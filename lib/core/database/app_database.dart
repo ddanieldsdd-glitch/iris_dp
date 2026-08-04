@@ -4,10 +4,16 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import '../storage/app_storage_config.dart';
 import '../utils/media_storage.dart';
 import '../utils/scene_color.dart';
 import '../utils/scene_format.dart';
+import '../../features/visual_bible/bible_section_fields.dart';
+import '../../features/visual_bible/moodboard_association.dart';
+import '../../features/visual_bible/visual_bible_completion.dart' as bible_layout;
+import '../../features/visual_bible/visual_bible_model.dart';
 import 'seed_data.dart';
+import '../../features/equipment/services/catalog_importer.dart';
 import 'tables.dart';
 
 part 'app_database.g.dart';
@@ -20,7 +26,11 @@ part 'app_database.g.dart';
   SiteImages,
   Cameras, Lenses, Lights, ProjectEquipment,
   LookBibles, ProjectAnnotatedPdfs,
-  VisualBibles, VisualBibleColorBlocks, VisualBibleLocationRefs, MoodboardImages,
+  VisualBibles, VisualBibleColorBlocks, VisualBibleLocationRefs, MoodboardGroups,
+  MoodboardImages, BibleSectionGroups, BibleSectionDefinitions,
+  ExposureBlocks, LightingSetups, CameraTests, VisualBibleVersions, BibleComments,
+  CatalogSyncMeta, BibleSectionEvidence, LukaSyncMeta, OpticsLabSamples,
+  CloudSyncQueue,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -28,13 +38,13 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 29;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
           await m.createAll();
-          await _seedEquipmentCatalog();
+          await importEmbeddedCatalog(this);
         },
         onUpgrade: (m, from, to) async {
           if (from < 2) {
@@ -100,6 +110,194 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(visualBibleLocationRefs);
             await m.createTable(moodboardImages);
             await _migrateLookBiblesToVisualBibles();
+          }
+          if (from < 14) {
+            await m.addColumn(cameras, cameras.dynamicRangeStops);
+            await m.addColumn(cameras, cameras.colorScience);
+            await m.addColumn(cameras, cameras.nativeIso);
+            await m.addColumn(cameras, cameras.logFormats);
+            await m.addColumn(visualBibles, visualBibles.primaryCameraId);
+            await m.addColumn(visualBibles, visualBibles.recordingFormat);
+            await m.addColumn(visualBibles, visualBibles.codec);
+            await m.addColumn(visualBibles, visualBibles.resolutionNotes);
+            await m.addColumn(visualBibles, visualBibles.frameRateNotes);
+            await m.addColumn(visualBibles, visualBibles.nativeIso);
+            await m.addColumn(visualBibles, visualBibles.defaultTStop);
+            await m.addColumn(visualBibles, visualBibles.ndNotes);
+            await m.addColumn(visualBibles, visualBibles.deliveryColorSpace);
+            await m.addColumn(visualBibles, visualBibles.captureResolution);
+            await m.addColumn(visualBibles, visualBibles.deliveryResolution);
+            await m.addColumn(visualBibles, visualBibles.workflowPipeline);
+            await m.addColumn(visualBibles, visualBibles.diffusionNotes);
+            await m.addColumn(visualBibles, visualBibles.sensorShadowBehavior);
+            await m.addColumn(visualBibles, visualBibles.colorScienceNotes);
+            await m.addColumn(visualBibles, visualBibles.lowLightNotes);
+            await m.addColumn(visualBibles, visualBibles.opticCharacterNotes);
+            await m.addColumn(visualBibles, visualBibles.filtrationNotes);
+            await m.addColumn(visualBibles, visualBibles.cameraMovementsJson);
+            await m.addColumn(visualBibles, visualBibles.actVisualNotes);
+            await m.addColumn(visualBibles, visualBibles.cameraNarrativeIntent);
+            await m.addColumn(visualBibles, visualBibles.opticsNarrativeIntent);
+            await m.addColumn(visualBibles, visualBibles.exposureNarrativeIntent);
+            await m.addColumn(visualBibles, visualBibles.lightingNarrativeIntent);
+            await m.addColumn(visualBibles, visualBibles.colorNarrativeIntent);
+            await m.addColumn(visualBibles, visualBibles.formatNarrativeIntent);
+            await m.addColumn(visualBibles, visualBibles.textureNarrativeIntent);
+            await m.addColumn(visualBibles, visualBibles.conceptNarrativeIntent);
+            await m.addColumn(
+              visualBibleLocationRefs,
+              visualBibleLocationRefs.solarOrientation,
+            );
+            await m.addColumn(
+              visualBibleLocationRefs,
+              visualBibleLocationRefs.availableLightHours,
+            );
+            await m.addColumn(
+              visualBibleLocationRefs,
+              visualBibleLocationRefs.existingPracticals,
+            );
+            await m.addColumn(
+              visualBibleLocationRefs,
+              visualBibleLocationRefs.estimatedColorTempKelvin,
+            );
+            await m.createTable(exposureBlocks);
+            await m.createTable(lightingSetups);
+            await m.createTable(cameraTests);
+            await m.createTable(visualBibleVersions);
+            await m.createTable(bibleComments);
+          }
+          if (from < 15) {
+            await m.addColumn(cameras, cameras.mountType);
+            await m.addColumn(cameras, cameras.sensorModesJson);
+            await m.addColumn(cameras, cameras.recordingResolutionsJson);
+            await m.addColumn(cameras, cameras.weightKg);
+            await m.addColumn(cameras, cameras.powerDrawW);
+            await m.addColumn(cameras, cameras.heroImagePath);
+            await m.addColumn(cameras, cameras.manufacturerUrl);
+            await m.addColumn(cameras, cameras.externalId);
+            await m.addColumn(cameras, cameras.catalogVersion);
+            await m.addColumn(cameras, cameras.isCustom);
+            await m.addColumn(lenses, lenses.mountType);
+            await m.addColumn(lenses, lenses.imageCircleMm);
+            await m.addColumn(lenses, lenses.isAnamorphic);
+            await m.addColumn(lenses, lenses.squeezeRatio);
+            await m.addColumn(lenses, lenses.closeFocusM);
+            await m.addColumn(lenses, lenses.frontDiameterMm);
+            await m.addColumn(lenses, lenses.lensType);
+            await m.addColumn(lenses, lenses.heroImagePath);
+            await m.addColumn(lenses, lenses.externalId);
+            await m.addColumn(lenses, lenses.catalogVersion);
+            await m.addColumn(lenses, lenses.isCustom);
+            await m.addColumn(lights, lights.beamAngleDeg);
+            await m.addColumn(lights, lights.cri);
+            await m.addColumn(lights, lights.tlci);
+            await m.addColumn(lights, lights.dimmingType);
+            await m.addColumn(lights, lights.modifierCompatibilityJson);
+            await m.addColumn(lights, lights.heroImagePath);
+            await m.addColumn(lights, lights.externalId);
+            await m.addColumn(lights, lights.catalogVersion);
+            await m.addColumn(lights, lights.isCustom);
+            await m.addColumn(visualBibles, visualBibles.opticsConfigJson);
+            await m.createTable(catalogSyncMeta);
+            await m.createTable(bibleSectionEvidence);
+            await _importEmbeddedCatalogIfNeeded();
+          }
+          if (from < 16) {
+            await m.addColumn(cameras, cameras.series);
+            await m.addColumn(cameras, cameras.vintage);
+            await m.addColumn(cameras, cameras.rentalTagsJson);
+            await m.addColumn(cameras, cameras.lukaCompatible);
+            await m.addColumn(cameras, cameras.lukaProfileJson);
+            await m.addColumn(lenses, lenses.series);
+            await m.addColumn(lenses, lenses.vintage);
+            await m.addColumn(lenses, lenses.rentalTagsJson);
+            await m.addColumn(lenses, lenses.lukaCompatible);
+            await m.addColumn(lenses, lenses.lukaProfileJson);
+            await m.addColumn(lights, lights.series);
+            await m.addColumn(lights, lights.vintage);
+            await m.addColumn(lights, lights.rentalTagsJson);
+            await m.addColumn(lights, lights.lukaProfileJson);
+            await m.createTable(lukaSyncMeta);
+            await _importEmbeddedCatalogIfNeeded();
+          }
+          if (from < 17) {
+            await m.addColumn(scenes, scenes.charactersJson);
+          }
+          if (from < 18) {
+            await m.addColumn(visualBibles, visualBibles.tone);
+            await m.addColumn(visualBibles, visualBibles.creativeIntention);
+            await m.addColumn(visualBibles, visualBibles.stagingApproach);
+            await m.addColumn(visualBibles, visualBibles.pointOfView);
+            await m.addColumn(
+              visualBibles,
+              visualBibles.directionNarrativeIntent,
+            );
+            await m.addColumn(visualBibles, visualBibles.depthOfFieldNotes);
+            await m.addColumn(
+              visualBibleLocationRefs,
+              visualBibleLocationRefs.stagingNote,
+            );
+          }
+          if (from < 19) {
+            await customStatement(
+              "UPDATE moodboard_images SET source = 'manual' "
+              "WHERE source = 'ai_generated'",
+            );
+            await customStatement(
+              "UPDATE shot_references SET source = 'manual' "
+              "WHERE source = 'ai_generated'",
+            );
+          }
+          if (from < 20) {
+            await m.createTable(opticsLabSamples);
+          }
+          if (from < 21) {
+            await m.addColumn(projectEquipment, projectEquipment.sortOrder);
+          }
+          if (from < 22) {
+            await m.addColumn(moodboardImages, moodboardImages.assignedSections);
+          }
+          if (from < 23) {
+            await m.createTable(moodboardGroups);
+            await m.addColumn(moodboardImages, moodboardImages.groupId);
+          }
+          if (from < 24) {
+            await _migrateEvidenceToMoodboard();
+          }
+          if (from < 25) {
+            await m.createTable(bibleSectionGroups);
+            await m.createTable(bibleSectionDefinitions);
+            await _seedBibleSectionDefinitionsForExistingBibles();
+          }
+          if (from < 26) {
+            await m.addColumn(
+              visualBibleLocationRefs,
+              visualBibleLocationRefs.locationSiteId,
+            );
+            await m.addColumn(
+              visualBibleLocationRefs,
+              visualBibleLocationRefs.locationBasePlanId,
+            );
+            await m.addColumn(
+              moodboardImages,
+              moodboardImages.linkedLocationBasePlanId,
+            );
+            await _backfillLocationForeignKeys();
+          }
+          if (from < 27) {
+            await customStatement(
+              "UPDATE bible_section_definitions SET label = 'Dirección' "
+              "WHERE id = 'direction'",
+            );
+            await _seedBibleSectionFieldsJson();
+          }
+          if (from < 28) {
+            await m.addColumn(projects, projects.cloudId);
+            await m.addColumn(projects, projects.syncUpdatedAt);
+            await m.createTable(cloudSyncQueue);
+          }
+          if (from < 29) {
+            await m.addColumn(projects, projects.characterColorsJson);
           }
         },
       );
@@ -512,8 +710,10 @@ class AppDatabase extends _$AppDatabase {
       String location,
       String shootSet,
       String locationSite,
+      String? name,
       String? description,
       String? locationColor,
+      String? charactersJson,
       int? sourceStartIndex,
     })> items,
   ) async {
@@ -559,11 +759,13 @@ class AppDatabase extends _$AppDatabase {
           }
         }
 
-        final name = formatSceneDefaultName(
-          intExt: s.intExt,
-          dayNight: s.dayNight,
-          location: s.location,
-        );
+        final name = s.name != null && s.name!.trim().isNotEmpty
+            ? s.name!.trim()
+            : formatSceneDefaultName(
+                intExt: s.intExt,
+                dayNight: s.dayNight,
+                location: s.location,
+              );
         final canonical = '${s.intExt}. ${s.location} - ${s.dayNight}';
 
         if (match != null) {
@@ -577,6 +779,7 @@ class AppDatabase extends _$AppDatabase {
             intExt: s.intExt,
             dayNight: s.dayNight,
             locationColor: Value(s.locationColor),
+            charactersJson: Value(s.charactersJson),
             description: Value(s.description),
             sourceStartIndex: Value(s.sourceStartIndex),
             sortOrder: order,
@@ -592,6 +795,7 @@ class AppDatabase extends _$AppDatabase {
             intExt: Value(s.intExt),
             dayNight: Value(s.dayNight),
             locationColor: Value(s.locationColor),
+            charactersJson: Value(s.charactersJson),
             description: Value(s.description),
             sourceStartIndex: Value(s.sourceStartIndex),
             sortOrder: Value(order),
@@ -806,14 +1010,39 @@ class AppDatabase extends _$AppDatabase {
       return sets.first;
     }
 
+    final baseHex = await _siteBaseHexForSite(projectId: projectId, site: site);
     final setId = await insertLocation(LocationBasePlansCompanion.insert(
       projectId: projectId,
       siteId: Value(site.id),
       locationName: site.name,
-      color: Value(defaultSceneColorForIndex(0)),
+      color: Value(baseHex),
       sortOrder: const Value(0),
     ));
     return (await getLocationById(setId))!;
+  }
+
+  Future<int> _siteIndexForSite({
+    required int projectId,
+    required LocationSite site,
+  }) async {
+    final sites = await (select(locationSites)
+          ..where((s) => s.projectId.equals(projectId))
+          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+        .get();
+    final idx = sites.indexWhere((s) => s.id == site.id);
+    return idx >= 0 ? idx : sites.length;
+  }
+
+  Future<String> _siteBaseHexForSite({
+    required int projectId,
+    required LocationSite site,
+  }) async {
+    final sites = await (select(locationSites)
+          ..where((s) => s.projectId.equals(projectId))
+          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+        .get();
+    final idx = sites.indexWhere((s) => s.id == site.id);
+    return siteBaseHexForIndex(idx >= 0 ? idx : sites.length);
   }
 
   /// Garantiza localización + set; crea lo que falte.
@@ -836,11 +1065,20 @@ class AppDatabase extends _$AppDatabase {
       final sets = await (select(locationBasePlans)
             ..where((l) => l.siteId.equals(site.id)))
           .get();
+      final baseHex = await _siteBaseHexForSite(projectId: projectId, site: site);
+      final setCount = sets.length + 1;
+      final siteIndex = await _siteIndexForSite(projectId: projectId, site: site);
+      final defaultHex = defaultSetHexForSite(
+        siteIndex: siteIndex,
+        setIndex: sets.length,
+        totalSets: setCount,
+        explicitHex: colorHex,
+      );
       final setId = await insertLocation(LocationBasePlansCompanion.insert(
         projectId: projectId,
         siteId: Value(site.id),
         locationName: setKey,
-        color: Value(colorHex ?? defaultSceneColorForIndex(sets.length)),
+        color: Value(defaultHex),
         sortOrder: Value(sets.length),
       ));
       set = (await getLocationById(setId))!;
@@ -897,14 +1135,25 @@ class AppDatabase extends _$AppDatabase {
     String? color,
     int? sortOrder,
   }) async {
+    final site = await getSiteById(siteId);
+    if (site == null) throw StateError('Localización no encontrada');
+
     final sets = await (select(locationBasePlans)
           ..where((l) => l.siteId.equals(siteId)))
         .get();
+    final siteIndex = await _siteIndexForSite(projectId: projectId, site: site);
+    final defaultHex = defaultSetHexForSite(
+      siteIndex: siteIndex,
+      setIndex: sets.length,
+      totalSets: sets.length + 1,
+      explicitHex: color,
+    );
+
     return insertLocation(LocationBasePlansCompanion.insert(
       projectId: projectId,
       siteId: Value(siteId),
       locationName: name,
-      color: Value(color ?? defaultSceneColorForIndex(sets.length)),
+      color: Value(defaultHex),
       sortOrder: Value(sortOrder ?? sets.length),
     ));
   }
@@ -982,6 +1231,12 @@ class AppDatabase extends _$AppDatabase {
     }
 
     var created = 0;
+    final siteOrder = <String>[];
+    for (final entry in grouped.values) {
+      final key = entry.siteName.trim().toLowerCase();
+      if (!siteOrder.contains(key)) siteOrder.add(key);
+    }
+
     for (final entry in grouped.values) {
       final existingSite = await findSiteByName(projectId, entry.siteName);
       final setsBefore = existingSite != null
@@ -994,16 +1249,29 @@ class AppDatabase extends _$AppDatabase {
       created += setsAfter - setsBefore;
 
       final normalizedSite = entry.siteName.trim().toLowerCase();
+      final siteIdx = siteOrder.indexOf(normalizedSite);
+      final siteSets = await (select(locationBasePlans)
+            ..where((l) => l.siteId.equals(site.id))
+            ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
+          .get();
+      var setIndex = siteSets.length;
+
       for (final setName in entry.setNames) {
         if (setName.trim().toLowerCase() == normalizedSite) continue;
         final existingSet = await findSetInSite(site.id, setName);
         if (existingSet != null) continue;
+        final totalSets = setIndex + 1;
         await ensureSiteAndSet(
           projectId: projectId,
           siteName: entry.siteName,
           setName: setName,
-          colorHex: defaultSceneColorForIndex(setsAfter + created),
+          colorHex: defaultSetHexForSite(
+            siteIndex: siteIdx >= 0 ? siteIdx : siteOrder.length,
+            setIndex: setIndex,
+            totalSets: totalSets,
+          ),
         );
+        setIndex++;
         created++;
       }
     }
@@ -1111,16 +1379,14 @@ class AppDatabase extends _$AppDatabase {
 
   /// Color base en localización: variantes en todos los sets.
   Future<void> applySiteColorFromBase(int siteId, String baseColorHex) async {
-    final base = locationBaseColor(sceneDisplayColor(baseColorHex));
     final siteSets = await (select(locationBasePlans)
           ..where((l) => l.siteId.equals(siteId))
           ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
         .get();
-    final count = siteSets.length;
-    for (var i = 0; i < count; i++) {
-      final variant = setVariantColor(base, i, count);
+    final variants = setVariantHexesForSiteBase(baseColorHex, siteSets.length);
+    for (var i = 0; i < siteSets.length; i++) {
       await updateLocation(
-        siteSets[i].copyWith(color: hexFromColor(variant)),
+        siteSets[i].copyWith(color: variants[i]),
       );
     }
     await clearSceneColorOverridesForSite(siteId);
@@ -1149,8 +1415,13 @@ class AppDatabase extends _$AppDatabase {
     Map<String, String> siteBySetKey,
   ) async {
     for (final entry in colorsBySetKey.entries) {
-      final siteName = siteBySetKey[entry.key] ?? entry.key;
-      await upsertSetColor(projectId, siteName, entry.key, entry.value);
+      final compositeKey = entry.key;
+      final pipe = compositeKey.indexOf('|');
+      final setName =
+          pipe >= 0 ? compositeKey.substring(pipe + 1) : compositeKey;
+      final siteName = siteBySetKey[compositeKey] ??
+          (pipe >= 0 ? compositeKey.substring(0, pipe) : compositeKey);
+      await upsertSetColor(projectId, siteName, setName, entry.value);
     }
   }
 
@@ -1306,8 +1577,21 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<ProjectEquipmentData>> watchProjectEquipment(int projectId) =>
       (select(projectEquipment)
-            ..where((e) => e.projectId.equals(projectId)))
+            ..where((e) => e.projectId.equals(projectId))
+            ..orderBy([
+              (e) => OrderingTerm.asc(e.sortOrder),
+              (e) => OrderingTerm.asc(e.id),
+            ]))
           .watch();
+
+  Future<List<ProjectEquipmentData>> getProjectEquipment(int projectId) =>
+      (select(projectEquipment)
+            ..where((e) => e.projectId.equals(projectId))
+            ..orderBy([
+              (e) => OrderingTerm.asc(e.sortOrder),
+              (e) => OrderingTerm.asc(e.id),
+            ]))
+          .get();
 
   Future<bool> isEquipmentAssigned({
     required int projectId,
@@ -1328,6 +1612,9 @@ class AppDatabase extends _$AppDatabase {
     required String equipmentType,
     required int equipmentId,
     String source = 'rental',
+    String status = 'available',
+    String? notes,
+    int sortOrder = 0,
   }) async {
     if (await isEquipmentAssigned(
       projectId: projectId,
@@ -1341,11 +1628,257 @@ class AppDatabase extends _$AppDatabase {
       equipmentType: equipmentType,
       equipmentId: equipmentId,
       source: Value(source),
+      status: Value(status),
+      notes: Value(notes),
+      sortOrder: Value(sortOrder),
     ));
+  }
+
+  Future<bool> updateProjectEquipmentAssignment({
+    required int assignmentId,
+    String? source,
+    String? status,
+    String? notes,
+    int? sortOrder,
+  }) async {
+    final row = await (select(projectEquipment)
+          ..where((e) => e.id.equals(assignmentId)))
+        .getSingleOrNull();
+    if (row == null) return false;
+    return update(projectEquipment).replace(
+      row.copyWith(
+        source: source ?? row.source,
+        status: status ?? row.status,
+        notes: Value(notes ?? row.notes),
+        sortOrder: sortOrder ?? row.sortOrder,
+      ),
+    );
+  }
+
+  Future<void> clearProjectEquipment(int projectId) async {
+    await (delete(projectEquipment)
+          ..where((e) => e.projectId.equals(projectId)))
+        .go();
   }
 
   Future<int> unassignProjectEquipment(int assignmentId) =>
       (delete(projectEquipment)..where((e) => e.id.equals(assignmentId))).go();
+
+  Future<Camera?> getCameraById(int id) =>
+      (select(cameras)..where((c) => c.id.equals(id))).getSingleOrNull();
+
+  Future<Lense?> getLensById(int id) =>
+      (select(lenses)..where((l) => l.id.equals(id))).getSingleOrNull();
+
+  Future<Light?> getLightById(int id) =>
+      (select(lights)..where((l) => l.id.equals(id))).getSingleOrNull();
+
+  Future<Camera?> getCameraByExternalId(String externalId) =>
+      (select(cameras)..where((c) => c.externalId.equals(externalId)))
+          .getSingleOrNull();
+
+  Future<Lense?> getLensByExternalId(String externalId) =>
+      (select(lenses)..where((l) => l.externalId.equals(externalId)))
+          .getSingleOrNull();
+
+  Future<Light?> getLightByExternalId(String externalId) =>
+      (select(lights)..where((l) => l.externalId.equals(externalId)))
+          .getSingleOrNull();
+
+  Future<Camera?> getCameraByBrandModel(String brand, String model) =>
+      (select(cameras)
+            ..where((c) =>
+                c.brand.equals(brand) & c.model.equals(model)))
+          .getSingleOrNull();
+
+  Future<Lense?> getLensByBrandModel(String brand, String model) =>
+      (select(lenses)
+            ..where((l) =>
+                l.brand.equals(brand) & l.model.equals(model)))
+          .getSingleOrNull();
+
+  Future<Light?> getLightByBrandModel(String brand, String model) =>
+      (select(lights)
+            ..where((l) =>
+                l.brand.equals(brand) & l.model.equals(model)))
+          .getSingleOrNull();
+
+  Future<List<Camera>> getAllCameras() =>
+      (select(cameras)..orderBy([(c) => OrderingTerm.asc(c.brand)])).get();
+
+  Future<List<Lense>> getAllLenses() =>
+      (select(lenses)..orderBy([(l) => OrderingTerm.asc(l.brand)])).get();
+
+  Future<List<Light>> getAllLights() =>
+      (select(lights)..orderBy([(l) => OrderingTerm.asc(l.brand)])).get();
+
+  Future<List<Camera>> getCustomCameras() =>
+      (select(cameras)..where((c) => c.isCustom.equals(true))).get();
+
+  Future<List<Lense>> getCustomLenses() =>
+      (select(lenses)..where((l) => l.isCustom.equals(true))).get();
+
+  Future<List<Light>> getCustomLights() =>
+      (select(lights)..where((l) => l.isCustom.equals(true))).get();
+
+  Future<int> insertCamera(CamerasCompanion row) => into(cameras).insert(row);
+
+  Future<bool> updateCamera(Camera row) => update(cameras).replace(row);
+
+  Future<int> deleteCamera(int id) =>
+      (delete(cameras)..where((c) => c.id.equals(id))).go();
+
+  Future<int> insertLens(LensesCompanion row) => into(lenses).insert(row);
+
+  Future<bool> updateLens(Lense row) => update(lenses).replace(row);
+
+  Future<int> deleteLens(int id) =>
+      (delete(lenses)..where((l) => l.id.equals(id))).go();
+
+  Future<int> insertLight(LightsCompanion row) => into(lights).insert(row);
+
+  Future<bool> updateLight(Light row) => update(lights).replace(row);
+
+  Future<int> deleteLight(int id) =>
+      (delete(lights)..where((l) => l.id.equals(id))).go();
+
+  Future<CatalogSyncMetaData?> getCatalogSyncMeta() =>
+      select(catalogSyncMeta).getSingleOrNull();
+
+  Future<void> upsertCatalogSyncMeta(CatalogSyncMetaCompanion row) async {
+    final existing = await getCatalogSyncMeta();
+    if (existing == null) {
+      await into(catalogSyncMeta).insert(row);
+    } else {
+      await (update(catalogSyncMeta)..where((m) => m.id.equals(existing.id)))
+          .write(row.copyWith(id: Value(existing.id)));
+    }
+  }
+
+  Future<LukaSyncMetaData?> getLukaSyncMeta() =>
+      select(lukaSyncMeta).getSingleOrNull();
+
+  Future<void> upsertLukaSyncMeta(LukaSyncMetaCompanion row) async {
+    final existing = await getLukaSyncMeta();
+    if (existing == null) {
+      await into(lukaSyncMeta).insert(row);
+    } else {
+      await (update(lukaSyncMeta)..where((m) => m.id.equals(existing.id)))
+          .write(row.copyWith(id: Value(existing.id)));
+    }
+  }
+
+  Stream<List<BibleSectionEvidenceData>> watchEvidenceForBible(
+    int bibleId, {
+    String? sectionId,
+    String? targetType,
+    int? targetId,
+  }) {
+    final query = select(bibleSectionEvidence)
+      ..where((e) {
+        var expr = e.bibleId.equals(bibleId);
+        if (sectionId != null) expr = expr & e.sectionId.equals(sectionId);
+        if (targetType != null) expr = expr & e.targetType.equals(targetType);
+        if (targetId != null) expr = expr & e.targetId.equals(targetId);
+        return expr;
+      })
+      ..orderBy([(e) => OrderingTerm.asc(e.sortOrder)]);
+    return query.watch();
+  }
+
+  Future<int> insertBibleEvidence(BibleSectionEvidenceCompanion row) =>
+      into(bibleSectionEvidence).insert(row);
+
+  Future<void> deleteBibleEvidence(int id) =>
+      (delete(bibleSectionEvidence)..where((e) => e.id.equals(id))).go();
+
+  Future<void> updateBibleEvidenceCaption(int id, String caption) =>
+      (update(bibleSectionEvidence)..where((e) => e.id.equals(id))).write(
+        BibleSectionEvidenceCompanion(caption: Value(caption)),
+      );
+
+  Future<void> _importEmbeddedCatalogIfNeeded() async {
+    await importEmbeddedCatalog(this, force: true);
+  }
+
+  /// Resuelve cámara principal del proyecto: Biblia > ProjectEquipment > null.
+  Future<Camera?> resolveProjectCamera(int projectId) async {
+    final bible = await getVisualBibleForProject(projectId);
+    if (bible?.primaryCameraId != null) {
+      return getCameraById(bible!.primaryCameraId!);
+    }
+    final assigned = await (select(projectEquipment)
+          ..where((e) =>
+              e.projectId.equals(projectId) & e.equipmentType.equals('camera')))
+        .get();
+    if (assigned.isEmpty) return null;
+    return getCameraById(assigned.first.equipmentId);
+  }
+
+  Future<void> syncBiblePrimaryCamera(int projectId, int cameraId) async {
+    final bible = await ensureVisualBibleForProject(projectId);
+    final cam = await getCameraById(cameraId);
+    await (update(visualBibles)..where((v) => v.id.equals(bible.id))).write(
+      VisualBiblesCompanion(
+        primaryCameraId: Value(cameraId),
+        nativeIso: Value(cam?.nativeIso),
+        colorScienceNotes: Value(cam?.colorScience),
+      ),
+    );
+    if (!await isEquipmentAssigned(
+      projectId: projectId,
+      equipmentType: 'camera',
+      equipmentId: cameraId,
+    )) {
+      await assignEquipmentToProject(
+        projectId: projectId,
+        equipmentType: 'camera',
+        equipmentId: cameraId,
+      );
+    }
+  }
+
+  Future<void> syncBiblePrimaryLens(int projectId, int lensId) async {
+    final bible = await ensureVisualBibleForProject(projectId);
+    await (update(visualBibles)..where((v) => v.id.equals(bible.id))).write(
+      VisualBiblesCompanion(primaryLensId: Value(lensId)),
+    );
+    if (!await isEquipmentAssigned(
+      projectId: projectId,
+      equipmentType: 'lens',
+      equipmentId: lensId,
+    )) {
+      await assignEquipmentToProject(
+        projectId: projectId,
+        equipmentType: 'lens',
+        equipmentId: lensId,
+      );
+    }
+  }
+
+  Future<void> saveOpticsConfigToBible({
+    required int projectId,
+    int? cameraId,
+    int? lensId,
+    String? tStop,
+    required String configJson,
+  }) async {
+    final bible = await ensureVisualBibleForProject(projectId);
+    await (update(visualBibles)..where((v) => v.id.equals(bible.id))).write(
+      VisualBiblesCompanion(
+        primaryCameraId: Value(cameraId),
+        primaryLensId: Value(lensId),
+        defaultTStop: Value(tStop),
+        opticsConfigJson: Value(configJson),
+      ),
+    );
+    if (cameraId != null) {
+      await syncBiblePrimaryCamera(projectId, cameraId);
+    }
+    if (lensId != null) {
+      await syncBiblePrimaryLens(projectId, lensId);
+    }
+  }
 
   // ── Referencias de plano ──────────────────────
   Stream<List<ShotReference>> watchReferencesForShot(int shotId) =>
@@ -1457,6 +1990,37 @@ class AppDatabase extends _$AppDatabase {
   bool _isExistingImage(String path) =>
       path.isNotEmpty && File(path).existsSync();
 
+  /// Conteos ligeros para la tarjeta de proyecto en inicio.
+  Future<({
+    VisualBible? bible,
+    int sceneCount,
+    int planCount,
+    int moodboardCount,
+    int locationCount,
+  })> fetchProjectSummaryCounts(int projectId) async {
+    final bible = await getVisualBibleForProject(projectId);
+    final sceneCount = await (select(scenes)
+          ..where((s) => s.projectId.equals(projectId)))
+        .get()
+        .then((rows) => rows.length);
+    final planCount = await countShotsWithCameraPlan(projectId);
+    final moodboardCount = await (select(moodboardImages)
+          ..where((m) => m.projectId.equals(projectId)))
+        .get()
+        .then((rows) => rows.length);
+    final locationCount = await (select(locationSites)
+          ..where((s) => s.projectId.equals(projectId)))
+        .get()
+        .then((rows) => rows.length);
+    return (
+      bible: bible,
+      sceneCount: sceneCount,
+      planCount: planCount,
+      moodboardCount: moodboardCount,
+      locationCount: locationCount,
+    );
+  }
+
   // ── Look Bible ───────────────────────────────────────────────────────────
 
   Stream<LookBible?> watchLookBibleForProject(int projectId) =>
@@ -1493,10 +2057,14 @@ class AppDatabase extends _$AppDatabase {
 
   Future<VisualBible> ensureVisualBibleForProject(int projectId) async {
     final existing = await getVisualBibleForProject(projectId);
-    if (existing != null) return existing;
+    if (existing != null) {
+      await ensureBibleSectionLayout(existing.id);
+      return existing;
+    }
     final id = await into(visualBibles).insert(
       VisualBiblesCompanion.insert(projectId: projectId),
     );
+    await ensureBibleSectionLayout(id);
     return (await (select(visualBibles)..where((v) => v.id.equals(id))).getSingle())!;
   }
 
@@ -1575,6 +2143,352 @@ class AppDatabase extends _$AppDatabase {
     return query.watch();
   }
 
+  /// Imágenes del moodboard visibles en una sección (asignación explícita o categoría).
+  Stream<List<MoodboardImage>> watchMoodboardImagesForSection(
+    int projectId,
+    String sectionId,
+  ) {
+    return watchMoodboardImages(projectId).map((rows) {
+      return rows
+          .where(
+            (row) => MoodboardAssociation.visibleInSection(
+              category: row.category,
+              assignedSections:
+                  MoodboardAssociation.decodeSections(row.assignedSections),
+              sectionId: sectionId,
+            ),
+          )
+          .toList();
+    });
+  }
+
+  /// Imágenes del moodboard vinculadas a un set/localización.
+  Stream<List<MoodboardImage>> watchMoodboardImagesForLocation(
+    int projectId,
+    String locationName, {
+    int? locationBasePlanId,
+  }) {
+    return watchMoodboardImages(projectId).map((rows) {
+      return rows
+          .where(
+            (row) => MoodboardAssociation.visibleInLocation(
+              linkedLocationName: row.linkedLocationName,
+              linkedLocationBasePlanId: row.linkedLocationBasePlanId,
+              locationName: locationName,
+              locationBasePlanId: locationBasePlanId,
+            ),
+          )
+          .toList();
+    });
+  }
+
+  Stream<List<MoodboardGroup>> watchMoodboardGroups(
+    int projectId, {
+    String? category,
+  }) {
+    final query = select(moodboardGroups)
+      ..where((g) {
+        final base = g.projectId.equals(projectId);
+        if (category != null) {
+          return base & g.category.equals(category);
+        }
+        return base;
+      })
+      ..orderBy([(g) => OrderingTerm.asc(g.sortOrder)]);
+    return query.watch();
+  }
+
+  Future<int> insertMoodboardGroup(MoodboardGroupsCompanion row) async {
+    if (!row.sortOrder.present) {
+      final max = await _maxMoodboardGroupSortOrder(
+        row.projectId.value,
+        row.category.value,
+      );
+      return into(moodboardGroups).insert(
+        row.copyWith(sortOrder: Value(max + 1)),
+      );
+    }
+    return into(moodboardGroups).insert(row);
+  }
+
+  Future<int> _maxMoodboardGroupSortOrder(int projectId, String category) async {
+    final rows = await (select(moodboardGroups)
+          ..where(
+            (g) => g.projectId.equals(projectId) & g.category.equals(category),
+          ))
+        .get();
+    if (rows.isEmpty) return 0;
+    return rows.map((r) => r.sortOrder).reduce((a, b) => a > b ? a : b);
+  }
+
+  Future<void> updateMoodboardGroup(MoodboardGroup row) =>
+      update(moodboardGroups).replace(row);
+
+  Future<void> deleteMoodboardGroup(int id) async {
+    await (update(moodboardImages)..where((m) => m.groupId.equals(id)))
+        .write(const MoodboardImagesCompanion(groupId: Value(null)));
+    await (delete(moodboardGroups)..where((g) => g.id.equals(id))).go();
+  }
+
+  Stream<List<BibleSectionGroup>> watchBibleSectionGroups(int bibleId) =>
+      (select(bibleSectionGroups)
+            ..where((g) => g.bibleId.equals(bibleId))
+            ..orderBy([(g) => OrderingTerm.asc(g.sortOrder)]))
+          .watch();
+
+  Stream<List<BibleSectionDefinition>> watchBibleSectionDefinitions(
+    int bibleId,
+  ) =>
+      (select(bibleSectionDefinitions)
+            ..where((d) => d.bibleId.equals(bibleId))
+            ..orderBy([(d) => OrderingTerm.asc(d.sortOrder)]))
+          .watch();
+
+  Future<void> ensureBibleSectionLayout(int bibleId) async {
+    final existing = await (select(bibleSectionGroups)
+          ..where((g) => g.bibleId.equals(bibleId)))
+        .get();
+    if (existing.isNotEmpty) return;
+    await _seedBibleSectionLayout(bibleId);
+  }
+
+  Future<void> _seedBibleSectionLayout(int bibleId) async {
+    var groupOrder = 0;
+    for (final groupId in bible_layout.BibleLayoutGroup.orderedGroups) {
+      await into(bibleSectionGroups).insert(
+        BibleSectionGroupsCompanion.insert(
+          id: groupId,
+          bibleId: bibleId,
+          label: bible_layout.BibleLayoutGroup.label(groupId),
+          sortOrder: Value(groupOrder++),
+          isBuiltIn: const Value(true),
+        ),
+      );
+      final sectionIds =
+          bible_layout.BibleLayoutGroup.sectionsByGroup[groupId] ?? [];
+      for (var i = 0; i < sectionIds.length; i++) {
+        final sectionId = sectionIds[i];
+        await into(bibleSectionDefinitions).insert(
+          BibleSectionDefinitionsCompanion.insert(
+            id: sectionId,
+            bibleId: bibleId,
+            groupId: groupId,
+            label: BibleSectionId.label(sectionId),
+            iconKey: Value(_sectionIconKey(sectionId)),
+            sortOrder: Value(i),
+            isBuiltIn: const Value(true),
+            template: Value(_sectionTemplate(sectionId)),
+            contentJson: Value(
+              BibleSectionFieldsConfig.encode(
+                BibleSectionFieldsConfig.defaultsFor(sectionId),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  static String _sectionIconKey(String sectionId) => switch (sectionId) {
+        BibleSectionId.direction => 'theater',
+        BibleSectionId.concept => 'auto_stories',
+        BibleSectionId.camera => 'videocam',
+        BibleSectionId.optics => 'camera',
+        BibleSectionId.exposure => 'exposure',
+        BibleSectionId.lighting => 'wb_sunny',
+        BibleSectionId.colorImage => 'palette',
+        BibleSectionId.format => 'aspect_ratio',
+        BibleSectionId.texture => 'grain',
+        BibleSectionId.location => 'location_on',
+        BibleSectionId.cameraTests => 'science',
+        BibleSectionId.workflow => 'account_tree',
+        BibleSectionId.moodboard => 'photo_library',
+        _ => 'article',
+      };
+
+  static String _sectionTemplate(String sectionId) => switch (sectionId) {
+        BibleSectionId.location => 'locations',
+        BibleSectionId.cameraTests => 'tests',
+        BibleSectionId.moodboard => 'moodboard',
+        BibleSectionId.workflow => 'standard',
+        BibleSectionId.colorImage => 'blocks_color',
+        BibleSectionId.exposure => 'blocks_exposure',
+        BibleSectionId.lighting => 'blocks_lighting',
+        _ => 'standard',
+      };
+
+  Future<void> upsertBibleSectionGroup(BibleSectionGroup row) =>
+      into(bibleSectionGroups).insertOnConflictUpdate(row);
+
+  Future<void> upsertBibleSectionDefinition(BibleSectionDefinition row) =>
+      into(bibleSectionDefinitions).insertOnConflictUpdate(row);
+
+  Future<void> insertCustomBibleSection({
+    required int bibleId,
+    required String groupId,
+    required String label,
+    String template = 'freeform',
+    String? contentJson,
+  }) async {
+    final id = 'custom_${DateTime.now().millisecondsSinceEpoch}';
+    final defs = await (select(bibleSectionDefinitions)
+          ..where((d) => d.bibleId.equals(bibleId) & d.groupId.equals(groupId)))
+        .get();
+    final maxOrder = defs.isEmpty
+        ? 0
+        : defs.map((d) => d.sortOrder).reduce((a, b) => a > b ? a : b);
+    await into(bibleSectionDefinitions).insert(
+      BibleSectionDefinitionsCompanion.insert(
+        id: id,
+        bibleId: bibleId,
+        groupId: groupId,
+        label: label,
+        sortOrder: Value(maxOrder + 1),
+        isBuiltIn: const Value(false),
+        template: Value(template),
+        contentJson: Value(contentJson),
+      ),
+    );
+  }
+
+  Future<void> _seedBibleSectionDefinitionsForExistingBibles() async {
+    final bibles = await select(visualBibles).get();
+    for (final bible in bibles) {
+      await ensureBibleSectionLayout(bible.id);
+    }
+  }
+
+  Future<void> _seedBibleSectionFieldsJson() async {
+    final defs = await select(bibleSectionDefinitions).get();
+    for (final def in defs) {
+      if (def.contentJson != null && def.contentJson!.isNotEmpty) continue;
+      if (!def.isBuiltIn) continue;
+      await upsertBibleSectionDefinition(
+        def.copyWith(
+          contentJson: Value(
+            BibleSectionFieldsConfig.encode(
+              BibleSectionFieldsConfig.defaultsFor(def.id),
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> saveBibleSectionFields(
+    int bibleId,
+    String sectionId,
+    List<BibleSectionField> fields,
+  ) async {
+    final def = await (select(bibleSectionDefinitions)
+          ..where(
+            (d) => d.bibleId.equals(bibleId) & d.id.equals(sectionId),
+          ))
+        .getSingleOrNull();
+    if (def == null) return;
+    await upsertBibleSectionDefinition(
+      def.copyWith(
+        contentJson: Value(BibleSectionFieldsConfig.encode(fields)),
+      ),
+    );
+  }
+
+  Future<void> reorderBibleSectionsInGroup(
+    int bibleId,
+    String groupId,
+    List<String> orderedSectionIds,
+  ) async {
+    for (var i = 0; i < orderedSectionIds.length; i++) {
+      final sectionId = orderedSectionIds[i];
+      final def = await (select(bibleSectionDefinitions)
+            ..where(
+              (d) =>
+                  d.bibleId.equals(bibleId) &
+                  d.groupId.equals(groupId) &
+                  d.id.equals(sectionId),
+            ))
+          .getSingleOrNull();
+      if (def == null) continue;
+      await upsertBibleSectionDefinition(
+        def.copyWith(sortOrder: i),
+      );
+    }
+  }
+
+  Future<void> _migrateEvidenceToMoodboard() async {
+    final evidenceRows = await select(bibleSectionEvidence).get();
+    for (final ev in evidenceRows) {
+      final bible = await (select(visualBibles)
+            ..where((v) => v.id.equals(ev.bibleId)))
+          .getSingleOrNull();
+      if (bible == null) continue;
+      final sectionsJson = jsonEncode([ev.sectionId]);
+      final existing = await (select(moodboardImages)
+            ..where(
+              (m) =>
+                  m.projectId.equals(bible.projectId) &
+                  m.imagePath.equals(ev.imagePath),
+            ))
+          .getSingleOrNull();
+      if (existing != null) {
+        final merged = MoodboardAssociation.decodeSections(
+          existing.assignedSections,
+        );
+        if (!merged.contains(ev.sectionId)) {
+          merged.add(ev.sectionId);
+        }
+        await (update(moodboardImages)..where((m) => m.id.equals(existing.id)))
+            .write(
+          MoodboardImagesCompanion(
+            assignedSections: Value(jsonEncode(merged)),
+            caption: ev.caption != null && ev.caption!.isNotEmpty
+                ? Value(ev.caption)
+                : const Value.absent(),
+          ),
+        );
+        continue;
+      }
+      await insertMoodboardImage(
+        MoodboardImagesCompanion.insert(
+          projectId: bible.projectId,
+          bibleId: Value(bible.id),
+          imagePath: ev.imagePath,
+          source: const Value('evidence_migration'),
+          caption: Value(ev.caption),
+          assignedSections: Value(sectionsJson),
+        ),
+      );
+    }
+  }
+
+  Future<void> _backfillLocationForeignKeys() async {
+    final plans = await select(locationBasePlans).get();
+    final planByName = {for (final p in plans) p.locationName: p};
+    final refs = await select(visualBibleLocationRefs).get();
+    for (final ref in refs) {
+      final plan = planByName[ref.locationName];
+      if (plan == null) continue;
+      await (update(visualBibleLocationRefs)..where((r) => r.id.equals(ref.id)))
+          .write(
+        VisualBibleLocationRefsCompanion(
+          locationBasePlanId: Value(plan.id),
+          locationSiteId: Value(plan.siteId),
+        ),
+      );
+    }
+    final moodRows = await select(moodboardImages).get();
+    for (final row in moodRows) {
+      if (row.linkedLocationName == null) continue;
+      final plan = planByName[row.linkedLocationName!];
+      if (plan == null) continue;
+      await (update(moodboardImages)..where((m) => m.id.equals(row.id))).write(
+        MoodboardImagesCompanion(
+          linkedLocationBasePlanId: Value(plan.id),
+        ),
+      );
+    }
+  }
+
   Future<int> insertMoodboardImage(MoodboardImagesCompanion row) async {
     if (!row.sortOrder.present) {
       final maxOrder = await _maxMoodboardSortOrder(row.projectId.value);
@@ -1599,12 +2513,145 @@ class AppDatabase extends _$AppDatabase {
   Future<void> deleteMoodboardImage(int id) =>
       (delete(moodboardImages)..where((m) => m.id.equals(id))).go();
 
+  static const opticsLabMaxSamples = 10;
+
+  Stream<List<OpticsLabSample>> watchOpticsLabSamples(int projectId) {
+    return (select(opticsLabSamples)
+          ..where((s) => s.projectId.equals(projectId))
+          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+        .watch();
+  }
+
+  Future<int> countOpticsLabSamples(int projectId) async {
+    final rows = await (select(opticsLabSamples)
+          ..where((s) => s.projectId.equals(projectId)))
+        .get();
+    return rows.length;
+  }
+
+  Future<int> insertOpticsLabSample(OpticsLabSamplesCompanion row) async {
+    if (!row.sortOrder.present) {
+      final maxOrder = await _maxOpticsLabSampleSortOrder(row.projectId.value);
+      return into(opticsLabSamples).insert(
+        row.copyWith(sortOrder: Value(maxOrder + 1)),
+      );
+    }
+    return into(opticsLabSamples).insert(row);
+  }
+
+  Future<int> _maxOpticsLabSampleSortOrder(int projectId) async {
+    final rows = await (select(opticsLabSamples)
+          ..where((s) => s.projectId.equals(projectId)))
+        .get();
+    if (rows.isEmpty) return 0;
+    return rows.map((r) => r.sortOrder).reduce((a, b) => a > b ? a : b);
+  }
+
+  Future<void> deleteOpticsLabSample(int id) async {
+    await (delete(opticsLabSamples)..where((s) => s.id.equals(id))).go();
+  }
+
+  Future<OpticsLabSample?> getOpticsLabSampleById(int id) {
+    return (select(opticsLabSamples)..where((s) => s.id.equals(id)))
+        .getSingleOrNull();
+  }
+
   Future<void> reorderMoodboardImage(int id, int newSortOrder) async {
     final row = await (select(moodboardImages)..where((m) => m.id.equals(id)))
         .getSingleOrNull();
     if (row == null) return;
     await update(moodboardImages).replace(row.copyWith(sortOrder: newSortOrder));
   }
+
+  // ── Exposure blocks ───────────────────────────────────────────────────────
+
+  Stream<List<ExposureBlock>> watchExposureBlocksForBible(int bibleId) =>
+      (select(exposureBlocks)
+            ..where((b) => b.bibleId.equals(bibleId))
+            ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)]))
+          .watch();
+
+  Future<int> insertExposureBlock(ExposureBlocksCompanion row) =>
+      into(exposureBlocks).insert(row);
+
+  Future<void> updateExposureBlock(ExposureBlock row) =>
+      update(exposureBlocks).replace(row);
+
+  Future<void> deleteExposureBlock(int id) =>
+      (delete(exposureBlocks)..where((b) => b.id.equals(id))).go();
+
+  // ── Lighting setups ───────────────────────────────────────────────────────
+
+  Stream<List<LightingSetup>> watchLightingSetupsForBible(int bibleId) =>
+      (select(lightingSetups)
+            ..where((s) => s.bibleId.equals(bibleId))
+            ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+          .watch();
+
+  Future<int> insertLightingSetup(LightingSetupsCompanion row) =>
+      into(lightingSetups).insert(row);
+
+  Future<void> updateLightingSetup(LightingSetup row) =>
+      update(lightingSetups).replace(row);
+
+  Future<void> deleteLightingSetup(int id) =>
+      (delete(lightingSetups)..where((s) => s.id.equals(id))).go();
+
+  // ── Camera tests ──────────────────────────────────────────────────────────
+
+  Stream<List<CameraTest>> watchCameraTestsForBible(int bibleId) =>
+      (select(cameraTests)
+            ..where((t) => t.bibleId.equals(bibleId))
+            ..orderBy([(t) => OrderingTerm.asc(t.sortOrder)]))
+          .watch();
+
+  Future<int> insertCameraTest(CameraTestsCompanion row) =>
+      into(cameraTests).insert(row);
+
+  Future<void> updateCameraTest(CameraTest row) =>
+      update(cameraTests).replace(row);
+
+  Future<void> deleteCameraTest(int id) =>
+      (delete(cameraTests)..where((t) => t.id.equals(id))).go();
+
+  // ── Bible versions ────────────────────────────────────────────────────────
+
+  Stream<List<VisualBibleVersion>> watchBibleVersions(int bibleId) =>
+      (select(visualBibleVersions)
+            ..where((v) => v.bibleId.equals(bibleId))
+            ..orderBy([(v) => OrderingTerm.desc(v.createdAt)]))
+          .watch();
+
+  Future<int> insertBibleVersion(VisualBibleVersionsCompanion row) =>
+      into(visualBibleVersions).insert(row);
+
+  // ── Bible comments ────────────────────────────────────────────────────────
+
+  Stream<List<BibleComment>> watchBibleComments(
+    int bibleId, {
+    String? targetType,
+    int? targetId,
+  }) {
+    final query = select(bibleComments)
+      ..where((c) {
+        var expr = c.bibleId.equals(bibleId);
+        if (targetType != null) {
+          expr = expr & c.targetType.equals(targetType);
+        }
+        if (targetId != null) {
+          expr = expr & c.targetId.equals(targetId);
+        }
+        return expr;
+      })
+      ..orderBy([(c) => OrderingTerm.desc(c.createdAt)]);
+    return query.watch();
+  }
+
+  Future<int> insertBibleComment(BibleCommentsCompanion row) =>
+      into(bibleComments).insert(row);
+
+  Future<void> deleteBibleComment(int id) =>
+      (delete(bibleComments)..where((c) => c.id.equals(id))).go();
 
   Future<void> _migrateLookBiblesToVisualBibles() async {
     final legacy = await select(lookBibles).get();
@@ -1702,6 +2749,11 @@ class AppDatabase extends _$AppDatabase {
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
+    if (AppStorageConfig.isConfigured) {
+      final file = File(AppStorageConfig.current!.databaseFile);
+      await Directory(p.dirname(file.path)).create(recursive: true);
+      return NativeDatabase.createInBackground(file);
+    }
     final dir = await getApplicationDocumentsDirectory();
     final file = File(p.join(dir.path, 'iris_dp.db'));
     return NativeDatabase.createInBackground(file);

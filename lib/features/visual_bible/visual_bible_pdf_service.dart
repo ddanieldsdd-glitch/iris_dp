@@ -8,9 +8,34 @@ import '../../core/utils/pdf_export_fonts.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import 'visual_bible_model.dart';
 
-/// Genera PDFs de la Biblia Visual (completa y por departamento).
+/// Genera PDFs de la Biblia de Fotografía (Pitch, Tech Scout, completa).
 class VisualBiblePdfService {
   VisualBiblePdfService._();
+
+  static Future<Uint8List> buildBytes({
+    required String mode,
+    required String projectName,
+    required String? director,
+    required VisualBibleData data,
+    required List<ColorBlockModel> colorBlocks,
+    required List<ExposureBlockModel> exposureBlocks,
+    required List<LightingSetupModel> lightingSetups,
+    required List<CameraTestModel> cameraTests,
+    required List<MoodboardImageModel> moodboard,
+  }) async {
+    final doc = await buildDocument(
+      mode: mode,
+      projectName: projectName,
+      director: director,
+      data: data,
+      colorBlocks: colorBlocks,
+      exposureBlocks: exposureBlocks,
+      lightingSetups: lightingSetups,
+      cameraTests: cameraTests,
+      moodboard: moodboard,
+    );
+    return doc.save();
+  }
 
   static Future<Uint8List> buildFullBytes({
     required String projectName,
@@ -18,27 +43,41 @@ class VisualBiblePdfService {
     required VisualBibleData data,
     required List<ColorBlockModel> colorBlocks,
     required List<MoodboardImageModel> moodboard,
-  }) async {
-    final doc = await buildFullDocument(
-      projectName: projectName,
-      director: director,
-      data: data,
-      colorBlocks: colorBlocks,
-      moodboard: moodboard,
-    );
-    return doc.save();
-  }
+  }) =>
+      buildBytes(
+        mode: VisualBibleExportMode.full,
+        projectName: projectName,
+        director: director,
+        data: data,
+        colorBlocks: colorBlocks,
+        exposureBlocks: const [],
+        lightingSetups: const [],
+        cameraTests: const [],
+        moodboard: moodboard,
+      );
 
-  static Future<pw.Document> buildFullDocument({
+  static Future<pw.Document> buildDocument({
+    required String mode,
     required String projectName,
     required String? director,
     required VisualBibleData data,
     required List<ColorBlockModel> colorBlocks,
+    required List<ExposureBlockModel> exposureBlocks,
+    required List<LightingSetupModel> lightingSetups,
+    required List<CameraTestModel> cameraTests,
     required List<MoodboardImageModel> moodboard,
   }) async {
+    final isPitch = mode == VisualBibleExportMode.pitch;
+    final isTech = mode == VisualBibleExportMode.techScout;
     final fonts = await PdfExportFonts.load();
     final theme = PdfExportFonts.theme(regular: fonts.regular, bold: fonts.bold);
     final doc = pw.Document();
+
+    final coverLabel = isPitch
+        ? 'PITCH DECK — BIBLIA DE FOTOGRAFÍA'
+        : isTech
+            ? 'TECH SCOUT — BIBLIA DE FOTOGRAFÍA'
+            : 'BIBLIA DE FOTOGRAFÍA';
 
     doc.addPage(
       pw.Page(
@@ -52,7 +91,7 @@ class VisualBiblePdfService {
             children: [
               pw.Spacer(),
               pw.Text(
-                'BIBLIA VISUAL',
+                coverLabel,
                 style: pw.TextStyle(
                   font: fonts.bold,
                   fontSize: 10,
@@ -94,31 +133,70 @@ class VisualBiblePdfService {
       ),
     );
 
-    if (data.visualConcept?.trim().isNotEmpty == true) {
+    if (!isTech && _hasDirectionContent(data)) {
       doc.addPage(
         pw.Page(
           theme: theme,
           pageFormat: PdfPageFormat.a4,
           build: (_) => _sectionPage(
-            title: 'CONCEPTO VISUAL',
+            title: 'DIRECCIÓN',
             fontBold: fonts.bold,
             font: fonts.regular,
-            content: pw.Text(
-              data.visualConcept!,
-              style: pw.TextStyle(font: fonts.regular, fontSize: 13, lineSpacing: 7),
+            content: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                ..._directionPdfFields(data, fonts.regular),
+                if (data.directionNarrativeIntent?.isNotEmpty == true) ...[
+                  pw.SizedBox(height: 12),
+                  pw.Text(
+                    data.directionNarrativeIntent!,
+                    style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
+                  ),
+                ],
+              ],
             ),
           ),
         ),
       );
     }
 
-    if (colorBlocks.isNotEmpty) {
+    if (!isTech && data.visualConcept?.trim().isNotEmpty == true) {
+      doc.addPage(
+        pw.Page(
+          theme: theme,
+          pageFormat: PdfPageFormat.a4,
+          build: (_) => _sectionPage(
+            title: 'CONCEPTO DE IMAGEN',
+            fontBold: fonts.bold,
+            font: fonts.regular,
+            content: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  data.visualConcept!,
+                  style: pw.TextStyle(font: fonts.regular, fontSize: 13, lineSpacing: 7),
+                ),
+                if (data.conceptNarrativeIntent?.isNotEmpty == true) ...[
+                  pw.SizedBox(height: 12),
+                  pw.Text(
+                    data.conceptNarrativeIntent!,
+                    style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!isTech && colorBlocks.isNotEmpty) {
       doc.addPage(
         pw.MultiPage(
           theme: theme,
           pageFormat: PdfPageFormat.a4,
           build: (context) => [
-            _sectionHeader('COLOR', fonts.bold),
+            _sectionHeader('COLOR E IMAGEN', fonts.bold),
             ...colorBlocks.map(
               (block) => pw.Container(
                 margin: const pw.EdgeInsets.only(bottom: 20),
@@ -165,45 +243,106 @@ class VisualBiblePdfService {
                 ),
               ),
             ),
+            if (data.workingLutName != null)
+              _techChip('LUT trabajo', data.workingLutName!, fonts),
+            if (data.creativeLutName != null)
+              _techChip('LUT creativo', data.creativeLutName!, fonts),
           ],
         ),
       );
     }
 
-    doc.addPage(
-      pw.Page(
-        theme: theme,
-        pageFormat: PdfPageFormat.a4,
-        build: (_) => _sectionPage(
-          title: 'LUZ',
-          fontBold: fonts.bold,
-          font: fonts.regular,
-          content: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              if (data.lightingPhilosophy?.isNotEmpty == true)
-                pw.Text(
-                  data.lightingPhilosophy!,
-                  style: pw.TextStyle(font: fonts.regular, fontSize: 12, lineSpacing: 6),
+    if (!isPitch) {
+      doc.addPage(
+        pw.Page(
+          theme: theme,
+          pageFormat: PdfPageFormat.a4,
+          build: (_) => _sectionPage(
+            title: 'ILUMINACIÓN',
+            fontBold: fonts.bold,
+            font: fonts.regular,
+            content: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                if (data.lightingPhilosophy?.isNotEmpty == true)
+                  pw.Text(
+                    data.lightingPhilosophy!,
+                    style: pw.TextStyle(font: fonts.regular, fontSize: 12, lineSpacing: 6),
+                  ),
+                pw.SizedBox(height: 16),
+                pw.Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _techChip('Calidad', data.lightQuality ?? '—', fonts),
+                    _techChip('Contraste', data.contrastStyle ?? '—', fonts),
+                    _techChip('K:F día', data.keyFillRatioDay ?? '—', fonts),
+                    _techChip('K:F noche', data.keyFillRatioNight ?? '—', fonts),
+                    if (data.defaultTStop != null)
+                      _techChip('T-stop', data.defaultTStop!, fonts),
+                    if (data.ndNotes != null) _techChip('ND', data.ndNotes!, fonts),
+                  ],
                 ),
-              pw.SizedBox(height: 16),
-              pw.Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  _techChip('Calidad', data.lightQuality ?? '—', fonts),
-                  _techChip('Contraste', data.contrastStyle ?? '—', fonts),
-                  _techChip('K:F día', data.keyFillRatioDay ?? '—', fonts),
-                  _techChip('K:F noche', data.keyFillRatioNight ?? '—', fonts),
+                if (lightingSetups.isNotEmpty) ...[
+                  pw.SizedBox(height: 16),
+                  pw.Text('SETUPS', style: pw.TextStyle(font: fonts.bold, fontSize: 10)),
+                  ...lightingSetups.map(
+                    (s) => pw.Padding(
+                      padding: const pw.EdgeInsets.only(top: 6),
+                      child: pw.Text('• ${s.setupName}: ${s.narrativeNote ?? ''}'),
+                    ),
+                  ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
+      );
+    }
 
-    if (moodboard.isNotEmpty) {
+    if (!isPitch) {
+      doc.addPage(
+        pw.Page(
+          theme: theme,
+          pageFormat: PdfPageFormat.a4,
+          build: (_) => _sectionPage(
+            title: 'EXPOSICIÓN Y CÁMARA',
+            fontBold: fonts.bold,
+            font: fonts.regular,
+            content: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                if (data.exposureNarrativeIntent?.isNotEmpty == true)
+                  pw.Text(data.exposureNarrativeIntent!),
+                pw.SizedBox(height: 12),
+                pw.Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (data.highlightBehavior != null)
+                      _techChip('Highlights', data.highlightBehavior!, fonts),
+                    if (data.shadowBehavior != null)
+                      _techChip('Sombras', data.shadowBehavior!, fonts),
+                    if (data.nativeIso != null)
+                      _techChip('ISO nativo', '${data.nativeIso}', fonts),
+                    if (data.recordingFormat != null)
+                      _techChip('Formato', data.recordingFormat!, fonts),
+                  ],
+                ),
+                if (exposureBlocks.isNotEmpty) ...[
+                  pw.SizedBox(height: 12),
+                  ...exposureBlocks.map(
+                    (b) => pw.Text('${b.blockName}: K:F ${b.keyFillRatio ?? "—"}'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!isTech && moodboard.isNotEmpty) {
       final images = <pw.MemoryImage>[];
       for (final img in moodboard.take(12)) {
         final bytes = await PdfSafeImage.loadFromPath(img.imagePath);
@@ -237,8 +376,127 @@ class VisualBiblePdfService {
       }
     }
 
+    if (!isPitch && cameraTests.isNotEmpty) {
+      doc.addPage(
+        pw.Page(
+          theme: theme,
+          pageFormat: PdfPageFormat.a4,
+          build: (_) => _sectionPage(
+            title: 'PRUEBAS DE CÁMARA',
+            fontBold: fonts.bold,
+            font: fonts.regular,
+            content: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: cameraTests
+                  .map(
+                    (t) => pw.Padding(
+                      padding: const pw.EdgeInsets.only(bottom: 8),
+                      child: pw.Text(
+                        '${t.testName} — LUT: ${t.lutName ?? "—"}, Luz: ${t.lightCondition ?? "—"}',
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if ((isPitch || isTech) && moodboard.isNotEmpty) {
+      final refsBySection = <String, List<({MoodboardImageModel img, pw.MemoryImage? image})>>{};
+      for (final img in moodboard) {
+        final sections = img.assignedSections.isNotEmpty
+            ? img.assignedSections
+            : [
+                for (final sid in BibleSectionId.all)
+                  if (BibleSectionId.moodboardCategory(sid) == img.category) sid,
+              ];
+        final bytes = await PdfSafeImage.loadFromPath(img.imagePath);
+        final memory = bytes != null ? pw.MemoryImage(bytes) : null;
+        for (final sid in sections) {
+          refsBySection.putIfAbsent(sid, () => []).add((img: img, image: memory));
+        }
+      }
+      if (refsBySection.isNotEmpty) {
+        doc.addPage(
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            build: (context) => [
+              _sectionHeader('REFERENCIAS VISUALES', fonts.bold),
+              for (final entry in refsBySection.entries) ...[
+                pw.Text(
+                  BibleSectionId.label(entry.key),
+                  style: pw.TextStyle(font: fonts.bold, fontSize: 12),
+                ),
+                pw.SizedBox(height: 8),
+                pw.Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final item in entry.value)
+                      if (item.image != null)
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Image(item.image!, height: 80, fit: pw.BoxFit.contain),
+                            if (item.img.caption?.isNotEmpty == true)
+                              pw.Text(
+                                item.img.caption!,
+                                style: pw.TextStyle(font: fonts.regular, fontSize: 8),
+                              ),
+                          ],
+                        ),
+                  ],
+                ),
+                pw.SizedBox(height: 16),
+              ],
+            ],
+          ),
+        );
+      }
+    }
+
+    if (isTech && data.opticsConfigJson?.isNotEmpty == true) {
+      doc.addPage(
+        pw.Page(
+          theme: theme,
+          pageFormat: PdfPageFormat.a4,
+          build: (_) => _sectionPage(
+            title: 'CONFIGURACIÓN ÓPTICA (FLT)',
+            fontBold: fonts.bold,
+            font: fonts.regular,
+            content: pw.Text(
+              data.opticsConfigJson!,
+              style: const pw.TextStyle(fontSize: 10),
+            ),
+          ),
+        ),
+      );
+    }
+
     return doc;
   }
+
+  static Future<pw.Document> buildFullDocument({
+    required String projectName,
+    required String? director,
+    required VisualBibleData data,
+    required List<ColorBlockModel> colorBlocks,
+    required List<MoodboardImageModel> moodboard,
+  }) =>
+      buildDocument(
+        mode: VisualBibleExportMode.full,
+        projectName: projectName,
+        director: director,
+        data: data,
+        colorBlocks: colorBlocks,
+        exposureBlocks: const [],
+        lightingSetups: const [],
+        cameraTests: const [],
+        moodboard: moodboard,
+      );
 
   static Future<Uint8List> buildDepartmentBytes({
     required String department,
@@ -308,27 +566,59 @@ class VisualBiblePdfService {
     return doc;
   }
 
+  static Future<String?> export({
+    required String mode,
+    required String projectName,
+    required String? director,
+    required VisualBibleData data,
+    required List<ColorBlockModel> colorBlocks,
+    required List<ExposureBlockModel> exposureBlocks,
+    required List<LightingSetupModel> lightingSetups,
+    required List<CameraTestModel> cameraTests,
+    required List<MoodboardImageModel> moodboard,
+  }) {
+    final safe = projectName.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
+    final suffix = switch (mode) {
+      VisualBibleExportMode.pitch => 'pitch',
+      VisualBibleExportMode.techScout => 'tech_scout',
+      _ => 'biblia_fotografia',
+    };
+    return ExportFileSaver.saveGenerated(
+      dialogTitle: 'Exportar Biblia de Fotografía',
+      fileName: '${safe.isEmpty ? 'proyecto' : safe}_$suffix.pdf',
+      extension: 'pdf',
+      build: () => buildBytes(
+        mode: mode,
+        projectName: projectName,
+        director: director,
+        data: data,
+        colorBlocks: colorBlocks,
+        exposureBlocks: exposureBlocks,
+        lightingSetups: lightingSetups,
+        cameraTests: cameraTests,
+        moodboard: moodboard,
+      ),
+    );
+  }
+
   static Future<String?> exportFull({
     required String projectName,
     required String? director,
     required VisualBibleData data,
     required List<ColorBlockModel> colorBlocks,
     required List<MoodboardImageModel> moodboard,
-  }) {
-    final safe = projectName.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
-    return ExportFileSaver.saveGenerated(
-      dialogTitle: 'Exportar Biblia Visual',
-      fileName: '${safe.isEmpty ? 'proyecto' : safe}_biblia_visual.pdf',
-      extension: 'pdf',
-      build: () => buildFullBytes(
+  }) =>
+      export(
+        mode: VisualBibleExportMode.full,
         projectName: projectName,
         director: director,
         data: data,
         colorBlocks: colorBlocks,
+        exposureBlocks: const [],
+        lightingSetups: const [],
+        cameraTests: const [],
         moodboard: moodboard,
-      ),
-    );
-  }
+      );
 
   static Future<String?> exportDepartment({
     required String department,
@@ -454,6 +744,40 @@ class VisualBiblePdfService {
         ),
       ],
     );
+  }
+
+  static bool _hasDirectionContent(VisualBibleData data) =>
+      data.tone?.trim().isNotEmpty == true ||
+      data.creativeIntention?.trim().isNotEmpty == true ||
+      data.stagingApproach?.trim().isNotEmpty == true ||
+      data.pointOfView?.trim().isNotEmpty == true ||
+      data.directionNarrativeIntent?.trim().isNotEmpty == true;
+
+  static List<pw.Widget> _directionPdfFields(
+    VisualBibleData data,
+    pw.Font font,
+  ) {
+    final fields = <(String, String?)>[
+      ('Tono', data.tone),
+      ('Intención', data.creativeIntention),
+      ('Puesta en escena', data.stagingApproach),
+      ('Punto de vista', data.pointOfView),
+    ];
+    return [
+      for (final (label, value) in fields)
+        if (value?.trim().isNotEmpty == true) ...[
+          pw.Text(
+            label.toUpperCase(),
+            style: pw.TextStyle(font: font, fontSize: 8, color: PdfColors.grey600),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            value!,
+            style: pw.TextStyle(font: font, fontSize: 12, lineSpacing: 5),
+          ),
+          pw.SizedBox(height: 12),
+        ],
+    ];
   }
 
   static pw.Widget _techChip(

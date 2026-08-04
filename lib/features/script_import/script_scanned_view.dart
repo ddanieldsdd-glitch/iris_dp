@@ -8,7 +8,7 @@ import 'script_file_reader.dart';
 import 'script_parser.dart';
 import 'script_screenplay_layout.dart';
 
-enum _ScriptEntryKind { blank, pageBreak, slugline, screenplayLine }
+enum _ScriptEntryKind { blank, pageBreak, slugline, screenplayLine, characterLine }
 
 class _ScriptEntry {
   final _ScriptEntryKind kind;
@@ -20,6 +20,8 @@ class _ScriptEntry {
   final ScreenplayLineKind? lineKind;
   final bool included;
   final Color? sceneColor;
+  final String? characterName;
+  final Color? characterColor;
 
   const _ScriptEntry._({
     required this.kind,
@@ -31,6 +33,8 @@ class _ScriptEntry {
     this.lineKind,
     this.included = false,
     this.sceneColor,
+    this.characterName,
+    this.characterColor,
   });
 
   factory _ScriptEntry.blank(double height) => _ScriptEntry._(
@@ -66,6 +70,19 @@ class _ScriptEntry {
         text: text,
         lineKind: lineKind,
       );
+
+  factory _ScriptEntry.characterLine({
+    required String text,
+    required String characterName,
+    required Color characterColor,
+  }) =>
+      _ScriptEntry._(
+        kind: _ScriptEntryKind.characterLine,
+        text: text,
+        lineKind: ScreenplayLineKind.character,
+        characterName: characterName,
+        characterColor: characterColor,
+      );
 }
 
 /// Texto extraído del guion con formato cinematográfico y sluglines pulsables.
@@ -75,7 +92,9 @@ class ScriptScannedView extends StatefulWidget {
   final ScrollController scrollController;
   final Set<int> includedStartIndices;
   final Map<int, Color> sceneColorsByStartIndex;
+  final Map<String, Color> characterColorsByName;
   final ValueChanged<RawSlugline> onSluglineTap;
+  final ValueChanged<String>? onCharacterTap;
 
   const ScriptScannedView({
     super.key,
@@ -84,7 +103,9 @@ class ScriptScannedView extends StatefulWidget {
     required this.scrollController,
     required this.includedStartIndices,
     this.sceneColorsByStartIndex = const {},
+    this.characterColorsByName = const {},
     required this.onSluglineTap,
+    this.onCharacterTap,
   });
 
   @override
@@ -112,7 +133,8 @@ class _ScriptScannedViewState extends State<ScriptScannedView> {
     if (oldWidget.text != widget.text ||
         oldWidget.fontSize != widget.fontSize ||
         oldWidget.includedStartIndices != widget.includedStartIndices ||
-        oldWidget.sceneColorsByStartIndex != widget.sceneColorsByStartIndex) {
+        oldWidget.sceneColorsByStartIndex != widget.sceneColorsByStartIndex ||
+        oldWidget.characterColorsByName != widget.characterColorsByName) {
       _rebuildEntries();
     }
   }
@@ -206,6 +228,23 @@ class _ScriptScannedViewState extends State<ScriptScannedView> {
         continue;
       }
 
+      if (kind == ScreenplayLineKind.character) {
+        final characterName = ScreenplayLineClassifier.parseCharacterName(trimmed);
+        if (characterName != null) {
+          final colorKey = characterName.toUpperCase();
+          final characterColor = widget.characterColorsByName[colorKey];
+          if (characterColor != null) {
+            entries.add(_ScriptEntry.characterLine(
+              text: trimmed,
+              characterName: characterName,
+              characterColor: characterColor,
+            ));
+            charIndex += line.length + 1;
+            continue;
+          }
+        }
+      }
+
       entries.add(_ScriptEntry.screenplayLine(text: trimmed, lineKind: kind));
       charIndex += line.length + 1;
     }
@@ -297,6 +336,17 @@ class _ScriptScannedViewState extends State<ScriptScannedView> {
                 )
               : _styleForKind(baseStyle, entry.lineKind!),
           innerWidth: _innerMaxWidth,
+        ),
+      _ScriptEntryKind.characterLine => _CharacterLineRow(
+          text: entry.text!,
+          characterName: entry.characterName!,
+          color: entry.characterColor!,
+          baseStyle: baseStyle,
+          palette: palette,
+          innerWidth: _innerMaxWidth,
+          onTap: widget.onCharacterTap == null
+              ? null
+              : () => widget.onCharacterTap!(entry.characterName!),
         ),
     };
   }
@@ -428,7 +478,7 @@ class _SluglineRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
-                  included ? Icons.check_circle_outline : Icons.add_circle_outline,
+                  included ? Icons.edit_outlined : Icons.add_circle_outline,
                   size: 16,
                   color: iconColor,
                 ),
@@ -449,6 +499,84 @@ class _SluglineRow extends StatelessWidget {
                     ),
                   ),
                 ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CharacterLineRow extends StatelessWidget {
+  final String text;
+  final String characterName;
+  final Color color;
+  final TextStyle baseStyle;
+  final AppPalette palette;
+  final double innerWidth;
+  final VoidCallback? onTap;
+
+  const _CharacterLineRow({
+    required this.text,
+    required this.characterName,
+    required this.color,
+    required this.baseStyle,
+    required this.palette,
+    required this.innerWidth,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final margins = ScreenplayMargins.forKind(
+      ScreenplayLineKind.character,
+      innerWidth,
+    );
+    final bg = color.withValues(alpha: 0.2);
+    final border = color;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: margins.left,
+        right: margins.right,
+        bottom: 2,
+      ),
+      child: Material(
+        color: bg,
+        borderRadius: BorderRadius.circular(4),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(4),
+          onTap: onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: border.withValues(alpha: 0.55)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            child: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: border,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: baseStyle.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (onTap != null)
+                  Icon(
+                    Icons.palette_outlined,
+                    size: 14,
+                    color: border,
+                  ),
               ],
             ),
           ),

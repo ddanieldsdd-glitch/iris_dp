@@ -2,7 +2,8 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iris_dp/core/database/app_database.dart';
-import 'package:iris_dp/features/script_import/claude_script_service.dart';
+import 'package:iris_dp/features/script_import/normalized_scene.dart';
+import 'package:iris_dp/features/script_import/script_character_extractor.dart';
 import 'package:iris_dp/features/script_import/script_parser.dart';
 
 void main() {
@@ -107,7 +108,7 @@ Karim espera.
   });
 
   group('NormalizedScene merge', () {
-    test('mergeWithRaw keeps all parser scenes when AI returns fewer', () {
+    test('mergeWithRaw keeps all parser scenes when fewer normalized entries', () {
       final raw = [
         const RawSlugline(
           number: 1,
@@ -142,6 +143,36 @@ Karim espera.
       expect(merged.length, 2);
       expect(merged[0].shootSet, 'CASA');
       expect(merged[1].location, 'CALLE');
+    });
+  });
+
+  group('ScriptCharacterExtractor', () {
+    test('detecta personajes entre sluglines consecutivas', () {
+      const script = '''
+INT. COCINA DE MARÍA - DÍA
+
+MARÍA
+(preocupada)
+¿Dónde está Gala?
+
+GALA
+Aquí estoy.
+
+EXT. CALLE DEL PUEBLO - NOCHE
+
+KARIM
+Corre.
+''';
+
+      final sluglines = ScriptParser.parse(script);
+      final characters = ScriptCharacterExtractor.extractBySlugStartIndex(
+        script,
+        sluglines,
+      );
+
+      expect(sluglines.length, 2);
+      expect(characters[sluglines[0].startIndex], ['GALA', 'MARÍA']);
+      expect(characters[sluglines[1].startIndex], ['KARIM']);
     });
   });
 

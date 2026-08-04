@@ -8,23 +8,27 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
-import '../../core/settings/api_key_provider.dart';
-import '../../core/settings/api_key_storage.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/utils/character_colors.dart';
 import '../../core/utils/color_edit_scope.dart';
 import '../../core/utils/media_storage.dart';
 import '../../core/utils/project_scene_colors.dart';
 import '../../core/utils/scene_color.dart';
+import '../../core/utils/scene_characters.dart';
 import '../../core/utils/scene_format.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/scene_character_chips.dart';
+import '../../core/widgets/scene_meta_display.dart';
 import '../technical_script/technical_script_screen.dart';
-import 'claude_script_service.dart';
 import 'import_scene_sheet.dart';
+import 'normalized_scene.dart';
+import 'script_character_extractor.dart';
+import 'character_color_sheet.dart';
 import 'script_file_reader.dart';
 import 'script_parser.dart';
 import 'script_preview_panel.dart';
@@ -69,6 +73,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
   String _status = '';
   LoadedScript? _loadedScript;
   final Map<String, String> _pendingSetColors = {};
+  final Map<String, String> _characterColors = {};
 
   @override
   void initState() {
@@ -95,6 +100,10 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
         final loaded = await ScriptFileReader.load(project.scriptFilePath!);
         setState(() {
           _loadedScript = loaded;
+          _characterColors
+            ..clear()
+            ..addAll(decodeCharacterColors(project.characterColorsJson));
+          _syncCharacterColorsFromScript(loaded.parseText);
           _scenes.clear();
           for (final scene in dbScenes) {
             final siteName = scene.locationSiteId != null
@@ -108,6 +117,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
           _status = dbScenes.isEmpty
               ? 'Guion cargado. Consulta el PDF o el texto escaneado y añade escenas.'
               : '${dbScenes.length} escenas sincronizadas con el guion técnico.';
+          _syncPendingColorsFromScenes();
         });
       } else if (_projectHasSyncedScenes) {
         setState(() {
@@ -167,6 +177,63 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
       _scenes.add(_SceneListItem.from(scenes[i], sourceStartIndex: startIndex));
     }
     _renumberScenes();
+    _syncPendingColorsFromScenes();
+  }
+
+  void _syncPendingColorsFromScenes() {
+    _pendingSetColors
+      ..clear()
+      ..addAll(buildPendingSetColorsFromScenes(
+        _scenes.map(
+          (item) => (
+            locationSite: item.data.locationSite,
+            shootSet: item.data.shootSet,
+          ),
+        ),
+      ));
+  }
+
+  void _syncCharacterColorsFromScript(String scriptText) {
+    final fromScript =
+        ScriptCharacterExtractor.extractAllCharacterNames(scriptText);
+    final fromScenes = _scenes
+        .expand((item) => item.data.characters)
+        .map(characterColorKey);
+    final allNames = {...fromScript, ...fromScenes};
+    _characterColors.addAll(
+      buildDefaultCharacterColors(allNames, preserve: _characterColors),
+    );
+  }
+
+  Map<String, Color> get _characterColorMap => {
+        for (final entry in _characterColors.entries)
+          entry.key: characterDisplayColor(entry.value),
+      };
+
+  Future<void> _persistCharacterColors() async {
+    final db = ref.read(databaseProvider);
+    final project = await db.getProject(widget.projectId);
+    if (project == null) return;
+    await db.updateProject(project.copyWith(
+      characterColorsJson: Value(encodeCharacterColors(_characterColors)),
+      updatedAt: DateTime.now(),
+    ));
+  }
+
+  Future<void> _onCharacterTap(String characterName) async {
+    final key = characterColorKey(characterName);
+    final currentHex = _characterColors[key];
+    final result = await showCharacterColorSheet(
+      context,
+      characterName: characterName,
+      currentHex: currentHex,
+    );
+    if (result == null) return;
+
+    setState(() {
+      _characterColors[key] = result;
+    });
+    await _persistCharacterColors();
   }
 
   Set<int> get _includedStartIndices => {
@@ -192,35 +259,53 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
           sourceStartIndex: item.sourceStartIndex,
           shootSet: item.data.shootSet,
           sceneColorOverride: item.data.locationColor,
+          locationSite: item.data.locationSite,
         ),
       ),
     );
   }
 
-  void _applySetColor(String shootSet, String hex) {
-    final key = shootSet.trim().toLowerCase();
+  int _siteIndexForName(String locationSite) {
+    final siteKey = locationSite.trim().toLowerCase();
+    final order = <String>[];
+    for (final item in _scenes) {
+      final key = item.data.locationSite.trim().toLowerCase();
+      if (!order.contains(key)) order.add(key);
+    }
+    final idx = order.indexOf(siteKey);
+    return idx >= 0 ? idx : order.length;
+  }
+
+  void _applySetColor(String locationSite, String shootSet, String hex) {
+    final key = setColorKey(locationSite, shootSet);
     _pendingSetColors[key] = hex;
+    final setKey = shootSet.trim().toLowerCase();
     for (var i = 0; i < _scenes.length; i++) {
-      if (_scenes[i].data.shootSet.trim().toLowerCase() == key) {
-        _scenes[i].data = _scenes[i].data.copyWith(locationColor: null);
+      final scene = _scenes[i].data;
+      if (scene.shootSet.trim().toLowerCase() == setKey &&
+          scene.locationSite.trim().toLowerCase() ==
+              locationSite.trim().toLowerCase()) {
+        _scenes[i].data = scene.copyWith(locationColor: null);
       }
     }
   }
 
   void _applyLocationColor(String locationSite, String baseHex) {
     final siteKey = locationSite.trim().toLowerCase();
-    final setKeys = <String>{};
+    final setNames = <String>{};
     for (final item in _scenes) {
       if (item.data.locationSite.trim().toLowerCase() == siteKey) {
-        setKeys.add(item.data.shootSet.trim().toLowerCase());
+        setNames.add(item.data.shootSet);
       }
     }
-    final sorted = setKeys.toList()..sort();
-    final base = locationBaseColor(sceneDisplayColor(baseHex));
-    for (var i = 0; i < sorted.length; i++) {
-      _pendingSetColors[sorted[i]] =
-          hexFromColor(setVariantColor(base, i, sorted.length));
-    }
+    _pendingSetColors.addAll(
+      pendingSetColorsForSite(
+        locationSite: locationSite,
+        setNames: setNames,
+        siteIndex: _siteIndexForName(locationSite),
+        baseHex: baseHex,
+      ),
+    );
     for (var i = 0; i < _scenes.length; i++) {
       if (_scenes[i].data.locationSite.trim().toLowerCase() == siteKey) {
         _scenes[i].data = _scenes[i].data.copyWith(locationColor: null);
@@ -240,7 +325,11 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
           locationColor: persistSceneColor(result.setColor),
         );
       case ColorEditScope.set:
-        _applySetColor(result.scene.shootSet, result.setColor);
+        _applySetColor(
+          result.scene.locationSite,
+          result.scene.shootSet,
+          result.setColor,
+        );
         sceneData = result.scene.copyWith(locationColor: null);
       case ColorEditScope.location:
         _applyLocationColor(result.scene.locationSite, result.setColor);
@@ -326,10 +415,12 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
 
       if (!detectScenes) {
         setState(() {
+          _syncCharacterColorsFromScript(loaded.parseText);
           _status =
               'Guion de referencia actualizado. Las escenas del proyecto se mantienen.';
           _loading = false;
         });
+        await _persistCharacterColors();
         return;
       }
 
@@ -346,32 +437,27 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
       }
 
       setState(() =>
-          _status = 'Normalizando con IA (${sluglines.length} escenas)...');
+          _status = 'Detectando escenas (${sluglines.length})...');
 
-      final apiKey = ref.read(claudeApiKeyProvider).valueOrNull ?? '';
-      late final List<NormalizedScene> scenes;
-      late final String statusMessage;
+      final charactersByStart = ScriptCharacterExtractor.extractBySlugStartIndex(
+        loaded.parseText,
+        sluglines,
+      );
 
-      if (ApiKeyStorage.isPlaceholderKey(apiKey)) {
-        scenes = sluglines.map(NormalizedScene.fromRaw).toList();
-        statusMessage = 'Detectadas ${scenes.length} escenas (sin IA).';
-      } else {
-        try {
-          final service = ClaudeScriptService(apiKey);
-          scenes = await service.normalizeSluglines(sluglines);
-          statusMessage = 'Detectadas ${scenes.length} escenas.';
-        } catch (e) {
-          scenes = sluglines.map(NormalizedScene.fromRaw).toList();
-          statusMessage =
-              'IA no disponible. Detectadas ${scenes.length} escenas localmente.';
-        }
-      }
+      final scenes = sluglines.map(NormalizedScene.fromRaw).toList();
+      final scenesWithCharacters = ScriptCharacterExtractor.attachToScenes(
+        scenes,
+        sluglines,
+        charactersByStart,
+      );
 
       setState(() {
-        _setScenesFromNormalized(scenes, sluglines: sluglines);
-        _status = statusMessage;
+        _setScenesFromNormalized(scenesWithCharacters, sluglines: sluglines);
+        _syncCharacterColorsFromScript(loaded.parseText);
+        _status = 'Detectadas ${scenesWithCharacters.length} escenas.';
         _loading = false;
       });
+      await _persistCharacterColors();
     } catch (e) {
       setState(() {
         _loading = false;
@@ -413,20 +499,31 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     return sets.length;
   }
 
-  Future<void> _addSceneFromSlugline(
+  Future<void> _onSluglineTap(
     RawSlugline slug,
     ProjectSceneColors colorCtx,
   ) async {
-    if (_scenes.any((s) => s.sourceStartIndex == slug.startIndex)) {
-      if (!mounted) return;
-      AppSnackBar.show(context, 'Esta escena ya está en la lista.');
+    final existingIndex =
+        _scenes.indexWhere((s) => s.sourceStartIndex == slug.startIndex);
+    if (existingIndex >= 0) {
+      await _editScene(existingIndex, colorCtx);
       return;
     }
 
     final nextNumber = slug.scriptNumber ?? _scenes.length + 1;
-    final prefilled = NormalizedScene.fromRaw(
+    var prefilled = NormalizedScene.fromRaw(
       slug.copyWith(number: nextNumber),
     );
+    if (_loadedScript != null) {
+      final charactersByStart =
+          ScriptCharacterExtractor.extractBySlugStartIndex(
+        _loadedScript!.parseText,
+        [slug],
+      );
+      prefilled = prefilled.copyWith(
+        characters: charactersByStart[slug.startIndex] ?? const [],
+      );
+    }
 
     final result = await showImportSceneSheet(
       context,
@@ -593,25 +690,27 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
               location: item.data.location,
               shootSet: item.data.shootSet,
               locationSite: item.data.locationSite,
+              name: item.data.name,
               description: item.data.description,
               locationColor: item.data.locationColor,
+              charactersJson: encodeSceneCharacters(item.data.characters),
               sourceStartIndex: item.sourceStartIndex,
             ),
           )
           .toList(growable: false);
 
       await db.syncScenesFromWorkspace(widget.projectId, items);
-      if (_pendingSetColors.isNotEmpty) {
-        final siteBySetKey = {
-          for (final item in _scenes)
-            item.data.shootSet.trim().toLowerCase(): item.data.locationSite.trim(),
-        };
-        await db.syncSetColorsFromWorkspace(
-          widget.projectId,
-          Map.from(_pendingSetColors),
-          siteBySetKey,
-        );
-      }
+      _syncPendingColorsFromScenes();
+      final siteBySetKey = {
+        for (final item in _scenes)
+          setColorKey(item.data.locationSite, item.data.shootSet):
+              item.data.locationSite.trim(),
+      };
+      await db.syncSetColorsFromWorkspace(
+        widget.projectId,
+        Map.from(_pendingSetColors),
+        siteBySetKey,
+      );
       await db.syncLocationsFromScenes(widget.projectId);
 
       if (!mounted) return;
@@ -700,8 +799,10 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
                           script: _loadedScript,
                           includedSceneStartIndices: _includedStartIndices,
                           sceneColorsByStartIndex: slugColors,
+                          characterColorsByName: _characterColorMap,
                           onSluglineTap: (slug) =>
-                              _addSceneFromSlugline(slug, colorCtx),
+                              _onSluglineTap(slug, colorCtx),
+                          onCharacterTap: _onCharacterTap,
                         ),
                       ),
                     ),
@@ -733,8 +834,10 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
                             script: _loadedScript,
                             includedSceneStartIndices: _includedStartIndices,
                             sceneColorsByStartIndex: slugColors,
+                            characterColorsByName: _characterColorMap,
                             onSluglineTap: (slug) =>
-                                _addSceneFromSlugline(slug, colorCtx),
+                                _onSluglineTap(slug, colorCtx),
+                            onCharacterTap: _onCharacterTap,
                           ),
                           _buildScenesPanel(palette, colorCtx),
                         ],
@@ -767,7 +870,9 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
               script: _loadedScript,
               includedSceneStartIndices: _includedStartIndices,
               sceneColorsByStartIndex: slugColors,
-              onSluglineTap: (slug) => _addSceneFromSlugline(slug, colorCtx),
+              characterColorsByName: _characterColorMap,
+              onSluglineTap: (slug) => _onSluglineTap(slug, colorCtx),
+              onCharacterTap: _onCharacterTap,
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -857,7 +962,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
                 ? Center(
                     child: Text(
                       'Consulta el guion (Original o Escaneado) y pulsa escenas '
-                      'pendientes para añadirlas. «Detectar escenas» es solo una ayuda.',
+                      'o personajes para marcarlos. «Detectar escenas» es solo una ayuda.',
                       style: AppTypography.bodyMedium(palette),
                       textAlign: TextAlign.center,
                     ),
@@ -900,6 +1005,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     final color = colorCtx.effective(
       shootSet: s.shootSet,
       sceneColorOverride: s.locationColor,
+      locationSite: s.locationSite,
     );
 
     return AppCard(
@@ -932,12 +1038,24 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  formatSceneMetaLine(
-                    intExt: s.intExt,
-                    dayNight: s.dayNight,
-                    location: s.location,
+                if (s.name != null &&
+                    s.name!.trim().isNotEmpty &&
+                    !isAutoGeneratedSceneName(
+                      name: s.name,
+                      intExt: s.intExt,
+                      dayNight: s.dayNight,
+                      location: s.location,
+                    )) ...[
+                  Text(
+                    s.name!,
+                    style: AppTypography.label(palette),
                   ),
+                  const SizedBox(height: 2),
+                ],
+                SceneMetaDisplay(
+                  intExt: s.intExt,
+                  dayNight: s.dayNight,
+                  location: s.location,
                   style: AppTypography.bodyLarge(palette),
                 ),
                 if (s.shootSet != s.location || s.locationSite != s.shootSet)
@@ -946,6 +1064,15 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
                     style: AppTypography.caption(palette)
                         .copyWith(color: palette.accent),
                   ),
+                if (s.characters.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  SceneCharacterChips(
+                    characters: s.characters,
+                    palette: palette,
+                    compact: true,
+                    characterColors: _characterColorMap,
+                  ),
+                ],
                 if (s.description != null && s.description!.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(

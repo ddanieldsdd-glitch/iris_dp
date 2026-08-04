@@ -8,6 +8,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_format.dart';
+import '../../core/widgets/scene_meta_display.dart';
 import '../camera_plan/camera_plan_scene_badge.dart';
 import '../../core/widgets/app_snackbar.dart';
 
@@ -234,11 +235,7 @@ class DraggableSceneChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final sceneColor = colors.sceneColor(scene);
-    final label = formatSceneMetaLine(
-      intExt: scene.intExt,
-      dayNight: scene.dayNight,
-      location: locationFromCanonical(scene.locationCanonical),
-    );
+    final locationName = locationFromCanonical(scene.locationCanonical);
 
     final chip = Material(
       color: sceneColor.withValues(alpha: 0.08),
@@ -262,11 +259,12 @@ class DraggableSceneChip extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: Text(
-                  label,
+                child: SceneMetaDisplay(
+                  intExt: scene.intExt,
+                  dayNight: scene.dayNight,
+                  location: locationName,
                   style: AppTypography.caption(palette),
                   maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],

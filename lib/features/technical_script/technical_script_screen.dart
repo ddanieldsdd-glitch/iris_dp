@@ -25,6 +25,7 @@ import 'scene_form_sheet.dart';
 import '../../core/utils/shot_technical_options.dart';
 import '../../core/widgets/inline_edit_field.dart';
 import '../../core/widgets/app_snackbar.dart';
+import '../../core/widgets/scene_meta_display.dart';
 
 // Re-export para compatibilidad con imports existentes.
 const kMovements = kShotMovements;
@@ -109,7 +110,7 @@ class TechnicalScriptScreen extends ConsumerWidget {
               return StreamBuilder<List<LocationBasePlan>>(
                 stream: db.watchLocationsForProject(projectId),
                 builder: (context, locSnap) {
-                  final colors = ProjectColorScheme(
+                  final colors = ProjectColorScheme.resolve(
                     sites: siteSnap.data ?? [],
                     sets: locSnap.data ?? [],
                     scenes: scenes,
@@ -213,17 +214,15 @@ class _SceneSection extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      formatSceneTitle(
-                        number: scene.number,
-                        intExt: scene.intExt,
-                        dayNight: scene.dayNight,
-                        location: locationName,
-                      ),
+                    SceneMetaDisplay(
+                      intExt: scene.intExt,
+                      dayNight: scene.dayNight,
+                      location: locationName,
                       style: AppTypography.titleMedium(palette).copyWith(
                         color: palette.textPrimary,
                         letterSpacing: 0.5,
                       ),
+                      iconSize: 18,
                     ),
                     if (scene.description != null &&
                         scene.description!.trim().isNotEmpty) ...[

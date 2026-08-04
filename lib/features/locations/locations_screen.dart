@@ -8,9 +8,11 @@ import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/project_color_scheme.dart';
+import '../../core/utils/scene_color.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/scene_color_picker.dart';
 import 'location_form_sheet.dart';
 import 'location_site_form_sheet.dart';
 import 'location_site_tabs.dart';
@@ -18,8 +20,15 @@ import '../../core/widgets/app_snackbar.dart';
 
 class LocationsScreen extends ConsumerStatefulWidget {
   final int projectId;
+  final int? initialSiteId;
+  final int? initialSetId;
 
-  const LocationsScreen({super.key, required this.projectId});
+  const LocationsScreen({
+    super.key,
+    required this.projectId,
+    this.initialSiteId,
+    this.initialSetId,
+  });
 
   @override
   ConsumerState<LocationsScreen> createState() => _LocationsScreenState();
@@ -29,6 +38,13 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen> {
   int? _selectedSiteId;
   int? _expandedSetId;
   bool _syncing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedSiteId = widget.initialSiteId;
+    _expandedSetId = widget.initialSetId;
+  }
 
   Future<void> _syncFromScenes() async {
     setState(() => _syncing = true);
@@ -251,7 +267,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen> {
               }
 
               final activeSiteId = _resolveActiveSiteId(sites);
-              final colors = ProjectColorScheme(
+              final colors = ProjectColorScheme.resolve(
                 sites: sites,
                 sets: sets,
                 scenes: sceneSnap.data ?? [],
@@ -766,6 +782,76 @@ class _SiteDetailPanelState extends ConsumerState<_SiteDetailPanel> {
     super.dispose();
   }
 
+  Future<void> _editSiteColor() async {
+    final palette = context.palette;
+    final site = widget.site;
+    final current = widget.colors.siteColor(site.id);
+    var picked = hexFromColor(current);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: palette.surfaceElevated,
+              title: Text(
+                'Color de «${site.name}»',
+                style: AppTypography.titleMedium(palette),
+              ),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'El color base se aplicará a todos los sets y escenas '
+                      'de esta localización.',
+                      style: AppTypography.bodyMedium(palette),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    SceneColorPicker(
+                      palette: palette,
+                      selectedHex: picked,
+                      onChanged: (hex) => setDialogState(() => picked = hex),
+                      hint: 'Color base de la localización.',
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: Text('Cancelar',
+                      style: AppTypography.bodyMedium(palette)),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: Text(
+                    'Aplicar',
+                    style: AppTypography.bodyMedium(palette)
+                        .copyWith(color: palette.accent),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final db = ref.read(databaseProvider);
+    await db.applySiteColorFromBase(site.id, picked);
+    if (!mounted) return;
+    AppSnackBar.show(
+      context,
+      'Color de «${site.name}» actualizado en todos sus sets.',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -809,12 +895,19 @@ class _SiteDetailPanelState extends ConsumerState<_SiteDetailPanel> {
                     children: [
                       Row(
                         children: [
-                          Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              color: siteColor,
-                              shape: BoxShape.circle,
+                          InkWell(
+                            onTap: _editSiteColor,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Tooltip(
+                              message: 'Cambiar color de la localización',
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: siteColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: AppSpacing.sm),

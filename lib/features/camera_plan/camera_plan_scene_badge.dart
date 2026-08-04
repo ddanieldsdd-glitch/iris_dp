@@ -55,6 +55,7 @@ class SceneHeaderRow extends StatelessWidget {
   final Color sceneColor;
   final String title;
   final String? subtitle;
+  final Widget? subtitleWidget;
   final AppPalette palette;
 
   const SceneHeaderRow({
@@ -64,6 +65,7 @@ class SceneHeaderRow extends StatelessWidget {
     required this.title,
     required this.palette,
     this.subtitle,
+    this.subtitleWidget,
   });
 
   @override
@@ -78,7 +80,10 @@ class SceneHeaderRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title, style: AppTypography.titleMedium(palette)),
-              if (subtitle != null) ...[
+              if (subtitleWidget != null) ...[
+                const SizedBox(height: 2),
+                subtitleWidget!,
+              ] else if (subtitle != null) ...[
                 const SizedBox(height: 2),
                 Text(subtitle!, style: AppTypography.caption(palette)),
               ],

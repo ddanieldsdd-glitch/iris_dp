@@ -1,12 +1,22 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' show Value;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+
+import '../../core/cloud/cloud_providers.dart';
+import '../../core/cloud/supabase_config.dart';
 import '../../core/database/app_database.dart';
+import '../../core/sync/project_sync_service.dart';
+import '../auth/invite_director_sheet.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_radius.dart';
+import '../../core/utils/media_storage.dart';
 import '../../core/widgets/app_button.dart';
 import 'project_icon_constants.dart';
 
@@ -27,6 +37,7 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
   late int _selectedIcon;
   late String _status;
   late int? _groupId;
+  String? _coverImagePath;
 
   bool get _isEditing => widget.project != null;
 
@@ -39,6 +50,47 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
     _selectedIcon = p?.iconCode ?? kProjectIcons.first.codePoint;
     _status = p?.status ?? 'preproduction';
     _groupId = p?.groupId;
+    _coverImagePath = p?.coverImagePath;
+  }
+
+  Future<void> _pickCoverImage() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final path = result.files.single.path;
+    if (path == null) return;
+
+    if (_isEditing) {
+      final ext = p.extension(path).isEmpty ? '.jpg' : p.extension(path);
+      final copied = await MediaStorage.copyFileIntoProject(
+        projectId: widget.project!.id,
+        sourcePath: path,
+        subfolder: 'cover',
+        fileName: 'cover_${DateTime.now().millisecondsSinceEpoch}$ext',
+      );
+      if (copied != null && mounted) {
+        setState(() => _coverImagePath = copied);
+      }
+    } else {
+      setState(() => _coverImagePath = path);
+    }
+  }
+
+  Future<String?> _persistCoverForNewProject(int projectId) async {
+    final path = _coverImagePath;
+    if (path == null || path.isEmpty) return null;
+    if (File(path).existsSync()) {
+      final ext = p.extension(path).isEmpty ? '.jpg' : p.extension(path);
+      return MediaStorage.copyFileIntoProject(
+        projectId: projectId,
+        sourcePath: path,
+        subfolder: 'cover',
+        fileName: 'cover_${DateTime.now().millisecondsSinceEpoch}$ext',
+      );
+    }
+    return null;
   }
 
   @override
@@ -62,11 +114,16 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
         status: _status,
         iconCode: _selectedIcon,
         groupId: Value(_groupId),
+        coverImagePath: Value(_coverImagePath),
         updatedAt: DateTime.now(),
       );
       await db.updateProject(updated);
+      final client = ref.read(supabaseClientProvider);
+      if (client != null && updated.cloudId != null) {
+        await ProjectSyncService(db, client).updateProject(updated);
+      }
     } else {
-      await db.insertProject(
+      final newId = await db.insertProject(
         ProjectsCompanion.insert(
           name: name,
           director: Value(director.isEmpty ? null : director),
@@ -75,6 +132,20 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
           groupId: Value(_groupId),
         ),
       );
+      if (_coverImagePath != null) {
+        final stored = await _persistCoverForNewProject(newId);
+        if (stored != null) {
+          final created = await db.getProject(newId);
+          if (created != null) {
+            await db.updateProject(
+              created.copyWith(
+                coverImagePath: Value(stored),
+                updatedAt: DateTime.now(),
+              ),
+            );
+          }
+        }
+      }
     }
 
     if (mounted) Navigator.pop(context);
@@ -119,6 +190,15 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
                 controller: _directorCtrl,
                 style: AppTypography.bodyLarge(palette),
                 decoration: const InputDecoration(hintText: 'Director (opcional)'),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text('Imagen del proyecto', style: AppTypography.label(palette)),
+              const SizedBox(height: AppSpacing.sm),
+              _CoverImagePicker(
+                coverPath: _coverImagePath,
+                iconCode: _selectedIcon,
+                onPick: _pickCoverImage,
+                onRemove: () => setState(() => _coverImagePath = null),
               ),
               const SizedBox(height: AppSpacing.lg),
               Text('Icono', style: AppTypography.label(palette)),
@@ -209,6 +289,20 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
                 },
               ),
               const SizedBox(height: AppSpacing.lg),
+              if (_isEditing &&
+                  SupabaseConfig.isConfigured &&
+                  widget.project?.cloudId != null) ...[
+                OutlinedButton.icon(
+                  onPressed: () => InviteDirectorSheet.show(
+                    context,
+                    projectCloudId: widget.project!.cloudId!,
+                    projectName: widget.project!.name,
+                  ),
+                  icon: const Icon(Icons.person_add_outlined),
+                  label: const Text('Invitar director por email'),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
               AppButton(
                 label: _isEditing ? 'Guardar cambios' : 'Crear proyecto',
                 icon: _isEditing ? Icons.check : Icons.add,
@@ -218,6 +312,76 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CoverImagePicker extends StatelessWidget {
+  final String? coverPath;
+  final int iconCode;
+  final VoidCallback onPick;
+  final VoidCallback onRemove;
+
+  const _CoverImagePicker({
+    required this.coverPath,
+    required this.iconCode,
+    required this.onPick,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final hasCover = coverPath != null &&
+        coverPath!.isNotEmpty &&
+        File(coverPath!).existsSync();
+    final icon = IconData(iconCode, fontFamily: 'MaterialIcons');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: AppRadius.medium,
+          child: SizedBox(
+            height: 120,
+            width: double.infinity,
+            child: hasCover
+                ? Image.file(File(coverPath!), fit: BoxFit.cover)
+                : ColoredBox(
+                    color: palette.surfaceOverlay,
+                    child: Center(
+                      child: Icon(icon, color: palette.textTertiary, size: 40),
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            TextButton.icon(
+              onPressed: onPick,
+              icon: const Icon(Icons.upload_outlined, size: 16),
+              label: Text(
+                hasCover ? 'Cambiar imagen' : 'Elegir imagen',
+                style: AppTypography.bodyMedium(palette),
+              ),
+            ),
+            if (hasCover)
+              TextButton(
+                onPressed: onRemove,
+                child: Text(
+                  'Quitar',
+                  style: AppTypography.bodyMedium(palette)
+                      .copyWith(color: palette.error),
+                ),
+              ),
+          ],
+        ),
+        Text(
+          'Aparece en la lista de proyectos y en la cabecera del hub.',
+          style: AppTypography.caption(palette),
+        ),
+      ],
     );
   }
 }

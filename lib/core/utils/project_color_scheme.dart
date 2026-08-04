@@ -4,6 +4,11 @@ import '../database/app_database.dart';
 import 'scene_color.dart';
 
 /// Colores unificados del proyecto: localización (base) → set (variante) → escena.
+///
+/// Punto de entrada único para **leer** colores en toda la app.
+/// Para **escribir** o bootstrap, usar helpers en [scene_color.dart]:
+/// [siteBaseHexForIndex], [defaultSetHexForSite], [pendingSetColorsForSite],
+/// [setVariantHexesForSiteBase], [buildPendingSetColorsFromScenes].
 class ProjectColorScheme {
   final Map<int, Color> _siteBaseById;
   final Map<String, Color> _orphanSiteBaseByKey;
@@ -22,6 +27,20 @@ class ProjectColorScheme {
         _setColorById = setColorById,
         _setByNameLower = setByNameLower,
         _pendingSetColors = pendingSetColors;
+
+  /// Alias explícito del constructor factory (API unificada de lectura).
+  static ProjectColorScheme resolve({
+    required List<LocationSite> sites,
+    required List<LocationBasePlan> sets,
+    List<Scene>? scenes,
+    Map<String, String>? pendingSetColorsByName,
+  }) =>
+      ProjectColorScheme(
+        sites: sites,
+        sets: sets,
+        scenes: scenes,
+        pendingSetColorsByName: pendingSetColorsByName,
+      );
 
   factory ProjectColorScheme({
     required List<LocationSite> sites,
@@ -119,7 +138,8 @@ class ProjectColorScheme {
 
   static String? _setHex(LocationBasePlan set, Map<String, String> pending) {
     final key = set.locationName.trim().toLowerCase();
-    final pendingHex = pending[key];
+    final pendingHex = pendingSetColorHex(pending, shootSet: set.locationName) ??
+        pending[key];
     if (pendingHex != null && pendingHex.isNotEmpty) return pendingHex;
     if (set.color.isNotEmpty && set.color != kSceneColorNeutral) {
       return set.color;
@@ -212,6 +232,7 @@ class ProjectColorScheme {
     String shootSet, {
     String? sceneColorOverride,
     int? locationSiteId,
+    String? locationSiteName,
   }) {
     final override = persistSceneColor(sceneColorOverride);
     if (override != null) return sceneDisplayColor(override);
@@ -219,9 +240,13 @@ class ProjectColorScheme {
     final set = _setByNameLower[shootSet.trim().toLowerCase()];
     if (set != null) return setColor(set);
 
-    final pending = _pendingSetColors[shootSet.trim().toLowerCase()];
+    final pending = pendingSetColorHex(
+      _pendingSetColors,
+      shootSet: shootSet,
+      locationSite: locationSiteName,
+    );
     if (pending != null && pending.isNotEmpty) {
-      return locationBaseColor(sceneDisplayColor(pending));
+      return sceneDisplayColor(pending);
     }
 
     if (locationSiteId != null) return siteColor(locationSiteId);
@@ -230,7 +255,12 @@ class ProjectColorScheme {
 
   Map<int, Color> colorsBySourceStartIndex({
     required Iterable<
-            ({int? sourceStartIndex, String shootSet, String? sceneColorOverride})>
+            ({
+              int? sourceStartIndex,
+              String shootSet,
+              String? sceneColorOverride,
+              String? locationSite,
+            })>
         scenes,
   }) {
     final map = <int, Color>{};
@@ -239,6 +269,7 @@ class ProjectColorScheme {
       map[s.sourceStartIndex!] = forShootSet(
         s.shootSet,
         sceneColorOverride: s.sceneColorOverride,
+        locationSiteName: s.locationSite,
       );
     }
     return map;

@@ -5,11 +5,14 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/color_edit_scope.dart';
 import '../../core/utils/project_scene_colors.dart';
+import '../../core/utils/scene_characters.dart';
 import '../../core/utils/scene_color.dart';
 import '../../core/widgets/app_button.dart';
+import '../../core/widgets/color_scope_prompt_dialog.dart';
+import '../../core/widgets/scene_character_chips.dart';
 import '../../core/widgets/scene_color_editor.dart';
 import '../technical_script/scene_form_sheet.dart';
-import 'claude_script_service.dart';
+import 'normalized_scene.dart';
 
 class ImportSceneEditResult {
   final NormalizedScene scene;
@@ -45,15 +48,19 @@ class ImportSceneSheet extends StatefulWidget {
 
 class _ImportSceneSheetState extends State<ImportSceneSheet> {
   late final TextEditingController _numberCtrl;
+  late final TextEditingController _nameCtrl;
   late final TextEditingController _locationCtrl;
   late final TextEditingController _siteCtrl;
   late final TextEditingController _setCtrl;
+  late final TextEditingController _charactersCtrl;
   late final TextEditingController _descriptionCtrl;
   late String _intExt;
   late String _dayNight;
   late String _pickedHex;
   late ColorEditScope _colorScope;
   late Color _effectiveColor;
+  bool _colorCustomizationConfirmed = false;
+  late List<String> _characters;
 
   bool get _isEditing => widget.scene != null;
 
@@ -63,30 +70,72 @@ class _ImportSceneSheetState extends State<ImportSceneSheet> {
     final s = widget.scene;
     final number = s?.number ?? widget.nextNumber;
     _numberCtrl = TextEditingController(text: '$number');
+    _nameCtrl = TextEditingController(text: s?.name ?? '');
     _locationCtrl = TextEditingController(text: s?.location ?? '');
     _siteCtrl = TextEditingController(text: s?.locationSite ?? '');
     _setCtrl = TextEditingController(text: s?.shootSet ?? '');
+    _characters = List<String>.from(s?.characters ?? const []);
+    _charactersCtrl = TextEditingController(
+      text: formatCharactersInput(_characters),
+    );
     _descriptionCtrl = TextEditingController(text: s?.description ?? '');
     _intExt = s?.intExt ?? 'INT';
     _dayNight = s?.dayNight ?? 'DÍA';
 
     final shootSet = s?.shootSet ?? '';
+    final locationSite = s?.locationSite ?? _siteCtrl.text.trim();
     _effectiveColor = widget.colorContext.effective(
       shootSet: shootSet.isEmpty ? 'temp' : shootSet,
       sceneColorOverride: s?.locationColor,
+      locationSite: locationSite.isEmpty ? null : locationSite,
     );
     _pickedHex = hexFromColor(_effectiveColor);
     _colorScope = persistSceneColor(s?.locationColor) != null
         ? ColorEditScope.scene
         : ColorEditScope.set;
+    _colorCustomizationConfirmed = persistSceneColor(s?.locationColor) != null;
+  }
+
+  Future<void> _onColorChanged(String hex) async {
+    if (!_colorCustomizationConfirmed &&
+        widget.setsInSite > 1 &&
+        _colorScope != ColorEditScope.scene) {
+      final palette = context.palette;
+      final setName = _setCtrl.text.trim().isEmpty
+          ? _locationCtrl.text.trim()
+          : _setCtrl.text.trim();
+      final siteName = _siteCtrl.text.trim().isEmpty
+          ? setName
+          : _siteCtrl.text.trim();
+      final result = await showSetColorCustomizationDialog(
+        context,
+        palette: palette,
+        setName: setName,
+        locationSiteName: siteName,
+        initialHex: hex,
+        scenesInSet: widget.scenesInSet,
+        setsInSite: widget.setsInSite,
+      );
+      if (!mounted || result == null) return;
+      setState(() {
+        _pickedHex = result.colorHex;
+        _colorScope = result.scope;
+        _colorCustomizationConfirmed = true;
+      });
+      return;
+    }
+
+    setState(() => _pickedHex = hex);
   }
 
   @override
   void dispose() {
     _numberCtrl.dispose();
+    _nameCtrl.dispose();
     _locationCtrl.dispose();
     _siteCtrl.dispose();
     _setCtrl.dispose();
+    _charactersCtrl.dispose();
     _descriptionCtrl.dispose();
     super.dispose();
   }
@@ -100,7 +149,9 @@ class _ImportSceneSheetState extends State<ImportSceneSheet> {
         _setCtrl.text.trim().isEmpty ? location : _setCtrl.text.trim();
     final locationSite =
         _siteCtrl.text.trim().isEmpty ? shootSet : _siteCtrl.text.trim();
+    final sceneName = _nameCtrl.text.trim();
     final description = _descriptionCtrl.text.trim();
+    final characters = parseCharactersInput(_charactersCtrl.text);
     final colorHex = sceneColorForPicker(_pickedHex);
 
     String? sceneOverride;
@@ -120,8 +171,10 @@ class _ImportSceneSheetState extends State<ImportSceneSheet> {
           location: location,
           shootSet: shootSet,
           locationSite: locationSite,
+          name: sceneName.isEmpty ? null : sceneName,
           description: description.isEmpty ? null : description,
           locationColor: sceneOverride,
+          characters: characters,
         ),
       ),
     );
@@ -151,6 +204,13 @@ class _ImportSceneSheetState extends State<ImportSceneSheet> {
             _field('Número', _numberCtrl, palette,
                 keyboard: TextInputType.number),
             const SizedBox(height: AppSpacing.md),
+            _field(
+              'Nombre de la escena',
+              _nameCtrl,
+              palette,
+              hint: 'Ej. La huida de Gala (opcional)',
+            ),
+            const SizedBox(height: AppSpacing.md),
             _dropdown('INT/EXT', _intExt, kIntExtOptions, palette, (v) {
               if (v != null) setState(() => _intExt = v);
             }),
@@ -169,10 +229,26 @@ class _ImportSceneSheetState extends State<ImportSceneSheet> {
                 hint: 'Ej. RÍO, ENTRADA DEL BOSQUE'),
             const SizedBox(height: AppSpacing.md),
             _field(
+              'Personajes',
+              _charactersCtrl,
+              palette,
+              hint: 'Separados por comas. Ej. GALA, KARIM, ADIL',
+              onChanged: (value) =>
+                  setState(() => _characters = parseCharactersInput(value)),
+            ),
+            if (_characters.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              SceneCharacterChips(
+                characters: _characters,
+                palette: palette,
+              ),
+            ],
+            const SizedBox(height: AppSpacing.md),
+            _field(
               'Descripción',
               _descriptionCtrl,
               palette,
-              hint: 'Resumen de la escena, tono, personajes…',
+              hint: 'Resumen de la escena, tono, acción…',
               minLines: 3,
             ),
             const SizedBox(height: AppSpacing.md),
@@ -183,8 +259,11 @@ class _ImportSceneSheetState extends State<ImportSceneSheet> {
               scope: _colorScope,
               scenesInSet: widget.scenesInSet,
               setsInSite: widget.setsInSite,
-              onColorChanged: (hex) => setState(() => _pickedHex = hex),
-              onScopeChanged: (scope) => setState(() => _colorScope = scope),
+              onColorChanged: _onColorChanged,
+              onScopeChanged: (scope) => setState(() {
+                _colorScope = scope;
+                _colorCustomizationConfirmed = true;
+              }),
             ),
             const SizedBox(height: AppSpacing.xl),
             AppButton(
@@ -205,6 +284,7 @@ class _ImportSceneSheetState extends State<ImportSceneSheet> {
     String? hint,
     TextInputType? keyboard,
     int minLines = 1,
+    ValueChanged<String>? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,6 +298,7 @@ class _ImportSceneSheetState extends State<ImportSceneSheet> {
           maxLines: minLines > 1 ? null : 1,
           style: AppTypography.bodyLarge(palette),
           decoration: InputDecoration(hintText: hint ?? label),
+          onChanged: onChanged,
         ),
       ],
     );

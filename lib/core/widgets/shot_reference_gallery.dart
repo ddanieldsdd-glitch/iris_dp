@@ -252,7 +252,6 @@ class _ShotReferenceViewerPageState
 
   String _sourceLabel(String source) => switch (source) {
         ShotReferenceSource.artemisCapture => 'Artemis',
-        ShotReferenceSource.aiGenerated => 'IA',
         ShotReferenceSource.unrealRender => 'Render UE',
         _ => 'Manual',
       };
@@ -917,7 +916,6 @@ class _ReferenceTile extends StatelessWidget {
 
   String _sourceLabel(String source) => switch (source) {
         ShotReferenceSource.artemisCapture => 'Artemis',
-        ShotReferenceSource.aiGenerated => 'IA',
         ShotReferenceSource.unrealRender => 'Render UE',
         _ => 'Manual',
       };

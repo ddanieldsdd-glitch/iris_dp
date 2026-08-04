@@ -111,7 +111,7 @@ List<ProjectHubDestination> buildProjectHubDestinations() {
       icon: Icons.view_comfy_outlined,
       title: 'Storyboard',
       subtitle: (s) => s.hasScenes
-          ? 'Referencia visual por plano · Artemis, fotos e IA'
+          ? 'Referencia visual por plano · Artemis y fotos'
           : 'Monta el storyboard cuando haya planos',
       accentColor: const Color(0xFF5AC8FA),
     ),
@@ -125,7 +125,7 @@ List<ProjectHubDestination> buildProjectHubDestinations() {
     ProjectHubDestination(
       id: ProjectHubDestinationId.lookBible,
       icon: Icons.auto_stories_outlined,
-      title: 'Biblia Visual',
+      title: 'Biblia de Fotografía',
       subtitle: (_) =>
           'Lookbook + manual operativo: color, luz, óptica y moodboard',
       accentColor: const Color(0xFFFF6B6B),

@@ -45,6 +45,8 @@ class ExportFileSaverPlugin: NSObject, FlutterPlugin {
     case "cancelPending":
       cancelPending()
       result(nil)
+    case "readClipboard":
+      readClipboard(result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -428,5 +430,170 @@ class ExportFileSaverPlugin: NSObject, FlutterPlugin {
 
   private func cancelPending() {
     clearPending()
+  }
+
+  /// Lee imagen o texto/HTML del portapapeles (Chrome, ShotDeck, Safari…).
+  private func readClipboard(result: @escaping FlutterResult) {
+    let pasteboard = NSPasteboard.general
+
+    if let png = extractImagePng(from: pasteboard) {
+      returnImagePayload(png, extension: ".png", result: result)
+      return
+    }
+
+    // Chrome suele poner la imagen en ítems individuales del pasteboard.
+    if let png = extractImageFromPasteboardItems(pasteboard) {
+      returnImagePayload(png, extension: ".png", result: result)
+      return
+    }
+
+    let htmlType = NSPasteboard.PasteboardType("public.html")
+    if let html = pasteboard.string(forType: htmlType)?
+      .trimmingCharacters(in: .whitespacesAndNewlines),
+      !html.isEmpty
+    {
+      result(["kind": "html", "html": html])
+      return
+    }
+
+    if let text = pasteboard.string(forType: .string)?
+      .trimmingCharacters(in: .whitespacesAndNewlines),
+      !text.isEmpty
+    {
+      result(["kind": "text", "text": text])
+      return
+    }
+
+    let types = pasteboard.types?.map { $0.rawValue } ?? []
+    result(["kind": "empty", "types": types])
+  }
+
+  /// Recorre ítems del pasteboard (formato habitual en Chrome).
+  private func extractImageFromPasteboardItems(_ pasteboard: NSPasteboard) -> Data? {
+    guard let items = pasteboard.pasteboardItems else { return nil }
+
+    let imageTypes: [NSPasteboard.PasteboardType] = [
+      .png,
+      .tiff,
+      NSPasteboard.PasteboardType("public.jpeg"),
+      NSPasteboard.PasteboardType("public.webp"),
+      NSPasteboard.PasteboardType("Apple PNG pasteboard type"),
+      NSPasteboard.PasteboardType("com.compuserve.gif"),
+      NSPasteboard.PasteboardType("public.png"),
+    ]
+
+    for item in items {
+      for type in imageTypes {
+        guard let data = item.data(forType: type), !data.isEmpty else { continue }
+        if type == .tiff, let png = pngData(from: data) { return png }
+        if type == .png || type.rawValue == "public.png" { return data }
+        if let image = NSImage(data: data), let png = pngData(from: image) { return png }
+      }
+
+      let fileUrlType = NSPasteboard.PasteboardType("public.file-url")
+      if let urlString = item.string(forType: fileUrlType),
+         let url = URL(string: urlString),
+         url.isFileURL,
+         let data = try? Data(contentsOf: url),
+         let png = pngData(from: data)
+      {
+        return png
+      }
+    }
+
+    return nil
+  }
+
+  /// Extrae PNG desde cualquier representación de imagen del portapapeles.
+  private func extractImagePng(from pasteboard: NSPasteboard) -> Data? {
+    if let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage] {
+      for image in images {
+        if let png = pngData(from: image) { return png }
+      }
+    }
+
+    if let image = NSImage(pasteboard: pasteboard), let png = pngData(from: image) {
+      return png
+    }
+
+    let imageTypes: [NSPasteboard.PasteboardType] = [
+      .png,
+      .tiff,
+      NSPasteboard.PasteboardType("public.jpeg"),
+      NSPasteboard.PasteboardType("public.webp"),
+      NSPasteboard.PasteboardType("Apple PNG pasteboard type"),
+      NSPasteboard.PasteboardType("com.compuserve.gif"),
+    ]
+
+    for type in imageTypes {
+      guard let data = pasteboard.data(forType: type), !data.isEmpty else { continue }
+      if type == .tiff, let png = pngData(from: data) { return png }
+      if type == .png { return data }
+      if let image = NSImage(data: data), let png = pngData(from: image) { return png }
+    }
+
+    if let types = pasteboard.types {
+      for type in types {
+        guard let data = pasteboard.data(forType: type), data.count > 256 else { continue }
+        if let image = NSImage(data: data), let png = pngData(from: image) {
+          return png
+        }
+      }
+    }
+
+    return nil
+  }
+
+  /// Escribe a archivo temporal (ShotDeck = imágenes grandes; evita límite del channel).
+  private func returnImagePayload(
+    _ data: Data,
+    extension ext: String,
+    result: @escaping FlutterResult
+  ) {
+    let fileURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("iris_clipboard_\(UUID().uuidString)\(ext)")
+    do {
+      try data.write(to: fileURL, options: .atomic)
+      result([
+        "kind": "image_path",
+        "path": fileURL.path,
+        "extension": ext,
+      ])
+    } catch {
+      if data.count <= 2_000_000 {
+        result([
+          "kind": "image",
+          "bytes": FlutterStandardTypedData(bytes: data),
+          "extension": ext,
+        ])
+      } else {
+        result(
+          FlutterError(
+            code: "CLIPBOARD_WRITE_FAILED",
+            message: error.localizedDescription,
+            details: nil
+          )
+        )
+      }
+    }
+  }
+
+  private func pngData(from image: NSImage) -> Data? {
+    if let tiff = image.tiffRepresentation,
+       let bitmap = NSBitmapImageRep(data: tiff),
+       let png = bitmap.representation(using: .png, properties: [:])
+    {
+      return png
+    }
+    guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+      return nil
+    }
+    let bitmapRep = NSBitmapImageRep(cgImage: cgImage)
+    return bitmapRep.representation(using: .png, properties: [:])
+  }
+
+  private func pngData(from imageData: Data) -> Data? {
+    guard let image = NSImage(data: imageData) else { return nil }
+    return pngData(from: image)
   }
 }

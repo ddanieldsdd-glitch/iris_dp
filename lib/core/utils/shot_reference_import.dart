@@ -11,7 +11,6 @@ import 'media_storage.dart';
 abstract final class ShotReferenceSource {
   static const manual = 'manual';
   static const artemisCapture = 'artemis_capture';
-  static const aiGenerated = 'ai_generated';
   static const unrealRender = 'unreal_render';
 }
 

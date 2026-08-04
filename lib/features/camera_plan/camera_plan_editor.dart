@@ -134,7 +134,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final sites = await db.watchSitesForProject(widget.projectId).first;
     final allSets = await db.watchLocationsForProject(widget.projectId).first;
     final allScenes = await db.watchScenesForProject(widget.projectId).first;
-    final colors = ProjectColorScheme(
+    final colors = ProjectColorScheme.resolve(
       sites: sites,
       sets: allSets,
       scenes: allScenes,
@@ -277,7 +277,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final sets = await db.getLocationsMapForProject(widget.projectId);
     final sites = await db.watchSitesForProject(widget.projectId).first;
     final allSets = sets.values.toList();
-    final colors = ProjectColorScheme(
+    final colors = ProjectColorScheme.resolve(
       sites: sites,
       sets: allSets,
       scenes: scenes,

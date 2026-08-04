@@ -24,9 +24,25 @@ class Projects extends Table {
   TextColumn get scriptFilePath => text().nullable()();
   // Ruta local del guion literario (copia en almacenamiento de la app)
   TextColumn get scriptFileName => text().nullable()();
+  TextColumn get characterColorsJson => text().nullable()();
+  // JSON mapa nombre → hex: {"GALA": "#E63946", "KARIM": "#2A9D8F"}
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  /// UUID en Supabase cuando sync cloud está activo.
+  TextColumn get cloudId => text().nullable()();
+  DateTimeColumn get syncUpdatedAt => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+/// Cola de operaciones pendientes hacia la nube.
+class CloudSyncQueue extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get entityType => text()();
+  TextColumn get localEntityId => text()();
+  TextColumn get operation => text()();
+  TextColumn get payloadJson => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  BoolColumn get processed => boolean().withDefault(const Constant(false))();
 }
 
 class Scenes extends Table {
@@ -48,6 +64,8 @@ class Scenes extends Table {
   TextColumn get dayNight => text().withDefault(const Constant('DÍA'))();
   TextColumn get locationColor => text().nullable()();
   // Hex del color de la localización, ej. "#FF6B6B"
+  TextColumn get charactersJson => text().nullable()();
+  // JSON array de personajes: ["GALA", "KARIM"]
   TextColumn get description => text().nullable()();
   TextColumn get actionText => text().nullable()();
   IntColumn get sourceStartIndex => integer().nullable()();
@@ -84,7 +102,7 @@ class ShotReferences extends Table {
   IntColumn get shotId => integer().references(Shots, #id)();
   TextColumn get imagePath => text()();
   TextColumn get source => text().withDefault(const Constant('manual'))();
-  // 'manual' | 'ai_generated' | 'artemis_capture'
+  // 'manual' | 'artemis_capture' | 'unreal_render'
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 }
 
@@ -184,6 +202,28 @@ class Cameras extends Table {
   RealColumn get sensorWidthMm => real()();
   RealColumn get sensorHeightMm => real()();
   TextColumn get recordingFormats => text().nullable()();
+  RealColumn get dynamicRangeStops => real().nullable()();
+  TextColumn get colorScience => text().nullable()();
+  IntColumn get nativeIso => integer().nullable()();
+  TextColumn get logFormats => text().nullable()();
+  TextColumn get mountType => text().nullable()();
+  TextColumn get sensorModesJson => text().nullable()();
+  TextColumn get recordingResolutionsJson => text().nullable()();
+  RealColumn get weightKg => real().nullable()();
+  RealColumn get powerDrawW => real().nullable()();
+  TextColumn get heroImagePath => text().nullable()();
+  TextColumn get manufacturerUrl => text().nullable()();
+  TextColumn get externalId => text().nullable()();
+  IntColumn get catalogVersion => integer().nullable()();
+  BoolColumn get isCustom =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get series => text().nullable()();
+  BoolColumn get vintage =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get rentalTagsJson => text().nullable()();
+  BoolColumn get lukaCompatible =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get lukaProfileJson => text().nullable()();
   TextColumn get notes => text().nullable()();
 }
 
@@ -197,6 +237,26 @@ class Lenses extends Table {
   RealColumn get focalMax => real().nullable()();
   RealColumn get minTStop => real()();
   TextColumn get formatCoverage => text()();
+  TextColumn get mountType => text().nullable()();
+  RealColumn get imageCircleMm => real().nullable()();
+  BoolColumn get isAnamorphic =>
+      boolean().withDefault(const Constant(false))();
+  RealColumn get squeezeRatio => real().nullable()();
+  RealColumn get closeFocusM => real().nullable()();
+  RealColumn get frontDiameterMm => real().nullable()();
+  TextColumn get lensType => text().nullable()();
+  TextColumn get heroImagePath => text().nullable()();
+  TextColumn get externalId => text().nullable()();
+  IntColumn get catalogVersion => integer().nullable()();
+  BoolColumn get isCustom =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get series => text().nullable()();
+  BoolColumn get vintage =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get rentalTagsJson => text().nullable()();
+  BoolColumn get lukaCompatible =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get lukaProfileJson => text().nullable()();
   TextColumn get notes => text().nullable()();
 }
 
@@ -212,7 +272,36 @@ class Lights extends Table {
   BoolColumn get isLukaCompatible =>
       boolean().withDefault(const Constant(false))();
   TextColumn get lukaFixtureId => text().nullable()();
+  RealColumn get beamAngleDeg => real().nullable()();
+  IntColumn get cri => integer().nullable()();
+  IntColumn get tlci => integer().nullable()();
+  TextColumn get dimmingType => text().nullable()();
+  TextColumn get modifierCompatibilityJson => text().nullable()();
+  TextColumn get heroImagePath => text().nullable()();
+  TextColumn get externalId => text().nullable()();
+  IntColumn get catalogVersion => integer().nullable()();
+  BoolColumn get isCustom =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get series => text().nullable()();
+  BoolColumn get vintage =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get rentalTagsJson => text().nullable()();
+  TextColumn get lukaProfileJson => text().nullable()();
   TextColumn get notes => text().nullable()();
+}
+
+class LukaSyncMeta extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get remoteVersion => text().nullable()();
+  TextColumn get sourceUrl => text().nullable()();
+  DateTimeColumn get lastSyncAt => dateTime().nullable()();
+}
+
+class CatalogSyncMeta extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get remoteVersion => text().nullable()();
+  TextColumn get sourceUrl => text().nullable()();
+  DateTimeColumn get lastSyncAt => dateTime().nullable()();
 }
 
 /// Equipo asignado a un proyecto.
@@ -224,6 +313,7 @@ class ProjectEquipment extends Table {
   TextColumn get source => text().withDefault(const Constant('rental'))();
   TextColumn get status => text().withDefault(const Constant('available'))();
   TextColumn get notes => text().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 }
 
 /// Look Bible: identidad visual del proyecto (moodboard, LUT, luz…).
@@ -270,6 +360,13 @@ class VisualBibles extends Table {
   TextColumn get narrativeReferences => text().nullable()();
   // JSON: [{title, director, dp, year, note}]
 
+  TextColumn get tone => text().nullable()();
+  TextColumn get creativeIntention => text().nullable()();
+  TextColumn get stagingApproach => text().nullable()();
+  TextColumn get pointOfView => text().nullable()();
+  TextColumn get directionNarrativeIntent => text().nullable()();
+  TextColumn get depthOfFieldNotes => text().nullable()();
+
   TextColumn get lightingPhilosophy => text().nullable()();
   TextColumn get lightQuality => text().nullable()();
   TextColumn get contrastStyle => text().nullable()();
@@ -300,7 +397,113 @@ class VisualBibles extends Table {
   TextColumn get creativeLutName => text().nullable()();
   TextColumn get creativeLutDescription => text().nullable()();
 
+  IntColumn get primaryCameraId => integer().nullable().references(Cameras, #id)();
+  TextColumn get recordingFormat => text().nullable()();
+  TextColumn get codec => text().nullable()();
+  TextColumn get resolutionNotes => text().nullable()();
+  TextColumn get frameRateNotes => text().nullable()();
+  IntColumn get nativeIso => integer().nullable()();
+  TextColumn get defaultTStop => text().nullable()();
+  TextColumn get ndNotes => text().nullable()();
+  TextColumn get deliveryColorSpace => text().nullable()();
+  TextColumn get captureResolution => text().nullable()();
+  TextColumn get deliveryResolution => text().nullable()();
+  TextColumn get workflowPipeline => text().nullable()();
+  // JSON
+  TextColumn get diffusionNotes => text().nullable()();
+  TextColumn get sensorShadowBehavior => text().nullable()();
+  TextColumn get colorScienceNotes => text().nullable()();
+  TextColumn get lowLightNotes => text().nullable()();
+  TextColumn get opticCharacterNotes => text().nullable()();
+  TextColumn get filtrationNotes => text().nullable()();
+  TextColumn get cameraMovementsJson => text().nullable()();
+  // JSON: [{movement, narrative, reference}]
+  TextColumn get actVisualNotes => text().nullable()();
+  // JSON: [{act, intent}]
+
+  TextColumn get cameraNarrativeIntent => text().nullable()();
+  TextColumn get opticsNarrativeIntent => text().nullable()();
+  TextColumn get exposureNarrativeIntent => text().nullable()();
+  TextColumn get lightingNarrativeIntent => text().nullable()();
+  TextColumn get colorNarrativeIntent => text().nullable()();
+  TextColumn get formatNarrativeIntent => text().nullable()();
+  TextColumn get textureNarrativeIntent => text().nullable()();
+  TextColumn get conceptNarrativeIntent => text().nullable()();
+  TextColumn get opticsConfigJson => text().nullable()();
+
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+class BibleSectionEvidence extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get bibleId => integer().references(VisualBibles, #id)();
+  TextColumn get sectionId => text()();
+  TextColumn get targetType => text().withDefault(const Constant('section'))();
+  IntColumn get targetId => integer().nullable()();
+  TextColumn get imagePath => text()();
+  TextColumn get caption => text().nullable()();
+  TextColumn get equipmentRefJson => text().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+}
+
+class ExposureBlocks extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get bibleId => integer().references(VisualBibles, #id)();
+  TextColumn get blockName => text()();
+  TextColumn get highlightStrategy => text().nullable()();
+  TextColumn get shadowStrategy => text().nullable()();
+  TextColumn get keyFillRatio => text().nullable()();
+  TextColumn get narrativeIntent => text().nullable()();
+  TextColumn get referenceImages => text().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+}
+
+class LightingSetups extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get bibleId => integer().references(VisualBibles, #id)();
+  TextColumn get setupName => text()();
+  TextColumn get narrativeNote => text().nullable()();
+  TextColumn get diagramJson => text()();
+  TextColumn get gelNotes => text().nullable()();
+  TextColumn get practicalMotivation => text().nullable()();
+  TextColumn get referenceImagePath => text().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+}
+
+class CameraTests extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get bibleId => integer().references(VisualBibles, #id)();
+  TextColumn get testName => text()();
+  IntColumn get cameraId => integer().nullable().references(Cameras, #id)();
+  IntColumn get lensId => integer().nullable().references(Lenses, #id)();
+  TextColumn get lutName => text().nullable()();
+  TextColumn get lightCondition => text().nullable()();
+  TextColumn get notes => text().nullable()();
+  TextColumn get imagePaths => text()();
+  // JSON array
+  DateTimeColumn get testedAt => dateTime().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+}
+
+class VisualBibleVersions extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get bibleId => integer().references(VisualBibles, #id)();
+  TextColumn get label => text()();
+  TextColumn get snapshotJson => text()();
+  TextColumn get changeNote => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+class BibleComments extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get bibleId => integer().references(VisualBibles, #id)();
+  TextColumn get authorRole => text()();
+  // dp | gaffer | colorist | ac
+  TextColumn get targetType => text()();
+  // moodboard | camera_test | lighting_setup | section
+  IntColumn get targetId => integer().nullable()();
+  TextColumn get comment => text()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 class VisualBibleColorBlocks extends Table {
@@ -322,11 +525,58 @@ class VisualBibleLocationRefs extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get bibleId => integer().references(VisualBibles, #id)();
   TextColumn get locationName => text()();
+  IntColumn get locationSiteId =>
+      integer().nullable().references(LocationSites, #id)();
+  IntColumn get locationBasePlanId =>
+      integer().nullable().references(LocationBasePlans, #id)();
   TextColumn get lightingNote => text().nullable()();
   TextColumn get colorNote => text().nullable()();
+  TextColumn get stagingNote => text().nullable()();
   TextColumn get referenceImages => text().nullable()();
   TextColumn get linkedShotIds => text().nullable()();
   // JSON array de IDs de plano
+  TextColumn get solarOrientation => text().nullable()();
+  TextColumn get availableLightHours => text().nullable()();
+  TextColumn get existingPracticals => text().nullable()();
+  IntColumn get estimatedColorTempKelvin => integer().nullable()();
+}
+
+/// Grupos del sidebar de la biblia (Narrativa, Técnica de imagen, etc.).
+class BibleSectionGroups extends Table {
+  TextColumn get id => text()();
+  IntColumn get bibleId => integer().references(VisualBibles, #id)();
+  TextColumn get label => text()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  BoolColumn get isBuiltIn => boolean().withDefault(const Constant(true))();
+
+  @override
+  Set<Column> get primaryKey => {id, bibleId};
+}
+
+/// Definición de secciones de la biblia (renombrables / custom).
+class BibleSectionDefinitions extends Table {
+  TextColumn get id => text()();
+  IntColumn get bibleId => integer().references(VisualBibles, #id)();
+  TextColumn get groupId => text()();
+  TextColumn get label => text()();
+  TextColumn get iconKey => text().withDefault(const Constant('article'))();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  BoolColumn get isBuiltIn => boolean().withDefault(const Constant(true))();
+  BoolColumn get isHidden => boolean().withDefault(const Constant(false))();
+  TextColumn get template =>
+      text().withDefault(const Constant('standard'))();
+  TextColumn get contentJson => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id, bibleId};
+}
+
+class MoodboardGroups extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  TextColumn get category => text()();
+  TextColumn get name => text()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 }
 
 class MoodboardImages extends Table {
@@ -335,12 +585,26 @@ class MoodboardImages extends Table {
   IntColumn get bibleId => integer().nullable().references(VisualBibles, #id)();
   TextColumn get imagePath => text()();
   TextColumn get source => text().withDefault(const Constant('manual'))();
-  // manual | ai_generated | scouting | artemis_capture | unreal_render | script_reference
+  // manual | scouting | artemis_capture | unreal_render | script_reference
   TextColumn get category => text().nullable()();
   // lighting | color | framing | texture | location | character | reference
+  IntColumn get groupId => integer().nullable().references(MoodboardGroups, #id)();
   TextColumn get caption => text().nullable()();
   TextColumn get filmReference => text().nullable()();
   IntColumn get linkedSceneId => integer().nullable()();
   TextColumn get linkedLocationName => text().nullable()();
+  IntColumn get linkedLocationBasePlanId =>
+      integer().nullable().references(LocationBasePlans, #id)();
+  /// JSON: secciones de la biblia donde debe aparecer (ej. ["lighting","concept"]).
+  TextColumn get assignedSections => text().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+}
+
+/// Imágenes de muestra del laboratorio óptico (FLT), por proyecto (máx. 10).
+class OpticsLabSamples extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  TextColumn get imagePath => text()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }

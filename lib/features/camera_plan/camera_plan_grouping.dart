@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/database/app_database.dart';
-import '../../core/utils/scene_color.dart';
+import '../../core/utils/project_color_scheme.dart';
 import 'camera_plan_scene_badge.dart';
 
 /// Jerarquía: localización → sets → escenas/planos.
@@ -42,6 +42,7 @@ List<CameraPlanHierarchy> buildCameraPlanHierarchy({
   required List<Scene> scenes,
   required List<LocationSite> sites,
   required List<LocationBasePlan> allSets,
+  required ProjectColorScheme colors,
 }) {
   final sitesById = {for (final s in sites) s.id: s};
   final setsBySite = <int, List<LocationBasePlan>>{};
@@ -106,15 +107,9 @@ List<CameraPlanHierarchy> buildCameraPlanHierarchy({
       ...orphanFromSets,
     ]);
 
-    final accent = effectiveSceneColor(
-      sceneColorOverride: first.locationColor,
-      locationColor: first.locationId != null
-          ? allSets
-              .where((l) => l.id == first.locationId)
-              .firstOrNull
-              ?.color
-          : null,
-    );
+    final accent = site != null
+        ? colors.siteColor(site.id)
+        : colors.siteColor(null, orphanSiteKey: siteName);
 
     return CameraPlanHierarchy(
       siteId: site?.id,
@@ -125,53 +120,6 @@ List<CameraPlanHierarchy> buildCameraPlanHierarchy({
       unassignedScenes: unassigned,
     );
   }).toList();
-}
-
-List<LocationSceneGroup> groupScenesByLocation({
-  required List<Scene> scenes,
-  required Map<int, LocationSite> sitesById,
-  required Map<int, LocationBasePlan> setsById,
-}) {
-  final orderedKeys = <String>[];
-  final groups = <String, LocationSceneGroup>{};
-
-  for (final scene in scenes) {
-    final site =
-        scene.locationSiteId != null ? sitesById[scene.locationSiteId] : null;
-    final set =
-        scene.locationId != null ? setsById[scene.locationId] : null;
-
-    final siteName = site?.name ??
-        (scene.locationPureName.trim().isNotEmpty
-            ? scene.locationPureName.trim()
-            : 'Sin localización');
-    final key = site != null ? site.id.toString() : siteName.toLowerCase();
-
-    final accent = effectiveSceneColor(
-      sceneColorOverride: scene.locationColor,
-      locationColor: set?.color,
-    );
-
-    if (!groups.containsKey(key)) {
-      orderedKeys.add(key);
-      groups[key] = LocationSceneGroup(
-        siteId: site?.id,
-        siteName: siteName,
-        accentColor: accent,
-        scenes: [scene],
-      );
-    } else {
-      final existing = groups[key]!;
-      groups[key] = LocationSceneGroup(
-        siteId: existing.siteId,
-        siteName: existing.siteName,
-        accentColor: existing.accentColor,
-        scenes: [...existing.scenes, scene],
-      );
-    }
-  }
-
-  return orderedKeys.map((k) => groups[k]!).toList();
 }
 
 /// Escenas en orden de guion (sortOrder, luego número).
@@ -188,22 +136,6 @@ List<Scene> scenesInScriptOrder(List<Scene> scenes) {
 /// Clave estable para anclar scroll a una localización.
 String cameraPlanLocationKey({required int? siteId, required String siteName}) =>
     siteId?.toString() ?? siteName.trim().toLowerCase();
-
-class LocationSceneGroup {
-  final int? siteId;
-  final String siteName;
-  final Color accentColor;
-  final List<Scene> scenes;
-
-  const LocationSceneGroup({
-    required this.siteId,
-    required this.siteName,
-    required this.accentColor,
-    required this.scenes,
-  });
-
-  int get sceneCount => scenes.length;
-}
 
 class NavLocationGroup {
   final String siteName;

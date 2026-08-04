@@ -1,12 +1,19 @@
 # IRIS DP
 
-App Flutter de **preproducción cinematográfica** para macOS: importación de guiones, localizaciones y guion técnico de planos.
+App Flutter de **preproducción cinematográfica**: guion, localizaciones, biblia de fotografía, moodboard y colaboración en la nube.
+
+## Plataformas
+
+| Plataforma | Estado |
+|------------|--------|
+| macOS | Principal — instalador `.dmg` |
+| Windows | `flutter build windows` |
+| iPad | `flutter build ipa` (biblia + moodboard v1) |
 
 ## Requisitos
 
-- Flutter 3.8+ ([instalación](https://docs.flutter.dev/get-started/install))
-- macOS (plataforma principal de desarrollo)
-- Licencia de [Syncfusion Flutter PDF](https://www.syncfusion.com/sales/products) para extracción de texto en producción (modo community disponible bajo condiciones)
+- Flutter 3.8+
+- Licencia Syncfusion PDF para extracción en producción (opcional en dev)
 
 ## Primer arranque
 
@@ -17,22 +24,53 @@ dart run build_runner build --delete-conflicting-outputs
 flutter run -d macos
 ```
 
-## Clave API de Claude (opcional)
+### Modo nube (multi-dispositivo + directores)
 
-La normalización de escenas con IA es opcional. **No incluyas claves en el código ni en assets.**
+1. Crea proyecto Supabase y ejecuta [`supabase/migrations/001_initial_schema.sql`](supabase/migrations/001_initial_schema.sql)
+2. Crea bucket Storage `project-media`
+3. Arranca con credenciales:
 
-1. Abre la app → icono de **Ajustes** (en la pantalla de proyectos)
-2. Pega tu clave de [Anthropic Console](https://console.anthropic.com/)
-3. Se guarda localmente en `~/Documents/iris_dp/settings.json`
+```bash
+flutter run -d macos \
+  --dart-define=SUPABASE_URL=https://TU_PROYECTO.supabase.co \
+  --dart-define=SUPABASE_ANON_KEY=TU_ANON_KEY
+```
 
-Sin clave, el parser local detecta escenas automáticamente.
+Sin credenciales → **modo local** (como antes).
 
-## Workflow
+### Tutorial e instalación
 
-1. **Proyectos** — crear y organizar por grupos
-2. **Guion literario** — importar PDF/DOCX/TXT/Fountain, editar escenas, sincronizar
-3. **Localizaciones** — sitios, sets, galerías de referencia
-4. **Guion técnico** — tabla de planos por escena; exportar a PDF
+Al abrir la app por primera vez verás un **tutorial paso a paso** (instalación, cuenta, carpetas, sync). Guía completa: [`docs/instalacion_y_actualizacion.md`](docs/instalacion_y_actualizacion.md).
+
+### Wizard post-instalación
+
+1. Bienvenida e instrucciones de instalación por plataforma  
+2. Cuenta IRIS DP (si hay nube)  
+3. Carpeta cache local (datos técnicos + documentos)  
+4. Cómo actualizar en varios dispositivos (sync Supabase)  
+5. Migración opcional local → nube  
+6. Tour rápido en la pantalla de proyectos  
+
+## Roles
+
+- **DP (owner)**: ve todos los proyectos del workspace  
+- **Director invitado**: solo proyectos asignados (no ve otros directores)  
+
+Invitar desde **Editar proyecto → Invitar director por email**.
+
+## Sync
+
+Botón nube en la barra de proyectos. Drift = cache offline; Supabase = fuente de verdad.
+
+## Release
+
+Ver [`docs/release.md`](docs/release.md) y [`scripts/build_macos_dmg.sh`](scripts/build_macos_dmg.sh).
+
+Tag `v*` dispara GitHub Actions ([`.github/workflows/release.yml`](../.github/workflows/release.yml)): build, GitHub Release y aviso automático vía Supabase.
+
+## Diseño
+
+Tokens estilo ShotDeck: [`docs/shotdeck_design_tokens.md`](docs/shotdeck_design_tokens.md)
 
 ## Tests
 
@@ -45,16 +83,10 @@ flutter test
 
 ```
 lib/
-  core/          # BD (Drift), tema, utilidades, ajustes
-  features/      # projects, script_import, locations, technical_script, pdf_export
-test/            # Tests unitarios y de widget
+  core/cloud/      # Supabase, sesión
+  core/sync/       # SyncEngine, proyectos, medios
+  features/auth/   # Login, invitaciones
+  features/onboarding/
+  features/migration/
+  supabase/        # SQL + RLS
 ```
-
-## Datos locales
-
-- Base de datos: `~/Documents/iris_dp.db`
-- Archivos de proyecto: `~/Documents/iris_dp/projects/{id}/`
-
-## CI
-
-GitHub Actions ejecuta `flutter analyze` y `flutter test` en cada push/PR (ver `.github/workflows/ci.yml`).

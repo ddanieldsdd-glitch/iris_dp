@@ -88,25 +88,28 @@ class ScreenplayLineClassifier {
   }
 
   static bool _isCharacterLine(String line) {
+    return parseCharacterName(line) != null;
+  }
+
+  /// Nombre del personaje en una línea de diálogo (sin extensión V.O., etc.).
+  static String? parseCharacterName(String line) {
     if (ScriptParser.tryParseSlugline(line, startIndex: 0) != null) {
-      return false;
+      return null;
     }
 
-    final match = _characterSuffix.firstMatch(line);
-    if (match == null) return false;
+    final match = _characterSuffix.firstMatch(line.trim());
+    if (match == null) return null;
 
-    final name = match.group(1) ?? '';
+    final name = match.group(1)?.trim() ?? '';
     final letters = name.replaceAll(RegExp(r'[^A-Za-zÁÉÍÓÚÜÑ]'), '');
-    if (letters.length < 2 || letters.length > 35) return false;
-    if (letters != letters.toUpperCase()) return false;
-
-    // Evita confundir sluglines sin guión o títulos largos.
-    if (name.length > 32) return false;
+    if (letters.length < 2 || letters.length > 35) return null;
+    if (letters != letters.toUpperCase()) return null;
+    if (name.length > 32) return null;
     if (RegExp(r'^(INT|EXT|INT\/EXT|I\/E)\b', caseSensitive: false).hasMatch(name)) {
-      return false;
+      return null;
     }
 
-    return true;
+    return name;
   }
 
   static bool _looksLikeAction(String line) {

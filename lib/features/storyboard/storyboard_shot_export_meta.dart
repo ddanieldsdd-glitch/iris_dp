@@ -61,26 +61,35 @@ class StoryboardShotExportMeta {
     var lensSeriesHeader = _lensSeriesFromShot(shot.lens);
     var sensorWidth = kDefaultSensorWidthMm;
 
-    final equipment = await db.watchProjectEquipment(project.id).first;
-    for (final row in equipment) {
-      if (row.equipmentType == 'camera') {
-        final cameras = await db.watchAllCameras().first;
-        final cam = cameras.where((c) => c.id == row.equipmentId).firstOrNull;
-        if (cam != null) {
-          cameraHeader = _cameraHeaderLabel(cam);
-          sensorWidth = cam.sensorWidthMm > 0 ? cam.sensorWidthMm : sensorWidth;
-          break;
-        }
+    final bible = await db.getVisualBibleForProject(project.id);
+    if (bible?.primaryCameraId != null) {
+      final cam = await db.getCameraById(bible!.primaryCameraId!);
+      if (cam != null) {
+        cameraHeader = _cameraHeaderLabel(cam);
+        sensorWidth = cam.sensorWidthMm > 0 ? cam.sensorWidthMm : sensorWidth;
+      }
+    } else {
+      final cam = await db.resolveProjectCamera(project.id);
+      if (cam != null) {
+        cameraHeader = _cameraHeaderLabel(cam);
+        sensorWidth = cam.sensorWidthMm > 0 ? cam.sensorWidthMm : sensorWidth;
       }
     }
 
-    for (final row in equipment) {
-      if (row.equipmentType == 'lens') {
-        final lenses = await db.watchAllLenses().first;
-        final lens = lenses.where((l) => l.id == row.equipmentId).firstOrNull;
-        if (lens != null) {
-          lensSeriesHeader = '${lens.brand} ${lens.model}'.trim();
-          break;
+    if (bible?.primaryLensId != null) {
+      final lens = await db.getLensById(bible!.primaryLensId!);
+      if (lens != null) {
+        lensSeriesHeader = '${lens.brand} ${lens.model}'.trim();
+      }
+    } else {
+      final equipment = await db.watchProjectEquipment(project.id).first;
+      for (final row in equipment) {
+        if (row.equipmentType == 'lens') {
+          final lens = await db.getLensById(row.equipmentId);
+          if (lens != null) {
+            lensSeriesHeader = '${lens.brand} ${lens.model}'.trim();
+            break;
+          }
         }
       }
     }

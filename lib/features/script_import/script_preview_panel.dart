@@ -20,14 +20,18 @@ class ScriptPreviewPanel extends StatefulWidget {
   final LoadedScript? script;
   final Set<int> includedSceneStartIndices;
   final Map<int, Color> sceneColorsByStartIndex;
+  final Map<String, Color> characterColorsByName;
   final ValueChanged<RawSlugline>? onSluglineTap;
+  final ValueChanged<String>? onCharacterTap;
 
   const ScriptPreviewPanel({
     super.key,
     this.script,
     this.includedSceneStartIndices = const {},
     this.sceneColorsByStartIndex = const {},
+    this.characterColorsByName = const {},
     this.onSluglineTap,
+    this.onCharacterTap,
   });
 
   @override
@@ -133,7 +137,10 @@ class _ScriptPreviewPanelState extends State<ScriptPreviewPanel> {
         ),
         if (_mode == ScriptPreviewMode.scanned) ...[
           Divider(height: 1, color: palette.divider),
-          _ScannedLegend(palette: palette),
+          _ScannedLegend(
+            palette: palette,
+            characterColors: widget.characterColorsByName,
+          ),
         ],
         Divider(height: 1, color: palette.divider),
         Expanded(child: _buildDocumentView(script)),
@@ -193,7 +200,9 @@ class _ScriptPreviewPanelState extends State<ScriptPreviewPanel> {
           scrollController: _scannedScrollController,
           includedStartIndices: widget.includedSceneStartIndices,
           sceneColorsByStartIndex: widget.sceneColorsByStartIndex,
+          characterColorsByName: widget.characterColorsByName,
           onSluglineTap: widget.onSluglineTap ?? (_) {},
+          onCharacterTap: widget.onCharacterTap,
         ),
       ],
     );
@@ -292,7 +301,7 @@ class _PreviewToolbar extends StatelessWidget {
               Expanded(
                 child: Text(
                   mode == ScriptPreviewMode.scanned
-                      ? 'Pulsa una escena resaltada para añadirla a la lista'
+                      ? 'Pulsa escenas o personajes para editarlos'
                       : 'Lectura fiel del documento',
                   style: AppTypography.caption(palette),
                 ),
@@ -334,32 +343,80 @@ class _PreviewToolbar extends StatelessWidget {
 
 class _ScannedLegend extends StatelessWidget {
   final AppPalette palette;
+  final Map<String, Color> characterColors;
 
-  const _ScannedLegend({required this.palette});
+  const _ScannedLegend({
+    required this.palette,
+    this.characterColors = const {},
+  });
 
   @override
   Widget build(BuildContext context) {
+    final sortedCharacters = characterColors.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: AppSpacing.sm,
       ),
-      child: Wrap(
-        spacing: AppSpacing.md,
-        runSpacing: AppSpacing.xs,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _legendChip(
-            palette,
-            const Color(0xFFFFE8B3),
-            Icons.add_circle_outline,
-            'Pendiente · pulsa para añadir',
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.xs,
+            children: [
+              _legendChip(
+                palette,
+                const Color(0xFFFFE8B3),
+                Icons.add_circle_outline,
+                'Escena pendiente',
+              ),
+              _legendChip(
+                palette,
+                palette.accent.withValues(alpha: 0.18),
+                Icons.edit_outlined,
+                'Escena en la lista',
+              ),
+            ],
           ),
-          _legendChip(
-            palette,
-            palette.accent.withValues(alpha: 0.18),
-            Icons.check_circle_outline,
-            'En la lista · color del set de rodaje',
+          if (sortedCharacters.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text('Personajes', style: AppTypography.caption(palette)),
+            const SizedBox(height: AppSpacing.xs),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final entry in sortedCharacters)
+                  _characterLegendChip(palette, entry.key, entry.value),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _characterLegendChip(AppPalette palette, String name, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.55)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
+          const SizedBox(width: 6),
+          Text(name, style: AppTypography.caption(palette)),
         ],
       ),
     );

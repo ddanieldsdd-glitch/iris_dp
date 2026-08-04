@@ -4,21 +4,31 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../storage/app_storage_config.dart';
+
 class MediaStorage {
-  static Future<Directory?> _documentsDir() async {
+  static Future<Directory?> _documentsRoot() async {
     try {
+      if (AppStorageConfig.isConfigured) {
+        return AppStorageConfig.documentsDirectory();
+      }
       return await getApplicationDocumentsDirectory();
     } catch (_) {
       return null;
     }
   }
 
+  static String _projectPath(Directory root, int projectId) {
+    if (AppStorageConfig.isConfigured) {
+      return p.join(root.path, 'projects', '$projectId');
+    }
+    return p.join(root.path, 'iris_dp', 'projects', '$projectId');
+  }
+
   static Future<Directory?> projectDirectory(int projectId) async {
-    final dir = await _documentsDir();
+    final dir = await _documentsRoot();
     if (dir == null) return null;
-    final projectDir = Directory(
-      p.join(dir.path, 'iris_dp', 'projects', '$projectId'),
-    );
+    final projectDir = Directory(_projectPath(dir, projectId));
     if (!await projectDir.exists()) {
       await projectDir.create(recursive: true);
     }
@@ -26,11 +36,9 @@ class MediaStorage {
   }
 
   static Future<void> deleteProjectDirectory(int projectId) async {
-    final dir = await _documentsDir();
+    final dir = await _documentsRoot();
     if (dir == null) return;
-    final projectDir = Directory(
-      p.join(dir.path, 'iris_dp', 'projects', '$projectId'),
-    );
+    final projectDir = Directory(_projectPath(dir, projectId));
     if (await projectDir.exists()) {
       await projectDir.delete(recursive: true);
     }
@@ -101,12 +109,12 @@ class MediaStorage {
     required int locationId,
     required String sourcePath,
   }) async {
-    final dir = await _documentsDir();
+    final dir = await _documentsRoot();
     if (dir == null) {
       throw StateError('Almacenamiento no disponible');
     }
     final destDir = Directory(
-      p.join(dir.path, 'iris_dp', 'projects', '$projectId', 'locations', '$locationId'),
+      p.join(_projectPath(dir, projectId), 'locations', '$locationId'),
     );
     if (!await destDir.exists()) {
       await destDir.create(recursive: true);
@@ -125,13 +133,11 @@ class MediaStorage {
     required int projectId,
     required String sourcePath,
   }) async {
-    final dir = await _documentsDir();
+    final dir = await _documentsRoot();
     if (dir == null) {
       throw StateError('Almacenamiento no disponible');
     }
-    final destDir = Directory(
-      p.join(dir.path, 'iris_dp', 'projects', '$projectId', 'script'),
-    );
+    final destDir = Directory(p.join(_projectPath(dir, projectId), 'script'));
     if (!await destDir.exists()) {
       await destDir.create(recursive: true);
     }
@@ -148,12 +154,12 @@ class MediaStorage {
     required int siteId,
     required String sourcePath,
   }) async {
-    final dir = await _documentsDir();
+    final dir = await _documentsRoot();
     if (dir == null) {
       throw StateError('Almacenamiento no disponible');
     }
     final destDir = Directory(
-      p.join(dir.path, 'iris_dp', 'projects', '$projectId', 'sites', '$siteId'),
+      p.join(_projectPath(dir, projectId), 'sites', '$siteId'),
     );
     if (!await destDir.exists()) {
       await destDir.create(recursive: true);
@@ -173,12 +179,12 @@ class MediaStorage {
     required int shotId,
     required String sourcePath,
   }) async {
-    final dir = await _documentsDir();
+    final dir = await _documentsRoot();
     if (dir == null) {
       throw StateError('Almacenamiento no disponible');
     }
     final destDir = Directory(
-      p.join(dir.path, 'iris_dp', 'projects', '$projectId', 'references'),
+      p.join(_projectPath(dir, projectId), 'references'),
     );
     if (!await destDir.exists()) {
       await destDir.create(recursive: true);
@@ -199,12 +205,12 @@ class MediaStorage {
     required Uint8List bytes,
     required String fileName,
   }) async {
-    final dir = await _documentsDir();
+    final dir = await _documentsRoot();
     if (dir == null) {
       throw StateError('Almacenamiento no disponible');
     }
     final destDir = Directory(
-      p.join(dir.path, 'iris_dp', 'projects', '$projectId', 'references'),
+      p.join(_projectPath(dir, projectId), 'references'),
     );
     if (!await destDir.exists()) {
       await destDir.create(recursive: true);
@@ -246,16 +252,13 @@ class MediaStorage {
     required String sourcePath,
     required String prefix,
   }) async {
-    final dir = await _documentsDir();
+    final dir = await _documentsRoot();
     if (dir == null) {
       throw StateError('Almacenamiento no disponible');
     }
     final destDir = Directory(
       p.join(
-        dir.path,
-        'iris_dp',
-        'projects',
-        '$projectId',
+        _projectPath(dir, projectId),
         scopeFolder,
         '$scopeId',
         'scans',

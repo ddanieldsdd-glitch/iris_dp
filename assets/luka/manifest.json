@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "fixtures": [
+    {"id": "skypanel_s360", "label": "ARRI SkyPanel S360-C", "unrealPath": "/Game/ARRI_LUKA/Fixtures/skypanel_s360"},
+    {"id": "skypanel_s120", "label": "ARRI SkyPanel S120-C", "unrealPath": "/Game/ARRI_LUKA/Fixtures/skypanel_s120"},
+    {"id": "skypanel_s60", "label": "ARRI SkyPanel S60-C", "unrealPath": "/Game/ARRI_LUKA/Fixtures/skypanel_s60"},
+    {"id": "skypanel_s30", "label": "ARRI SkyPanel S30-C", "unrealPath": "/Game/ARRI_LUKA/Fixtures/skypanel_s30"},
+    {"id": "orbiter", "label": "ARRI Orbiter", "unrealPath": "/Game/ARRI_LUKA/Fixtures/orbiter"},
+    {"id": "l7c", "label": "ARRI L7-C", "unrealPath": "/Game/ARRI_LUKA/Fixtures/l7c"},
+    {"id": "t24", "label": "ARRI T24", "unrealPath": "/Game/ARRI_LUKA/Fixtures/t24"},
+    {"id": "t12", "label": "ARRI T12", "unrealPath": "/Game/ARRI_LUKA/Fixtures/t12"},
+    {"id": "t5", "label": "ARRI T5", "unrealPath": "/Game/ARRI_LUKA/Fixtures/t5"},
+    {"id": "t2", "label": "ARRI T2", "unrealPath": "/Game/ARRI_LUKA/Fixtures/t2"},
+    {"id": "m18", "label": "ARRI M18", "unrealPath": "/Game/ARRI_LUKA/Fixtures/m18"},
+    {"id": "m40", "label": "ARRI M40", "unrealPath": "/Game/ARRI_LUKA/Fixtures/m40"}
+  ],
+  "cameraProfiles": [
+    {"id": "alexa_35", "label": "ALEXA 35", "sensorWidthMm": 27.99, "sensorHeightMm": 19.22, "lukaPreset": "ALEXA 35"},
+    {"id": "alexa_mini_lf", "label": "ALEXA Mini LF", "sensorWidthMm": 36.7, "sensorHeightMm": 25.54, "lukaPreset": "ALEXA Mini LF"},
+    {"id": "venice2", "label": "Sony VENICE 2", "sensorWidthMm": 35.9, "sensorHeightMm": 24.0, "lukaPreset": "VENICE 2"},
+    {"id": "red_vraptor", "label": "RED V-RAPTOR 8K VV", "sensorWidthMm": 40.96, "sensorHeightMm": 21.6, "lukaPreset": "V-RAPTOR 8K VV"}
+  ],
+  "notes": "Manifest curado IRIS — no sustituye instalación local del plugin ARRI LUKA (Windows)."
+}

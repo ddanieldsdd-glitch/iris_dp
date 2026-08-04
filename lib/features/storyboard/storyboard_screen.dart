@@ -201,7 +201,7 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
               return StreamBuilder<List<LocationBasePlan>>(
                 stream: db.watchLocationsForProject(widget.projectId),
                 builder: (context, setSnap) {
-                  final colors = ProjectColorScheme(
+                  final colors = ProjectColorScheme.resolve(
                     sites: siteSnap.data ?? [],
                     sets: setSnap.data ?? [],
                     scenes: scenes,
@@ -1330,10 +1330,6 @@ class _FrameDetailSheet extends ConsumerWidget {
               onTap: onExport,
             ),
             const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Generar con IA estará disponible en una próxima versión.',
-              style: AppTypography.caption(palette),
-            ),
           ],
         ),
       ),

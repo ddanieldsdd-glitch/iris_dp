@@ -96,6 +96,11 @@ class PlanElementCompat {
     (id: 'l7c', label: 'ARRI L7-C'),
     (id: 't24', label: 'ARRI T24 Fresnel'),
     (id: 't12', label: 'ARRI T12 Fresnel'),
+    (id: 't5', label: 'ARRI T5 Fresnel'),
+    (id: 't2', label: 'ARRI T2 Fresnel'),
+    (id: 'm18', label: 'ARRI M18 HMI'),
+    (id: 'm40', label: 'ARRI M40 HMI'),
+    (id: 'm12', label: 'ARRI M12 HMI'),
   ];
 
   static String? labelForLukaFixture(String? id) {

@@ -19,9 +19,6 @@ String userFriendlyError(Object error) {
   if (message.contains('TimeoutException') || message.contains('timed out')) {
     return 'La operación tardó demasiado. Inténtalo de nuevo.';
   }
-  if (message.contains('Claude API error')) {
-    return 'Error al contactar con Claude. Revisa tu clave API en Ajustes.';
-  }
   if (message.contains('Bytes are not supported on macOS')) {
     return 'No se pudo guardar el archivo en macOS. Inténtalo de nuevo.';
   }

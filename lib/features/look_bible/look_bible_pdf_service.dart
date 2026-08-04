@@ -3,9 +3,8 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
-
 import '../../core/utils/export_file_saver.dart';
+import '../../core/utils/pdf_export_fonts.dart';
 
 import 'look_bible_model.dart';
 class LookBiblePdfService {
@@ -17,8 +16,9 @@ class LookBiblePdfService {
     required LookBibleData data,
   }) async {
     final doc = pw.Document();
-    final fontBold = await PdfGoogleFonts.interBold();
-    final font = await PdfGoogleFonts.interRegular();
+    final fonts = await PdfExportFonts.load();
+    final font = fonts.regular;
+    final fontBold = fonts.bold;
 
     final moodboardImages = <pw.MemoryImage>[];
     for (final path in data.moodboardImagePaths) {

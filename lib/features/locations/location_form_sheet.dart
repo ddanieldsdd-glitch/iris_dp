@@ -52,8 +52,28 @@ class _LocationFormSheetState extends ConsumerState<LocationFormSheet> {
     _nameCtrl = TextEditingController(text: loc?.locationName ?? '');
     _descriptionCtrl = TextEditingController(text: loc?.description ?? '');
     _notesCtrl = TextEditingController(text: loc?.notes ?? '');
-    _color = loc?.color ?? defaultSceneColorForIndex(widget.nextSortOrder);
+    _color = loc?.color ?? kSceneColorNeutral;
+    _loadDefaultColor();
     _loadParentSiteName();
+  }
+
+  Future<void> _loadDefaultColor() async {
+    if (_isEditing) return;
+    final db = ref.read(databaseProvider);
+    final site = await db.getSiteById(widget.siteId);
+    if (site == null || !mounted) return;
+
+    final sites = await db.watchSitesForProject(widget.projectId).first;
+    final sets = await db.watchSetsForSite(widget.siteId).first;
+    final siteIndex = sites.indexWhere((s) => s.id == site.id);
+
+    setState(() {
+      _color = defaultSetHexForSite(
+        siteIndex: siteIndex >= 0 ? siteIndex : sites.length,
+        setIndex: sets.length,
+        totalSets: sets.length + 1,
+      );
+    });
   }
 
   Future<void> _loadParentSiteName() async {

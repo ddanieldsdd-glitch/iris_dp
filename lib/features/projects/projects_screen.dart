@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/app_database.dart';
@@ -11,8 +13,11 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_card.dart';
 import 'create_project_sheet.dart';
 import 'project_form_sheet.dart';
+import 'project_overview.dart';
+import 'project_overview_metrics.dart';
 import '../project_hub/project_hub_screen.dart';
 import '../../core/widgets/app_snackbar.dart';
+import '../../core/widgets/sync_status_indicator.dart';
 
 class ProjectsScreen extends ConsumerWidget {
   const ProjectsScreen({super.key});
@@ -44,6 +49,7 @@ class ProjectsScreen extends ConsumerWidget {
                   icon: Icon(Icons.settings_outlined, color: palette.textSecondary),
                   onPressed: () => SettingsSheet.show(context),
                 ),
+                const SyncStatusIndicator(),
                 const SizedBox(width: AppSpacing.sm),
                 AppButton(
                   label: 'Nuevo grupo',
@@ -312,7 +318,7 @@ class _ProjectGrid extends StatelessWidget {
         maxCrossAxisExtent: 280,
         crossAxisSpacing: AppSpacing.md,
         mainAxisSpacing: AppSpacing.md,
-        childAspectRatio: 0.85,
+        childAspectRatio: 0.62,
       ),
       itemCount: projects.length,
       itemBuilder: (context, i) => _ProjectCard(
@@ -326,7 +332,7 @@ class _ProjectGrid extends StatelessWidget {
   }
 }
 
-class _ProjectCard extends StatelessWidget {
+class _ProjectCard extends ConsumerStatefulWidget {
   final Project project;
   final VoidCallback onTap;
   final VoidCallback onEdit;
@@ -342,29 +348,93 @@ class _ProjectCard extends StatelessWidget {
   });
 
   @override
+  ConsumerState<_ProjectCard> createState() => _ProjectCardState();
+}
+
+class _ProjectCardState extends ConsumerState<_ProjectCard> {
+  ProjectOverview? _overview;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOverview();
+  }
+
+  @override
+  void didUpdateWidget(_ProjectCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.project.id != widget.project.id) {
+      _loadOverview();
+    }
+  }
+
+  Future<void> _loadOverview() async {
+    final db = ref.read(databaseProvider);
+    final overview = await loadProjectOverview(db, widget.project.id);
+    if (mounted) setState(() => _overview = overview);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final project = widget.project;
     final icon = IconData(project.iconCode, fontFamily: 'MaterialIcons');
+    final coverPath = project.coverImagePath;
+    final hasCover = coverPath != null &&
+        coverPath.isNotEmpty &&
+        File(coverPath).existsSync();
+    final overview = _overview;
+    final directionText = overview?.directionSummary;
 
     return AppCard(
-      onTap: onTap,
+      onTap: widget.onTap,
       padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
+            flex: 5,
             child: Stack(children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: palette.surfaceOverlay,
-                  borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(16)),
-                ),
-                child: Center(
-                  child: Icon(icon,
-                      color: palette.textTertiary, size: 48),
-                ),
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16)),
+                child: hasCover
+                    ? Image.file(
+                        File(coverPath),
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
+                      )
+                    : Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: palette.surfaceOverlay,
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(16)),
+                        ),
+                        child: Center(
+                          child: Icon(icon,
+                              color: palette.textTertiary, size: 48),
+                        ),
+                      ),
               ),
+              if (hasCover)
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(16)),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.35),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               Positioned(
                 top: 8, right: 8,
                 child: PopupMenuButton<String>(
@@ -372,9 +442,9 @@ class _ProjectCard extends StatelessWidget {
                   icon: Icon(Icons.more_horiz,
                       color: palette.textSecondary, size: 18),
                   onSelected: (v) {
-                    if (v == 'edit') onEdit();
-                    if (v == 'duplicate') onDuplicate();
-                    if (v == 'delete') onDelete();
+                    if (v == 'edit') widget.onEdit();
+                    if (v == 'duplicate') widget.onDuplicate();
+                    if (v == 'delete') widget.onDelete();
                   },
                   itemBuilder: (_) => [
                     PopupMenuItem(
@@ -411,7 +481,9 @@ class _ProjectCard extends StatelessWidget {
               ),
             ]),
           ),
-          Padding(
+          Expanded(
+            flex: 6,
+            child: Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -421,44 +493,60 @@ class _ProjectCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
                 if (project.director != null) ...[
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(project.director!,
-                      style: AppTypography.bodyMedium(palette),
+                      style: AppTypography.caption(palette),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ],
+                if (directionText != null && directionText.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    directionText,
+                    style: AppTypography.caption(palette).copyWith(
+                      color: palette.textSecondary,
+                      height: 1.35,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ] else if (overview != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Añade la intención en Biblia → Dirección',
+                    style: AppTypography.caption(palette).copyWith(
+                      color: palette.textTertiary,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
                 const SizedBox(height: 8),
-                _StatusChip(status: project.status),
+                if (overview != null) ...[
+                  ProjectStateChip(
+                    overview: overview,
+                    status: project.status,
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const NeverScrollableScrollPhysics(),
+                      child: ProjectOverviewMetrics(overview: overview),
+                    ),
+                  ),
+                ] else
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: LinearProgressIndicator(minHeight: 2),
+                  ),
               ],
             ),
           ),
+          ),
         ],
       ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  final String status;
-  const _StatusChip({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final (label, color) = switch (status) {
-      'preproduction' => ('Preproducción', palette.warning),
-      'shooting' => ('Rodaje', palette.success),
-      'post' => ('Post', palette.textTertiary),
-      _ => ('—', palette.textTertiary),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(label,
-          style: AppTypography.caption(palette).copyWith(color: color)),
     );
   }
 }

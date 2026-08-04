@@ -70,32 +70,56 @@ Color setVariantColor(Color locationBase, int setIndex, int setCount) {
   return hsl.withSaturation(sat).withLightness(light).toColor();
 }
 
-/// Color de escena dentro del bloque: hereda del set o de la localización.
-Color sceneBlockColor({
-  required Color locationBase,
-  int? setIndex,
-  int setCount = 1,
-  String? sceneColorOverride,
-}) {
-  final override = persistSceneColor(sceneColorOverride);
-  if (override != null) return sceneDisplayColor(override);
-  if (setIndex != null) {
-    return setVariantColor(locationBase, setIndex, setCount);
-  }
-  return locationBaseColor(locationBase);
+/// Hex del color base de una localización por índice global.
+String siteBaseHexForIndex(int siteIndex, {String? existingHex}) {
+  final existing = existingHex != null ? sceneDisplayColor(existingHex) : null;
+  return hexFromColor(locationBlockColor(siteIndex, existing: existing));
 }
 
-/// Color efectivo: override de escena → color de localización → neutro.
-Color effectiveSceneColor({
-  String? sceneColorOverride,
-  String? locationColor,
+/// Hex por defecto de un set dentro de su localización.
+String defaultSetHexForSite({
+  required int siteIndex,
+  required int setIndex,
+  required int totalSets,
+  String? explicitHex,
 }) {
-  final override = persistSceneColor(sceneColorOverride);
-  if (override != null) return sceneDisplayColor(override);
-  if (locationColor != null && locationColor.isNotEmpty) {
-    return sceneDisplayColor(locationColor);
+  if (explicitHex != null && explicitHex.isNotEmpty) {
+    return sceneColorForPicker(explicitHex);
   }
-  return sceneDisplayColor(null);
+  final base = colorFromHex(siteBaseHexForIndex(siteIndex))!;
+  return hexFromColor(setVariantColor(base, setIndex, totalSets));
+}
+
+/// Variantes hex de todos los sets de una localización a partir de un color base.
+List<String> setVariantHexesForSiteBase(String baseHex, int setCount) {
+  if (setCount <= 0) return const [];
+  final base = locationBaseColor(sceneDisplayColor(baseHex));
+  return [
+    for (var i = 0; i < setCount; i++)
+      hexFromColor(setVariantColor(base, i, setCount)),
+  ];
+}
+
+/// Mapa site|set → hex para el workspace de importación.
+Map<String, String> pendingSetColorsForSite({
+  required String locationSite,
+  required Iterable<String> setNames,
+  required int siteIndex,
+  required String baseHex,
+}) {
+  final siteKey = locationSite.trim().toLowerCase();
+  final sorted = setNames
+      .map((name) => name.trim().toLowerCase())
+      .where((name) => name.isNotEmpty)
+      .toSet()
+      .toList()
+    ..sort();
+  final base = locationBaseColor(sceneDisplayColor(baseHex));
+  return {
+    for (var i = 0; i < sorted.length; i++)
+      '$siteKey|${sorted[i]}':
+          hexFromColor(setVariantColor(base, i, sorted.length)),
+  };
 }
 
 /// Normaliza al guardar: el neutro se persiste como null (sin color asignado).
@@ -110,4 +134,67 @@ String? persistSceneColor(String? hex) {
 String sceneColorForPicker(String? hex) {
   if (hex == null || hex.isEmpty) return kSceneColorNeutral;
   return hex;
+}
+
+/// Clave compuesta site|set para colores pendientes en el workspace de import.
+String setColorKey(String siteName, String setName) =>
+    '${siteName.trim().toLowerCase()}|${setName.trim().toLowerCase()}';
+
+/// Resuelve color pendiente por site+set, con fallback al nombre de set solo.
+String? pendingSetColorHex(
+  Map<String, String> pending, {
+  required String shootSet,
+  String? locationSite,
+}) {
+  if (locationSite != null && locationSite.trim().isNotEmpty) {
+    final composite = pending[setColorKey(locationSite, shootSet)];
+    if (composite != null && composite.isNotEmpty) return composite;
+  }
+  return pending[shootSet.trim().toLowerCase()];
+}
+
+/// Asigna un color base distinto por localización y variantes por set.
+Map<String, String> buildPendingSetColorsFromScenes(
+  Iterable<({String locationSite, String shootSet})> scenes, {
+  Map<String, String>? preserve,
+}) {
+  final result = <String, String>{};
+  if (preserve != null) {
+    result.addAll(preserve);
+  }
+
+  final siteOrder = <String>[];
+  final setsBySite = <String, List<String>>{};
+
+  for (final scene in scenes) {
+    final setName = scene.shootSet.trim();
+    if (setName.isEmpty) continue;
+
+    final siteName = scene.locationSite.trim().isEmpty
+        ? setName
+        : scene.locationSite.trim();
+    final siteKey = siteName.toLowerCase();
+    if (!siteOrder.contains(siteKey)) siteOrder.add(siteKey);
+
+    final setKey = setName.toLowerCase();
+    final list = setsBySite.putIfAbsent(siteKey, () => []);
+    if (!list.contains(setKey)) list.add(setKey);
+  }
+
+  for (var siteIdx = 0; siteIdx < siteOrder.length; siteIdx++) {
+    final siteKey = siteOrder[siteIdx];
+    final setKeys = setsBySite[siteKey]!..sort();
+    final assigned = pendingSetColorsForSite(
+      locationSite: siteKey,
+      setNames: setKeys,
+      siteIndex: siteIdx,
+      baseHex: siteBaseHexForIndex(siteIdx),
+    );
+    for (final entry in assigned.entries) {
+      if (result.containsKey(entry.key)) continue;
+      result[entry.key] = entry.value;
+    }
+  }
+
+  return result;
 }

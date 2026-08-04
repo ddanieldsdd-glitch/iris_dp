@@ -413,6 +413,17 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _characterColorsJsonMeta =
+      const VerificationMeta('characterColorsJson');
+  @override
+  late final GeneratedColumn<String> characterColorsJson =
+      GeneratedColumn<String>(
+        'character_colors_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _sortOrderMeta = const VerificationMeta(
     'sortOrder',
   );
@@ -425,6 +436,29 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _cloudIdMeta = const VerificationMeta(
+    'cloudId',
+  );
+  @override
+  late final GeneratedColumn<String> cloudId = GeneratedColumn<String>(
+    'cloud_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _syncUpdatedAtMeta = const VerificationMeta(
+    'syncUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> syncUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'sync_updated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -465,7 +499,10 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     googleEmail,
     scriptFilePath,
     scriptFileName,
+    characterColorsJson,
     sortOrder,
+    cloudId,
+    syncUpdatedAt,
     createdAt,
     updatedAt,
   ];
@@ -585,10 +622,34 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         ),
       );
     }
+    if (data.containsKey('character_colors_json')) {
+      context.handle(
+        _characterColorsJsonMeta,
+        characterColorsJson.isAcceptableOrUnknown(
+          data['character_colors_json']!,
+          _characterColorsJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('sort_order')) {
       context.handle(
         _sortOrderMeta,
         sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('cloud_id')) {
+      context.handle(
+        _cloudIdMeta,
+        cloudId.isAcceptableOrUnknown(data['cloud_id']!, _cloudIdMeta),
+      );
+    }
+    if (data.containsKey('sync_updated_at')) {
+      context.handle(
+        _syncUpdatedAtMeta,
+        syncUpdatedAt.isAcceptableOrUnknown(
+          data['sync_updated_at']!,
+          _syncUpdatedAtMeta,
+        ),
       );
     }
     if (data.containsKey('created_at')) {
@@ -668,10 +729,22 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         DriftSqlType.string,
         data['${effectivePrefix}script_file_name'],
       ),
+      characterColorsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}character_colors_json'],
+      ),
       sortOrder: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
       )!,
+      cloudId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cloud_id'],
+      ),
+      syncUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}sync_updated_at'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -704,7 +777,12 @@ class Project extends DataClass implements Insertable<Project> {
   final String? googleEmail;
   final String? scriptFilePath;
   final String? scriptFileName;
+  final String? characterColorsJson;
   final int sortOrder;
+
+  /// UUID en Supabase cuando sync cloud está activo.
+  final String? cloudId;
+  final DateTime? syncUpdatedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
   const Project({
@@ -722,7 +800,10 @@ class Project extends DataClass implements Insertable<Project> {
     this.googleEmail,
     this.scriptFilePath,
     this.scriptFileName,
+    this.characterColorsJson,
     required this.sortOrder,
+    this.cloudId,
+    this.syncUpdatedAt,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -763,7 +844,16 @@ class Project extends DataClass implements Insertable<Project> {
     if (!nullToAbsent || scriptFileName != null) {
       map['script_file_name'] = Variable<String>(scriptFileName);
     }
+    if (!nullToAbsent || characterColorsJson != null) {
+      map['character_colors_json'] = Variable<String>(characterColorsJson);
+    }
     map['sort_order'] = Variable<int>(sortOrder);
+    if (!nullToAbsent || cloudId != null) {
+      map['cloud_id'] = Variable<String>(cloudId);
+    }
+    if (!nullToAbsent || syncUpdatedAt != null) {
+      map['sync_updated_at'] = Variable<DateTime>(syncUpdatedAt);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -805,7 +895,16 @@ class Project extends DataClass implements Insertable<Project> {
       scriptFileName: scriptFileName == null && nullToAbsent
           ? const Value.absent()
           : Value(scriptFileName),
+      characterColorsJson: characterColorsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(characterColorsJson),
       sortOrder: Value(sortOrder),
+      cloudId: cloudId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cloudId),
+      syncUpdatedAt: syncUpdatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(syncUpdatedAt),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -833,7 +932,12 @@ class Project extends DataClass implements Insertable<Project> {
       googleEmail: serializer.fromJson<String?>(json['googleEmail']),
       scriptFilePath: serializer.fromJson<String?>(json['scriptFilePath']),
       scriptFileName: serializer.fromJson<String?>(json['scriptFileName']),
+      characterColorsJson: serializer.fromJson<String?>(
+        json['characterColorsJson'],
+      ),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      cloudId: serializer.fromJson<String?>(json['cloudId']),
+      syncUpdatedAt: serializer.fromJson<DateTime?>(json['syncUpdatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -856,7 +960,10 @@ class Project extends DataClass implements Insertable<Project> {
       'googleEmail': serializer.toJson<String?>(googleEmail),
       'scriptFilePath': serializer.toJson<String?>(scriptFilePath),
       'scriptFileName': serializer.toJson<String?>(scriptFileName),
+      'characterColorsJson': serializer.toJson<String?>(characterColorsJson),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'cloudId': serializer.toJson<String?>(cloudId),
+      'syncUpdatedAt': serializer.toJson<DateTime?>(syncUpdatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -877,7 +984,10 @@ class Project extends DataClass implements Insertable<Project> {
     Value<String?> googleEmail = const Value.absent(),
     Value<String?> scriptFilePath = const Value.absent(),
     Value<String?> scriptFileName = const Value.absent(),
+    Value<String?> characterColorsJson = const Value.absent(),
     int? sortOrder,
+    Value<String?> cloudId = const Value.absent(),
+    Value<DateTime?> syncUpdatedAt = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Project(
@@ -905,7 +1015,14 @@ class Project extends DataClass implements Insertable<Project> {
     scriptFileName: scriptFileName.present
         ? scriptFileName.value
         : this.scriptFileName,
+    characterColorsJson: characterColorsJson.present
+        ? characterColorsJson.value
+        : this.characterColorsJson,
     sortOrder: sortOrder ?? this.sortOrder,
+    cloudId: cloudId.present ? cloudId.value : this.cloudId,
+    syncUpdatedAt: syncUpdatedAt.present
+        ? syncUpdatedAt.value
+        : this.syncUpdatedAt,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -941,7 +1058,14 @@ class Project extends DataClass implements Insertable<Project> {
       scriptFileName: data.scriptFileName.present
           ? data.scriptFileName.value
           : this.scriptFileName,
+      characterColorsJson: data.characterColorsJson.present
+          ? data.characterColorsJson.value
+          : this.characterColorsJson,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      cloudId: data.cloudId.present ? data.cloudId.value : this.cloudId,
+      syncUpdatedAt: data.syncUpdatedAt.present
+          ? data.syncUpdatedAt.value
+          : this.syncUpdatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -964,7 +1088,10 @@ class Project extends DataClass implements Insertable<Project> {
           ..write('googleEmail: $googleEmail, ')
           ..write('scriptFilePath: $scriptFilePath, ')
           ..write('scriptFileName: $scriptFileName, ')
+          ..write('characterColorsJson: $characterColorsJson, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('cloudId: $cloudId, ')
+          ..write('syncUpdatedAt: $syncUpdatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -987,7 +1114,10 @@ class Project extends DataClass implements Insertable<Project> {
     googleEmail,
     scriptFilePath,
     scriptFileName,
+    characterColorsJson,
     sortOrder,
+    cloudId,
+    syncUpdatedAt,
     createdAt,
     updatedAt,
   );
@@ -1009,7 +1139,10 @@ class Project extends DataClass implements Insertable<Project> {
           other.googleEmail == this.googleEmail &&
           other.scriptFilePath == this.scriptFilePath &&
           other.scriptFileName == this.scriptFileName &&
+          other.characterColorsJson == this.characterColorsJson &&
           other.sortOrder == this.sortOrder &&
+          other.cloudId == this.cloudId &&
+          other.syncUpdatedAt == this.syncUpdatedAt &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1029,7 +1162,10 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
   final Value<String?> googleEmail;
   final Value<String?> scriptFilePath;
   final Value<String?> scriptFileName;
+  final Value<String?> characterColorsJson;
   final Value<int> sortOrder;
+  final Value<String?> cloudId;
+  final Value<DateTime?> syncUpdatedAt;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   const ProjectsCompanion({
@@ -1047,7 +1183,10 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.googleEmail = const Value.absent(),
     this.scriptFilePath = const Value.absent(),
     this.scriptFileName = const Value.absent(),
+    this.characterColorsJson = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.cloudId = const Value.absent(),
+    this.syncUpdatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -1066,7 +1205,10 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.googleEmail = const Value.absent(),
     this.scriptFilePath = const Value.absent(),
     this.scriptFileName = const Value.absent(),
+    this.characterColorsJson = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.cloudId = const Value.absent(),
+    this.syncUpdatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   }) : name = Value(name);
@@ -1085,7 +1227,10 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Expression<String>? googleEmail,
     Expression<String>? scriptFilePath,
     Expression<String>? scriptFileName,
+    Expression<String>? characterColorsJson,
     Expression<int>? sortOrder,
+    Expression<String>? cloudId,
+    Expression<DateTime>? syncUpdatedAt,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
   }) {
@@ -1104,7 +1249,11 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       if (googleEmail != null) 'google_email': googleEmail,
       if (scriptFilePath != null) 'script_file_path': scriptFilePath,
       if (scriptFileName != null) 'script_file_name': scriptFileName,
+      if (characterColorsJson != null)
+        'character_colors_json': characterColorsJson,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (cloudId != null) 'cloud_id': cloudId,
+      if (syncUpdatedAt != null) 'sync_updated_at': syncUpdatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -1125,7 +1274,10 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Value<String?>? googleEmail,
     Value<String?>? scriptFilePath,
     Value<String?>? scriptFileName,
+    Value<String?>? characterColorsJson,
     Value<int>? sortOrder,
+    Value<String?>? cloudId,
+    Value<DateTime?>? syncUpdatedAt,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
   }) {
@@ -1144,7 +1296,10 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       googleEmail: googleEmail ?? this.googleEmail,
       scriptFilePath: scriptFilePath ?? this.scriptFilePath,
       scriptFileName: scriptFileName ?? this.scriptFileName,
+      characterColorsJson: characterColorsJson ?? this.characterColorsJson,
       sortOrder: sortOrder ?? this.sortOrder,
+      cloudId: cloudId ?? this.cloudId,
+      syncUpdatedAt: syncUpdatedAt ?? this.syncUpdatedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -1195,8 +1350,19 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     if (scriptFileName.present) {
       map['script_file_name'] = Variable<String>(scriptFileName.value);
     }
+    if (characterColorsJson.present) {
+      map['character_colors_json'] = Variable<String>(
+        characterColorsJson.value,
+      );
+    }
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (cloudId.present) {
+      map['cloud_id'] = Variable<String>(cloudId.value);
+    }
+    if (syncUpdatedAt.present) {
+      map['sync_updated_at'] = Variable<DateTime>(syncUpdatedAt.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
@@ -1224,7 +1390,10 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
           ..write('googleEmail: $googleEmail, ')
           ..write('scriptFilePath: $scriptFilePath, ')
           ..write('scriptFileName: $scriptFileName, ')
+          ..write('characterColorsJson: $characterColorsJson, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('cloudId: $cloudId, ')
+          ..write('syncUpdatedAt: $syncUpdatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -2815,6 +2984,17 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _charactersJsonMeta = const VerificationMeta(
+    'charactersJson',
+  );
+  @override
+  late final GeneratedColumn<String> charactersJson = GeneratedColumn<String>(
+    'characters_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _descriptionMeta = const VerificationMeta(
     'description',
   );
@@ -2900,6 +3080,7 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
     intExt,
     dayNight,
     locationColor,
+    charactersJson,
     description,
     actionText,
     sourceStartIndex,
@@ -3004,6 +3185,15 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
         ),
       );
     }
+    if (data.containsKey('characters_json')) {
+      context.handle(
+        _charactersJsonMeta,
+        charactersJson.isAcceptableOrUnknown(
+          data['characters_json']!,
+          _charactersJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('description')) {
       context.handle(
         _descriptionMeta,
@@ -3105,6 +3295,10 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
         DriftSqlType.string,
         data['${effectivePrefix}location_color'],
       ),
+      charactersJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}characters_json'],
+      ),
       description: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}description'],
@@ -3150,6 +3344,7 @@ class Scene extends DataClass implements Insertable<Scene> {
   final String intExt;
   final String dayNight;
   final String? locationColor;
+  final String? charactersJson;
   final String? description;
   final String? actionText;
   final int? sourceStartIndex;
@@ -3168,6 +3363,7 @@ class Scene extends DataClass implements Insertable<Scene> {
     required this.intExt,
     required this.dayNight,
     this.locationColor,
+    this.charactersJson,
     this.description,
     this.actionText,
     this.sourceStartIndex,
@@ -3194,6 +3390,9 @@ class Scene extends DataClass implements Insertable<Scene> {
     map['day_night'] = Variable<String>(dayNight);
     if (!nullToAbsent || locationColor != null) {
       map['location_color'] = Variable<String>(locationColor);
+    }
+    if (!nullToAbsent || charactersJson != null) {
+      map['characters_json'] = Variable<String>(charactersJson);
     }
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
@@ -3229,6 +3428,9 @@ class Scene extends DataClass implements Insertable<Scene> {
       locationColor: locationColor == null && nullToAbsent
           ? const Value.absent()
           : Value(locationColor),
+      charactersJson: charactersJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(charactersJson),
       description: description == null && nullToAbsent
           ? const Value.absent()
           : Value(description),
@@ -3261,6 +3463,7 @@ class Scene extends DataClass implements Insertable<Scene> {
       intExt: serializer.fromJson<String>(json['intExt']),
       dayNight: serializer.fromJson<String>(json['dayNight']),
       locationColor: serializer.fromJson<String?>(json['locationColor']),
+      charactersJson: serializer.fromJson<String?>(json['charactersJson']),
       description: serializer.fromJson<String?>(json['description']),
       actionText: serializer.fromJson<String?>(json['actionText']),
       sourceStartIndex: serializer.fromJson<int?>(json['sourceStartIndex']),
@@ -3284,6 +3487,7 @@ class Scene extends DataClass implements Insertable<Scene> {
       'intExt': serializer.toJson<String>(intExt),
       'dayNight': serializer.toJson<String>(dayNight),
       'locationColor': serializer.toJson<String?>(locationColor),
+      'charactersJson': serializer.toJson<String?>(charactersJson),
       'description': serializer.toJson<String?>(description),
       'actionText': serializer.toJson<String?>(actionText),
       'sourceStartIndex': serializer.toJson<int?>(sourceStartIndex),
@@ -3305,6 +3509,7 @@ class Scene extends DataClass implements Insertable<Scene> {
     String? intExt,
     String? dayNight,
     Value<String?> locationColor = const Value.absent(),
+    Value<String?> charactersJson = const Value.absent(),
     Value<String?> description = const Value.absent(),
     Value<String?> actionText = const Value.absent(),
     Value<int?> sourceStartIndex = const Value.absent(),
@@ -3327,6 +3532,9 @@ class Scene extends DataClass implements Insertable<Scene> {
     locationColor: locationColor.present
         ? locationColor.value
         : this.locationColor,
+    charactersJson: charactersJson.present
+        ? charactersJson.value
+        : this.charactersJson,
     description: description.present ? description.value : this.description,
     actionText: actionText.present ? actionText.value : this.actionText,
     sourceStartIndex: sourceStartIndex.present
@@ -3359,6 +3567,9 @@ class Scene extends DataClass implements Insertable<Scene> {
       locationColor: data.locationColor.present
           ? data.locationColor.value
           : this.locationColor,
+      charactersJson: data.charactersJson.present
+          ? data.charactersJson.value
+          : this.charactersJson,
       description: data.description.present
           ? data.description.value
           : this.description,
@@ -3392,6 +3603,7 @@ class Scene extends DataClass implements Insertable<Scene> {
           ..write('intExt: $intExt, ')
           ..write('dayNight: $dayNight, ')
           ..write('locationColor: $locationColor, ')
+          ..write('charactersJson: $charactersJson, ')
           ..write('description: $description, ')
           ..write('actionText: $actionText, ')
           ..write('sourceStartIndex: $sourceStartIndex, ')
@@ -3415,6 +3627,7 @@ class Scene extends DataClass implements Insertable<Scene> {
     intExt,
     dayNight,
     locationColor,
+    charactersJson,
     description,
     actionText,
     sourceStartIndex,
@@ -3437,6 +3650,7 @@ class Scene extends DataClass implements Insertable<Scene> {
           other.intExt == this.intExt &&
           other.dayNight == this.dayNight &&
           other.locationColor == this.locationColor &&
+          other.charactersJson == this.charactersJson &&
           other.description == this.description &&
           other.actionText == this.actionText &&
           other.sourceStartIndex == this.sourceStartIndex &&
@@ -3457,6 +3671,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
   final Value<String> intExt;
   final Value<String> dayNight;
   final Value<String?> locationColor;
+  final Value<String?> charactersJson;
   final Value<String?> description;
   final Value<String?> actionText;
   final Value<int?> sourceStartIndex;
@@ -3475,6 +3690,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     this.intExt = const Value.absent(),
     this.dayNight = const Value.absent(),
     this.locationColor = const Value.absent(),
+    this.charactersJson = const Value.absent(),
     this.description = const Value.absent(),
     this.actionText = const Value.absent(),
     this.sourceStartIndex = const Value.absent(),
@@ -3494,6 +3710,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     this.intExt = const Value.absent(),
     this.dayNight = const Value.absent(),
     this.locationColor = const Value.absent(),
+    this.charactersJson = const Value.absent(),
     this.description = const Value.absent(),
     this.actionText = const Value.absent(),
     this.sourceStartIndex = const Value.absent(),
@@ -3517,6 +3734,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     Expression<String>? intExt,
     Expression<String>? dayNight,
     Expression<String>? locationColor,
+    Expression<String>? charactersJson,
     Expression<String>? description,
     Expression<String>? actionText,
     Expression<int>? sourceStartIndex,
@@ -3536,6 +3754,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
       if (intExt != null) 'int_ext': intExt,
       if (dayNight != null) 'day_night': dayNight,
       if (locationColor != null) 'location_color': locationColor,
+      if (charactersJson != null) 'characters_json': charactersJson,
       if (description != null) 'description': description,
       if (actionText != null) 'action_text': actionText,
       if (sourceStartIndex != null) 'source_start_index': sourceStartIndex,
@@ -3557,6 +3776,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     Value<String>? intExt,
     Value<String>? dayNight,
     Value<String?>? locationColor,
+    Value<String?>? charactersJson,
     Value<String?>? description,
     Value<String?>? actionText,
     Value<int?>? sourceStartIndex,
@@ -3576,6 +3796,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
       intExt: intExt ?? this.intExt,
       dayNight: dayNight ?? this.dayNight,
       locationColor: locationColor ?? this.locationColor,
+      charactersJson: charactersJson ?? this.charactersJson,
       description: description ?? this.description,
       actionText: actionText ?? this.actionText,
       sourceStartIndex: sourceStartIndex ?? this.sourceStartIndex,
@@ -3621,6 +3842,9 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     if (locationColor.present) {
       map['location_color'] = Variable<String>(locationColor.value);
     }
+    if (charactersJson.present) {
+      map['characters_json'] = Variable<String>(charactersJson.value);
+    }
     if (description.present) {
       map['description'] = Variable<String>(description.value);
     }
@@ -3656,6 +3880,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
           ..write('intExt: $intExt, ')
           ..write('dayNight: $dayNight, ')
           ..write('locationColor: $locationColor, ')
+          ..write('charactersJson: $charactersJson, ')
           ..write('description: $description, ')
           ..write('actionText: $actionText, ')
           ..write('sourceStartIndex: $sourceStartIndex, ')
@@ -7361,6 +7586,226 @@ class $CamerasTable extends Cameras with TableInfo<$CamerasTable, Camera> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _dynamicRangeStopsMeta = const VerificationMeta(
+    'dynamicRangeStops',
+  );
+  @override
+  late final GeneratedColumn<double> dynamicRangeStops =
+      GeneratedColumn<double>(
+        'dynamic_range_stops',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _colorScienceMeta = const VerificationMeta(
+    'colorScience',
+  );
+  @override
+  late final GeneratedColumn<String> colorScience = GeneratedColumn<String>(
+    'color_science',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nativeIsoMeta = const VerificationMeta(
+    'nativeIso',
+  );
+  @override
+  late final GeneratedColumn<int> nativeIso = GeneratedColumn<int>(
+    'native_iso',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _logFormatsMeta = const VerificationMeta(
+    'logFormats',
+  );
+  @override
+  late final GeneratedColumn<String> logFormats = GeneratedColumn<String>(
+    'log_formats',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _mountTypeMeta = const VerificationMeta(
+    'mountType',
+  );
+  @override
+  late final GeneratedColumn<String> mountType = GeneratedColumn<String>(
+    'mount_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sensorModesJsonMeta = const VerificationMeta(
+    'sensorModesJson',
+  );
+  @override
+  late final GeneratedColumn<String> sensorModesJson = GeneratedColumn<String>(
+    'sensor_modes_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _recordingResolutionsJsonMeta =
+      const VerificationMeta('recordingResolutionsJson');
+  @override
+  late final GeneratedColumn<String> recordingResolutionsJson =
+      GeneratedColumn<String>(
+        'recording_resolutions_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _weightKgMeta = const VerificationMeta(
+    'weightKg',
+  );
+  @override
+  late final GeneratedColumn<double> weightKg = GeneratedColumn<double>(
+    'weight_kg',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _powerDrawWMeta = const VerificationMeta(
+    'powerDrawW',
+  );
+  @override
+  late final GeneratedColumn<double> powerDrawW = GeneratedColumn<double>(
+    'power_draw_w',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _heroImagePathMeta = const VerificationMeta(
+    'heroImagePath',
+  );
+  @override
+  late final GeneratedColumn<String> heroImagePath = GeneratedColumn<String>(
+    'hero_image_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _manufacturerUrlMeta = const VerificationMeta(
+    'manufacturerUrl',
+  );
+  @override
+  late final GeneratedColumn<String> manufacturerUrl = GeneratedColumn<String>(
+    'manufacturer_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _catalogVersionMeta = const VerificationMeta(
+    'catalogVersion',
+  );
+  @override
+  late final GeneratedColumn<int> catalogVersion = GeneratedColumn<int>(
+    'catalog_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isCustomMeta = const VerificationMeta(
+    'isCustom',
+  );
+  @override
+  late final GeneratedColumn<bool> isCustom = GeneratedColumn<bool>(
+    'is_custom',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_custom" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _seriesMeta = const VerificationMeta('series');
+  @override
+  late final GeneratedColumn<String> series = GeneratedColumn<String>(
+    'series',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _vintageMeta = const VerificationMeta(
+    'vintage',
+  );
+  @override
+  late final GeneratedColumn<bool> vintage = GeneratedColumn<bool>(
+    'vintage',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("vintage" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _rentalTagsJsonMeta = const VerificationMeta(
+    'rentalTagsJson',
+  );
+  @override
+  late final GeneratedColumn<String> rentalTagsJson = GeneratedColumn<String>(
+    'rental_tags_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lukaCompatibleMeta = const VerificationMeta(
+    'lukaCompatible',
+  );
+  @override
+  late final GeneratedColumn<bool> lukaCompatible = GeneratedColumn<bool>(
+    'luka_compatible',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("luka_compatible" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _lukaProfileJsonMeta = const VerificationMeta(
+    'lukaProfileJson',
+  );
+  @override
+  late final GeneratedColumn<String> lukaProfileJson = GeneratedColumn<String>(
+    'luka_profile_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _notesMeta = const VerificationMeta('notes');
   @override
   late final GeneratedColumn<String> notes = GeneratedColumn<String>(
@@ -7378,6 +7823,25 @@ class $CamerasTable extends Cameras with TableInfo<$CamerasTable, Camera> {
     sensorWidthMm,
     sensorHeightMm,
     recordingFormats,
+    dynamicRangeStops,
+    colorScience,
+    nativeIso,
+    logFormats,
+    mountType,
+    sensorModesJson,
+    recordingResolutionsJson,
+    weightKg,
+    powerDrawW,
+    heroImagePath,
+    manufacturerUrl,
+    externalId,
+    catalogVersion,
+    isCustom,
+    series,
+    vintage,
+    rentalTagsJson,
+    lukaCompatible,
+    lukaProfileJson,
     notes,
   ];
   @override
@@ -7442,6 +7906,153 @@ class $CamerasTable extends Cameras with TableInfo<$CamerasTable, Camera> {
         ),
       );
     }
+    if (data.containsKey('dynamic_range_stops')) {
+      context.handle(
+        _dynamicRangeStopsMeta,
+        dynamicRangeStops.isAcceptableOrUnknown(
+          data['dynamic_range_stops']!,
+          _dynamicRangeStopsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('color_science')) {
+      context.handle(
+        _colorScienceMeta,
+        colorScience.isAcceptableOrUnknown(
+          data['color_science']!,
+          _colorScienceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('native_iso')) {
+      context.handle(
+        _nativeIsoMeta,
+        nativeIso.isAcceptableOrUnknown(data['native_iso']!, _nativeIsoMeta),
+      );
+    }
+    if (data.containsKey('log_formats')) {
+      context.handle(
+        _logFormatsMeta,
+        logFormats.isAcceptableOrUnknown(data['log_formats']!, _logFormatsMeta),
+      );
+    }
+    if (data.containsKey('mount_type')) {
+      context.handle(
+        _mountTypeMeta,
+        mountType.isAcceptableOrUnknown(data['mount_type']!, _mountTypeMeta),
+      );
+    }
+    if (data.containsKey('sensor_modes_json')) {
+      context.handle(
+        _sensorModesJsonMeta,
+        sensorModesJson.isAcceptableOrUnknown(
+          data['sensor_modes_json']!,
+          _sensorModesJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('recording_resolutions_json')) {
+      context.handle(
+        _recordingResolutionsJsonMeta,
+        recordingResolutionsJson.isAcceptableOrUnknown(
+          data['recording_resolutions_json']!,
+          _recordingResolutionsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('weight_kg')) {
+      context.handle(
+        _weightKgMeta,
+        weightKg.isAcceptableOrUnknown(data['weight_kg']!, _weightKgMeta),
+      );
+    }
+    if (data.containsKey('power_draw_w')) {
+      context.handle(
+        _powerDrawWMeta,
+        powerDrawW.isAcceptableOrUnknown(
+          data['power_draw_w']!,
+          _powerDrawWMeta,
+        ),
+      );
+    }
+    if (data.containsKey('hero_image_path')) {
+      context.handle(
+        _heroImagePathMeta,
+        heroImagePath.isAcceptableOrUnknown(
+          data['hero_image_path']!,
+          _heroImagePathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('manufacturer_url')) {
+      context.handle(
+        _manufacturerUrlMeta,
+        manufacturerUrl.isAcceptableOrUnknown(
+          data['manufacturer_url']!,
+          _manufacturerUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
+    }
+    if (data.containsKey('catalog_version')) {
+      context.handle(
+        _catalogVersionMeta,
+        catalogVersion.isAcceptableOrUnknown(
+          data['catalog_version']!,
+          _catalogVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_custom')) {
+      context.handle(
+        _isCustomMeta,
+        isCustom.isAcceptableOrUnknown(data['is_custom']!, _isCustomMeta),
+      );
+    }
+    if (data.containsKey('series')) {
+      context.handle(
+        _seriesMeta,
+        series.isAcceptableOrUnknown(data['series']!, _seriesMeta),
+      );
+    }
+    if (data.containsKey('vintage')) {
+      context.handle(
+        _vintageMeta,
+        vintage.isAcceptableOrUnknown(data['vintage']!, _vintageMeta),
+      );
+    }
+    if (data.containsKey('rental_tags_json')) {
+      context.handle(
+        _rentalTagsJsonMeta,
+        rentalTagsJson.isAcceptableOrUnknown(
+          data['rental_tags_json']!,
+          _rentalTagsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('luka_compatible')) {
+      context.handle(
+        _lukaCompatibleMeta,
+        lukaCompatible.isAcceptableOrUnknown(
+          data['luka_compatible']!,
+          _lukaCompatibleMeta,
+        ),
+      );
+    }
+    if (data.containsKey('luka_profile_json')) {
+      context.handle(
+        _lukaProfileJsonMeta,
+        lukaProfileJson.isAcceptableOrUnknown(
+          data['luka_profile_json']!,
+          _lukaProfileJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('notes')) {
       context.handle(
         _notesMeta,
@@ -7481,6 +8092,82 @@ class $CamerasTable extends Cameras with TableInfo<$CamerasTable, Camera> {
         DriftSqlType.string,
         data['${effectivePrefix}recording_formats'],
       ),
+      dynamicRangeStops: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}dynamic_range_stops'],
+      ),
+      colorScience: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}color_science'],
+      ),
+      nativeIso: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}native_iso'],
+      ),
+      logFormats: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}log_formats'],
+      ),
+      mountType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mount_type'],
+      ),
+      sensorModesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sensor_modes_json'],
+      ),
+      recordingResolutionsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}recording_resolutions_json'],
+      ),
+      weightKg: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}weight_kg'],
+      ),
+      powerDrawW: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}power_draw_w'],
+      ),
+      heroImagePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}hero_image_path'],
+      ),
+      manufacturerUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}manufacturer_url'],
+      ),
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      ),
+      catalogVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}catalog_version'],
+      ),
+      isCustom: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_custom'],
+      )!,
+      series: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}series'],
+      ),
+      vintage: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}vintage'],
+      )!,
+      rentalTagsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}rental_tags_json'],
+      ),
+      lukaCompatible: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}luka_compatible'],
+      )!,
+      lukaProfileJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}luka_profile_json'],
+      ),
       notes: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}notes'],
@@ -7501,6 +8188,25 @@ class Camera extends DataClass implements Insertable<Camera> {
   final double sensorWidthMm;
   final double sensorHeightMm;
   final String? recordingFormats;
+  final double? dynamicRangeStops;
+  final String? colorScience;
+  final int? nativeIso;
+  final String? logFormats;
+  final String? mountType;
+  final String? sensorModesJson;
+  final String? recordingResolutionsJson;
+  final double? weightKg;
+  final double? powerDrawW;
+  final String? heroImagePath;
+  final String? manufacturerUrl;
+  final String? externalId;
+  final int? catalogVersion;
+  final bool isCustom;
+  final String? series;
+  final bool vintage;
+  final String? rentalTagsJson;
+  final bool lukaCompatible;
+  final String? lukaProfileJson;
   final String? notes;
   const Camera({
     required this.id,
@@ -7509,6 +8215,25 @@ class Camera extends DataClass implements Insertable<Camera> {
     required this.sensorWidthMm,
     required this.sensorHeightMm,
     this.recordingFormats,
+    this.dynamicRangeStops,
+    this.colorScience,
+    this.nativeIso,
+    this.logFormats,
+    this.mountType,
+    this.sensorModesJson,
+    this.recordingResolutionsJson,
+    this.weightKg,
+    this.powerDrawW,
+    this.heroImagePath,
+    this.manufacturerUrl,
+    this.externalId,
+    this.catalogVersion,
+    required this.isCustom,
+    this.series,
+    required this.vintage,
+    this.rentalTagsJson,
+    required this.lukaCompatible,
+    this.lukaProfileJson,
     this.notes,
   });
   @override
@@ -7521,6 +8246,59 @@ class Camera extends DataClass implements Insertable<Camera> {
     map['sensor_height_mm'] = Variable<double>(sensorHeightMm);
     if (!nullToAbsent || recordingFormats != null) {
       map['recording_formats'] = Variable<String>(recordingFormats);
+    }
+    if (!nullToAbsent || dynamicRangeStops != null) {
+      map['dynamic_range_stops'] = Variable<double>(dynamicRangeStops);
+    }
+    if (!nullToAbsent || colorScience != null) {
+      map['color_science'] = Variable<String>(colorScience);
+    }
+    if (!nullToAbsent || nativeIso != null) {
+      map['native_iso'] = Variable<int>(nativeIso);
+    }
+    if (!nullToAbsent || logFormats != null) {
+      map['log_formats'] = Variable<String>(logFormats);
+    }
+    if (!nullToAbsent || mountType != null) {
+      map['mount_type'] = Variable<String>(mountType);
+    }
+    if (!nullToAbsent || sensorModesJson != null) {
+      map['sensor_modes_json'] = Variable<String>(sensorModesJson);
+    }
+    if (!nullToAbsent || recordingResolutionsJson != null) {
+      map['recording_resolutions_json'] = Variable<String>(
+        recordingResolutionsJson,
+      );
+    }
+    if (!nullToAbsent || weightKg != null) {
+      map['weight_kg'] = Variable<double>(weightKg);
+    }
+    if (!nullToAbsent || powerDrawW != null) {
+      map['power_draw_w'] = Variable<double>(powerDrawW);
+    }
+    if (!nullToAbsent || heroImagePath != null) {
+      map['hero_image_path'] = Variable<String>(heroImagePath);
+    }
+    if (!nullToAbsent || manufacturerUrl != null) {
+      map['manufacturer_url'] = Variable<String>(manufacturerUrl);
+    }
+    if (!nullToAbsent || externalId != null) {
+      map['external_id'] = Variable<String>(externalId);
+    }
+    if (!nullToAbsent || catalogVersion != null) {
+      map['catalog_version'] = Variable<int>(catalogVersion);
+    }
+    map['is_custom'] = Variable<bool>(isCustom);
+    if (!nullToAbsent || series != null) {
+      map['series'] = Variable<String>(series);
+    }
+    map['vintage'] = Variable<bool>(vintage);
+    if (!nullToAbsent || rentalTagsJson != null) {
+      map['rental_tags_json'] = Variable<String>(rentalTagsJson);
+    }
+    map['luka_compatible'] = Variable<bool>(lukaCompatible);
+    if (!nullToAbsent || lukaProfileJson != null) {
+      map['luka_profile_json'] = Variable<String>(lukaProfileJson);
     }
     if (!nullToAbsent || notes != null) {
       map['notes'] = Variable<String>(notes);
@@ -7538,6 +8316,57 @@ class Camera extends DataClass implements Insertable<Camera> {
       recordingFormats: recordingFormats == null && nullToAbsent
           ? const Value.absent()
           : Value(recordingFormats),
+      dynamicRangeStops: dynamicRangeStops == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dynamicRangeStops),
+      colorScience: colorScience == null && nullToAbsent
+          ? const Value.absent()
+          : Value(colorScience),
+      nativeIso: nativeIso == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nativeIso),
+      logFormats: logFormats == null && nullToAbsent
+          ? const Value.absent()
+          : Value(logFormats),
+      mountType: mountType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mountType),
+      sensorModesJson: sensorModesJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sensorModesJson),
+      recordingResolutionsJson: recordingResolutionsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recordingResolutionsJson),
+      weightKg: weightKg == null && nullToAbsent
+          ? const Value.absent()
+          : Value(weightKg),
+      powerDrawW: powerDrawW == null && nullToAbsent
+          ? const Value.absent()
+          : Value(powerDrawW),
+      heroImagePath: heroImagePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(heroImagePath),
+      manufacturerUrl: manufacturerUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(manufacturerUrl),
+      externalId: externalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(externalId),
+      catalogVersion: catalogVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(catalogVersion),
+      isCustom: Value(isCustom),
+      series: series == null && nullToAbsent
+          ? const Value.absent()
+          : Value(series),
+      vintage: Value(vintage),
+      rentalTagsJson: rentalTagsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rentalTagsJson),
+      lukaCompatible: Value(lukaCompatible),
+      lukaProfileJson: lukaProfileJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lukaProfileJson),
       notes: notes == null && nullToAbsent
           ? const Value.absent()
           : Value(notes),
@@ -7556,6 +8385,29 @@ class Camera extends DataClass implements Insertable<Camera> {
       sensorWidthMm: serializer.fromJson<double>(json['sensorWidthMm']),
       sensorHeightMm: serializer.fromJson<double>(json['sensorHeightMm']),
       recordingFormats: serializer.fromJson<String?>(json['recordingFormats']),
+      dynamicRangeStops: serializer.fromJson<double?>(
+        json['dynamicRangeStops'],
+      ),
+      colorScience: serializer.fromJson<String?>(json['colorScience']),
+      nativeIso: serializer.fromJson<int?>(json['nativeIso']),
+      logFormats: serializer.fromJson<String?>(json['logFormats']),
+      mountType: serializer.fromJson<String?>(json['mountType']),
+      sensorModesJson: serializer.fromJson<String?>(json['sensorModesJson']),
+      recordingResolutionsJson: serializer.fromJson<String?>(
+        json['recordingResolutionsJson'],
+      ),
+      weightKg: serializer.fromJson<double?>(json['weightKg']),
+      powerDrawW: serializer.fromJson<double?>(json['powerDrawW']),
+      heroImagePath: serializer.fromJson<String?>(json['heroImagePath']),
+      manufacturerUrl: serializer.fromJson<String?>(json['manufacturerUrl']),
+      externalId: serializer.fromJson<String?>(json['externalId']),
+      catalogVersion: serializer.fromJson<int?>(json['catalogVersion']),
+      isCustom: serializer.fromJson<bool>(json['isCustom']),
+      series: serializer.fromJson<String?>(json['series']),
+      vintage: serializer.fromJson<bool>(json['vintage']),
+      rentalTagsJson: serializer.fromJson<String?>(json['rentalTagsJson']),
+      lukaCompatible: serializer.fromJson<bool>(json['lukaCompatible']),
+      lukaProfileJson: serializer.fromJson<String?>(json['lukaProfileJson']),
       notes: serializer.fromJson<String?>(json['notes']),
     );
   }
@@ -7569,6 +8421,27 @@ class Camera extends DataClass implements Insertable<Camera> {
       'sensorWidthMm': serializer.toJson<double>(sensorWidthMm),
       'sensorHeightMm': serializer.toJson<double>(sensorHeightMm),
       'recordingFormats': serializer.toJson<String?>(recordingFormats),
+      'dynamicRangeStops': serializer.toJson<double?>(dynamicRangeStops),
+      'colorScience': serializer.toJson<String?>(colorScience),
+      'nativeIso': serializer.toJson<int?>(nativeIso),
+      'logFormats': serializer.toJson<String?>(logFormats),
+      'mountType': serializer.toJson<String?>(mountType),
+      'sensorModesJson': serializer.toJson<String?>(sensorModesJson),
+      'recordingResolutionsJson': serializer.toJson<String?>(
+        recordingResolutionsJson,
+      ),
+      'weightKg': serializer.toJson<double?>(weightKg),
+      'powerDrawW': serializer.toJson<double?>(powerDrawW),
+      'heroImagePath': serializer.toJson<String?>(heroImagePath),
+      'manufacturerUrl': serializer.toJson<String?>(manufacturerUrl),
+      'externalId': serializer.toJson<String?>(externalId),
+      'catalogVersion': serializer.toJson<int?>(catalogVersion),
+      'isCustom': serializer.toJson<bool>(isCustom),
+      'series': serializer.toJson<String?>(series),
+      'vintage': serializer.toJson<bool>(vintage),
+      'rentalTagsJson': serializer.toJson<String?>(rentalTagsJson),
+      'lukaCompatible': serializer.toJson<bool>(lukaCompatible),
+      'lukaProfileJson': serializer.toJson<String?>(lukaProfileJson),
       'notes': serializer.toJson<String?>(notes),
     };
   }
@@ -7580,6 +8453,25 @@ class Camera extends DataClass implements Insertable<Camera> {
     double? sensorWidthMm,
     double? sensorHeightMm,
     Value<String?> recordingFormats = const Value.absent(),
+    Value<double?> dynamicRangeStops = const Value.absent(),
+    Value<String?> colorScience = const Value.absent(),
+    Value<int?> nativeIso = const Value.absent(),
+    Value<String?> logFormats = const Value.absent(),
+    Value<String?> mountType = const Value.absent(),
+    Value<String?> sensorModesJson = const Value.absent(),
+    Value<String?> recordingResolutionsJson = const Value.absent(),
+    Value<double?> weightKg = const Value.absent(),
+    Value<double?> powerDrawW = const Value.absent(),
+    Value<String?> heroImagePath = const Value.absent(),
+    Value<String?> manufacturerUrl = const Value.absent(),
+    Value<String?> externalId = const Value.absent(),
+    Value<int?> catalogVersion = const Value.absent(),
+    bool? isCustom,
+    Value<String?> series = const Value.absent(),
+    bool? vintage,
+    Value<String?> rentalTagsJson = const Value.absent(),
+    bool? lukaCompatible,
+    Value<String?> lukaProfileJson = const Value.absent(),
     Value<String?> notes = const Value.absent(),
   }) => Camera(
     id: id ?? this.id,
@@ -7590,6 +8482,41 @@ class Camera extends DataClass implements Insertable<Camera> {
     recordingFormats: recordingFormats.present
         ? recordingFormats.value
         : this.recordingFormats,
+    dynamicRangeStops: dynamicRangeStops.present
+        ? dynamicRangeStops.value
+        : this.dynamicRangeStops,
+    colorScience: colorScience.present ? colorScience.value : this.colorScience,
+    nativeIso: nativeIso.present ? nativeIso.value : this.nativeIso,
+    logFormats: logFormats.present ? logFormats.value : this.logFormats,
+    mountType: mountType.present ? mountType.value : this.mountType,
+    sensorModesJson: sensorModesJson.present
+        ? sensorModesJson.value
+        : this.sensorModesJson,
+    recordingResolutionsJson: recordingResolutionsJson.present
+        ? recordingResolutionsJson.value
+        : this.recordingResolutionsJson,
+    weightKg: weightKg.present ? weightKg.value : this.weightKg,
+    powerDrawW: powerDrawW.present ? powerDrawW.value : this.powerDrawW,
+    heroImagePath: heroImagePath.present
+        ? heroImagePath.value
+        : this.heroImagePath,
+    manufacturerUrl: manufacturerUrl.present
+        ? manufacturerUrl.value
+        : this.manufacturerUrl,
+    externalId: externalId.present ? externalId.value : this.externalId,
+    catalogVersion: catalogVersion.present
+        ? catalogVersion.value
+        : this.catalogVersion,
+    isCustom: isCustom ?? this.isCustom,
+    series: series.present ? series.value : this.series,
+    vintage: vintage ?? this.vintage,
+    rentalTagsJson: rentalTagsJson.present
+        ? rentalTagsJson.value
+        : this.rentalTagsJson,
+    lukaCompatible: lukaCompatible ?? this.lukaCompatible,
+    lukaProfileJson: lukaProfileJson.present
+        ? lukaProfileJson.value
+        : this.lukaProfileJson,
     notes: notes.present ? notes.value : this.notes,
   );
   Camera copyWithCompanion(CamerasCompanion data) {
@@ -7606,6 +8533,51 @@ class Camera extends DataClass implements Insertable<Camera> {
       recordingFormats: data.recordingFormats.present
           ? data.recordingFormats.value
           : this.recordingFormats,
+      dynamicRangeStops: data.dynamicRangeStops.present
+          ? data.dynamicRangeStops.value
+          : this.dynamicRangeStops,
+      colorScience: data.colorScience.present
+          ? data.colorScience.value
+          : this.colorScience,
+      nativeIso: data.nativeIso.present ? data.nativeIso.value : this.nativeIso,
+      logFormats: data.logFormats.present
+          ? data.logFormats.value
+          : this.logFormats,
+      mountType: data.mountType.present ? data.mountType.value : this.mountType,
+      sensorModesJson: data.sensorModesJson.present
+          ? data.sensorModesJson.value
+          : this.sensorModesJson,
+      recordingResolutionsJson: data.recordingResolutionsJson.present
+          ? data.recordingResolutionsJson.value
+          : this.recordingResolutionsJson,
+      weightKg: data.weightKg.present ? data.weightKg.value : this.weightKg,
+      powerDrawW: data.powerDrawW.present
+          ? data.powerDrawW.value
+          : this.powerDrawW,
+      heroImagePath: data.heroImagePath.present
+          ? data.heroImagePath.value
+          : this.heroImagePath,
+      manufacturerUrl: data.manufacturerUrl.present
+          ? data.manufacturerUrl.value
+          : this.manufacturerUrl,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
+      catalogVersion: data.catalogVersion.present
+          ? data.catalogVersion.value
+          : this.catalogVersion,
+      isCustom: data.isCustom.present ? data.isCustom.value : this.isCustom,
+      series: data.series.present ? data.series.value : this.series,
+      vintage: data.vintage.present ? data.vintage.value : this.vintage,
+      rentalTagsJson: data.rentalTagsJson.present
+          ? data.rentalTagsJson.value
+          : this.rentalTagsJson,
+      lukaCompatible: data.lukaCompatible.present
+          ? data.lukaCompatible.value
+          : this.lukaCompatible,
+      lukaProfileJson: data.lukaProfileJson.present
+          ? data.lukaProfileJson.value
+          : this.lukaProfileJson,
       notes: data.notes.present ? data.notes.value : this.notes,
     );
   }
@@ -7619,21 +8591,59 @@ class Camera extends DataClass implements Insertable<Camera> {
           ..write('sensorWidthMm: $sensorWidthMm, ')
           ..write('sensorHeightMm: $sensorHeightMm, ')
           ..write('recordingFormats: $recordingFormats, ')
+          ..write('dynamicRangeStops: $dynamicRangeStops, ')
+          ..write('colorScience: $colorScience, ')
+          ..write('nativeIso: $nativeIso, ')
+          ..write('logFormats: $logFormats, ')
+          ..write('mountType: $mountType, ')
+          ..write('sensorModesJson: $sensorModesJson, ')
+          ..write('recordingResolutionsJson: $recordingResolutionsJson, ')
+          ..write('weightKg: $weightKg, ')
+          ..write('powerDrawW: $powerDrawW, ')
+          ..write('heroImagePath: $heroImagePath, ')
+          ..write('manufacturerUrl: $manufacturerUrl, ')
+          ..write('externalId: $externalId, ')
+          ..write('catalogVersion: $catalogVersion, ')
+          ..write('isCustom: $isCustom, ')
+          ..write('series: $series, ')
+          ..write('vintage: $vintage, ')
+          ..write('rentalTagsJson: $rentalTagsJson, ')
+          ..write('lukaCompatible: $lukaCompatible, ')
+          ..write('lukaProfileJson: $lukaProfileJson, ')
           ..write('notes: $notes')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     brand,
     model,
     sensorWidthMm,
     sensorHeightMm,
     recordingFormats,
+    dynamicRangeStops,
+    colorScience,
+    nativeIso,
+    logFormats,
+    mountType,
+    sensorModesJson,
+    recordingResolutionsJson,
+    weightKg,
+    powerDrawW,
+    heroImagePath,
+    manufacturerUrl,
+    externalId,
+    catalogVersion,
+    isCustom,
+    series,
+    vintage,
+    rentalTagsJson,
+    lukaCompatible,
+    lukaProfileJson,
     notes,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -7644,6 +8654,25 @@ class Camera extends DataClass implements Insertable<Camera> {
           other.sensorWidthMm == this.sensorWidthMm &&
           other.sensorHeightMm == this.sensorHeightMm &&
           other.recordingFormats == this.recordingFormats &&
+          other.dynamicRangeStops == this.dynamicRangeStops &&
+          other.colorScience == this.colorScience &&
+          other.nativeIso == this.nativeIso &&
+          other.logFormats == this.logFormats &&
+          other.mountType == this.mountType &&
+          other.sensorModesJson == this.sensorModesJson &&
+          other.recordingResolutionsJson == this.recordingResolutionsJson &&
+          other.weightKg == this.weightKg &&
+          other.powerDrawW == this.powerDrawW &&
+          other.heroImagePath == this.heroImagePath &&
+          other.manufacturerUrl == this.manufacturerUrl &&
+          other.externalId == this.externalId &&
+          other.catalogVersion == this.catalogVersion &&
+          other.isCustom == this.isCustom &&
+          other.series == this.series &&
+          other.vintage == this.vintage &&
+          other.rentalTagsJson == this.rentalTagsJson &&
+          other.lukaCompatible == this.lukaCompatible &&
+          other.lukaProfileJson == this.lukaProfileJson &&
           other.notes == this.notes);
 }
 
@@ -7654,6 +8683,25 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
   final Value<double> sensorWidthMm;
   final Value<double> sensorHeightMm;
   final Value<String?> recordingFormats;
+  final Value<double?> dynamicRangeStops;
+  final Value<String?> colorScience;
+  final Value<int?> nativeIso;
+  final Value<String?> logFormats;
+  final Value<String?> mountType;
+  final Value<String?> sensorModesJson;
+  final Value<String?> recordingResolutionsJson;
+  final Value<double?> weightKg;
+  final Value<double?> powerDrawW;
+  final Value<String?> heroImagePath;
+  final Value<String?> manufacturerUrl;
+  final Value<String?> externalId;
+  final Value<int?> catalogVersion;
+  final Value<bool> isCustom;
+  final Value<String?> series;
+  final Value<bool> vintage;
+  final Value<String?> rentalTagsJson;
+  final Value<bool> lukaCompatible;
+  final Value<String?> lukaProfileJson;
   final Value<String?> notes;
   const CamerasCompanion({
     this.id = const Value.absent(),
@@ -7662,6 +8710,25 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
     this.sensorWidthMm = const Value.absent(),
     this.sensorHeightMm = const Value.absent(),
     this.recordingFormats = const Value.absent(),
+    this.dynamicRangeStops = const Value.absent(),
+    this.colorScience = const Value.absent(),
+    this.nativeIso = const Value.absent(),
+    this.logFormats = const Value.absent(),
+    this.mountType = const Value.absent(),
+    this.sensorModesJson = const Value.absent(),
+    this.recordingResolutionsJson = const Value.absent(),
+    this.weightKg = const Value.absent(),
+    this.powerDrawW = const Value.absent(),
+    this.heroImagePath = const Value.absent(),
+    this.manufacturerUrl = const Value.absent(),
+    this.externalId = const Value.absent(),
+    this.catalogVersion = const Value.absent(),
+    this.isCustom = const Value.absent(),
+    this.series = const Value.absent(),
+    this.vintage = const Value.absent(),
+    this.rentalTagsJson = const Value.absent(),
+    this.lukaCompatible = const Value.absent(),
+    this.lukaProfileJson = const Value.absent(),
     this.notes = const Value.absent(),
   });
   CamerasCompanion.insert({
@@ -7671,6 +8738,25 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
     required double sensorWidthMm,
     required double sensorHeightMm,
     this.recordingFormats = const Value.absent(),
+    this.dynamicRangeStops = const Value.absent(),
+    this.colorScience = const Value.absent(),
+    this.nativeIso = const Value.absent(),
+    this.logFormats = const Value.absent(),
+    this.mountType = const Value.absent(),
+    this.sensorModesJson = const Value.absent(),
+    this.recordingResolutionsJson = const Value.absent(),
+    this.weightKg = const Value.absent(),
+    this.powerDrawW = const Value.absent(),
+    this.heroImagePath = const Value.absent(),
+    this.manufacturerUrl = const Value.absent(),
+    this.externalId = const Value.absent(),
+    this.catalogVersion = const Value.absent(),
+    this.isCustom = const Value.absent(),
+    this.series = const Value.absent(),
+    this.vintage = const Value.absent(),
+    this.rentalTagsJson = const Value.absent(),
+    this.lukaCompatible = const Value.absent(),
+    this.lukaProfileJson = const Value.absent(),
     this.notes = const Value.absent(),
   }) : brand = Value(brand),
        model = Value(model),
@@ -7683,6 +8769,25 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
     Expression<double>? sensorWidthMm,
     Expression<double>? sensorHeightMm,
     Expression<String>? recordingFormats,
+    Expression<double>? dynamicRangeStops,
+    Expression<String>? colorScience,
+    Expression<int>? nativeIso,
+    Expression<String>? logFormats,
+    Expression<String>? mountType,
+    Expression<String>? sensorModesJson,
+    Expression<String>? recordingResolutionsJson,
+    Expression<double>? weightKg,
+    Expression<double>? powerDrawW,
+    Expression<String>? heroImagePath,
+    Expression<String>? manufacturerUrl,
+    Expression<String>? externalId,
+    Expression<int>? catalogVersion,
+    Expression<bool>? isCustom,
+    Expression<String>? series,
+    Expression<bool>? vintage,
+    Expression<String>? rentalTagsJson,
+    Expression<bool>? lukaCompatible,
+    Expression<String>? lukaProfileJson,
     Expression<String>? notes,
   }) {
     return RawValuesInsertable({
@@ -7692,6 +8797,26 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
       if (sensorWidthMm != null) 'sensor_width_mm': sensorWidthMm,
       if (sensorHeightMm != null) 'sensor_height_mm': sensorHeightMm,
       if (recordingFormats != null) 'recording_formats': recordingFormats,
+      if (dynamicRangeStops != null) 'dynamic_range_stops': dynamicRangeStops,
+      if (colorScience != null) 'color_science': colorScience,
+      if (nativeIso != null) 'native_iso': nativeIso,
+      if (logFormats != null) 'log_formats': logFormats,
+      if (mountType != null) 'mount_type': mountType,
+      if (sensorModesJson != null) 'sensor_modes_json': sensorModesJson,
+      if (recordingResolutionsJson != null)
+        'recording_resolutions_json': recordingResolutionsJson,
+      if (weightKg != null) 'weight_kg': weightKg,
+      if (powerDrawW != null) 'power_draw_w': powerDrawW,
+      if (heroImagePath != null) 'hero_image_path': heroImagePath,
+      if (manufacturerUrl != null) 'manufacturer_url': manufacturerUrl,
+      if (externalId != null) 'external_id': externalId,
+      if (catalogVersion != null) 'catalog_version': catalogVersion,
+      if (isCustom != null) 'is_custom': isCustom,
+      if (series != null) 'series': series,
+      if (vintage != null) 'vintage': vintage,
+      if (rentalTagsJson != null) 'rental_tags_json': rentalTagsJson,
+      if (lukaCompatible != null) 'luka_compatible': lukaCompatible,
+      if (lukaProfileJson != null) 'luka_profile_json': lukaProfileJson,
       if (notes != null) 'notes': notes,
     });
   }
@@ -7703,6 +8828,25 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
     Value<double>? sensorWidthMm,
     Value<double>? sensorHeightMm,
     Value<String?>? recordingFormats,
+    Value<double?>? dynamicRangeStops,
+    Value<String?>? colorScience,
+    Value<int?>? nativeIso,
+    Value<String?>? logFormats,
+    Value<String?>? mountType,
+    Value<String?>? sensorModesJson,
+    Value<String?>? recordingResolutionsJson,
+    Value<double?>? weightKg,
+    Value<double?>? powerDrawW,
+    Value<String?>? heroImagePath,
+    Value<String?>? manufacturerUrl,
+    Value<String?>? externalId,
+    Value<int?>? catalogVersion,
+    Value<bool>? isCustom,
+    Value<String?>? series,
+    Value<bool>? vintage,
+    Value<String?>? rentalTagsJson,
+    Value<bool>? lukaCompatible,
+    Value<String?>? lukaProfileJson,
     Value<String?>? notes,
   }) {
     return CamerasCompanion(
@@ -7712,6 +8856,26 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
       sensorWidthMm: sensorWidthMm ?? this.sensorWidthMm,
       sensorHeightMm: sensorHeightMm ?? this.sensorHeightMm,
       recordingFormats: recordingFormats ?? this.recordingFormats,
+      dynamicRangeStops: dynamicRangeStops ?? this.dynamicRangeStops,
+      colorScience: colorScience ?? this.colorScience,
+      nativeIso: nativeIso ?? this.nativeIso,
+      logFormats: logFormats ?? this.logFormats,
+      mountType: mountType ?? this.mountType,
+      sensorModesJson: sensorModesJson ?? this.sensorModesJson,
+      recordingResolutionsJson:
+          recordingResolutionsJson ?? this.recordingResolutionsJson,
+      weightKg: weightKg ?? this.weightKg,
+      powerDrawW: powerDrawW ?? this.powerDrawW,
+      heroImagePath: heroImagePath ?? this.heroImagePath,
+      manufacturerUrl: manufacturerUrl ?? this.manufacturerUrl,
+      externalId: externalId ?? this.externalId,
+      catalogVersion: catalogVersion ?? this.catalogVersion,
+      isCustom: isCustom ?? this.isCustom,
+      series: series ?? this.series,
+      vintage: vintage ?? this.vintage,
+      rentalTagsJson: rentalTagsJson ?? this.rentalTagsJson,
+      lukaCompatible: lukaCompatible ?? this.lukaCompatible,
+      lukaProfileJson: lukaProfileJson ?? this.lukaProfileJson,
       notes: notes ?? this.notes,
     );
   }
@@ -7737,6 +8901,65 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
     if (recordingFormats.present) {
       map['recording_formats'] = Variable<String>(recordingFormats.value);
     }
+    if (dynamicRangeStops.present) {
+      map['dynamic_range_stops'] = Variable<double>(dynamicRangeStops.value);
+    }
+    if (colorScience.present) {
+      map['color_science'] = Variable<String>(colorScience.value);
+    }
+    if (nativeIso.present) {
+      map['native_iso'] = Variable<int>(nativeIso.value);
+    }
+    if (logFormats.present) {
+      map['log_formats'] = Variable<String>(logFormats.value);
+    }
+    if (mountType.present) {
+      map['mount_type'] = Variable<String>(mountType.value);
+    }
+    if (sensorModesJson.present) {
+      map['sensor_modes_json'] = Variable<String>(sensorModesJson.value);
+    }
+    if (recordingResolutionsJson.present) {
+      map['recording_resolutions_json'] = Variable<String>(
+        recordingResolutionsJson.value,
+      );
+    }
+    if (weightKg.present) {
+      map['weight_kg'] = Variable<double>(weightKg.value);
+    }
+    if (powerDrawW.present) {
+      map['power_draw_w'] = Variable<double>(powerDrawW.value);
+    }
+    if (heroImagePath.present) {
+      map['hero_image_path'] = Variable<String>(heroImagePath.value);
+    }
+    if (manufacturerUrl.present) {
+      map['manufacturer_url'] = Variable<String>(manufacturerUrl.value);
+    }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
+    }
+    if (catalogVersion.present) {
+      map['catalog_version'] = Variable<int>(catalogVersion.value);
+    }
+    if (isCustom.present) {
+      map['is_custom'] = Variable<bool>(isCustom.value);
+    }
+    if (series.present) {
+      map['series'] = Variable<String>(series.value);
+    }
+    if (vintage.present) {
+      map['vintage'] = Variable<bool>(vintage.value);
+    }
+    if (rentalTagsJson.present) {
+      map['rental_tags_json'] = Variable<String>(rentalTagsJson.value);
+    }
+    if (lukaCompatible.present) {
+      map['luka_compatible'] = Variable<bool>(lukaCompatible.value);
+    }
+    if (lukaProfileJson.present) {
+      map['luka_profile_json'] = Variable<String>(lukaProfileJson.value);
+    }
     if (notes.present) {
       map['notes'] = Variable<String>(notes.value);
     }
@@ -7752,6 +8975,25 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
           ..write('sensorWidthMm: $sensorWidthMm, ')
           ..write('sensorHeightMm: $sensorHeightMm, ')
           ..write('recordingFormats: $recordingFormats, ')
+          ..write('dynamicRangeStops: $dynamicRangeStops, ')
+          ..write('colorScience: $colorScience, ')
+          ..write('nativeIso: $nativeIso, ')
+          ..write('logFormats: $logFormats, ')
+          ..write('mountType: $mountType, ')
+          ..write('sensorModesJson: $sensorModesJson, ')
+          ..write('recordingResolutionsJson: $recordingResolutionsJson, ')
+          ..write('weightKg: $weightKg, ')
+          ..write('powerDrawW: $powerDrawW, ')
+          ..write('heroImagePath: $heroImagePath, ')
+          ..write('manufacturerUrl: $manufacturerUrl, ')
+          ..write('externalId: $externalId, ')
+          ..write('catalogVersion: $catalogVersion, ')
+          ..write('isCustom: $isCustom, ')
+          ..write('series: $series, ')
+          ..write('vintage: $vintage, ')
+          ..write('rentalTagsJson: $rentalTagsJson, ')
+          ..write('lukaCompatible: $lukaCompatible, ')
+          ..write('lukaProfileJson: $lukaProfileJson, ')
           ..write('notes: $notes')
           ..write(')'))
         .toString();
@@ -7849,6 +9091,196 @@ class $LensesTable extends Lenses with TableInfo<$LensesTable, Lense> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _mountTypeMeta = const VerificationMeta(
+    'mountType',
+  );
+  @override
+  late final GeneratedColumn<String> mountType = GeneratedColumn<String>(
+    'mount_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _imageCircleMmMeta = const VerificationMeta(
+    'imageCircleMm',
+  );
+  @override
+  late final GeneratedColumn<double> imageCircleMm = GeneratedColumn<double>(
+    'image_circle_mm',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isAnamorphicMeta = const VerificationMeta(
+    'isAnamorphic',
+  );
+  @override
+  late final GeneratedColumn<bool> isAnamorphic = GeneratedColumn<bool>(
+    'is_anamorphic',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_anamorphic" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _squeezeRatioMeta = const VerificationMeta(
+    'squeezeRatio',
+  );
+  @override
+  late final GeneratedColumn<double> squeezeRatio = GeneratedColumn<double>(
+    'squeeze_ratio',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _closeFocusMMeta = const VerificationMeta(
+    'closeFocusM',
+  );
+  @override
+  late final GeneratedColumn<double> closeFocusM = GeneratedColumn<double>(
+    'close_focus_m',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _frontDiameterMmMeta = const VerificationMeta(
+    'frontDiameterMm',
+  );
+  @override
+  late final GeneratedColumn<double> frontDiameterMm = GeneratedColumn<double>(
+    'front_diameter_mm',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lensTypeMeta = const VerificationMeta(
+    'lensType',
+  );
+  @override
+  late final GeneratedColumn<String> lensType = GeneratedColumn<String>(
+    'lens_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _heroImagePathMeta = const VerificationMeta(
+    'heroImagePath',
+  );
+  @override
+  late final GeneratedColumn<String> heroImagePath = GeneratedColumn<String>(
+    'hero_image_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _catalogVersionMeta = const VerificationMeta(
+    'catalogVersion',
+  );
+  @override
+  late final GeneratedColumn<int> catalogVersion = GeneratedColumn<int>(
+    'catalog_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isCustomMeta = const VerificationMeta(
+    'isCustom',
+  );
+  @override
+  late final GeneratedColumn<bool> isCustom = GeneratedColumn<bool>(
+    'is_custom',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_custom" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _seriesMeta = const VerificationMeta('series');
+  @override
+  late final GeneratedColumn<String> series = GeneratedColumn<String>(
+    'series',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _vintageMeta = const VerificationMeta(
+    'vintage',
+  );
+  @override
+  late final GeneratedColumn<bool> vintage = GeneratedColumn<bool>(
+    'vintage',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("vintage" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _rentalTagsJsonMeta = const VerificationMeta(
+    'rentalTagsJson',
+  );
+  @override
+  late final GeneratedColumn<String> rentalTagsJson = GeneratedColumn<String>(
+    'rental_tags_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lukaCompatibleMeta = const VerificationMeta(
+    'lukaCompatible',
+  );
+  @override
+  late final GeneratedColumn<bool> lukaCompatible = GeneratedColumn<bool>(
+    'luka_compatible',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("luka_compatible" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _lukaProfileJsonMeta = const VerificationMeta(
+    'lukaProfileJson',
+  );
+  @override
+  late final GeneratedColumn<String> lukaProfileJson = GeneratedColumn<String>(
+    'luka_profile_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _notesMeta = const VerificationMeta('notes');
   @override
   late final GeneratedColumn<String> notes = GeneratedColumn<String>(
@@ -7868,6 +9300,22 @@ class $LensesTable extends Lenses with TableInfo<$LensesTable, Lense> {
     focalMax,
     minTStop,
     formatCoverage,
+    mountType,
+    imageCircleMm,
+    isAnamorphic,
+    squeezeRatio,
+    closeFocusM,
+    frontDiameterMm,
+    lensType,
+    heroImagePath,
+    externalId,
+    catalogVersion,
+    isCustom,
+    series,
+    vintage,
+    rentalTagsJson,
+    lukaCompatible,
+    lukaProfileJson,
     notes,
   ];
   @override
@@ -7943,6 +9391,132 @@ class $LensesTable extends Lenses with TableInfo<$LensesTable, Lense> {
     } else if (isInserting) {
       context.missing(_formatCoverageMeta);
     }
+    if (data.containsKey('mount_type')) {
+      context.handle(
+        _mountTypeMeta,
+        mountType.isAcceptableOrUnknown(data['mount_type']!, _mountTypeMeta),
+      );
+    }
+    if (data.containsKey('image_circle_mm')) {
+      context.handle(
+        _imageCircleMmMeta,
+        imageCircleMm.isAcceptableOrUnknown(
+          data['image_circle_mm']!,
+          _imageCircleMmMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_anamorphic')) {
+      context.handle(
+        _isAnamorphicMeta,
+        isAnamorphic.isAcceptableOrUnknown(
+          data['is_anamorphic']!,
+          _isAnamorphicMeta,
+        ),
+      );
+    }
+    if (data.containsKey('squeeze_ratio')) {
+      context.handle(
+        _squeezeRatioMeta,
+        squeezeRatio.isAcceptableOrUnknown(
+          data['squeeze_ratio']!,
+          _squeezeRatioMeta,
+        ),
+      );
+    }
+    if (data.containsKey('close_focus_m')) {
+      context.handle(
+        _closeFocusMMeta,
+        closeFocusM.isAcceptableOrUnknown(
+          data['close_focus_m']!,
+          _closeFocusMMeta,
+        ),
+      );
+    }
+    if (data.containsKey('front_diameter_mm')) {
+      context.handle(
+        _frontDiameterMmMeta,
+        frontDiameterMm.isAcceptableOrUnknown(
+          data['front_diameter_mm']!,
+          _frontDiameterMmMeta,
+        ),
+      );
+    }
+    if (data.containsKey('lens_type')) {
+      context.handle(
+        _lensTypeMeta,
+        lensType.isAcceptableOrUnknown(data['lens_type']!, _lensTypeMeta),
+      );
+    }
+    if (data.containsKey('hero_image_path')) {
+      context.handle(
+        _heroImagePathMeta,
+        heroImagePath.isAcceptableOrUnknown(
+          data['hero_image_path']!,
+          _heroImagePathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
+    }
+    if (data.containsKey('catalog_version')) {
+      context.handle(
+        _catalogVersionMeta,
+        catalogVersion.isAcceptableOrUnknown(
+          data['catalog_version']!,
+          _catalogVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_custom')) {
+      context.handle(
+        _isCustomMeta,
+        isCustom.isAcceptableOrUnknown(data['is_custom']!, _isCustomMeta),
+      );
+    }
+    if (data.containsKey('series')) {
+      context.handle(
+        _seriesMeta,
+        series.isAcceptableOrUnknown(data['series']!, _seriesMeta),
+      );
+    }
+    if (data.containsKey('vintage')) {
+      context.handle(
+        _vintageMeta,
+        vintage.isAcceptableOrUnknown(data['vintage']!, _vintageMeta),
+      );
+    }
+    if (data.containsKey('rental_tags_json')) {
+      context.handle(
+        _rentalTagsJsonMeta,
+        rentalTagsJson.isAcceptableOrUnknown(
+          data['rental_tags_json']!,
+          _rentalTagsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('luka_compatible')) {
+      context.handle(
+        _lukaCompatibleMeta,
+        lukaCompatible.isAcceptableOrUnknown(
+          data['luka_compatible']!,
+          _lukaCompatibleMeta,
+        ),
+      );
+    }
+    if (data.containsKey('luka_profile_json')) {
+      context.handle(
+        _lukaProfileJsonMeta,
+        lukaProfileJson.isAcceptableOrUnknown(
+          data['luka_profile_json']!,
+          _lukaProfileJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('notes')) {
       context.handle(
         _notesMeta,
@@ -7990,6 +9564,70 @@ class $LensesTable extends Lenses with TableInfo<$LensesTable, Lense> {
         DriftSqlType.string,
         data['${effectivePrefix}format_coverage'],
       )!,
+      mountType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mount_type'],
+      ),
+      imageCircleMm: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}image_circle_mm'],
+      ),
+      isAnamorphic: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_anamorphic'],
+      )!,
+      squeezeRatio: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}squeeze_ratio'],
+      ),
+      closeFocusM: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}close_focus_m'],
+      ),
+      frontDiameterMm: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}front_diameter_mm'],
+      ),
+      lensType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}lens_type'],
+      ),
+      heroImagePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}hero_image_path'],
+      ),
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      ),
+      catalogVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}catalog_version'],
+      ),
+      isCustom: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_custom'],
+      )!,
+      series: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}series'],
+      ),
+      vintage: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}vintage'],
+      )!,
+      rentalTagsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}rental_tags_json'],
+      ),
+      lukaCompatible: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}luka_compatible'],
+      )!,
+      lukaProfileJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}luka_profile_json'],
+      ),
       notes: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}notes'],
@@ -8012,6 +9650,22 @@ class Lense extends DataClass implements Insertable<Lense> {
   final double? focalMax;
   final double minTStop;
   final String formatCoverage;
+  final String? mountType;
+  final double? imageCircleMm;
+  final bool isAnamorphic;
+  final double? squeezeRatio;
+  final double? closeFocusM;
+  final double? frontDiameterMm;
+  final String? lensType;
+  final String? heroImagePath;
+  final String? externalId;
+  final int? catalogVersion;
+  final bool isCustom;
+  final String? series;
+  final bool vintage;
+  final String? rentalTagsJson;
+  final bool lukaCompatible;
+  final String? lukaProfileJson;
   final String? notes;
   const Lense({
     required this.id,
@@ -8022,6 +9676,22 @@ class Lense extends DataClass implements Insertable<Lense> {
     this.focalMax,
     required this.minTStop,
     required this.formatCoverage,
+    this.mountType,
+    this.imageCircleMm,
+    required this.isAnamorphic,
+    this.squeezeRatio,
+    this.closeFocusM,
+    this.frontDiameterMm,
+    this.lensType,
+    this.heroImagePath,
+    this.externalId,
+    this.catalogVersion,
+    required this.isCustom,
+    this.series,
+    required this.vintage,
+    this.rentalTagsJson,
+    required this.lukaCompatible,
+    this.lukaProfileJson,
     this.notes,
   });
   @override
@@ -8039,6 +9709,46 @@ class Lense extends DataClass implements Insertable<Lense> {
     }
     map['min_t_stop'] = Variable<double>(minTStop);
     map['format_coverage'] = Variable<String>(formatCoverage);
+    if (!nullToAbsent || mountType != null) {
+      map['mount_type'] = Variable<String>(mountType);
+    }
+    if (!nullToAbsent || imageCircleMm != null) {
+      map['image_circle_mm'] = Variable<double>(imageCircleMm);
+    }
+    map['is_anamorphic'] = Variable<bool>(isAnamorphic);
+    if (!nullToAbsent || squeezeRatio != null) {
+      map['squeeze_ratio'] = Variable<double>(squeezeRatio);
+    }
+    if (!nullToAbsent || closeFocusM != null) {
+      map['close_focus_m'] = Variable<double>(closeFocusM);
+    }
+    if (!nullToAbsent || frontDiameterMm != null) {
+      map['front_diameter_mm'] = Variable<double>(frontDiameterMm);
+    }
+    if (!nullToAbsent || lensType != null) {
+      map['lens_type'] = Variable<String>(lensType);
+    }
+    if (!nullToAbsent || heroImagePath != null) {
+      map['hero_image_path'] = Variable<String>(heroImagePath);
+    }
+    if (!nullToAbsent || externalId != null) {
+      map['external_id'] = Variable<String>(externalId);
+    }
+    if (!nullToAbsent || catalogVersion != null) {
+      map['catalog_version'] = Variable<int>(catalogVersion);
+    }
+    map['is_custom'] = Variable<bool>(isCustom);
+    if (!nullToAbsent || series != null) {
+      map['series'] = Variable<String>(series);
+    }
+    map['vintage'] = Variable<bool>(vintage);
+    if (!nullToAbsent || rentalTagsJson != null) {
+      map['rental_tags_json'] = Variable<String>(rentalTagsJson);
+    }
+    map['luka_compatible'] = Variable<bool>(lukaCompatible);
+    if (!nullToAbsent || lukaProfileJson != null) {
+      map['luka_profile_json'] = Variable<String>(lukaProfileJson);
+    }
     if (!nullToAbsent || notes != null) {
       map['notes'] = Variable<String>(notes);
     }
@@ -8059,6 +9769,46 @@ class Lense extends DataClass implements Insertable<Lense> {
           : Value(focalMax),
       minTStop: Value(minTStop),
       formatCoverage: Value(formatCoverage),
+      mountType: mountType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mountType),
+      imageCircleMm: imageCircleMm == null && nullToAbsent
+          ? const Value.absent()
+          : Value(imageCircleMm),
+      isAnamorphic: Value(isAnamorphic),
+      squeezeRatio: squeezeRatio == null && nullToAbsent
+          ? const Value.absent()
+          : Value(squeezeRatio),
+      closeFocusM: closeFocusM == null && nullToAbsent
+          ? const Value.absent()
+          : Value(closeFocusM),
+      frontDiameterMm: frontDiameterMm == null && nullToAbsent
+          ? const Value.absent()
+          : Value(frontDiameterMm),
+      lensType: lensType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lensType),
+      heroImagePath: heroImagePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(heroImagePath),
+      externalId: externalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(externalId),
+      catalogVersion: catalogVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(catalogVersion),
+      isCustom: Value(isCustom),
+      series: series == null && nullToAbsent
+          ? const Value.absent()
+          : Value(series),
+      vintage: Value(vintage),
+      rentalTagsJson: rentalTagsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rentalTagsJson),
+      lukaCompatible: Value(lukaCompatible),
+      lukaProfileJson: lukaProfileJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lukaProfileJson),
       notes: notes == null && nullToAbsent
           ? const Value.absent()
           : Value(notes),
@@ -8079,6 +9829,22 @@ class Lense extends DataClass implements Insertable<Lense> {
       focalMax: serializer.fromJson<double?>(json['focalMax']),
       minTStop: serializer.fromJson<double>(json['minTStop']),
       formatCoverage: serializer.fromJson<String>(json['formatCoverage']),
+      mountType: serializer.fromJson<String?>(json['mountType']),
+      imageCircleMm: serializer.fromJson<double?>(json['imageCircleMm']),
+      isAnamorphic: serializer.fromJson<bool>(json['isAnamorphic']),
+      squeezeRatio: serializer.fromJson<double?>(json['squeezeRatio']),
+      closeFocusM: serializer.fromJson<double?>(json['closeFocusM']),
+      frontDiameterMm: serializer.fromJson<double?>(json['frontDiameterMm']),
+      lensType: serializer.fromJson<String?>(json['lensType']),
+      heroImagePath: serializer.fromJson<String?>(json['heroImagePath']),
+      externalId: serializer.fromJson<String?>(json['externalId']),
+      catalogVersion: serializer.fromJson<int?>(json['catalogVersion']),
+      isCustom: serializer.fromJson<bool>(json['isCustom']),
+      series: serializer.fromJson<String?>(json['series']),
+      vintage: serializer.fromJson<bool>(json['vintage']),
+      rentalTagsJson: serializer.fromJson<String?>(json['rentalTagsJson']),
+      lukaCompatible: serializer.fromJson<bool>(json['lukaCompatible']),
+      lukaProfileJson: serializer.fromJson<String?>(json['lukaProfileJson']),
       notes: serializer.fromJson<String?>(json['notes']),
     );
   }
@@ -8094,6 +9860,22 @@ class Lense extends DataClass implements Insertable<Lense> {
       'focalMax': serializer.toJson<double?>(focalMax),
       'minTStop': serializer.toJson<double>(minTStop),
       'formatCoverage': serializer.toJson<String>(formatCoverage),
+      'mountType': serializer.toJson<String?>(mountType),
+      'imageCircleMm': serializer.toJson<double?>(imageCircleMm),
+      'isAnamorphic': serializer.toJson<bool>(isAnamorphic),
+      'squeezeRatio': serializer.toJson<double?>(squeezeRatio),
+      'closeFocusM': serializer.toJson<double?>(closeFocusM),
+      'frontDiameterMm': serializer.toJson<double?>(frontDiameterMm),
+      'lensType': serializer.toJson<String?>(lensType),
+      'heroImagePath': serializer.toJson<String?>(heroImagePath),
+      'externalId': serializer.toJson<String?>(externalId),
+      'catalogVersion': serializer.toJson<int?>(catalogVersion),
+      'isCustom': serializer.toJson<bool>(isCustom),
+      'series': serializer.toJson<String?>(series),
+      'vintage': serializer.toJson<bool>(vintage),
+      'rentalTagsJson': serializer.toJson<String?>(rentalTagsJson),
+      'lukaCompatible': serializer.toJson<bool>(lukaCompatible),
+      'lukaProfileJson': serializer.toJson<String?>(lukaProfileJson),
       'notes': serializer.toJson<String?>(notes),
     };
   }
@@ -8107,6 +9889,22 @@ class Lense extends DataClass implements Insertable<Lense> {
     Value<double?> focalMax = const Value.absent(),
     double? minTStop,
     String? formatCoverage,
+    Value<String?> mountType = const Value.absent(),
+    Value<double?> imageCircleMm = const Value.absent(),
+    bool? isAnamorphic,
+    Value<double?> squeezeRatio = const Value.absent(),
+    Value<double?> closeFocusM = const Value.absent(),
+    Value<double?> frontDiameterMm = const Value.absent(),
+    Value<String?> lensType = const Value.absent(),
+    Value<String?> heroImagePath = const Value.absent(),
+    Value<String?> externalId = const Value.absent(),
+    Value<int?> catalogVersion = const Value.absent(),
+    bool? isCustom,
+    Value<String?> series = const Value.absent(),
+    bool? vintage,
+    Value<String?> rentalTagsJson = const Value.absent(),
+    bool? lukaCompatible,
+    Value<String?> lukaProfileJson = const Value.absent(),
     Value<String?> notes = const Value.absent(),
   }) => Lense(
     id: id ?? this.id,
@@ -8117,6 +9915,34 @@ class Lense extends DataClass implements Insertable<Lense> {
     focalMax: focalMax.present ? focalMax.value : this.focalMax,
     minTStop: minTStop ?? this.minTStop,
     formatCoverage: formatCoverage ?? this.formatCoverage,
+    mountType: mountType.present ? mountType.value : this.mountType,
+    imageCircleMm: imageCircleMm.present
+        ? imageCircleMm.value
+        : this.imageCircleMm,
+    isAnamorphic: isAnamorphic ?? this.isAnamorphic,
+    squeezeRatio: squeezeRatio.present ? squeezeRatio.value : this.squeezeRatio,
+    closeFocusM: closeFocusM.present ? closeFocusM.value : this.closeFocusM,
+    frontDiameterMm: frontDiameterMm.present
+        ? frontDiameterMm.value
+        : this.frontDiameterMm,
+    lensType: lensType.present ? lensType.value : this.lensType,
+    heroImagePath: heroImagePath.present
+        ? heroImagePath.value
+        : this.heroImagePath,
+    externalId: externalId.present ? externalId.value : this.externalId,
+    catalogVersion: catalogVersion.present
+        ? catalogVersion.value
+        : this.catalogVersion,
+    isCustom: isCustom ?? this.isCustom,
+    series: series.present ? series.value : this.series,
+    vintage: vintage ?? this.vintage,
+    rentalTagsJson: rentalTagsJson.present
+        ? rentalTagsJson.value
+        : this.rentalTagsJson,
+    lukaCompatible: lukaCompatible ?? this.lukaCompatible,
+    lukaProfileJson: lukaProfileJson.present
+        ? lukaProfileJson.value
+        : this.lukaProfileJson,
     notes: notes.present ? notes.value : this.notes,
   );
   Lense copyWithCompanion(LensesCompanion data) {
@@ -8133,6 +9959,44 @@ class Lense extends DataClass implements Insertable<Lense> {
       formatCoverage: data.formatCoverage.present
           ? data.formatCoverage.value
           : this.formatCoverage,
+      mountType: data.mountType.present ? data.mountType.value : this.mountType,
+      imageCircleMm: data.imageCircleMm.present
+          ? data.imageCircleMm.value
+          : this.imageCircleMm,
+      isAnamorphic: data.isAnamorphic.present
+          ? data.isAnamorphic.value
+          : this.isAnamorphic,
+      squeezeRatio: data.squeezeRatio.present
+          ? data.squeezeRatio.value
+          : this.squeezeRatio,
+      closeFocusM: data.closeFocusM.present
+          ? data.closeFocusM.value
+          : this.closeFocusM,
+      frontDiameterMm: data.frontDiameterMm.present
+          ? data.frontDiameterMm.value
+          : this.frontDiameterMm,
+      lensType: data.lensType.present ? data.lensType.value : this.lensType,
+      heroImagePath: data.heroImagePath.present
+          ? data.heroImagePath.value
+          : this.heroImagePath,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
+      catalogVersion: data.catalogVersion.present
+          ? data.catalogVersion.value
+          : this.catalogVersion,
+      isCustom: data.isCustom.present ? data.isCustom.value : this.isCustom,
+      series: data.series.present ? data.series.value : this.series,
+      vintage: data.vintage.present ? data.vintage.value : this.vintage,
+      rentalTagsJson: data.rentalTagsJson.present
+          ? data.rentalTagsJson.value
+          : this.rentalTagsJson,
+      lukaCompatible: data.lukaCompatible.present
+          ? data.lukaCompatible.value
+          : this.lukaCompatible,
+      lukaProfileJson: data.lukaProfileJson.present
+          ? data.lukaProfileJson.value
+          : this.lukaProfileJson,
       notes: data.notes.present ? data.notes.value : this.notes,
     );
   }
@@ -8148,13 +10012,29 @@ class Lense extends DataClass implements Insertable<Lense> {
           ..write('focalMax: $focalMax, ')
           ..write('minTStop: $minTStop, ')
           ..write('formatCoverage: $formatCoverage, ')
+          ..write('mountType: $mountType, ')
+          ..write('imageCircleMm: $imageCircleMm, ')
+          ..write('isAnamorphic: $isAnamorphic, ')
+          ..write('squeezeRatio: $squeezeRatio, ')
+          ..write('closeFocusM: $closeFocusM, ')
+          ..write('frontDiameterMm: $frontDiameterMm, ')
+          ..write('lensType: $lensType, ')
+          ..write('heroImagePath: $heroImagePath, ')
+          ..write('externalId: $externalId, ')
+          ..write('catalogVersion: $catalogVersion, ')
+          ..write('isCustom: $isCustom, ')
+          ..write('series: $series, ')
+          ..write('vintage: $vintage, ')
+          ..write('rentalTagsJson: $rentalTagsJson, ')
+          ..write('lukaCompatible: $lukaCompatible, ')
+          ..write('lukaProfileJson: $lukaProfileJson, ')
           ..write('notes: $notes')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     brand,
     model,
@@ -8163,8 +10043,24 @@ class Lense extends DataClass implements Insertable<Lense> {
     focalMax,
     minTStop,
     formatCoverage,
+    mountType,
+    imageCircleMm,
+    isAnamorphic,
+    squeezeRatio,
+    closeFocusM,
+    frontDiameterMm,
+    lensType,
+    heroImagePath,
+    externalId,
+    catalogVersion,
+    isCustom,
+    series,
+    vintage,
+    rentalTagsJson,
+    lukaCompatible,
+    lukaProfileJson,
     notes,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -8177,6 +10073,22 @@ class Lense extends DataClass implements Insertable<Lense> {
           other.focalMax == this.focalMax &&
           other.minTStop == this.minTStop &&
           other.formatCoverage == this.formatCoverage &&
+          other.mountType == this.mountType &&
+          other.imageCircleMm == this.imageCircleMm &&
+          other.isAnamorphic == this.isAnamorphic &&
+          other.squeezeRatio == this.squeezeRatio &&
+          other.closeFocusM == this.closeFocusM &&
+          other.frontDiameterMm == this.frontDiameterMm &&
+          other.lensType == this.lensType &&
+          other.heroImagePath == this.heroImagePath &&
+          other.externalId == this.externalId &&
+          other.catalogVersion == this.catalogVersion &&
+          other.isCustom == this.isCustom &&
+          other.series == this.series &&
+          other.vintage == this.vintage &&
+          other.rentalTagsJson == this.rentalTagsJson &&
+          other.lukaCompatible == this.lukaCompatible &&
+          other.lukaProfileJson == this.lukaProfileJson &&
           other.notes == this.notes);
 }
 
@@ -8189,6 +10101,22 @@ class LensesCompanion extends UpdateCompanion<Lense> {
   final Value<double?> focalMax;
   final Value<double> minTStop;
   final Value<String> formatCoverage;
+  final Value<String?> mountType;
+  final Value<double?> imageCircleMm;
+  final Value<bool> isAnamorphic;
+  final Value<double?> squeezeRatio;
+  final Value<double?> closeFocusM;
+  final Value<double?> frontDiameterMm;
+  final Value<String?> lensType;
+  final Value<String?> heroImagePath;
+  final Value<String?> externalId;
+  final Value<int?> catalogVersion;
+  final Value<bool> isCustom;
+  final Value<String?> series;
+  final Value<bool> vintage;
+  final Value<String?> rentalTagsJson;
+  final Value<bool> lukaCompatible;
+  final Value<String?> lukaProfileJson;
   final Value<String?> notes;
   const LensesCompanion({
     this.id = const Value.absent(),
@@ -8199,6 +10127,22 @@ class LensesCompanion extends UpdateCompanion<Lense> {
     this.focalMax = const Value.absent(),
     this.minTStop = const Value.absent(),
     this.formatCoverage = const Value.absent(),
+    this.mountType = const Value.absent(),
+    this.imageCircleMm = const Value.absent(),
+    this.isAnamorphic = const Value.absent(),
+    this.squeezeRatio = const Value.absent(),
+    this.closeFocusM = const Value.absent(),
+    this.frontDiameterMm = const Value.absent(),
+    this.lensType = const Value.absent(),
+    this.heroImagePath = const Value.absent(),
+    this.externalId = const Value.absent(),
+    this.catalogVersion = const Value.absent(),
+    this.isCustom = const Value.absent(),
+    this.series = const Value.absent(),
+    this.vintage = const Value.absent(),
+    this.rentalTagsJson = const Value.absent(),
+    this.lukaCompatible = const Value.absent(),
+    this.lukaProfileJson = const Value.absent(),
     this.notes = const Value.absent(),
   });
   LensesCompanion.insert({
@@ -8210,6 +10154,22 @@ class LensesCompanion extends UpdateCompanion<Lense> {
     this.focalMax = const Value.absent(),
     required double minTStop,
     required String formatCoverage,
+    this.mountType = const Value.absent(),
+    this.imageCircleMm = const Value.absent(),
+    this.isAnamorphic = const Value.absent(),
+    this.squeezeRatio = const Value.absent(),
+    this.closeFocusM = const Value.absent(),
+    this.frontDiameterMm = const Value.absent(),
+    this.lensType = const Value.absent(),
+    this.heroImagePath = const Value.absent(),
+    this.externalId = const Value.absent(),
+    this.catalogVersion = const Value.absent(),
+    this.isCustom = const Value.absent(),
+    this.series = const Value.absent(),
+    this.vintage = const Value.absent(),
+    this.rentalTagsJson = const Value.absent(),
+    this.lukaCompatible = const Value.absent(),
+    this.lukaProfileJson = const Value.absent(),
     this.notes = const Value.absent(),
   }) : brand = Value(brand),
        model = Value(model),
@@ -8225,6 +10185,22 @@ class LensesCompanion extends UpdateCompanion<Lense> {
     Expression<double>? focalMax,
     Expression<double>? minTStop,
     Expression<String>? formatCoverage,
+    Expression<String>? mountType,
+    Expression<double>? imageCircleMm,
+    Expression<bool>? isAnamorphic,
+    Expression<double>? squeezeRatio,
+    Expression<double>? closeFocusM,
+    Expression<double>? frontDiameterMm,
+    Expression<String>? lensType,
+    Expression<String>? heroImagePath,
+    Expression<String>? externalId,
+    Expression<int>? catalogVersion,
+    Expression<bool>? isCustom,
+    Expression<String>? series,
+    Expression<bool>? vintage,
+    Expression<String>? rentalTagsJson,
+    Expression<bool>? lukaCompatible,
+    Expression<String>? lukaProfileJson,
     Expression<String>? notes,
   }) {
     return RawValuesInsertable({
@@ -8236,6 +10212,22 @@ class LensesCompanion extends UpdateCompanion<Lense> {
       if (focalMax != null) 'focal_max': focalMax,
       if (minTStop != null) 'min_t_stop': minTStop,
       if (formatCoverage != null) 'format_coverage': formatCoverage,
+      if (mountType != null) 'mount_type': mountType,
+      if (imageCircleMm != null) 'image_circle_mm': imageCircleMm,
+      if (isAnamorphic != null) 'is_anamorphic': isAnamorphic,
+      if (squeezeRatio != null) 'squeeze_ratio': squeezeRatio,
+      if (closeFocusM != null) 'close_focus_m': closeFocusM,
+      if (frontDiameterMm != null) 'front_diameter_mm': frontDiameterMm,
+      if (lensType != null) 'lens_type': lensType,
+      if (heroImagePath != null) 'hero_image_path': heroImagePath,
+      if (externalId != null) 'external_id': externalId,
+      if (catalogVersion != null) 'catalog_version': catalogVersion,
+      if (isCustom != null) 'is_custom': isCustom,
+      if (series != null) 'series': series,
+      if (vintage != null) 'vintage': vintage,
+      if (rentalTagsJson != null) 'rental_tags_json': rentalTagsJson,
+      if (lukaCompatible != null) 'luka_compatible': lukaCompatible,
+      if (lukaProfileJson != null) 'luka_profile_json': lukaProfileJson,
       if (notes != null) 'notes': notes,
     });
   }
@@ -8249,6 +10241,22 @@ class LensesCompanion extends UpdateCompanion<Lense> {
     Value<double?>? focalMax,
     Value<double>? minTStop,
     Value<String>? formatCoverage,
+    Value<String?>? mountType,
+    Value<double?>? imageCircleMm,
+    Value<bool>? isAnamorphic,
+    Value<double?>? squeezeRatio,
+    Value<double?>? closeFocusM,
+    Value<double?>? frontDiameterMm,
+    Value<String?>? lensType,
+    Value<String?>? heroImagePath,
+    Value<String?>? externalId,
+    Value<int?>? catalogVersion,
+    Value<bool>? isCustom,
+    Value<String?>? series,
+    Value<bool>? vintage,
+    Value<String?>? rentalTagsJson,
+    Value<bool>? lukaCompatible,
+    Value<String?>? lukaProfileJson,
     Value<String?>? notes,
   }) {
     return LensesCompanion(
@@ -8260,6 +10268,22 @@ class LensesCompanion extends UpdateCompanion<Lense> {
       focalMax: focalMax ?? this.focalMax,
       minTStop: minTStop ?? this.minTStop,
       formatCoverage: formatCoverage ?? this.formatCoverage,
+      mountType: mountType ?? this.mountType,
+      imageCircleMm: imageCircleMm ?? this.imageCircleMm,
+      isAnamorphic: isAnamorphic ?? this.isAnamorphic,
+      squeezeRatio: squeezeRatio ?? this.squeezeRatio,
+      closeFocusM: closeFocusM ?? this.closeFocusM,
+      frontDiameterMm: frontDiameterMm ?? this.frontDiameterMm,
+      lensType: lensType ?? this.lensType,
+      heroImagePath: heroImagePath ?? this.heroImagePath,
+      externalId: externalId ?? this.externalId,
+      catalogVersion: catalogVersion ?? this.catalogVersion,
+      isCustom: isCustom ?? this.isCustom,
+      series: series ?? this.series,
+      vintage: vintage ?? this.vintage,
+      rentalTagsJson: rentalTagsJson ?? this.rentalTagsJson,
+      lukaCompatible: lukaCompatible ?? this.lukaCompatible,
+      lukaProfileJson: lukaProfileJson ?? this.lukaProfileJson,
       notes: notes ?? this.notes,
     );
   }
@@ -8291,6 +10315,54 @@ class LensesCompanion extends UpdateCompanion<Lense> {
     if (formatCoverage.present) {
       map['format_coverage'] = Variable<String>(formatCoverage.value);
     }
+    if (mountType.present) {
+      map['mount_type'] = Variable<String>(mountType.value);
+    }
+    if (imageCircleMm.present) {
+      map['image_circle_mm'] = Variable<double>(imageCircleMm.value);
+    }
+    if (isAnamorphic.present) {
+      map['is_anamorphic'] = Variable<bool>(isAnamorphic.value);
+    }
+    if (squeezeRatio.present) {
+      map['squeeze_ratio'] = Variable<double>(squeezeRatio.value);
+    }
+    if (closeFocusM.present) {
+      map['close_focus_m'] = Variable<double>(closeFocusM.value);
+    }
+    if (frontDiameterMm.present) {
+      map['front_diameter_mm'] = Variable<double>(frontDiameterMm.value);
+    }
+    if (lensType.present) {
+      map['lens_type'] = Variable<String>(lensType.value);
+    }
+    if (heroImagePath.present) {
+      map['hero_image_path'] = Variable<String>(heroImagePath.value);
+    }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
+    }
+    if (catalogVersion.present) {
+      map['catalog_version'] = Variable<int>(catalogVersion.value);
+    }
+    if (isCustom.present) {
+      map['is_custom'] = Variable<bool>(isCustom.value);
+    }
+    if (series.present) {
+      map['series'] = Variable<String>(series.value);
+    }
+    if (vintage.present) {
+      map['vintage'] = Variable<bool>(vintage.value);
+    }
+    if (rentalTagsJson.present) {
+      map['rental_tags_json'] = Variable<String>(rentalTagsJson.value);
+    }
+    if (lukaCompatible.present) {
+      map['luka_compatible'] = Variable<bool>(lukaCompatible.value);
+    }
+    if (lukaProfileJson.present) {
+      map['luka_profile_json'] = Variable<String>(lukaProfileJson.value);
+    }
     if (notes.present) {
       map['notes'] = Variable<String>(notes.value);
     }
@@ -8308,6 +10380,22 @@ class LensesCompanion extends UpdateCompanion<Lense> {
           ..write('focalMax: $focalMax, ')
           ..write('minTStop: $minTStop, ')
           ..write('formatCoverage: $formatCoverage, ')
+          ..write('mountType: $mountType, ')
+          ..write('imageCircleMm: $imageCircleMm, ')
+          ..write('isAnamorphic: $isAnamorphic, ')
+          ..write('squeezeRatio: $squeezeRatio, ')
+          ..write('closeFocusM: $closeFocusM, ')
+          ..write('frontDiameterMm: $frontDiameterMm, ')
+          ..write('lensType: $lensType, ')
+          ..write('heroImagePath: $heroImagePath, ')
+          ..write('externalId: $externalId, ')
+          ..write('catalogVersion: $catalogVersion, ')
+          ..write('isCustom: $isCustom, ')
+          ..write('series: $series, ')
+          ..write('vintage: $vintage, ')
+          ..write('rentalTagsJson: $rentalTagsJson, ')
+          ..write('lukaCompatible: $lukaCompatible, ')
+          ..write('lukaProfileJson: $lukaProfileJson, ')
           ..write('notes: $notes')
           ..write(')'))
         .toString();
@@ -8418,6 +10506,151 @@ class $LightsTable extends Lights with TableInfo<$LightsTable, Light> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _beamAngleDegMeta = const VerificationMeta(
+    'beamAngleDeg',
+  );
+  @override
+  late final GeneratedColumn<double> beamAngleDeg = GeneratedColumn<double>(
+    'beam_angle_deg',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _criMeta = const VerificationMeta('cri');
+  @override
+  late final GeneratedColumn<int> cri = GeneratedColumn<int>(
+    'cri',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tlciMeta = const VerificationMeta('tlci');
+  @override
+  late final GeneratedColumn<int> tlci = GeneratedColumn<int>(
+    'tlci',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _dimmingTypeMeta = const VerificationMeta(
+    'dimmingType',
+  );
+  @override
+  late final GeneratedColumn<String> dimmingType = GeneratedColumn<String>(
+    'dimming_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _modifierCompatibilityJsonMeta =
+      const VerificationMeta('modifierCompatibilityJson');
+  @override
+  late final GeneratedColumn<String> modifierCompatibilityJson =
+      GeneratedColumn<String>(
+        'modifier_compatibility_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _heroImagePathMeta = const VerificationMeta(
+    'heroImagePath',
+  );
+  @override
+  late final GeneratedColumn<String> heroImagePath = GeneratedColumn<String>(
+    'hero_image_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _catalogVersionMeta = const VerificationMeta(
+    'catalogVersion',
+  );
+  @override
+  late final GeneratedColumn<int> catalogVersion = GeneratedColumn<int>(
+    'catalog_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isCustomMeta = const VerificationMeta(
+    'isCustom',
+  );
+  @override
+  late final GeneratedColumn<bool> isCustom = GeneratedColumn<bool>(
+    'is_custom',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_custom" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _seriesMeta = const VerificationMeta('series');
+  @override
+  late final GeneratedColumn<String> series = GeneratedColumn<String>(
+    'series',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _vintageMeta = const VerificationMeta(
+    'vintage',
+  );
+  @override
+  late final GeneratedColumn<bool> vintage = GeneratedColumn<bool>(
+    'vintage',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("vintage" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _rentalTagsJsonMeta = const VerificationMeta(
+    'rentalTagsJson',
+  );
+  @override
+  late final GeneratedColumn<String> rentalTagsJson = GeneratedColumn<String>(
+    'rental_tags_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lukaProfileJsonMeta = const VerificationMeta(
+    'lukaProfileJson',
+  );
+  @override
+  late final GeneratedColumn<String> lukaProfileJson = GeneratedColumn<String>(
+    'luka_profile_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _notesMeta = const VerificationMeta('notes');
   @override
   late final GeneratedColumn<String> notes = GeneratedColumn<String>(
@@ -8438,6 +10671,19 @@ class $LightsTable extends Lights with TableInfo<$LightsTable, Light> {
     colorTempMax,
     isLukaCompatible,
     lukaFixtureId,
+    beamAngleDeg,
+    cri,
+    tlci,
+    dimmingType,
+    modifierCompatibilityJson,
+    heroImagePath,
+    externalId,
+    catalogVersion,
+    isCustom,
+    series,
+    vintage,
+    rentalTagsJson,
+    lukaProfileJson,
     notes,
   ];
   @override
@@ -8527,6 +10773,105 @@ class $LightsTable extends Lights with TableInfo<$LightsTable, Light> {
         ),
       );
     }
+    if (data.containsKey('beam_angle_deg')) {
+      context.handle(
+        _beamAngleDegMeta,
+        beamAngleDeg.isAcceptableOrUnknown(
+          data['beam_angle_deg']!,
+          _beamAngleDegMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cri')) {
+      context.handle(
+        _criMeta,
+        cri.isAcceptableOrUnknown(data['cri']!, _criMeta),
+      );
+    }
+    if (data.containsKey('tlci')) {
+      context.handle(
+        _tlciMeta,
+        tlci.isAcceptableOrUnknown(data['tlci']!, _tlciMeta),
+      );
+    }
+    if (data.containsKey('dimming_type')) {
+      context.handle(
+        _dimmingTypeMeta,
+        dimmingType.isAcceptableOrUnknown(
+          data['dimming_type']!,
+          _dimmingTypeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('modifier_compatibility_json')) {
+      context.handle(
+        _modifierCompatibilityJsonMeta,
+        modifierCompatibilityJson.isAcceptableOrUnknown(
+          data['modifier_compatibility_json']!,
+          _modifierCompatibilityJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('hero_image_path')) {
+      context.handle(
+        _heroImagePathMeta,
+        heroImagePath.isAcceptableOrUnknown(
+          data['hero_image_path']!,
+          _heroImagePathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
+    }
+    if (data.containsKey('catalog_version')) {
+      context.handle(
+        _catalogVersionMeta,
+        catalogVersion.isAcceptableOrUnknown(
+          data['catalog_version']!,
+          _catalogVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_custom')) {
+      context.handle(
+        _isCustomMeta,
+        isCustom.isAcceptableOrUnknown(data['is_custom']!, _isCustomMeta),
+      );
+    }
+    if (data.containsKey('series')) {
+      context.handle(
+        _seriesMeta,
+        series.isAcceptableOrUnknown(data['series']!, _seriesMeta),
+      );
+    }
+    if (data.containsKey('vintage')) {
+      context.handle(
+        _vintageMeta,
+        vintage.isAcceptableOrUnknown(data['vintage']!, _vintageMeta),
+      );
+    }
+    if (data.containsKey('rental_tags_json')) {
+      context.handle(
+        _rentalTagsJsonMeta,
+        rentalTagsJson.isAcceptableOrUnknown(
+          data['rental_tags_json']!,
+          _rentalTagsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('luka_profile_json')) {
+      context.handle(
+        _lukaProfileJsonMeta,
+        lukaProfileJson.isAcceptableOrUnknown(
+          data['luka_profile_json']!,
+          _lukaProfileJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('notes')) {
       context.handle(
         _notesMeta,
@@ -8578,6 +10923,58 @@ class $LightsTable extends Lights with TableInfo<$LightsTable, Light> {
         DriftSqlType.string,
         data['${effectivePrefix}luka_fixture_id'],
       ),
+      beamAngleDeg: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}beam_angle_deg'],
+      ),
+      cri: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cri'],
+      ),
+      tlci: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}tlci'],
+      ),
+      dimmingType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}dimming_type'],
+      ),
+      modifierCompatibilityJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}modifier_compatibility_json'],
+      ),
+      heroImagePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}hero_image_path'],
+      ),
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      ),
+      catalogVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}catalog_version'],
+      ),
+      isCustom: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_custom'],
+      )!,
+      series: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}series'],
+      ),
+      vintage: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}vintage'],
+      )!,
+      rentalTagsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}rental_tags_json'],
+      ),
+      lukaProfileJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}luka_profile_json'],
+      ),
       notes: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}notes'],
@@ -8601,6 +10998,19 @@ class Light extends DataClass implements Insertable<Light> {
   final int colorTempMax;
   final bool isLukaCompatible;
   final String? lukaFixtureId;
+  final double? beamAngleDeg;
+  final int? cri;
+  final int? tlci;
+  final String? dimmingType;
+  final String? modifierCompatibilityJson;
+  final String? heroImagePath;
+  final String? externalId;
+  final int? catalogVersion;
+  final bool isCustom;
+  final String? series;
+  final bool vintage;
+  final String? rentalTagsJson;
+  final String? lukaProfileJson;
   final String? notes;
   const Light({
     required this.id,
@@ -8612,6 +11022,19 @@ class Light extends DataClass implements Insertable<Light> {
     required this.colorTempMax,
     required this.isLukaCompatible,
     this.lukaFixtureId,
+    this.beamAngleDeg,
+    this.cri,
+    this.tlci,
+    this.dimmingType,
+    this.modifierCompatibilityJson,
+    this.heroImagePath,
+    this.externalId,
+    this.catalogVersion,
+    required this.isCustom,
+    this.series,
+    required this.vintage,
+    this.rentalTagsJson,
+    this.lukaProfileJson,
     this.notes,
   });
   @override
@@ -8627,6 +11050,43 @@ class Light extends DataClass implements Insertable<Light> {
     map['is_luka_compatible'] = Variable<bool>(isLukaCompatible);
     if (!nullToAbsent || lukaFixtureId != null) {
       map['luka_fixture_id'] = Variable<String>(lukaFixtureId);
+    }
+    if (!nullToAbsent || beamAngleDeg != null) {
+      map['beam_angle_deg'] = Variable<double>(beamAngleDeg);
+    }
+    if (!nullToAbsent || cri != null) {
+      map['cri'] = Variable<int>(cri);
+    }
+    if (!nullToAbsent || tlci != null) {
+      map['tlci'] = Variable<int>(tlci);
+    }
+    if (!nullToAbsent || dimmingType != null) {
+      map['dimming_type'] = Variable<String>(dimmingType);
+    }
+    if (!nullToAbsent || modifierCompatibilityJson != null) {
+      map['modifier_compatibility_json'] = Variable<String>(
+        modifierCompatibilityJson,
+      );
+    }
+    if (!nullToAbsent || heroImagePath != null) {
+      map['hero_image_path'] = Variable<String>(heroImagePath);
+    }
+    if (!nullToAbsent || externalId != null) {
+      map['external_id'] = Variable<String>(externalId);
+    }
+    if (!nullToAbsent || catalogVersion != null) {
+      map['catalog_version'] = Variable<int>(catalogVersion);
+    }
+    map['is_custom'] = Variable<bool>(isCustom);
+    if (!nullToAbsent || series != null) {
+      map['series'] = Variable<String>(series);
+    }
+    map['vintage'] = Variable<bool>(vintage);
+    if (!nullToAbsent || rentalTagsJson != null) {
+      map['rental_tags_json'] = Variable<String>(rentalTagsJson);
+    }
+    if (!nullToAbsent || lukaProfileJson != null) {
+      map['luka_profile_json'] = Variable<String>(lukaProfileJson);
     }
     if (!nullToAbsent || notes != null) {
       map['notes'] = Variable<String>(notes);
@@ -8647,6 +11107,38 @@ class Light extends DataClass implements Insertable<Light> {
       lukaFixtureId: lukaFixtureId == null && nullToAbsent
           ? const Value.absent()
           : Value(lukaFixtureId),
+      beamAngleDeg: beamAngleDeg == null && nullToAbsent
+          ? const Value.absent()
+          : Value(beamAngleDeg),
+      cri: cri == null && nullToAbsent ? const Value.absent() : Value(cri),
+      tlci: tlci == null && nullToAbsent ? const Value.absent() : Value(tlci),
+      dimmingType: dimmingType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dimmingType),
+      modifierCompatibilityJson:
+          modifierCompatibilityJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(modifierCompatibilityJson),
+      heroImagePath: heroImagePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(heroImagePath),
+      externalId: externalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(externalId),
+      catalogVersion: catalogVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(catalogVersion),
+      isCustom: Value(isCustom),
+      series: series == null && nullToAbsent
+          ? const Value.absent()
+          : Value(series),
+      vintage: Value(vintage),
+      rentalTagsJson: rentalTagsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rentalTagsJson),
+      lukaProfileJson: lukaProfileJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lukaProfileJson),
       notes: notes == null && nullToAbsent
           ? const Value.absent()
           : Value(notes),
@@ -8668,6 +11160,21 @@ class Light extends DataClass implements Insertable<Light> {
       colorTempMax: serializer.fromJson<int>(json['colorTempMax']),
       isLukaCompatible: serializer.fromJson<bool>(json['isLukaCompatible']),
       lukaFixtureId: serializer.fromJson<String?>(json['lukaFixtureId']),
+      beamAngleDeg: serializer.fromJson<double?>(json['beamAngleDeg']),
+      cri: serializer.fromJson<int?>(json['cri']),
+      tlci: serializer.fromJson<int?>(json['tlci']),
+      dimmingType: serializer.fromJson<String?>(json['dimmingType']),
+      modifierCompatibilityJson: serializer.fromJson<String?>(
+        json['modifierCompatibilityJson'],
+      ),
+      heroImagePath: serializer.fromJson<String?>(json['heroImagePath']),
+      externalId: serializer.fromJson<String?>(json['externalId']),
+      catalogVersion: serializer.fromJson<int?>(json['catalogVersion']),
+      isCustom: serializer.fromJson<bool>(json['isCustom']),
+      series: serializer.fromJson<String?>(json['series']),
+      vintage: serializer.fromJson<bool>(json['vintage']),
+      rentalTagsJson: serializer.fromJson<String?>(json['rentalTagsJson']),
+      lukaProfileJson: serializer.fromJson<String?>(json['lukaProfileJson']),
       notes: serializer.fromJson<String?>(json['notes']),
     );
   }
@@ -8684,6 +11191,21 @@ class Light extends DataClass implements Insertable<Light> {
       'colorTempMax': serializer.toJson<int>(colorTempMax),
       'isLukaCompatible': serializer.toJson<bool>(isLukaCompatible),
       'lukaFixtureId': serializer.toJson<String?>(lukaFixtureId),
+      'beamAngleDeg': serializer.toJson<double?>(beamAngleDeg),
+      'cri': serializer.toJson<int?>(cri),
+      'tlci': serializer.toJson<int?>(tlci),
+      'dimmingType': serializer.toJson<String?>(dimmingType),
+      'modifierCompatibilityJson': serializer.toJson<String?>(
+        modifierCompatibilityJson,
+      ),
+      'heroImagePath': serializer.toJson<String?>(heroImagePath),
+      'externalId': serializer.toJson<String?>(externalId),
+      'catalogVersion': serializer.toJson<int?>(catalogVersion),
+      'isCustom': serializer.toJson<bool>(isCustom),
+      'series': serializer.toJson<String?>(series),
+      'vintage': serializer.toJson<bool>(vintage),
+      'rentalTagsJson': serializer.toJson<String?>(rentalTagsJson),
+      'lukaProfileJson': serializer.toJson<String?>(lukaProfileJson),
       'notes': serializer.toJson<String?>(notes),
     };
   }
@@ -8698,6 +11220,19 @@ class Light extends DataClass implements Insertable<Light> {
     int? colorTempMax,
     bool? isLukaCompatible,
     Value<String?> lukaFixtureId = const Value.absent(),
+    Value<double?> beamAngleDeg = const Value.absent(),
+    Value<int?> cri = const Value.absent(),
+    Value<int?> tlci = const Value.absent(),
+    Value<String?> dimmingType = const Value.absent(),
+    Value<String?> modifierCompatibilityJson = const Value.absent(),
+    Value<String?> heroImagePath = const Value.absent(),
+    Value<String?> externalId = const Value.absent(),
+    Value<int?> catalogVersion = const Value.absent(),
+    bool? isCustom,
+    Value<String?> series = const Value.absent(),
+    bool? vintage,
+    Value<String?> rentalTagsJson = const Value.absent(),
+    Value<String?> lukaProfileJson = const Value.absent(),
     Value<String?> notes = const Value.absent(),
   }) => Light(
     id: id ?? this.id,
@@ -8711,6 +11246,29 @@ class Light extends DataClass implements Insertable<Light> {
     lukaFixtureId: lukaFixtureId.present
         ? lukaFixtureId.value
         : this.lukaFixtureId,
+    beamAngleDeg: beamAngleDeg.present ? beamAngleDeg.value : this.beamAngleDeg,
+    cri: cri.present ? cri.value : this.cri,
+    tlci: tlci.present ? tlci.value : this.tlci,
+    dimmingType: dimmingType.present ? dimmingType.value : this.dimmingType,
+    modifierCompatibilityJson: modifierCompatibilityJson.present
+        ? modifierCompatibilityJson.value
+        : this.modifierCompatibilityJson,
+    heroImagePath: heroImagePath.present
+        ? heroImagePath.value
+        : this.heroImagePath,
+    externalId: externalId.present ? externalId.value : this.externalId,
+    catalogVersion: catalogVersion.present
+        ? catalogVersion.value
+        : this.catalogVersion,
+    isCustom: isCustom ?? this.isCustom,
+    series: series.present ? series.value : this.series,
+    vintage: vintage ?? this.vintage,
+    rentalTagsJson: rentalTagsJson.present
+        ? rentalTagsJson.value
+        : this.rentalTagsJson,
+    lukaProfileJson: lukaProfileJson.present
+        ? lukaProfileJson.value
+        : this.lukaProfileJson,
     notes: notes.present ? notes.value : this.notes,
   );
   Light copyWithCompanion(LightsCompanion data) {
@@ -8732,6 +11290,35 @@ class Light extends DataClass implements Insertable<Light> {
       lukaFixtureId: data.lukaFixtureId.present
           ? data.lukaFixtureId.value
           : this.lukaFixtureId,
+      beamAngleDeg: data.beamAngleDeg.present
+          ? data.beamAngleDeg.value
+          : this.beamAngleDeg,
+      cri: data.cri.present ? data.cri.value : this.cri,
+      tlci: data.tlci.present ? data.tlci.value : this.tlci,
+      dimmingType: data.dimmingType.present
+          ? data.dimmingType.value
+          : this.dimmingType,
+      modifierCompatibilityJson: data.modifierCompatibilityJson.present
+          ? data.modifierCompatibilityJson.value
+          : this.modifierCompatibilityJson,
+      heroImagePath: data.heroImagePath.present
+          ? data.heroImagePath.value
+          : this.heroImagePath,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
+      catalogVersion: data.catalogVersion.present
+          ? data.catalogVersion.value
+          : this.catalogVersion,
+      isCustom: data.isCustom.present ? data.isCustom.value : this.isCustom,
+      series: data.series.present ? data.series.value : this.series,
+      vintage: data.vintage.present ? data.vintage.value : this.vintage,
+      rentalTagsJson: data.rentalTagsJson.present
+          ? data.rentalTagsJson.value
+          : this.rentalTagsJson,
+      lukaProfileJson: data.lukaProfileJson.present
+          ? data.lukaProfileJson.value
+          : this.lukaProfileJson,
       notes: data.notes.present ? data.notes.value : this.notes,
     );
   }
@@ -8748,13 +11335,26 @@ class Light extends DataClass implements Insertable<Light> {
           ..write('colorTempMax: $colorTempMax, ')
           ..write('isLukaCompatible: $isLukaCompatible, ')
           ..write('lukaFixtureId: $lukaFixtureId, ')
+          ..write('beamAngleDeg: $beamAngleDeg, ')
+          ..write('cri: $cri, ')
+          ..write('tlci: $tlci, ')
+          ..write('dimmingType: $dimmingType, ')
+          ..write('modifierCompatibilityJson: $modifierCompatibilityJson, ')
+          ..write('heroImagePath: $heroImagePath, ')
+          ..write('externalId: $externalId, ')
+          ..write('catalogVersion: $catalogVersion, ')
+          ..write('isCustom: $isCustom, ')
+          ..write('series: $series, ')
+          ..write('vintage: $vintage, ')
+          ..write('rentalTagsJson: $rentalTagsJson, ')
+          ..write('lukaProfileJson: $lukaProfileJson, ')
           ..write('notes: $notes')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     brand,
     model,
@@ -8764,8 +11364,21 @@ class Light extends DataClass implements Insertable<Light> {
     colorTempMax,
     isLukaCompatible,
     lukaFixtureId,
+    beamAngleDeg,
+    cri,
+    tlci,
+    dimmingType,
+    modifierCompatibilityJson,
+    heroImagePath,
+    externalId,
+    catalogVersion,
+    isCustom,
+    series,
+    vintage,
+    rentalTagsJson,
+    lukaProfileJson,
     notes,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -8779,6 +11392,19 @@ class Light extends DataClass implements Insertable<Light> {
           other.colorTempMax == this.colorTempMax &&
           other.isLukaCompatible == this.isLukaCompatible &&
           other.lukaFixtureId == this.lukaFixtureId &&
+          other.beamAngleDeg == this.beamAngleDeg &&
+          other.cri == this.cri &&
+          other.tlci == this.tlci &&
+          other.dimmingType == this.dimmingType &&
+          other.modifierCompatibilityJson == this.modifierCompatibilityJson &&
+          other.heroImagePath == this.heroImagePath &&
+          other.externalId == this.externalId &&
+          other.catalogVersion == this.catalogVersion &&
+          other.isCustom == this.isCustom &&
+          other.series == this.series &&
+          other.vintage == this.vintage &&
+          other.rentalTagsJson == this.rentalTagsJson &&
+          other.lukaProfileJson == this.lukaProfileJson &&
           other.notes == this.notes);
 }
 
@@ -8792,6 +11418,19 @@ class LightsCompanion extends UpdateCompanion<Light> {
   final Value<int> colorTempMax;
   final Value<bool> isLukaCompatible;
   final Value<String?> lukaFixtureId;
+  final Value<double?> beamAngleDeg;
+  final Value<int?> cri;
+  final Value<int?> tlci;
+  final Value<String?> dimmingType;
+  final Value<String?> modifierCompatibilityJson;
+  final Value<String?> heroImagePath;
+  final Value<String?> externalId;
+  final Value<int?> catalogVersion;
+  final Value<bool> isCustom;
+  final Value<String?> series;
+  final Value<bool> vintage;
+  final Value<String?> rentalTagsJson;
+  final Value<String?> lukaProfileJson;
   final Value<String?> notes;
   const LightsCompanion({
     this.id = const Value.absent(),
@@ -8803,6 +11442,19 @@ class LightsCompanion extends UpdateCompanion<Light> {
     this.colorTempMax = const Value.absent(),
     this.isLukaCompatible = const Value.absent(),
     this.lukaFixtureId = const Value.absent(),
+    this.beamAngleDeg = const Value.absent(),
+    this.cri = const Value.absent(),
+    this.tlci = const Value.absent(),
+    this.dimmingType = const Value.absent(),
+    this.modifierCompatibilityJson = const Value.absent(),
+    this.heroImagePath = const Value.absent(),
+    this.externalId = const Value.absent(),
+    this.catalogVersion = const Value.absent(),
+    this.isCustom = const Value.absent(),
+    this.series = const Value.absent(),
+    this.vintage = const Value.absent(),
+    this.rentalTagsJson = const Value.absent(),
+    this.lukaProfileJson = const Value.absent(),
     this.notes = const Value.absent(),
   });
   LightsCompanion.insert({
@@ -8815,6 +11467,19 @@ class LightsCompanion extends UpdateCompanion<Light> {
     required int colorTempMax,
     this.isLukaCompatible = const Value.absent(),
     this.lukaFixtureId = const Value.absent(),
+    this.beamAngleDeg = const Value.absent(),
+    this.cri = const Value.absent(),
+    this.tlci = const Value.absent(),
+    this.dimmingType = const Value.absent(),
+    this.modifierCompatibilityJson = const Value.absent(),
+    this.heroImagePath = const Value.absent(),
+    this.externalId = const Value.absent(),
+    this.catalogVersion = const Value.absent(),
+    this.isCustom = const Value.absent(),
+    this.series = const Value.absent(),
+    this.vintage = const Value.absent(),
+    this.rentalTagsJson = const Value.absent(),
+    this.lukaProfileJson = const Value.absent(),
     this.notes = const Value.absent(),
   }) : brand = Value(brand),
        model = Value(model),
@@ -8832,6 +11497,19 @@ class LightsCompanion extends UpdateCompanion<Light> {
     Expression<int>? colorTempMax,
     Expression<bool>? isLukaCompatible,
     Expression<String>? lukaFixtureId,
+    Expression<double>? beamAngleDeg,
+    Expression<int>? cri,
+    Expression<int>? tlci,
+    Expression<String>? dimmingType,
+    Expression<String>? modifierCompatibilityJson,
+    Expression<String>? heroImagePath,
+    Expression<String>? externalId,
+    Expression<int>? catalogVersion,
+    Expression<bool>? isCustom,
+    Expression<String>? series,
+    Expression<bool>? vintage,
+    Expression<String>? rentalTagsJson,
+    Expression<String>? lukaProfileJson,
     Expression<String>? notes,
   }) {
     return RawValuesInsertable({
@@ -8844,6 +11522,20 @@ class LightsCompanion extends UpdateCompanion<Light> {
       if (colorTempMax != null) 'color_temp_max': colorTempMax,
       if (isLukaCompatible != null) 'is_luka_compatible': isLukaCompatible,
       if (lukaFixtureId != null) 'luka_fixture_id': lukaFixtureId,
+      if (beamAngleDeg != null) 'beam_angle_deg': beamAngleDeg,
+      if (cri != null) 'cri': cri,
+      if (tlci != null) 'tlci': tlci,
+      if (dimmingType != null) 'dimming_type': dimmingType,
+      if (modifierCompatibilityJson != null)
+        'modifier_compatibility_json': modifierCompatibilityJson,
+      if (heroImagePath != null) 'hero_image_path': heroImagePath,
+      if (externalId != null) 'external_id': externalId,
+      if (catalogVersion != null) 'catalog_version': catalogVersion,
+      if (isCustom != null) 'is_custom': isCustom,
+      if (series != null) 'series': series,
+      if (vintage != null) 'vintage': vintage,
+      if (rentalTagsJson != null) 'rental_tags_json': rentalTagsJson,
+      if (lukaProfileJson != null) 'luka_profile_json': lukaProfileJson,
       if (notes != null) 'notes': notes,
     });
   }
@@ -8858,6 +11550,19 @@ class LightsCompanion extends UpdateCompanion<Light> {
     Value<int>? colorTempMax,
     Value<bool>? isLukaCompatible,
     Value<String?>? lukaFixtureId,
+    Value<double?>? beamAngleDeg,
+    Value<int?>? cri,
+    Value<int?>? tlci,
+    Value<String?>? dimmingType,
+    Value<String?>? modifierCompatibilityJson,
+    Value<String?>? heroImagePath,
+    Value<String?>? externalId,
+    Value<int?>? catalogVersion,
+    Value<bool>? isCustom,
+    Value<String?>? series,
+    Value<bool>? vintage,
+    Value<String?>? rentalTagsJson,
+    Value<String?>? lukaProfileJson,
     Value<String?>? notes,
   }) {
     return LightsCompanion(
@@ -8870,6 +11575,20 @@ class LightsCompanion extends UpdateCompanion<Light> {
       colorTempMax: colorTempMax ?? this.colorTempMax,
       isLukaCompatible: isLukaCompatible ?? this.isLukaCompatible,
       lukaFixtureId: lukaFixtureId ?? this.lukaFixtureId,
+      beamAngleDeg: beamAngleDeg ?? this.beamAngleDeg,
+      cri: cri ?? this.cri,
+      tlci: tlci ?? this.tlci,
+      dimmingType: dimmingType ?? this.dimmingType,
+      modifierCompatibilityJson:
+          modifierCompatibilityJson ?? this.modifierCompatibilityJson,
+      heroImagePath: heroImagePath ?? this.heroImagePath,
+      externalId: externalId ?? this.externalId,
+      catalogVersion: catalogVersion ?? this.catalogVersion,
+      isCustom: isCustom ?? this.isCustom,
+      series: series ?? this.series,
+      vintage: vintage ?? this.vintage,
+      rentalTagsJson: rentalTagsJson ?? this.rentalTagsJson,
+      lukaProfileJson: lukaProfileJson ?? this.lukaProfileJson,
       notes: notes ?? this.notes,
     );
   }
@@ -8904,6 +11623,47 @@ class LightsCompanion extends UpdateCompanion<Light> {
     if (lukaFixtureId.present) {
       map['luka_fixture_id'] = Variable<String>(lukaFixtureId.value);
     }
+    if (beamAngleDeg.present) {
+      map['beam_angle_deg'] = Variable<double>(beamAngleDeg.value);
+    }
+    if (cri.present) {
+      map['cri'] = Variable<int>(cri.value);
+    }
+    if (tlci.present) {
+      map['tlci'] = Variable<int>(tlci.value);
+    }
+    if (dimmingType.present) {
+      map['dimming_type'] = Variable<String>(dimmingType.value);
+    }
+    if (modifierCompatibilityJson.present) {
+      map['modifier_compatibility_json'] = Variable<String>(
+        modifierCompatibilityJson.value,
+      );
+    }
+    if (heroImagePath.present) {
+      map['hero_image_path'] = Variable<String>(heroImagePath.value);
+    }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
+    }
+    if (catalogVersion.present) {
+      map['catalog_version'] = Variable<int>(catalogVersion.value);
+    }
+    if (isCustom.present) {
+      map['is_custom'] = Variable<bool>(isCustom.value);
+    }
+    if (series.present) {
+      map['series'] = Variable<String>(series.value);
+    }
+    if (vintage.present) {
+      map['vintage'] = Variable<bool>(vintage.value);
+    }
+    if (rentalTagsJson.present) {
+      map['rental_tags_json'] = Variable<String>(rentalTagsJson.value);
+    }
+    if (lukaProfileJson.present) {
+      map['luka_profile_json'] = Variable<String>(lukaProfileJson.value);
+    }
     if (notes.present) {
       map['notes'] = Variable<String>(notes.value);
     }
@@ -8922,6 +11682,19 @@ class LightsCompanion extends UpdateCompanion<Light> {
           ..write('colorTempMax: $colorTempMax, ')
           ..write('isLukaCompatible: $isLukaCompatible, ')
           ..write('lukaFixtureId: $lukaFixtureId, ')
+          ..write('beamAngleDeg: $beamAngleDeg, ')
+          ..write('cri: $cri, ')
+          ..write('tlci: $tlci, ')
+          ..write('dimmingType: $dimmingType, ')
+          ..write('modifierCompatibilityJson: $modifierCompatibilityJson, ')
+          ..write('heroImagePath: $heroImagePath, ')
+          ..write('externalId: $externalId, ')
+          ..write('catalogVersion: $catalogVersion, ')
+          ..write('isCustom: $isCustom, ')
+          ..write('series: $series, ')
+          ..write('vintage: $vintage, ')
+          ..write('rentalTagsJson: $rentalTagsJson, ')
+          ..write('lukaProfileJson: $lukaProfileJson, ')
           ..write('notes: $notes')
           ..write(')'))
         .toString();
@@ -9012,6 +11785,18 @@ class $ProjectEquipmentTable extends ProjectEquipment
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -9021,6 +11806,7 @@ class $ProjectEquipmentTable extends ProjectEquipment
     source,
     status,
     notes,
+    sortOrder,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -9085,6 +11871,12 @@ class $ProjectEquipmentTable extends ProjectEquipment
         notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
       );
     }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
     return context;
   }
 
@@ -9122,6 +11914,10 @@ class $ProjectEquipmentTable extends ProjectEquipment
         DriftSqlType.string,
         data['${effectivePrefix}notes'],
       ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
     );
   }
 
@@ -9140,6 +11936,7 @@ class ProjectEquipmentData extends DataClass
   final String source;
   final String status;
   final String? notes;
+  final int sortOrder;
   const ProjectEquipmentData({
     required this.id,
     required this.projectId,
@@ -9148,6 +11945,7 @@ class ProjectEquipmentData extends DataClass
     required this.source,
     required this.status,
     this.notes,
+    required this.sortOrder,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -9161,6 +11959,7 @@ class ProjectEquipmentData extends DataClass
     if (!nullToAbsent || notes != null) {
       map['notes'] = Variable<String>(notes);
     }
+    map['sort_order'] = Variable<int>(sortOrder);
     return map;
   }
 
@@ -9175,6 +11974,7 @@ class ProjectEquipmentData extends DataClass
       notes: notes == null && nullToAbsent
           ? const Value.absent()
           : Value(notes),
+      sortOrder: Value(sortOrder),
     );
   }
 
@@ -9191,6 +11991,7 @@ class ProjectEquipmentData extends DataClass
       source: serializer.fromJson<String>(json['source']),
       status: serializer.fromJson<String>(json['status']),
       notes: serializer.fromJson<String?>(json['notes']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
     );
   }
   @override
@@ -9204,6 +12005,7 @@ class ProjectEquipmentData extends DataClass
       'source': serializer.toJson<String>(source),
       'status': serializer.toJson<String>(status),
       'notes': serializer.toJson<String?>(notes),
+      'sortOrder': serializer.toJson<int>(sortOrder),
     };
   }
 
@@ -9215,6 +12017,7 @@ class ProjectEquipmentData extends DataClass
     String? source,
     String? status,
     Value<String?> notes = const Value.absent(),
+    int? sortOrder,
   }) => ProjectEquipmentData(
     id: id ?? this.id,
     projectId: projectId ?? this.projectId,
@@ -9223,6 +12026,7 @@ class ProjectEquipmentData extends DataClass
     source: source ?? this.source,
     status: status ?? this.status,
     notes: notes.present ? notes.value : this.notes,
+    sortOrder: sortOrder ?? this.sortOrder,
   );
   ProjectEquipmentData copyWithCompanion(ProjectEquipmentCompanion data) {
     return ProjectEquipmentData(
@@ -9237,6 +12041,7 @@ class ProjectEquipmentData extends DataClass
       source: data.source.present ? data.source.value : this.source,
       status: data.status.present ? data.status.value : this.status,
       notes: data.notes.present ? data.notes.value : this.notes,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
     );
   }
 
@@ -9249,7 +12054,8 @@ class ProjectEquipmentData extends DataClass
           ..write('equipmentId: $equipmentId, ')
           ..write('source: $source, ')
           ..write('status: $status, ')
-          ..write('notes: $notes')
+          ..write('notes: $notes, ')
+          ..write('sortOrder: $sortOrder')
           ..write(')'))
         .toString();
   }
@@ -9263,6 +12069,7 @@ class ProjectEquipmentData extends DataClass
     source,
     status,
     notes,
+    sortOrder,
   );
   @override
   bool operator ==(Object other) =>
@@ -9274,7 +12081,8 @@ class ProjectEquipmentData extends DataClass
           other.equipmentId == this.equipmentId &&
           other.source == this.source &&
           other.status == this.status &&
-          other.notes == this.notes);
+          other.notes == this.notes &&
+          other.sortOrder == this.sortOrder);
 }
 
 class ProjectEquipmentCompanion extends UpdateCompanion<ProjectEquipmentData> {
@@ -9285,6 +12093,7 @@ class ProjectEquipmentCompanion extends UpdateCompanion<ProjectEquipmentData> {
   final Value<String> source;
   final Value<String> status;
   final Value<String?> notes;
+  final Value<int> sortOrder;
   const ProjectEquipmentCompanion({
     this.id = const Value.absent(),
     this.projectId = const Value.absent(),
@@ -9293,6 +12102,7 @@ class ProjectEquipmentCompanion extends UpdateCompanion<ProjectEquipmentData> {
     this.source = const Value.absent(),
     this.status = const Value.absent(),
     this.notes = const Value.absent(),
+    this.sortOrder = const Value.absent(),
   });
   ProjectEquipmentCompanion.insert({
     this.id = const Value.absent(),
@@ -9302,6 +12112,7 @@ class ProjectEquipmentCompanion extends UpdateCompanion<ProjectEquipmentData> {
     this.source = const Value.absent(),
     this.status = const Value.absent(),
     this.notes = const Value.absent(),
+    this.sortOrder = const Value.absent(),
   }) : projectId = Value(projectId),
        equipmentType = Value(equipmentType),
        equipmentId = Value(equipmentId);
@@ -9313,6 +12124,7 @@ class ProjectEquipmentCompanion extends UpdateCompanion<ProjectEquipmentData> {
     Expression<String>? source,
     Expression<String>? status,
     Expression<String>? notes,
+    Expression<int>? sortOrder,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -9322,6 +12134,7 @@ class ProjectEquipmentCompanion extends UpdateCompanion<ProjectEquipmentData> {
       if (source != null) 'source': source,
       if (status != null) 'status': status,
       if (notes != null) 'notes': notes,
+      if (sortOrder != null) 'sort_order': sortOrder,
     });
   }
 
@@ -9333,6 +12146,7 @@ class ProjectEquipmentCompanion extends UpdateCompanion<ProjectEquipmentData> {
     Value<String>? source,
     Value<String>? status,
     Value<String?>? notes,
+    Value<int>? sortOrder,
   }) {
     return ProjectEquipmentCompanion(
       id: id ?? this.id,
@@ -9342,6 +12156,7 @@ class ProjectEquipmentCompanion extends UpdateCompanion<ProjectEquipmentData> {
       source: source ?? this.source,
       status: status ?? this.status,
       notes: notes ?? this.notes,
+      sortOrder: sortOrder ?? this.sortOrder,
     );
   }
 
@@ -9369,6 +12184,9 @@ class ProjectEquipmentCompanion extends UpdateCompanion<ProjectEquipmentData> {
     if (notes.present) {
       map['notes'] = Variable<String>(notes.value);
     }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
     return map;
   }
 
@@ -9381,7 +12199,8 @@ class ProjectEquipmentCompanion extends UpdateCompanion<ProjectEquipmentData> {
           ..write('equipmentId: $equipmentId, ')
           ..write('source: $source, ')
           ..write('status: $status, ')
-          ..write('notes: $notes')
+          ..write('notes: $notes, ')
+          ..write('sortOrder: $sortOrder')
           ..write(')'))
         .toString();
   }
@@ -10614,6 +13433,72 @@ class $VisualBiblesTable extends VisualBibles
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _toneMeta = const VerificationMeta('tone');
+  @override
+  late final GeneratedColumn<String> tone = GeneratedColumn<String>(
+    'tone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _creativeIntentionMeta = const VerificationMeta(
+    'creativeIntention',
+  );
+  @override
+  late final GeneratedColumn<String> creativeIntention =
+      GeneratedColumn<String>(
+        'creative_intention',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _stagingApproachMeta = const VerificationMeta(
+    'stagingApproach',
+  );
+  @override
+  late final GeneratedColumn<String> stagingApproach = GeneratedColumn<String>(
+    'staging_approach',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pointOfViewMeta = const VerificationMeta(
+    'pointOfView',
+  );
+  @override
+  late final GeneratedColumn<String> pointOfView = GeneratedColumn<String>(
+    'point_of_view',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _directionNarrativeIntentMeta =
+      const VerificationMeta('directionNarrativeIntent');
+  @override
+  late final GeneratedColumn<String> directionNarrativeIntent =
+      GeneratedColumn<String>(
+        'direction_narrative_intent',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _depthOfFieldNotesMeta = const VerificationMeta(
+    'depthOfFieldNotes',
+  );
+  @override
+  late final GeneratedColumn<String> depthOfFieldNotes =
+      GeneratedColumn<String>(
+        'depth_of_field_notes',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _lightingPhilosophyMeta =
       const VerificationMeta('lightingPhilosophy');
   @override
@@ -10861,6 +13746,328 @@ class $VisualBiblesTable extends VisualBibles
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _primaryCameraIdMeta = const VerificationMeta(
+    'primaryCameraId',
+  );
+  @override
+  late final GeneratedColumn<int> primaryCameraId = GeneratedColumn<int>(
+    'primary_camera_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES cameras (id)',
+    ),
+  );
+  static const VerificationMeta _recordingFormatMeta = const VerificationMeta(
+    'recordingFormat',
+  );
+  @override
+  late final GeneratedColumn<String> recordingFormat = GeneratedColumn<String>(
+    'recording_format',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _codecMeta = const VerificationMeta('codec');
+  @override
+  late final GeneratedColumn<String> codec = GeneratedColumn<String>(
+    'codec',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _resolutionNotesMeta = const VerificationMeta(
+    'resolutionNotes',
+  );
+  @override
+  late final GeneratedColumn<String> resolutionNotes = GeneratedColumn<String>(
+    'resolution_notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _frameRateNotesMeta = const VerificationMeta(
+    'frameRateNotes',
+  );
+  @override
+  late final GeneratedColumn<String> frameRateNotes = GeneratedColumn<String>(
+    'frame_rate_notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nativeIsoMeta = const VerificationMeta(
+    'nativeIso',
+  );
+  @override
+  late final GeneratedColumn<int> nativeIso = GeneratedColumn<int>(
+    'native_iso',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _defaultTStopMeta = const VerificationMeta(
+    'defaultTStop',
+  );
+  @override
+  late final GeneratedColumn<String> defaultTStop = GeneratedColumn<String>(
+    'default_t_stop',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _ndNotesMeta = const VerificationMeta(
+    'ndNotes',
+  );
+  @override
+  late final GeneratedColumn<String> ndNotes = GeneratedColumn<String>(
+    'nd_notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _deliveryColorSpaceMeta =
+      const VerificationMeta('deliveryColorSpace');
+  @override
+  late final GeneratedColumn<String> deliveryColorSpace =
+      GeneratedColumn<String>(
+        'delivery_color_space',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _captureResolutionMeta = const VerificationMeta(
+    'captureResolution',
+  );
+  @override
+  late final GeneratedColumn<String> captureResolution =
+      GeneratedColumn<String>(
+        'capture_resolution',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _deliveryResolutionMeta =
+      const VerificationMeta('deliveryResolution');
+  @override
+  late final GeneratedColumn<String> deliveryResolution =
+      GeneratedColumn<String>(
+        'delivery_resolution',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _workflowPipelineMeta = const VerificationMeta(
+    'workflowPipeline',
+  );
+  @override
+  late final GeneratedColumn<String> workflowPipeline = GeneratedColumn<String>(
+    'workflow_pipeline',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _diffusionNotesMeta = const VerificationMeta(
+    'diffusionNotes',
+  );
+  @override
+  late final GeneratedColumn<String> diffusionNotes = GeneratedColumn<String>(
+    'diffusion_notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sensorShadowBehaviorMeta =
+      const VerificationMeta('sensorShadowBehavior');
+  @override
+  late final GeneratedColumn<String> sensorShadowBehavior =
+      GeneratedColumn<String>(
+        'sensor_shadow_behavior',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _colorScienceNotesMeta = const VerificationMeta(
+    'colorScienceNotes',
+  );
+  @override
+  late final GeneratedColumn<String> colorScienceNotes =
+      GeneratedColumn<String>(
+        'color_science_notes',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lowLightNotesMeta = const VerificationMeta(
+    'lowLightNotes',
+  );
+  @override
+  late final GeneratedColumn<String> lowLightNotes = GeneratedColumn<String>(
+    'low_light_notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _opticCharacterNotesMeta =
+      const VerificationMeta('opticCharacterNotes');
+  @override
+  late final GeneratedColumn<String> opticCharacterNotes =
+      GeneratedColumn<String>(
+        'optic_character_notes',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _filtrationNotesMeta = const VerificationMeta(
+    'filtrationNotes',
+  );
+  @override
+  late final GeneratedColumn<String> filtrationNotes = GeneratedColumn<String>(
+    'filtration_notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _cameraMovementsJsonMeta =
+      const VerificationMeta('cameraMovementsJson');
+  @override
+  late final GeneratedColumn<String> cameraMovementsJson =
+      GeneratedColumn<String>(
+        'camera_movements_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _actVisualNotesMeta = const VerificationMeta(
+    'actVisualNotes',
+  );
+  @override
+  late final GeneratedColumn<String> actVisualNotes = GeneratedColumn<String>(
+    'act_visual_notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _cameraNarrativeIntentMeta =
+      const VerificationMeta('cameraNarrativeIntent');
+  @override
+  late final GeneratedColumn<String> cameraNarrativeIntent =
+      GeneratedColumn<String>(
+        'camera_narrative_intent',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _opticsNarrativeIntentMeta =
+      const VerificationMeta('opticsNarrativeIntent');
+  @override
+  late final GeneratedColumn<String> opticsNarrativeIntent =
+      GeneratedColumn<String>(
+        'optics_narrative_intent',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _exposureNarrativeIntentMeta =
+      const VerificationMeta('exposureNarrativeIntent');
+  @override
+  late final GeneratedColumn<String> exposureNarrativeIntent =
+      GeneratedColumn<String>(
+        'exposure_narrative_intent',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lightingNarrativeIntentMeta =
+      const VerificationMeta('lightingNarrativeIntent');
+  @override
+  late final GeneratedColumn<String> lightingNarrativeIntent =
+      GeneratedColumn<String>(
+        'lighting_narrative_intent',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _colorNarrativeIntentMeta =
+      const VerificationMeta('colorNarrativeIntent');
+  @override
+  late final GeneratedColumn<String> colorNarrativeIntent =
+      GeneratedColumn<String>(
+        'color_narrative_intent',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _formatNarrativeIntentMeta =
+      const VerificationMeta('formatNarrativeIntent');
+  @override
+  late final GeneratedColumn<String> formatNarrativeIntent =
+      GeneratedColumn<String>(
+        'format_narrative_intent',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _textureNarrativeIntentMeta =
+      const VerificationMeta('textureNarrativeIntent');
+  @override
+  late final GeneratedColumn<String> textureNarrativeIntent =
+      GeneratedColumn<String>(
+        'texture_narrative_intent',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _conceptNarrativeIntentMeta =
+      const VerificationMeta('conceptNarrativeIntent');
+  @override
+  late final GeneratedColumn<String> conceptNarrativeIntent =
+      GeneratedColumn<String>(
+        'concept_narrative_intent',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _opticsConfigJsonMeta = const VerificationMeta(
+    'opticsConfigJson',
+  );
+  @override
+  late final GeneratedColumn<String> opticsConfigJson = GeneratedColumn<String>(
+    'optics_config_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -10879,6 +14086,12 @@ class $VisualBiblesTable extends VisualBibles
     projectId,
     visualConcept,
     narrativeReferences,
+    tone,
+    creativeIntention,
+    stagingApproach,
+    pointOfView,
+    directionNarrativeIntent,
+    depthOfFieldNotes,
     lightingPhilosophy,
     lightQuality,
     contrastStyle,
@@ -10901,6 +14114,35 @@ class $VisualBiblesTable extends VisualBibles
     workingLutName,
     creativeLutName,
     creativeLutDescription,
+    primaryCameraId,
+    recordingFormat,
+    codec,
+    resolutionNotes,
+    frameRateNotes,
+    nativeIso,
+    defaultTStop,
+    ndNotes,
+    deliveryColorSpace,
+    captureResolution,
+    deliveryResolution,
+    workflowPipeline,
+    diffusionNotes,
+    sensorShadowBehavior,
+    colorScienceNotes,
+    lowLightNotes,
+    opticCharacterNotes,
+    filtrationNotes,
+    cameraMovementsJson,
+    actVisualNotes,
+    cameraNarrativeIntent,
+    opticsNarrativeIntent,
+    exposureNarrativeIntent,
+    lightingNarrativeIntent,
+    colorNarrativeIntent,
+    formatNarrativeIntent,
+    textureNarrativeIntent,
+    conceptNarrativeIntent,
+    opticsConfigJson,
     updatedAt,
   ];
   @override
@@ -10941,6 +14183,57 @@ class $VisualBiblesTable extends VisualBibles
         narrativeReferences.isAcceptableOrUnknown(
           data['narrative_references']!,
           _narrativeReferencesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('tone')) {
+      context.handle(
+        _toneMeta,
+        tone.isAcceptableOrUnknown(data['tone']!, _toneMeta),
+      );
+    }
+    if (data.containsKey('creative_intention')) {
+      context.handle(
+        _creativeIntentionMeta,
+        creativeIntention.isAcceptableOrUnknown(
+          data['creative_intention']!,
+          _creativeIntentionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('staging_approach')) {
+      context.handle(
+        _stagingApproachMeta,
+        stagingApproach.isAcceptableOrUnknown(
+          data['staging_approach']!,
+          _stagingApproachMeta,
+        ),
+      );
+    }
+    if (data.containsKey('point_of_view')) {
+      context.handle(
+        _pointOfViewMeta,
+        pointOfView.isAcceptableOrUnknown(
+          data['point_of_view']!,
+          _pointOfViewMeta,
+        ),
+      );
+    }
+    if (data.containsKey('direction_narrative_intent')) {
+      context.handle(
+        _directionNarrativeIntentMeta,
+        directionNarrativeIntent.isAcceptableOrUnknown(
+          data['direction_narrative_intent']!,
+          _directionNarrativeIntentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('depth_of_field_notes')) {
+      context.handle(
+        _depthOfFieldNotesMeta,
+        depthOfFieldNotes.isAcceptableOrUnknown(
+          data['depth_of_field_notes']!,
+          _depthOfFieldNotesMeta,
         ),
       );
     }
@@ -11136,6 +14429,258 @@ class $VisualBiblesTable extends VisualBibles
         ),
       );
     }
+    if (data.containsKey('primary_camera_id')) {
+      context.handle(
+        _primaryCameraIdMeta,
+        primaryCameraId.isAcceptableOrUnknown(
+          data['primary_camera_id']!,
+          _primaryCameraIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('recording_format')) {
+      context.handle(
+        _recordingFormatMeta,
+        recordingFormat.isAcceptableOrUnknown(
+          data['recording_format']!,
+          _recordingFormatMeta,
+        ),
+      );
+    }
+    if (data.containsKey('codec')) {
+      context.handle(
+        _codecMeta,
+        codec.isAcceptableOrUnknown(data['codec']!, _codecMeta),
+      );
+    }
+    if (data.containsKey('resolution_notes')) {
+      context.handle(
+        _resolutionNotesMeta,
+        resolutionNotes.isAcceptableOrUnknown(
+          data['resolution_notes']!,
+          _resolutionNotesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('frame_rate_notes')) {
+      context.handle(
+        _frameRateNotesMeta,
+        frameRateNotes.isAcceptableOrUnknown(
+          data['frame_rate_notes']!,
+          _frameRateNotesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('native_iso')) {
+      context.handle(
+        _nativeIsoMeta,
+        nativeIso.isAcceptableOrUnknown(data['native_iso']!, _nativeIsoMeta),
+      );
+    }
+    if (data.containsKey('default_t_stop')) {
+      context.handle(
+        _defaultTStopMeta,
+        defaultTStop.isAcceptableOrUnknown(
+          data['default_t_stop']!,
+          _defaultTStopMeta,
+        ),
+      );
+    }
+    if (data.containsKey('nd_notes')) {
+      context.handle(
+        _ndNotesMeta,
+        ndNotes.isAcceptableOrUnknown(data['nd_notes']!, _ndNotesMeta),
+      );
+    }
+    if (data.containsKey('delivery_color_space')) {
+      context.handle(
+        _deliveryColorSpaceMeta,
+        deliveryColorSpace.isAcceptableOrUnknown(
+          data['delivery_color_space']!,
+          _deliveryColorSpaceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('capture_resolution')) {
+      context.handle(
+        _captureResolutionMeta,
+        captureResolution.isAcceptableOrUnknown(
+          data['capture_resolution']!,
+          _captureResolutionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('delivery_resolution')) {
+      context.handle(
+        _deliveryResolutionMeta,
+        deliveryResolution.isAcceptableOrUnknown(
+          data['delivery_resolution']!,
+          _deliveryResolutionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('workflow_pipeline')) {
+      context.handle(
+        _workflowPipelineMeta,
+        workflowPipeline.isAcceptableOrUnknown(
+          data['workflow_pipeline']!,
+          _workflowPipelineMeta,
+        ),
+      );
+    }
+    if (data.containsKey('diffusion_notes')) {
+      context.handle(
+        _diffusionNotesMeta,
+        diffusionNotes.isAcceptableOrUnknown(
+          data['diffusion_notes']!,
+          _diffusionNotesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sensor_shadow_behavior')) {
+      context.handle(
+        _sensorShadowBehaviorMeta,
+        sensorShadowBehavior.isAcceptableOrUnknown(
+          data['sensor_shadow_behavior']!,
+          _sensorShadowBehaviorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('color_science_notes')) {
+      context.handle(
+        _colorScienceNotesMeta,
+        colorScienceNotes.isAcceptableOrUnknown(
+          data['color_science_notes']!,
+          _colorScienceNotesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('low_light_notes')) {
+      context.handle(
+        _lowLightNotesMeta,
+        lowLightNotes.isAcceptableOrUnknown(
+          data['low_light_notes']!,
+          _lowLightNotesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('optic_character_notes')) {
+      context.handle(
+        _opticCharacterNotesMeta,
+        opticCharacterNotes.isAcceptableOrUnknown(
+          data['optic_character_notes']!,
+          _opticCharacterNotesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('filtration_notes')) {
+      context.handle(
+        _filtrationNotesMeta,
+        filtrationNotes.isAcceptableOrUnknown(
+          data['filtration_notes']!,
+          _filtrationNotesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('camera_movements_json')) {
+      context.handle(
+        _cameraMovementsJsonMeta,
+        cameraMovementsJson.isAcceptableOrUnknown(
+          data['camera_movements_json']!,
+          _cameraMovementsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('act_visual_notes')) {
+      context.handle(
+        _actVisualNotesMeta,
+        actVisualNotes.isAcceptableOrUnknown(
+          data['act_visual_notes']!,
+          _actVisualNotesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('camera_narrative_intent')) {
+      context.handle(
+        _cameraNarrativeIntentMeta,
+        cameraNarrativeIntent.isAcceptableOrUnknown(
+          data['camera_narrative_intent']!,
+          _cameraNarrativeIntentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('optics_narrative_intent')) {
+      context.handle(
+        _opticsNarrativeIntentMeta,
+        opticsNarrativeIntent.isAcceptableOrUnknown(
+          data['optics_narrative_intent']!,
+          _opticsNarrativeIntentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('exposure_narrative_intent')) {
+      context.handle(
+        _exposureNarrativeIntentMeta,
+        exposureNarrativeIntent.isAcceptableOrUnknown(
+          data['exposure_narrative_intent']!,
+          _exposureNarrativeIntentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('lighting_narrative_intent')) {
+      context.handle(
+        _lightingNarrativeIntentMeta,
+        lightingNarrativeIntent.isAcceptableOrUnknown(
+          data['lighting_narrative_intent']!,
+          _lightingNarrativeIntentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('color_narrative_intent')) {
+      context.handle(
+        _colorNarrativeIntentMeta,
+        colorNarrativeIntent.isAcceptableOrUnknown(
+          data['color_narrative_intent']!,
+          _colorNarrativeIntentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('format_narrative_intent')) {
+      context.handle(
+        _formatNarrativeIntentMeta,
+        formatNarrativeIntent.isAcceptableOrUnknown(
+          data['format_narrative_intent']!,
+          _formatNarrativeIntentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('texture_narrative_intent')) {
+      context.handle(
+        _textureNarrativeIntentMeta,
+        textureNarrativeIntent.isAcceptableOrUnknown(
+          data['texture_narrative_intent']!,
+          _textureNarrativeIntentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('concept_narrative_intent')) {
+      context.handle(
+        _conceptNarrativeIntentMeta,
+        conceptNarrativeIntent.isAcceptableOrUnknown(
+          data['concept_narrative_intent']!,
+          _conceptNarrativeIntentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('optics_config_json')) {
+      context.handle(
+        _opticsConfigJsonMeta,
+        opticsConfigJson.isAcceptableOrUnknown(
+          data['optics_config_json']!,
+          _opticsConfigJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('updated_at')) {
       context.handle(
         _updatedAtMeta,
@@ -11166,6 +14711,30 @@ class $VisualBiblesTable extends VisualBibles
       narrativeReferences: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}narrative_references'],
+      ),
+      tone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tone'],
+      ),
+      creativeIntention: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}creative_intention'],
+      ),
+      stagingApproach: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}staging_approach'],
+      ),
+      pointOfView: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}point_of_view'],
+      ),
+      directionNarrativeIntent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}direction_narrative_intent'],
+      ),
+      depthOfFieldNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}depth_of_field_notes'],
       ),
       lightingPhilosophy: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -11255,6 +14824,122 @@ class $VisualBiblesTable extends VisualBibles
         DriftSqlType.string,
         data['${effectivePrefix}creative_lut_description'],
       ),
+      primaryCameraId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}primary_camera_id'],
+      ),
+      recordingFormat: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}recording_format'],
+      ),
+      codec: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}codec'],
+      ),
+      resolutionNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}resolution_notes'],
+      ),
+      frameRateNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}frame_rate_notes'],
+      ),
+      nativeIso: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}native_iso'],
+      ),
+      defaultTStop: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}default_t_stop'],
+      ),
+      ndNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}nd_notes'],
+      ),
+      deliveryColorSpace: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}delivery_color_space'],
+      ),
+      captureResolution: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}capture_resolution'],
+      ),
+      deliveryResolution: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}delivery_resolution'],
+      ),
+      workflowPipeline: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workflow_pipeline'],
+      ),
+      diffusionNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}diffusion_notes'],
+      ),
+      sensorShadowBehavior: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sensor_shadow_behavior'],
+      ),
+      colorScienceNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}color_science_notes'],
+      ),
+      lowLightNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}low_light_notes'],
+      ),
+      opticCharacterNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}optic_character_notes'],
+      ),
+      filtrationNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}filtration_notes'],
+      ),
+      cameraMovementsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}camera_movements_json'],
+      ),
+      actVisualNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}act_visual_notes'],
+      ),
+      cameraNarrativeIntent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}camera_narrative_intent'],
+      ),
+      opticsNarrativeIntent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}optics_narrative_intent'],
+      ),
+      exposureNarrativeIntent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}exposure_narrative_intent'],
+      ),
+      lightingNarrativeIntent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}lighting_narrative_intent'],
+      ),
+      colorNarrativeIntent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}color_narrative_intent'],
+      ),
+      formatNarrativeIntent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}format_narrative_intent'],
+      ),
+      textureNarrativeIntent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}texture_narrative_intent'],
+      ),
+      conceptNarrativeIntent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}concept_narrative_intent'],
+      ),
+      opticsConfigJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}optics_config_json'],
+      ),
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -11273,6 +14958,12 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
   final int projectId;
   final String? visualConcept;
   final String? narrativeReferences;
+  final String? tone;
+  final String? creativeIntention;
+  final String? stagingApproach;
+  final String? pointOfView;
+  final String? directionNarrativeIntent;
+  final String? depthOfFieldNotes;
   final String? lightingPhilosophy;
   final String? lightQuality;
   final String? contrastStyle;
@@ -11295,12 +14986,47 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
   final String? workingLutName;
   final String? creativeLutName;
   final String? creativeLutDescription;
+  final int? primaryCameraId;
+  final String? recordingFormat;
+  final String? codec;
+  final String? resolutionNotes;
+  final String? frameRateNotes;
+  final int? nativeIso;
+  final String? defaultTStop;
+  final String? ndNotes;
+  final String? deliveryColorSpace;
+  final String? captureResolution;
+  final String? deliveryResolution;
+  final String? workflowPipeline;
+  final String? diffusionNotes;
+  final String? sensorShadowBehavior;
+  final String? colorScienceNotes;
+  final String? lowLightNotes;
+  final String? opticCharacterNotes;
+  final String? filtrationNotes;
+  final String? cameraMovementsJson;
+  final String? actVisualNotes;
+  final String? cameraNarrativeIntent;
+  final String? opticsNarrativeIntent;
+  final String? exposureNarrativeIntent;
+  final String? lightingNarrativeIntent;
+  final String? colorNarrativeIntent;
+  final String? formatNarrativeIntent;
+  final String? textureNarrativeIntent;
+  final String? conceptNarrativeIntent;
+  final String? opticsConfigJson;
   final DateTime updatedAt;
   const VisualBible({
     required this.id,
     required this.projectId,
     this.visualConcept,
     this.narrativeReferences,
+    this.tone,
+    this.creativeIntention,
+    this.stagingApproach,
+    this.pointOfView,
+    this.directionNarrativeIntent,
+    this.depthOfFieldNotes,
     this.lightingPhilosophy,
     this.lightQuality,
     this.contrastStyle,
@@ -11323,6 +15049,35 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
     this.workingLutName,
     this.creativeLutName,
     this.creativeLutDescription,
+    this.primaryCameraId,
+    this.recordingFormat,
+    this.codec,
+    this.resolutionNotes,
+    this.frameRateNotes,
+    this.nativeIso,
+    this.defaultTStop,
+    this.ndNotes,
+    this.deliveryColorSpace,
+    this.captureResolution,
+    this.deliveryResolution,
+    this.workflowPipeline,
+    this.diffusionNotes,
+    this.sensorShadowBehavior,
+    this.colorScienceNotes,
+    this.lowLightNotes,
+    this.opticCharacterNotes,
+    this.filtrationNotes,
+    this.cameraMovementsJson,
+    this.actVisualNotes,
+    this.cameraNarrativeIntent,
+    this.opticsNarrativeIntent,
+    this.exposureNarrativeIntent,
+    this.lightingNarrativeIntent,
+    this.colorNarrativeIntent,
+    this.formatNarrativeIntent,
+    this.textureNarrativeIntent,
+    this.conceptNarrativeIntent,
+    this.opticsConfigJson,
     required this.updatedAt,
   });
   @override
@@ -11335,6 +15090,26 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
     }
     if (!nullToAbsent || narrativeReferences != null) {
       map['narrative_references'] = Variable<String>(narrativeReferences);
+    }
+    if (!nullToAbsent || tone != null) {
+      map['tone'] = Variable<String>(tone);
+    }
+    if (!nullToAbsent || creativeIntention != null) {
+      map['creative_intention'] = Variable<String>(creativeIntention);
+    }
+    if (!nullToAbsent || stagingApproach != null) {
+      map['staging_approach'] = Variable<String>(stagingApproach);
+    }
+    if (!nullToAbsent || pointOfView != null) {
+      map['point_of_view'] = Variable<String>(pointOfView);
+    }
+    if (!nullToAbsent || directionNarrativeIntent != null) {
+      map['direction_narrative_intent'] = Variable<String>(
+        directionNarrativeIntent,
+      );
+    }
+    if (!nullToAbsent || depthOfFieldNotes != null) {
+      map['depth_of_field_notes'] = Variable<String>(depthOfFieldNotes);
     }
     if (!nullToAbsent || lightingPhilosophy != null) {
       map['lighting_philosophy'] = Variable<String>(lightingPhilosophy);
@@ -11406,6 +15181,101 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
         creativeLutDescription,
       );
     }
+    if (!nullToAbsent || primaryCameraId != null) {
+      map['primary_camera_id'] = Variable<int>(primaryCameraId);
+    }
+    if (!nullToAbsent || recordingFormat != null) {
+      map['recording_format'] = Variable<String>(recordingFormat);
+    }
+    if (!nullToAbsent || codec != null) {
+      map['codec'] = Variable<String>(codec);
+    }
+    if (!nullToAbsent || resolutionNotes != null) {
+      map['resolution_notes'] = Variable<String>(resolutionNotes);
+    }
+    if (!nullToAbsent || frameRateNotes != null) {
+      map['frame_rate_notes'] = Variable<String>(frameRateNotes);
+    }
+    if (!nullToAbsent || nativeIso != null) {
+      map['native_iso'] = Variable<int>(nativeIso);
+    }
+    if (!nullToAbsent || defaultTStop != null) {
+      map['default_t_stop'] = Variable<String>(defaultTStop);
+    }
+    if (!nullToAbsent || ndNotes != null) {
+      map['nd_notes'] = Variable<String>(ndNotes);
+    }
+    if (!nullToAbsent || deliveryColorSpace != null) {
+      map['delivery_color_space'] = Variable<String>(deliveryColorSpace);
+    }
+    if (!nullToAbsent || captureResolution != null) {
+      map['capture_resolution'] = Variable<String>(captureResolution);
+    }
+    if (!nullToAbsent || deliveryResolution != null) {
+      map['delivery_resolution'] = Variable<String>(deliveryResolution);
+    }
+    if (!nullToAbsent || workflowPipeline != null) {
+      map['workflow_pipeline'] = Variable<String>(workflowPipeline);
+    }
+    if (!nullToAbsent || diffusionNotes != null) {
+      map['diffusion_notes'] = Variable<String>(diffusionNotes);
+    }
+    if (!nullToAbsent || sensorShadowBehavior != null) {
+      map['sensor_shadow_behavior'] = Variable<String>(sensorShadowBehavior);
+    }
+    if (!nullToAbsent || colorScienceNotes != null) {
+      map['color_science_notes'] = Variable<String>(colorScienceNotes);
+    }
+    if (!nullToAbsent || lowLightNotes != null) {
+      map['low_light_notes'] = Variable<String>(lowLightNotes);
+    }
+    if (!nullToAbsent || opticCharacterNotes != null) {
+      map['optic_character_notes'] = Variable<String>(opticCharacterNotes);
+    }
+    if (!nullToAbsent || filtrationNotes != null) {
+      map['filtration_notes'] = Variable<String>(filtrationNotes);
+    }
+    if (!nullToAbsent || cameraMovementsJson != null) {
+      map['camera_movements_json'] = Variable<String>(cameraMovementsJson);
+    }
+    if (!nullToAbsent || actVisualNotes != null) {
+      map['act_visual_notes'] = Variable<String>(actVisualNotes);
+    }
+    if (!nullToAbsent || cameraNarrativeIntent != null) {
+      map['camera_narrative_intent'] = Variable<String>(cameraNarrativeIntent);
+    }
+    if (!nullToAbsent || opticsNarrativeIntent != null) {
+      map['optics_narrative_intent'] = Variable<String>(opticsNarrativeIntent);
+    }
+    if (!nullToAbsent || exposureNarrativeIntent != null) {
+      map['exposure_narrative_intent'] = Variable<String>(
+        exposureNarrativeIntent,
+      );
+    }
+    if (!nullToAbsent || lightingNarrativeIntent != null) {
+      map['lighting_narrative_intent'] = Variable<String>(
+        lightingNarrativeIntent,
+      );
+    }
+    if (!nullToAbsent || colorNarrativeIntent != null) {
+      map['color_narrative_intent'] = Variable<String>(colorNarrativeIntent);
+    }
+    if (!nullToAbsent || formatNarrativeIntent != null) {
+      map['format_narrative_intent'] = Variable<String>(formatNarrativeIntent);
+    }
+    if (!nullToAbsent || textureNarrativeIntent != null) {
+      map['texture_narrative_intent'] = Variable<String>(
+        textureNarrativeIntent,
+      );
+    }
+    if (!nullToAbsent || conceptNarrativeIntent != null) {
+      map['concept_narrative_intent'] = Variable<String>(
+        conceptNarrativeIntent,
+      );
+    }
+    if (!nullToAbsent || opticsConfigJson != null) {
+      map['optics_config_json'] = Variable<String>(opticsConfigJson);
+    }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
   }
@@ -11420,6 +15290,22 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
       narrativeReferences: narrativeReferences == null && nullToAbsent
           ? const Value.absent()
           : Value(narrativeReferences),
+      tone: tone == null && nullToAbsent ? const Value.absent() : Value(tone),
+      creativeIntention: creativeIntention == null && nullToAbsent
+          ? const Value.absent()
+          : Value(creativeIntention),
+      stagingApproach: stagingApproach == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stagingApproach),
+      pointOfView: pointOfView == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pointOfView),
+      directionNarrativeIntent: directionNarrativeIntent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(directionNarrativeIntent),
+      depthOfFieldNotes: depthOfFieldNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(depthOfFieldNotes),
       lightingPhilosophy: lightingPhilosophy == null && nullToAbsent
           ? const Value.absent()
           : Value(lightingPhilosophy),
@@ -11486,6 +15372,93 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
       creativeLutDescription: creativeLutDescription == null && nullToAbsent
           ? const Value.absent()
           : Value(creativeLutDescription),
+      primaryCameraId: primaryCameraId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(primaryCameraId),
+      recordingFormat: recordingFormat == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recordingFormat),
+      codec: codec == null && nullToAbsent
+          ? const Value.absent()
+          : Value(codec),
+      resolutionNotes: resolutionNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(resolutionNotes),
+      frameRateNotes: frameRateNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(frameRateNotes),
+      nativeIso: nativeIso == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nativeIso),
+      defaultTStop: defaultTStop == null && nullToAbsent
+          ? const Value.absent()
+          : Value(defaultTStop),
+      ndNotes: ndNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(ndNotes),
+      deliveryColorSpace: deliveryColorSpace == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deliveryColorSpace),
+      captureResolution: captureResolution == null && nullToAbsent
+          ? const Value.absent()
+          : Value(captureResolution),
+      deliveryResolution: deliveryResolution == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deliveryResolution),
+      workflowPipeline: workflowPipeline == null && nullToAbsent
+          ? const Value.absent()
+          : Value(workflowPipeline),
+      diffusionNotes: diffusionNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(diffusionNotes),
+      sensorShadowBehavior: sensorShadowBehavior == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sensorShadowBehavior),
+      colorScienceNotes: colorScienceNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(colorScienceNotes),
+      lowLightNotes: lowLightNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lowLightNotes),
+      opticCharacterNotes: opticCharacterNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(opticCharacterNotes),
+      filtrationNotes: filtrationNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(filtrationNotes),
+      cameraMovementsJson: cameraMovementsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cameraMovementsJson),
+      actVisualNotes: actVisualNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(actVisualNotes),
+      cameraNarrativeIntent: cameraNarrativeIntent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cameraNarrativeIntent),
+      opticsNarrativeIntent: opticsNarrativeIntent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(opticsNarrativeIntent),
+      exposureNarrativeIntent: exposureNarrativeIntent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(exposureNarrativeIntent),
+      lightingNarrativeIntent: lightingNarrativeIntent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lightingNarrativeIntent),
+      colorNarrativeIntent: colorNarrativeIntent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(colorNarrativeIntent),
+      formatNarrativeIntent: formatNarrativeIntent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(formatNarrativeIntent),
+      textureNarrativeIntent: textureNarrativeIntent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(textureNarrativeIntent),
+      conceptNarrativeIntent: conceptNarrativeIntent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(conceptNarrativeIntent),
+      opticsConfigJson: opticsConfigJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(opticsConfigJson),
       updatedAt: Value(updatedAt),
     );
   }
@@ -11501,6 +15474,18 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
       visualConcept: serializer.fromJson<String?>(json['visualConcept']),
       narrativeReferences: serializer.fromJson<String?>(
         json['narrativeReferences'],
+      ),
+      tone: serializer.fromJson<String?>(json['tone']),
+      creativeIntention: serializer.fromJson<String?>(
+        json['creativeIntention'],
+      ),
+      stagingApproach: serializer.fromJson<String?>(json['stagingApproach']),
+      pointOfView: serializer.fromJson<String?>(json['pointOfView']),
+      directionNarrativeIntent: serializer.fromJson<String?>(
+        json['directionNarrativeIntent'],
+      ),
+      depthOfFieldNotes: serializer.fromJson<String?>(
+        json['depthOfFieldNotes'],
       ),
       lightingPhilosophy: serializer.fromJson<String?>(
         json['lightingPhilosophy'],
@@ -11538,6 +15523,65 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
       creativeLutDescription: serializer.fromJson<String?>(
         json['creativeLutDescription'],
       ),
+      primaryCameraId: serializer.fromJson<int?>(json['primaryCameraId']),
+      recordingFormat: serializer.fromJson<String?>(json['recordingFormat']),
+      codec: serializer.fromJson<String?>(json['codec']),
+      resolutionNotes: serializer.fromJson<String?>(json['resolutionNotes']),
+      frameRateNotes: serializer.fromJson<String?>(json['frameRateNotes']),
+      nativeIso: serializer.fromJson<int?>(json['nativeIso']),
+      defaultTStop: serializer.fromJson<String?>(json['defaultTStop']),
+      ndNotes: serializer.fromJson<String?>(json['ndNotes']),
+      deliveryColorSpace: serializer.fromJson<String?>(
+        json['deliveryColorSpace'],
+      ),
+      captureResolution: serializer.fromJson<String?>(
+        json['captureResolution'],
+      ),
+      deliveryResolution: serializer.fromJson<String?>(
+        json['deliveryResolution'],
+      ),
+      workflowPipeline: serializer.fromJson<String?>(json['workflowPipeline']),
+      diffusionNotes: serializer.fromJson<String?>(json['diffusionNotes']),
+      sensorShadowBehavior: serializer.fromJson<String?>(
+        json['sensorShadowBehavior'],
+      ),
+      colorScienceNotes: serializer.fromJson<String?>(
+        json['colorScienceNotes'],
+      ),
+      lowLightNotes: serializer.fromJson<String?>(json['lowLightNotes']),
+      opticCharacterNotes: serializer.fromJson<String?>(
+        json['opticCharacterNotes'],
+      ),
+      filtrationNotes: serializer.fromJson<String?>(json['filtrationNotes']),
+      cameraMovementsJson: serializer.fromJson<String?>(
+        json['cameraMovementsJson'],
+      ),
+      actVisualNotes: serializer.fromJson<String?>(json['actVisualNotes']),
+      cameraNarrativeIntent: serializer.fromJson<String?>(
+        json['cameraNarrativeIntent'],
+      ),
+      opticsNarrativeIntent: serializer.fromJson<String?>(
+        json['opticsNarrativeIntent'],
+      ),
+      exposureNarrativeIntent: serializer.fromJson<String?>(
+        json['exposureNarrativeIntent'],
+      ),
+      lightingNarrativeIntent: serializer.fromJson<String?>(
+        json['lightingNarrativeIntent'],
+      ),
+      colorNarrativeIntent: serializer.fromJson<String?>(
+        json['colorNarrativeIntent'],
+      ),
+      formatNarrativeIntent: serializer.fromJson<String?>(
+        json['formatNarrativeIntent'],
+      ),
+      textureNarrativeIntent: serializer.fromJson<String?>(
+        json['textureNarrativeIntent'],
+      ),
+      conceptNarrativeIntent: serializer.fromJson<String?>(
+        json['conceptNarrativeIntent'],
+      ),
+      opticsConfigJson: serializer.fromJson<String?>(json['opticsConfigJson']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
   }
@@ -11549,6 +15593,14 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
       'projectId': serializer.toJson<int>(projectId),
       'visualConcept': serializer.toJson<String?>(visualConcept),
       'narrativeReferences': serializer.toJson<String?>(narrativeReferences),
+      'tone': serializer.toJson<String?>(tone),
+      'creativeIntention': serializer.toJson<String?>(creativeIntention),
+      'stagingApproach': serializer.toJson<String?>(stagingApproach),
+      'pointOfView': serializer.toJson<String?>(pointOfView),
+      'directionNarrativeIntent': serializer.toJson<String?>(
+        directionNarrativeIntent,
+      ),
+      'depthOfFieldNotes': serializer.toJson<String?>(depthOfFieldNotes),
       'lightingPhilosophy': serializer.toJson<String?>(lightingPhilosophy),
       'lightQuality': serializer.toJson<String?>(lightQuality),
       'contrastStyle': serializer.toJson<String?>(contrastStyle),
@@ -11575,6 +15627,49 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
       'creativeLutDescription': serializer.toJson<String?>(
         creativeLutDescription,
       ),
+      'primaryCameraId': serializer.toJson<int?>(primaryCameraId),
+      'recordingFormat': serializer.toJson<String?>(recordingFormat),
+      'codec': serializer.toJson<String?>(codec),
+      'resolutionNotes': serializer.toJson<String?>(resolutionNotes),
+      'frameRateNotes': serializer.toJson<String?>(frameRateNotes),
+      'nativeIso': serializer.toJson<int?>(nativeIso),
+      'defaultTStop': serializer.toJson<String?>(defaultTStop),
+      'ndNotes': serializer.toJson<String?>(ndNotes),
+      'deliveryColorSpace': serializer.toJson<String?>(deliveryColorSpace),
+      'captureResolution': serializer.toJson<String?>(captureResolution),
+      'deliveryResolution': serializer.toJson<String?>(deliveryResolution),
+      'workflowPipeline': serializer.toJson<String?>(workflowPipeline),
+      'diffusionNotes': serializer.toJson<String?>(diffusionNotes),
+      'sensorShadowBehavior': serializer.toJson<String?>(sensorShadowBehavior),
+      'colorScienceNotes': serializer.toJson<String?>(colorScienceNotes),
+      'lowLightNotes': serializer.toJson<String?>(lowLightNotes),
+      'opticCharacterNotes': serializer.toJson<String?>(opticCharacterNotes),
+      'filtrationNotes': serializer.toJson<String?>(filtrationNotes),
+      'cameraMovementsJson': serializer.toJson<String?>(cameraMovementsJson),
+      'actVisualNotes': serializer.toJson<String?>(actVisualNotes),
+      'cameraNarrativeIntent': serializer.toJson<String?>(
+        cameraNarrativeIntent,
+      ),
+      'opticsNarrativeIntent': serializer.toJson<String?>(
+        opticsNarrativeIntent,
+      ),
+      'exposureNarrativeIntent': serializer.toJson<String?>(
+        exposureNarrativeIntent,
+      ),
+      'lightingNarrativeIntent': serializer.toJson<String?>(
+        lightingNarrativeIntent,
+      ),
+      'colorNarrativeIntent': serializer.toJson<String?>(colorNarrativeIntent),
+      'formatNarrativeIntent': serializer.toJson<String?>(
+        formatNarrativeIntent,
+      ),
+      'textureNarrativeIntent': serializer.toJson<String?>(
+        textureNarrativeIntent,
+      ),
+      'conceptNarrativeIntent': serializer.toJson<String?>(
+        conceptNarrativeIntent,
+      ),
+      'opticsConfigJson': serializer.toJson<String?>(opticsConfigJson),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
   }
@@ -11584,6 +15679,12 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
     int? projectId,
     Value<String?> visualConcept = const Value.absent(),
     Value<String?> narrativeReferences = const Value.absent(),
+    Value<String?> tone = const Value.absent(),
+    Value<String?> creativeIntention = const Value.absent(),
+    Value<String?> stagingApproach = const Value.absent(),
+    Value<String?> pointOfView = const Value.absent(),
+    Value<String?> directionNarrativeIntent = const Value.absent(),
+    Value<String?> depthOfFieldNotes = const Value.absent(),
     Value<String?> lightingPhilosophy = const Value.absent(),
     Value<String?> lightQuality = const Value.absent(),
     Value<String?> contrastStyle = const Value.absent(),
@@ -11606,6 +15707,35 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
     Value<String?> workingLutName = const Value.absent(),
     Value<String?> creativeLutName = const Value.absent(),
     Value<String?> creativeLutDescription = const Value.absent(),
+    Value<int?> primaryCameraId = const Value.absent(),
+    Value<String?> recordingFormat = const Value.absent(),
+    Value<String?> codec = const Value.absent(),
+    Value<String?> resolutionNotes = const Value.absent(),
+    Value<String?> frameRateNotes = const Value.absent(),
+    Value<int?> nativeIso = const Value.absent(),
+    Value<String?> defaultTStop = const Value.absent(),
+    Value<String?> ndNotes = const Value.absent(),
+    Value<String?> deliveryColorSpace = const Value.absent(),
+    Value<String?> captureResolution = const Value.absent(),
+    Value<String?> deliveryResolution = const Value.absent(),
+    Value<String?> workflowPipeline = const Value.absent(),
+    Value<String?> diffusionNotes = const Value.absent(),
+    Value<String?> sensorShadowBehavior = const Value.absent(),
+    Value<String?> colorScienceNotes = const Value.absent(),
+    Value<String?> lowLightNotes = const Value.absent(),
+    Value<String?> opticCharacterNotes = const Value.absent(),
+    Value<String?> filtrationNotes = const Value.absent(),
+    Value<String?> cameraMovementsJson = const Value.absent(),
+    Value<String?> actVisualNotes = const Value.absent(),
+    Value<String?> cameraNarrativeIntent = const Value.absent(),
+    Value<String?> opticsNarrativeIntent = const Value.absent(),
+    Value<String?> exposureNarrativeIntent = const Value.absent(),
+    Value<String?> lightingNarrativeIntent = const Value.absent(),
+    Value<String?> colorNarrativeIntent = const Value.absent(),
+    Value<String?> formatNarrativeIntent = const Value.absent(),
+    Value<String?> textureNarrativeIntent = const Value.absent(),
+    Value<String?> conceptNarrativeIntent = const Value.absent(),
+    Value<String?> opticsConfigJson = const Value.absent(),
     DateTime? updatedAt,
   }) => VisualBible(
     id: id ?? this.id,
@@ -11616,6 +15746,20 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
     narrativeReferences: narrativeReferences.present
         ? narrativeReferences.value
         : this.narrativeReferences,
+    tone: tone.present ? tone.value : this.tone,
+    creativeIntention: creativeIntention.present
+        ? creativeIntention.value
+        : this.creativeIntention,
+    stagingApproach: stagingApproach.present
+        ? stagingApproach.value
+        : this.stagingApproach,
+    pointOfView: pointOfView.present ? pointOfView.value : this.pointOfView,
+    directionNarrativeIntent: directionNarrativeIntent.present
+        ? directionNarrativeIntent.value
+        : this.directionNarrativeIntent,
+    depthOfFieldNotes: depthOfFieldNotes.present
+        ? depthOfFieldNotes.value
+        : this.depthOfFieldNotes,
     lightingPhilosophy: lightingPhilosophy.present
         ? lightingPhilosophy.value
         : this.lightingPhilosophy,
@@ -11670,6 +15814,85 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
     creativeLutDescription: creativeLutDescription.present
         ? creativeLutDescription.value
         : this.creativeLutDescription,
+    primaryCameraId: primaryCameraId.present
+        ? primaryCameraId.value
+        : this.primaryCameraId,
+    recordingFormat: recordingFormat.present
+        ? recordingFormat.value
+        : this.recordingFormat,
+    codec: codec.present ? codec.value : this.codec,
+    resolutionNotes: resolutionNotes.present
+        ? resolutionNotes.value
+        : this.resolutionNotes,
+    frameRateNotes: frameRateNotes.present
+        ? frameRateNotes.value
+        : this.frameRateNotes,
+    nativeIso: nativeIso.present ? nativeIso.value : this.nativeIso,
+    defaultTStop: defaultTStop.present ? defaultTStop.value : this.defaultTStop,
+    ndNotes: ndNotes.present ? ndNotes.value : this.ndNotes,
+    deliveryColorSpace: deliveryColorSpace.present
+        ? deliveryColorSpace.value
+        : this.deliveryColorSpace,
+    captureResolution: captureResolution.present
+        ? captureResolution.value
+        : this.captureResolution,
+    deliveryResolution: deliveryResolution.present
+        ? deliveryResolution.value
+        : this.deliveryResolution,
+    workflowPipeline: workflowPipeline.present
+        ? workflowPipeline.value
+        : this.workflowPipeline,
+    diffusionNotes: diffusionNotes.present
+        ? diffusionNotes.value
+        : this.diffusionNotes,
+    sensorShadowBehavior: sensorShadowBehavior.present
+        ? sensorShadowBehavior.value
+        : this.sensorShadowBehavior,
+    colorScienceNotes: colorScienceNotes.present
+        ? colorScienceNotes.value
+        : this.colorScienceNotes,
+    lowLightNotes: lowLightNotes.present
+        ? lowLightNotes.value
+        : this.lowLightNotes,
+    opticCharacterNotes: opticCharacterNotes.present
+        ? opticCharacterNotes.value
+        : this.opticCharacterNotes,
+    filtrationNotes: filtrationNotes.present
+        ? filtrationNotes.value
+        : this.filtrationNotes,
+    cameraMovementsJson: cameraMovementsJson.present
+        ? cameraMovementsJson.value
+        : this.cameraMovementsJson,
+    actVisualNotes: actVisualNotes.present
+        ? actVisualNotes.value
+        : this.actVisualNotes,
+    cameraNarrativeIntent: cameraNarrativeIntent.present
+        ? cameraNarrativeIntent.value
+        : this.cameraNarrativeIntent,
+    opticsNarrativeIntent: opticsNarrativeIntent.present
+        ? opticsNarrativeIntent.value
+        : this.opticsNarrativeIntent,
+    exposureNarrativeIntent: exposureNarrativeIntent.present
+        ? exposureNarrativeIntent.value
+        : this.exposureNarrativeIntent,
+    lightingNarrativeIntent: lightingNarrativeIntent.present
+        ? lightingNarrativeIntent.value
+        : this.lightingNarrativeIntent,
+    colorNarrativeIntent: colorNarrativeIntent.present
+        ? colorNarrativeIntent.value
+        : this.colorNarrativeIntent,
+    formatNarrativeIntent: formatNarrativeIntent.present
+        ? formatNarrativeIntent.value
+        : this.formatNarrativeIntent,
+    textureNarrativeIntent: textureNarrativeIntent.present
+        ? textureNarrativeIntent.value
+        : this.textureNarrativeIntent,
+    conceptNarrativeIntent: conceptNarrativeIntent.present
+        ? conceptNarrativeIntent.value
+        : this.conceptNarrativeIntent,
+    opticsConfigJson: opticsConfigJson.present
+        ? opticsConfigJson.value
+        : this.opticsConfigJson,
     updatedAt: updatedAt ?? this.updatedAt,
   );
   VisualBible copyWithCompanion(VisualBiblesCompanion data) {
@@ -11682,6 +15905,22 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
       narrativeReferences: data.narrativeReferences.present
           ? data.narrativeReferences.value
           : this.narrativeReferences,
+      tone: data.tone.present ? data.tone.value : this.tone,
+      creativeIntention: data.creativeIntention.present
+          ? data.creativeIntention.value
+          : this.creativeIntention,
+      stagingApproach: data.stagingApproach.present
+          ? data.stagingApproach.value
+          : this.stagingApproach,
+      pointOfView: data.pointOfView.present
+          ? data.pointOfView.value
+          : this.pointOfView,
+      directionNarrativeIntent: data.directionNarrativeIntent.present
+          ? data.directionNarrativeIntent.value
+          : this.directionNarrativeIntent,
+      depthOfFieldNotes: data.depthOfFieldNotes.present
+          ? data.depthOfFieldNotes.value
+          : this.depthOfFieldNotes,
       lightingPhilosophy: data.lightingPhilosophy.present
           ? data.lightingPhilosophy.value
           : this.lightingPhilosophy,
@@ -11746,6 +15985,87 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
       creativeLutDescription: data.creativeLutDescription.present
           ? data.creativeLutDescription.value
           : this.creativeLutDescription,
+      primaryCameraId: data.primaryCameraId.present
+          ? data.primaryCameraId.value
+          : this.primaryCameraId,
+      recordingFormat: data.recordingFormat.present
+          ? data.recordingFormat.value
+          : this.recordingFormat,
+      codec: data.codec.present ? data.codec.value : this.codec,
+      resolutionNotes: data.resolutionNotes.present
+          ? data.resolutionNotes.value
+          : this.resolutionNotes,
+      frameRateNotes: data.frameRateNotes.present
+          ? data.frameRateNotes.value
+          : this.frameRateNotes,
+      nativeIso: data.nativeIso.present ? data.nativeIso.value : this.nativeIso,
+      defaultTStop: data.defaultTStop.present
+          ? data.defaultTStop.value
+          : this.defaultTStop,
+      ndNotes: data.ndNotes.present ? data.ndNotes.value : this.ndNotes,
+      deliveryColorSpace: data.deliveryColorSpace.present
+          ? data.deliveryColorSpace.value
+          : this.deliveryColorSpace,
+      captureResolution: data.captureResolution.present
+          ? data.captureResolution.value
+          : this.captureResolution,
+      deliveryResolution: data.deliveryResolution.present
+          ? data.deliveryResolution.value
+          : this.deliveryResolution,
+      workflowPipeline: data.workflowPipeline.present
+          ? data.workflowPipeline.value
+          : this.workflowPipeline,
+      diffusionNotes: data.diffusionNotes.present
+          ? data.diffusionNotes.value
+          : this.diffusionNotes,
+      sensorShadowBehavior: data.sensorShadowBehavior.present
+          ? data.sensorShadowBehavior.value
+          : this.sensorShadowBehavior,
+      colorScienceNotes: data.colorScienceNotes.present
+          ? data.colorScienceNotes.value
+          : this.colorScienceNotes,
+      lowLightNotes: data.lowLightNotes.present
+          ? data.lowLightNotes.value
+          : this.lowLightNotes,
+      opticCharacterNotes: data.opticCharacterNotes.present
+          ? data.opticCharacterNotes.value
+          : this.opticCharacterNotes,
+      filtrationNotes: data.filtrationNotes.present
+          ? data.filtrationNotes.value
+          : this.filtrationNotes,
+      cameraMovementsJson: data.cameraMovementsJson.present
+          ? data.cameraMovementsJson.value
+          : this.cameraMovementsJson,
+      actVisualNotes: data.actVisualNotes.present
+          ? data.actVisualNotes.value
+          : this.actVisualNotes,
+      cameraNarrativeIntent: data.cameraNarrativeIntent.present
+          ? data.cameraNarrativeIntent.value
+          : this.cameraNarrativeIntent,
+      opticsNarrativeIntent: data.opticsNarrativeIntent.present
+          ? data.opticsNarrativeIntent.value
+          : this.opticsNarrativeIntent,
+      exposureNarrativeIntent: data.exposureNarrativeIntent.present
+          ? data.exposureNarrativeIntent.value
+          : this.exposureNarrativeIntent,
+      lightingNarrativeIntent: data.lightingNarrativeIntent.present
+          ? data.lightingNarrativeIntent.value
+          : this.lightingNarrativeIntent,
+      colorNarrativeIntent: data.colorNarrativeIntent.present
+          ? data.colorNarrativeIntent.value
+          : this.colorNarrativeIntent,
+      formatNarrativeIntent: data.formatNarrativeIntent.present
+          ? data.formatNarrativeIntent.value
+          : this.formatNarrativeIntent,
+      textureNarrativeIntent: data.textureNarrativeIntent.present
+          ? data.textureNarrativeIntent.value
+          : this.textureNarrativeIntent,
+      conceptNarrativeIntent: data.conceptNarrativeIntent.present
+          ? data.conceptNarrativeIntent.value
+          : this.conceptNarrativeIntent,
+      opticsConfigJson: data.opticsConfigJson.present
+          ? data.opticsConfigJson.value
+          : this.opticsConfigJson,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
@@ -11757,6 +16077,12 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
           ..write('projectId: $projectId, ')
           ..write('visualConcept: $visualConcept, ')
           ..write('narrativeReferences: $narrativeReferences, ')
+          ..write('tone: $tone, ')
+          ..write('creativeIntention: $creativeIntention, ')
+          ..write('stagingApproach: $stagingApproach, ')
+          ..write('pointOfView: $pointOfView, ')
+          ..write('directionNarrativeIntent: $directionNarrativeIntent, ')
+          ..write('depthOfFieldNotes: $depthOfFieldNotes, ')
           ..write('lightingPhilosophy: $lightingPhilosophy, ')
           ..write('lightQuality: $lightQuality, ')
           ..write('contrastStyle: $contrastStyle, ')
@@ -11779,6 +16105,35 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
           ..write('workingLutName: $workingLutName, ')
           ..write('creativeLutName: $creativeLutName, ')
           ..write('creativeLutDescription: $creativeLutDescription, ')
+          ..write('primaryCameraId: $primaryCameraId, ')
+          ..write('recordingFormat: $recordingFormat, ')
+          ..write('codec: $codec, ')
+          ..write('resolutionNotes: $resolutionNotes, ')
+          ..write('frameRateNotes: $frameRateNotes, ')
+          ..write('nativeIso: $nativeIso, ')
+          ..write('defaultTStop: $defaultTStop, ')
+          ..write('ndNotes: $ndNotes, ')
+          ..write('deliveryColorSpace: $deliveryColorSpace, ')
+          ..write('captureResolution: $captureResolution, ')
+          ..write('deliveryResolution: $deliveryResolution, ')
+          ..write('workflowPipeline: $workflowPipeline, ')
+          ..write('diffusionNotes: $diffusionNotes, ')
+          ..write('sensorShadowBehavior: $sensorShadowBehavior, ')
+          ..write('colorScienceNotes: $colorScienceNotes, ')
+          ..write('lowLightNotes: $lowLightNotes, ')
+          ..write('opticCharacterNotes: $opticCharacterNotes, ')
+          ..write('filtrationNotes: $filtrationNotes, ')
+          ..write('cameraMovementsJson: $cameraMovementsJson, ')
+          ..write('actVisualNotes: $actVisualNotes, ')
+          ..write('cameraNarrativeIntent: $cameraNarrativeIntent, ')
+          ..write('opticsNarrativeIntent: $opticsNarrativeIntent, ')
+          ..write('exposureNarrativeIntent: $exposureNarrativeIntent, ')
+          ..write('lightingNarrativeIntent: $lightingNarrativeIntent, ')
+          ..write('colorNarrativeIntent: $colorNarrativeIntent, ')
+          ..write('formatNarrativeIntent: $formatNarrativeIntent, ')
+          ..write('textureNarrativeIntent: $textureNarrativeIntent, ')
+          ..write('conceptNarrativeIntent: $conceptNarrativeIntent, ')
+          ..write('opticsConfigJson: $opticsConfigJson, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
@@ -11790,6 +16145,12 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
     projectId,
     visualConcept,
     narrativeReferences,
+    tone,
+    creativeIntention,
+    stagingApproach,
+    pointOfView,
+    directionNarrativeIntent,
+    depthOfFieldNotes,
     lightingPhilosophy,
     lightQuality,
     contrastStyle,
@@ -11812,6 +16173,35 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
     workingLutName,
     creativeLutName,
     creativeLutDescription,
+    primaryCameraId,
+    recordingFormat,
+    codec,
+    resolutionNotes,
+    frameRateNotes,
+    nativeIso,
+    defaultTStop,
+    ndNotes,
+    deliveryColorSpace,
+    captureResolution,
+    deliveryResolution,
+    workflowPipeline,
+    diffusionNotes,
+    sensorShadowBehavior,
+    colorScienceNotes,
+    lowLightNotes,
+    opticCharacterNotes,
+    filtrationNotes,
+    cameraMovementsJson,
+    actVisualNotes,
+    cameraNarrativeIntent,
+    opticsNarrativeIntent,
+    exposureNarrativeIntent,
+    lightingNarrativeIntent,
+    colorNarrativeIntent,
+    formatNarrativeIntent,
+    textureNarrativeIntent,
+    conceptNarrativeIntent,
+    opticsConfigJson,
     updatedAt,
   ]);
   @override
@@ -11822,6 +16212,12 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
           other.projectId == this.projectId &&
           other.visualConcept == this.visualConcept &&
           other.narrativeReferences == this.narrativeReferences &&
+          other.tone == this.tone &&
+          other.creativeIntention == this.creativeIntention &&
+          other.stagingApproach == this.stagingApproach &&
+          other.pointOfView == this.pointOfView &&
+          other.directionNarrativeIntent == this.directionNarrativeIntent &&
+          other.depthOfFieldNotes == this.depthOfFieldNotes &&
           other.lightingPhilosophy == this.lightingPhilosophy &&
           other.lightQuality == this.lightQuality &&
           other.contrastStyle == this.contrastStyle &&
@@ -11844,6 +16240,35 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
           other.workingLutName == this.workingLutName &&
           other.creativeLutName == this.creativeLutName &&
           other.creativeLutDescription == this.creativeLutDescription &&
+          other.primaryCameraId == this.primaryCameraId &&
+          other.recordingFormat == this.recordingFormat &&
+          other.codec == this.codec &&
+          other.resolutionNotes == this.resolutionNotes &&
+          other.frameRateNotes == this.frameRateNotes &&
+          other.nativeIso == this.nativeIso &&
+          other.defaultTStop == this.defaultTStop &&
+          other.ndNotes == this.ndNotes &&
+          other.deliveryColorSpace == this.deliveryColorSpace &&
+          other.captureResolution == this.captureResolution &&
+          other.deliveryResolution == this.deliveryResolution &&
+          other.workflowPipeline == this.workflowPipeline &&
+          other.diffusionNotes == this.diffusionNotes &&
+          other.sensorShadowBehavior == this.sensorShadowBehavior &&
+          other.colorScienceNotes == this.colorScienceNotes &&
+          other.lowLightNotes == this.lowLightNotes &&
+          other.opticCharacterNotes == this.opticCharacterNotes &&
+          other.filtrationNotes == this.filtrationNotes &&
+          other.cameraMovementsJson == this.cameraMovementsJson &&
+          other.actVisualNotes == this.actVisualNotes &&
+          other.cameraNarrativeIntent == this.cameraNarrativeIntent &&
+          other.opticsNarrativeIntent == this.opticsNarrativeIntent &&
+          other.exposureNarrativeIntent == this.exposureNarrativeIntent &&
+          other.lightingNarrativeIntent == this.lightingNarrativeIntent &&
+          other.colorNarrativeIntent == this.colorNarrativeIntent &&
+          other.formatNarrativeIntent == this.formatNarrativeIntent &&
+          other.textureNarrativeIntent == this.textureNarrativeIntent &&
+          other.conceptNarrativeIntent == this.conceptNarrativeIntent &&
+          other.opticsConfigJson == this.opticsConfigJson &&
           other.updatedAt == this.updatedAt);
 }
 
@@ -11852,6 +16277,12 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
   final Value<int> projectId;
   final Value<String?> visualConcept;
   final Value<String?> narrativeReferences;
+  final Value<String?> tone;
+  final Value<String?> creativeIntention;
+  final Value<String?> stagingApproach;
+  final Value<String?> pointOfView;
+  final Value<String?> directionNarrativeIntent;
+  final Value<String?> depthOfFieldNotes;
   final Value<String?> lightingPhilosophy;
   final Value<String?> lightQuality;
   final Value<String?> contrastStyle;
@@ -11874,12 +16305,47 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
   final Value<String?> workingLutName;
   final Value<String?> creativeLutName;
   final Value<String?> creativeLutDescription;
+  final Value<int?> primaryCameraId;
+  final Value<String?> recordingFormat;
+  final Value<String?> codec;
+  final Value<String?> resolutionNotes;
+  final Value<String?> frameRateNotes;
+  final Value<int?> nativeIso;
+  final Value<String?> defaultTStop;
+  final Value<String?> ndNotes;
+  final Value<String?> deliveryColorSpace;
+  final Value<String?> captureResolution;
+  final Value<String?> deliveryResolution;
+  final Value<String?> workflowPipeline;
+  final Value<String?> diffusionNotes;
+  final Value<String?> sensorShadowBehavior;
+  final Value<String?> colorScienceNotes;
+  final Value<String?> lowLightNotes;
+  final Value<String?> opticCharacterNotes;
+  final Value<String?> filtrationNotes;
+  final Value<String?> cameraMovementsJson;
+  final Value<String?> actVisualNotes;
+  final Value<String?> cameraNarrativeIntent;
+  final Value<String?> opticsNarrativeIntent;
+  final Value<String?> exposureNarrativeIntent;
+  final Value<String?> lightingNarrativeIntent;
+  final Value<String?> colorNarrativeIntent;
+  final Value<String?> formatNarrativeIntent;
+  final Value<String?> textureNarrativeIntent;
+  final Value<String?> conceptNarrativeIntent;
+  final Value<String?> opticsConfigJson;
   final Value<DateTime> updatedAt;
   const VisualBiblesCompanion({
     this.id = const Value.absent(),
     this.projectId = const Value.absent(),
     this.visualConcept = const Value.absent(),
     this.narrativeReferences = const Value.absent(),
+    this.tone = const Value.absent(),
+    this.creativeIntention = const Value.absent(),
+    this.stagingApproach = const Value.absent(),
+    this.pointOfView = const Value.absent(),
+    this.directionNarrativeIntent = const Value.absent(),
+    this.depthOfFieldNotes = const Value.absent(),
     this.lightingPhilosophy = const Value.absent(),
     this.lightQuality = const Value.absent(),
     this.contrastStyle = const Value.absent(),
@@ -11902,6 +16368,35 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
     this.workingLutName = const Value.absent(),
     this.creativeLutName = const Value.absent(),
     this.creativeLutDescription = const Value.absent(),
+    this.primaryCameraId = const Value.absent(),
+    this.recordingFormat = const Value.absent(),
+    this.codec = const Value.absent(),
+    this.resolutionNotes = const Value.absent(),
+    this.frameRateNotes = const Value.absent(),
+    this.nativeIso = const Value.absent(),
+    this.defaultTStop = const Value.absent(),
+    this.ndNotes = const Value.absent(),
+    this.deliveryColorSpace = const Value.absent(),
+    this.captureResolution = const Value.absent(),
+    this.deliveryResolution = const Value.absent(),
+    this.workflowPipeline = const Value.absent(),
+    this.diffusionNotes = const Value.absent(),
+    this.sensorShadowBehavior = const Value.absent(),
+    this.colorScienceNotes = const Value.absent(),
+    this.lowLightNotes = const Value.absent(),
+    this.opticCharacterNotes = const Value.absent(),
+    this.filtrationNotes = const Value.absent(),
+    this.cameraMovementsJson = const Value.absent(),
+    this.actVisualNotes = const Value.absent(),
+    this.cameraNarrativeIntent = const Value.absent(),
+    this.opticsNarrativeIntent = const Value.absent(),
+    this.exposureNarrativeIntent = const Value.absent(),
+    this.lightingNarrativeIntent = const Value.absent(),
+    this.colorNarrativeIntent = const Value.absent(),
+    this.formatNarrativeIntent = const Value.absent(),
+    this.textureNarrativeIntent = const Value.absent(),
+    this.conceptNarrativeIntent = const Value.absent(),
+    this.opticsConfigJson = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
   VisualBiblesCompanion.insert({
@@ -11909,6 +16404,12 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
     required int projectId,
     this.visualConcept = const Value.absent(),
     this.narrativeReferences = const Value.absent(),
+    this.tone = const Value.absent(),
+    this.creativeIntention = const Value.absent(),
+    this.stagingApproach = const Value.absent(),
+    this.pointOfView = const Value.absent(),
+    this.directionNarrativeIntent = const Value.absent(),
+    this.depthOfFieldNotes = const Value.absent(),
     this.lightingPhilosophy = const Value.absent(),
     this.lightQuality = const Value.absent(),
     this.contrastStyle = const Value.absent(),
@@ -11931,6 +16432,35 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
     this.workingLutName = const Value.absent(),
     this.creativeLutName = const Value.absent(),
     this.creativeLutDescription = const Value.absent(),
+    this.primaryCameraId = const Value.absent(),
+    this.recordingFormat = const Value.absent(),
+    this.codec = const Value.absent(),
+    this.resolutionNotes = const Value.absent(),
+    this.frameRateNotes = const Value.absent(),
+    this.nativeIso = const Value.absent(),
+    this.defaultTStop = const Value.absent(),
+    this.ndNotes = const Value.absent(),
+    this.deliveryColorSpace = const Value.absent(),
+    this.captureResolution = const Value.absent(),
+    this.deliveryResolution = const Value.absent(),
+    this.workflowPipeline = const Value.absent(),
+    this.diffusionNotes = const Value.absent(),
+    this.sensorShadowBehavior = const Value.absent(),
+    this.colorScienceNotes = const Value.absent(),
+    this.lowLightNotes = const Value.absent(),
+    this.opticCharacterNotes = const Value.absent(),
+    this.filtrationNotes = const Value.absent(),
+    this.cameraMovementsJson = const Value.absent(),
+    this.actVisualNotes = const Value.absent(),
+    this.cameraNarrativeIntent = const Value.absent(),
+    this.opticsNarrativeIntent = const Value.absent(),
+    this.exposureNarrativeIntent = const Value.absent(),
+    this.lightingNarrativeIntent = const Value.absent(),
+    this.colorNarrativeIntent = const Value.absent(),
+    this.formatNarrativeIntent = const Value.absent(),
+    this.textureNarrativeIntent = const Value.absent(),
+    this.conceptNarrativeIntent = const Value.absent(),
+    this.opticsConfigJson = const Value.absent(),
     this.updatedAt = const Value.absent(),
   }) : projectId = Value(projectId);
   static Insertable<VisualBible> custom({
@@ -11938,6 +16468,12 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
     Expression<int>? projectId,
     Expression<String>? visualConcept,
     Expression<String>? narrativeReferences,
+    Expression<String>? tone,
+    Expression<String>? creativeIntention,
+    Expression<String>? stagingApproach,
+    Expression<String>? pointOfView,
+    Expression<String>? directionNarrativeIntent,
+    Expression<String>? depthOfFieldNotes,
     Expression<String>? lightingPhilosophy,
     Expression<String>? lightQuality,
     Expression<String>? contrastStyle,
@@ -11960,6 +16496,35 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
     Expression<String>? workingLutName,
     Expression<String>? creativeLutName,
     Expression<String>? creativeLutDescription,
+    Expression<int>? primaryCameraId,
+    Expression<String>? recordingFormat,
+    Expression<String>? codec,
+    Expression<String>? resolutionNotes,
+    Expression<String>? frameRateNotes,
+    Expression<int>? nativeIso,
+    Expression<String>? defaultTStop,
+    Expression<String>? ndNotes,
+    Expression<String>? deliveryColorSpace,
+    Expression<String>? captureResolution,
+    Expression<String>? deliveryResolution,
+    Expression<String>? workflowPipeline,
+    Expression<String>? diffusionNotes,
+    Expression<String>? sensorShadowBehavior,
+    Expression<String>? colorScienceNotes,
+    Expression<String>? lowLightNotes,
+    Expression<String>? opticCharacterNotes,
+    Expression<String>? filtrationNotes,
+    Expression<String>? cameraMovementsJson,
+    Expression<String>? actVisualNotes,
+    Expression<String>? cameraNarrativeIntent,
+    Expression<String>? opticsNarrativeIntent,
+    Expression<String>? exposureNarrativeIntent,
+    Expression<String>? lightingNarrativeIntent,
+    Expression<String>? colorNarrativeIntent,
+    Expression<String>? formatNarrativeIntent,
+    Expression<String>? textureNarrativeIntent,
+    Expression<String>? conceptNarrativeIntent,
+    Expression<String>? opticsConfigJson,
     Expression<DateTime>? updatedAt,
   }) {
     return RawValuesInsertable({
@@ -11968,6 +16533,13 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
       if (visualConcept != null) 'visual_concept': visualConcept,
       if (narrativeReferences != null)
         'narrative_references': narrativeReferences,
+      if (tone != null) 'tone': tone,
+      if (creativeIntention != null) 'creative_intention': creativeIntention,
+      if (stagingApproach != null) 'staging_approach': stagingApproach,
+      if (pointOfView != null) 'point_of_view': pointOfView,
+      if (directionNarrativeIntent != null)
+        'direction_narrative_intent': directionNarrativeIntent,
+      if (depthOfFieldNotes != null) 'depth_of_field_notes': depthOfFieldNotes,
       if (lightingPhilosophy != null) 'lighting_philosophy': lightingPhilosophy,
       if (lightQuality != null) 'light_quality': lightQuality,
       if (contrastStyle != null) 'contrast_style': contrastStyle,
@@ -11993,6 +16565,47 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
       if (creativeLutName != null) 'creative_lut_name': creativeLutName,
       if (creativeLutDescription != null)
         'creative_lut_description': creativeLutDescription,
+      if (primaryCameraId != null) 'primary_camera_id': primaryCameraId,
+      if (recordingFormat != null) 'recording_format': recordingFormat,
+      if (codec != null) 'codec': codec,
+      if (resolutionNotes != null) 'resolution_notes': resolutionNotes,
+      if (frameRateNotes != null) 'frame_rate_notes': frameRateNotes,
+      if (nativeIso != null) 'native_iso': nativeIso,
+      if (defaultTStop != null) 'default_t_stop': defaultTStop,
+      if (ndNotes != null) 'nd_notes': ndNotes,
+      if (deliveryColorSpace != null)
+        'delivery_color_space': deliveryColorSpace,
+      if (captureResolution != null) 'capture_resolution': captureResolution,
+      if (deliveryResolution != null) 'delivery_resolution': deliveryResolution,
+      if (workflowPipeline != null) 'workflow_pipeline': workflowPipeline,
+      if (diffusionNotes != null) 'diffusion_notes': diffusionNotes,
+      if (sensorShadowBehavior != null)
+        'sensor_shadow_behavior': sensorShadowBehavior,
+      if (colorScienceNotes != null) 'color_science_notes': colorScienceNotes,
+      if (lowLightNotes != null) 'low_light_notes': lowLightNotes,
+      if (opticCharacterNotes != null)
+        'optic_character_notes': opticCharacterNotes,
+      if (filtrationNotes != null) 'filtration_notes': filtrationNotes,
+      if (cameraMovementsJson != null)
+        'camera_movements_json': cameraMovementsJson,
+      if (actVisualNotes != null) 'act_visual_notes': actVisualNotes,
+      if (cameraNarrativeIntent != null)
+        'camera_narrative_intent': cameraNarrativeIntent,
+      if (opticsNarrativeIntent != null)
+        'optics_narrative_intent': opticsNarrativeIntent,
+      if (exposureNarrativeIntent != null)
+        'exposure_narrative_intent': exposureNarrativeIntent,
+      if (lightingNarrativeIntent != null)
+        'lighting_narrative_intent': lightingNarrativeIntent,
+      if (colorNarrativeIntent != null)
+        'color_narrative_intent': colorNarrativeIntent,
+      if (formatNarrativeIntent != null)
+        'format_narrative_intent': formatNarrativeIntent,
+      if (textureNarrativeIntent != null)
+        'texture_narrative_intent': textureNarrativeIntent,
+      if (conceptNarrativeIntent != null)
+        'concept_narrative_intent': conceptNarrativeIntent,
+      if (opticsConfigJson != null) 'optics_config_json': opticsConfigJson,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
   }
@@ -12002,6 +16615,12 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
     Value<int>? projectId,
     Value<String?>? visualConcept,
     Value<String?>? narrativeReferences,
+    Value<String?>? tone,
+    Value<String?>? creativeIntention,
+    Value<String?>? stagingApproach,
+    Value<String?>? pointOfView,
+    Value<String?>? directionNarrativeIntent,
+    Value<String?>? depthOfFieldNotes,
     Value<String?>? lightingPhilosophy,
     Value<String?>? lightQuality,
     Value<String?>? contrastStyle,
@@ -12024,6 +16643,35 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
     Value<String?>? workingLutName,
     Value<String?>? creativeLutName,
     Value<String?>? creativeLutDescription,
+    Value<int?>? primaryCameraId,
+    Value<String?>? recordingFormat,
+    Value<String?>? codec,
+    Value<String?>? resolutionNotes,
+    Value<String?>? frameRateNotes,
+    Value<int?>? nativeIso,
+    Value<String?>? defaultTStop,
+    Value<String?>? ndNotes,
+    Value<String?>? deliveryColorSpace,
+    Value<String?>? captureResolution,
+    Value<String?>? deliveryResolution,
+    Value<String?>? workflowPipeline,
+    Value<String?>? diffusionNotes,
+    Value<String?>? sensorShadowBehavior,
+    Value<String?>? colorScienceNotes,
+    Value<String?>? lowLightNotes,
+    Value<String?>? opticCharacterNotes,
+    Value<String?>? filtrationNotes,
+    Value<String?>? cameraMovementsJson,
+    Value<String?>? actVisualNotes,
+    Value<String?>? cameraNarrativeIntent,
+    Value<String?>? opticsNarrativeIntent,
+    Value<String?>? exposureNarrativeIntent,
+    Value<String?>? lightingNarrativeIntent,
+    Value<String?>? colorNarrativeIntent,
+    Value<String?>? formatNarrativeIntent,
+    Value<String?>? textureNarrativeIntent,
+    Value<String?>? conceptNarrativeIntent,
+    Value<String?>? opticsConfigJson,
     Value<DateTime>? updatedAt,
   }) {
     return VisualBiblesCompanion(
@@ -12031,6 +16679,13 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
       projectId: projectId ?? this.projectId,
       visualConcept: visualConcept ?? this.visualConcept,
       narrativeReferences: narrativeReferences ?? this.narrativeReferences,
+      tone: tone ?? this.tone,
+      creativeIntention: creativeIntention ?? this.creativeIntention,
+      stagingApproach: stagingApproach ?? this.stagingApproach,
+      pointOfView: pointOfView ?? this.pointOfView,
+      directionNarrativeIntent:
+          directionNarrativeIntent ?? this.directionNarrativeIntent,
+      depthOfFieldNotes: depthOfFieldNotes ?? this.depthOfFieldNotes,
       lightingPhilosophy: lightingPhilosophy ?? this.lightingPhilosophy,
       lightQuality: lightQuality ?? this.lightQuality,
       contrastStyle: contrastStyle ?? this.contrastStyle,
@@ -12055,6 +16710,42 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
       creativeLutName: creativeLutName ?? this.creativeLutName,
       creativeLutDescription:
           creativeLutDescription ?? this.creativeLutDescription,
+      primaryCameraId: primaryCameraId ?? this.primaryCameraId,
+      recordingFormat: recordingFormat ?? this.recordingFormat,
+      codec: codec ?? this.codec,
+      resolutionNotes: resolutionNotes ?? this.resolutionNotes,
+      frameRateNotes: frameRateNotes ?? this.frameRateNotes,
+      nativeIso: nativeIso ?? this.nativeIso,
+      defaultTStop: defaultTStop ?? this.defaultTStop,
+      ndNotes: ndNotes ?? this.ndNotes,
+      deliveryColorSpace: deliveryColorSpace ?? this.deliveryColorSpace,
+      captureResolution: captureResolution ?? this.captureResolution,
+      deliveryResolution: deliveryResolution ?? this.deliveryResolution,
+      workflowPipeline: workflowPipeline ?? this.workflowPipeline,
+      diffusionNotes: diffusionNotes ?? this.diffusionNotes,
+      sensorShadowBehavior: sensorShadowBehavior ?? this.sensorShadowBehavior,
+      colorScienceNotes: colorScienceNotes ?? this.colorScienceNotes,
+      lowLightNotes: lowLightNotes ?? this.lowLightNotes,
+      opticCharacterNotes: opticCharacterNotes ?? this.opticCharacterNotes,
+      filtrationNotes: filtrationNotes ?? this.filtrationNotes,
+      cameraMovementsJson: cameraMovementsJson ?? this.cameraMovementsJson,
+      actVisualNotes: actVisualNotes ?? this.actVisualNotes,
+      cameraNarrativeIntent:
+          cameraNarrativeIntent ?? this.cameraNarrativeIntent,
+      opticsNarrativeIntent:
+          opticsNarrativeIntent ?? this.opticsNarrativeIntent,
+      exposureNarrativeIntent:
+          exposureNarrativeIntent ?? this.exposureNarrativeIntent,
+      lightingNarrativeIntent:
+          lightingNarrativeIntent ?? this.lightingNarrativeIntent,
+      colorNarrativeIntent: colorNarrativeIntent ?? this.colorNarrativeIntent,
+      formatNarrativeIntent:
+          formatNarrativeIntent ?? this.formatNarrativeIntent,
+      textureNarrativeIntent:
+          textureNarrativeIntent ?? this.textureNarrativeIntent,
+      conceptNarrativeIntent:
+          conceptNarrativeIntent ?? this.conceptNarrativeIntent,
+      opticsConfigJson: opticsConfigJson ?? this.opticsConfigJson,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
@@ -12073,6 +16764,26 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
     }
     if (narrativeReferences.present) {
       map['narrative_references'] = Variable<String>(narrativeReferences.value);
+    }
+    if (tone.present) {
+      map['tone'] = Variable<String>(tone.value);
+    }
+    if (creativeIntention.present) {
+      map['creative_intention'] = Variable<String>(creativeIntention.value);
+    }
+    if (stagingApproach.present) {
+      map['staging_approach'] = Variable<String>(stagingApproach.value);
+    }
+    if (pointOfView.present) {
+      map['point_of_view'] = Variable<String>(pointOfView.value);
+    }
+    if (directionNarrativeIntent.present) {
+      map['direction_narrative_intent'] = Variable<String>(
+        directionNarrativeIntent.value,
+      );
+    }
+    if (depthOfFieldNotes.present) {
+      map['depth_of_field_notes'] = Variable<String>(depthOfFieldNotes.value);
     }
     if (lightingPhilosophy.present) {
       map['lighting_philosophy'] = Variable<String>(lightingPhilosophy.value);
@@ -12146,6 +16857,115 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
         creativeLutDescription.value,
       );
     }
+    if (primaryCameraId.present) {
+      map['primary_camera_id'] = Variable<int>(primaryCameraId.value);
+    }
+    if (recordingFormat.present) {
+      map['recording_format'] = Variable<String>(recordingFormat.value);
+    }
+    if (codec.present) {
+      map['codec'] = Variable<String>(codec.value);
+    }
+    if (resolutionNotes.present) {
+      map['resolution_notes'] = Variable<String>(resolutionNotes.value);
+    }
+    if (frameRateNotes.present) {
+      map['frame_rate_notes'] = Variable<String>(frameRateNotes.value);
+    }
+    if (nativeIso.present) {
+      map['native_iso'] = Variable<int>(nativeIso.value);
+    }
+    if (defaultTStop.present) {
+      map['default_t_stop'] = Variable<String>(defaultTStop.value);
+    }
+    if (ndNotes.present) {
+      map['nd_notes'] = Variable<String>(ndNotes.value);
+    }
+    if (deliveryColorSpace.present) {
+      map['delivery_color_space'] = Variable<String>(deliveryColorSpace.value);
+    }
+    if (captureResolution.present) {
+      map['capture_resolution'] = Variable<String>(captureResolution.value);
+    }
+    if (deliveryResolution.present) {
+      map['delivery_resolution'] = Variable<String>(deliveryResolution.value);
+    }
+    if (workflowPipeline.present) {
+      map['workflow_pipeline'] = Variable<String>(workflowPipeline.value);
+    }
+    if (diffusionNotes.present) {
+      map['diffusion_notes'] = Variable<String>(diffusionNotes.value);
+    }
+    if (sensorShadowBehavior.present) {
+      map['sensor_shadow_behavior'] = Variable<String>(
+        sensorShadowBehavior.value,
+      );
+    }
+    if (colorScienceNotes.present) {
+      map['color_science_notes'] = Variable<String>(colorScienceNotes.value);
+    }
+    if (lowLightNotes.present) {
+      map['low_light_notes'] = Variable<String>(lowLightNotes.value);
+    }
+    if (opticCharacterNotes.present) {
+      map['optic_character_notes'] = Variable<String>(
+        opticCharacterNotes.value,
+      );
+    }
+    if (filtrationNotes.present) {
+      map['filtration_notes'] = Variable<String>(filtrationNotes.value);
+    }
+    if (cameraMovementsJson.present) {
+      map['camera_movements_json'] = Variable<String>(
+        cameraMovementsJson.value,
+      );
+    }
+    if (actVisualNotes.present) {
+      map['act_visual_notes'] = Variable<String>(actVisualNotes.value);
+    }
+    if (cameraNarrativeIntent.present) {
+      map['camera_narrative_intent'] = Variable<String>(
+        cameraNarrativeIntent.value,
+      );
+    }
+    if (opticsNarrativeIntent.present) {
+      map['optics_narrative_intent'] = Variable<String>(
+        opticsNarrativeIntent.value,
+      );
+    }
+    if (exposureNarrativeIntent.present) {
+      map['exposure_narrative_intent'] = Variable<String>(
+        exposureNarrativeIntent.value,
+      );
+    }
+    if (lightingNarrativeIntent.present) {
+      map['lighting_narrative_intent'] = Variable<String>(
+        lightingNarrativeIntent.value,
+      );
+    }
+    if (colorNarrativeIntent.present) {
+      map['color_narrative_intent'] = Variable<String>(
+        colorNarrativeIntent.value,
+      );
+    }
+    if (formatNarrativeIntent.present) {
+      map['format_narrative_intent'] = Variable<String>(
+        formatNarrativeIntent.value,
+      );
+    }
+    if (textureNarrativeIntent.present) {
+      map['texture_narrative_intent'] = Variable<String>(
+        textureNarrativeIntent.value,
+      );
+    }
+    if (conceptNarrativeIntent.present) {
+      map['concept_narrative_intent'] = Variable<String>(
+        conceptNarrativeIntent.value,
+      );
+    }
+    if (opticsConfigJson.present) {
+      map['optics_config_json'] = Variable<String>(opticsConfigJson.value);
+    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
@@ -12159,6 +16979,12 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
           ..write('projectId: $projectId, ')
           ..write('visualConcept: $visualConcept, ')
           ..write('narrativeReferences: $narrativeReferences, ')
+          ..write('tone: $tone, ')
+          ..write('creativeIntention: $creativeIntention, ')
+          ..write('stagingApproach: $stagingApproach, ')
+          ..write('pointOfView: $pointOfView, ')
+          ..write('directionNarrativeIntent: $directionNarrativeIntent, ')
+          ..write('depthOfFieldNotes: $depthOfFieldNotes, ')
           ..write('lightingPhilosophy: $lightingPhilosophy, ')
           ..write('lightQuality: $lightQuality, ')
           ..write('contrastStyle: $contrastStyle, ')
@@ -12181,6 +17007,35 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
           ..write('workingLutName: $workingLutName, ')
           ..write('creativeLutName: $creativeLutName, ')
           ..write('creativeLutDescription: $creativeLutDescription, ')
+          ..write('primaryCameraId: $primaryCameraId, ')
+          ..write('recordingFormat: $recordingFormat, ')
+          ..write('codec: $codec, ')
+          ..write('resolutionNotes: $resolutionNotes, ')
+          ..write('frameRateNotes: $frameRateNotes, ')
+          ..write('nativeIso: $nativeIso, ')
+          ..write('defaultTStop: $defaultTStop, ')
+          ..write('ndNotes: $ndNotes, ')
+          ..write('deliveryColorSpace: $deliveryColorSpace, ')
+          ..write('captureResolution: $captureResolution, ')
+          ..write('deliveryResolution: $deliveryResolution, ')
+          ..write('workflowPipeline: $workflowPipeline, ')
+          ..write('diffusionNotes: $diffusionNotes, ')
+          ..write('sensorShadowBehavior: $sensorShadowBehavior, ')
+          ..write('colorScienceNotes: $colorScienceNotes, ')
+          ..write('lowLightNotes: $lowLightNotes, ')
+          ..write('opticCharacterNotes: $opticCharacterNotes, ')
+          ..write('filtrationNotes: $filtrationNotes, ')
+          ..write('cameraMovementsJson: $cameraMovementsJson, ')
+          ..write('actVisualNotes: $actVisualNotes, ')
+          ..write('cameraNarrativeIntent: $cameraNarrativeIntent, ')
+          ..write('opticsNarrativeIntent: $opticsNarrativeIntent, ')
+          ..write('exposureNarrativeIntent: $exposureNarrativeIntent, ')
+          ..write('lightingNarrativeIntent: $lightingNarrativeIntent, ')
+          ..write('colorNarrativeIntent: $colorNarrativeIntent, ')
+          ..write('formatNarrativeIntent: $formatNarrativeIntent, ')
+          ..write('textureNarrativeIntent: $textureNarrativeIntent, ')
+          ..write('conceptNarrativeIntent: $conceptNarrativeIntent, ')
+          ..write('opticsConfigJson: $opticsConfigJson, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
@@ -12877,6 +17732,33 @@ class $VisualBibleLocationRefsTable extends VisualBibleLocationRefs
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _locationSiteIdMeta = const VerificationMeta(
+    'locationSiteId',
+  );
+  @override
+  late final GeneratedColumn<int> locationSiteId = GeneratedColumn<int>(
+    'location_site_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES location_sites (id)',
+    ),
+  );
+  static const VerificationMeta _locationBasePlanIdMeta =
+      const VerificationMeta('locationBasePlanId');
+  @override
+  late final GeneratedColumn<int> locationBasePlanId = GeneratedColumn<int>(
+    'location_base_plan_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES location_base_plans (id)',
+    ),
+  );
   static const VerificationMeta _lightingNoteMeta = const VerificationMeta(
     'lightingNote',
   );
@@ -12894,6 +17776,17 @@ class $VisualBibleLocationRefsTable extends VisualBibleLocationRefs
   @override
   late final GeneratedColumn<String> colorNote = GeneratedColumn<String>(
     'color_note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stagingNoteMeta = const VerificationMeta(
+    'stagingNote',
+  );
+  @override
+  late final GeneratedColumn<String> stagingNote = GeneratedColumn<String>(
+    'staging_note',
     aliasedName,
     true,
     type: DriftSqlType.string,
@@ -12921,15 +17814,66 @@ class $VisualBibleLocationRefsTable extends VisualBibleLocationRefs
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _solarOrientationMeta = const VerificationMeta(
+    'solarOrientation',
+  );
+  @override
+  late final GeneratedColumn<String> solarOrientation = GeneratedColumn<String>(
+    'solar_orientation',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _availableLightHoursMeta =
+      const VerificationMeta('availableLightHours');
+  @override
+  late final GeneratedColumn<String> availableLightHours =
+      GeneratedColumn<String>(
+        'available_light_hours',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _existingPracticalsMeta =
+      const VerificationMeta('existingPracticals');
+  @override
+  late final GeneratedColumn<String> existingPracticals =
+      GeneratedColumn<String>(
+        'existing_practicals',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _estimatedColorTempKelvinMeta =
+      const VerificationMeta('estimatedColorTempKelvin');
+  @override
+  late final GeneratedColumn<int> estimatedColorTempKelvin =
+      GeneratedColumn<int>(
+        'estimated_color_temp_kelvin',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
     bibleId,
     locationName,
+    locationSiteId,
+    locationBasePlanId,
     lightingNote,
     colorNote,
+    stagingNote,
     referenceImages,
     linkedShotIds,
+    solarOrientation,
+    availableLightHours,
+    existingPracticals,
+    estimatedColorTempKelvin,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -12965,6 +17909,24 @@ class $VisualBibleLocationRefsTable extends VisualBibleLocationRefs
     } else if (isInserting) {
       context.missing(_locationNameMeta);
     }
+    if (data.containsKey('location_site_id')) {
+      context.handle(
+        _locationSiteIdMeta,
+        locationSiteId.isAcceptableOrUnknown(
+          data['location_site_id']!,
+          _locationSiteIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_base_plan_id')) {
+      context.handle(
+        _locationBasePlanIdMeta,
+        locationBasePlanId.isAcceptableOrUnknown(
+          data['location_base_plan_id']!,
+          _locationBasePlanIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('lighting_note')) {
       context.handle(
         _lightingNoteMeta,
@@ -12978,6 +17940,15 @@ class $VisualBibleLocationRefsTable extends VisualBibleLocationRefs
       context.handle(
         _colorNoteMeta,
         colorNote.isAcceptableOrUnknown(data['color_note']!, _colorNoteMeta),
+      );
+    }
+    if (data.containsKey('staging_note')) {
+      context.handle(
+        _stagingNoteMeta,
+        stagingNote.isAcceptableOrUnknown(
+          data['staging_note']!,
+          _stagingNoteMeta,
+        ),
       );
     }
     if (data.containsKey('reference_images')) {
@@ -12995,6 +17966,42 @@ class $VisualBibleLocationRefsTable extends VisualBibleLocationRefs
         linkedShotIds.isAcceptableOrUnknown(
           data['linked_shot_ids']!,
           _linkedShotIdsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('solar_orientation')) {
+      context.handle(
+        _solarOrientationMeta,
+        solarOrientation.isAcceptableOrUnknown(
+          data['solar_orientation']!,
+          _solarOrientationMeta,
+        ),
+      );
+    }
+    if (data.containsKey('available_light_hours')) {
+      context.handle(
+        _availableLightHoursMeta,
+        availableLightHours.isAcceptableOrUnknown(
+          data['available_light_hours']!,
+          _availableLightHoursMeta,
+        ),
+      );
+    }
+    if (data.containsKey('existing_practicals')) {
+      context.handle(
+        _existingPracticalsMeta,
+        existingPracticals.isAcceptableOrUnknown(
+          data['existing_practicals']!,
+          _existingPracticalsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('estimated_color_temp_kelvin')) {
+      context.handle(
+        _estimatedColorTempKelvinMeta,
+        estimatedColorTempKelvin.isAcceptableOrUnknown(
+          data['estimated_color_temp_kelvin']!,
+          _estimatedColorTempKelvinMeta,
         ),
       );
     }
@@ -13019,6 +18026,14 @@ class $VisualBibleLocationRefsTable extends VisualBibleLocationRefs
         DriftSqlType.string,
         data['${effectivePrefix}location_name'],
       )!,
+      locationSiteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}location_site_id'],
+      ),
+      locationBasePlanId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}location_base_plan_id'],
+      ),
       lightingNote: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}lighting_note'],
@@ -13027,6 +18042,10 @@ class $VisualBibleLocationRefsTable extends VisualBibleLocationRefs
         DriftSqlType.string,
         data['${effectivePrefix}color_note'],
       ),
+      stagingNote: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}staging_note'],
+      ),
       referenceImages: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}reference_images'],
@@ -13034,6 +18053,22 @@ class $VisualBibleLocationRefsTable extends VisualBibleLocationRefs
       linkedShotIds: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}linked_shot_ids'],
+      ),
+      solarOrientation: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}solar_orientation'],
+      ),
+      availableLightHours: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}available_light_hours'],
+      ),
+      existingPracticals: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}existing_practicals'],
+      ),
+      estimatedColorTempKelvin: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}estimated_color_temp_kelvin'],
       ),
     );
   }
@@ -13049,18 +18084,32 @@ class VisualBibleLocationRef extends DataClass
   final int id;
   final int bibleId;
   final String locationName;
+  final int? locationSiteId;
+  final int? locationBasePlanId;
   final String? lightingNote;
   final String? colorNote;
+  final String? stagingNote;
   final String? referenceImages;
   final String? linkedShotIds;
+  final String? solarOrientation;
+  final String? availableLightHours;
+  final String? existingPracticals;
+  final int? estimatedColorTempKelvin;
   const VisualBibleLocationRef({
     required this.id,
     required this.bibleId,
     required this.locationName,
+    this.locationSiteId,
+    this.locationBasePlanId,
     this.lightingNote,
     this.colorNote,
+    this.stagingNote,
     this.referenceImages,
     this.linkedShotIds,
+    this.solarOrientation,
+    this.availableLightHours,
+    this.existingPracticals,
+    this.estimatedColorTempKelvin,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -13068,17 +18117,40 @@ class VisualBibleLocationRef extends DataClass
     map['id'] = Variable<int>(id);
     map['bible_id'] = Variable<int>(bibleId);
     map['location_name'] = Variable<String>(locationName);
+    if (!nullToAbsent || locationSiteId != null) {
+      map['location_site_id'] = Variable<int>(locationSiteId);
+    }
+    if (!nullToAbsent || locationBasePlanId != null) {
+      map['location_base_plan_id'] = Variable<int>(locationBasePlanId);
+    }
     if (!nullToAbsent || lightingNote != null) {
       map['lighting_note'] = Variable<String>(lightingNote);
     }
     if (!nullToAbsent || colorNote != null) {
       map['color_note'] = Variable<String>(colorNote);
     }
+    if (!nullToAbsent || stagingNote != null) {
+      map['staging_note'] = Variable<String>(stagingNote);
+    }
     if (!nullToAbsent || referenceImages != null) {
       map['reference_images'] = Variable<String>(referenceImages);
     }
     if (!nullToAbsent || linkedShotIds != null) {
       map['linked_shot_ids'] = Variable<String>(linkedShotIds);
+    }
+    if (!nullToAbsent || solarOrientation != null) {
+      map['solar_orientation'] = Variable<String>(solarOrientation);
+    }
+    if (!nullToAbsent || availableLightHours != null) {
+      map['available_light_hours'] = Variable<String>(availableLightHours);
+    }
+    if (!nullToAbsent || existingPracticals != null) {
+      map['existing_practicals'] = Variable<String>(existingPracticals);
+    }
+    if (!nullToAbsent || estimatedColorTempKelvin != null) {
+      map['estimated_color_temp_kelvin'] = Variable<int>(
+        estimatedColorTempKelvin,
+      );
     }
     return map;
   }
@@ -13088,18 +18160,39 @@ class VisualBibleLocationRef extends DataClass
       id: Value(id),
       bibleId: Value(bibleId),
       locationName: Value(locationName),
+      locationSiteId: locationSiteId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSiteId),
+      locationBasePlanId: locationBasePlanId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationBasePlanId),
       lightingNote: lightingNote == null && nullToAbsent
           ? const Value.absent()
           : Value(lightingNote),
       colorNote: colorNote == null && nullToAbsent
           ? const Value.absent()
           : Value(colorNote),
+      stagingNote: stagingNote == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stagingNote),
       referenceImages: referenceImages == null && nullToAbsent
           ? const Value.absent()
           : Value(referenceImages),
       linkedShotIds: linkedShotIds == null && nullToAbsent
           ? const Value.absent()
           : Value(linkedShotIds),
+      solarOrientation: solarOrientation == null && nullToAbsent
+          ? const Value.absent()
+          : Value(solarOrientation),
+      availableLightHours: availableLightHours == null && nullToAbsent
+          ? const Value.absent()
+          : Value(availableLightHours),
+      existingPracticals: existingPracticals == null && nullToAbsent
+          ? const Value.absent()
+          : Value(existingPracticals),
+      estimatedColorTempKelvin: estimatedColorTempKelvin == null && nullToAbsent
+          ? const Value.absent()
+          : Value(estimatedColorTempKelvin),
     );
   }
 
@@ -13112,10 +18205,23 @@ class VisualBibleLocationRef extends DataClass
       id: serializer.fromJson<int>(json['id']),
       bibleId: serializer.fromJson<int>(json['bibleId']),
       locationName: serializer.fromJson<String>(json['locationName']),
+      locationSiteId: serializer.fromJson<int?>(json['locationSiteId']),
+      locationBasePlanId: serializer.fromJson<int?>(json['locationBasePlanId']),
       lightingNote: serializer.fromJson<String?>(json['lightingNote']),
       colorNote: serializer.fromJson<String?>(json['colorNote']),
+      stagingNote: serializer.fromJson<String?>(json['stagingNote']),
       referenceImages: serializer.fromJson<String?>(json['referenceImages']),
       linkedShotIds: serializer.fromJson<String?>(json['linkedShotIds']),
+      solarOrientation: serializer.fromJson<String?>(json['solarOrientation']),
+      availableLightHours: serializer.fromJson<String?>(
+        json['availableLightHours'],
+      ),
+      existingPracticals: serializer.fromJson<String?>(
+        json['existingPracticals'],
+      ),
+      estimatedColorTempKelvin: serializer.fromJson<int?>(
+        json['estimatedColorTempKelvin'],
+      ),
     );
   }
   @override
@@ -13125,10 +18231,19 @@ class VisualBibleLocationRef extends DataClass
       'id': serializer.toJson<int>(id),
       'bibleId': serializer.toJson<int>(bibleId),
       'locationName': serializer.toJson<String>(locationName),
+      'locationSiteId': serializer.toJson<int?>(locationSiteId),
+      'locationBasePlanId': serializer.toJson<int?>(locationBasePlanId),
       'lightingNote': serializer.toJson<String?>(lightingNote),
       'colorNote': serializer.toJson<String?>(colorNote),
+      'stagingNote': serializer.toJson<String?>(stagingNote),
       'referenceImages': serializer.toJson<String?>(referenceImages),
       'linkedShotIds': serializer.toJson<String?>(linkedShotIds),
+      'solarOrientation': serializer.toJson<String?>(solarOrientation),
+      'availableLightHours': serializer.toJson<String?>(availableLightHours),
+      'existingPracticals': serializer.toJson<String?>(existingPracticals),
+      'estimatedColorTempKelvin': serializer.toJson<int?>(
+        estimatedColorTempKelvin,
+      ),
     };
   }
 
@@ -13136,22 +18251,48 @@ class VisualBibleLocationRef extends DataClass
     int? id,
     int? bibleId,
     String? locationName,
+    Value<int?> locationSiteId = const Value.absent(),
+    Value<int?> locationBasePlanId = const Value.absent(),
     Value<String?> lightingNote = const Value.absent(),
     Value<String?> colorNote = const Value.absent(),
+    Value<String?> stagingNote = const Value.absent(),
     Value<String?> referenceImages = const Value.absent(),
     Value<String?> linkedShotIds = const Value.absent(),
+    Value<String?> solarOrientation = const Value.absent(),
+    Value<String?> availableLightHours = const Value.absent(),
+    Value<String?> existingPracticals = const Value.absent(),
+    Value<int?> estimatedColorTempKelvin = const Value.absent(),
   }) => VisualBibleLocationRef(
     id: id ?? this.id,
     bibleId: bibleId ?? this.bibleId,
     locationName: locationName ?? this.locationName,
+    locationSiteId: locationSiteId.present
+        ? locationSiteId.value
+        : this.locationSiteId,
+    locationBasePlanId: locationBasePlanId.present
+        ? locationBasePlanId.value
+        : this.locationBasePlanId,
     lightingNote: lightingNote.present ? lightingNote.value : this.lightingNote,
     colorNote: colorNote.present ? colorNote.value : this.colorNote,
+    stagingNote: stagingNote.present ? stagingNote.value : this.stagingNote,
     referenceImages: referenceImages.present
         ? referenceImages.value
         : this.referenceImages,
     linkedShotIds: linkedShotIds.present
         ? linkedShotIds.value
         : this.linkedShotIds,
+    solarOrientation: solarOrientation.present
+        ? solarOrientation.value
+        : this.solarOrientation,
+    availableLightHours: availableLightHours.present
+        ? availableLightHours.value
+        : this.availableLightHours,
+    existingPracticals: existingPracticals.present
+        ? existingPracticals.value
+        : this.existingPracticals,
+    estimatedColorTempKelvin: estimatedColorTempKelvin.present
+        ? estimatedColorTempKelvin.value
+        : this.estimatedColorTempKelvin,
   );
   VisualBibleLocationRef copyWithCompanion(
     VisualBibleLocationRefsCompanion data,
@@ -13162,16 +18303,37 @@ class VisualBibleLocationRef extends DataClass
       locationName: data.locationName.present
           ? data.locationName.value
           : this.locationName,
+      locationSiteId: data.locationSiteId.present
+          ? data.locationSiteId.value
+          : this.locationSiteId,
+      locationBasePlanId: data.locationBasePlanId.present
+          ? data.locationBasePlanId.value
+          : this.locationBasePlanId,
       lightingNote: data.lightingNote.present
           ? data.lightingNote.value
           : this.lightingNote,
       colorNote: data.colorNote.present ? data.colorNote.value : this.colorNote,
+      stagingNote: data.stagingNote.present
+          ? data.stagingNote.value
+          : this.stagingNote,
       referenceImages: data.referenceImages.present
           ? data.referenceImages.value
           : this.referenceImages,
       linkedShotIds: data.linkedShotIds.present
           ? data.linkedShotIds.value
           : this.linkedShotIds,
+      solarOrientation: data.solarOrientation.present
+          ? data.solarOrientation.value
+          : this.solarOrientation,
+      availableLightHours: data.availableLightHours.present
+          ? data.availableLightHours.value
+          : this.availableLightHours,
+      existingPracticals: data.existingPracticals.present
+          ? data.existingPracticals.value
+          : this.existingPracticals,
+      estimatedColorTempKelvin: data.estimatedColorTempKelvin.present
+          ? data.estimatedColorTempKelvin.value
+          : this.estimatedColorTempKelvin,
     );
   }
 
@@ -13181,10 +18343,17 @@ class VisualBibleLocationRef extends DataClass
           ..write('id: $id, ')
           ..write('bibleId: $bibleId, ')
           ..write('locationName: $locationName, ')
+          ..write('locationSiteId: $locationSiteId, ')
+          ..write('locationBasePlanId: $locationBasePlanId, ')
           ..write('lightingNote: $lightingNote, ')
           ..write('colorNote: $colorNote, ')
+          ..write('stagingNote: $stagingNote, ')
           ..write('referenceImages: $referenceImages, ')
-          ..write('linkedShotIds: $linkedShotIds')
+          ..write('linkedShotIds: $linkedShotIds, ')
+          ..write('solarOrientation: $solarOrientation, ')
+          ..write('availableLightHours: $availableLightHours, ')
+          ..write('existingPracticals: $existingPracticals, ')
+          ..write('estimatedColorTempKelvin: $estimatedColorTempKelvin')
           ..write(')'))
         .toString();
   }
@@ -13194,10 +18363,17 @@ class VisualBibleLocationRef extends DataClass
     id,
     bibleId,
     locationName,
+    locationSiteId,
+    locationBasePlanId,
     lightingNote,
     colorNote,
+    stagingNote,
     referenceImages,
     linkedShotIds,
+    solarOrientation,
+    availableLightHours,
+    existingPracticals,
+    estimatedColorTempKelvin,
   );
   @override
   bool operator ==(Object other) =>
@@ -13206,10 +18382,17 @@ class VisualBibleLocationRef extends DataClass
           other.id == this.id &&
           other.bibleId == this.bibleId &&
           other.locationName == this.locationName &&
+          other.locationSiteId == this.locationSiteId &&
+          other.locationBasePlanId == this.locationBasePlanId &&
           other.lightingNote == this.lightingNote &&
           other.colorNote == this.colorNote &&
+          other.stagingNote == this.stagingNote &&
           other.referenceImages == this.referenceImages &&
-          other.linkedShotIds == this.linkedShotIds);
+          other.linkedShotIds == this.linkedShotIds &&
+          other.solarOrientation == this.solarOrientation &&
+          other.availableLightHours == this.availableLightHours &&
+          other.existingPracticals == this.existingPracticals &&
+          other.estimatedColorTempKelvin == this.estimatedColorTempKelvin);
 }
 
 class VisualBibleLocationRefsCompanion
@@ -13217,46 +18400,84 @@ class VisualBibleLocationRefsCompanion
   final Value<int> id;
   final Value<int> bibleId;
   final Value<String> locationName;
+  final Value<int?> locationSiteId;
+  final Value<int?> locationBasePlanId;
   final Value<String?> lightingNote;
   final Value<String?> colorNote;
+  final Value<String?> stagingNote;
   final Value<String?> referenceImages;
   final Value<String?> linkedShotIds;
+  final Value<String?> solarOrientation;
+  final Value<String?> availableLightHours;
+  final Value<String?> existingPracticals;
+  final Value<int?> estimatedColorTempKelvin;
   const VisualBibleLocationRefsCompanion({
     this.id = const Value.absent(),
     this.bibleId = const Value.absent(),
     this.locationName = const Value.absent(),
+    this.locationSiteId = const Value.absent(),
+    this.locationBasePlanId = const Value.absent(),
     this.lightingNote = const Value.absent(),
     this.colorNote = const Value.absent(),
+    this.stagingNote = const Value.absent(),
     this.referenceImages = const Value.absent(),
     this.linkedShotIds = const Value.absent(),
+    this.solarOrientation = const Value.absent(),
+    this.availableLightHours = const Value.absent(),
+    this.existingPracticals = const Value.absent(),
+    this.estimatedColorTempKelvin = const Value.absent(),
   });
   VisualBibleLocationRefsCompanion.insert({
     this.id = const Value.absent(),
     required int bibleId,
     required String locationName,
+    this.locationSiteId = const Value.absent(),
+    this.locationBasePlanId = const Value.absent(),
     this.lightingNote = const Value.absent(),
     this.colorNote = const Value.absent(),
+    this.stagingNote = const Value.absent(),
     this.referenceImages = const Value.absent(),
     this.linkedShotIds = const Value.absent(),
+    this.solarOrientation = const Value.absent(),
+    this.availableLightHours = const Value.absent(),
+    this.existingPracticals = const Value.absent(),
+    this.estimatedColorTempKelvin = const Value.absent(),
   }) : bibleId = Value(bibleId),
        locationName = Value(locationName);
   static Insertable<VisualBibleLocationRef> custom({
     Expression<int>? id,
     Expression<int>? bibleId,
     Expression<String>? locationName,
+    Expression<int>? locationSiteId,
+    Expression<int>? locationBasePlanId,
     Expression<String>? lightingNote,
     Expression<String>? colorNote,
+    Expression<String>? stagingNote,
     Expression<String>? referenceImages,
     Expression<String>? linkedShotIds,
+    Expression<String>? solarOrientation,
+    Expression<String>? availableLightHours,
+    Expression<String>? existingPracticals,
+    Expression<int>? estimatedColorTempKelvin,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (bibleId != null) 'bible_id': bibleId,
       if (locationName != null) 'location_name': locationName,
+      if (locationSiteId != null) 'location_site_id': locationSiteId,
+      if (locationBasePlanId != null)
+        'location_base_plan_id': locationBasePlanId,
       if (lightingNote != null) 'lighting_note': lightingNote,
       if (colorNote != null) 'color_note': colorNote,
+      if (stagingNote != null) 'staging_note': stagingNote,
       if (referenceImages != null) 'reference_images': referenceImages,
       if (linkedShotIds != null) 'linked_shot_ids': linkedShotIds,
+      if (solarOrientation != null) 'solar_orientation': solarOrientation,
+      if (availableLightHours != null)
+        'available_light_hours': availableLightHours,
+      if (existingPracticals != null) 'existing_practicals': existingPracticals,
+      if (estimatedColorTempKelvin != null)
+        'estimated_color_temp_kelvin': estimatedColorTempKelvin,
     });
   }
 
@@ -13264,19 +18485,34 @@ class VisualBibleLocationRefsCompanion
     Value<int>? id,
     Value<int>? bibleId,
     Value<String>? locationName,
+    Value<int?>? locationSiteId,
+    Value<int?>? locationBasePlanId,
     Value<String?>? lightingNote,
     Value<String?>? colorNote,
+    Value<String?>? stagingNote,
     Value<String?>? referenceImages,
     Value<String?>? linkedShotIds,
+    Value<String?>? solarOrientation,
+    Value<String?>? availableLightHours,
+    Value<String?>? existingPracticals,
+    Value<int?>? estimatedColorTempKelvin,
   }) {
     return VisualBibleLocationRefsCompanion(
       id: id ?? this.id,
       bibleId: bibleId ?? this.bibleId,
       locationName: locationName ?? this.locationName,
+      locationSiteId: locationSiteId ?? this.locationSiteId,
+      locationBasePlanId: locationBasePlanId ?? this.locationBasePlanId,
       lightingNote: lightingNote ?? this.lightingNote,
       colorNote: colorNote ?? this.colorNote,
+      stagingNote: stagingNote ?? this.stagingNote,
       referenceImages: referenceImages ?? this.referenceImages,
       linkedShotIds: linkedShotIds ?? this.linkedShotIds,
+      solarOrientation: solarOrientation ?? this.solarOrientation,
+      availableLightHours: availableLightHours ?? this.availableLightHours,
+      existingPracticals: existingPracticals ?? this.existingPracticals,
+      estimatedColorTempKelvin:
+          estimatedColorTempKelvin ?? this.estimatedColorTempKelvin,
     );
   }
 
@@ -13292,17 +18528,42 @@ class VisualBibleLocationRefsCompanion
     if (locationName.present) {
       map['location_name'] = Variable<String>(locationName.value);
     }
+    if (locationSiteId.present) {
+      map['location_site_id'] = Variable<int>(locationSiteId.value);
+    }
+    if (locationBasePlanId.present) {
+      map['location_base_plan_id'] = Variable<int>(locationBasePlanId.value);
+    }
     if (lightingNote.present) {
       map['lighting_note'] = Variable<String>(lightingNote.value);
     }
     if (colorNote.present) {
       map['color_note'] = Variable<String>(colorNote.value);
     }
+    if (stagingNote.present) {
+      map['staging_note'] = Variable<String>(stagingNote.value);
+    }
     if (referenceImages.present) {
       map['reference_images'] = Variable<String>(referenceImages.value);
     }
     if (linkedShotIds.present) {
       map['linked_shot_ids'] = Variable<String>(linkedShotIds.value);
+    }
+    if (solarOrientation.present) {
+      map['solar_orientation'] = Variable<String>(solarOrientation.value);
+    }
+    if (availableLightHours.present) {
+      map['available_light_hours'] = Variable<String>(
+        availableLightHours.value,
+      );
+    }
+    if (existingPracticals.present) {
+      map['existing_practicals'] = Variable<String>(existingPracticals.value);
+    }
+    if (estimatedColorTempKelvin.present) {
+      map['estimated_color_temp_kelvin'] = Variable<int>(
+        estimatedColorTempKelvin.value,
+      );
     }
     return map;
   }
@@ -13313,10 +18574,368 @@ class VisualBibleLocationRefsCompanion
           ..write('id: $id, ')
           ..write('bibleId: $bibleId, ')
           ..write('locationName: $locationName, ')
+          ..write('locationSiteId: $locationSiteId, ')
+          ..write('locationBasePlanId: $locationBasePlanId, ')
           ..write('lightingNote: $lightingNote, ')
           ..write('colorNote: $colorNote, ')
+          ..write('stagingNote: $stagingNote, ')
           ..write('referenceImages: $referenceImages, ')
-          ..write('linkedShotIds: $linkedShotIds')
+          ..write('linkedShotIds: $linkedShotIds, ')
+          ..write('solarOrientation: $solarOrientation, ')
+          ..write('availableLightHours: $availableLightHours, ')
+          ..write('existingPracticals: $existingPracticals, ')
+          ..write('estimatedColorTempKelvin: $estimatedColorTempKelvin')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MoodboardGroupsTable extends MoodboardGroups
+    with TableInfo<$MoodboardGroupsTable, MoodboardGroup> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MoodboardGroupsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    projectId,
+    category,
+    name,
+    sortOrder,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'moodboard_groups';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MoodboardGroup> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MoodboardGroup map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MoodboardGroup(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+    );
+  }
+
+  @override
+  $MoodboardGroupsTable createAlias(String alias) {
+    return $MoodboardGroupsTable(attachedDatabase, alias);
+  }
+}
+
+class MoodboardGroup extends DataClass implements Insertable<MoodboardGroup> {
+  final int id;
+  final int projectId;
+  final String category;
+  final String name;
+  final int sortOrder;
+  const MoodboardGroup({
+    required this.id,
+    required this.projectId,
+    required this.category,
+    required this.name,
+    required this.sortOrder,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['project_id'] = Variable<int>(projectId);
+    map['category'] = Variable<String>(category);
+    map['name'] = Variable<String>(name);
+    map['sort_order'] = Variable<int>(sortOrder);
+    return map;
+  }
+
+  MoodboardGroupsCompanion toCompanion(bool nullToAbsent) {
+    return MoodboardGroupsCompanion(
+      id: Value(id),
+      projectId: Value(projectId),
+      category: Value(category),
+      name: Value(name),
+      sortOrder: Value(sortOrder),
+    );
+  }
+
+  factory MoodboardGroup.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MoodboardGroup(
+      id: serializer.fromJson<int>(json['id']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      category: serializer.fromJson<String>(json['category']),
+      name: serializer.fromJson<String>(json['name']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'projectId': serializer.toJson<int>(projectId),
+      'category': serializer.toJson<String>(category),
+      'name': serializer.toJson<String>(name),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+    };
+  }
+
+  MoodboardGroup copyWith({
+    int? id,
+    int? projectId,
+    String? category,
+    String? name,
+    int? sortOrder,
+  }) => MoodboardGroup(
+    id: id ?? this.id,
+    projectId: projectId ?? this.projectId,
+    category: category ?? this.category,
+    name: name ?? this.name,
+    sortOrder: sortOrder ?? this.sortOrder,
+  );
+  MoodboardGroup copyWithCompanion(MoodboardGroupsCompanion data) {
+    return MoodboardGroup(
+      id: data.id.present ? data.id.value : this.id,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      category: data.category.present ? data.category.value : this.category,
+      name: data.name.present ? data.name.value : this.name,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MoodboardGroup(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('category: $category, ')
+          ..write('name: $name, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, projectId, category, name, sortOrder);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MoodboardGroup &&
+          other.id == this.id &&
+          other.projectId == this.projectId &&
+          other.category == this.category &&
+          other.name == this.name &&
+          other.sortOrder == this.sortOrder);
+}
+
+class MoodboardGroupsCompanion extends UpdateCompanion<MoodboardGroup> {
+  final Value<int> id;
+  final Value<int> projectId;
+  final Value<String> category;
+  final Value<String> name;
+  final Value<int> sortOrder;
+  const MoodboardGroupsCompanion({
+    this.id = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.category = const Value.absent(),
+    this.name = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  });
+  MoodboardGroupsCompanion.insert({
+    this.id = const Value.absent(),
+    required int projectId,
+    required String category,
+    required String name,
+    this.sortOrder = const Value.absent(),
+  }) : projectId = Value(projectId),
+       category = Value(category),
+       name = Value(name);
+  static Insertable<MoodboardGroup> custom({
+    Expression<int>? id,
+    Expression<int>? projectId,
+    Expression<String>? category,
+    Expression<String>? name,
+    Expression<int>? sortOrder,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (projectId != null) 'project_id': projectId,
+      if (category != null) 'category': category,
+      if (name != null) 'name': name,
+      if (sortOrder != null) 'sort_order': sortOrder,
+    });
+  }
+
+  MoodboardGroupsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? projectId,
+    Value<String>? category,
+    Value<String>? name,
+    Value<int>? sortOrder,
+  }) {
+    return MoodboardGroupsCompanion(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      category: category ?? this.category,
+      name: name ?? this.name,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MoodboardGroupsCompanion(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('category: $category, ')
+          ..write('name: $name, ')
+          ..write('sortOrder: $sortOrder')
           ..write(')'))
         .toString();
   }
@@ -13401,6 +19020,20 @@ class $MoodboardImagesTable extends MoodboardImages
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<int> groupId = GeneratedColumn<int>(
+    'group_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES moodboard_groups (id)',
+    ),
+  );
   static const VerificationMeta _captionMeta = const VerificationMeta(
     'caption',
   );
@@ -13445,6 +19078,31 @@ class $MoodboardImagesTable extends MoodboardImages
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _linkedLocationBasePlanIdMeta =
+      const VerificationMeta('linkedLocationBasePlanId');
+  @override
+  late final GeneratedColumn<int> linkedLocationBasePlanId =
+      GeneratedColumn<int>(
+        'linked_location_base_plan_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'REFERENCES location_base_plans (id)',
+        ),
+      );
+  static const VerificationMeta _assignedSectionsMeta = const VerificationMeta(
+    'assignedSections',
+  );
+  @override
+  late final GeneratedColumn<String> assignedSections = GeneratedColumn<String>(
+    'assigned_sections',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _sortOrderMeta = const VerificationMeta(
     'sortOrder',
   );
@@ -13465,10 +19123,13 @@ class $MoodboardImagesTable extends MoodboardImages
     imagePath,
     source,
     category,
+    groupId,
     caption,
     filmReference,
     linkedSceneId,
     linkedLocationName,
+    linkedLocationBasePlanId,
+    assignedSections,
     sortOrder,
   ];
   @override
@@ -13520,6 +19181,12 @@ class $MoodboardImagesTable extends MoodboardImages
         category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
       );
     }
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    }
     if (data.containsKey('caption')) {
       context.handle(
         _captionMeta,
@@ -13550,6 +19217,24 @@ class $MoodboardImagesTable extends MoodboardImages
         linkedLocationName.isAcceptableOrUnknown(
           data['linked_location_name']!,
           _linkedLocationNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('linked_location_base_plan_id')) {
+      context.handle(
+        _linkedLocationBasePlanIdMeta,
+        linkedLocationBasePlanId.isAcceptableOrUnknown(
+          data['linked_location_base_plan_id']!,
+          _linkedLocationBasePlanIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('assigned_sections')) {
+      context.handle(
+        _assignedSectionsMeta,
+        assignedSections.isAcceptableOrUnknown(
+          data['assigned_sections']!,
+          _assignedSectionsMeta,
         ),
       );
     }
@@ -13592,6 +19277,10 @@ class $MoodboardImagesTable extends MoodboardImages
         DriftSqlType.string,
         data['${effectivePrefix}category'],
       ),
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}group_id'],
+      ),
       caption: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}caption'],
@@ -13607,6 +19296,14 @@ class $MoodboardImagesTable extends MoodboardImages
       linkedLocationName: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}linked_location_name'],
+      ),
+      linkedLocationBasePlanId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}linked_location_base_plan_id'],
+      ),
+      assignedSections: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}assigned_sections'],
       ),
       sortOrder: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -13628,10 +19325,15 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
   final String imagePath;
   final String source;
   final String? category;
+  final int? groupId;
   final String? caption;
   final String? filmReference;
   final int? linkedSceneId;
   final String? linkedLocationName;
+  final int? linkedLocationBasePlanId;
+
+  /// JSON: secciones de la biblia donde debe aparecer (ej. ["lighting","concept"]).
+  final String? assignedSections;
   final int sortOrder;
   const MoodboardImage({
     required this.id,
@@ -13640,10 +19342,13 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     required this.imagePath,
     required this.source,
     this.category,
+    this.groupId,
     this.caption,
     this.filmReference,
     this.linkedSceneId,
     this.linkedLocationName,
+    this.linkedLocationBasePlanId,
+    this.assignedSections,
     required this.sortOrder,
   });
   @override
@@ -13659,6 +19364,9 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     if (!nullToAbsent || category != null) {
       map['category'] = Variable<String>(category);
     }
+    if (!nullToAbsent || groupId != null) {
+      map['group_id'] = Variable<int>(groupId);
+    }
     if (!nullToAbsent || caption != null) {
       map['caption'] = Variable<String>(caption);
     }
@@ -13670,6 +19378,14 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     }
     if (!nullToAbsent || linkedLocationName != null) {
       map['linked_location_name'] = Variable<String>(linkedLocationName);
+    }
+    if (!nullToAbsent || linkedLocationBasePlanId != null) {
+      map['linked_location_base_plan_id'] = Variable<int>(
+        linkedLocationBasePlanId,
+      );
+    }
+    if (!nullToAbsent || assignedSections != null) {
+      map['assigned_sections'] = Variable<String>(assignedSections);
     }
     map['sort_order'] = Variable<int>(sortOrder);
     return map;
@@ -13687,6 +19403,9 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
       category: category == null && nullToAbsent
           ? const Value.absent()
           : Value(category),
+      groupId: groupId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(groupId),
       caption: caption == null && nullToAbsent
           ? const Value.absent()
           : Value(caption),
@@ -13699,6 +19418,12 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
       linkedLocationName: linkedLocationName == null && nullToAbsent
           ? const Value.absent()
           : Value(linkedLocationName),
+      linkedLocationBasePlanId: linkedLocationBasePlanId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(linkedLocationBasePlanId),
+      assignedSections: assignedSections == null && nullToAbsent
+          ? const Value.absent()
+          : Value(assignedSections),
       sortOrder: Value(sortOrder),
     );
   }
@@ -13715,12 +19440,17 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
       imagePath: serializer.fromJson<String>(json['imagePath']),
       source: serializer.fromJson<String>(json['source']),
       category: serializer.fromJson<String?>(json['category']),
+      groupId: serializer.fromJson<int?>(json['groupId']),
       caption: serializer.fromJson<String?>(json['caption']),
       filmReference: serializer.fromJson<String?>(json['filmReference']),
       linkedSceneId: serializer.fromJson<int?>(json['linkedSceneId']),
       linkedLocationName: serializer.fromJson<String?>(
         json['linkedLocationName'],
       ),
+      linkedLocationBasePlanId: serializer.fromJson<int?>(
+        json['linkedLocationBasePlanId'],
+      ),
+      assignedSections: serializer.fromJson<String?>(json['assignedSections']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
     );
   }
@@ -13734,10 +19464,15 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
       'imagePath': serializer.toJson<String>(imagePath),
       'source': serializer.toJson<String>(source),
       'category': serializer.toJson<String?>(category),
+      'groupId': serializer.toJson<int?>(groupId),
       'caption': serializer.toJson<String?>(caption),
       'filmReference': serializer.toJson<String?>(filmReference),
       'linkedSceneId': serializer.toJson<int?>(linkedSceneId),
       'linkedLocationName': serializer.toJson<String?>(linkedLocationName),
+      'linkedLocationBasePlanId': serializer.toJson<int?>(
+        linkedLocationBasePlanId,
+      ),
+      'assignedSections': serializer.toJson<String?>(assignedSections),
       'sortOrder': serializer.toJson<int>(sortOrder),
     };
   }
@@ -13749,10 +19484,13 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     String? imagePath,
     String? source,
     Value<String?> category = const Value.absent(),
+    Value<int?> groupId = const Value.absent(),
     Value<String?> caption = const Value.absent(),
     Value<String?> filmReference = const Value.absent(),
     Value<int?> linkedSceneId = const Value.absent(),
     Value<String?> linkedLocationName = const Value.absent(),
+    Value<int?> linkedLocationBasePlanId = const Value.absent(),
+    Value<String?> assignedSections = const Value.absent(),
     int? sortOrder,
   }) => MoodboardImage(
     id: id ?? this.id,
@@ -13761,6 +19499,7 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     imagePath: imagePath ?? this.imagePath,
     source: source ?? this.source,
     category: category.present ? category.value : this.category,
+    groupId: groupId.present ? groupId.value : this.groupId,
     caption: caption.present ? caption.value : this.caption,
     filmReference: filmReference.present
         ? filmReference.value
@@ -13771,6 +19510,12 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     linkedLocationName: linkedLocationName.present
         ? linkedLocationName.value
         : this.linkedLocationName,
+    linkedLocationBasePlanId: linkedLocationBasePlanId.present
+        ? linkedLocationBasePlanId.value
+        : this.linkedLocationBasePlanId,
+    assignedSections: assignedSections.present
+        ? assignedSections.value
+        : this.assignedSections,
     sortOrder: sortOrder ?? this.sortOrder,
   );
   MoodboardImage copyWithCompanion(MoodboardImagesCompanion data) {
@@ -13781,6 +19526,7 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
       imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
       source: data.source.present ? data.source.value : this.source,
       category: data.category.present ? data.category.value : this.category,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
       caption: data.caption.present ? data.caption.value : this.caption,
       filmReference: data.filmReference.present
           ? data.filmReference.value
@@ -13791,6 +19537,12 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
       linkedLocationName: data.linkedLocationName.present
           ? data.linkedLocationName.value
           : this.linkedLocationName,
+      linkedLocationBasePlanId: data.linkedLocationBasePlanId.present
+          ? data.linkedLocationBasePlanId.value
+          : this.linkedLocationBasePlanId,
+      assignedSections: data.assignedSections.present
+          ? data.assignedSections.value
+          : this.assignedSections,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
     );
   }
@@ -13804,10 +19556,13 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
           ..write('imagePath: $imagePath, ')
           ..write('source: $source, ')
           ..write('category: $category, ')
+          ..write('groupId: $groupId, ')
           ..write('caption: $caption, ')
           ..write('filmReference: $filmReference, ')
           ..write('linkedSceneId: $linkedSceneId, ')
           ..write('linkedLocationName: $linkedLocationName, ')
+          ..write('linkedLocationBasePlanId: $linkedLocationBasePlanId, ')
+          ..write('assignedSections: $assignedSections, ')
           ..write('sortOrder: $sortOrder')
           ..write(')'))
         .toString();
@@ -13821,10 +19576,13 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     imagePath,
     source,
     category,
+    groupId,
     caption,
     filmReference,
     linkedSceneId,
     linkedLocationName,
+    linkedLocationBasePlanId,
+    assignedSections,
     sortOrder,
   );
   @override
@@ -13837,10 +19595,13 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
           other.imagePath == this.imagePath &&
           other.source == this.source &&
           other.category == this.category &&
+          other.groupId == this.groupId &&
           other.caption == this.caption &&
           other.filmReference == this.filmReference &&
           other.linkedSceneId == this.linkedSceneId &&
           other.linkedLocationName == this.linkedLocationName &&
+          other.linkedLocationBasePlanId == this.linkedLocationBasePlanId &&
+          other.assignedSections == this.assignedSections &&
           other.sortOrder == this.sortOrder);
 }
 
@@ -13851,10 +19612,13 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
   final Value<String> imagePath;
   final Value<String> source;
   final Value<String?> category;
+  final Value<int?> groupId;
   final Value<String?> caption;
   final Value<String?> filmReference;
   final Value<int?> linkedSceneId;
   final Value<String?> linkedLocationName;
+  final Value<int?> linkedLocationBasePlanId;
+  final Value<String?> assignedSections;
   final Value<int> sortOrder;
   const MoodboardImagesCompanion({
     this.id = const Value.absent(),
@@ -13863,10 +19627,13 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
     this.imagePath = const Value.absent(),
     this.source = const Value.absent(),
     this.category = const Value.absent(),
+    this.groupId = const Value.absent(),
     this.caption = const Value.absent(),
     this.filmReference = const Value.absent(),
     this.linkedSceneId = const Value.absent(),
     this.linkedLocationName = const Value.absent(),
+    this.linkedLocationBasePlanId = const Value.absent(),
+    this.assignedSections = const Value.absent(),
     this.sortOrder = const Value.absent(),
   });
   MoodboardImagesCompanion.insert({
@@ -13876,10 +19643,13 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
     required String imagePath,
     this.source = const Value.absent(),
     this.category = const Value.absent(),
+    this.groupId = const Value.absent(),
     this.caption = const Value.absent(),
     this.filmReference = const Value.absent(),
     this.linkedSceneId = const Value.absent(),
     this.linkedLocationName = const Value.absent(),
+    this.linkedLocationBasePlanId = const Value.absent(),
+    this.assignedSections = const Value.absent(),
     this.sortOrder = const Value.absent(),
   }) : projectId = Value(projectId),
        imagePath = Value(imagePath);
@@ -13890,10 +19660,13 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
     Expression<String>? imagePath,
     Expression<String>? source,
     Expression<String>? category,
+    Expression<int>? groupId,
     Expression<String>? caption,
     Expression<String>? filmReference,
     Expression<int>? linkedSceneId,
     Expression<String>? linkedLocationName,
+    Expression<int>? linkedLocationBasePlanId,
+    Expression<String>? assignedSections,
     Expression<int>? sortOrder,
   }) {
     return RawValuesInsertable({
@@ -13903,11 +19676,15 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
       if (imagePath != null) 'image_path': imagePath,
       if (source != null) 'source': source,
       if (category != null) 'category': category,
+      if (groupId != null) 'group_id': groupId,
       if (caption != null) 'caption': caption,
       if (filmReference != null) 'film_reference': filmReference,
       if (linkedSceneId != null) 'linked_scene_id': linkedSceneId,
       if (linkedLocationName != null)
         'linked_location_name': linkedLocationName,
+      if (linkedLocationBasePlanId != null)
+        'linked_location_base_plan_id': linkedLocationBasePlanId,
+      if (assignedSections != null) 'assigned_sections': assignedSections,
       if (sortOrder != null) 'sort_order': sortOrder,
     });
   }
@@ -13919,10 +19696,13 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
     Value<String>? imagePath,
     Value<String>? source,
     Value<String?>? category,
+    Value<int?>? groupId,
     Value<String?>? caption,
     Value<String?>? filmReference,
     Value<int?>? linkedSceneId,
     Value<String?>? linkedLocationName,
+    Value<int?>? linkedLocationBasePlanId,
+    Value<String?>? assignedSections,
     Value<int>? sortOrder,
   }) {
     return MoodboardImagesCompanion(
@@ -13932,10 +19712,14 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
       imagePath: imagePath ?? this.imagePath,
       source: source ?? this.source,
       category: category ?? this.category,
+      groupId: groupId ?? this.groupId,
       caption: caption ?? this.caption,
       filmReference: filmReference ?? this.filmReference,
       linkedSceneId: linkedSceneId ?? this.linkedSceneId,
       linkedLocationName: linkedLocationName ?? this.linkedLocationName,
+      linkedLocationBasePlanId:
+          linkedLocationBasePlanId ?? this.linkedLocationBasePlanId,
+      assignedSections: assignedSections ?? this.assignedSections,
       sortOrder: sortOrder ?? this.sortOrder,
     );
   }
@@ -13961,6 +19745,9 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
     if (category.present) {
       map['category'] = Variable<String>(category.value);
     }
+    if (groupId.present) {
+      map['group_id'] = Variable<int>(groupId.value);
+    }
     if (caption.present) {
       map['caption'] = Variable<String>(caption.value);
     }
@@ -13972,6 +19759,14 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
     }
     if (linkedLocationName.present) {
       map['linked_location_name'] = Variable<String>(linkedLocationName.value);
+    }
+    if (linkedLocationBasePlanId.present) {
+      map['linked_location_base_plan_id'] = Variable<int>(
+        linkedLocationBasePlanId.value,
+      );
+    }
+    if (assignedSections.present) {
+      map['assigned_sections'] = Variable<String>(assignedSections.value);
     }
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
@@ -13988,11 +19783,5734 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
           ..write('imagePath: $imagePath, ')
           ..write('source: $source, ')
           ..write('category: $category, ')
+          ..write('groupId: $groupId, ')
           ..write('caption: $caption, ')
           ..write('filmReference: $filmReference, ')
           ..write('linkedSceneId: $linkedSceneId, ')
           ..write('linkedLocationName: $linkedLocationName, ')
+          ..write('linkedLocationBasePlanId: $linkedLocationBasePlanId, ')
+          ..write('assignedSections: $assignedSections, ')
           ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $BibleSectionGroupsTable extends BibleSectionGroups
+    with TableInfo<$BibleSectionGroupsTable, BibleSectionGroup> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BibleSectionGroupsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bibleIdMeta = const VerificationMeta(
+    'bibleId',
+  );
+  @override
+  late final GeneratedColumn<int> bibleId = GeneratedColumn<int>(
+    'bible_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES visual_bibles (id)',
+    ),
+  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isBuiltInMeta = const VerificationMeta(
+    'isBuiltIn',
+  );
+  @override
+  late final GeneratedColumn<bool> isBuiltIn = GeneratedColumn<bool>(
+    'is_built_in',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_built_in" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bibleId,
+    label,
+    sortOrder,
+    isBuiltIn,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bible_section_groups';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BibleSectionGroup> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('bible_id')) {
+      context.handle(
+        _bibleIdMeta,
+        bibleId.isAcceptableOrUnknown(data['bible_id']!, _bibleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bibleIdMeta);
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_labelMeta);
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('is_built_in')) {
+      context.handle(
+        _isBuiltInMeta,
+        isBuiltIn.isAcceptableOrUnknown(data['is_built_in']!, _isBuiltInMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id, bibleId};
+  @override
+  BibleSectionGroup map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BibleSectionGroup(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      bibleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bible_id'],
+      )!,
+      label: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}label'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      isBuiltIn: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_built_in'],
+      )!,
+    );
+  }
+
+  @override
+  $BibleSectionGroupsTable createAlias(String alias) {
+    return $BibleSectionGroupsTable(attachedDatabase, alias);
+  }
+}
+
+class BibleSectionGroup extends DataClass
+    implements Insertable<BibleSectionGroup> {
+  final String id;
+  final int bibleId;
+  final String label;
+  final int sortOrder;
+  final bool isBuiltIn;
+  const BibleSectionGroup({
+    required this.id,
+    required this.bibleId,
+    required this.label,
+    required this.sortOrder,
+    required this.isBuiltIn,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['bible_id'] = Variable<int>(bibleId);
+    map['label'] = Variable<String>(label);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['is_built_in'] = Variable<bool>(isBuiltIn);
+    return map;
+  }
+
+  BibleSectionGroupsCompanion toCompanion(bool nullToAbsent) {
+    return BibleSectionGroupsCompanion(
+      id: Value(id),
+      bibleId: Value(bibleId),
+      label: Value(label),
+      sortOrder: Value(sortOrder),
+      isBuiltIn: Value(isBuiltIn),
+    );
+  }
+
+  factory BibleSectionGroup.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BibleSectionGroup(
+      id: serializer.fromJson<String>(json['id']),
+      bibleId: serializer.fromJson<int>(json['bibleId']),
+      label: serializer.fromJson<String>(json['label']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      isBuiltIn: serializer.fromJson<bool>(json['isBuiltIn']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'bibleId': serializer.toJson<int>(bibleId),
+      'label': serializer.toJson<String>(label),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'isBuiltIn': serializer.toJson<bool>(isBuiltIn),
+    };
+  }
+
+  BibleSectionGroup copyWith({
+    String? id,
+    int? bibleId,
+    String? label,
+    int? sortOrder,
+    bool? isBuiltIn,
+  }) => BibleSectionGroup(
+    id: id ?? this.id,
+    bibleId: bibleId ?? this.bibleId,
+    label: label ?? this.label,
+    sortOrder: sortOrder ?? this.sortOrder,
+    isBuiltIn: isBuiltIn ?? this.isBuiltIn,
+  );
+  BibleSectionGroup copyWithCompanion(BibleSectionGroupsCompanion data) {
+    return BibleSectionGroup(
+      id: data.id.present ? data.id.value : this.id,
+      bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
+      label: data.label.present ? data.label.value : this.label,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      isBuiltIn: data.isBuiltIn.present ? data.isBuiltIn.value : this.isBuiltIn,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BibleSectionGroup(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('label: $label, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('isBuiltIn: $isBuiltIn')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, bibleId, label, sortOrder, isBuiltIn);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BibleSectionGroup &&
+          other.id == this.id &&
+          other.bibleId == this.bibleId &&
+          other.label == this.label &&
+          other.sortOrder == this.sortOrder &&
+          other.isBuiltIn == this.isBuiltIn);
+}
+
+class BibleSectionGroupsCompanion extends UpdateCompanion<BibleSectionGroup> {
+  final Value<String> id;
+  final Value<int> bibleId;
+  final Value<String> label;
+  final Value<int> sortOrder;
+  final Value<bool> isBuiltIn;
+  final Value<int> rowid;
+  const BibleSectionGroupsCompanion({
+    this.id = const Value.absent(),
+    this.bibleId = const Value.absent(),
+    this.label = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.isBuiltIn = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BibleSectionGroupsCompanion.insert({
+    required String id,
+    required int bibleId,
+    required String label,
+    this.sortOrder = const Value.absent(),
+    this.isBuiltIn = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       bibleId = Value(bibleId),
+       label = Value(label);
+  static Insertable<BibleSectionGroup> custom({
+    Expression<String>? id,
+    Expression<int>? bibleId,
+    Expression<String>? label,
+    Expression<int>? sortOrder,
+    Expression<bool>? isBuiltIn,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bibleId != null) 'bible_id': bibleId,
+      if (label != null) 'label': label,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (isBuiltIn != null) 'is_built_in': isBuiltIn,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BibleSectionGroupsCompanion copyWith({
+    Value<String>? id,
+    Value<int>? bibleId,
+    Value<String>? label,
+    Value<int>? sortOrder,
+    Value<bool>? isBuiltIn,
+    Value<int>? rowid,
+  }) {
+    return BibleSectionGroupsCompanion(
+      id: id ?? this.id,
+      bibleId: bibleId ?? this.bibleId,
+      label: label ?? this.label,
+      sortOrder: sortOrder ?? this.sortOrder,
+      isBuiltIn: isBuiltIn ?? this.isBuiltIn,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (bibleId.present) {
+      map['bible_id'] = Variable<int>(bibleId.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (isBuiltIn.present) {
+      map['is_built_in'] = Variable<bool>(isBuiltIn.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BibleSectionGroupsCompanion(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('label: $label, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('isBuiltIn: $isBuiltIn, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $BibleSectionDefinitionsTable extends BibleSectionDefinitions
+    with TableInfo<$BibleSectionDefinitionsTable, BibleSectionDefinition> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BibleSectionDefinitionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bibleIdMeta = const VerificationMeta(
+    'bibleId',
+  );
+  @override
+  late final GeneratedColumn<int> bibleId = GeneratedColumn<int>(
+    'bible_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES visual_bibles (id)',
+    ),
+  );
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _iconKeyMeta = const VerificationMeta(
+    'iconKey',
+  );
+  @override
+  late final GeneratedColumn<String> iconKey = GeneratedColumn<String>(
+    'icon_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('article'),
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isBuiltInMeta = const VerificationMeta(
+    'isBuiltIn',
+  );
+  @override
+  late final GeneratedColumn<bool> isBuiltIn = GeneratedColumn<bool>(
+    'is_built_in',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_built_in" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _isHiddenMeta = const VerificationMeta(
+    'isHidden',
+  );
+  @override
+  late final GeneratedColumn<bool> isHidden = GeneratedColumn<bool>(
+    'is_hidden',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_hidden" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _templateMeta = const VerificationMeta(
+    'template',
+  );
+  @override
+  late final GeneratedColumn<String> template = GeneratedColumn<String>(
+    'template',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('standard'),
+  );
+  static const VerificationMeta _contentJsonMeta = const VerificationMeta(
+    'contentJson',
+  );
+  @override
+  late final GeneratedColumn<String> contentJson = GeneratedColumn<String>(
+    'content_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bibleId,
+    groupId,
+    label,
+    iconKey,
+    sortOrder,
+    isBuiltIn,
+    isHidden,
+    template,
+    contentJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bible_section_definitions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BibleSectionDefinition> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('bible_id')) {
+      context.handle(
+        _bibleIdMeta,
+        bibleId.isAcceptableOrUnknown(data['bible_id']!, _bibleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bibleIdMeta);
+    }
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_labelMeta);
+    }
+    if (data.containsKey('icon_key')) {
+      context.handle(
+        _iconKeyMeta,
+        iconKey.isAcceptableOrUnknown(data['icon_key']!, _iconKeyMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('is_built_in')) {
+      context.handle(
+        _isBuiltInMeta,
+        isBuiltIn.isAcceptableOrUnknown(data['is_built_in']!, _isBuiltInMeta),
+      );
+    }
+    if (data.containsKey('is_hidden')) {
+      context.handle(
+        _isHiddenMeta,
+        isHidden.isAcceptableOrUnknown(data['is_hidden']!, _isHiddenMeta),
+      );
+    }
+    if (data.containsKey('template')) {
+      context.handle(
+        _templateMeta,
+        template.isAcceptableOrUnknown(data['template']!, _templateMeta),
+      );
+    }
+    if (data.containsKey('content_json')) {
+      context.handle(
+        _contentJsonMeta,
+        contentJson.isAcceptableOrUnknown(
+          data['content_json']!,
+          _contentJsonMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id, bibleId};
+  @override
+  BibleSectionDefinition map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BibleSectionDefinition(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      bibleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bible_id'],
+      )!,
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      label: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}label'],
+      )!,
+      iconKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon_key'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      isBuiltIn: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_built_in'],
+      )!,
+      isHidden: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_hidden'],
+      )!,
+      template: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}template'],
+      )!,
+      contentJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_json'],
+      ),
+    );
+  }
+
+  @override
+  $BibleSectionDefinitionsTable createAlias(String alias) {
+    return $BibleSectionDefinitionsTable(attachedDatabase, alias);
+  }
+}
+
+class BibleSectionDefinition extends DataClass
+    implements Insertable<BibleSectionDefinition> {
+  final String id;
+  final int bibleId;
+  final String groupId;
+  final String label;
+  final String iconKey;
+  final int sortOrder;
+  final bool isBuiltIn;
+  final bool isHidden;
+  final String template;
+  final String? contentJson;
+  const BibleSectionDefinition({
+    required this.id,
+    required this.bibleId,
+    required this.groupId,
+    required this.label,
+    required this.iconKey,
+    required this.sortOrder,
+    required this.isBuiltIn,
+    required this.isHidden,
+    required this.template,
+    this.contentJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['bible_id'] = Variable<int>(bibleId);
+    map['group_id'] = Variable<String>(groupId);
+    map['label'] = Variable<String>(label);
+    map['icon_key'] = Variable<String>(iconKey);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['is_built_in'] = Variable<bool>(isBuiltIn);
+    map['is_hidden'] = Variable<bool>(isHidden);
+    map['template'] = Variable<String>(template);
+    if (!nullToAbsent || contentJson != null) {
+      map['content_json'] = Variable<String>(contentJson);
+    }
+    return map;
+  }
+
+  BibleSectionDefinitionsCompanion toCompanion(bool nullToAbsent) {
+    return BibleSectionDefinitionsCompanion(
+      id: Value(id),
+      bibleId: Value(bibleId),
+      groupId: Value(groupId),
+      label: Value(label),
+      iconKey: Value(iconKey),
+      sortOrder: Value(sortOrder),
+      isBuiltIn: Value(isBuiltIn),
+      isHidden: Value(isHidden),
+      template: Value(template),
+      contentJson: contentJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contentJson),
+    );
+  }
+
+  factory BibleSectionDefinition.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BibleSectionDefinition(
+      id: serializer.fromJson<String>(json['id']),
+      bibleId: serializer.fromJson<int>(json['bibleId']),
+      groupId: serializer.fromJson<String>(json['groupId']),
+      label: serializer.fromJson<String>(json['label']),
+      iconKey: serializer.fromJson<String>(json['iconKey']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      isBuiltIn: serializer.fromJson<bool>(json['isBuiltIn']),
+      isHidden: serializer.fromJson<bool>(json['isHidden']),
+      template: serializer.fromJson<String>(json['template']),
+      contentJson: serializer.fromJson<String?>(json['contentJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'bibleId': serializer.toJson<int>(bibleId),
+      'groupId': serializer.toJson<String>(groupId),
+      'label': serializer.toJson<String>(label),
+      'iconKey': serializer.toJson<String>(iconKey),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'isBuiltIn': serializer.toJson<bool>(isBuiltIn),
+      'isHidden': serializer.toJson<bool>(isHidden),
+      'template': serializer.toJson<String>(template),
+      'contentJson': serializer.toJson<String?>(contentJson),
+    };
+  }
+
+  BibleSectionDefinition copyWith({
+    String? id,
+    int? bibleId,
+    String? groupId,
+    String? label,
+    String? iconKey,
+    int? sortOrder,
+    bool? isBuiltIn,
+    bool? isHidden,
+    String? template,
+    Value<String?> contentJson = const Value.absent(),
+  }) => BibleSectionDefinition(
+    id: id ?? this.id,
+    bibleId: bibleId ?? this.bibleId,
+    groupId: groupId ?? this.groupId,
+    label: label ?? this.label,
+    iconKey: iconKey ?? this.iconKey,
+    sortOrder: sortOrder ?? this.sortOrder,
+    isBuiltIn: isBuiltIn ?? this.isBuiltIn,
+    isHidden: isHidden ?? this.isHidden,
+    template: template ?? this.template,
+    contentJson: contentJson.present ? contentJson.value : this.contentJson,
+  );
+  BibleSectionDefinition copyWithCompanion(
+    BibleSectionDefinitionsCompanion data,
+  ) {
+    return BibleSectionDefinition(
+      id: data.id.present ? data.id.value : this.id,
+      bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      label: data.label.present ? data.label.value : this.label,
+      iconKey: data.iconKey.present ? data.iconKey.value : this.iconKey,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      isBuiltIn: data.isBuiltIn.present ? data.isBuiltIn.value : this.isBuiltIn,
+      isHidden: data.isHidden.present ? data.isHidden.value : this.isHidden,
+      template: data.template.present ? data.template.value : this.template,
+      contentJson: data.contentJson.present
+          ? data.contentJson.value
+          : this.contentJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BibleSectionDefinition(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('groupId: $groupId, ')
+          ..write('label: $label, ')
+          ..write('iconKey: $iconKey, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('isBuiltIn: $isBuiltIn, ')
+          ..write('isHidden: $isHidden, ')
+          ..write('template: $template, ')
+          ..write('contentJson: $contentJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    bibleId,
+    groupId,
+    label,
+    iconKey,
+    sortOrder,
+    isBuiltIn,
+    isHidden,
+    template,
+    contentJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BibleSectionDefinition &&
+          other.id == this.id &&
+          other.bibleId == this.bibleId &&
+          other.groupId == this.groupId &&
+          other.label == this.label &&
+          other.iconKey == this.iconKey &&
+          other.sortOrder == this.sortOrder &&
+          other.isBuiltIn == this.isBuiltIn &&
+          other.isHidden == this.isHidden &&
+          other.template == this.template &&
+          other.contentJson == this.contentJson);
+}
+
+class BibleSectionDefinitionsCompanion
+    extends UpdateCompanion<BibleSectionDefinition> {
+  final Value<String> id;
+  final Value<int> bibleId;
+  final Value<String> groupId;
+  final Value<String> label;
+  final Value<String> iconKey;
+  final Value<int> sortOrder;
+  final Value<bool> isBuiltIn;
+  final Value<bool> isHidden;
+  final Value<String> template;
+  final Value<String?> contentJson;
+  final Value<int> rowid;
+  const BibleSectionDefinitionsCompanion({
+    this.id = const Value.absent(),
+    this.bibleId = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.label = const Value.absent(),
+    this.iconKey = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.isBuiltIn = const Value.absent(),
+    this.isHidden = const Value.absent(),
+    this.template = const Value.absent(),
+    this.contentJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BibleSectionDefinitionsCompanion.insert({
+    required String id,
+    required int bibleId,
+    required String groupId,
+    required String label,
+    this.iconKey = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.isBuiltIn = const Value.absent(),
+    this.isHidden = const Value.absent(),
+    this.template = const Value.absent(),
+    this.contentJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       bibleId = Value(bibleId),
+       groupId = Value(groupId),
+       label = Value(label);
+  static Insertable<BibleSectionDefinition> custom({
+    Expression<String>? id,
+    Expression<int>? bibleId,
+    Expression<String>? groupId,
+    Expression<String>? label,
+    Expression<String>? iconKey,
+    Expression<int>? sortOrder,
+    Expression<bool>? isBuiltIn,
+    Expression<bool>? isHidden,
+    Expression<String>? template,
+    Expression<String>? contentJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bibleId != null) 'bible_id': bibleId,
+      if (groupId != null) 'group_id': groupId,
+      if (label != null) 'label': label,
+      if (iconKey != null) 'icon_key': iconKey,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (isBuiltIn != null) 'is_built_in': isBuiltIn,
+      if (isHidden != null) 'is_hidden': isHidden,
+      if (template != null) 'template': template,
+      if (contentJson != null) 'content_json': contentJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BibleSectionDefinitionsCompanion copyWith({
+    Value<String>? id,
+    Value<int>? bibleId,
+    Value<String>? groupId,
+    Value<String>? label,
+    Value<String>? iconKey,
+    Value<int>? sortOrder,
+    Value<bool>? isBuiltIn,
+    Value<bool>? isHidden,
+    Value<String>? template,
+    Value<String?>? contentJson,
+    Value<int>? rowid,
+  }) {
+    return BibleSectionDefinitionsCompanion(
+      id: id ?? this.id,
+      bibleId: bibleId ?? this.bibleId,
+      groupId: groupId ?? this.groupId,
+      label: label ?? this.label,
+      iconKey: iconKey ?? this.iconKey,
+      sortOrder: sortOrder ?? this.sortOrder,
+      isBuiltIn: isBuiltIn ?? this.isBuiltIn,
+      isHidden: isHidden ?? this.isHidden,
+      template: template ?? this.template,
+      contentJson: contentJson ?? this.contentJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (bibleId.present) {
+      map['bible_id'] = Variable<int>(bibleId.value);
+    }
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (iconKey.present) {
+      map['icon_key'] = Variable<String>(iconKey.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (isBuiltIn.present) {
+      map['is_built_in'] = Variable<bool>(isBuiltIn.value);
+    }
+    if (isHidden.present) {
+      map['is_hidden'] = Variable<bool>(isHidden.value);
+    }
+    if (template.present) {
+      map['template'] = Variable<String>(template.value);
+    }
+    if (contentJson.present) {
+      map['content_json'] = Variable<String>(contentJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BibleSectionDefinitionsCompanion(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('groupId: $groupId, ')
+          ..write('label: $label, ')
+          ..write('iconKey: $iconKey, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('isBuiltIn: $isBuiltIn, ')
+          ..write('isHidden: $isHidden, ')
+          ..write('template: $template, ')
+          ..write('contentJson: $contentJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ExposureBlocksTable extends ExposureBlocks
+    with TableInfo<$ExposureBlocksTable, ExposureBlock> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ExposureBlocksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _bibleIdMeta = const VerificationMeta(
+    'bibleId',
+  );
+  @override
+  late final GeneratedColumn<int> bibleId = GeneratedColumn<int>(
+    'bible_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES visual_bibles (id)',
+    ),
+  );
+  static const VerificationMeta _blockNameMeta = const VerificationMeta(
+    'blockName',
+  );
+  @override
+  late final GeneratedColumn<String> blockName = GeneratedColumn<String>(
+    'block_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _highlightStrategyMeta = const VerificationMeta(
+    'highlightStrategy',
+  );
+  @override
+  late final GeneratedColumn<String> highlightStrategy =
+      GeneratedColumn<String>(
+        'highlight_strategy',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _shadowStrategyMeta = const VerificationMeta(
+    'shadowStrategy',
+  );
+  @override
+  late final GeneratedColumn<String> shadowStrategy = GeneratedColumn<String>(
+    'shadow_strategy',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _keyFillRatioMeta = const VerificationMeta(
+    'keyFillRatio',
+  );
+  @override
+  late final GeneratedColumn<String> keyFillRatio = GeneratedColumn<String>(
+    'key_fill_ratio',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _narrativeIntentMeta = const VerificationMeta(
+    'narrativeIntent',
+  );
+  @override
+  late final GeneratedColumn<String> narrativeIntent = GeneratedColumn<String>(
+    'narrative_intent',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _referenceImagesMeta = const VerificationMeta(
+    'referenceImages',
+  );
+  @override
+  late final GeneratedColumn<String> referenceImages = GeneratedColumn<String>(
+    'reference_images',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bibleId,
+    blockName,
+    highlightStrategy,
+    shadowStrategy,
+    keyFillRatio,
+    narrativeIntent,
+    referenceImages,
+    sortOrder,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'exposure_blocks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ExposureBlock> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('bible_id')) {
+      context.handle(
+        _bibleIdMeta,
+        bibleId.isAcceptableOrUnknown(data['bible_id']!, _bibleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bibleIdMeta);
+    }
+    if (data.containsKey('block_name')) {
+      context.handle(
+        _blockNameMeta,
+        blockName.isAcceptableOrUnknown(data['block_name']!, _blockNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_blockNameMeta);
+    }
+    if (data.containsKey('highlight_strategy')) {
+      context.handle(
+        _highlightStrategyMeta,
+        highlightStrategy.isAcceptableOrUnknown(
+          data['highlight_strategy']!,
+          _highlightStrategyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('shadow_strategy')) {
+      context.handle(
+        _shadowStrategyMeta,
+        shadowStrategy.isAcceptableOrUnknown(
+          data['shadow_strategy']!,
+          _shadowStrategyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('key_fill_ratio')) {
+      context.handle(
+        _keyFillRatioMeta,
+        keyFillRatio.isAcceptableOrUnknown(
+          data['key_fill_ratio']!,
+          _keyFillRatioMeta,
+        ),
+      );
+    }
+    if (data.containsKey('narrative_intent')) {
+      context.handle(
+        _narrativeIntentMeta,
+        narrativeIntent.isAcceptableOrUnknown(
+          data['narrative_intent']!,
+          _narrativeIntentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('reference_images')) {
+      context.handle(
+        _referenceImagesMeta,
+        referenceImages.isAcceptableOrUnknown(
+          data['reference_images']!,
+          _referenceImagesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ExposureBlock map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ExposureBlock(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      bibleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bible_id'],
+      )!,
+      blockName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}block_name'],
+      )!,
+      highlightStrategy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}highlight_strategy'],
+      ),
+      shadowStrategy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}shadow_strategy'],
+      ),
+      keyFillRatio: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}key_fill_ratio'],
+      ),
+      narrativeIntent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}narrative_intent'],
+      ),
+      referenceImages: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reference_images'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+    );
+  }
+
+  @override
+  $ExposureBlocksTable createAlias(String alias) {
+    return $ExposureBlocksTable(attachedDatabase, alias);
+  }
+}
+
+class ExposureBlock extends DataClass implements Insertable<ExposureBlock> {
+  final int id;
+  final int bibleId;
+  final String blockName;
+  final String? highlightStrategy;
+  final String? shadowStrategy;
+  final String? keyFillRatio;
+  final String? narrativeIntent;
+  final String? referenceImages;
+  final int sortOrder;
+  const ExposureBlock({
+    required this.id,
+    required this.bibleId,
+    required this.blockName,
+    this.highlightStrategy,
+    this.shadowStrategy,
+    this.keyFillRatio,
+    this.narrativeIntent,
+    this.referenceImages,
+    required this.sortOrder,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['bible_id'] = Variable<int>(bibleId);
+    map['block_name'] = Variable<String>(blockName);
+    if (!nullToAbsent || highlightStrategy != null) {
+      map['highlight_strategy'] = Variable<String>(highlightStrategy);
+    }
+    if (!nullToAbsent || shadowStrategy != null) {
+      map['shadow_strategy'] = Variable<String>(shadowStrategy);
+    }
+    if (!nullToAbsent || keyFillRatio != null) {
+      map['key_fill_ratio'] = Variable<String>(keyFillRatio);
+    }
+    if (!nullToAbsent || narrativeIntent != null) {
+      map['narrative_intent'] = Variable<String>(narrativeIntent);
+    }
+    if (!nullToAbsent || referenceImages != null) {
+      map['reference_images'] = Variable<String>(referenceImages);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    return map;
+  }
+
+  ExposureBlocksCompanion toCompanion(bool nullToAbsent) {
+    return ExposureBlocksCompanion(
+      id: Value(id),
+      bibleId: Value(bibleId),
+      blockName: Value(blockName),
+      highlightStrategy: highlightStrategy == null && nullToAbsent
+          ? const Value.absent()
+          : Value(highlightStrategy),
+      shadowStrategy: shadowStrategy == null && nullToAbsent
+          ? const Value.absent()
+          : Value(shadowStrategy),
+      keyFillRatio: keyFillRatio == null && nullToAbsent
+          ? const Value.absent()
+          : Value(keyFillRatio),
+      narrativeIntent: narrativeIntent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(narrativeIntent),
+      referenceImages: referenceImages == null && nullToAbsent
+          ? const Value.absent()
+          : Value(referenceImages),
+      sortOrder: Value(sortOrder),
+    );
+  }
+
+  factory ExposureBlock.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ExposureBlock(
+      id: serializer.fromJson<int>(json['id']),
+      bibleId: serializer.fromJson<int>(json['bibleId']),
+      blockName: serializer.fromJson<String>(json['blockName']),
+      highlightStrategy: serializer.fromJson<String?>(
+        json['highlightStrategy'],
+      ),
+      shadowStrategy: serializer.fromJson<String?>(json['shadowStrategy']),
+      keyFillRatio: serializer.fromJson<String?>(json['keyFillRatio']),
+      narrativeIntent: serializer.fromJson<String?>(json['narrativeIntent']),
+      referenceImages: serializer.fromJson<String?>(json['referenceImages']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'bibleId': serializer.toJson<int>(bibleId),
+      'blockName': serializer.toJson<String>(blockName),
+      'highlightStrategy': serializer.toJson<String?>(highlightStrategy),
+      'shadowStrategy': serializer.toJson<String?>(shadowStrategy),
+      'keyFillRatio': serializer.toJson<String?>(keyFillRatio),
+      'narrativeIntent': serializer.toJson<String?>(narrativeIntent),
+      'referenceImages': serializer.toJson<String?>(referenceImages),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+    };
+  }
+
+  ExposureBlock copyWith({
+    int? id,
+    int? bibleId,
+    String? blockName,
+    Value<String?> highlightStrategy = const Value.absent(),
+    Value<String?> shadowStrategy = const Value.absent(),
+    Value<String?> keyFillRatio = const Value.absent(),
+    Value<String?> narrativeIntent = const Value.absent(),
+    Value<String?> referenceImages = const Value.absent(),
+    int? sortOrder,
+  }) => ExposureBlock(
+    id: id ?? this.id,
+    bibleId: bibleId ?? this.bibleId,
+    blockName: blockName ?? this.blockName,
+    highlightStrategy: highlightStrategy.present
+        ? highlightStrategy.value
+        : this.highlightStrategy,
+    shadowStrategy: shadowStrategy.present
+        ? shadowStrategy.value
+        : this.shadowStrategy,
+    keyFillRatio: keyFillRatio.present ? keyFillRatio.value : this.keyFillRatio,
+    narrativeIntent: narrativeIntent.present
+        ? narrativeIntent.value
+        : this.narrativeIntent,
+    referenceImages: referenceImages.present
+        ? referenceImages.value
+        : this.referenceImages,
+    sortOrder: sortOrder ?? this.sortOrder,
+  );
+  ExposureBlock copyWithCompanion(ExposureBlocksCompanion data) {
+    return ExposureBlock(
+      id: data.id.present ? data.id.value : this.id,
+      bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
+      blockName: data.blockName.present ? data.blockName.value : this.blockName,
+      highlightStrategy: data.highlightStrategy.present
+          ? data.highlightStrategy.value
+          : this.highlightStrategy,
+      shadowStrategy: data.shadowStrategy.present
+          ? data.shadowStrategy.value
+          : this.shadowStrategy,
+      keyFillRatio: data.keyFillRatio.present
+          ? data.keyFillRatio.value
+          : this.keyFillRatio,
+      narrativeIntent: data.narrativeIntent.present
+          ? data.narrativeIntent.value
+          : this.narrativeIntent,
+      referenceImages: data.referenceImages.present
+          ? data.referenceImages.value
+          : this.referenceImages,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExposureBlock(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('blockName: $blockName, ')
+          ..write('highlightStrategy: $highlightStrategy, ')
+          ..write('shadowStrategy: $shadowStrategy, ')
+          ..write('keyFillRatio: $keyFillRatio, ')
+          ..write('narrativeIntent: $narrativeIntent, ')
+          ..write('referenceImages: $referenceImages, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    bibleId,
+    blockName,
+    highlightStrategy,
+    shadowStrategy,
+    keyFillRatio,
+    narrativeIntent,
+    referenceImages,
+    sortOrder,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ExposureBlock &&
+          other.id == this.id &&
+          other.bibleId == this.bibleId &&
+          other.blockName == this.blockName &&
+          other.highlightStrategy == this.highlightStrategy &&
+          other.shadowStrategy == this.shadowStrategy &&
+          other.keyFillRatio == this.keyFillRatio &&
+          other.narrativeIntent == this.narrativeIntent &&
+          other.referenceImages == this.referenceImages &&
+          other.sortOrder == this.sortOrder);
+}
+
+class ExposureBlocksCompanion extends UpdateCompanion<ExposureBlock> {
+  final Value<int> id;
+  final Value<int> bibleId;
+  final Value<String> blockName;
+  final Value<String?> highlightStrategy;
+  final Value<String?> shadowStrategy;
+  final Value<String?> keyFillRatio;
+  final Value<String?> narrativeIntent;
+  final Value<String?> referenceImages;
+  final Value<int> sortOrder;
+  const ExposureBlocksCompanion({
+    this.id = const Value.absent(),
+    this.bibleId = const Value.absent(),
+    this.blockName = const Value.absent(),
+    this.highlightStrategy = const Value.absent(),
+    this.shadowStrategy = const Value.absent(),
+    this.keyFillRatio = const Value.absent(),
+    this.narrativeIntent = const Value.absent(),
+    this.referenceImages = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  });
+  ExposureBlocksCompanion.insert({
+    this.id = const Value.absent(),
+    required int bibleId,
+    required String blockName,
+    this.highlightStrategy = const Value.absent(),
+    this.shadowStrategy = const Value.absent(),
+    this.keyFillRatio = const Value.absent(),
+    this.narrativeIntent = const Value.absent(),
+    this.referenceImages = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  }) : bibleId = Value(bibleId),
+       blockName = Value(blockName);
+  static Insertable<ExposureBlock> custom({
+    Expression<int>? id,
+    Expression<int>? bibleId,
+    Expression<String>? blockName,
+    Expression<String>? highlightStrategy,
+    Expression<String>? shadowStrategy,
+    Expression<String>? keyFillRatio,
+    Expression<String>? narrativeIntent,
+    Expression<String>? referenceImages,
+    Expression<int>? sortOrder,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bibleId != null) 'bible_id': bibleId,
+      if (blockName != null) 'block_name': blockName,
+      if (highlightStrategy != null) 'highlight_strategy': highlightStrategy,
+      if (shadowStrategy != null) 'shadow_strategy': shadowStrategy,
+      if (keyFillRatio != null) 'key_fill_ratio': keyFillRatio,
+      if (narrativeIntent != null) 'narrative_intent': narrativeIntent,
+      if (referenceImages != null) 'reference_images': referenceImages,
+      if (sortOrder != null) 'sort_order': sortOrder,
+    });
+  }
+
+  ExposureBlocksCompanion copyWith({
+    Value<int>? id,
+    Value<int>? bibleId,
+    Value<String>? blockName,
+    Value<String?>? highlightStrategy,
+    Value<String?>? shadowStrategy,
+    Value<String?>? keyFillRatio,
+    Value<String?>? narrativeIntent,
+    Value<String?>? referenceImages,
+    Value<int>? sortOrder,
+  }) {
+    return ExposureBlocksCompanion(
+      id: id ?? this.id,
+      bibleId: bibleId ?? this.bibleId,
+      blockName: blockName ?? this.blockName,
+      highlightStrategy: highlightStrategy ?? this.highlightStrategy,
+      shadowStrategy: shadowStrategy ?? this.shadowStrategy,
+      keyFillRatio: keyFillRatio ?? this.keyFillRatio,
+      narrativeIntent: narrativeIntent ?? this.narrativeIntent,
+      referenceImages: referenceImages ?? this.referenceImages,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (bibleId.present) {
+      map['bible_id'] = Variable<int>(bibleId.value);
+    }
+    if (blockName.present) {
+      map['block_name'] = Variable<String>(blockName.value);
+    }
+    if (highlightStrategy.present) {
+      map['highlight_strategy'] = Variable<String>(highlightStrategy.value);
+    }
+    if (shadowStrategy.present) {
+      map['shadow_strategy'] = Variable<String>(shadowStrategy.value);
+    }
+    if (keyFillRatio.present) {
+      map['key_fill_ratio'] = Variable<String>(keyFillRatio.value);
+    }
+    if (narrativeIntent.present) {
+      map['narrative_intent'] = Variable<String>(narrativeIntent.value);
+    }
+    if (referenceImages.present) {
+      map['reference_images'] = Variable<String>(referenceImages.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExposureBlocksCompanion(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('blockName: $blockName, ')
+          ..write('highlightStrategy: $highlightStrategy, ')
+          ..write('shadowStrategy: $shadowStrategy, ')
+          ..write('keyFillRatio: $keyFillRatio, ')
+          ..write('narrativeIntent: $narrativeIntent, ')
+          ..write('referenceImages: $referenceImages, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $LightingSetupsTable extends LightingSetups
+    with TableInfo<$LightingSetupsTable, LightingSetup> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LightingSetupsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _bibleIdMeta = const VerificationMeta(
+    'bibleId',
+  );
+  @override
+  late final GeneratedColumn<int> bibleId = GeneratedColumn<int>(
+    'bible_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES visual_bibles (id)',
+    ),
+  );
+  static const VerificationMeta _setupNameMeta = const VerificationMeta(
+    'setupName',
+  );
+  @override
+  late final GeneratedColumn<String> setupName = GeneratedColumn<String>(
+    'setup_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _narrativeNoteMeta = const VerificationMeta(
+    'narrativeNote',
+  );
+  @override
+  late final GeneratedColumn<String> narrativeNote = GeneratedColumn<String>(
+    'narrative_note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _diagramJsonMeta = const VerificationMeta(
+    'diagramJson',
+  );
+  @override
+  late final GeneratedColumn<String> diagramJson = GeneratedColumn<String>(
+    'diagram_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _gelNotesMeta = const VerificationMeta(
+    'gelNotes',
+  );
+  @override
+  late final GeneratedColumn<String> gelNotes = GeneratedColumn<String>(
+    'gel_notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _practicalMotivationMeta =
+      const VerificationMeta('practicalMotivation');
+  @override
+  late final GeneratedColumn<String> practicalMotivation =
+      GeneratedColumn<String>(
+        'practical_motivation',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _referenceImagePathMeta =
+      const VerificationMeta('referenceImagePath');
+  @override
+  late final GeneratedColumn<String> referenceImagePath =
+      GeneratedColumn<String>(
+        'reference_image_path',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bibleId,
+    setupName,
+    narrativeNote,
+    diagramJson,
+    gelNotes,
+    practicalMotivation,
+    referenceImagePath,
+    sortOrder,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'lighting_setups';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LightingSetup> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('bible_id')) {
+      context.handle(
+        _bibleIdMeta,
+        bibleId.isAcceptableOrUnknown(data['bible_id']!, _bibleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bibleIdMeta);
+    }
+    if (data.containsKey('setup_name')) {
+      context.handle(
+        _setupNameMeta,
+        setupName.isAcceptableOrUnknown(data['setup_name']!, _setupNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_setupNameMeta);
+    }
+    if (data.containsKey('narrative_note')) {
+      context.handle(
+        _narrativeNoteMeta,
+        narrativeNote.isAcceptableOrUnknown(
+          data['narrative_note']!,
+          _narrativeNoteMeta,
+        ),
+      );
+    }
+    if (data.containsKey('diagram_json')) {
+      context.handle(
+        _diagramJsonMeta,
+        diagramJson.isAcceptableOrUnknown(
+          data['diagram_json']!,
+          _diagramJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_diagramJsonMeta);
+    }
+    if (data.containsKey('gel_notes')) {
+      context.handle(
+        _gelNotesMeta,
+        gelNotes.isAcceptableOrUnknown(data['gel_notes']!, _gelNotesMeta),
+      );
+    }
+    if (data.containsKey('practical_motivation')) {
+      context.handle(
+        _practicalMotivationMeta,
+        practicalMotivation.isAcceptableOrUnknown(
+          data['practical_motivation']!,
+          _practicalMotivationMeta,
+        ),
+      );
+    }
+    if (data.containsKey('reference_image_path')) {
+      context.handle(
+        _referenceImagePathMeta,
+        referenceImagePath.isAcceptableOrUnknown(
+          data['reference_image_path']!,
+          _referenceImagePathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LightingSetup map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LightingSetup(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      bibleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bible_id'],
+      )!,
+      setupName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}setup_name'],
+      )!,
+      narrativeNote: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}narrative_note'],
+      ),
+      diagramJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}diagram_json'],
+      )!,
+      gelNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}gel_notes'],
+      ),
+      practicalMotivation: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}practical_motivation'],
+      ),
+      referenceImagePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reference_image_path'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+    );
+  }
+
+  @override
+  $LightingSetupsTable createAlias(String alias) {
+    return $LightingSetupsTable(attachedDatabase, alias);
+  }
+}
+
+class LightingSetup extends DataClass implements Insertable<LightingSetup> {
+  final int id;
+  final int bibleId;
+  final String setupName;
+  final String? narrativeNote;
+  final String diagramJson;
+  final String? gelNotes;
+  final String? practicalMotivation;
+  final String? referenceImagePath;
+  final int sortOrder;
+  const LightingSetup({
+    required this.id,
+    required this.bibleId,
+    required this.setupName,
+    this.narrativeNote,
+    required this.diagramJson,
+    this.gelNotes,
+    this.practicalMotivation,
+    this.referenceImagePath,
+    required this.sortOrder,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['bible_id'] = Variable<int>(bibleId);
+    map['setup_name'] = Variable<String>(setupName);
+    if (!nullToAbsent || narrativeNote != null) {
+      map['narrative_note'] = Variable<String>(narrativeNote);
+    }
+    map['diagram_json'] = Variable<String>(diagramJson);
+    if (!nullToAbsent || gelNotes != null) {
+      map['gel_notes'] = Variable<String>(gelNotes);
+    }
+    if (!nullToAbsent || practicalMotivation != null) {
+      map['practical_motivation'] = Variable<String>(practicalMotivation);
+    }
+    if (!nullToAbsent || referenceImagePath != null) {
+      map['reference_image_path'] = Variable<String>(referenceImagePath);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    return map;
+  }
+
+  LightingSetupsCompanion toCompanion(bool nullToAbsent) {
+    return LightingSetupsCompanion(
+      id: Value(id),
+      bibleId: Value(bibleId),
+      setupName: Value(setupName),
+      narrativeNote: narrativeNote == null && nullToAbsent
+          ? const Value.absent()
+          : Value(narrativeNote),
+      diagramJson: Value(diagramJson),
+      gelNotes: gelNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(gelNotes),
+      practicalMotivation: practicalMotivation == null && nullToAbsent
+          ? const Value.absent()
+          : Value(practicalMotivation),
+      referenceImagePath: referenceImagePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(referenceImagePath),
+      sortOrder: Value(sortOrder),
+    );
+  }
+
+  factory LightingSetup.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LightingSetup(
+      id: serializer.fromJson<int>(json['id']),
+      bibleId: serializer.fromJson<int>(json['bibleId']),
+      setupName: serializer.fromJson<String>(json['setupName']),
+      narrativeNote: serializer.fromJson<String?>(json['narrativeNote']),
+      diagramJson: serializer.fromJson<String>(json['diagramJson']),
+      gelNotes: serializer.fromJson<String?>(json['gelNotes']),
+      practicalMotivation: serializer.fromJson<String?>(
+        json['practicalMotivation'],
+      ),
+      referenceImagePath: serializer.fromJson<String?>(
+        json['referenceImagePath'],
+      ),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'bibleId': serializer.toJson<int>(bibleId),
+      'setupName': serializer.toJson<String>(setupName),
+      'narrativeNote': serializer.toJson<String?>(narrativeNote),
+      'diagramJson': serializer.toJson<String>(diagramJson),
+      'gelNotes': serializer.toJson<String?>(gelNotes),
+      'practicalMotivation': serializer.toJson<String?>(practicalMotivation),
+      'referenceImagePath': serializer.toJson<String?>(referenceImagePath),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+    };
+  }
+
+  LightingSetup copyWith({
+    int? id,
+    int? bibleId,
+    String? setupName,
+    Value<String?> narrativeNote = const Value.absent(),
+    String? diagramJson,
+    Value<String?> gelNotes = const Value.absent(),
+    Value<String?> practicalMotivation = const Value.absent(),
+    Value<String?> referenceImagePath = const Value.absent(),
+    int? sortOrder,
+  }) => LightingSetup(
+    id: id ?? this.id,
+    bibleId: bibleId ?? this.bibleId,
+    setupName: setupName ?? this.setupName,
+    narrativeNote: narrativeNote.present
+        ? narrativeNote.value
+        : this.narrativeNote,
+    diagramJson: diagramJson ?? this.diagramJson,
+    gelNotes: gelNotes.present ? gelNotes.value : this.gelNotes,
+    practicalMotivation: practicalMotivation.present
+        ? practicalMotivation.value
+        : this.practicalMotivation,
+    referenceImagePath: referenceImagePath.present
+        ? referenceImagePath.value
+        : this.referenceImagePath,
+    sortOrder: sortOrder ?? this.sortOrder,
+  );
+  LightingSetup copyWithCompanion(LightingSetupsCompanion data) {
+    return LightingSetup(
+      id: data.id.present ? data.id.value : this.id,
+      bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
+      setupName: data.setupName.present ? data.setupName.value : this.setupName,
+      narrativeNote: data.narrativeNote.present
+          ? data.narrativeNote.value
+          : this.narrativeNote,
+      diagramJson: data.diagramJson.present
+          ? data.diagramJson.value
+          : this.diagramJson,
+      gelNotes: data.gelNotes.present ? data.gelNotes.value : this.gelNotes,
+      practicalMotivation: data.practicalMotivation.present
+          ? data.practicalMotivation.value
+          : this.practicalMotivation,
+      referenceImagePath: data.referenceImagePath.present
+          ? data.referenceImagePath.value
+          : this.referenceImagePath,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LightingSetup(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('setupName: $setupName, ')
+          ..write('narrativeNote: $narrativeNote, ')
+          ..write('diagramJson: $diagramJson, ')
+          ..write('gelNotes: $gelNotes, ')
+          ..write('practicalMotivation: $practicalMotivation, ')
+          ..write('referenceImagePath: $referenceImagePath, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    bibleId,
+    setupName,
+    narrativeNote,
+    diagramJson,
+    gelNotes,
+    practicalMotivation,
+    referenceImagePath,
+    sortOrder,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LightingSetup &&
+          other.id == this.id &&
+          other.bibleId == this.bibleId &&
+          other.setupName == this.setupName &&
+          other.narrativeNote == this.narrativeNote &&
+          other.diagramJson == this.diagramJson &&
+          other.gelNotes == this.gelNotes &&
+          other.practicalMotivation == this.practicalMotivation &&
+          other.referenceImagePath == this.referenceImagePath &&
+          other.sortOrder == this.sortOrder);
+}
+
+class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
+  final Value<int> id;
+  final Value<int> bibleId;
+  final Value<String> setupName;
+  final Value<String?> narrativeNote;
+  final Value<String> diagramJson;
+  final Value<String?> gelNotes;
+  final Value<String?> practicalMotivation;
+  final Value<String?> referenceImagePath;
+  final Value<int> sortOrder;
+  const LightingSetupsCompanion({
+    this.id = const Value.absent(),
+    this.bibleId = const Value.absent(),
+    this.setupName = const Value.absent(),
+    this.narrativeNote = const Value.absent(),
+    this.diagramJson = const Value.absent(),
+    this.gelNotes = const Value.absent(),
+    this.practicalMotivation = const Value.absent(),
+    this.referenceImagePath = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  });
+  LightingSetupsCompanion.insert({
+    this.id = const Value.absent(),
+    required int bibleId,
+    required String setupName,
+    this.narrativeNote = const Value.absent(),
+    required String diagramJson,
+    this.gelNotes = const Value.absent(),
+    this.practicalMotivation = const Value.absent(),
+    this.referenceImagePath = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  }) : bibleId = Value(bibleId),
+       setupName = Value(setupName),
+       diagramJson = Value(diagramJson);
+  static Insertable<LightingSetup> custom({
+    Expression<int>? id,
+    Expression<int>? bibleId,
+    Expression<String>? setupName,
+    Expression<String>? narrativeNote,
+    Expression<String>? diagramJson,
+    Expression<String>? gelNotes,
+    Expression<String>? practicalMotivation,
+    Expression<String>? referenceImagePath,
+    Expression<int>? sortOrder,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bibleId != null) 'bible_id': bibleId,
+      if (setupName != null) 'setup_name': setupName,
+      if (narrativeNote != null) 'narrative_note': narrativeNote,
+      if (diagramJson != null) 'diagram_json': diagramJson,
+      if (gelNotes != null) 'gel_notes': gelNotes,
+      if (practicalMotivation != null)
+        'practical_motivation': practicalMotivation,
+      if (referenceImagePath != null)
+        'reference_image_path': referenceImagePath,
+      if (sortOrder != null) 'sort_order': sortOrder,
+    });
+  }
+
+  LightingSetupsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? bibleId,
+    Value<String>? setupName,
+    Value<String?>? narrativeNote,
+    Value<String>? diagramJson,
+    Value<String?>? gelNotes,
+    Value<String?>? practicalMotivation,
+    Value<String?>? referenceImagePath,
+    Value<int>? sortOrder,
+  }) {
+    return LightingSetupsCompanion(
+      id: id ?? this.id,
+      bibleId: bibleId ?? this.bibleId,
+      setupName: setupName ?? this.setupName,
+      narrativeNote: narrativeNote ?? this.narrativeNote,
+      diagramJson: diagramJson ?? this.diagramJson,
+      gelNotes: gelNotes ?? this.gelNotes,
+      practicalMotivation: practicalMotivation ?? this.practicalMotivation,
+      referenceImagePath: referenceImagePath ?? this.referenceImagePath,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (bibleId.present) {
+      map['bible_id'] = Variable<int>(bibleId.value);
+    }
+    if (setupName.present) {
+      map['setup_name'] = Variable<String>(setupName.value);
+    }
+    if (narrativeNote.present) {
+      map['narrative_note'] = Variable<String>(narrativeNote.value);
+    }
+    if (diagramJson.present) {
+      map['diagram_json'] = Variable<String>(diagramJson.value);
+    }
+    if (gelNotes.present) {
+      map['gel_notes'] = Variable<String>(gelNotes.value);
+    }
+    if (practicalMotivation.present) {
+      map['practical_motivation'] = Variable<String>(practicalMotivation.value);
+    }
+    if (referenceImagePath.present) {
+      map['reference_image_path'] = Variable<String>(referenceImagePath.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LightingSetupsCompanion(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('setupName: $setupName, ')
+          ..write('narrativeNote: $narrativeNote, ')
+          ..write('diagramJson: $diagramJson, ')
+          ..write('gelNotes: $gelNotes, ')
+          ..write('practicalMotivation: $practicalMotivation, ')
+          ..write('referenceImagePath: $referenceImagePath, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CameraTestsTable extends CameraTests
+    with TableInfo<$CameraTestsTable, CameraTest> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CameraTestsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _bibleIdMeta = const VerificationMeta(
+    'bibleId',
+  );
+  @override
+  late final GeneratedColumn<int> bibleId = GeneratedColumn<int>(
+    'bible_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES visual_bibles (id)',
+    ),
+  );
+  static const VerificationMeta _testNameMeta = const VerificationMeta(
+    'testName',
+  );
+  @override
+  late final GeneratedColumn<String> testName = GeneratedColumn<String>(
+    'test_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cameraIdMeta = const VerificationMeta(
+    'cameraId',
+  );
+  @override
+  late final GeneratedColumn<int> cameraId = GeneratedColumn<int>(
+    'camera_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES cameras (id)',
+    ),
+  );
+  static const VerificationMeta _lensIdMeta = const VerificationMeta('lensId');
+  @override
+  late final GeneratedColumn<int> lensId = GeneratedColumn<int>(
+    'lens_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES lenses (id)',
+    ),
+  );
+  static const VerificationMeta _lutNameMeta = const VerificationMeta(
+    'lutName',
+  );
+  @override
+  late final GeneratedColumn<String> lutName = GeneratedColumn<String>(
+    'lut_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lightConditionMeta = const VerificationMeta(
+    'lightCondition',
+  );
+  @override
+  late final GeneratedColumn<String> lightCondition = GeneratedColumn<String>(
+    'light_condition',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _imagePathsMeta = const VerificationMeta(
+    'imagePaths',
+  );
+  @override
+  late final GeneratedColumn<String> imagePaths = GeneratedColumn<String>(
+    'image_paths',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _testedAtMeta = const VerificationMeta(
+    'testedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> testedAt = GeneratedColumn<DateTime>(
+    'tested_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bibleId,
+    testName,
+    cameraId,
+    lensId,
+    lutName,
+    lightCondition,
+    notes,
+    imagePaths,
+    testedAt,
+    sortOrder,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'camera_tests';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CameraTest> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('bible_id')) {
+      context.handle(
+        _bibleIdMeta,
+        bibleId.isAcceptableOrUnknown(data['bible_id']!, _bibleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bibleIdMeta);
+    }
+    if (data.containsKey('test_name')) {
+      context.handle(
+        _testNameMeta,
+        testName.isAcceptableOrUnknown(data['test_name']!, _testNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_testNameMeta);
+    }
+    if (data.containsKey('camera_id')) {
+      context.handle(
+        _cameraIdMeta,
+        cameraId.isAcceptableOrUnknown(data['camera_id']!, _cameraIdMeta),
+      );
+    }
+    if (data.containsKey('lens_id')) {
+      context.handle(
+        _lensIdMeta,
+        lensId.isAcceptableOrUnknown(data['lens_id']!, _lensIdMeta),
+      );
+    }
+    if (data.containsKey('lut_name')) {
+      context.handle(
+        _lutNameMeta,
+        lutName.isAcceptableOrUnknown(data['lut_name']!, _lutNameMeta),
+      );
+    }
+    if (data.containsKey('light_condition')) {
+      context.handle(
+        _lightConditionMeta,
+        lightCondition.isAcceptableOrUnknown(
+          data['light_condition']!,
+          _lightConditionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
+    if (data.containsKey('image_paths')) {
+      context.handle(
+        _imagePathsMeta,
+        imagePaths.isAcceptableOrUnknown(data['image_paths']!, _imagePathsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_imagePathsMeta);
+    }
+    if (data.containsKey('tested_at')) {
+      context.handle(
+        _testedAtMeta,
+        testedAt.isAcceptableOrUnknown(data['tested_at']!, _testedAtMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CameraTest map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CameraTest(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      bibleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bible_id'],
+      )!,
+      testName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}test_name'],
+      )!,
+      cameraId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}camera_id'],
+      ),
+      lensId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lens_id'],
+      ),
+      lutName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}lut_name'],
+      ),
+      lightCondition: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}light_condition'],
+      ),
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
+      imagePaths: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}image_paths'],
+      )!,
+      testedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}tested_at'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+    );
+  }
+
+  @override
+  $CameraTestsTable createAlias(String alias) {
+    return $CameraTestsTable(attachedDatabase, alias);
+  }
+}
+
+class CameraTest extends DataClass implements Insertable<CameraTest> {
+  final int id;
+  final int bibleId;
+  final String testName;
+  final int? cameraId;
+  final int? lensId;
+  final String? lutName;
+  final String? lightCondition;
+  final String? notes;
+  final String imagePaths;
+  final DateTime? testedAt;
+  final int sortOrder;
+  const CameraTest({
+    required this.id,
+    required this.bibleId,
+    required this.testName,
+    this.cameraId,
+    this.lensId,
+    this.lutName,
+    this.lightCondition,
+    this.notes,
+    required this.imagePaths,
+    this.testedAt,
+    required this.sortOrder,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['bible_id'] = Variable<int>(bibleId);
+    map['test_name'] = Variable<String>(testName);
+    if (!nullToAbsent || cameraId != null) {
+      map['camera_id'] = Variable<int>(cameraId);
+    }
+    if (!nullToAbsent || lensId != null) {
+      map['lens_id'] = Variable<int>(lensId);
+    }
+    if (!nullToAbsent || lutName != null) {
+      map['lut_name'] = Variable<String>(lutName);
+    }
+    if (!nullToAbsent || lightCondition != null) {
+      map['light_condition'] = Variable<String>(lightCondition);
+    }
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
+    map['image_paths'] = Variable<String>(imagePaths);
+    if (!nullToAbsent || testedAt != null) {
+      map['tested_at'] = Variable<DateTime>(testedAt);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    return map;
+  }
+
+  CameraTestsCompanion toCompanion(bool nullToAbsent) {
+    return CameraTestsCompanion(
+      id: Value(id),
+      bibleId: Value(bibleId),
+      testName: Value(testName),
+      cameraId: cameraId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cameraId),
+      lensId: lensId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lensId),
+      lutName: lutName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lutName),
+      lightCondition: lightCondition == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lightCondition),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
+      imagePaths: Value(imagePaths),
+      testedAt: testedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(testedAt),
+      sortOrder: Value(sortOrder),
+    );
+  }
+
+  factory CameraTest.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CameraTest(
+      id: serializer.fromJson<int>(json['id']),
+      bibleId: serializer.fromJson<int>(json['bibleId']),
+      testName: serializer.fromJson<String>(json['testName']),
+      cameraId: serializer.fromJson<int?>(json['cameraId']),
+      lensId: serializer.fromJson<int?>(json['lensId']),
+      lutName: serializer.fromJson<String?>(json['lutName']),
+      lightCondition: serializer.fromJson<String?>(json['lightCondition']),
+      notes: serializer.fromJson<String?>(json['notes']),
+      imagePaths: serializer.fromJson<String>(json['imagePaths']),
+      testedAt: serializer.fromJson<DateTime?>(json['testedAt']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'bibleId': serializer.toJson<int>(bibleId),
+      'testName': serializer.toJson<String>(testName),
+      'cameraId': serializer.toJson<int?>(cameraId),
+      'lensId': serializer.toJson<int?>(lensId),
+      'lutName': serializer.toJson<String?>(lutName),
+      'lightCondition': serializer.toJson<String?>(lightCondition),
+      'notes': serializer.toJson<String?>(notes),
+      'imagePaths': serializer.toJson<String>(imagePaths),
+      'testedAt': serializer.toJson<DateTime?>(testedAt),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+    };
+  }
+
+  CameraTest copyWith({
+    int? id,
+    int? bibleId,
+    String? testName,
+    Value<int?> cameraId = const Value.absent(),
+    Value<int?> lensId = const Value.absent(),
+    Value<String?> lutName = const Value.absent(),
+    Value<String?> lightCondition = const Value.absent(),
+    Value<String?> notes = const Value.absent(),
+    String? imagePaths,
+    Value<DateTime?> testedAt = const Value.absent(),
+    int? sortOrder,
+  }) => CameraTest(
+    id: id ?? this.id,
+    bibleId: bibleId ?? this.bibleId,
+    testName: testName ?? this.testName,
+    cameraId: cameraId.present ? cameraId.value : this.cameraId,
+    lensId: lensId.present ? lensId.value : this.lensId,
+    lutName: lutName.present ? lutName.value : this.lutName,
+    lightCondition: lightCondition.present
+        ? lightCondition.value
+        : this.lightCondition,
+    notes: notes.present ? notes.value : this.notes,
+    imagePaths: imagePaths ?? this.imagePaths,
+    testedAt: testedAt.present ? testedAt.value : this.testedAt,
+    sortOrder: sortOrder ?? this.sortOrder,
+  );
+  CameraTest copyWithCompanion(CameraTestsCompanion data) {
+    return CameraTest(
+      id: data.id.present ? data.id.value : this.id,
+      bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
+      testName: data.testName.present ? data.testName.value : this.testName,
+      cameraId: data.cameraId.present ? data.cameraId.value : this.cameraId,
+      lensId: data.lensId.present ? data.lensId.value : this.lensId,
+      lutName: data.lutName.present ? data.lutName.value : this.lutName,
+      lightCondition: data.lightCondition.present
+          ? data.lightCondition.value
+          : this.lightCondition,
+      notes: data.notes.present ? data.notes.value : this.notes,
+      imagePaths: data.imagePaths.present
+          ? data.imagePaths.value
+          : this.imagePaths,
+      testedAt: data.testedAt.present ? data.testedAt.value : this.testedAt,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CameraTest(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('testName: $testName, ')
+          ..write('cameraId: $cameraId, ')
+          ..write('lensId: $lensId, ')
+          ..write('lutName: $lutName, ')
+          ..write('lightCondition: $lightCondition, ')
+          ..write('notes: $notes, ')
+          ..write('imagePaths: $imagePaths, ')
+          ..write('testedAt: $testedAt, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    bibleId,
+    testName,
+    cameraId,
+    lensId,
+    lutName,
+    lightCondition,
+    notes,
+    imagePaths,
+    testedAt,
+    sortOrder,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CameraTest &&
+          other.id == this.id &&
+          other.bibleId == this.bibleId &&
+          other.testName == this.testName &&
+          other.cameraId == this.cameraId &&
+          other.lensId == this.lensId &&
+          other.lutName == this.lutName &&
+          other.lightCondition == this.lightCondition &&
+          other.notes == this.notes &&
+          other.imagePaths == this.imagePaths &&
+          other.testedAt == this.testedAt &&
+          other.sortOrder == this.sortOrder);
+}
+
+class CameraTestsCompanion extends UpdateCompanion<CameraTest> {
+  final Value<int> id;
+  final Value<int> bibleId;
+  final Value<String> testName;
+  final Value<int?> cameraId;
+  final Value<int?> lensId;
+  final Value<String?> lutName;
+  final Value<String?> lightCondition;
+  final Value<String?> notes;
+  final Value<String> imagePaths;
+  final Value<DateTime?> testedAt;
+  final Value<int> sortOrder;
+  const CameraTestsCompanion({
+    this.id = const Value.absent(),
+    this.bibleId = const Value.absent(),
+    this.testName = const Value.absent(),
+    this.cameraId = const Value.absent(),
+    this.lensId = const Value.absent(),
+    this.lutName = const Value.absent(),
+    this.lightCondition = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.imagePaths = const Value.absent(),
+    this.testedAt = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  });
+  CameraTestsCompanion.insert({
+    this.id = const Value.absent(),
+    required int bibleId,
+    required String testName,
+    this.cameraId = const Value.absent(),
+    this.lensId = const Value.absent(),
+    this.lutName = const Value.absent(),
+    this.lightCondition = const Value.absent(),
+    this.notes = const Value.absent(),
+    required String imagePaths,
+    this.testedAt = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  }) : bibleId = Value(bibleId),
+       testName = Value(testName),
+       imagePaths = Value(imagePaths);
+  static Insertable<CameraTest> custom({
+    Expression<int>? id,
+    Expression<int>? bibleId,
+    Expression<String>? testName,
+    Expression<int>? cameraId,
+    Expression<int>? lensId,
+    Expression<String>? lutName,
+    Expression<String>? lightCondition,
+    Expression<String>? notes,
+    Expression<String>? imagePaths,
+    Expression<DateTime>? testedAt,
+    Expression<int>? sortOrder,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bibleId != null) 'bible_id': bibleId,
+      if (testName != null) 'test_name': testName,
+      if (cameraId != null) 'camera_id': cameraId,
+      if (lensId != null) 'lens_id': lensId,
+      if (lutName != null) 'lut_name': lutName,
+      if (lightCondition != null) 'light_condition': lightCondition,
+      if (notes != null) 'notes': notes,
+      if (imagePaths != null) 'image_paths': imagePaths,
+      if (testedAt != null) 'tested_at': testedAt,
+      if (sortOrder != null) 'sort_order': sortOrder,
+    });
+  }
+
+  CameraTestsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? bibleId,
+    Value<String>? testName,
+    Value<int?>? cameraId,
+    Value<int?>? lensId,
+    Value<String?>? lutName,
+    Value<String?>? lightCondition,
+    Value<String?>? notes,
+    Value<String>? imagePaths,
+    Value<DateTime?>? testedAt,
+    Value<int>? sortOrder,
+  }) {
+    return CameraTestsCompanion(
+      id: id ?? this.id,
+      bibleId: bibleId ?? this.bibleId,
+      testName: testName ?? this.testName,
+      cameraId: cameraId ?? this.cameraId,
+      lensId: lensId ?? this.lensId,
+      lutName: lutName ?? this.lutName,
+      lightCondition: lightCondition ?? this.lightCondition,
+      notes: notes ?? this.notes,
+      imagePaths: imagePaths ?? this.imagePaths,
+      testedAt: testedAt ?? this.testedAt,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (bibleId.present) {
+      map['bible_id'] = Variable<int>(bibleId.value);
+    }
+    if (testName.present) {
+      map['test_name'] = Variable<String>(testName.value);
+    }
+    if (cameraId.present) {
+      map['camera_id'] = Variable<int>(cameraId.value);
+    }
+    if (lensId.present) {
+      map['lens_id'] = Variable<int>(lensId.value);
+    }
+    if (lutName.present) {
+      map['lut_name'] = Variable<String>(lutName.value);
+    }
+    if (lightCondition.present) {
+      map['light_condition'] = Variable<String>(lightCondition.value);
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
+    if (imagePaths.present) {
+      map['image_paths'] = Variable<String>(imagePaths.value);
+    }
+    if (testedAt.present) {
+      map['tested_at'] = Variable<DateTime>(testedAt.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CameraTestsCompanion(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('testName: $testName, ')
+          ..write('cameraId: $cameraId, ')
+          ..write('lensId: $lensId, ')
+          ..write('lutName: $lutName, ')
+          ..write('lightCondition: $lightCondition, ')
+          ..write('notes: $notes, ')
+          ..write('imagePaths: $imagePaths, ')
+          ..write('testedAt: $testedAt, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $VisualBibleVersionsTable extends VisualBibleVersions
+    with TableInfo<$VisualBibleVersionsTable, VisualBibleVersion> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $VisualBibleVersionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _bibleIdMeta = const VerificationMeta(
+    'bibleId',
+  );
+  @override
+  late final GeneratedColumn<int> bibleId = GeneratedColumn<int>(
+    'bible_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES visual_bibles (id)',
+    ),
+  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotJsonMeta = const VerificationMeta(
+    'snapshotJson',
+  );
+  @override
+  late final GeneratedColumn<String> snapshotJson = GeneratedColumn<String>(
+    'snapshot_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _changeNoteMeta = const VerificationMeta(
+    'changeNote',
+  );
+  @override
+  late final GeneratedColumn<String> changeNote = GeneratedColumn<String>(
+    'change_note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bibleId,
+    label,
+    snapshotJson,
+    changeNote,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'visual_bible_versions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<VisualBibleVersion> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('bible_id')) {
+      context.handle(
+        _bibleIdMeta,
+        bibleId.isAcceptableOrUnknown(data['bible_id']!, _bibleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bibleIdMeta);
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_labelMeta);
+    }
+    if (data.containsKey('snapshot_json')) {
+      context.handle(
+        _snapshotJsonMeta,
+        snapshotJson.isAcceptableOrUnknown(
+          data['snapshot_json']!,
+          _snapshotJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotJsonMeta);
+    }
+    if (data.containsKey('change_note')) {
+      context.handle(
+        _changeNoteMeta,
+        changeNote.isAcceptableOrUnknown(data['change_note']!, _changeNoteMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  VisualBibleVersion map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return VisualBibleVersion(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      bibleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bible_id'],
+      )!,
+      label: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}label'],
+      )!,
+      snapshotJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot_json'],
+      )!,
+      changeNote: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}change_note'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $VisualBibleVersionsTable createAlias(String alias) {
+    return $VisualBibleVersionsTable(attachedDatabase, alias);
+  }
+}
+
+class VisualBibleVersion extends DataClass
+    implements Insertable<VisualBibleVersion> {
+  final int id;
+  final int bibleId;
+  final String label;
+  final String snapshotJson;
+  final String? changeNote;
+  final DateTime createdAt;
+  const VisualBibleVersion({
+    required this.id,
+    required this.bibleId,
+    required this.label,
+    required this.snapshotJson,
+    this.changeNote,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['bible_id'] = Variable<int>(bibleId);
+    map['label'] = Variable<String>(label);
+    map['snapshot_json'] = Variable<String>(snapshotJson);
+    if (!nullToAbsent || changeNote != null) {
+      map['change_note'] = Variable<String>(changeNote);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  VisualBibleVersionsCompanion toCompanion(bool nullToAbsent) {
+    return VisualBibleVersionsCompanion(
+      id: Value(id),
+      bibleId: Value(bibleId),
+      label: Value(label),
+      snapshotJson: Value(snapshotJson),
+      changeNote: changeNote == null && nullToAbsent
+          ? const Value.absent()
+          : Value(changeNote),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory VisualBibleVersion.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return VisualBibleVersion(
+      id: serializer.fromJson<int>(json['id']),
+      bibleId: serializer.fromJson<int>(json['bibleId']),
+      label: serializer.fromJson<String>(json['label']),
+      snapshotJson: serializer.fromJson<String>(json['snapshotJson']),
+      changeNote: serializer.fromJson<String?>(json['changeNote']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'bibleId': serializer.toJson<int>(bibleId),
+      'label': serializer.toJson<String>(label),
+      'snapshotJson': serializer.toJson<String>(snapshotJson),
+      'changeNote': serializer.toJson<String?>(changeNote),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  VisualBibleVersion copyWith({
+    int? id,
+    int? bibleId,
+    String? label,
+    String? snapshotJson,
+    Value<String?> changeNote = const Value.absent(),
+    DateTime? createdAt,
+  }) => VisualBibleVersion(
+    id: id ?? this.id,
+    bibleId: bibleId ?? this.bibleId,
+    label: label ?? this.label,
+    snapshotJson: snapshotJson ?? this.snapshotJson,
+    changeNote: changeNote.present ? changeNote.value : this.changeNote,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  VisualBibleVersion copyWithCompanion(VisualBibleVersionsCompanion data) {
+    return VisualBibleVersion(
+      id: data.id.present ? data.id.value : this.id,
+      bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
+      label: data.label.present ? data.label.value : this.label,
+      snapshotJson: data.snapshotJson.present
+          ? data.snapshotJson.value
+          : this.snapshotJson,
+      changeNote: data.changeNote.present
+          ? data.changeNote.value
+          : this.changeNote,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VisualBibleVersion(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('label: $label, ')
+          ..write('snapshotJson: $snapshotJson, ')
+          ..write('changeNote: $changeNote, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, bibleId, label, snapshotJson, changeNote, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is VisualBibleVersion &&
+          other.id == this.id &&
+          other.bibleId == this.bibleId &&
+          other.label == this.label &&
+          other.snapshotJson == this.snapshotJson &&
+          other.changeNote == this.changeNote &&
+          other.createdAt == this.createdAt);
+}
+
+class VisualBibleVersionsCompanion extends UpdateCompanion<VisualBibleVersion> {
+  final Value<int> id;
+  final Value<int> bibleId;
+  final Value<String> label;
+  final Value<String> snapshotJson;
+  final Value<String?> changeNote;
+  final Value<DateTime> createdAt;
+  const VisualBibleVersionsCompanion({
+    this.id = const Value.absent(),
+    this.bibleId = const Value.absent(),
+    this.label = const Value.absent(),
+    this.snapshotJson = const Value.absent(),
+    this.changeNote = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  VisualBibleVersionsCompanion.insert({
+    this.id = const Value.absent(),
+    required int bibleId,
+    required String label,
+    required String snapshotJson,
+    this.changeNote = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : bibleId = Value(bibleId),
+       label = Value(label),
+       snapshotJson = Value(snapshotJson);
+  static Insertable<VisualBibleVersion> custom({
+    Expression<int>? id,
+    Expression<int>? bibleId,
+    Expression<String>? label,
+    Expression<String>? snapshotJson,
+    Expression<String>? changeNote,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bibleId != null) 'bible_id': bibleId,
+      if (label != null) 'label': label,
+      if (snapshotJson != null) 'snapshot_json': snapshotJson,
+      if (changeNote != null) 'change_note': changeNote,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  VisualBibleVersionsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? bibleId,
+    Value<String>? label,
+    Value<String>? snapshotJson,
+    Value<String?>? changeNote,
+    Value<DateTime>? createdAt,
+  }) {
+    return VisualBibleVersionsCompanion(
+      id: id ?? this.id,
+      bibleId: bibleId ?? this.bibleId,
+      label: label ?? this.label,
+      snapshotJson: snapshotJson ?? this.snapshotJson,
+      changeNote: changeNote ?? this.changeNote,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (bibleId.present) {
+      map['bible_id'] = Variable<int>(bibleId.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (snapshotJson.present) {
+      map['snapshot_json'] = Variable<String>(snapshotJson.value);
+    }
+    if (changeNote.present) {
+      map['change_note'] = Variable<String>(changeNote.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VisualBibleVersionsCompanion(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('label: $label, ')
+          ..write('snapshotJson: $snapshotJson, ')
+          ..write('changeNote: $changeNote, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $BibleCommentsTable extends BibleComments
+    with TableInfo<$BibleCommentsTable, BibleComment> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BibleCommentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _bibleIdMeta = const VerificationMeta(
+    'bibleId',
+  );
+  @override
+  late final GeneratedColumn<int> bibleId = GeneratedColumn<int>(
+    'bible_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES visual_bibles (id)',
+    ),
+  );
+  static const VerificationMeta _authorRoleMeta = const VerificationMeta(
+    'authorRole',
+  );
+  @override
+  late final GeneratedColumn<String> authorRole = GeneratedColumn<String>(
+    'author_role',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetTypeMeta = const VerificationMeta(
+    'targetType',
+  );
+  @override
+  late final GeneratedColumn<String> targetType = GeneratedColumn<String>(
+    'target_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetIdMeta = const VerificationMeta(
+    'targetId',
+  );
+  @override
+  late final GeneratedColumn<int> targetId = GeneratedColumn<int>(
+    'target_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _commentMeta = const VerificationMeta(
+    'comment',
+  );
+  @override
+  late final GeneratedColumn<String> comment = GeneratedColumn<String>(
+    'comment',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bibleId,
+    authorRole,
+    targetType,
+    targetId,
+    comment,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bible_comments';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BibleComment> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('bible_id')) {
+      context.handle(
+        _bibleIdMeta,
+        bibleId.isAcceptableOrUnknown(data['bible_id']!, _bibleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bibleIdMeta);
+    }
+    if (data.containsKey('author_role')) {
+      context.handle(
+        _authorRoleMeta,
+        authorRole.isAcceptableOrUnknown(data['author_role']!, _authorRoleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_authorRoleMeta);
+    }
+    if (data.containsKey('target_type')) {
+      context.handle(
+        _targetTypeMeta,
+        targetType.isAcceptableOrUnknown(data['target_type']!, _targetTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetTypeMeta);
+    }
+    if (data.containsKey('target_id')) {
+      context.handle(
+        _targetIdMeta,
+        targetId.isAcceptableOrUnknown(data['target_id']!, _targetIdMeta),
+      );
+    }
+    if (data.containsKey('comment')) {
+      context.handle(
+        _commentMeta,
+        comment.isAcceptableOrUnknown(data['comment']!, _commentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_commentMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  BibleComment map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BibleComment(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      bibleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bible_id'],
+      )!,
+      authorRole: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}author_role'],
+      )!,
+      targetType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_type'],
+      )!,
+      targetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}target_id'],
+      ),
+      comment: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}comment'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $BibleCommentsTable createAlias(String alias) {
+    return $BibleCommentsTable(attachedDatabase, alias);
+  }
+}
+
+class BibleComment extends DataClass implements Insertable<BibleComment> {
+  final int id;
+  final int bibleId;
+  final String authorRole;
+  final String targetType;
+  final int? targetId;
+  final String comment;
+  final DateTime createdAt;
+  const BibleComment({
+    required this.id,
+    required this.bibleId,
+    required this.authorRole,
+    required this.targetType,
+    this.targetId,
+    required this.comment,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['bible_id'] = Variable<int>(bibleId);
+    map['author_role'] = Variable<String>(authorRole);
+    map['target_type'] = Variable<String>(targetType);
+    if (!nullToAbsent || targetId != null) {
+      map['target_id'] = Variable<int>(targetId);
+    }
+    map['comment'] = Variable<String>(comment);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  BibleCommentsCompanion toCompanion(bool nullToAbsent) {
+    return BibleCommentsCompanion(
+      id: Value(id),
+      bibleId: Value(bibleId),
+      authorRole: Value(authorRole),
+      targetType: Value(targetType),
+      targetId: targetId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(targetId),
+      comment: Value(comment),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory BibleComment.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BibleComment(
+      id: serializer.fromJson<int>(json['id']),
+      bibleId: serializer.fromJson<int>(json['bibleId']),
+      authorRole: serializer.fromJson<String>(json['authorRole']),
+      targetType: serializer.fromJson<String>(json['targetType']),
+      targetId: serializer.fromJson<int?>(json['targetId']),
+      comment: serializer.fromJson<String>(json['comment']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'bibleId': serializer.toJson<int>(bibleId),
+      'authorRole': serializer.toJson<String>(authorRole),
+      'targetType': serializer.toJson<String>(targetType),
+      'targetId': serializer.toJson<int?>(targetId),
+      'comment': serializer.toJson<String>(comment),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  BibleComment copyWith({
+    int? id,
+    int? bibleId,
+    String? authorRole,
+    String? targetType,
+    Value<int?> targetId = const Value.absent(),
+    String? comment,
+    DateTime? createdAt,
+  }) => BibleComment(
+    id: id ?? this.id,
+    bibleId: bibleId ?? this.bibleId,
+    authorRole: authorRole ?? this.authorRole,
+    targetType: targetType ?? this.targetType,
+    targetId: targetId.present ? targetId.value : this.targetId,
+    comment: comment ?? this.comment,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  BibleComment copyWithCompanion(BibleCommentsCompanion data) {
+    return BibleComment(
+      id: data.id.present ? data.id.value : this.id,
+      bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
+      authorRole: data.authorRole.present
+          ? data.authorRole.value
+          : this.authorRole,
+      targetType: data.targetType.present
+          ? data.targetType.value
+          : this.targetType,
+      targetId: data.targetId.present ? data.targetId.value : this.targetId,
+      comment: data.comment.present ? data.comment.value : this.comment,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BibleComment(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('authorRole: $authorRole, ')
+          ..write('targetType: $targetType, ')
+          ..write('targetId: $targetId, ')
+          ..write('comment: $comment, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    bibleId,
+    authorRole,
+    targetType,
+    targetId,
+    comment,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BibleComment &&
+          other.id == this.id &&
+          other.bibleId == this.bibleId &&
+          other.authorRole == this.authorRole &&
+          other.targetType == this.targetType &&
+          other.targetId == this.targetId &&
+          other.comment == this.comment &&
+          other.createdAt == this.createdAt);
+}
+
+class BibleCommentsCompanion extends UpdateCompanion<BibleComment> {
+  final Value<int> id;
+  final Value<int> bibleId;
+  final Value<String> authorRole;
+  final Value<String> targetType;
+  final Value<int?> targetId;
+  final Value<String> comment;
+  final Value<DateTime> createdAt;
+  const BibleCommentsCompanion({
+    this.id = const Value.absent(),
+    this.bibleId = const Value.absent(),
+    this.authorRole = const Value.absent(),
+    this.targetType = const Value.absent(),
+    this.targetId = const Value.absent(),
+    this.comment = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  BibleCommentsCompanion.insert({
+    this.id = const Value.absent(),
+    required int bibleId,
+    required String authorRole,
+    required String targetType,
+    this.targetId = const Value.absent(),
+    required String comment,
+    this.createdAt = const Value.absent(),
+  }) : bibleId = Value(bibleId),
+       authorRole = Value(authorRole),
+       targetType = Value(targetType),
+       comment = Value(comment);
+  static Insertable<BibleComment> custom({
+    Expression<int>? id,
+    Expression<int>? bibleId,
+    Expression<String>? authorRole,
+    Expression<String>? targetType,
+    Expression<int>? targetId,
+    Expression<String>? comment,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bibleId != null) 'bible_id': bibleId,
+      if (authorRole != null) 'author_role': authorRole,
+      if (targetType != null) 'target_type': targetType,
+      if (targetId != null) 'target_id': targetId,
+      if (comment != null) 'comment': comment,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  BibleCommentsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? bibleId,
+    Value<String>? authorRole,
+    Value<String>? targetType,
+    Value<int?>? targetId,
+    Value<String>? comment,
+    Value<DateTime>? createdAt,
+  }) {
+    return BibleCommentsCompanion(
+      id: id ?? this.id,
+      bibleId: bibleId ?? this.bibleId,
+      authorRole: authorRole ?? this.authorRole,
+      targetType: targetType ?? this.targetType,
+      targetId: targetId ?? this.targetId,
+      comment: comment ?? this.comment,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (bibleId.present) {
+      map['bible_id'] = Variable<int>(bibleId.value);
+    }
+    if (authorRole.present) {
+      map['author_role'] = Variable<String>(authorRole.value);
+    }
+    if (targetType.present) {
+      map['target_type'] = Variable<String>(targetType.value);
+    }
+    if (targetId.present) {
+      map['target_id'] = Variable<int>(targetId.value);
+    }
+    if (comment.present) {
+      map['comment'] = Variable<String>(comment.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BibleCommentsCompanion(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('authorRole: $authorRole, ')
+          ..write('targetType: $targetType, ')
+          ..write('targetId: $targetId, ')
+          ..write('comment: $comment, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CatalogSyncMetaTable extends CatalogSyncMeta
+    with TableInfo<$CatalogSyncMetaTable, CatalogSyncMetaData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CatalogSyncMetaTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _remoteVersionMeta = const VerificationMeta(
+    'remoteVersion',
+  );
+  @override
+  late final GeneratedColumn<String> remoteVersion = GeneratedColumn<String>(
+    'remote_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceUrlMeta = const VerificationMeta(
+    'sourceUrl',
+  );
+  @override
+  late final GeneratedColumn<String> sourceUrl = GeneratedColumn<String>(
+    'source_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastSyncAtMeta = const VerificationMeta(
+    'lastSyncAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastSyncAt = GeneratedColumn<DateTime>(
+    'last_sync_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    remoteVersion,
+    sourceUrl,
+    lastSyncAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'catalog_sync_meta';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CatalogSyncMetaData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('remote_version')) {
+      context.handle(
+        _remoteVersionMeta,
+        remoteVersion.isAcceptableOrUnknown(
+          data['remote_version']!,
+          _remoteVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_url')) {
+      context.handle(
+        _sourceUrlMeta,
+        sourceUrl.isAcceptableOrUnknown(data['source_url']!, _sourceUrlMeta),
+      );
+    }
+    if (data.containsKey('last_sync_at')) {
+      context.handle(
+        _lastSyncAtMeta,
+        lastSyncAt.isAcceptableOrUnknown(
+          data['last_sync_at']!,
+          _lastSyncAtMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CatalogSyncMetaData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CatalogSyncMetaData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      remoteVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_version'],
+      ),
+      sourceUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_url'],
+      ),
+      lastSyncAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_sync_at'],
+      ),
+    );
+  }
+
+  @override
+  $CatalogSyncMetaTable createAlias(String alias) {
+    return $CatalogSyncMetaTable(attachedDatabase, alias);
+  }
+}
+
+class CatalogSyncMetaData extends DataClass
+    implements Insertable<CatalogSyncMetaData> {
+  final int id;
+  final String? remoteVersion;
+  final String? sourceUrl;
+  final DateTime? lastSyncAt;
+  const CatalogSyncMetaData({
+    required this.id,
+    this.remoteVersion,
+    this.sourceUrl,
+    this.lastSyncAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || remoteVersion != null) {
+      map['remote_version'] = Variable<String>(remoteVersion);
+    }
+    if (!nullToAbsent || sourceUrl != null) {
+      map['source_url'] = Variable<String>(sourceUrl);
+    }
+    if (!nullToAbsent || lastSyncAt != null) {
+      map['last_sync_at'] = Variable<DateTime>(lastSyncAt);
+    }
+    return map;
+  }
+
+  CatalogSyncMetaCompanion toCompanion(bool nullToAbsent) {
+    return CatalogSyncMetaCompanion(
+      id: Value(id),
+      remoteVersion: remoteVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteVersion),
+      sourceUrl: sourceUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceUrl),
+      lastSyncAt: lastSyncAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastSyncAt),
+    );
+  }
+
+  factory CatalogSyncMetaData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CatalogSyncMetaData(
+      id: serializer.fromJson<int>(json['id']),
+      remoteVersion: serializer.fromJson<String?>(json['remoteVersion']),
+      sourceUrl: serializer.fromJson<String?>(json['sourceUrl']),
+      lastSyncAt: serializer.fromJson<DateTime?>(json['lastSyncAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'remoteVersion': serializer.toJson<String?>(remoteVersion),
+      'sourceUrl': serializer.toJson<String?>(sourceUrl),
+      'lastSyncAt': serializer.toJson<DateTime?>(lastSyncAt),
+    };
+  }
+
+  CatalogSyncMetaData copyWith({
+    int? id,
+    Value<String?> remoteVersion = const Value.absent(),
+    Value<String?> sourceUrl = const Value.absent(),
+    Value<DateTime?> lastSyncAt = const Value.absent(),
+  }) => CatalogSyncMetaData(
+    id: id ?? this.id,
+    remoteVersion: remoteVersion.present
+        ? remoteVersion.value
+        : this.remoteVersion,
+    sourceUrl: sourceUrl.present ? sourceUrl.value : this.sourceUrl,
+    lastSyncAt: lastSyncAt.present ? lastSyncAt.value : this.lastSyncAt,
+  );
+  CatalogSyncMetaData copyWithCompanion(CatalogSyncMetaCompanion data) {
+    return CatalogSyncMetaData(
+      id: data.id.present ? data.id.value : this.id,
+      remoteVersion: data.remoteVersion.present
+          ? data.remoteVersion.value
+          : this.remoteVersion,
+      sourceUrl: data.sourceUrl.present ? data.sourceUrl.value : this.sourceUrl,
+      lastSyncAt: data.lastSyncAt.present
+          ? data.lastSyncAt.value
+          : this.lastSyncAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CatalogSyncMetaData(')
+          ..write('id: $id, ')
+          ..write('remoteVersion: $remoteVersion, ')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('lastSyncAt: $lastSyncAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, remoteVersion, sourceUrl, lastSyncAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CatalogSyncMetaData &&
+          other.id == this.id &&
+          other.remoteVersion == this.remoteVersion &&
+          other.sourceUrl == this.sourceUrl &&
+          other.lastSyncAt == this.lastSyncAt);
+}
+
+class CatalogSyncMetaCompanion extends UpdateCompanion<CatalogSyncMetaData> {
+  final Value<int> id;
+  final Value<String?> remoteVersion;
+  final Value<String?> sourceUrl;
+  final Value<DateTime?> lastSyncAt;
+  const CatalogSyncMetaCompanion({
+    this.id = const Value.absent(),
+    this.remoteVersion = const Value.absent(),
+    this.sourceUrl = const Value.absent(),
+    this.lastSyncAt = const Value.absent(),
+  });
+  CatalogSyncMetaCompanion.insert({
+    this.id = const Value.absent(),
+    this.remoteVersion = const Value.absent(),
+    this.sourceUrl = const Value.absent(),
+    this.lastSyncAt = const Value.absent(),
+  });
+  static Insertable<CatalogSyncMetaData> custom({
+    Expression<int>? id,
+    Expression<String>? remoteVersion,
+    Expression<String>? sourceUrl,
+    Expression<DateTime>? lastSyncAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (remoteVersion != null) 'remote_version': remoteVersion,
+      if (sourceUrl != null) 'source_url': sourceUrl,
+      if (lastSyncAt != null) 'last_sync_at': lastSyncAt,
+    });
+  }
+
+  CatalogSyncMetaCompanion copyWith({
+    Value<int>? id,
+    Value<String?>? remoteVersion,
+    Value<String?>? sourceUrl,
+    Value<DateTime?>? lastSyncAt,
+  }) {
+    return CatalogSyncMetaCompanion(
+      id: id ?? this.id,
+      remoteVersion: remoteVersion ?? this.remoteVersion,
+      sourceUrl: sourceUrl ?? this.sourceUrl,
+      lastSyncAt: lastSyncAt ?? this.lastSyncAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (remoteVersion.present) {
+      map['remote_version'] = Variable<String>(remoteVersion.value);
+    }
+    if (sourceUrl.present) {
+      map['source_url'] = Variable<String>(sourceUrl.value);
+    }
+    if (lastSyncAt.present) {
+      map['last_sync_at'] = Variable<DateTime>(lastSyncAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CatalogSyncMetaCompanion(')
+          ..write('id: $id, ')
+          ..write('remoteVersion: $remoteVersion, ')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('lastSyncAt: $lastSyncAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $BibleSectionEvidenceTable extends BibleSectionEvidence
+    with TableInfo<$BibleSectionEvidenceTable, BibleSectionEvidenceData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BibleSectionEvidenceTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _bibleIdMeta = const VerificationMeta(
+    'bibleId',
+  );
+  @override
+  late final GeneratedColumn<int> bibleId = GeneratedColumn<int>(
+    'bible_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES visual_bibles (id)',
+    ),
+  );
+  static const VerificationMeta _sectionIdMeta = const VerificationMeta(
+    'sectionId',
+  );
+  @override
+  late final GeneratedColumn<String> sectionId = GeneratedColumn<String>(
+    'section_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetTypeMeta = const VerificationMeta(
+    'targetType',
+  );
+  @override
+  late final GeneratedColumn<String> targetType = GeneratedColumn<String>(
+    'target_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('section'),
+  );
+  static const VerificationMeta _targetIdMeta = const VerificationMeta(
+    'targetId',
+  );
+  @override
+  late final GeneratedColumn<int> targetId = GeneratedColumn<int>(
+    'target_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _imagePathMeta = const VerificationMeta(
+    'imagePath',
+  );
+  @override
+  late final GeneratedColumn<String> imagePath = GeneratedColumn<String>(
+    'image_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _captionMeta = const VerificationMeta(
+    'caption',
+  );
+  @override
+  late final GeneratedColumn<String> caption = GeneratedColumn<String>(
+    'caption',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _equipmentRefJsonMeta = const VerificationMeta(
+    'equipmentRefJson',
+  );
+  @override
+  late final GeneratedColumn<String> equipmentRefJson = GeneratedColumn<String>(
+    'equipment_ref_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bibleId,
+    sectionId,
+    targetType,
+    targetId,
+    imagePath,
+    caption,
+    equipmentRefJson,
+    sortOrder,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bible_section_evidence';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BibleSectionEvidenceData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('bible_id')) {
+      context.handle(
+        _bibleIdMeta,
+        bibleId.isAcceptableOrUnknown(data['bible_id']!, _bibleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bibleIdMeta);
+    }
+    if (data.containsKey('section_id')) {
+      context.handle(
+        _sectionIdMeta,
+        sectionId.isAcceptableOrUnknown(data['section_id']!, _sectionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sectionIdMeta);
+    }
+    if (data.containsKey('target_type')) {
+      context.handle(
+        _targetTypeMeta,
+        targetType.isAcceptableOrUnknown(data['target_type']!, _targetTypeMeta),
+      );
+    }
+    if (data.containsKey('target_id')) {
+      context.handle(
+        _targetIdMeta,
+        targetId.isAcceptableOrUnknown(data['target_id']!, _targetIdMeta),
+      );
+    }
+    if (data.containsKey('image_path')) {
+      context.handle(
+        _imagePathMeta,
+        imagePath.isAcceptableOrUnknown(data['image_path']!, _imagePathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_imagePathMeta);
+    }
+    if (data.containsKey('caption')) {
+      context.handle(
+        _captionMeta,
+        caption.isAcceptableOrUnknown(data['caption']!, _captionMeta),
+      );
+    }
+    if (data.containsKey('equipment_ref_json')) {
+      context.handle(
+        _equipmentRefJsonMeta,
+        equipmentRefJson.isAcceptableOrUnknown(
+          data['equipment_ref_json']!,
+          _equipmentRefJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  BibleSectionEvidenceData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BibleSectionEvidenceData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      bibleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bible_id'],
+      )!,
+      sectionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}section_id'],
+      )!,
+      targetType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_type'],
+      )!,
+      targetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}target_id'],
+      ),
+      imagePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}image_path'],
+      )!,
+      caption: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}caption'],
+      ),
+      equipmentRefJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}equipment_ref_json'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+    );
+  }
+
+  @override
+  $BibleSectionEvidenceTable createAlias(String alias) {
+    return $BibleSectionEvidenceTable(attachedDatabase, alias);
+  }
+}
+
+class BibleSectionEvidenceData extends DataClass
+    implements Insertable<BibleSectionEvidenceData> {
+  final int id;
+  final int bibleId;
+  final String sectionId;
+  final String targetType;
+  final int? targetId;
+  final String imagePath;
+  final String? caption;
+  final String? equipmentRefJson;
+  final int sortOrder;
+  const BibleSectionEvidenceData({
+    required this.id,
+    required this.bibleId,
+    required this.sectionId,
+    required this.targetType,
+    this.targetId,
+    required this.imagePath,
+    this.caption,
+    this.equipmentRefJson,
+    required this.sortOrder,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['bible_id'] = Variable<int>(bibleId);
+    map['section_id'] = Variable<String>(sectionId);
+    map['target_type'] = Variable<String>(targetType);
+    if (!nullToAbsent || targetId != null) {
+      map['target_id'] = Variable<int>(targetId);
+    }
+    map['image_path'] = Variable<String>(imagePath);
+    if (!nullToAbsent || caption != null) {
+      map['caption'] = Variable<String>(caption);
+    }
+    if (!nullToAbsent || equipmentRefJson != null) {
+      map['equipment_ref_json'] = Variable<String>(equipmentRefJson);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    return map;
+  }
+
+  BibleSectionEvidenceCompanion toCompanion(bool nullToAbsent) {
+    return BibleSectionEvidenceCompanion(
+      id: Value(id),
+      bibleId: Value(bibleId),
+      sectionId: Value(sectionId),
+      targetType: Value(targetType),
+      targetId: targetId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(targetId),
+      imagePath: Value(imagePath),
+      caption: caption == null && nullToAbsent
+          ? const Value.absent()
+          : Value(caption),
+      equipmentRefJson: equipmentRefJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(equipmentRefJson),
+      sortOrder: Value(sortOrder),
+    );
+  }
+
+  factory BibleSectionEvidenceData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BibleSectionEvidenceData(
+      id: serializer.fromJson<int>(json['id']),
+      bibleId: serializer.fromJson<int>(json['bibleId']),
+      sectionId: serializer.fromJson<String>(json['sectionId']),
+      targetType: serializer.fromJson<String>(json['targetType']),
+      targetId: serializer.fromJson<int?>(json['targetId']),
+      imagePath: serializer.fromJson<String>(json['imagePath']),
+      caption: serializer.fromJson<String?>(json['caption']),
+      equipmentRefJson: serializer.fromJson<String?>(json['equipmentRefJson']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'bibleId': serializer.toJson<int>(bibleId),
+      'sectionId': serializer.toJson<String>(sectionId),
+      'targetType': serializer.toJson<String>(targetType),
+      'targetId': serializer.toJson<int?>(targetId),
+      'imagePath': serializer.toJson<String>(imagePath),
+      'caption': serializer.toJson<String?>(caption),
+      'equipmentRefJson': serializer.toJson<String?>(equipmentRefJson),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+    };
+  }
+
+  BibleSectionEvidenceData copyWith({
+    int? id,
+    int? bibleId,
+    String? sectionId,
+    String? targetType,
+    Value<int?> targetId = const Value.absent(),
+    String? imagePath,
+    Value<String?> caption = const Value.absent(),
+    Value<String?> equipmentRefJson = const Value.absent(),
+    int? sortOrder,
+  }) => BibleSectionEvidenceData(
+    id: id ?? this.id,
+    bibleId: bibleId ?? this.bibleId,
+    sectionId: sectionId ?? this.sectionId,
+    targetType: targetType ?? this.targetType,
+    targetId: targetId.present ? targetId.value : this.targetId,
+    imagePath: imagePath ?? this.imagePath,
+    caption: caption.present ? caption.value : this.caption,
+    equipmentRefJson: equipmentRefJson.present
+        ? equipmentRefJson.value
+        : this.equipmentRefJson,
+    sortOrder: sortOrder ?? this.sortOrder,
+  );
+  BibleSectionEvidenceData copyWithCompanion(
+    BibleSectionEvidenceCompanion data,
+  ) {
+    return BibleSectionEvidenceData(
+      id: data.id.present ? data.id.value : this.id,
+      bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
+      sectionId: data.sectionId.present ? data.sectionId.value : this.sectionId,
+      targetType: data.targetType.present
+          ? data.targetType.value
+          : this.targetType,
+      targetId: data.targetId.present ? data.targetId.value : this.targetId,
+      imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
+      caption: data.caption.present ? data.caption.value : this.caption,
+      equipmentRefJson: data.equipmentRefJson.present
+          ? data.equipmentRefJson.value
+          : this.equipmentRefJson,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BibleSectionEvidenceData(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('sectionId: $sectionId, ')
+          ..write('targetType: $targetType, ')
+          ..write('targetId: $targetId, ')
+          ..write('imagePath: $imagePath, ')
+          ..write('caption: $caption, ')
+          ..write('equipmentRefJson: $equipmentRefJson, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    bibleId,
+    sectionId,
+    targetType,
+    targetId,
+    imagePath,
+    caption,
+    equipmentRefJson,
+    sortOrder,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BibleSectionEvidenceData &&
+          other.id == this.id &&
+          other.bibleId == this.bibleId &&
+          other.sectionId == this.sectionId &&
+          other.targetType == this.targetType &&
+          other.targetId == this.targetId &&
+          other.imagePath == this.imagePath &&
+          other.caption == this.caption &&
+          other.equipmentRefJson == this.equipmentRefJson &&
+          other.sortOrder == this.sortOrder);
+}
+
+class BibleSectionEvidenceCompanion
+    extends UpdateCompanion<BibleSectionEvidenceData> {
+  final Value<int> id;
+  final Value<int> bibleId;
+  final Value<String> sectionId;
+  final Value<String> targetType;
+  final Value<int?> targetId;
+  final Value<String> imagePath;
+  final Value<String?> caption;
+  final Value<String?> equipmentRefJson;
+  final Value<int> sortOrder;
+  const BibleSectionEvidenceCompanion({
+    this.id = const Value.absent(),
+    this.bibleId = const Value.absent(),
+    this.sectionId = const Value.absent(),
+    this.targetType = const Value.absent(),
+    this.targetId = const Value.absent(),
+    this.imagePath = const Value.absent(),
+    this.caption = const Value.absent(),
+    this.equipmentRefJson = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  });
+  BibleSectionEvidenceCompanion.insert({
+    this.id = const Value.absent(),
+    required int bibleId,
+    required String sectionId,
+    this.targetType = const Value.absent(),
+    this.targetId = const Value.absent(),
+    required String imagePath,
+    this.caption = const Value.absent(),
+    this.equipmentRefJson = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  }) : bibleId = Value(bibleId),
+       sectionId = Value(sectionId),
+       imagePath = Value(imagePath);
+  static Insertable<BibleSectionEvidenceData> custom({
+    Expression<int>? id,
+    Expression<int>? bibleId,
+    Expression<String>? sectionId,
+    Expression<String>? targetType,
+    Expression<int>? targetId,
+    Expression<String>? imagePath,
+    Expression<String>? caption,
+    Expression<String>? equipmentRefJson,
+    Expression<int>? sortOrder,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bibleId != null) 'bible_id': bibleId,
+      if (sectionId != null) 'section_id': sectionId,
+      if (targetType != null) 'target_type': targetType,
+      if (targetId != null) 'target_id': targetId,
+      if (imagePath != null) 'image_path': imagePath,
+      if (caption != null) 'caption': caption,
+      if (equipmentRefJson != null) 'equipment_ref_json': equipmentRefJson,
+      if (sortOrder != null) 'sort_order': sortOrder,
+    });
+  }
+
+  BibleSectionEvidenceCompanion copyWith({
+    Value<int>? id,
+    Value<int>? bibleId,
+    Value<String>? sectionId,
+    Value<String>? targetType,
+    Value<int?>? targetId,
+    Value<String>? imagePath,
+    Value<String?>? caption,
+    Value<String?>? equipmentRefJson,
+    Value<int>? sortOrder,
+  }) {
+    return BibleSectionEvidenceCompanion(
+      id: id ?? this.id,
+      bibleId: bibleId ?? this.bibleId,
+      sectionId: sectionId ?? this.sectionId,
+      targetType: targetType ?? this.targetType,
+      targetId: targetId ?? this.targetId,
+      imagePath: imagePath ?? this.imagePath,
+      caption: caption ?? this.caption,
+      equipmentRefJson: equipmentRefJson ?? this.equipmentRefJson,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (bibleId.present) {
+      map['bible_id'] = Variable<int>(bibleId.value);
+    }
+    if (sectionId.present) {
+      map['section_id'] = Variable<String>(sectionId.value);
+    }
+    if (targetType.present) {
+      map['target_type'] = Variable<String>(targetType.value);
+    }
+    if (targetId.present) {
+      map['target_id'] = Variable<int>(targetId.value);
+    }
+    if (imagePath.present) {
+      map['image_path'] = Variable<String>(imagePath.value);
+    }
+    if (caption.present) {
+      map['caption'] = Variable<String>(caption.value);
+    }
+    if (equipmentRefJson.present) {
+      map['equipment_ref_json'] = Variable<String>(equipmentRefJson.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BibleSectionEvidenceCompanion(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('sectionId: $sectionId, ')
+          ..write('targetType: $targetType, ')
+          ..write('targetId: $targetId, ')
+          ..write('imagePath: $imagePath, ')
+          ..write('caption: $caption, ')
+          ..write('equipmentRefJson: $equipmentRefJson, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $LukaSyncMetaTable extends LukaSyncMeta
+    with TableInfo<$LukaSyncMetaTable, LukaSyncMetaData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LukaSyncMetaTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _remoteVersionMeta = const VerificationMeta(
+    'remoteVersion',
+  );
+  @override
+  late final GeneratedColumn<String> remoteVersion = GeneratedColumn<String>(
+    'remote_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceUrlMeta = const VerificationMeta(
+    'sourceUrl',
+  );
+  @override
+  late final GeneratedColumn<String> sourceUrl = GeneratedColumn<String>(
+    'source_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastSyncAtMeta = const VerificationMeta(
+    'lastSyncAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastSyncAt = GeneratedColumn<DateTime>(
+    'last_sync_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    remoteVersion,
+    sourceUrl,
+    lastSyncAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'luka_sync_meta';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LukaSyncMetaData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('remote_version')) {
+      context.handle(
+        _remoteVersionMeta,
+        remoteVersion.isAcceptableOrUnknown(
+          data['remote_version']!,
+          _remoteVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_url')) {
+      context.handle(
+        _sourceUrlMeta,
+        sourceUrl.isAcceptableOrUnknown(data['source_url']!, _sourceUrlMeta),
+      );
+    }
+    if (data.containsKey('last_sync_at')) {
+      context.handle(
+        _lastSyncAtMeta,
+        lastSyncAt.isAcceptableOrUnknown(
+          data['last_sync_at']!,
+          _lastSyncAtMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LukaSyncMetaData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LukaSyncMetaData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      remoteVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_version'],
+      ),
+      sourceUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_url'],
+      ),
+      lastSyncAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_sync_at'],
+      ),
+    );
+  }
+
+  @override
+  $LukaSyncMetaTable createAlias(String alias) {
+    return $LukaSyncMetaTable(attachedDatabase, alias);
+  }
+}
+
+class LukaSyncMetaData extends DataClass
+    implements Insertable<LukaSyncMetaData> {
+  final int id;
+  final String? remoteVersion;
+  final String? sourceUrl;
+  final DateTime? lastSyncAt;
+  const LukaSyncMetaData({
+    required this.id,
+    this.remoteVersion,
+    this.sourceUrl,
+    this.lastSyncAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || remoteVersion != null) {
+      map['remote_version'] = Variable<String>(remoteVersion);
+    }
+    if (!nullToAbsent || sourceUrl != null) {
+      map['source_url'] = Variable<String>(sourceUrl);
+    }
+    if (!nullToAbsent || lastSyncAt != null) {
+      map['last_sync_at'] = Variable<DateTime>(lastSyncAt);
+    }
+    return map;
+  }
+
+  LukaSyncMetaCompanion toCompanion(bool nullToAbsent) {
+    return LukaSyncMetaCompanion(
+      id: Value(id),
+      remoteVersion: remoteVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteVersion),
+      sourceUrl: sourceUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceUrl),
+      lastSyncAt: lastSyncAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastSyncAt),
+    );
+  }
+
+  factory LukaSyncMetaData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LukaSyncMetaData(
+      id: serializer.fromJson<int>(json['id']),
+      remoteVersion: serializer.fromJson<String?>(json['remoteVersion']),
+      sourceUrl: serializer.fromJson<String?>(json['sourceUrl']),
+      lastSyncAt: serializer.fromJson<DateTime?>(json['lastSyncAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'remoteVersion': serializer.toJson<String?>(remoteVersion),
+      'sourceUrl': serializer.toJson<String?>(sourceUrl),
+      'lastSyncAt': serializer.toJson<DateTime?>(lastSyncAt),
+    };
+  }
+
+  LukaSyncMetaData copyWith({
+    int? id,
+    Value<String?> remoteVersion = const Value.absent(),
+    Value<String?> sourceUrl = const Value.absent(),
+    Value<DateTime?> lastSyncAt = const Value.absent(),
+  }) => LukaSyncMetaData(
+    id: id ?? this.id,
+    remoteVersion: remoteVersion.present
+        ? remoteVersion.value
+        : this.remoteVersion,
+    sourceUrl: sourceUrl.present ? sourceUrl.value : this.sourceUrl,
+    lastSyncAt: lastSyncAt.present ? lastSyncAt.value : this.lastSyncAt,
+  );
+  LukaSyncMetaData copyWithCompanion(LukaSyncMetaCompanion data) {
+    return LukaSyncMetaData(
+      id: data.id.present ? data.id.value : this.id,
+      remoteVersion: data.remoteVersion.present
+          ? data.remoteVersion.value
+          : this.remoteVersion,
+      sourceUrl: data.sourceUrl.present ? data.sourceUrl.value : this.sourceUrl,
+      lastSyncAt: data.lastSyncAt.present
+          ? data.lastSyncAt.value
+          : this.lastSyncAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LukaSyncMetaData(')
+          ..write('id: $id, ')
+          ..write('remoteVersion: $remoteVersion, ')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('lastSyncAt: $lastSyncAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, remoteVersion, sourceUrl, lastSyncAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LukaSyncMetaData &&
+          other.id == this.id &&
+          other.remoteVersion == this.remoteVersion &&
+          other.sourceUrl == this.sourceUrl &&
+          other.lastSyncAt == this.lastSyncAt);
+}
+
+class LukaSyncMetaCompanion extends UpdateCompanion<LukaSyncMetaData> {
+  final Value<int> id;
+  final Value<String?> remoteVersion;
+  final Value<String?> sourceUrl;
+  final Value<DateTime?> lastSyncAt;
+  const LukaSyncMetaCompanion({
+    this.id = const Value.absent(),
+    this.remoteVersion = const Value.absent(),
+    this.sourceUrl = const Value.absent(),
+    this.lastSyncAt = const Value.absent(),
+  });
+  LukaSyncMetaCompanion.insert({
+    this.id = const Value.absent(),
+    this.remoteVersion = const Value.absent(),
+    this.sourceUrl = const Value.absent(),
+    this.lastSyncAt = const Value.absent(),
+  });
+  static Insertable<LukaSyncMetaData> custom({
+    Expression<int>? id,
+    Expression<String>? remoteVersion,
+    Expression<String>? sourceUrl,
+    Expression<DateTime>? lastSyncAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (remoteVersion != null) 'remote_version': remoteVersion,
+      if (sourceUrl != null) 'source_url': sourceUrl,
+      if (lastSyncAt != null) 'last_sync_at': lastSyncAt,
+    });
+  }
+
+  LukaSyncMetaCompanion copyWith({
+    Value<int>? id,
+    Value<String?>? remoteVersion,
+    Value<String?>? sourceUrl,
+    Value<DateTime?>? lastSyncAt,
+  }) {
+    return LukaSyncMetaCompanion(
+      id: id ?? this.id,
+      remoteVersion: remoteVersion ?? this.remoteVersion,
+      sourceUrl: sourceUrl ?? this.sourceUrl,
+      lastSyncAt: lastSyncAt ?? this.lastSyncAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (remoteVersion.present) {
+      map['remote_version'] = Variable<String>(remoteVersion.value);
+    }
+    if (sourceUrl.present) {
+      map['source_url'] = Variable<String>(sourceUrl.value);
+    }
+    if (lastSyncAt.present) {
+      map['last_sync_at'] = Variable<DateTime>(lastSyncAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LukaSyncMetaCompanion(')
+          ..write('id: $id, ')
+          ..write('remoteVersion: $remoteVersion, ')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('lastSyncAt: $lastSyncAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $OpticsLabSamplesTable extends OpticsLabSamples
+    with TableInfo<$OpticsLabSamplesTable, OpticsLabSample> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OpticsLabSamplesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _imagePathMeta = const VerificationMeta(
+    'imagePath',
+  );
+  @override
+  late final GeneratedColumn<String> imagePath = GeneratedColumn<String>(
+    'image_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    projectId,
+    imagePath,
+    sortOrder,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'optics_lab_samples';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<OpticsLabSample> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('image_path')) {
+      context.handle(
+        _imagePathMeta,
+        imagePath.isAcceptableOrUnknown(data['image_path']!, _imagePathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_imagePathMeta);
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  OpticsLabSample map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return OpticsLabSample(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      imagePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}image_path'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $OpticsLabSamplesTable createAlias(String alias) {
+    return $OpticsLabSamplesTable(attachedDatabase, alias);
+  }
+}
+
+class OpticsLabSample extends DataClass implements Insertable<OpticsLabSample> {
+  final int id;
+  final int projectId;
+  final String imagePath;
+  final int sortOrder;
+  final DateTime createdAt;
+  const OpticsLabSample({
+    required this.id,
+    required this.projectId,
+    required this.imagePath,
+    required this.sortOrder,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['project_id'] = Variable<int>(projectId);
+    map['image_path'] = Variable<String>(imagePath);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  OpticsLabSamplesCompanion toCompanion(bool nullToAbsent) {
+    return OpticsLabSamplesCompanion(
+      id: Value(id),
+      projectId: Value(projectId),
+      imagePath: Value(imagePath),
+      sortOrder: Value(sortOrder),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory OpticsLabSample.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return OpticsLabSample(
+      id: serializer.fromJson<int>(json['id']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      imagePath: serializer.fromJson<String>(json['imagePath']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'projectId': serializer.toJson<int>(projectId),
+      'imagePath': serializer.toJson<String>(imagePath),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  OpticsLabSample copyWith({
+    int? id,
+    int? projectId,
+    String? imagePath,
+    int? sortOrder,
+    DateTime? createdAt,
+  }) => OpticsLabSample(
+    id: id ?? this.id,
+    projectId: projectId ?? this.projectId,
+    imagePath: imagePath ?? this.imagePath,
+    sortOrder: sortOrder ?? this.sortOrder,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  OpticsLabSample copyWithCompanion(OpticsLabSamplesCompanion data) {
+    return OpticsLabSample(
+      id: data.id.present ? data.id.value : this.id,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OpticsLabSample(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('imagePath: $imagePath, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, projectId, imagePath, sortOrder, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is OpticsLabSample &&
+          other.id == this.id &&
+          other.projectId == this.projectId &&
+          other.imagePath == this.imagePath &&
+          other.sortOrder == this.sortOrder &&
+          other.createdAt == this.createdAt);
+}
+
+class OpticsLabSamplesCompanion extends UpdateCompanion<OpticsLabSample> {
+  final Value<int> id;
+  final Value<int> projectId;
+  final Value<String> imagePath;
+  final Value<int> sortOrder;
+  final Value<DateTime> createdAt;
+  const OpticsLabSamplesCompanion({
+    this.id = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.imagePath = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  OpticsLabSamplesCompanion.insert({
+    this.id = const Value.absent(),
+    required int projectId,
+    required String imagePath,
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : projectId = Value(projectId),
+       imagePath = Value(imagePath);
+  static Insertable<OpticsLabSample> custom({
+    Expression<int>? id,
+    Expression<int>? projectId,
+    Expression<String>? imagePath,
+    Expression<int>? sortOrder,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (projectId != null) 'project_id': projectId,
+      if (imagePath != null) 'image_path': imagePath,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  OpticsLabSamplesCompanion copyWith({
+    Value<int>? id,
+    Value<int>? projectId,
+    Value<String>? imagePath,
+    Value<int>? sortOrder,
+    Value<DateTime>? createdAt,
+  }) {
+    return OpticsLabSamplesCompanion(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      imagePath: imagePath ?? this.imagePath,
+      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (imagePath.present) {
+      map['image_path'] = Variable<String>(imagePath.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OpticsLabSamplesCompanion(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('imagePath: $imagePath, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CloudSyncQueueTable extends CloudSyncQueue
+    with TableInfo<$CloudSyncQueueTable, CloudSyncQueueData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CloudSyncQueueTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _entityTypeMeta = const VerificationMeta(
+    'entityType',
+  );
+  @override
+  late final GeneratedColumn<String> entityType = GeneratedColumn<String>(
+    'entity_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localEntityIdMeta = const VerificationMeta(
+    'localEntityId',
+  );
+  @override
+  late final GeneratedColumn<String> localEntityId = GeneratedColumn<String>(
+    'local_entity_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _operationMeta = const VerificationMeta(
+    'operation',
+  );
+  @override
+  late final GeneratedColumn<String> operation = GeneratedColumn<String>(
+    'operation',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _processedMeta = const VerificationMeta(
+    'processed',
+  );
+  @override
+  late final GeneratedColumn<bool> processed = GeneratedColumn<bool>(
+    'processed',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("processed" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    entityType,
+    localEntityId,
+    operation,
+    payloadJson,
+    createdAt,
+    processed,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'cloud_sync_queue';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CloudSyncQueueData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('entity_type')) {
+      context.handle(
+        _entityTypeMeta,
+        entityType.isAcceptableOrUnknown(data['entity_type']!, _entityTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityTypeMeta);
+    }
+    if (data.containsKey('local_entity_id')) {
+      context.handle(
+        _localEntityIdMeta,
+        localEntityId.isAcceptableOrUnknown(
+          data['local_entity_id']!,
+          _localEntityIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_localEntityIdMeta);
+    }
+    if (data.containsKey('operation')) {
+      context.handle(
+        _operationMeta,
+        operation.isAcceptableOrUnknown(data['operation']!, _operationMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_operationMeta);
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('processed')) {
+      context.handle(
+        _processedMeta,
+        processed.isAcceptableOrUnknown(data['processed']!, _processedMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CloudSyncQueueData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CloudSyncQueueData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      entityType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_type'],
+      )!,
+      localEntityId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_entity_id'],
+      )!,
+      operation: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operation'],
+      )!,
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      processed: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}processed'],
+      )!,
+    );
+  }
+
+  @override
+  $CloudSyncQueueTable createAlias(String alias) {
+    return $CloudSyncQueueTable(attachedDatabase, alias);
+  }
+}
+
+class CloudSyncQueueData extends DataClass
+    implements Insertable<CloudSyncQueueData> {
+  final int id;
+  final String entityType;
+  final String localEntityId;
+  final String operation;
+  final String? payloadJson;
+  final DateTime createdAt;
+  final bool processed;
+  const CloudSyncQueueData({
+    required this.id,
+    required this.entityType,
+    required this.localEntityId,
+    required this.operation,
+    this.payloadJson,
+    required this.createdAt,
+    required this.processed,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['entity_type'] = Variable<String>(entityType);
+    map['local_entity_id'] = Variable<String>(localEntityId);
+    map['operation'] = Variable<String>(operation);
+    if (!nullToAbsent || payloadJson != null) {
+      map['payload_json'] = Variable<String>(payloadJson);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['processed'] = Variable<bool>(processed);
+    return map;
+  }
+
+  CloudSyncQueueCompanion toCompanion(bool nullToAbsent) {
+    return CloudSyncQueueCompanion(
+      id: Value(id),
+      entityType: Value(entityType),
+      localEntityId: Value(localEntityId),
+      operation: Value(operation),
+      payloadJson: payloadJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(payloadJson),
+      createdAt: Value(createdAt),
+      processed: Value(processed),
+    );
+  }
+
+  factory CloudSyncQueueData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CloudSyncQueueData(
+      id: serializer.fromJson<int>(json['id']),
+      entityType: serializer.fromJson<String>(json['entityType']),
+      localEntityId: serializer.fromJson<String>(json['localEntityId']),
+      operation: serializer.fromJson<String>(json['operation']),
+      payloadJson: serializer.fromJson<String?>(json['payloadJson']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      processed: serializer.fromJson<bool>(json['processed']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'entityType': serializer.toJson<String>(entityType),
+      'localEntityId': serializer.toJson<String>(localEntityId),
+      'operation': serializer.toJson<String>(operation),
+      'payloadJson': serializer.toJson<String?>(payloadJson),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'processed': serializer.toJson<bool>(processed),
+    };
+  }
+
+  CloudSyncQueueData copyWith({
+    int? id,
+    String? entityType,
+    String? localEntityId,
+    String? operation,
+    Value<String?> payloadJson = const Value.absent(),
+    DateTime? createdAt,
+    bool? processed,
+  }) => CloudSyncQueueData(
+    id: id ?? this.id,
+    entityType: entityType ?? this.entityType,
+    localEntityId: localEntityId ?? this.localEntityId,
+    operation: operation ?? this.operation,
+    payloadJson: payloadJson.present ? payloadJson.value : this.payloadJson,
+    createdAt: createdAt ?? this.createdAt,
+    processed: processed ?? this.processed,
+  );
+  CloudSyncQueueData copyWithCompanion(CloudSyncQueueCompanion data) {
+    return CloudSyncQueueData(
+      id: data.id.present ? data.id.value : this.id,
+      entityType: data.entityType.present
+          ? data.entityType.value
+          : this.entityType,
+      localEntityId: data.localEntityId.present
+          ? data.localEntityId.value
+          : this.localEntityId,
+      operation: data.operation.present ? data.operation.value : this.operation,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      processed: data.processed.present ? data.processed.value : this.processed,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CloudSyncQueueData(')
+          ..write('id: $id, ')
+          ..write('entityType: $entityType, ')
+          ..write('localEntityId: $localEntityId, ')
+          ..write('operation: $operation, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('processed: $processed')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    entityType,
+    localEntityId,
+    operation,
+    payloadJson,
+    createdAt,
+    processed,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CloudSyncQueueData &&
+          other.id == this.id &&
+          other.entityType == this.entityType &&
+          other.localEntityId == this.localEntityId &&
+          other.operation == this.operation &&
+          other.payloadJson == this.payloadJson &&
+          other.createdAt == this.createdAt &&
+          other.processed == this.processed);
+}
+
+class CloudSyncQueueCompanion extends UpdateCompanion<CloudSyncQueueData> {
+  final Value<int> id;
+  final Value<String> entityType;
+  final Value<String> localEntityId;
+  final Value<String> operation;
+  final Value<String?> payloadJson;
+  final Value<DateTime> createdAt;
+  final Value<bool> processed;
+  const CloudSyncQueueCompanion({
+    this.id = const Value.absent(),
+    this.entityType = const Value.absent(),
+    this.localEntityId = const Value.absent(),
+    this.operation = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.processed = const Value.absent(),
+  });
+  CloudSyncQueueCompanion.insert({
+    this.id = const Value.absent(),
+    required String entityType,
+    required String localEntityId,
+    required String operation,
+    this.payloadJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.processed = const Value.absent(),
+  }) : entityType = Value(entityType),
+       localEntityId = Value(localEntityId),
+       operation = Value(operation);
+  static Insertable<CloudSyncQueueData> custom({
+    Expression<int>? id,
+    Expression<String>? entityType,
+    Expression<String>? localEntityId,
+    Expression<String>? operation,
+    Expression<String>? payloadJson,
+    Expression<DateTime>? createdAt,
+    Expression<bool>? processed,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (entityType != null) 'entity_type': entityType,
+      if (localEntityId != null) 'local_entity_id': localEntityId,
+      if (operation != null) 'operation': operation,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (createdAt != null) 'created_at': createdAt,
+      if (processed != null) 'processed': processed,
+    });
+  }
+
+  CloudSyncQueueCompanion copyWith({
+    Value<int>? id,
+    Value<String>? entityType,
+    Value<String>? localEntityId,
+    Value<String>? operation,
+    Value<String?>? payloadJson,
+    Value<DateTime>? createdAt,
+    Value<bool>? processed,
+  }) {
+    return CloudSyncQueueCompanion(
+      id: id ?? this.id,
+      entityType: entityType ?? this.entityType,
+      localEntityId: localEntityId ?? this.localEntityId,
+      operation: operation ?? this.operation,
+      payloadJson: payloadJson ?? this.payloadJson,
+      createdAt: createdAt ?? this.createdAt,
+      processed: processed ?? this.processed,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (entityType.present) {
+      map['entity_type'] = Variable<String>(entityType.value);
+    }
+    if (localEntityId.present) {
+      map['local_entity_id'] = Variable<String>(localEntityId.value);
+    }
+    if (operation.present) {
+      map['operation'] = Variable<String>(operation.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (processed.present) {
+      map['processed'] = Variable<bool>(processed.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CloudSyncQueueCompanion(')
+          ..write('id: $id, ')
+          ..write('entityType: $entityType, ')
+          ..write('localEntityId: $localEntityId, ')
+          ..write('operation: $operation, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('processed: $processed')
           ..write(')'))
         .toString();
   }
@@ -14030,9 +25548,32 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $VisualBibleColorBlocksTable(this);
   late final $VisualBibleLocationRefsTable visualBibleLocationRefs =
       $VisualBibleLocationRefsTable(this);
+  late final $MoodboardGroupsTable moodboardGroups = $MoodboardGroupsTable(
+    this,
+  );
   late final $MoodboardImagesTable moodboardImages = $MoodboardImagesTable(
     this,
   );
+  late final $BibleSectionGroupsTable bibleSectionGroups =
+      $BibleSectionGroupsTable(this);
+  late final $BibleSectionDefinitionsTable bibleSectionDefinitions =
+      $BibleSectionDefinitionsTable(this);
+  late final $ExposureBlocksTable exposureBlocks = $ExposureBlocksTable(this);
+  late final $LightingSetupsTable lightingSetups = $LightingSetupsTable(this);
+  late final $CameraTestsTable cameraTests = $CameraTestsTable(this);
+  late final $VisualBibleVersionsTable visualBibleVersions =
+      $VisualBibleVersionsTable(this);
+  late final $BibleCommentsTable bibleComments = $BibleCommentsTable(this);
+  late final $CatalogSyncMetaTable catalogSyncMeta = $CatalogSyncMetaTable(
+    this,
+  );
+  late final $BibleSectionEvidenceTable bibleSectionEvidence =
+      $BibleSectionEvidenceTable(this);
+  late final $LukaSyncMetaTable lukaSyncMeta = $LukaSyncMetaTable(this);
+  late final $OpticsLabSamplesTable opticsLabSamples = $OpticsLabSamplesTable(
+    this,
+  );
+  late final $CloudSyncQueueTable cloudSyncQueue = $CloudSyncQueueTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -14058,7 +25599,20 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     visualBibles,
     visualBibleColorBlocks,
     visualBibleLocationRefs,
+    moodboardGroups,
     moodboardImages,
+    bibleSectionGroups,
+    bibleSectionDefinitions,
+    exposureBlocks,
+    lightingSetups,
+    cameraTests,
+    visualBibleVersions,
+    bibleComments,
+    catalogSyncMeta,
+    bibleSectionEvidence,
+    lukaSyncMeta,
+    opticsLabSamples,
+    cloudSyncQueue,
   ];
 }
 
@@ -14340,7 +25894,10 @@ typedef $$ProjectsTableCreateCompanionBuilder =
       Value<String?> googleEmail,
       Value<String?> scriptFilePath,
       Value<String?> scriptFileName,
+      Value<String?> characterColorsJson,
       Value<int> sortOrder,
+      Value<String?> cloudId,
+      Value<DateTime?> syncUpdatedAt,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
     });
@@ -14360,7 +25917,10 @@ typedef $$ProjectsTableUpdateCompanionBuilder =
       Value<String?> googleEmail,
       Value<String?> scriptFilePath,
       Value<String?> scriptFileName,
+      Value<String?> characterColorsJson,
       Value<int> sortOrder,
+      Value<String?> cloudId,
+      Value<DateTime?> syncUpdatedAt,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
     });
@@ -14555,6 +26115,29 @@ final class $$ProjectsTableReferences
     );
   }
 
+  static MultiTypedResultKey<$MoodboardGroupsTable, List<MoodboardGroup>>
+  _moodboardGroupsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.moodboardGroups,
+    aliasName: $_aliasNameGenerator(
+      db.projects.id,
+      db.moodboardGroups.projectId,
+    ),
+  );
+
+  $$MoodboardGroupsTableProcessedTableManager get moodboardGroupsRefs {
+    final manager = $$MoodboardGroupsTableTableManager(
+      $_db,
+      $_db.moodboardGroups,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _moodboardGroupsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$MoodboardImagesTable, List<MoodboardImage>>
   _moodboardImagesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.moodboardImages,
@@ -14572,6 +26155,29 @@ final class $$ProjectsTableReferences
 
     final cache = $_typedResult.readTableOrNull(
       _moodboardImagesRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$OpticsLabSamplesTable, List<OpticsLabSample>>
+  _opticsLabSamplesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.opticsLabSamples,
+    aliasName: $_aliasNameGenerator(
+      db.projects.id,
+      db.opticsLabSamples.projectId,
+    ),
+  );
+
+  $$OpticsLabSamplesTableProcessedTableManager get opticsLabSamplesRefs {
+    final manager = $$OpticsLabSamplesTableTableManager(
+      $_db,
+      $_db.opticsLabSamples,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _opticsLabSamplesRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -14653,8 +26259,23 @@ class $$ProjectsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get characterColorsJson => $composableBuilder(
+    column: $table.characterColorsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cloudId => $composableBuilder(
+    column: $table.cloudId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get syncUpdatedAt => $composableBuilder(
+    column: $table.syncUpdatedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -14891,6 +26512,31 @@ class $$ProjectsTableFilterComposer
     return f(composer);
   }
 
+  Expression<bool> moodboardGroupsRefs(
+    Expression<bool> Function($$MoodboardGroupsTableFilterComposer f) f,
+  ) {
+    final $$MoodboardGroupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.moodboardGroups,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MoodboardGroupsTableFilterComposer(
+            $db: $db,
+            $table: $db.moodboardGroups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<bool> moodboardImagesRefs(
     Expression<bool> Function($$MoodboardImagesTableFilterComposer f) f,
   ) {
@@ -14907,6 +26553,31 @@ class $$ProjectsTableFilterComposer
           }) => $$MoodboardImagesTableFilterComposer(
             $db: $db,
             $table: $db.moodboardImages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> opticsLabSamplesRefs(
+    Expression<bool> Function($$OpticsLabSamplesTableFilterComposer f) f,
+  ) {
+    final $$OpticsLabSamplesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.opticsLabSamples,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$OpticsLabSamplesTableFilterComposer(
+            $db: $db,
+            $table: $db.opticsLabSamples,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -14991,8 +26662,23 @@ class $$ProjectsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get characterColorsJson => $composableBuilder(
+    column: $table.characterColorsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cloudId => $composableBuilder(
+    column: $table.cloudId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get syncUpdatedAt => $composableBuilder(
+    column: $table.syncUpdatedAt,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -15094,8 +26780,21 @@ class $$ProjectsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get characterColorsJson => $composableBuilder(
+    column: $table.characterColorsJson,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<String> get cloudId =>
+      $composableBuilder(column: $table.cloudId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get syncUpdatedAt => $composableBuilder(
+    column: $table.syncUpdatedAt,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -15328,6 +27027,31 @@ class $$ProjectsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> moodboardGroupsRefs<T extends Object>(
+    Expression<T> Function($$MoodboardGroupsTableAnnotationComposer a) f,
+  ) {
+    final $$MoodboardGroupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.moodboardGroups,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MoodboardGroupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.moodboardGroups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> moodboardImagesRefs<T extends Object>(
     Expression<T> Function($$MoodboardImagesTableAnnotationComposer a) f,
   ) {
@@ -15344,6 +27068,31 @@ class $$ProjectsTableAnnotationComposer
           }) => $$MoodboardImagesTableAnnotationComposer(
             $db: $db,
             $table: $db.moodboardImages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> opticsLabSamplesRefs<T extends Object>(
+    Expression<T> Function($$OpticsLabSamplesTableAnnotationComposer a) f,
+  ) {
+    final $$OpticsLabSamplesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.opticsLabSamples,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$OpticsLabSamplesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.opticsLabSamples,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -15377,7 +27126,9 @@ class $$ProjectsTableTableManager
             bool lookBiblesRefs,
             bool projectAnnotatedPdfsRefs,
             bool visualBiblesRefs,
+            bool moodboardGroupsRefs,
             bool moodboardImagesRefs,
+            bool opticsLabSamplesRefs,
           })
         > {
   $$ProjectsTableTableManager(_$AppDatabase db, $ProjectsTable table)
@@ -15407,7 +27158,10 @@ class $$ProjectsTableTableManager
                 Value<String?> googleEmail = const Value.absent(),
                 Value<String?> scriptFilePath = const Value.absent(),
                 Value<String?> scriptFileName = const Value.absent(),
+                Value<String?> characterColorsJson = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String?> cloudId = const Value.absent(),
+                Value<DateTime?> syncUpdatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => ProjectsCompanion(
@@ -15425,7 +27179,10 @@ class $$ProjectsTableTableManager
                 googleEmail: googleEmail,
                 scriptFilePath: scriptFilePath,
                 scriptFileName: scriptFileName,
+                characterColorsJson: characterColorsJson,
                 sortOrder: sortOrder,
+                cloudId: cloudId,
+                syncUpdatedAt: syncUpdatedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),
@@ -15445,7 +27202,10 @@ class $$ProjectsTableTableManager
                 Value<String?> googleEmail = const Value.absent(),
                 Value<String?> scriptFilePath = const Value.absent(),
                 Value<String?> scriptFileName = const Value.absent(),
+                Value<String?> characterColorsJson = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String?> cloudId = const Value.absent(),
+                Value<DateTime?> syncUpdatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => ProjectsCompanion.insert(
@@ -15463,7 +27223,10 @@ class $$ProjectsTableTableManager
                 googleEmail: googleEmail,
                 scriptFilePath: scriptFilePath,
                 scriptFileName: scriptFileName,
+                characterColorsJson: characterColorsJson,
                 sortOrder: sortOrder,
+                cloudId: cloudId,
+                syncUpdatedAt: syncUpdatedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),
@@ -15486,7 +27249,9 @@ class $$ProjectsTableTableManager
                 lookBiblesRefs = false,
                 projectAnnotatedPdfsRefs = false,
                 visualBiblesRefs = false,
+                moodboardGroupsRefs = false,
                 moodboardImagesRefs = false,
+                opticsLabSamplesRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -15499,7 +27264,9 @@ class $$ProjectsTableTableManager
                     if (lookBiblesRefs) db.lookBibles,
                     if (projectAnnotatedPdfsRefs) db.projectAnnotatedPdfs,
                     if (visualBiblesRefs) db.visualBibles,
+                    if (moodboardGroupsRefs) db.moodboardGroups,
                     if (moodboardImagesRefs) db.moodboardImages,
+                    if (opticsLabSamplesRefs) db.opticsLabSamples,
                   ],
                   addJoins:
                       <
@@ -15703,6 +27470,27 @@ class $$ProjectsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (moodboardGroupsRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          MoodboardGroup
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._moodboardGroupsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).moodboardGroupsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (moodboardImagesRefs)
                         await $_getPrefetchedData<
                           Project,
@@ -15718,6 +27506,27 @@ class $$ProjectsTableTableManager
                                 table,
                                 p0,
                               ).moodboardImagesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (opticsLabSamplesRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          OpticsLabSample
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._opticsLabSamplesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).opticsLabSamplesRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.projectId == item.id,
@@ -15754,7 +27563,9 @@ typedef $$ProjectsTableProcessedTableManager =
         bool lookBiblesRefs,
         bool projectAnnotatedPdfsRefs,
         bool visualBiblesRefs,
+        bool moodboardGroupsRefs,
         bool moodboardImagesRefs,
+        bool opticsLabSamplesRefs,
       })
     >;
 typedef $$LocationSitesTableCreateCompanionBuilder =
@@ -15870,6 +27681,34 @@ final class $$LocationSitesTableReferences
     ).filter((f) => f.siteId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_siteImagesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $VisualBibleLocationRefsTable,
+    List<VisualBibleLocationRef>
+  >
+  _visualBibleLocationRefsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.visualBibleLocationRefs,
+        aliasName: $_aliasNameGenerator(
+          db.locationSites.id,
+          db.visualBibleLocationRefs.locationSiteId,
+        ),
+      );
+
+  $$VisualBibleLocationRefsTableProcessedTableManager
+  get visualBibleLocationRefsRefs {
+    final manager = $$VisualBibleLocationRefsTableTableManager(
+      $_db,
+      $_db.visualBibleLocationRefs,
+    ).filter((f) => f.locationSiteId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _visualBibleLocationRefsRefsTable($_db),
+    );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -16025,6 +27864,32 @@ class $$LocationSitesTableFilterComposer
                 $removeJoinBuilderFromRootComposer,
           ),
     );
+    return f(composer);
+  }
+
+  Expression<bool> visualBibleLocationRefsRefs(
+    Expression<bool> Function($$VisualBibleLocationRefsTableFilterComposer f) f,
+  ) {
+    final $$VisualBibleLocationRefsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.visualBibleLocationRefs,
+          getReferencedColumn: (t) => t.locationSiteId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VisualBibleLocationRefsTableFilterComposer(
+                $db: $db,
+                $table: $db.visualBibleLocationRefs,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
     return f(composer);
   }
 }
@@ -16249,6 +28114,33 @@ class $$LocationSitesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> visualBibleLocationRefsRefs<T extends Object>(
+    Expression<T> Function($$VisualBibleLocationRefsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$VisualBibleLocationRefsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.visualBibleLocationRefs,
+          getReferencedColumn: (t) => t.locationSiteId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VisualBibleLocationRefsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.visualBibleLocationRefs,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$LocationSitesTableTableManager
@@ -16269,6 +28161,7 @@ class $$LocationSitesTableTableManager
             bool locationBasePlansRefs,
             bool scenesRefs,
             bool siteImagesRefs,
+            bool visualBibleLocationRefsRefs,
           })
         > {
   $$LocationSitesTableTableManager(_$AppDatabase db, $LocationSitesTable table)
@@ -16344,6 +28237,7 @@ class $$LocationSitesTableTableManager
                 locationBasePlansRefs = false,
                 scenesRefs = false,
                 siteImagesRefs = false,
+                visualBibleLocationRefsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -16351,6 +28245,7 @@ class $$LocationSitesTableTableManager
                     if (locationBasePlansRefs) db.locationBasePlans,
                     if (scenesRefs) db.scenes,
                     if (siteImagesRefs) db.siteImages,
+                    if (visualBibleLocationRefsRefs) db.visualBibleLocationRefs,
                   ],
                   addJoins:
                       <
@@ -16451,6 +28346,27 @@ class $$LocationSitesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (visualBibleLocationRefsRefs)
+                        await $_getPrefetchedData<
+                          LocationSite,
+                          $LocationSitesTable,
+                          VisualBibleLocationRef
+                        >(
+                          currentTable: table,
+                          referencedTable: $$LocationSitesTableReferences
+                              ._visualBibleLocationRefsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$LocationSitesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).visualBibleLocationRefsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.locationSiteId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -16476,6 +28392,7 @@ typedef $$LocationSitesTableProcessedTableManager =
         bool locationBasePlansRefs,
         bool scenesRefs,
         bool siteImagesRefs,
+        bool visualBibleLocationRefsRefs,
       })
     >;
 typedef $$LocationBasePlansTableCreateCompanionBuilder =
@@ -16602,6 +28519,61 @@ final class $$LocationBasePlansTableReferences
     ).filter((f) => f.locationId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_locationImagesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $VisualBibleLocationRefsTable,
+    List<VisualBibleLocationRef>
+  >
+  _visualBibleLocationRefsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.visualBibleLocationRefs,
+        aliasName: $_aliasNameGenerator(
+          db.locationBasePlans.id,
+          db.visualBibleLocationRefs.locationBasePlanId,
+        ),
+      );
+
+  $$VisualBibleLocationRefsTableProcessedTableManager
+  get visualBibleLocationRefsRefs {
+    final manager =
+        $$VisualBibleLocationRefsTableTableManager(
+          $_db,
+          $_db.visualBibleLocationRefs,
+        ).filter(
+          (f) => f.locationBasePlanId.id.sqlEquals($_itemColumn<int>('id')!),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _visualBibleLocationRefsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$MoodboardImagesTable, List<MoodboardImage>>
+  _moodboardImagesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.moodboardImages,
+    aliasName: $_aliasNameGenerator(
+      db.locationBasePlans.id,
+      db.moodboardImages.linkedLocationBasePlanId,
+    ),
+  );
+
+  $$MoodboardImagesTableProcessedTableManager get moodboardImagesRefs {
+    final manager =
+        $$MoodboardImagesTableTableManager($_db, $_db.moodboardImages).filter(
+          (f) =>
+              f.linkedLocationBasePlanId.id.sqlEquals($_itemColumn<int>('id')!),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _moodboardImagesRefsTable($_db),
+    );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -16764,6 +28736,57 @@ class $$LocationBasePlansTableFilterComposer
           }) => $$LocationImagesTableFilterComposer(
             $db: $db,
             $table: $db.locationImages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> visualBibleLocationRefsRefs(
+    Expression<bool> Function($$VisualBibleLocationRefsTableFilterComposer f) f,
+  ) {
+    final $$VisualBibleLocationRefsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.visualBibleLocationRefs,
+          getReferencedColumn: (t) => t.locationBasePlanId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VisualBibleLocationRefsTableFilterComposer(
+                $db: $db,
+                $table: $db.visualBibleLocationRefs,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<bool> moodboardImagesRefs(
+    Expression<bool> Function($$MoodboardImagesTableFilterComposer f) f,
+  ) {
+    final $$MoodboardImagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.moodboardImages,
+      getReferencedColumn: (t) => t.linkedLocationBasePlanId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MoodboardImagesTableFilterComposer(
+            $db: $db,
+            $table: $db.moodboardImages,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -17042,6 +29065,58 @@ class $$LocationBasePlansTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> visualBibleLocationRefsRefs<T extends Object>(
+    Expression<T> Function($$VisualBibleLocationRefsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$VisualBibleLocationRefsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.visualBibleLocationRefs,
+          getReferencedColumn: (t) => t.locationBasePlanId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VisualBibleLocationRefsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.visualBibleLocationRefs,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<T> moodboardImagesRefs<T extends Object>(
+    Expression<T> Function($$MoodboardImagesTableAnnotationComposer a) f,
+  ) {
+    final $$MoodboardImagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.moodboardImages,
+      getReferencedColumn: (t) => t.linkedLocationBasePlanId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MoodboardImagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.moodboardImages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$LocationBasePlansTableTableManager
@@ -17062,6 +29137,8 @@ class $$LocationBasePlansTableTableManager
             bool siteId,
             bool scenesRefs,
             bool locationImagesRefs,
+            bool visualBibleLocationRefsRefs,
+            bool moodboardImagesRefs,
           })
         > {
   $$LocationBasePlansTableTableManager(
@@ -17158,12 +29235,16 @@ class $$LocationBasePlansTableTableManager
                 siteId = false,
                 scenesRefs = false,
                 locationImagesRefs = false,
+                visualBibleLocationRefsRefs = false,
+                moodboardImagesRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (scenesRefs) db.scenes,
                     if (locationImagesRefs) db.locationImages,
+                    if (visualBibleLocationRefsRefs) db.visualBibleLocationRefs,
+                    if (moodboardImagesRefs) db.moodboardImages,
                   ],
                   addJoins:
                       <
@@ -17258,6 +29339,48 @@ class $$LocationBasePlansTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (visualBibleLocationRefsRefs)
+                        await $_getPrefetchedData<
+                          LocationBasePlan,
+                          $LocationBasePlansTable,
+                          VisualBibleLocationRef
+                        >(
+                          currentTable: table,
+                          referencedTable: $$LocationBasePlansTableReferences
+                              ._visualBibleLocationRefsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$LocationBasePlansTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).visualBibleLocationRefsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.locationBasePlanId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (moodboardImagesRefs)
+                        await $_getPrefetchedData<
+                          LocationBasePlan,
+                          $LocationBasePlansTable,
+                          MoodboardImage
+                        >(
+                          currentTable: table,
+                          referencedTable: $$LocationBasePlansTableReferences
+                              ._moodboardImagesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$LocationBasePlansTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).moodboardImagesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.linkedLocationBasePlanId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -17283,6 +29406,8 @@ typedef $$LocationBasePlansTableProcessedTableManager =
         bool siteId,
         bool scenesRefs,
         bool locationImagesRefs,
+        bool visualBibleLocationRefsRefs,
+        bool moodboardImagesRefs,
       })
     >;
 typedef $$ScenesTableCreateCompanionBuilder =
@@ -17298,6 +29423,7 @@ typedef $$ScenesTableCreateCompanionBuilder =
       Value<String> intExt,
       Value<String> dayNight,
       Value<String?> locationColor,
+      Value<String?> charactersJson,
       Value<String?> description,
       Value<String?> actionText,
       Value<int?> sourceStartIndex,
@@ -17318,6 +29444,7 @@ typedef $$ScenesTableUpdateCompanionBuilder =
       Value<String> intExt,
       Value<String> dayNight,
       Value<String?> locationColor,
+      Value<String?> charactersJson,
       Value<String?> description,
       Value<String?> actionText,
       Value<int?> sourceStartIndex,
@@ -17451,6 +29578,11 @@ class $$ScenesTableFilterComposer
 
   ColumnFilters<String> get locationColor => $composableBuilder(
     column: $table.locationColor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get charactersJson => $composableBuilder(
+    column: $table.charactersJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -17628,6 +29760,11 @@ class $$ScenesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get charactersJson => $composableBuilder(
+    column: $table.charactersJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get description => $composableBuilder(
     column: $table.description,
     builder: (column) => ColumnOrderings(column),
@@ -17764,6 +29901,11 @@ class $$ScenesTableAnnotationComposer
 
   GeneratedColumn<String> get locationColor => $composableBuilder(
     column: $table.locationColor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get charactersJson => $composableBuilder(
+    column: $table.charactersJson,
     builder: (column) => column,
   );
 
@@ -17935,6 +30077,7 @@ class $$ScenesTableTableManager
                 Value<String> intExt = const Value.absent(),
                 Value<String> dayNight = const Value.absent(),
                 Value<String?> locationColor = const Value.absent(),
+                Value<String?> charactersJson = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<String?> actionText = const Value.absent(),
                 Value<int?> sourceStartIndex = const Value.absent(),
@@ -17953,6 +30096,7 @@ class $$ScenesTableTableManager
                 intExt: intExt,
                 dayNight: dayNight,
                 locationColor: locationColor,
+                charactersJson: charactersJson,
                 description: description,
                 actionText: actionText,
                 sourceStartIndex: sourceStartIndex,
@@ -17973,6 +30117,7 @@ class $$ScenesTableTableManager
                 Value<String> intExt = const Value.absent(),
                 Value<String> dayNight = const Value.absent(),
                 Value<String?> locationColor = const Value.absent(),
+                Value<String?> charactersJson = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<String?> actionText = const Value.absent(),
                 Value<int?> sourceStartIndex = const Value.absent(),
@@ -17991,6 +30136,7 @@ class $$ScenesTableTableManager
                 intExt: intExt,
                 dayNight: dayNight,
                 locationColor: locationColor,
+                charactersJson: charactersJson,
                 description: description,
                 actionText: actionText,
                 sourceStartIndex: sourceStartIndex,
@@ -21028,6 +33174,25 @@ typedef $$CamerasTableCreateCompanionBuilder =
       required double sensorWidthMm,
       required double sensorHeightMm,
       Value<String?> recordingFormats,
+      Value<double?> dynamicRangeStops,
+      Value<String?> colorScience,
+      Value<int?> nativeIso,
+      Value<String?> logFormats,
+      Value<String?> mountType,
+      Value<String?> sensorModesJson,
+      Value<String?> recordingResolutionsJson,
+      Value<double?> weightKg,
+      Value<double?> powerDrawW,
+      Value<String?> heroImagePath,
+      Value<String?> manufacturerUrl,
+      Value<String?> externalId,
+      Value<int?> catalogVersion,
+      Value<bool> isCustom,
+      Value<String?> series,
+      Value<bool> vintage,
+      Value<String?> rentalTagsJson,
+      Value<bool> lukaCompatible,
+      Value<String?> lukaProfileJson,
       Value<String?> notes,
     });
 typedef $$CamerasTableUpdateCompanionBuilder =
@@ -21038,8 +33203,71 @@ typedef $$CamerasTableUpdateCompanionBuilder =
       Value<double> sensorWidthMm,
       Value<double> sensorHeightMm,
       Value<String?> recordingFormats,
+      Value<double?> dynamicRangeStops,
+      Value<String?> colorScience,
+      Value<int?> nativeIso,
+      Value<String?> logFormats,
+      Value<String?> mountType,
+      Value<String?> sensorModesJson,
+      Value<String?> recordingResolutionsJson,
+      Value<double?> weightKg,
+      Value<double?> powerDrawW,
+      Value<String?> heroImagePath,
+      Value<String?> manufacturerUrl,
+      Value<String?> externalId,
+      Value<int?> catalogVersion,
+      Value<bool> isCustom,
+      Value<String?> series,
+      Value<bool> vintage,
+      Value<String?> rentalTagsJson,
+      Value<bool> lukaCompatible,
+      Value<String?> lukaProfileJson,
       Value<String?> notes,
     });
+
+final class $$CamerasTableReferences
+    extends BaseReferences<_$AppDatabase, $CamerasTable, Camera> {
+  $$CamerasTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$VisualBiblesTable, List<VisualBible>>
+  _visualBiblesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.visualBibles,
+    aliasName: $_aliasNameGenerator(
+      db.cameras.id,
+      db.visualBibles.primaryCameraId,
+    ),
+  );
+
+  $$VisualBiblesTableProcessedTableManager get visualBiblesRefs {
+    final manager = $$VisualBiblesTableTableManager(
+      $_db,
+      $_db.visualBibles,
+    ).filter((f) => f.primaryCameraId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_visualBiblesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CameraTestsTable, List<CameraTest>>
+  _cameraTestsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.cameraTests,
+    aliasName: $_aliasNameGenerator(db.cameras.id, db.cameraTests.cameraId),
+  );
+
+  $$CameraTestsTableProcessedTableManager get cameraTestsRefs {
+    final manager = $$CameraTestsTableTableManager(
+      $_db,
+      $_db.cameraTests,
+    ).filter((f) => f.cameraId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_cameraTestsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
 
 class $$CamerasTableFilterComposer
     extends Composer<_$AppDatabase, $CamerasTable> {
@@ -21080,10 +33308,155 @@ class $$CamerasTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<double> get dynamicRangeStops => $composableBuilder(
+    column: $table.dynamicRangeStops,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get colorScience => $composableBuilder(
+    column: $table.colorScience,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nativeIso => $composableBuilder(
+    column: $table.nativeIso,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get logFormats => $composableBuilder(
+    column: $table.logFormats,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mountType => $composableBuilder(
+    column: $table.mountType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sensorModesJson => $composableBuilder(
+    column: $table.sensorModesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get recordingResolutionsJson => $composableBuilder(
+    column: $table.recordingResolutionsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get weightKg => $composableBuilder(
+    column: $table.weightKg,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get powerDrawW => $composableBuilder(
+    column: $table.powerDrawW,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get heroImagePath => $composableBuilder(
+    column: $table.heroImagePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get manufacturerUrl => $composableBuilder(
+    column: $table.manufacturerUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get catalogVersion => $composableBuilder(
+    column: $table.catalogVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isCustom => $composableBuilder(
+    column: $table.isCustom,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get series => $composableBuilder(
+    column: $table.series,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get vintage => $composableBuilder(
+    column: $table.vintage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rentalTagsJson => $composableBuilder(
+    column: $table.rentalTagsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get lukaCompatible => $composableBuilder(
+    column: $table.lukaCompatible,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lukaProfileJson => $composableBuilder(
+    column: $table.lukaProfileJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get notes => $composableBuilder(
     column: $table.notes,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> visualBiblesRefs(
+    Expression<bool> Function($$VisualBiblesTableFilterComposer f) f,
+  ) {
+    final $$VisualBiblesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.primaryCameraId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> cameraTestsRefs(
+    Expression<bool> Function($$CameraTestsTableFilterComposer f) f,
+  ) {
+    final $$CameraTestsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.cameraTests,
+      getReferencedColumn: (t) => t.cameraId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CameraTestsTableFilterComposer(
+            $db: $db,
+            $table: $db.cameraTests,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$CamerasTableOrderingComposer
@@ -21122,6 +33495,101 @@ class $$CamerasTableOrderingComposer
 
   ColumnOrderings<String> get recordingFormats => $composableBuilder(
     column: $table.recordingFormats,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get dynamicRangeStops => $composableBuilder(
+    column: $table.dynamicRangeStops,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get colorScience => $composableBuilder(
+    column: $table.colorScience,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nativeIso => $composableBuilder(
+    column: $table.nativeIso,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get logFormats => $composableBuilder(
+    column: $table.logFormats,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mountType => $composableBuilder(
+    column: $table.mountType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sensorModesJson => $composableBuilder(
+    column: $table.sensorModesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get recordingResolutionsJson => $composableBuilder(
+    column: $table.recordingResolutionsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get weightKg => $composableBuilder(
+    column: $table.weightKg,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get powerDrawW => $composableBuilder(
+    column: $table.powerDrawW,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get heroImagePath => $composableBuilder(
+    column: $table.heroImagePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get manufacturerUrl => $composableBuilder(
+    column: $table.manufacturerUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get catalogVersion => $composableBuilder(
+    column: $table.catalogVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isCustom => $composableBuilder(
+    column: $table.isCustom,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get series => $composableBuilder(
+    column: $table.series,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get vintage => $composableBuilder(
+    column: $table.vintage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rentalTagsJson => $composableBuilder(
+    column: $table.rentalTagsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get lukaCompatible => $composableBuilder(
+    column: $table.lukaCompatible,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lukaProfileJson => $composableBuilder(
+    column: $table.lukaProfileJson,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -21164,8 +33632,141 @@ class $$CamerasTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<double> get dynamicRangeStops => $composableBuilder(
+    column: $table.dynamicRangeStops,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get colorScience => $composableBuilder(
+    column: $table.colorScience,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get nativeIso =>
+      $composableBuilder(column: $table.nativeIso, builder: (column) => column);
+
+  GeneratedColumn<String> get logFormats => $composableBuilder(
+    column: $table.logFormats,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get mountType =>
+      $composableBuilder(column: $table.mountType, builder: (column) => column);
+
+  GeneratedColumn<String> get sensorModesJson => $composableBuilder(
+    column: $table.sensorModesJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get recordingResolutionsJson => $composableBuilder(
+    column: $table.recordingResolutionsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get weightKg =>
+      $composableBuilder(column: $table.weightKg, builder: (column) => column);
+
+  GeneratedColumn<double> get powerDrawW => $composableBuilder(
+    column: $table.powerDrawW,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get heroImagePath => $composableBuilder(
+    column: $table.heroImagePath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get manufacturerUrl => $composableBuilder(
+    column: $table.manufacturerUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get catalogVersion => $composableBuilder(
+    column: $table.catalogVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isCustom =>
+      $composableBuilder(column: $table.isCustom, builder: (column) => column);
+
+  GeneratedColumn<String> get series =>
+      $composableBuilder(column: $table.series, builder: (column) => column);
+
+  GeneratedColumn<bool> get vintage =>
+      $composableBuilder(column: $table.vintage, builder: (column) => column);
+
+  GeneratedColumn<String> get rentalTagsJson => $composableBuilder(
+    column: $table.rentalTagsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get lukaCompatible => $composableBuilder(
+    column: $table.lukaCompatible,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lukaProfileJson => $composableBuilder(
+    column: $table.lukaProfileJson,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get notes =>
       $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  Expression<T> visualBiblesRefs<T extends Object>(
+    Expression<T> Function($$VisualBiblesTableAnnotationComposer a) f,
+  ) {
+    final $$VisualBiblesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.primaryCameraId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> cameraTestsRefs<T extends Object>(
+    Expression<T> Function($$CameraTestsTableAnnotationComposer a) f,
+  ) {
+    final $$CameraTestsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.cameraTests,
+      getReferencedColumn: (t) => t.cameraId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CameraTestsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.cameraTests,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$CamerasTableTableManager
@@ -21179,9 +33780,9 @@ class $$CamerasTableTableManager
           $$CamerasTableAnnotationComposer,
           $$CamerasTableCreateCompanionBuilder,
           $$CamerasTableUpdateCompanionBuilder,
-          (Camera, BaseReferences<_$AppDatabase, $CamerasTable, Camera>),
+          (Camera, $$CamerasTableReferences),
           Camera,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool visualBiblesRefs, bool cameraTestsRefs})
         > {
   $$CamerasTableTableManager(_$AppDatabase db, $CamerasTable table)
     : super(
@@ -21202,6 +33803,25 @@ class $$CamerasTableTableManager
                 Value<double> sensorWidthMm = const Value.absent(),
                 Value<double> sensorHeightMm = const Value.absent(),
                 Value<String?> recordingFormats = const Value.absent(),
+                Value<double?> dynamicRangeStops = const Value.absent(),
+                Value<String?> colorScience = const Value.absent(),
+                Value<int?> nativeIso = const Value.absent(),
+                Value<String?> logFormats = const Value.absent(),
+                Value<String?> mountType = const Value.absent(),
+                Value<String?> sensorModesJson = const Value.absent(),
+                Value<String?> recordingResolutionsJson = const Value.absent(),
+                Value<double?> weightKg = const Value.absent(),
+                Value<double?> powerDrawW = const Value.absent(),
+                Value<String?> heroImagePath = const Value.absent(),
+                Value<String?> manufacturerUrl = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
+                Value<int?> catalogVersion = const Value.absent(),
+                Value<bool> isCustom = const Value.absent(),
+                Value<String?> series = const Value.absent(),
+                Value<bool> vintage = const Value.absent(),
+                Value<String?> rentalTagsJson = const Value.absent(),
+                Value<bool> lukaCompatible = const Value.absent(),
+                Value<String?> lukaProfileJson = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
               }) => CamerasCompanion(
                 id: id,
@@ -21210,6 +33830,25 @@ class $$CamerasTableTableManager
                 sensorWidthMm: sensorWidthMm,
                 sensorHeightMm: sensorHeightMm,
                 recordingFormats: recordingFormats,
+                dynamicRangeStops: dynamicRangeStops,
+                colorScience: colorScience,
+                nativeIso: nativeIso,
+                logFormats: logFormats,
+                mountType: mountType,
+                sensorModesJson: sensorModesJson,
+                recordingResolutionsJson: recordingResolutionsJson,
+                weightKg: weightKg,
+                powerDrawW: powerDrawW,
+                heroImagePath: heroImagePath,
+                manufacturerUrl: manufacturerUrl,
+                externalId: externalId,
+                catalogVersion: catalogVersion,
+                isCustom: isCustom,
+                series: series,
+                vintage: vintage,
+                rentalTagsJson: rentalTagsJson,
+                lukaCompatible: lukaCompatible,
+                lukaProfileJson: lukaProfileJson,
                 notes: notes,
               ),
           createCompanionCallback:
@@ -21220,6 +33859,25 @@ class $$CamerasTableTableManager
                 required double sensorWidthMm,
                 required double sensorHeightMm,
                 Value<String?> recordingFormats = const Value.absent(),
+                Value<double?> dynamicRangeStops = const Value.absent(),
+                Value<String?> colorScience = const Value.absent(),
+                Value<int?> nativeIso = const Value.absent(),
+                Value<String?> logFormats = const Value.absent(),
+                Value<String?> mountType = const Value.absent(),
+                Value<String?> sensorModesJson = const Value.absent(),
+                Value<String?> recordingResolutionsJson = const Value.absent(),
+                Value<double?> weightKg = const Value.absent(),
+                Value<double?> powerDrawW = const Value.absent(),
+                Value<String?> heroImagePath = const Value.absent(),
+                Value<String?> manufacturerUrl = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
+                Value<int?> catalogVersion = const Value.absent(),
+                Value<bool> isCustom = const Value.absent(),
+                Value<String?> series = const Value.absent(),
+                Value<bool> vintage = const Value.absent(),
+                Value<String?> rentalTagsJson = const Value.absent(),
+                Value<bool> lukaCompatible = const Value.absent(),
+                Value<String?> lukaProfileJson = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
               }) => CamerasCompanion.insert(
                 id: id,
@@ -21228,12 +33886,92 @@ class $$CamerasTableTableManager
                 sensorWidthMm: sensorWidthMm,
                 sensorHeightMm: sensorHeightMm,
                 recordingFormats: recordingFormats,
+                dynamicRangeStops: dynamicRangeStops,
+                colorScience: colorScience,
+                nativeIso: nativeIso,
+                logFormats: logFormats,
+                mountType: mountType,
+                sensorModesJson: sensorModesJson,
+                recordingResolutionsJson: recordingResolutionsJson,
+                weightKg: weightKg,
+                powerDrawW: powerDrawW,
+                heroImagePath: heroImagePath,
+                manufacturerUrl: manufacturerUrl,
+                externalId: externalId,
+                catalogVersion: catalogVersion,
+                isCustom: isCustom,
+                series: series,
+                vintage: vintage,
+                rentalTagsJson: rentalTagsJson,
+                lukaCompatible: lukaCompatible,
+                lukaProfileJson: lukaProfileJson,
                 notes: notes,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CamerasTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback:
+              ({visualBiblesRefs = false, cameraTestsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (visualBiblesRefs) db.visualBibles,
+                    if (cameraTestsRefs) db.cameraTests,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (visualBiblesRefs)
+                        await $_getPrefetchedData<
+                          Camera,
+                          $CamerasTable,
+                          VisualBible
+                        >(
+                          currentTable: table,
+                          referencedTable: $$CamerasTableReferences
+                              ._visualBiblesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$CamerasTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).visualBiblesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.primaryCameraId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (cameraTestsRefs)
+                        await $_getPrefetchedData<
+                          Camera,
+                          $CamerasTable,
+                          CameraTest
+                        >(
+                          currentTable: table,
+                          referencedTable: $$CamerasTableReferences
+                              ._cameraTestsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$CamerasTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).cameraTestsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.cameraId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
         ),
       );
 }
@@ -21248,9 +33986,9 @@ typedef $$CamerasTableProcessedTableManager =
       $$CamerasTableAnnotationComposer,
       $$CamerasTableCreateCompanionBuilder,
       $$CamerasTableUpdateCompanionBuilder,
-      (Camera, BaseReferences<_$AppDatabase, $CamerasTable, Camera>),
+      (Camera, $$CamerasTableReferences),
       Camera,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool visualBiblesRefs, bool cameraTestsRefs})
     >;
 typedef $$LensesTableCreateCompanionBuilder =
     LensesCompanion Function({
@@ -21262,6 +34000,22 @@ typedef $$LensesTableCreateCompanionBuilder =
       Value<double?> focalMax,
       required double minTStop,
       required String formatCoverage,
+      Value<String?> mountType,
+      Value<double?> imageCircleMm,
+      Value<bool> isAnamorphic,
+      Value<double?> squeezeRatio,
+      Value<double?> closeFocusM,
+      Value<double?> frontDiameterMm,
+      Value<String?> lensType,
+      Value<String?> heroImagePath,
+      Value<String?> externalId,
+      Value<int?> catalogVersion,
+      Value<bool> isCustom,
+      Value<String?> series,
+      Value<bool> vintage,
+      Value<String?> rentalTagsJson,
+      Value<bool> lukaCompatible,
+      Value<String?> lukaProfileJson,
       Value<String?> notes,
     });
 typedef $$LensesTableUpdateCompanionBuilder =
@@ -21274,6 +34028,22 @@ typedef $$LensesTableUpdateCompanionBuilder =
       Value<double?> focalMax,
       Value<double> minTStop,
       Value<String> formatCoverage,
+      Value<String?> mountType,
+      Value<double?> imageCircleMm,
+      Value<bool> isAnamorphic,
+      Value<double?> squeezeRatio,
+      Value<double?> closeFocusM,
+      Value<double?> frontDiameterMm,
+      Value<String?> lensType,
+      Value<String?> heroImagePath,
+      Value<String?> externalId,
+      Value<int?> catalogVersion,
+      Value<bool> isCustom,
+      Value<String?> series,
+      Value<bool> vintage,
+      Value<String?> rentalTagsJson,
+      Value<bool> lukaCompatible,
+      Value<String?> lukaProfileJson,
       Value<String?> notes,
     });
 
@@ -21297,6 +34067,24 @@ final class $$LensesTableReferences
     ).filter((f) => f.primaryLensId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_visualBiblesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CameraTestsTable, List<CameraTest>>
+  _cameraTestsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.cameraTests,
+    aliasName: $_aliasNameGenerator(db.lenses.id, db.cameraTests.lensId),
+  );
+
+  $$CameraTestsTableProcessedTableManager get cameraTestsRefs {
+    final manager = $$CameraTestsTableTableManager(
+      $_db,
+      $_db.cameraTests,
+    ).filter((f) => f.lensId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_cameraTestsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -21352,6 +34140,86 @@ class $$LensesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get mountType => $composableBuilder(
+    column: $table.mountType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get imageCircleMm => $composableBuilder(
+    column: $table.imageCircleMm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isAnamorphic => $composableBuilder(
+    column: $table.isAnamorphic,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get squeezeRatio => $composableBuilder(
+    column: $table.squeezeRatio,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get closeFocusM => $composableBuilder(
+    column: $table.closeFocusM,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get frontDiameterMm => $composableBuilder(
+    column: $table.frontDiameterMm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lensType => $composableBuilder(
+    column: $table.lensType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get heroImagePath => $composableBuilder(
+    column: $table.heroImagePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get catalogVersion => $composableBuilder(
+    column: $table.catalogVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isCustom => $composableBuilder(
+    column: $table.isCustom,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get series => $composableBuilder(
+    column: $table.series,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get vintage => $composableBuilder(
+    column: $table.vintage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rentalTagsJson => $composableBuilder(
+    column: $table.rentalTagsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get lukaCompatible => $composableBuilder(
+    column: $table.lukaCompatible,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lukaProfileJson => $composableBuilder(
+    column: $table.lukaProfileJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get notes => $composableBuilder(
     column: $table.notes,
     builder: (column) => ColumnFilters(column),
@@ -21373,6 +34241,31 @@ class $$LensesTableFilterComposer
           }) => $$VisualBiblesTableFilterComposer(
             $db: $db,
             $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> cameraTestsRefs(
+    Expression<bool> Function($$CameraTestsTableFilterComposer f) f,
+  ) {
+    final $$CameraTestsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.cameraTests,
+      getReferencedColumn: (t) => t.lensId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CameraTestsTableFilterComposer(
+            $db: $db,
+            $table: $db.cameraTests,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -21432,6 +34325,86 @@ class $$LensesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get mountType => $composableBuilder(
+    column: $table.mountType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get imageCircleMm => $composableBuilder(
+    column: $table.imageCircleMm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isAnamorphic => $composableBuilder(
+    column: $table.isAnamorphic,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get squeezeRatio => $composableBuilder(
+    column: $table.squeezeRatio,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get closeFocusM => $composableBuilder(
+    column: $table.closeFocusM,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get frontDiameterMm => $composableBuilder(
+    column: $table.frontDiameterMm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lensType => $composableBuilder(
+    column: $table.lensType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get heroImagePath => $composableBuilder(
+    column: $table.heroImagePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get catalogVersion => $composableBuilder(
+    column: $table.catalogVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isCustom => $composableBuilder(
+    column: $table.isCustom,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get series => $composableBuilder(
+    column: $table.series,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get vintage => $composableBuilder(
+    column: $table.vintage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rentalTagsJson => $composableBuilder(
+    column: $table.rentalTagsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get lukaCompatible => $composableBuilder(
+    column: $table.lukaCompatible,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lukaProfileJson => $composableBuilder(
+    column: $table.lukaProfileJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get notes => $composableBuilder(
     column: $table.notes,
     builder: (column) => ColumnOrderings(column),
@@ -21475,6 +34448,76 @@ class $$LensesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get mountType =>
+      $composableBuilder(column: $table.mountType, builder: (column) => column);
+
+  GeneratedColumn<double> get imageCircleMm => $composableBuilder(
+    column: $table.imageCircleMm,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isAnamorphic => $composableBuilder(
+    column: $table.isAnamorphic,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get squeezeRatio => $composableBuilder(
+    column: $table.squeezeRatio,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get closeFocusM => $composableBuilder(
+    column: $table.closeFocusM,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get frontDiameterMm => $composableBuilder(
+    column: $table.frontDiameterMm,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lensType =>
+      $composableBuilder(column: $table.lensType, builder: (column) => column);
+
+  GeneratedColumn<String> get heroImagePath => $composableBuilder(
+    column: $table.heroImagePath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get catalogVersion => $composableBuilder(
+    column: $table.catalogVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isCustom =>
+      $composableBuilder(column: $table.isCustom, builder: (column) => column);
+
+  GeneratedColumn<String> get series =>
+      $composableBuilder(column: $table.series, builder: (column) => column);
+
+  GeneratedColumn<bool> get vintage =>
+      $composableBuilder(column: $table.vintage, builder: (column) => column);
+
+  GeneratedColumn<String> get rentalTagsJson => $composableBuilder(
+    column: $table.rentalTagsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get lukaCompatible => $composableBuilder(
+    column: $table.lukaCompatible,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lukaProfileJson => $composableBuilder(
+    column: $table.lukaProfileJson,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get notes =>
       $composableBuilder(column: $table.notes, builder: (column) => column);
 
@@ -21502,6 +34545,31 @@ class $$LensesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> cameraTestsRefs<T extends Object>(
+    Expression<T> Function($$CameraTestsTableAnnotationComposer a) f,
+  ) {
+    final $$CameraTestsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.cameraTests,
+      getReferencedColumn: (t) => t.lensId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CameraTestsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.cameraTests,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$LensesTableTableManager
@@ -21517,7 +34585,7 @@ class $$LensesTableTableManager
           $$LensesTableUpdateCompanionBuilder,
           (Lense, $$LensesTableReferences),
           Lense,
-          PrefetchHooks Function({bool visualBiblesRefs})
+          PrefetchHooks Function({bool visualBiblesRefs, bool cameraTestsRefs})
         > {
   $$LensesTableTableManager(_$AppDatabase db, $LensesTable table)
     : super(
@@ -21540,6 +34608,22 @@ class $$LensesTableTableManager
                 Value<double?> focalMax = const Value.absent(),
                 Value<double> minTStop = const Value.absent(),
                 Value<String> formatCoverage = const Value.absent(),
+                Value<String?> mountType = const Value.absent(),
+                Value<double?> imageCircleMm = const Value.absent(),
+                Value<bool> isAnamorphic = const Value.absent(),
+                Value<double?> squeezeRatio = const Value.absent(),
+                Value<double?> closeFocusM = const Value.absent(),
+                Value<double?> frontDiameterMm = const Value.absent(),
+                Value<String?> lensType = const Value.absent(),
+                Value<String?> heroImagePath = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
+                Value<int?> catalogVersion = const Value.absent(),
+                Value<bool> isCustom = const Value.absent(),
+                Value<String?> series = const Value.absent(),
+                Value<bool> vintage = const Value.absent(),
+                Value<String?> rentalTagsJson = const Value.absent(),
+                Value<bool> lukaCompatible = const Value.absent(),
+                Value<String?> lukaProfileJson = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
               }) => LensesCompanion(
                 id: id,
@@ -21550,6 +34634,22 @@ class $$LensesTableTableManager
                 focalMax: focalMax,
                 minTStop: minTStop,
                 formatCoverage: formatCoverage,
+                mountType: mountType,
+                imageCircleMm: imageCircleMm,
+                isAnamorphic: isAnamorphic,
+                squeezeRatio: squeezeRatio,
+                closeFocusM: closeFocusM,
+                frontDiameterMm: frontDiameterMm,
+                lensType: lensType,
+                heroImagePath: heroImagePath,
+                externalId: externalId,
+                catalogVersion: catalogVersion,
+                isCustom: isCustom,
+                series: series,
+                vintage: vintage,
+                rentalTagsJson: rentalTagsJson,
+                lukaCompatible: lukaCompatible,
+                lukaProfileJson: lukaProfileJson,
                 notes: notes,
               ),
           createCompanionCallback:
@@ -21562,6 +34662,22 @@ class $$LensesTableTableManager
                 Value<double?> focalMax = const Value.absent(),
                 required double minTStop,
                 required String formatCoverage,
+                Value<String?> mountType = const Value.absent(),
+                Value<double?> imageCircleMm = const Value.absent(),
+                Value<bool> isAnamorphic = const Value.absent(),
+                Value<double?> squeezeRatio = const Value.absent(),
+                Value<double?> closeFocusM = const Value.absent(),
+                Value<double?> frontDiameterMm = const Value.absent(),
+                Value<String?> lensType = const Value.absent(),
+                Value<String?> heroImagePath = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
+                Value<int?> catalogVersion = const Value.absent(),
+                Value<bool> isCustom = const Value.absent(),
+                Value<String?> series = const Value.absent(),
+                Value<bool> vintage = const Value.absent(),
+                Value<String?> rentalTagsJson = const Value.absent(),
+                Value<bool> lukaCompatible = const Value.absent(),
+                Value<String?> lukaProfileJson = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
               }) => LensesCompanion.insert(
                 id: id,
@@ -21572,6 +34688,22 @@ class $$LensesTableTableManager
                 focalMax: focalMax,
                 minTStop: minTStop,
                 formatCoverage: formatCoverage,
+                mountType: mountType,
+                imageCircleMm: imageCircleMm,
+                isAnamorphic: isAnamorphic,
+                squeezeRatio: squeezeRatio,
+                closeFocusM: closeFocusM,
+                frontDiameterMm: frontDiameterMm,
+                lensType: lensType,
+                heroImagePath: heroImagePath,
+                externalId: externalId,
+                catalogVersion: catalogVersion,
+                isCustom: isCustom,
+                series: series,
+                vintage: vintage,
+                rentalTagsJson: rentalTagsJson,
+                lukaCompatible: lukaCompatible,
+                lukaProfileJson: lukaProfileJson,
                 notes: notes,
               ),
           withReferenceMapper: (p0) => p0
@@ -21580,33 +34712,63 @@ class $$LensesTableTableManager
                     (e.readTable(table), $$LensesTableReferences(db, table, e)),
               )
               .toList(),
-          prefetchHooksCallback: ({visualBiblesRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (visualBiblesRefs) db.visualBibles],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (visualBiblesRefs)
-                    await $_getPrefetchedData<Lense, $LensesTable, VisualBible>(
-                      currentTable: table,
-                      referencedTable: $$LensesTableReferences
-                          ._visualBiblesRefsTable(db),
-                      managerFromTypedResult: (p0) => $$LensesTableReferences(
-                        db,
-                        table,
-                        p0,
-                      ).visualBiblesRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where(
-                            (e) => e.primaryLensId == item.id,
-                          ),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({visualBiblesRefs = false, cameraTestsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (visualBiblesRefs) db.visualBibles,
+                    if (cameraTestsRefs) db.cameraTests,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (visualBiblesRefs)
+                        await $_getPrefetchedData<
+                          Lense,
+                          $LensesTable,
+                          VisualBible
+                        >(
+                          currentTable: table,
+                          referencedTable: $$LensesTableReferences
+                              ._visualBiblesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$LensesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).visualBiblesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.primaryLensId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (cameraTestsRefs)
+                        await $_getPrefetchedData<
+                          Lense,
+                          $LensesTable,
+                          CameraTest
+                        >(
+                          currentTable: table,
+                          referencedTable: $$LensesTableReferences
+                              ._cameraTestsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$LensesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).cameraTestsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.lensId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -21623,7 +34785,7 @@ typedef $$LensesTableProcessedTableManager =
       $$LensesTableUpdateCompanionBuilder,
       (Lense, $$LensesTableReferences),
       Lense,
-      PrefetchHooks Function({bool visualBiblesRefs})
+      PrefetchHooks Function({bool visualBiblesRefs, bool cameraTestsRefs})
     >;
 typedef $$LightsTableCreateCompanionBuilder =
     LightsCompanion Function({
@@ -21636,6 +34798,19 @@ typedef $$LightsTableCreateCompanionBuilder =
       required int colorTempMax,
       Value<bool> isLukaCompatible,
       Value<String?> lukaFixtureId,
+      Value<double?> beamAngleDeg,
+      Value<int?> cri,
+      Value<int?> tlci,
+      Value<String?> dimmingType,
+      Value<String?> modifierCompatibilityJson,
+      Value<String?> heroImagePath,
+      Value<String?> externalId,
+      Value<int?> catalogVersion,
+      Value<bool> isCustom,
+      Value<String?> series,
+      Value<bool> vintage,
+      Value<String?> rentalTagsJson,
+      Value<String?> lukaProfileJson,
       Value<String?> notes,
     });
 typedef $$LightsTableUpdateCompanionBuilder =
@@ -21649,6 +34824,19 @@ typedef $$LightsTableUpdateCompanionBuilder =
       Value<int> colorTempMax,
       Value<bool> isLukaCompatible,
       Value<String?> lukaFixtureId,
+      Value<double?> beamAngleDeg,
+      Value<int?> cri,
+      Value<int?> tlci,
+      Value<String?> dimmingType,
+      Value<String?> modifierCompatibilityJson,
+      Value<String?> heroImagePath,
+      Value<String?> externalId,
+      Value<int?> catalogVersion,
+      Value<bool> isCustom,
+      Value<String?> series,
+      Value<bool> vintage,
+      Value<String?> rentalTagsJson,
+      Value<String?> lukaProfileJson,
       Value<String?> notes,
     });
 
@@ -21703,6 +34891,71 @@ class $$LightsTableFilterComposer
 
   ColumnFilters<String> get lukaFixtureId => $composableBuilder(
     column: $table.lukaFixtureId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get beamAngleDeg => $composableBuilder(
+    column: $table.beamAngleDeg,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cri => $composableBuilder(
+    column: $table.cri,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get tlci => $composableBuilder(
+    column: $table.tlci,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dimmingType => $composableBuilder(
+    column: $table.dimmingType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get modifierCompatibilityJson => $composableBuilder(
+    column: $table.modifierCompatibilityJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get heroImagePath => $composableBuilder(
+    column: $table.heroImagePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get catalogVersion => $composableBuilder(
+    column: $table.catalogVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isCustom => $composableBuilder(
+    column: $table.isCustom,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get series => $composableBuilder(
+    column: $table.series,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get vintage => $composableBuilder(
+    column: $table.vintage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rentalTagsJson => $composableBuilder(
+    column: $table.rentalTagsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lukaProfileJson => $composableBuilder(
+    column: $table.lukaProfileJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -21766,6 +35019,71 @@ class $$LightsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get beamAngleDeg => $composableBuilder(
+    column: $table.beamAngleDeg,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cri => $composableBuilder(
+    column: $table.cri,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get tlci => $composableBuilder(
+    column: $table.tlci,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dimmingType => $composableBuilder(
+    column: $table.dimmingType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get modifierCompatibilityJson => $composableBuilder(
+    column: $table.modifierCompatibilityJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get heroImagePath => $composableBuilder(
+    column: $table.heroImagePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get catalogVersion => $composableBuilder(
+    column: $table.catalogVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isCustom => $composableBuilder(
+    column: $table.isCustom,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get series => $composableBuilder(
+    column: $table.series,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get vintage => $composableBuilder(
+    column: $table.vintage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rentalTagsJson => $composableBuilder(
+    column: $table.rentalTagsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lukaProfileJson => $composableBuilder(
+    column: $table.lukaProfileJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get notes => $composableBuilder(
     column: $table.notes,
     builder: (column) => ColumnOrderings(column),
@@ -21816,6 +35134,61 @@ class $$LightsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<double> get beamAngleDeg => $composableBuilder(
+    column: $table.beamAngleDeg,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get cri =>
+      $composableBuilder(column: $table.cri, builder: (column) => column);
+
+  GeneratedColumn<int> get tlci =>
+      $composableBuilder(column: $table.tlci, builder: (column) => column);
+
+  GeneratedColumn<String> get dimmingType => $composableBuilder(
+    column: $table.dimmingType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get modifierCompatibilityJson => $composableBuilder(
+    column: $table.modifierCompatibilityJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get heroImagePath => $composableBuilder(
+    column: $table.heroImagePath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get catalogVersion => $composableBuilder(
+    column: $table.catalogVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isCustom =>
+      $composableBuilder(column: $table.isCustom, builder: (column) => column);
+
+  GeneratedColumn<String> get series =>
+      $composableBuilder(column: $table.series, builder: (column) => column);
+
+  GeneratedColumn<bool> get vintage =>
+      $composableBuilder(column: $table.vintage, builder: (column) => column);
+
+  GeneratedColumn<String> get rentalTagsJson => $composableBuilder(
+    column: $table.rentalTagsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lukaProfileJson => $composableBuilder(
+    column: $table.lukaProfileJson,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get notes =>
       $composableBuilder(column: $table.notes, builder: (column) => column);
 }
@@ -21857,6 +35230,19 @@ class $$LightsTableTableManager
                 Value<int> colorTempMax = const Value.absent(),
                 Value<bool> isLukaCompatible = const Value.absent(),
                 Value<String?> lukaFixtureId = const Value.absent(),
+                Value<double?> beamAngleDeg = const Value.absent(),
+                Value<int?> cri = const Value.absent(),
+                Value<int?> tlci = const Value.absent(),
+                Value<String?> dimmingType = const Value.absent(),
+                Value<String?> modifierCompatibilityJson = const Value.absent(),
+                Value<String?> heroImagePath = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
+                Value<int?> catalogVersion = const Value.absent(),
+                Value<bool> isCustom = const Value.absent(),
+                Value<String?> series = const Value.absent(),
+                Value<bool> vintage = const Value.absent(),
+                Value<String?> rentalTagsJson = const Value.absent(),
+                Value<String?> lukaProfileJson = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
               }) => LightsCompanion(
                 id: id,
@@ -21868,6 +35254,19 @@ class $$LightsTableTableManager
                 colorTempMax: colorTempMax,
                 isLukaCompatible: isLukaCompatible,
                 lukaFixtureId: lukaFixtureId,
+                beamAngleDeg: beamAngleDeg,
+                cri: cri,
+                tlci: tlci,
+                dimmingType: dimmingType,
+                modifierCompatibilityJson: modifierCompatibilityJson,
+                heroImagePath: heroImagePath,
+                externalId: externalId,
+                catalogVersion: catalogVersion,
+                isCustom: isCustom,
+                series: series,
+                vintage: vintage,
+                rentalTagsJson: rentalTagsJson,
+                lukaProfileJson: lukaProfileJson,
                 notes: notes,
               ),
           createCompanionCallback:
@@ -21881,6 +35280,19 @@ class $$LightsTableTableManager
                 required int colorTempMax,
                 Value<bool> isLukaCompatible = const Value.absent(),
                 Value<String?> lukaFixtureId = const Value.absent(),
+                Value<double?> beamAngleDeg = const Value.absent(),
+                Value<int?> cri = const Value.absent(),
+                Value<int?> tlci = const Value.absent(),
+                Value<String?> dimmingType = const Value.absent(),
+                Value<String?> modifierCompatibilityJson = const Value.absent(),
+                Value<String?> heroImagePath = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
+                Value<int?> catalogVersion = const Value.absent(),
+                Value<bool> isCustom = const Value.absent(),
+                Value<String?> series = const Value.absent(),
+                Value<bool> vintage = const Value.absent(),
+                Value<String?> rentalTagsJson = const Value.absent(),
+                Value<String?> lukaProfileJson = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
               }) => LightsCompanion.insert(
                 id: id,
@@ -21892,6 +35304,19 @@ class $$LightsTableTableManager
                 colorTempMax: colorTempMax,
                 isLukaCompatible: isLukaCompatible,
                 lukaFixtureId: lukaFixtureId,
+                beamAngleDeg: beamAngleDeg,
+                cri: cri,
+                tlci: tlci,
+                dimmingType: dimmingType,
+                modifierCompatibilityJson: modifierCompatibilityJson,
+                heroImagePath: heroImagePath,
+                externalId: externalId,
+                catalogVersion: catalogVersion,
+                isCustom: isCustom,
+                series: series,
+                vintage: vintage,
+                rentalTagsJson: rentalTagsJson,
+                lukaProfileJson: lukaProfileJson,
                 notes: notes,
               ),
           withReferenceMapper: (p0) => p0
@@ -21925,6 +35350,7 @@ typedef $$ProjectEquipmentTableCreateCompanionBuilder =
       Value<String> source,
       Value<String> status,
       Value<String?> notes,
+      Value<int> sortOrder,
     });
 typedef $$ProjectEquipmentTableUpdateCompanionBuilder =
     ProjectEquipmentCompanion Function({
@@ -21935,6 +35361,7 @@ typedef $$ProjectEquipmentTableUpdateCompanionBuilder =
       Value<String> source,
       Value<String> status,
       Value<String?> notes,
+      Value<int> sortOrder,
     });
 
 final class $$ProjectEquipmentTableReferences
@@ -22009,6 +35436,11 @@ class $$ProjectEquipmentTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$ProjectsTableFilterComposer get projectId {
     final $$ProjectsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -22072,6 +35504,11 @@ class $$ProjectEquipmentTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ProjectsTableOrderingComposer get projectId {
     final $$ProjectsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -22126,6 +35563,9 @@ class $$ProjectEquipmentTableAnnotationComposer
 
   GeneratedColumn<String> get notes =>
       $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
 
   $$ProjectsTableAnnotationComposer get projectId {
     final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
@@ -22188,6 +35628,7 @@ class $$ProjectEquipmentTableTableManager
                 Value<String> source = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
               }) => ProjectEquipmentCompanion(
                 id: id,
                 projectId: projectId,
@@ -22196,6 +35637,7 @@ class $$ProjectEquipmentTableTableManager
                 source: source,
                 status: status,
                 notes: notes,
+                sortOrder: sortOrder,
               ),
           createCompanionCallback:
               ({
@@ -22206,6 +35648,7 @@ class $$ProjectEquipmentTableTableManager
                 Value<String> source = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
               }) => ProjectEquipmentCompanion.insert(
                 id: id,
                 projectId: projectId,
@@ -22214,6 +35657,7 @@ class $$ProjectEquipmentTableTableManager
                 source: source,
                 status: status,
                 notes: notes,
+                sortOrder: sortOrder,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -23109,6 +36553,12 @@ typedef $$VisualBiblesTableCreateCompanionBuilder =
       required int projectId,
       Value<String?> visualConcept,
       Value<String?> narrativeReferences,
+      Value<String?> tone,
+      Value<String?> creativeIntention,
+      Value<String?> stagingApproach,
+      Value<String?> pointOfView,
+      Value<String?> directionNarrativeIntent,
+      Value<String?> depthOfFieldNotes,
       Value<String?> lightingPhilosophy,
       Value<String?> lightQuality,
       Value<String?> contrastStyle,
@@ -23131,6 +36581,35 @@ typedef $$VisualBiblesTableCreateCompanionBuilder =
       Value<String?> workingLutName,
       Value<String?> creativeLutName,
       Value<String?> creativeLutDescription,
+      Value<int?> primaryCameraId,
+      Value<String?> recordingFormat,
+      Value<String?> codec,
+      Value<String?> resolutionNotes,
+      Value<String?> frameRateNotes,
+      Value<int?> nativeIso,
+      Value<String?> defaultTStop,
+      Value<String?> ndNotes,
+      Value<String?> deliveryColorSpace,
+      Value<String?> captureResolution,
+      Value<String?> deliveryResolution,
+      Value<String?> workflowPipeline,
+      Value<String?> diffusionNotes,
+      Value<String?> sensorShadowBehavior,
+      Value<String?> colorScienceNotes,
+      Value<String?> lowLightNotes,
+      Value<String?> opticCharacterNotes,
+      Value<String?> filtrationNotes,
+      Value<String?> cameraMovementsJson,
+      Value<String?> actVisualNotes,
+      Value<String?> cameraNarrativeIntent,
+      Value<String?> opticsNarrativeIntent,
+      Value<String?> exposureNarrativeIntent,
+      Value<String?> lightingNarrativeIntent,
+      Value<String?> colorNarrativeIntent,
+      Value<String?> formatNarrativeIntent,
+      Value<String?> textureNarrativeIntent,
+      Value<String?> conceptNarrativeIntent,
+      Value<String?> opticsConfigJson,
       Value<DateTime> updatedAt,
     });
 typedef $$VisualBiblesTableUpdateCompanionBuilder =
@@ -23139,6 +36618,12 @@ typedef $$VisualBiblesTableUpdateCompanionBuilder =
       Value<int> projectId,
       Value<String?> visualConcept,
       Value<String?> narrativeReferences,
+      Value<String?> tone,
+      Value<String?> creativeIntention,
+      Value<String?> stagingApproach,
+      Value<String?> pointOfView,
+      Value<String?> directionNarrativeIntent,
+      Value<String?> depthOfFieldNotes,
       Value<String?> lightingPhilosophy,
       Value<String?> lightQuality,
       Value<String?> contrastStyle,
@@ -23161,6 +36646,35 @@ typedef $$VisualBiblesTableUpdateCompanionBuilder =
       Value<String?> workingLutName,
       Value<String?> creativeLutName,
       Value<String?> creativeLutDescription,
+      Value<int?> primaryCameraId,
+      Value<String?> recordingFormat,
+      Value<String?> codec,
+      Value<String?> resolutionNotes,
+      Value<String?> frameRateNotes,
+      Value<int?> nativeIso,
+      Value<String?> defaultTStop,
+      Value<String?> ndNotes,
+      Value<String?> deliveryColorSpace,
+      Value<String?> captureResolution,
+      Value<String?> deliveryResolution,
+      Value<String?> workflowPipeline,
+      Value<String?> diffusionNotes,
+      Value<String?> sensorShadowBehavior,
+      Value<String?> colorScienceNotes,
+      Value<String?> lowLightNotes,
+      Value<String?> opticCharacterNotes,
+      Value<String?> filtrationNotes,
+      Value<String?> cameraMovementsJson,
+      Value<String?> actVisualNotes,
+      Value<String?> cameraNarrativeIntent,
+      Value<String?> opticsNarrativeIntent,
+      Value<String?> exposureNarrativeIntent,
+      Value<String?> lightingNarrativeIntent,
+      Value<String?> colorNarrativeIntent,
+      Value<String?> formatNarrativeIntent,
+      Value<String?> textureNarrativeIntent,
+      Value<String?> conceptNarrativeIntent,
+      Value<String?> opticsConfigJson,
       Value<DateTime> updatedAt,
     });
 
@@ -23200,6 +36714,25 @@ final class $$VisualBiblesTableReferences
       $_db.lenses,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_primaryLensIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $CamerasTable _primaryCameraIdTable(_$AppDatabase db) =>
+      db.cameras.createAlias(
+        $_aliasNameGenerator(db.visualBibles.primaryCameraId, db.cameras.id),
+      );
+
+  $$CamerasTableProcessedTableManager? get primaryCameraId {
+    final $_column = $_itemColumn<int>('primary_camera_id');
+    if ($_column == null) return null;
+    final manager = $$CamerasTableTableManager(
+      $_db,
+      $_db.cameras,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_primaryCameraIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -23284,6 +36817,194 @@ final class $$VisualBiblesTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$BibleSectionGroupsTable, List<BibleSectionGroup>>
+  _bibleSectionGroupsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.bibleSectionGroups,
+        aliasName: $_aliasNameGenerator(
+          db.visualBibles.id,
+          db.bibleSectionGroups.bibleId,
+        ),
+      );
+
+  $$BibleSectionGroupsTableProcessedTableManager get bibleSectionGroupsRefs {
+    final manager = $$BibleSectionGroupsTableTableManager(
+      $_db,
+      $_db.bibleSectionGroups,
+    ).filter((f) => f.bibleId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _bibleSectionGroupsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $BibleSectionDefinitionsTable,
+    List<BibleSectionDefinition>
+  >
+  _bibleSectionDefinitionsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.bibleSectionDefinitions,
+        aliasName: $_aliasNameGenerator(
+          db.visualBibles.id,
+          db.bibleSectionDefinitions.bibleId,
+        ),
+      );
+
+  $$BibleSectionDefinitionsTableProcessedTableManager
+  get bibleSectionDefinitionsRefs {
+    final manager = $$BibleSectionDefinitionsTableTableManager(
+      $_db,
+      $_db.bibleSectionDefinitions,
+    ).filter((f) => f.bibleId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _bibleSectionDefinitionsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ExposureBlocksTable, List<ExposureBlock>>
+  _exposureBlocksRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.exposureBlocks,
+    aliasName: $_aliasNameGenerator(
+      db.visualBibles.id,
+      db.exposureBlocks.bibleId,
+    ),
+  );
+
+  $$ExposureBlocksTableProcessedTableManager get exposureBlocksRefs {
+    final manager = $$ExposureBlocksTableTableManager(
+      $_db,
+      $_db.exposureBlocks,
+    ).filter((f) => f.bibleId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_exposureBlocksRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$LightingSetupsTable, List<LightingSetup>>
+  _lightingSetupsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.lightingSetups,
+    aliasName: $_aliasNameGenerator(
+      db.visualBibles.id,
+      db.lightingSetups.bibleId,
+    ),
+  );
+
+  $$LightingSetupsTableProcessedTableManager get lightingSetupsRefs {
+    final manager = $$LightingSetupsTableTableManager(
+      $_db,
+      $_db.lightingSetups,
+    ).filter((f) => f.bibleId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_lightingSetupsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CameraTestsTable, List<CameraTest>>
+  _cameraTestsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.cameraTests,
+    aliasName: $_aliasNameGenerator(db.visualBibles.id, db.cameraTests.bibleId),
+  );
+
+  $$CameraTestsTableProcessedTableManager get cameraTestsRefs {
+    final manager = $$CameraTestsTableTableManager(
+      $_db,
+      $_db.cameraTests,
+    ).filter((f) => f.bibleId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_cameraTestsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $VisualBibleVersionsTable,
+    List<VisualBibleVersion>
+  >
+  _visualBibleVersionsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.visualBibleVersions,
+        aliasName: $_aliasNameGenerator(
+          db.visualBibles.id,
+          db.visualBibleVersions.bibleId,
+        ),
+      );
+
+  $$VisualBibleVersionsTableProcessedTableManager get visualBibleVersionsRefs {
+    final manager = $$VisualBibleVersionsTableTableManager(
+      $_db,
+      $_db.visualBibleVersions,
+    ).filter((f) => f.bibleId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _visualBibleVersionsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$BibleCommentsTable, List<BibleComment>>
+  _bibleCommentsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.bibleComments,
+    aliasName: $_aliasNameGenerator(
+      db.visualBibles.id,
+      db.bibleComments.bibleId,
+    ),
+  );
+
+  $$BibleCommentsTableProcessedTableManager get bibleCommentsRefs {
+    final manager = $$BibleCommentsTableTableManager(
+      $_db,
+      $_db.bibleComments,
+    ).filter((f) => f.bibleId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_bibleCommentsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $BibleSectionEvidenceTable,
+    List<BibleSectionEvidenceData>
+  >
+  _bibleSectionEvidenceRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.bibleSectionEvidence,
+        aliasName: $_aliasNameGenerator(
+          db.visualBibles.id,
+          db.bibleSectionEvidence.bibleId,
+        ),
+      );
+
+  $$BibleSectionEvidenceTableProcessedTableManager
+  get bibleSectionEvidenceRefs {
+    final manager = $$BibleSectionEvidenceTableTableManager(
+      $_db,
+      $_db.bibleSectionEvidence,
+    ).filter((f) => f.bibleId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _bibleSectionEvidenceRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$VisualBiblesTableFilterComposer
@@ -23307,6 +37028,36 @@ class $$VisualBiblesTableFilterComposer
 
   ColumnFilters<String> get narrativeReferences => $composableBuilder(
     column: $table.narrativeReferences,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tone => $composableBuilder(
+    column: $table.tone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get creativeIntention => $composableBuilder(
+    column: $table.creativeIntention,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stagingApproach => $composableBuilder(
+    column: $table.stagingApproach,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pointOfView => $composableBuilder(
+    column: $table.pointOfView,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get directionNarrativeIntent => $composableBuilder(
+    column: $table.directionNarrativeIntent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get depthOfFieldNotes => $composableBuilder(
+    column: $table.depthOfFieldNotes,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -23415,6 +37166,146 @@ class $$VisualBiblesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get recordingFormat => $composableBuilder(
+    column: $table.recordingFormat,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get codec => $composableBuilder(
+    column: $table.codec,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get resolutionNotes => $composableBuilder(
+    column: $table.resolutionNotes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get frameRateNotes => $composableBuilder(
+    column: $table.frameRateNotes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nativeIso => $composableBuilder(
+    column: $table.nativeIso,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get defaultTStop => $composableBuilder(
+    column: $table.defaultTStop,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ndNotes => $composableBuilder(
+    column: $table.ndNotes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deliveryColorSpace => $composableBuilder(
+    column: $table.deliveryColorSpace,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get captureResolution => $composableBuilder(
+    column: $table.captureResolution,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deliveryResolution => $composableBuilder(
+    column: $table.deliveryResolution,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workflowPipeline => $composableBuilder(
+    column: $table.workflowPipeline,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get diffusionNotes => $composableBuilder(
+    column: $table.diffusionNotes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sensorShadowBehavior => $composableBuilder(
+    column: $table.sensorShadowBehavior,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get colorScienceNotes => $composableBuilder(
+    column: $table.colorScienceNotes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lowLightNotes => $composableBuilder(
+    column: $table.lowLightNotes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get opticCharacterNotes => $composableBuilder(
+    column: $table.opticCharacterNotes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get filtrationNotes => $composableBuilder(
+    column: $table.filtrationNotes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cameraMovementsJson => $composableBuilder(
+    column: $table.cameraMovementsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actVisualNotes => $composableBuilder(
+    column: $table.actVisualNotes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cameraNarrativeIntent => $composableBuilder(
+    column: $table.cameraNarrativeIntent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get opticsNarrativeIntent => $composableBuilder(
+    column: $table.opticsNarrativeIntent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get exposureNarrativeIntent => $composableBuilder(
+    column: $table.exposureNarrativeIntent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lightingNarrativeIntent => $composableBuilder(
+    column: $table.lightingNarrativeIntent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get colorNarrativeIntent => $composableBuilder(
+    column: $table.colorNarrativeIntent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get formatNarrativeIntent => $composableBuilder(
+    column: $table.formatNarrativeIntent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get textureNarrativeIntent => $composableBuilder(
+    column: $table.textureNarrativeIntent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get conceptNarrativeIntent => $composableBuilder(
+    column: $table.conceptNarrativeIntent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get opticsConfigJson => $composableBuilder(
+    column: $table.opticsConfigJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
@@ -23457,6 +37348,29 @@ class $$VisualBiblesTableFilterComposer
           }) => $$LensesTableFilterComposer(
             $db: $db,
             $table: $db.lenses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CamerasTableFilterComposer get primaryCameraId {
+    final $$CamerasTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.primaryCameraId,
+      referencedTable: $db.cameras,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CamerasTableFilterComposer(
+            $db: $db,
+            $table: $db.cameras,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -23542,6 +37456,207 @@ class $$VisualBiblesTableFilterComposer
     );
     return f(composer);
   }
+
+  Expression<bool> bibleSectionGroupsRefs(
+    Expression<bool> Function($$BibleSectionGroupsTableFilterComposer f) f,
+  ) {
+    final $$BibleSectionGroupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.bibleSectionGroups,
+      getReferencedColumn: (t) => t.bibleId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BibleSectionGroupsTableFilterComposer(
+            $db: $db,
+            $table: $db.bibleSectionGroups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> bibleSectionDefinitionsRefs(
+    Expression<bool> Function($$BibleSectionDefinitionsTableFilterComposer f) f,
+  ) {
+    final $$BibleSectionDefinitionsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.bibleSectionDefinitions,
+          getReferencedColumn: (t) => t.bibleId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$BibleSectionDefinitionsTableFilterComposer(
+                $db: $db,
+                $table: $db.bibleSectionDefinitions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<bool> exposureBlocksRefs(
+    Expression<bool> Function($$ExposureBlocksTableFilterComposer f) f,
+  ) {
+    final $$ExposureBlocksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.exposureBlocks,
+      getReferencedColumn: (t) => t.bibleId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExposureBlocksTableFilterComposer(
+            $db: $db,
+            $table: $db.exposureBlocks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> lightingSetupsRefs(
+    Expression<bool> Function($$LightingSetupsTableFilterComposer f) f,
+  ) {
+    final $$LightingSetupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lightingSetups,
+      getReferencedColumn: (t) => t.bibleId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LightingSetupsTableFilterComposer(
+            $db: $db,
+            $table: $db.lightingSetups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> cameraTestsRefs(
+    Expression<bool> Function($$CameraTestsTableFilterComposer f) f,
+  ) {
+    final $$CameraTestsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.cameraTests,
+      getReferencedColumn: (t) => t.bibleId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CameraTestsTableFilterComposer(
+            $db: $db,
+            $table: $db.cameraTests,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> visualBibleVersionsRefs(
+    Expression<bool> Function($$VisualBibleVersionsTableFilterComposer f) f,
+  ) {
+    final $$VisualBibleVersionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.visualBibleVersions,
+      getReferencedColumn: (t) => t.bibleId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBibleVersionsTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibleVersions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> bibleCommentsRefs(
+    Expression<bool> Function($$BibleCommentsTableFilterComposer f) f,
+  ) {
+    final $$BibleCommentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.bibleComments,
+      getReferencedColumn: (t) => t.bibleId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BibleCommentsTableFilterComposer(
+            $db: $db,
+            $table: $db.bibleComments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> bibleSectionEvidenceRefs(
+    Expression<bool> Function($$BibleSectionEvidenceTableFilterComposer f) f,
+  ) {
+    final $$BibleSectionEvidenceTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.bibleSectionEvidence,
+      getReferencedColumn: (t) => t.bibleId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BibleSectionEvidenceTableFilterComposer(
+            $db: $db,
+            $table: $db.bibleSectionEvidence,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$VisualBiblesTableOrderingComposer
@@ -23565,6 +37680,36 @@ class $$VisualBiblesTableOrderingComposer
 
   ColumnOrderings<String> get narrativeReferences => $composableBuilder(
     column: $table.narrativeReferences,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tone => $composableBuilder(
+    column: $table.tone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get creativeIntention => $composableBuilder(
+    column: $table.creativeIntention,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stagingApproach => $composableBuilder(
+    column: $table.stagingApproach,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get pointOfView => $composableBuilder(
+    column: $table.pointOfView,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get directionNarrativeIntent => $composableBuilder(
+    column: $table.directionNarrativeIntent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get depthOfFieldNotes => $composableBuilder(
+    column: $table.depthOfFieldNotes,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -23673,6 +37818,146 @@ class $$VisualBiblesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get recordingFormat => $composableBuilder(
+    column: $table.recordingFormat,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get codec => $composableBuilder(
+    column: $table.codec,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get resolutionNotes => $composableBuilder(
+    column: $table.resolutionNotes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get frameRateNotes => $composableBuilder(
+    column: $table.frameRateNotes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nativeIso => $composableBuilder(
+    column: $table.nativeIso,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get defaultTStop => $composableBuilder(
+    column: $table.defaultTStop,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ndNotes => $composableBuilder(
+    column: $table.ndNotes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deliveryColorSpace => $composableBuilder(
+    column: $table.deliveryColorSpace,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get captureResolution => $composableBuilder(
+    column: $table.captureResolution,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deliveryResolution => $composableBuilder(
+    column: $table.deliveryResolution,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get workflowPipeline => $composableBuilder(
+    column: $table.workflowPipeline,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get diffusionNotes => $composableBuilder(
+    column: $table.diffusionNotes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sensorShadowBehavior => $composableBuilder(
+    column: $table.sensorShadowBehavior,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get colorScienceNotes => $composableBuilder(
+    column: $table.colorScienceNotes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lowLightNotes => $composableBuilder(
+    column: $table.lowLightNotes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get opticCharacterNotes => $composableBuilder(
+    column: $table.opticCharacterNotes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get filtrationNotes => $composableBuilder(
+    column: $table.filtrationNotes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cameraMovementsJson => $composableBuilder(
+    column: $table.cameraMovementsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actVisualNotes => $composableBuilder(
+    column: $table.actVisualNotes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cameraNarrativeIntent => $composableBuilder(
+    column: $table.cameraNarrativeIntent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get opticsNarrativeIntent => $composableBuilder(
+    column: $table.opticsNarrativeIntent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get exposureNarrativeIntent => $composableBuilder(
+    column: $table.exposureNarrativeIntent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lightingNarrativeIntent => $composableBuilder(
+    column: $table.lightingNarrativeIntent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get colorNarrativeIntent => $composableBuilder(
+    column: $table.colorNarrativeIntent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get formatNarrativeIntent => $composableBuilder(
+    column: $table.formatNarrativeIntent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get textureNarrativeIntent => $composableBuilder(
+    column: $table.textureNarrativeIntent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get conceptNarrativeIntent => $composableBuilder(
+    column: $table.conceptNarrativeIntent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get opticsConfigJson => $composableBuilder(
+    column: $table.opticsConfigJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
@@ -23723,6 +38008,29 @@ class $$VisualBiblesTableOrderingComposer
     );
     return composer;
   }
+
+  $$CamerasTableOrderingComposer get primaryCameraId {
+    final $$CamerasTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.primaryCameraId,
+      referencedTable: $db.cameras,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CamerasTableOrderingComposer(
+            $db: $db,
+            $table: $db.cameras,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$VisualBiblesTableAnnotationComposer
@@ -23744,6 +38052,34 @@ class $$VisualBiblesTableAnnotationComposer
 
   GeneratedColumn<String> get narrativeReferences => $composableBuilder(
     column: $table.narrativeReferences,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get tone =>
+      $composableBuilder(column: $table.tone, builder: (column) => column);
+
+  GeneratedColumn<String> get creativeIntention => $composableBuilder(
+    column: $table.creativeIntention,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stagingApproach => $composableBuilder(
+    column: $table.stagingApproach,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get pointOfView => $composableBuilder(
+    column: $table.pointOfView,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get directionNarrativeIntent => $composableBuilder(
+    column: $table.directionNarrativeIntent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get depthOfFieldNotes => $composableBuilder(
+    column: $table.depthOfFieldNotes,
     builder: (column) => column,
   );
 
@@ -23850,6 +38186,140 @@ class $$VisualBiblesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get recordingFormat => $composableBuilder(
+    column: $table.recordingFormat,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get codec =>
+      $composableBuilder(column: $table.codec, builder: (column) => column);
+
+  GeneratedColumn<String> get resolutionNotes => $composableBuilder(
+    column: $table.resolutionNotes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get frameRateNotes => $composableBuilder(
+    column: $table.frameRateNotes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get nativeIso =>
+      $composableBuilder(column: $table.nativeIso, builder: (column) => column);
+
+  GeneratedColumn<String> get defaultTStop => $composableBuilder(
+    column: $table.defaultTStop,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get ndNotes =>
+      $composableBuilder(column: $table.ndNotes, builder: (column) => column);
+
+  GeneratedColumn<String> get deliveryColorSpace => $composableBuilder(
+    column: $table.deliveryColorSpace,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get captureResolution => $composableBuilder(
+    column: $table.captureResolution,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get deliveryResolution => $composableBuilder(
+    column: $table.deliveryResolution,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get workflowPipeline => $composableBuilder(
+    column: $table.workflowPipeline,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get diffusionNotes => $composableBuilder(
+    column: $table.diffusionNotes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sensorShadowBehavior => $composableBuilder(
+    column: $table.sensorShadowBehavior,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get colorScienceNotes => $composableBuilder(
+    column: $table.colorScienceNotes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lowLightNotes => $composableBuilder(
+    column: $table.lowLightNotes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get opticCharacterNotes => $composableBuilder(
+    column: $table.opticCharacterNotes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get filtrationNotes => $composableBuilder(
+    column: $table.filtrationNotes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get cameraMovementsJson => $composableBuilder(
+    column: $table.cameraMovementsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get actVisualNotes => $composableBuilder(
+    column: $table.actVisualNotes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get cameraNarrativeIntent => $composableBuilder(
+    column: $table.cameraNarrativeIntent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get opticsNarrativeIntent => $composableBuilder(
+    column: $table.opticsNarrativeIntent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get exposureNarrativeIntent => $composableBuilder(
+    column: $table.exposureNarrativeIntent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lightingNarrativeIntent => $composableBuilder(
+    column: $table.lightingNarrativeIntent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get colorNarrativeIntent => $composableBuilder(
+    column: $table.colorNarrativeIntent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get formatNarrativeIntent => $composableBuilder(
+    column: $table.formatNarrativeIntent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get textureNarrativeIntent => $composableBuilder(
+    column: $table.textureNarrativeIntent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get conceptNarrativeIntent => $composableBuilder(
+    column: $table.conceptNarrativeIntent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get opticsConfigJson => $composableBuilder(
+    column: $table.opticsConfigJson,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
@@ -23890,6 +38360,29 @@ class $$VisualBiblesTableAnnotationComposer
           }) => $$LensesTableAnnotationComposer(
             $db: $db,
             $table: $db.lenses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CamerasTableAnnotationComposer get primaryCameraId {
+    final $$CamerasTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.primaryCameraId,
+      referencedTable: $db.cameras,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CamerasTableAnnotationComposer(
+            $db: $db,
+            $table: $db.cameras,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -23976,6 +38469,211 @@ class $$VisualBiblesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> bibleSectionGroupsRefs<T extends Object>(
+    Expression<T> Function($$BibleSectionGroupsTableAnnotationComposer a) f,
+  ) {
+    final $$BibleSectionGroupsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.bibleSectionGroups,
+          getReferencedColumn: (t) => t.bibleId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$BibleSectionGroupsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.bibleSectionGroups,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<T> bibleSectionDefinitionsRefs<T extends Object>(
+    Expression<T> Function($$BibleSectionDefinitionsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$BibleSectionDefinitionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.bibleSectionDefinitions,
+          getReferencedColumn: (t) => t.bibleId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$BibleSectionDefinitionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.bibleSectionDefinitions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<T> exposureBlocksRefs<T extends Object>(
+    Expression<T> Function($$ExposureBlocksTableAnnotationComposer a) f,
+  ) {
+    final $$ExposureBlocksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.exposureBlocks,
+      getReferencedColumn: (t) => t.bibleId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExposureBlocksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.exposureBlocks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> lightingSetupsRefs<T extends Object>(
+    Expression<T> Function($$LightingSetupsTableAnnotationComposer a) f,
+  ) {
+    final $$LightingSetupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lightingSetups,
+      getReferencedColumn: (t) => t.bibleId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LightingSetupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.lightingSetups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> cameraTestsRefs<T extends Object>(
+    Expression<T> Function($$CameraTestsTableAnnotationComposer a) f,
+  ) {
+    final $$CameraTestsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.cameraTests,
+      getReferencedColumn: (t) => t.bibleId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CameraTestsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.cameraTests,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> visualBibleVersionsRefs<T extends Object>(
+    Expression<T> Function($$VisualBibleVersionsTableAnnotationComposer a) f,
+  ) {
+    final $$VisualBibleVersionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.visualBibleVersions,
+          getReferencedColumn: (t) => t.bibleId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VisualBibleVersionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.visualBibleVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<T> bibleCommentsRefs<T extends Object>(
+    Expression<T> Function($$BibleCommentsTableAnnotationComposer a) f,
+  ) {
+    final $$BibleCommentsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.bibleComments,
+      getReferencedColumn: (t) => t.bibleId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BibleCommentsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.bibleComments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> bibleSectionEvidenceRefs<T extends Object>(
+    Expression<T> Function($$BibleSectionEvidenceTableAnnotationComposer a) f,
+  ) {
+    final $$BibleSectionEvidenceTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.bibleSectionEvidence,
+          getReferencedColumn: (t) => t.bibleId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$BibleSectionEvidenceTableAnnotationComposer(
+                $db: $db,
+                $table: $db.bibleSectionEvidence,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$VisualBiblesTableTableManager
@@ -23994,9 +38692,18 @@ class $$VisualBiblesTableTableManager
           PrefetchHooks Function({
             bool projectId,
             bool primaryLensId,
+            bool primaryCameraId,
             bool visualBibleColorBlocksRefs,
             bool visualBibleLocationRefsRefs,
             bool moodboardImagesRefs,
+            bool bibleSectionGroupsRefs,
+            bool bibleSectionDefinitionsRefs,
+            bool exposureBlocksRefs,
+            bool lightingSetupsRefs,
+            bool cameraTestsRefs,
+            bool visualBibleVersionsRefs,
+            bool bibleCommentsRefs,
+            bool bibleSectionEvidenceRefs,
           })
         > {
   $$VisualBiblesTableTableManager(_$AppDatabase db, $VisualBiblesTable table)
@@ -24016,6 +38723,12 @@ class $$VisualBiblesTableTableManager
                 Value<int> projectId = const Value.absent(),
                 Value<String?> visualConcept = const Value.absent(),
                 Value<String?> narrativeReferences = const Value.absent(),
+                Value<String?> tone = const Value.absent(),
+                Value<String?> creativeIntention = const Value.absent(),
+                Value<String?> stagingApproach = const Value.absent(),
+                Value<String?> pointOfView = const Value.absent(),
+                Value<String?> directionNarrativeIntent = const Value.absent(),
+                Value<String?> depthOfFieldNotes = const Value.absent(),
                 Value<String?> lightingPhilosophy = const Value.absent(),
                 Value<String?> lightQuality = const Value.absent(),
                 Value<String?> contrastStyle = const Value.absent(),
@@ -24038,12 +38751,47 @@ class $$VisualBiblesTableTableManager
                 Value<String?> workingLutName = const Value.absent(),
                 Value<String?> creativeLutName = const Value.absent(),
                 Value<String?> creativeLutDescription = const Value.absent(),
+                Value<int?> primaryCameraId = const Value.absent(),
+                Value<String?> recordingFormat = const Value.absent(),
+                Value<String?> codec = const Value.absent(),
+                Value<String?> resolutionNotes = const Value.absent(),
+                Value<String?> frameRateNotes = const Value.absent(),
+                Value<int?> nativeIso = const Value.absent(),
+                Value<String?> defaultTStop = const Value.absent(),
+                Value<String?> ndNotes = const Value.absent(),
+                Value<String?> deliveryColorSpace = const Value.absent(),
+                Value<String?> captureResolution = const Value.absent(),
+                Value<String?> deliveryResolution = const Value.absent(),
+                Value<String?> workflowPipeline = const Value.absent(),
+                Value<String?> diffusionNotes = const Value.absent(),
+                Value<String?> sensorShadowBehavior = const Value.absent(),
+                Value<String?> colorScienceNotes = const Value.absent(),
+                Value<String?> lowLightNotes = const Value.absent(),
+                Value<String?> opticCharacterNotes = const Value.absent(),
+                Value<String?> filtrationNotes = const Value.absent(),
+                Value<String?> cameraMovementsJson = const Value.absent(),
+                Value<String?> actVisualNotes = const Value.absent(),
+                Value<String?> cameraNarrativeIntent = const Value.absent(),
+                Value<String?> opticsNarrativeIntent = const Value.absent(),
+                Value<String?> exposureNarrativeIntent = const Value.absent(),
+                Value<String?> lightingNarrativeIntent = const Value.absent(),
+                Value<String?> colorNarrativeIntent = const Value.absent(),
+                Value<String?> formatNarrativeIntent = const Value.absent(),
+                Value<String?> textureNarrativeIntent = const Value.absent(),
+                Value<String?> conceptNarrativeIntent = const Value.absent(),
+                Value<String?> opticsConfigJson = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => VisualBiblesCompanion(
                 id: id,
                 projectId: projectId,
                 visualConcept: visualConcept,
                 narrativeReferences: narrativeReferences,
+                tone: tone,
+                creativeIntention: creativeIntention,
+                stagingApproach: stagingApproach,
+                pointOfView: pointOfView,
+                directionNarrativeIntent: directionNarrativeIntent,
+                depthOfFieldNotes: depthOfFieldNotes,
                 lightingPhilosophy: lightingPhilosophy,
                 lightQuality: lightQuality,
                 contrastStyle: contrastStyle,
@@ -24066,6 +38814,35 @@ class $$VisualBiblesTableTableManager
                 workingLutName: workingLutName,
                 creativeLutName: creativeLutName,
                 creativeLutDescription: creativeLutDescription,
+                primaryCameraId: primaryCameraId,
+                recordingFormat: recordingFormat,
+                codec: codec,
+                resolutionNotes: resolutionNotes,
+                frameRateNotes: frameRateNotes,
+                nativeIso: nativeIso,
+                defaultTStop: defaultTStop,
+                ndNotes: ndNotes,
+                deliveryColorSpace: deliveryColorSpace,
+                captureResolution: captureResolution,
+                deliveryResolution: deliveryResolution,
+                workflowPipeline: workflowPipeline,
+                diffusionNotes: diffusionNotes,
+                sensorShadowBehavior: sensorShadowBehavior,
+                colorScienceNotes: colorScienceNotes,
+                lowLightNotes: lowLightNotes,
+                opticCharacterNotes: opticCharacterNotes,
+                filtrationNotes: filtrationNotes,
+                cameraMovementsJson: cameraMovementsJson,
+                actVisualNotes: actVisualNotes,
+                cameraNarrativeIntent: cameraNarrativeIntent,
+                opticsNarrativeIntent: opticsNarrativeIntent,
+                exposureNarrativeIntent: exposureNarrativeIntent,
+                lightingNarrativeIntent: lightingNarrativeIntent,
+                colorNarrativeIntent: colorNarrativeIntent,
+                formatNarrativeIntent: formatNarrativeIntent,
+                textureNarrativeIntent: textureNarrativeIntent,
+                conceptNarrativeIntent: conceptNarrativeIntent,
+                opticsConfigJson: opticsConfigJson,
                 updatedAt: updatedAt,
               ),
           createCompanionCallback:
@@ -24074,6 +38851,12 @@ class $$VisualBiblesTableTableManager
                 required int projectId,
                 Value<String?> visualConcept = const Value.absent(),
                 Value<String?> narrativeReferences = const Value.absent(),
+                Value<String?> tone = const Value.absent(),
+                Value<String?> creativeIntention = const Value.absent(),
+                Value<String?> stagingApproach = const Value.absent(),
+                Value<String?> pointOfView = const Value.absent(),
+                Value<String?> directionNarrativeIntent = const Value.absent(),
+                Value<String?> depthOfFieldNotes = const Value.absent(),
                 Value<String?> lightingPhilosophy = const Value.absent(),
                 Value<String?> lightQuality = const Value.absent(),
                 Value<String?> contrastStyle = const Value.absent(),
@@ -24096,12 +38879,47 @@ class $$VisualBiblesTableTableManager
                 Value<String?> workingLutName = const Value.absent(),
                 Value<String?> creativeLutName = const Value.absent(),
                 Value<String?> creativeLutDescription = const Value.absent(),
+                Value<int?> primaryCameraId = const Value.absent(),
+                Value<String?> recordingFormat = const Value.absent(),
+                Value<String?> codec = const Value.absent(),
+                Value<String?> resolutionNotes = const Value.absent(),
+                Value<String?> frameRateNotes = const Value.absent(),
+                Value<int?> nativeIso = const Value.absent(),
+                Value<String?> defaultTStop = const Value.absent(),
+                Value<String?> ndNotes = const Value.absent(),
+                Value<String?> deliveryColorSpace = const Value.absent(),
+                Value<String?> captureResolution = const Value.absent(),
+                Value<String?> deliveryResolution = const Value.absent(),
+                Value<String?> workflowPipeline = const Value.absent(),
+                Value<String?> diffusionNotes = const Value.absent(),
+                Value<String?> sensorShadowBehavior = const Value.absent(),
+                Value<String?> colorScienceNotes = const Value.absent(),
+                Value<String?> lowLightNotes = const Value.absent(),
+                Value<String?> opticCharacterNotes = const Value.absent(),
+                Value<String?> filtrationNotes = const Value.absent(),
+                Value<String?> cameraMovementsJson = const Value.absent(),
+                Value<String?> actVisualNotes = const Value.absent(),
+                Value<String?> cameraNarrativeIntent = const Value.absent(),
+                Value<String?> opticsNarrativeIntent = const Value.absent(),
+                Value<String?> exposureNarrativeIntent = const Value.absent(),
+                Value<String?> lightingNarrativeIntent = const Value.absent(),
+                Value<String?> colorNarrativeIntent = const Value.absent(),
+                Value<String?> formatNarrativeIntent = const Value.absent(),
+                Value<String?> textureNarrativeIntent = const Value.absent(),
+                Value<String?> conceptNarrativeIntent = const Value.absent(),
+                Value<String?> opticsConfigJson = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => VisualBiblesCompanion.insert(
                 id: id,
                 projectId: projectId,
                 visualConcept: visualConcept,
                 narrativeReferences: narrativeReferences,
+                tone: tone,
+                creativeIntention: creativeIntention,
+                stagingApproach: stagingApproach,
+                pointOfView: pointOfView,
+                directionNarrativeIntent: directionNarrativeIntent,
+                depthOfFieldNotes: depthOfFieldNotes,
                 lightingPhilosophy: lightingPhilosophy,
                 lightQuality: lightQuality,
                 contrastStyle: contrastStyle,
@@ -24124,6 +38942,35 @@ class $$VisualBiblesTableTableManager
                 workingLutName: workingLutName,
                 creativeLutName: creativeLutName,
                 creativeLutDescription: creativeLutDescription,
+                primaryCameraId: primaryCameraId,
+                recordingFormat: recordingFormat,
+                codec: codec,
+                resolutionNotes: resolutionNotes,
+                frameRateNotes: frameRateNotes,
+                nativeIso: nativeIso,
+                defaultTStop: defaultTStop,
+                ndNotes: ndNotes,
+                deliveryColorSpace: deliveryColorSpace,
+                captureResolution: captureResolution,
+                deliveryResolution: deliveryResolution,
+                workflowPipeline: workflowPipeline,
+                diffusionNotes: diffusionNotes,
+                sensorShadowBehavior: sensorShadowBehavior,
+                colorScienceNotes: colorScienceNotes,
+                lowLightNotes: lowLightNotes,
+                opticCharacterNotes: opticCharacterNotes,
+                filtrationNotes: filtrationNotes,
+                cameraMovementsJson: cameraMovementsJson,
+                actVisualNotes: actVisualNotes,
+                cameraNarrativeIntent: cameraNarrativeIntent,
+                opticsNarrativeIntent: opticsNarrativeIntent,
+                exposureNarrativeIntent: exposureNarrativeIntent,
+                lightingNarrativeIntent: lightingNarrativeIntent,
+                colorNarrativeIntent: colorNarrativeIntent,
+                formatNarrativeIntent: formatNarrativeIntent,
+                textureNarrativeIntent: textureNarrativeIntent,
+                conceptNarrativeIntent: conceptNarrativeIntent,
+                opticsConfigJson: opticsConfigJson,
                 updatedAt: updatedAt,
               ),
           withReferenceMapper: (p0) => p0
@@ -24138,9 +38985,18 @@ class $$VisualBiblesTableTableManager
               ({
                 projectId = false,
                 primaryLensId = false,
+                primaryCameraId = false,
                 visualBibleColorBlocksRefs = false,
                 visualBibleLocationRefsRefs = false,
                 moodboardImagesRefs = false,
+                bibleSectionGroupsRefs = false,
+                bibleSectionDefinitionsRefs = false,
+                exposureBlocksRefs = false,
+                lightingSetupsRefs = false,
+                cameraTestsRefs = false,
+                visualBibleVersionsRefs = false,
+                bibleCommentsRefs = false,
+                bibleSectionEvidenceRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -24148,6 +39004,14 @@ class $$VisualBiblesTableTableManager
                     if (visualBibleColorBlocksRefs) db.visualBibleColorBlocks,
                     if (visualBibleLocationRefsRefs) db.visualBibleLocationRefs,
                     if (moodboardImagesRefs) db.moodboardImages,
+                    if (bibleSectionGroupsRefs) db.bibleSectionGroups,
+                    if (bibleSectionDefinitionsRefs) db.bibleSectionDefinitions,
+                    if (exposureBlocksRefs) db.exposureBlocks,
+                    if (lightingSetupsRefs) db.lightingSetups,
+                    if (cameraTestsRefs) db.cameraTests,
+                    if (visualBibleVersionsRefs) db.visualBibleVersions,
+                    if (bibleCommentsRefs) db.bibleComments,
+                    if (bibleSectionEvidenceRefs) db.bibleSectionEvidence,
                   ],
                   addJoins:
                       <
@@ -24191,6 +39055,21 @@ class $$VisualBiblesTableTableManager
                                     referencedColumn:
                                         $$VisualBiblesTableReferences
                                             ._primaryLensIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (primaryCameraId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.primaryCameraId,
+                                    referencedTable:
+                                        $$VisualBiblesTableReferences
+                                            ._primaryCameraIdTable(db),
+                                    referencedColumn:
+                                        $$VisualBiblesTableReferences
+                                            ._primaryCameraIdTable(db)
                                             .id,
                                   )
                                   as T;
@@ -24263,6 +39142,174 @@ class $$VisualBiblesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (bibleSectionGroupsRefs)
+                        await $_getPrefetchedData<
+                          VisualBible,
+                          $VisualBiblesTable,
+                          BibleSectionGroup
+                        >(
+                          currentTable: table,
+                          referencedTable: $$VisualBiblesTableReferences
+                              ._bibleSectionGroupsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$VisualBiblesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).bibleSectionGroupsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.bibleId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (bibleSectionDefinitionsRefs)
+                        await $_getPrefetchedData<
+                          VisualBible,
+                          $VisualBiblesTable,
+                          BibleSectionDefinition
+                        >(
+                          currentTable: table,
+                          referencedTable: $$VisualBiblesTableReferences
+                              ._bibleSectionDefinitionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$VisualBiblesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).bibleSectionDefinitionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.bibleId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (exposureBlocksRefs)
+                        await $_getPrefetchedData<
+                          VisualBible,
+                          $VisualBiblesTable,
+                          ExposureBlock
+                        >(
+                          currentTable: table,
+                          referencedTable: $$VisualBiblesTableReferences
+                              ._exposureBlocksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$VisualBiblesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).exposureBlocksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.bibleId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (lightingSetupsRefs)
+                        await $_getPrefetchedData<
+                          VisualBible,
+                          $VisualBiblesTable,
+                          LightingSetup
+                        >(
+                          currentTable: table,
+                          referencedTable: $$VisualBiblesTableReferences
+                              ._lightingSetupsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$VisualBiblesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).lightingSetupsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.bibleId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (cameraTestsRefs)
+                        await $_getPrefetchedData<
+                          VisualBible,
+                          $VisualBiblesTable,
+                          CameraTest
+                        >(
+                          currentTable: table,
+                          referencedTable: $$VisualBiblesTableReferences
+                              ._cameraTestsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$VisualBiblesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).cameraTestsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.bibleId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (visualBibleVersionsRefs)
+                        await $_getPrefetchedData<
+                          VisualBible,
+                          $VisualBiblesTable,
+                          VisualBibleVersion
+                        >(
+                          currentTable: table,
+                          referencedTable: $$VisualBiblesTableReferences
+                              ._visualBibleVersionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$VisualBiblesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).visualBibleVersionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.bibleId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (bibleCommentsRefs)
+                        await $_getPrefetchedData<
+                          VisualBible,
+                          $VisualBiblesTable,
+                          BibleComment
+                        >(
+                          currentTable: table,
+                          referencedTable: $$VisualBiblesTableReferences
+                              ._bibleCommentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$VisualBiblesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).bibleCommentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.bibleId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (bibleSectionEvidenceRefs)
+                        await $_getPrefetchedData<
+                          VisualBible,
+                          $VisualBiblesTable,
+                          BibleSectionEvidenceData
+                        >(
+                          currentTable: table,
+                          referencedTable: $$VisualBiblesTableReferences
+                              ._bibleSectionEvidenceRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$VisualBiblesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).bibleSectionEvidenceRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.bibleId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -24286,9 +39333,18 @@ typedef $$VisualBiblesTableProcessedTableManager =
       PrefetchHooks Function({
         bool projectId,
         bool primaryLensId,
+        bool primaryCameraId,
         bool visualBibleColorBlocksRefs,
         bool visualBibleLocationRefsRefs,
         bool moodboardImagesRefs,
+        bool bibleSectionGroupsRefs,
+        bool bibleSectionDefinitionsRefs,
+        bool exposureBlocksRefs,
+        bool lightingSetupsRefs,
+        bool cameraTestsRefs,
+        bool visualBibleVersionsRefs,
+        bool bibleCommentsRefs,
+        bool bibleSectionEvidenceRefs,
       })
     >;
 typedef $$VisualBibleColorBlocksTableCreateCompanionBuilder =
@@ -24741,20 +39797,34 @@ typedef $$VisualBibleLocationRefsTableCreateCompanionBuilder =
       Value<int> id,
       required int bibleId,
       required String locationName,
+      Value<int?> locationSiteId,
+      Value<int?> locationBasePlanId,
       Value<String?> lightingNote,
       Value<String?> colorNote,
+      Value<String?> stagingNote,
       Value<String?> referenceImages,
       Value<String?> linkedShotIds,
+      Value<String?> solarOrientation,
+      Value<String?> availableLightHours,
+      Value<String?> existingPracticals,
+      Value<int?> estimatedColorTempKelvin,
     });
 typedef $$VisualBibleLocationRefsTableUpdateCompanionBuilder =
     VisualBibleLocationRefsCompanion Function({
       Value<int> id,
       Value<int> bibleId,
       Value<String> locationName,
+      Value<int?> locationSiteId,
+      Value<int?> locationBasePlanId,
       Value<String?> lightingNote,
       Value<String?> colorNote,
+      Value<String?> stagingNote,
       Value<String?> referenceImages,
       Value<String?> linkedShotIds,
+      Value<String?> solarOrientation,
+      Value<String?> availableLightHours,
+      Value<String?> existingPracticals,
+      Value<int?> estimatedColorTempKelvin,
     });
 
 final class $$VisualBibleLocationRefsTableReferences
@@ -24791,6 +39861,50 @@ final class $$VisualBibleLocationRefsTableReferences
       manager.$state.copyWith(prefetchedData: [item]),
     );
   }
+
+  static $LocationSitesTable _locationSiteIdTable(_$AppDatabase db) =>
+      db.locationSites.createAlias(
+        $_aliasNameGenerator(
+          db.visualBibleLocationRefs.locationSiteId,
+          db.locationSites.id,
+        ),
+      );
+
+  $$LocationSitesTableProcessedTableManager? get locationSiteId {
+    final $_column = $_itemColumn<int>('location_site_id');
+    if ($_column == null) return null;
+    final manager = $$LocationSitesTableTableManager(
+      $_db,
+      $_db.locationSites,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_locationSiteIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $LocationBasePlansTable _locationBasePlanIdTable(_$AppDatabase db) =>
+      db.locationBasePlans.createAlias(
+        $_aliasNameGenerator(
+          db.visualBibleLocationRefs.locationBasePlanId,
+          db.locationBasePlans.id,
+        ),
+      );
+
+  $$LocationBasePlansTableProcessedTableManager? get locationBasePlanId {
+    final $_column = $_itemColumn<int>('location_base_plan_id');
+    if ($_column == null) return null;
+    final manager = $$LocationBasePlansTableTableManager(
+      $_db,
+      $_db.locationBasePlans,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_locationBasePlanIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
 }
 
 class $$VisualBibleLocationRefsTableFilterComposer
@@ -24822,6 +39936,11 @@ class $$VisualBibleLocationRefsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get stagingNote => $composableBuilder(
+    column: $table.stagingNote,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get referenceImages => $composableBuilder(
     column: $table.referenceImages,
     builder: (column) => ColumnFilters(column),
@@ -24829,6 +39948,26 @@ class $$VisualBibleLocationRefsTableFilterComposer
 
   ColumnFilters<String> get linkedShotIds => $composableBuilder(
     column: $table.linkedShotIds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get solarOrientation => $composableBuilder(
+    column: $table.solarOrientation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get availableLightHours => $composableBuilder(
+    column: $table.availableLightHours,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get existingPracticals => $composableBuilder(
+    column: $table.existingPracticals,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get estimatedColorTempKelvin => $composableBuilder(
+    column: $table.estimatedColorTempKelvin,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -24846,6 +39985,52 @@ class $$VisualBibleLocationRefsTableFilterComposer
           }) => $$VisualBiblesTableFilterComposer(
             $db: $db,
             $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationSitesTableFilterComposer get locationSiteId {
+    final $$LocationSitesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationSiteId,
+      referencedTable: $db.locationSites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationSitesTableFilterComposer(
+            $db: $db,
+            $table: $db.locationSites,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationBasePlansTableFilterComposer get locationBasePlanId {
+    final $$LocationBasePlansTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationBasePlanId,
+      referencedTable: $db.locationBasePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationBasePlansTableFilterComposer(
+            $db: $db,
+            $table: $db.locationBasePlans,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -24885,6 +40070,11 @@ class $$VisualBibleLocationRefsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get stagingNote => $composableBuilder(
+    column: $table.stagingNote,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get referenceImages => $composableBuilder(
     column: $table.referenceImages,
     builder: (column) => ColumnOrderings(column),
@@ -24892,6 +40082,26 @@ class $$VisualBibleLocationRefsTableOrderingComposer
 
   ColumnOrderings<String> get linkedShotIds => $composableBuilder(
     column: $table.linkedShotIds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get solarOrientation => $composableBuilder(
+    column: $table.solarOrientation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get availableLightHours => $composableBuilder(
+    column: $table.availableLightHours,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get existingPracticals => $composableBuilder(
+    column: $table.existingPracticals,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get estimatedColorTempKelvin => $composableBuilder(
+    column: $table.estimatedColorTempKelvin,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -24909,6 +40119,52 @@ class $$VisualBibleLocationRefsTableOrderingComposer
           }) => $$VisualBiblesTableOrderingComposer(
             $db: $db,
             $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationSitesTableOrderingComposer get locationSiteId {
+    final $$LocationSitesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationSiteId,
+      referencedTable: $db.locationSites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationSitesTableOrderingComposer(
+            $db: $db,
+            $table: $db.locationSites,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationBasePlansTableOrderingComposer get locationBasePlanId {
+    final $$LocationBasePlansTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationBasePlanId,
+      referencedTable: $db.locationBasePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationBasePlansTableOrderingComposer(
+            $db: $db,
+            $table: $db.locationBasePlans,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -24944,6 +40200,11 @@ class $$VisualBibleLocationRefsTableAnnotationComposer
   GeneratedColumn<String> get colorNote =>
       $composableBuilder(column: $table.colorNote, builder: (column) => column);
 
+  GeneratedColumn<String> get stagingNote => $composableBuilder(
+    column: $table.stagingNote,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get referenceImages => $composableBuilder(
     column: $table.referenceImages,
     builder: (column) => column,
@@ -24951,6 +40212,26 @@ class $$VisualBibleLocationRefsTableAnnotationComposer
 
   GeneratedColumn<String> get linkedShotIds => $composableBuilder(
     column: $table.linkedShotIds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get solarOrientation => $composableBuilder(
+    column: $table.solarOrientation,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get availableLightHours => $composableBuilder(
+    column: $table.availableLightHours,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get existingPracticals => $composableBuilder(
+    column: $table.existingPracticals,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get estimatedColorTempKelvin => $composableBuilder(
+    column: $table.estimatedColorTempKelvin,
     builder: (column) => column,
   );
 
@@ -24976,6 +40257,53 @@ class $$VisualBibleLocationRefsTableAnnotationComposer
     );
     return composer;
   }
+
+  $$LocationSitesTableAnnotationComposer get locationSiteId {
+    final $$LocationSitesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationSiteId,
+      referencedTable: $db.locationSites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationSitesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.locationSites,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationBasePlansTableAnnotationComposer get locationBasePlanId {
+    final $$LocationBasePlansTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.locationBasePlanId,
+          referencedTable: $db.locationBasePlans,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$LocationBasePlansTableAnnotationComposer(
+                $db: $db,
+                $table: $db.locationBasePlans,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
 }
 
 class $$VisualBibleLocationRefsTableTableManager
@@ -24991,7 +40319,11 @@ class $$VisualBibleLocationRefsTableTableManager
           $$VisualBibleLocationRefsTableUpdateCompanionBuilder,
           (VisualBibleLocationRef, $$VisualBibleLocationRefsTableReferences),
           VisualBibleLocationRef,
-          PrefetchHooks Function({bool bibleId})
+          PrefetchHooks Function({
+            bool bibleId,
+            bool locationSiteId,
+            bool locationBasePlanId,
+          })
         > {
   $$VisualBibleLocationRefsTableTableManager(
     _$AppDatabase db,
@@ -25020,36 +40352,64 @@ class $$VisualBibleLocationRefsTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<int> bibleId = const Value.absent(),
                 Value<String> locationName = const Value.absent(),
+                Value<int?> locationSiteId = const Value.absent(),
+                Value<int?> locationBasePlanId = const Value.absent(),
                 Value<String?> lightingNote = const Value.absent(),
                 Value<String?> colorNote = const Value.absent(),
+                Value<String?> stagingNote = const Value.absent(),
                 Value<String?> referenceImages = const Value.absent(),
                 Value<String?> linkedShotIds = const Value.absent(),
+                Value<String?> solarOrientation = const Value.absent(),
+                Value<String?> availableLightHours = const Value.absent(),
+                Value<String?> existingPracticals = const Value.absent(),
+                Value<int?> estimatedColorTempKelvin = const Value.absent(),
               }) => VisualBibleLocationRefsCompanion(
                 id: id,
                 bibleId: bibleId,
                 locationName: locationName,
+                locationSiteId: locationSiteId,
+                locationBasePlanId: locationBasePlanId,
                 lightingNote: lightingNote,
                 colorNote: colorNote,
+                stagingNote: stagingNote,
                 referenceImages: referenceImages,
                 linkedShotIds: linkedShotIds,
+                solarOrientation: solarOrientation,
+                availableLightHours: availableLightHours,
+                existingPracticals: existingPracticals,
+                estimatedColorTempKelvin: estimatedColorTempKelvin,
               ),
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
                 required int bibleId,
                 required String locationName,
+                Value<int?> locationSiteId = const Value.absent(),
+                Value<int?> locationBasePlanId = const Value.absent(),
                 Value<String?> lightingNote = const Value.absent(),
                 Value<String?> colorNote = const Value.absent(),
+                Value<String?> stagingNote = const Value.absent(),
                 Value<String?> referenceImages = const Value.absent(),
                 Value<String?> linkedShotIds = const Value.absent(),
+                Value<String?> solarOrientation = const Value.absent(),
+                Value<String?> availableLightHours = const Value.absent(),
+                Value<String?> existingPracticals = const Value.absent(),
+                Value<int?> estimatedColorTempKelvin = const Value.absent(),
               }) => VisualBibleLocationRefsCompanion.insert(
                 id: id,
                 bibleId: bibleId,
                 locationName: locationName,
+                locationSiteId: locationSiteId,
+                locationBasePlanId: locationBasePlanId,
                 lightingNote: lightingNote,
                 colorNote: colorNote,
+                stagingNote: stagingNote,
                 referenceImages: referenceImages,
                 linkedShotIds: linkedShotIds,
+                solarOrientation: solarOrientation,
+                availableLightHours: availableLightHours,
+                existingPracticals: existingPracticals,
+                estimatedColorTempKelvin: estimatedColorTempKelvin,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -25059,49 +40419,84 @@ class $$VisualBibleLocationRefsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({bibleId = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [],
-              addJoins:
-                  <
-                    T extends TableManagerState<
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic
-                    >
-                  >(state) {
-                    if (bibleId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.bibleId,
-                                referencedTable:
-                                    $$VisualBibleLocationRefsTableReferences
-                                        ._bibleIdTable(db),
-                                referencedColumn:
-                                    $$VisualBibleLocationRefsTableReferences
-                                        ._bibleIdTable(db)
-                                        .id,
-                              )
-                              as T;
-                    }
+          prefetchHooksCallback:
+              ({
+                bibleId = false,
+                locationSiteId = false,
+                locationBasePlanId = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (bibleId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.bibleId,
+                                    referencedTable:
+                                        $$VisualBibleLocationRefsTableReferences
+                                            ._bibleIdTable(db),
+                                    referencedColumn:
+                                        $$VisualBibleLocationRefsTableReferences
+                                            ._bibleIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (locationSiteId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.locationSiteId,
+                                    referencedTable:
+                                        $$VisualBibleLocationRefsTableReferences
+                                            ._locationSiteIdTable(db),
+                                    referencedColumn:
+                                        $$VisualBibleLocationRefsTableReferences
+                                            ._locationSiteIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (locationBasePlanId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.locationBasePlanId,
+                                    referencedTable:
+                                        $$VisualBibleLocationRefsTableReferences
+                                            ._locationBasePlanIdTable(db),
+                                    referencedColumn:
+                                        $$VisualBibleLocationRefsTableReferences
+                                            ._locationBasePlanIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
 
-                    return state;
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
                   },
-              getPrefetchedDataCallback: (items) async {
-                return [];
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -25118,7 +40513,431 @@ typedef $$VisualBibleLocationRefsTableProcessedTableManager =
       $$VisualBibleLocationRefsTableUpdateCompanionBuilder,
       (VisualBibleLocationRef, $$VisualBibleLocationRefsTableReferences),
       VisualBibleLocationRef,
-      PrefetchHooks Function({bool bibleId})
+      PrefetchHooks Function({
+        bool bibleId,
+        bool locationSiteId,
+        bool locationBasePlanId,
+      })
+    >;
+typedef $$MoodboardGroupsTableCreateCompanionBuilder =
+    MoodboardGroupsCompanion Function({
+      Value<int> id,
+      required int projectId,
+      required String category,
+      required String name,
+      Value<int> sortOrder,
+    });
+typedef $$MoodboardGroupsTableUpdateCompanionBuilder =
+    MoodboardGroupsCompanion Function({
+      Value<int> id,
+      Value<int> projectId,
+      Value<String> category,
+      Value<String> name,
+      Value<int> sortOrder,
+    });
+
+final class $$MoodboardGroupsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $MoodboardGroupsTable, MoodboardGroup> {
+  $$MoodboardGroupsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.moodboardGroups.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$MoodboardImagesTable, List<MoodboardImage>>
+  _moodboardImagesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.moodboardImages,
+    aliasName: $_aliasNameGenerator(
+      db.moodboardGroups.id,
+      db.moodboardImages.groupId,
+    ),
+  );
+
+  $$MoodboardImagesTableProcessedTableManager get moodboardImagesRefs {
+    final manager = $$MoodboardImagesTableTableManager(
+      $_db,
+      $_db.moodboardImages,
+    ).filter((f) => f.groupId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _moodboardImagesRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$MoodboardGroupsTableFilterComposer
+    extends Composer<_$AppDatabase, $MoodboardGroupsTable> {
+  $$MoodboardGroupsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> moodboardImagesRefs(
+    Expression<bool> Function($$MoodboardImagesTableFilterComposer f) f,
+  ) {
+    final $$MoodboardImagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.moodboardImages,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MoodboardImagesTableFilterComposer(
+            $db: $db,
+            $table: $db.moodboardImages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$MoodboardGroupsTableOrderingComposer
+    extends Composer<_$AppDatabase, $MoodboardGroupsTable> {
+  $$MoodboardGroupsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$MoodboardGroupsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MoodboardGroupsTable> {
+  $$MoodboardGroupsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> moodboardImagesRefs<T extends Object>(
+    Expression<T> Function($$MoodboardImagesTableAnnotationComposer a) f,
+  ) {
+    final $$MoodboardImagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.moodboardImages,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MoodboardImagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.moodboardImages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$MoodboardGroupsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MoodboardGroupsTable,
+          MoodboardGroup,
+          $$MoodboardGroupsTableFilterComposer,
+          $$MoodboardGroupsTableOrderingComposer,
+          $$MoodboardGroupsTableAnnotationComposer,
+          $$MoodboardGroupsTableCreateCompanionBuilder,
+          $$MoodboardGroupsTableUpdateCompanionBuilder,
+          (MoodboardGroup, $$MoodboardGroupsTableReferences),
+          MoodboardGroup,
+          PrefetchHooks Function({bool projectId, bool moodboardImagesRefs})
+        > {
+  $$MoodboardGroupsTableTableManager(
+    _$AppDatabase db,
+    $MoodboardGroupsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MoodboardGroupsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MoodboardGroupsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MoodboardGroupsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<String> category = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => MoodboardGroupsCompanion(
+                id: id,
+                projectId: projectId,
+                category: category,
+                name: name,
+                sortOrder: sortOrder,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int projectId,
+                required String category,
+                required String name,
+                Value<int> sortOrder = const Value.absent(),
+              }) => MoodboardGroupsCompanion.insert(
+                id: id,
+                projectId: projectId,
+                category: category,
+                name: name,
+                sortOrder: sortOrder,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$MoodboardGroupsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({projectId = false, moodboardImagesRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (moodboardImagesRefs) db.moodboardImages,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (projectId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.projectId,
+                                    referencedTable:
+                                        $$MoodboardGroupsTableReferences
+                                            ._projectIdTable(db),
+                                    referencedColumn:
+                                        $$MoodboardGroupsTableReferences
+                                            ._projectIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (moodboardImagesRefs)
+                        await $_getPrefetchedData<
+                          MoodboardGroup,
+                          $MoodboardGroupsTable,
+                          MoodboardImage
+                        >(
+                          currentTable: table,
+                          referencedTable: $$MoodboardGroupsTableReferences
+                              ._moodboardImagesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$MoodboardGroupsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).moodboardImagesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.groupId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$MoodboardGroupsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MoodboardGroupsTable,
+      MoodboardGroup,
+      $$MoodboardGroupsTableFilterComposer,
+      $$MoodboardGroupsTableOrderingComposer,
+      $$MoodboardGroupsTableAnnotationComposer,
+      $$MoodboardGroupsTableCreateCompanionBuilder,
+      $$MoodboardGroupsTableUpdateCompanionBuilder,
+      (MoodboardGroup, $$MoodboardGroupsTableReferences),
+      MoodboardGroup,
+      PrefetchHooks Function({bool projectId, bool moodboardImagesRefs})
     >;
 typedef $$MoodboardImagesTableCreateCompanionBuilder =
     MoodboardImagesCompanion Function({
@@ -25128,10 +40947,13 @@ typedef $$MoodboardImagesTableCreateCompanionBuilder =
       required String imagePath,
       Value<String> source,
       Value<String?> category,
+      Value<int?> groupId,
       Value<String?> caption,
       Value<String?> filmReference,
       Value<int?> linkedSceneId,
       Value<String?> linkedLocationName,
+      Value<int?> linkedLocationBasePlanId,
+      Value<String?> assignedSections,
       Value<int> sortOrder,
     });
 typedef $$MoodboardImagesTableUpdateCompanionBuilder =
@@ -25142,10 +40964,13 @@ typedef $$MoodboardImagesTableUpdateCompanionBuilder =
       Value<String> imagePath,
       Value<String> source,
       Value<String?> category,
+      Value<int?> groupId,
       Value<String?> caption,
       Value<String?> filmReference,
       Value<int?> linkedSceneId,
       Value<String?> linkedLocationName,
+      Value<int?> linkedLocationBasePlanId,
+      Value<String?> assignedSections,
       Value<int> sortOrder,
     });
 
@@ -25190,6 +41015,50 @@ final class $$MoodboardImagesTableReferences
       $_db.visualBibles,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_bibleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $MoodboardGroupsTable _groupIdTable(_$AppDatabase db) =>
+      db.moodboardGroups.createAlias(
+        $_aliasNameGenerator(db.moodboardImages.groupId, db.moodboardGroups.id),
+      );
+
+  $$MoodboardGroupsTableProcessedTableManager? get groupId {
+    final $_column = $_itemColumn<int>('group_id');
+    if ($_column == null) return null;
+    final manager = $$MoodboardGroupsTableTableManager(
+      $_db,
+      $_db.moodboardGroups,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_groupIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $LocationBasePlansTable _linkedLocationBasePlanIdTable(
+    _$AppDatabase db,
+  ) => db.locationBasePlans.createAlias(
+    $_aliasNameGenerator(
+      db.moodboardImages.linkedLocationBasePlanId,
+      db.locationBasePlans.id,
+    ),
+  );
+
+  $$LocationBasePlansTableProcessedTableManager? get linkedLocationBasePlanId {
+    final $_column = $_itemColumn<int>('linked_location_base_plan_id');
+    if ($_column == null) return null;
+    final manager = $$LocationBasePlansTableTableManager(
+      $_db,
+      $_db.locationBasePlans,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(
+      _linkedLocationBasePlanIdTable($_db),
+    );
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -25246,6 +41115,11 @@ class $$MoodboardImagesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get assignedSections => $composableBuilder(
+    column: $table.assignedSections,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
     builder: (column) => ColumnFilters(column),
@@ -25288,6 +41162,52 @@ class $$MoodboardImagesTableFilterComposer
           }) => $$VisualBiblesTableFilterComposer(
             $db: $db,
             $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$MoodboardGroupsTableFilterComposer get groupId {
+    final $$MoodboardGroupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.moodboardGroups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MoodboardGroupsTableFilterComposer(
+            $db: $db,
+            $table: $db.moodboardGroups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationBasePlansTableFilterComposer get linkedLocationBasePlanId {
+    final $$LocationBasePlansTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedLocationBasePlanId,
+      referencedTable: $db.locationBasePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationBasePlansTableFilterComposer(
+            $db: $db,
+            $table: $db.locationBasePlans,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -25347,6 +41267,11 @@ class $$MoodboardImagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get assignedSections => $composableBuilder(
+    column: $table.assignedSections,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
     builder: (column) => ColumnOrderings(column),
@@ -25397,6 +41322,52 @@ class $$MoodboardImagesTableOrderingComposer
     );
     return composer;
   }
+
+  $$MoodboardGroupsTableOrderingComposer get groupId {
+    final $$MoodboardGroupsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.moodboardGroups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MoodboardGroupsTableOrderingComposer(
+            $db: $db,
+            $table: $db.moodboardGroups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationBasePlansTableOrderingComposer get linkedLocationBasePlanId {
+    final $$LocationBasePlansTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedLocationBasePlanId,
+      referencedTable: $db.locationBasePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationBasePlansTableOrderingComposer(
+            $db: $db,
+            $table: $db.locationBasePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$MoodboardImagesTableAnnotationComposer
@@ -25435,6 +41406,11 @@ class $$MoodboardImagesTableAnnotationComposer
 
   GeneratedColumn<String> get linkedLocationName => $composableBuilder(
     column: $table.linkedLocationName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get assignedSections => $composableBuilder(
+    column: $table.assignedSections,
     builder: (column) => column,
   );
 
@@ -25486,6 +41462,53 @@ class $$MoodboardImagesTableAnnotationComposer
     );
     return composer;
   }
+
+  $$MoodboardGroupsTableAnnotationComposer get groupId {
+    final $$MoodboardGroupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.moodboardGroups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MoodboardGroupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.moodboardGroups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationBasePlansTableAnnotationComposer get linkedLocationBasePlanId {
+    final $$LocationBasePlansTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.linkedLocationBasePlanId,
+          referencedTable: $db.locationBasePlans,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$LocationBasePlansTableAnnotationComposer(
+                $db: $db,
+                $table: $db.locationBasePlans,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
 }
 
 class $$MoodboardImagesTableTableManager
@@ -25501,7 +41524,12 @@ class $$MoodboardImagesTableTableManager
           $$MoodboardImagesTableUpdateCompanionBuilder,
           (MoodboardImage, $$MoodboardImagesTableReferences),
           MoodboardImage,
-          PrefetchHooks Function({bool projectId, bool bibleId})
+          PrefetchHooks Function({
+            bool projectId,
+            bool bibleId,
+            bool groupId,
+            bool linkedLocationBasePlanId,
+          })
         > {
   $$MoodboardImagesTableTableManager(
     _$AppDatabase db,
@@ -25524,10 +41552,13 @@ class $$MoodboardImagesTableTableManager
                 Value<String> imagePath = const Value.absent(),
                 Value<String> source = const Value.absent(),
                 Value<String?> category = const Value.absent(),
+                Value<int?> groupId = const Value.absent(),
                 Value<String?> caption = const Value.absent(),
                 Value<String?> filmReference = const Value.absent(),
                 Value<int?> linkedSceneId = const Value.absent(),
                 Value<String?> linkedLocationName = const Value.absent(),
+                Value<int?> linkedLocationBasePlanId = const Value.absent(),
+                Value<String?> assignedSections = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
               }) => MoodboardImagesCompanion(
                 id: id,
@@ -25536,10 +41567,13 @@ class $$MoodboardImagesTableTableManager
                 imagePath: imagePath,
                 source: source,
                 category: category,
+                groupId: groupId,
                 caption: caption,
                 filmReference: filmReference,
                 linkedSceneId: linkedSceneId,
                 linkedLocationName: linkedLocationName,
+                linkedLocationBasePlanId: linkedLocationBasePlanId,
+                assignedSections: assignedSections,
                 sortOrder: sortOrder,
               ),
           createCompanionCallback:
@@ -25550,10 +41584,13 @@ class $$MoodboardImagesTableTableManager
                 required String imagePath,
                 Value<String> source = const Value.absent(),
                 Value<String?> category = const Value.absent(),
+                Value<int?> groupId = const Value.absent(),
                 Value<String?> caption = const Value.absent(),
                 Value<String?> filmReference = const Value.absent(),
                 Value<int?> linkedSceneId = const Value.absent(),
                 Value<String?> linkedLocationName = const Value.absent(),
+                Value<int?> linkedLocationBasePlanId = const Value.absent(),
+                Value<String?> assignedSections = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
               }) => MoodboardImagesCompanion.insert(
                 id: id,
@@ -25562,10 +41599,13 @@ class $$MoodboardImagesTableTableManager
                 imagePath: imagePath,
                 source: source,
                 category: category,
+                groupId: groupId,
                 caption: caption,
                 filmReference: filmReference,
                 linkedSceneId: linkedSceneId,
                 linkedLocationName: linkedLocationName,
+                linkedLocationBasePlanId: linkedLocationBasePlanId,
+                assignedSections: assignedSections,
                 sortOrder: sortOrder,
               ),
           withReferenceMapper: (p0) => p0
@@ -25576,7 +41616,4085 @@ class $$MoodboardImagesTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({projectId = false, bibleId = false}) {
+          prefetchHooksCallback:
+              ({
+                projectId = false,
+                bibleId = false,
+                groupId = false,
+                linkedLocationBasePlanId = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (projectId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.projectId,
+                                    referencedTable:
+                                        $$MoodboardImagesTableReferences
+                                            ._projectIdTable(db),
+                                    referencedColumn:
+                                        $$MoodboardImagesTableReferences
+                                            ._projectIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (bibleId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.bibleId,
+                                    referencedTable:
+                                        $$MoodboardImagesTableReferences
+                                            ._bibleIdTable(db),
+                                    referencedColumn:
+                                        $$MoodboardImagesTableReferences
+                                            ._bibleIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (groupId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.groupId,
+                                    referencedTable:
+                                        $$MoodboardImagesTableReferences
+                                            ._groupIdTable(db),
+                                    referencedColumn:
+                                        $$MoodboardImagesTableReferences
+                                            ._groupIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (linkedLocationBasePlanId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn:
+                                        table.linkedLocationBasePlanId,
+                                    referencedTable:
+                                        $$MoodboardImagesTableReferences
+                                            ._linkedLocationBasePlanIdTable(db),
+                                    referencedColumn:
+                                        $$MoodboardImagesTableReferences
+                                            ._linkedLocationBasePlanIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$MoodboardImagesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MoodboardImagesTable,
+      MoodboardImage,
+      $$MoodboardImagesTableFilterComposer,
+      $$MoodboardImagesTableOrderingComposer,
+      $$MoodboardImagesTableAnnotationComposer,
+      $$MoodboardImagesTableCreateCompanionBuilder,
+      $$MoodboardImagesTableUpdateCompanionBuilder,
+      (MoodboardImage, $$MoodboardImagesTableReferences),
+      MoodboardImage,
+      PrefetchHooks Function({
+        bool projectId,
+        bool bibleId,
+        bool groupId,
+        bool linkedLocationBasePlanId,
+      })
+    >;
+typedef $$BibleSectionGroupsTableCreateCompanionBuilder =
+    BibleSectionGroupsCompanion Function({
+      required String id,
+      required int bibleId,
+      required String label,
+      Value<int> sortOrder,
+      Value<bool> isBuiltIn,
+      Value<int> rowid,
+    });
+typedef $$BibleSectionGroupsTableUpdateCompanionBuilder =
+    BibleSectionGroupsCompanion Function({
+      Value<String> id,
+      Value<int> bibleId,
+      Value<String> label,
+      Value<int> sortOrder,
+      Value<bool> isBuiltIn,
+      Value<int> rowid,
+    });
+
+final class $$BibleSectionGroupsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $BibleSectionGroupsTable,
+          BibleSectionGroup
+        > {
+  $$BibleSectionGroupsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $VisualBiblesTable _bibleIdTable(_$AppDatabase db) =>
+      db.visualBibles.createAlias(
+        $_aliasNameGenerator(db.bibleSectionGroups.bibleId, db.visualBibles.id),
+      );
+
+  $$VisualBiblesTableProcessedTableManager get bibleId {
+    final $_column = $_itemColumn<int>('bible_id')!;
+
+    final manager = $$VisualBiblesTableTableManager(
+      $_db,
+      $_db.visualBibles,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_bibleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$BibleSectionGroupsTableFilterComposer
+    extends Composer<_$AppDatabase, $BibleSectionGroupsTable> {
+  $$BibleSectionGroupsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isBuiltIn => $composableBuilder(
+    column: $table.isBuiltIn,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$VisualBiblesTableFilterComposer get bibleId {
+    final $$VisualBiblesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BibleSectionGroupsTableOrderingComposer
+    extends Composer<_$AppDatabase, $BibleSectionGroupsTable> {
+  $$BibleSectionGroupsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isBuiltIn => $composableBuilder(
+    column: $table.isBuiltIn,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$VisualBiblesTableOrderingComposer get bibleId {
+    final $$VisualBiblesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableOrderingComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BibleSectionGroupsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BibleSectionGroupsTable> {
+  $$BibleSectionGroupsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<bool> get isBuiltIn =>
+      $composableBuilder(column: $table.isBuiltIn, builder: (column) => column);
+
+  $$VisualBiblesTableAnnotationComposer get bibleId {
+    final $$VisualBiblesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BibleSectionGroupsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BibleSectionGroupsTable,
+          BibleSectionGroup,
+          $$BibleSectionGroupsTableFilterComposer,
+          $$BibleSectionGroupsTableOrderingComposer,
+          $$BibleSectionGroupsTableAnnotationComposer,
+          $$BibleSectionGroupsTableCreateCompanionBuilder,
+          $$BibleSectionGroupsTableUpdateCompanionBuilder,
+          (BibleSectionGroup, $$BibleSectionGroupsTableReferences),
+          BibleSectionGroup,
+          PrefetchHooks Function({bool bibleId})
+        > {
+  $$BibleSectionGroupsTableTableManager(
+    _$AppDatabase db,
+    $BibleSectionGroupsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BibleSectionGroupsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BibleSectionGroupsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BibleSectionGroupsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int> bibleId = const Value.absent(),
+                Value<String> label = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<bool> isBuiltIn = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BibleSectionGroupsCompanion(
+                id: id,
+                bibleId: bibleId,
+                label: label,
+                sortOrder: sortOrder,
+                isBuiltIn: isBuiltIn,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required int bibleId,
+                required String label,
+                Value<int> sortOrder = const Value.absent(),
+                Value<bool> isBuiltIn = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BibleSectionGroupsCompanion.insert(
+                id: id,
+                bibleId: bibleId,
+                label: label,
+                sortOrder: sortOrder,
+                isBuiltIn: isBuiltIn,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$BibleSectionGroupsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({bibleId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (bibleId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.bibleId,
+                                referencedTable:
+                                    $$BibleSectionGroupsTableReferences
+                                        ._bibleIdTable(db),
+                                referencedColumn:
+                                    $$BibleSectionGroupsTableReferences
+                                        ._bibleIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$BibleSectionGroupsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BibleSectionGroupsTable,
+      BibleSectionGroup,
+      $$BibleSectionGroupsTableFilterComposer,
+      $$BibleSectionGroupsTableOrderingComposer,
+      $$BibleSectionGroupsTableAnnotationComposer,
+      $$BibleSectionGroupsTableCreateCompanionBuilder,
+      $$BibleSectionGroupsTableUpdateCompanionBuilder,
+      (BibleSectionGroup, $$BibleSectionGroupsTableReferences),
+      BibleSectionGroup,
+      PrefetchHooks Function({bool bibleId})
+    >;
+typedef $$BibleSectionDefinitionsTableCreateCompanionBuilder =
+    BibleSectionDefinitionsCompanion Function({
+      required String id,
+      required int bibleId,
+      required String groupId,
+      required String label,
+      Value<String> iconKey,
+      Value<int> sortOrder,
+      Value<bool> isBuiltIn,
+      Value<bool> isHidden,
+      Value<String> template,
+      Value<String?> contentJson,
+      Value<int> rowid,
+    });
+typedef $$BibleSectionDefinitionsTableUpdateCompanionBuilder =
+    BibleSectionDefinitionsCompanion Function({
+      Value<String> id,
+      Value<int> bibleId,
+      Value<String> groupId,
+      Value<String> label,
+      Value<String> iconKey,
+      Value<int> sortOrder,
+      Value<bool> isBuiltIn,
+      Value<bool> isHidden,
+      Value<String> template,
+      Value<String?> contentJson,
+      Value<int> rowid,
+    });
+
+final class $$BibleSectionDefinitionsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $BibleSectionDefinitionsTable,
+          BibleSectionDefinition
+        > {
+  $$BibleSectionDefinitionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $VisualBiblesTable _bibleIdTable(_$AppDatabase db) =>
+      db.visualBibles.createAlias(
+        $_aliasNameGenerator(
+          db.bibleSectionDefinitions.bibleId,
+          db.visualBibles.id,
+        ),
+      );
+
+  $$VisualBiblesTableProcessedTableManager get bibleId {
+    final $_column = $_itemColumn<int>('bible_id')!;
+
+    final manager = $$VisualBiblesTableTableManager(
+      $_db,
+      $_db.visualBibles,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_bibleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$BibleSectionDefinitionsTableFilterComposer
+    extends Composer<_$AppDatabase, $BibleSectionDefinitionsTable> {
+  $$BibleSectionDefinitionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get iconKey => $composableBuilder(
+    column: $table.iconKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isBuiltIn => $composableBuilder(
+    column: $table.isBuiltIn,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isHidden => $composableBuilder(
+    column: $table.isHidden,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get template => $composableBuilder(
+    column: $table.template,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentJson => $composableBuilder(
+    column: $table.contentJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$VisualBiblesTableFilterComposer get bibleId {
+    final $$VisualBiblesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BibleSectionDefinitionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $BibleSectionDefinitionsTable> {
+  $$BibleSectionDefinitionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get iconKey => $composableBuilder(
+    column: $table.iconKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isBuiltIn => $composableBuilder(
+    column: $table.isBuiltIn,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isHidden => $composableBuilder(
+    column: $table.isHidden,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get template => $composableBuilder(
+    column: $table.template,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentJson => $composableBuilder(
+    column: $table.contentJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$VisualBiblesTableOrderingComposer get bibleId {
+    final $$VisualBiblesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableOrderingComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BibleSectionDefinitionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BibleSectionDefinitionsTable> {
+  $$BibleSectionDefinitionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get groupId =>
+      $composableBuilder(column: $table.groupId, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<String> get iconKey =>
+      $composableBuilder(column: $table.iconKey, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<bool> get isBuiltIn =>
+      $composableBuilder(column: $table.isBuiltIn, builder: (column) => column);
+
+  GeneratedColumn<bool> get isHidden =>
+      $composableBuilder(column: $table.isHidden, builder: (column) => column);
+
+  GeneratedColumn<String> get template =>
+      $composableBuilder(column: $table.template, builder: (column) => column);
+
+  GeneratedColumn<String> get contentJson => $composableBuilder(
+    column: $table.contentJson,
+    builder: (column) => column,
+  );
+
+  $$VisualBiblesTableAnnotationComposer get bibleId {
+    final $$VisualBiblesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BibleSectionDefinitionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BibleSectionDefinitionsTable,
+          BibleSectionDefinition,
+          $$BibleSectionDefinitionsTableFilterComposer,
+          $$BibleSectionDefinitionsTableOrderingComposer,
+          $$BibleSectionDefinitionsTableAnnotationComposer,
+          $$BibleSectionDefinitionsTableCreateCompanionBuilder,
+          $$BibleSectionDefinitionsTableUpdateCompanionBuilder,
+          (BibleSectionDefinition, $$BibleSectionDefinitionsTableReferences),
+          BibleSectionDefinition,
+          PrefetchHooks Function({bool bibleId})
+        > {
+  $$BibleSectionDefinitionsTableTableManager(
+    _$AppDatabase db,
+    $BibleSectionDefinitionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BibleSectionDefinitionsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$BibleSectionDefinitionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$BibleSectionDefinitionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int> bibleId = const Value.absent(),
+                Value<String> groupId = const Value.absent(),
+                Value<String> label = const Value.absent(),
+                Value<String> iconKey = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<bool> isBuiltIn = const Value.absent(),
+                Value<bool> isHidden = const Value.absent(),
+                Value<String> template = const Value.absent(),
+                Value<String?> contentJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BibleSectionDefinitionsCompanion(
+                id: id,
+                bibleId: bibleId,
+                groupId: groupId,
+                label: label,
+                iconKey: iconKey,
+                sortOrder: sortOrder,
+                isBuiltIn: isBuiltIn,
+                isHidden: isHidden,
+                template: template,
+                contentJson: contentJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required int bibleId,
+                required String groupId,
+                required String label,
+                Value<String> iconKey = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<bool> isBuiltIn = const Value.absent(),
+                Value<bool> isHidden = const Value.absent(),
+                Value<String> template = const Value.absent(),
+                Value<String?> contentJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BibleSectionDefinitionsCompanion.insert(
+                id: id,
+                bibleId: bibleId,
+                groupId: groupId,
+                label: label,
+                iconKey: iconKey,
+                sortOrder: sortOrder,
+                isBuiltIn: isBuiltIn,
+                isHidden: isHidden,
+                template: template,
+                contentJson: contentJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$BibleSectionDefinitionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({bibleId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (bibleId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.bibleId,
+                                referencedTable:
+                                    $$BibleSectionDefinitionsTableReferences
+                                        ._bibleIdTable(db),
+                                referencedColumn:
+                                    $$BibleSectionDefinitionsTableReferences
+                                        ._bibleIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$BibleSectionDefinitionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BibleSectionDefinitionsTable,
+      BibleSectionDefinition,
+      $$BibleSectionDefinitionsTableFilterComposer,
+      $$BibleSectionDefinitionsTableOrderingComposer,
+      $$BibleSectionDefinitionsTableAnnotationComposer,
+      $$BibleSectionDefinitionsTableCreateCompanionBuilder,
+      $$BibleSectionDefinitionsTableUpdateCompanionBuilder,
+      (BibleSectionDefinition, $$BibleSectionDefinitionsTableReferences),
+      BibleSectionDefinition,
+      PrefetchHooks Function({bool bibleId})
+    >;
+typedef $$ExposureBlocksTableCreateCompanionBuilder =
+    ExposureBlocksCompanion Function({
+      Value<int> id,
+      required int bibleId,
+      required String blockName,
+      Value<String?> highlightStrategy,
+      Value<String?> shadowStrategy,
+      Value<String?> keyFillRatio,
+      Value<String?> narrativeIntent,
+      Value<String?> referenceImages,
+      Value<int> sortOrder,
+    });
+typedef $$ExposureBlocksTableUpdateCompanionBuilder =
+    ExposureBlocksCompanion Function({
+      Value<int> id,
+      Value<int> bibleId,
+      Value<String> blockName,
+      Value<String?> highlightStrategy,
+      Value<String?> shadowStrategy,
+      Value<String?> keyFillRatio,
+      Value<String?> narrativeIntent,
+      Value<String?> referenceImages,
+      Value<int> sortOrder,
+    });
+
+final class $$ExposureBlocksTableReferences
+    extends BaseReferences<_$AppDatabase, $ExposureBlocksTable, ExposureBlock> {
+  $$ExposureBlocksTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $VisualBiblesTable _bibleIdTable(_$AppDatabase db) =>
+      db.visualBibles.createAlias(
+        $_aliasNameGenerator(db.exposureBlocks.bibleId, db.visualBibles.id),
+      );
+
+  $$VisualBiblesTableProcessedTableManager get bibleId {
+    final $_column = $_itemColumn<int>('bible_id')!;
+
+    final manager = $$VisualBiblesTableTableManager(
+      $_db,
+      $_db.visualBibles,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_bibleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ExposureBlocksTableFilterComposer
+    extends Composer<_$AppDatabase, $ExposureBlocksTable> {
+  $$ExposureBlocksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get blockName => $composableBuilder(
+    column: $table.blockName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get highlightStrategy => $composableBuilder(
+    column: $table.highlightStrategy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get shadowStrategy => $composableBuilder(
+    column: $table.shadowStrategy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get keyFillRatio => $composableBuilder(
+    column: $table.keyFillRatio,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get narrativeIntent => $composableBuilder(
+    column: $table.narrativeIntent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get referenceImages => $composableBuilder(
+    column: $table.referenceImages,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$VisualBiblesTableFilterComposer get bibleId {
+    final $$VisualBiblesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ExposureBlocksTableOrderingComposer
+    extends Composer<_$AppDatabase, $ExposureBlocksTable> {
+  $$ExposureBlocksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get blockName => $composableBuilder(
+    column: $table.blockName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get highlightStrategy => $composableBuilder(
+    column: $table.highlightStrategy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get shadowStrategy => $composableBuilder(
+    column: $table.shadowStrategy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get keyFillRatio => $composableBuilder(
+    column: $table.keyFillRatio,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get narrativeIntent => $composableBuilder(
+    column: $table.narrativeIntent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get referenceImages => $composableBuilder(
+    column: $table.referenceImages,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$VisualBiblesTableOrderingComposer get bibleId {
+    final $$VisualBiblesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableOrderingComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ExposureBlocksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ExposureBlocksTable> {
+  $$ExposureBlocksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get blockName =>
+      $composableBuilder(column: $table.blockName, builder: (column) => column);
+
+  GeneratedColumn<String> get highlightStrategy => $composableBuilder(
+    column: $table.highlightStrategy,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get shadowStrategy => $composableBuilder(
+    column: $table.shadowStrategy,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get keyFillRatio => $composableBuilder(
+    column: $table.keyFillRatio,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get narrativeIntent => $composableBuilder(
+    column: $table.narrativeIntent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get referenceImages => $composableBuilder(
+    column: $table.referenceImages,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  $$VisualBiblesTableAnnotationComposer get bibleId {
+    final $$VisualBiblesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ExposureBlocksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ExposureBlocksTable,
+          ExposureBlock,
+          $$ExposureBlocksTableFilterComposer,
+          $$ExposureBlocksTableOrderingComposer,
+          $$ExposureBlocksTableAnnotationComposer,
+          $$ExposureBlocksTableCreateCompanionBuilder,
+          $$ExposureBlocksTableUpdateCompanionBuilder,
+          (ExposureBlock, $$ExposureBlocksTableReferences),
+          ExposureBlock,
+          PrefetchHooks Function({bool bibleId})
+        > {
+  $$ExposureBlocksTableTableManager(
+    _$AppDatabase db,
+    $ExposureBlocksTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ExposureBlocksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ExposureBlocksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ExposureBlocksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> bibleId = const Value.absent(),
+                Value<String> blockName = const Value.absent(),
+                Value<String?> highlightStrategy = const Value.absent(),
+                Value<String?> shadowStrategy = const Value.absent(),
+                Value<String?> keyFillRatio = const Value.absent(),
+                Value<String?> narrativeIntent = const Value.absent(),
+                Value<String?> referenceImages = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => ExposureBlocksCompanion(
+                id: id,
+                bibleId: bibleId,
+                blockName: blockName,
+                highlightStrategy: highlightStrategy,
+                shadowStrategy: shadowStrategy,
+                keyFillRatio: keyFillRatio,
+                narrativeIntent: narrativeIntent,
+                referenceImages: referenceImages,
+                sortOrder: sortOrder,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int bibleId,
+                required String blockName,
+                Value<String?> highlightStrategy = const Value.absent(),
+                Value<String?> shadowStrategy = const Value.absent(),
+                Value<String?> keyFillRatio = const Value.absent(),
+                Value<String?> narrativeIntent = const Value.absent(),
+                Value<String?> referenceImages = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => ExposureBlocksCompanion.insert(
+                id: id,
+                bibleId: bibleId,
+                blockName: blockName,
+                highlightStrategy: highlightStrategy,
+                shadowStrategy: shadowStrategy,
+                keyFillRatio: keyFillRatio,
+                narrativeIntent: narrativeIntent,
+                referenceImages: referenceImages,
+                sortOrder: sortOrder,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ExposureBlocksTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({bibleId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (bibleId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.bibleId,
+                                referencedTable: $$ExposureBlocksTableReferences
+                                    ._bibleIdTable(db),
+                                referencedColumn:
+                                    $$ExposureBlocksTableReferences
+                                        ._bibleIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ExposureBlocksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ExposureBlocksTable,
+      ExposureBlock,
+      $$ExposureBlocksTableFilterComposer,
+      $$ExposureBlocksTableOrderingComposer,
+      $$ExposureBlocksTableAnnotationComposer,
+      $$ExposureBlocksTableCreateCompanionBuilder,
+      $$ExposureBlocksTableUpdateCompanionBuilder,
+      (ExposureBlock, $$ExposureBlocksTableReferences),
+      ExposureBlock,
+      PrefetchHooks Function({bool bibleId})
+    >;
+typedef $$LightingSetupsTableCreateCompanionBuilder =
+    LightingSetupsCompanion Function({
+      Value<int> id,
+      required int bibleId,
+      required String setupName,
+      Value<String?> narrativeNote,
+      required String diagramJson,
+      Value<String?> gelNotes,
+      Value<String?> practicalMotivation,
+      Value<String?> referenceImagePath,
+      Value<int> sortOrder,
+    });
+typedef $$LightingSetupsTableUpdateCompanionBuilder =
+    LightingSetupsCompanion Function({
+      Value<int> id,
+      Value<int> bibleId,
+      Value<String> setupName,
+      Value<String?> narrativeNote,
+      Value<String> diagramJson,
+      Value<String?> gelNotes,
+      Value<String?> practicalMotivation,
+      Value<String?> referenceImagePath,
+      Value<int> sortOrder,
+    });
+
+final class $$LightingSetupsTableReferences
+    extends BaseReferences<_$AppDatabase, $LightingSetupsTable, LightingSetup> {
+  $$LightingSetupsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $VisualBiblesTable _bibleIdTable(_$AppDatabase db) =>
+      db.visualBibles.createAlias(
+        $_aliasNameGenerator(db.lightingSetups.bibleId, db.visualBibles.id),
+      );
+
+  $$VisualBiblesTableProcessedTableManager get bibleId {
+    final $_column = $_itemColumn<int>('bible_id')!;
+
+    final manager = $$VisualBiblesTableTableManager(
+      $_db,
+      $_db.visualBibles,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_bibleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$LightingSetupsTableFilterComposer
+    extends Composer<_$AppDatabase, $LightingSetupsTable> {
+  $$LightingSetupsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get setupName => $composableBuilder(
+    column: $table.setupName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get narrativeNote => $composableBuilder(
+    column: $table.narrativeNote,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get diagramJson => $composableBuilder(
+    column: $table.diagramJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get gelNotes => $composableBuilder(
+    column: $table.gelNotes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get practicalMotivation => $composableBuilder(
+    column: $table.practicalMotivation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get referenceImagePath => $composableBuilder(
+    column: $table.referenceImagePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$VisualBiblesTableFilterComposer get bibleId {
+    final $$VisualBiblesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LightingSetupsTableOrderingComposer
+    extends Composer<_$AppDatabase, $LightingSetupsTable> {
+  $$LightingSetupsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get setupName => $composableBuilder(
+    column: $table.setupName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get narrativeNote => $composableBuilder(
+    column: $table.narrativeNote,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get diagramJson => $composableBuilder(
+    column: $table.diagramJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get gelNotes => $composableBuilder(
+    column: $table.gelNotes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get practicalMotivation => $composableBuilder(
+    column: $table.practicalMotivation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get referenceImagePath => $composableBuilder(
+    column: $table.referenceImagePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$VisualBiblesTableOrderingComposer get bibleId {
+    final $$VisualBiblesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableOrderingComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LightingSetupsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LightingSetupsTable> {
+  $$LightingSetupsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get setupName =>
+      $composableBuilder(column: $table.setupName, builder: (column) => column);
+
+  GeneratedColumn<String> get narrativeNote => $composableBuilder(
+    column: $table.narrativeNote,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get diagramJson => $composableBuilder(
+    column: $table.diagramJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get gelNotes =>
+      $composableBuilder(column: $table.gelNotes, builder: (column) => column);
+
+  GeneratedColumn<String> get practicalMotivation => $composableBuilder(
+    column: $table.practicalMotivation,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get referenceImagePath => $composableBuilder(
+    column: $table.referenceImagePath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  $$VisualBiblesTableAnnotationComposer get bibleId {
+    final $$VisualBiblesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LightingSetupsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LightingSetupsTable,
+          LightingSetup,
+          $$LightingSetupsTableFilterComposer,
+          $$LightingSetupsTableOrderingComposer,
+          $$LightingSetupsTableAnnotationComposer,
+          $$LightingSetupsTableCreateCompanionBuilder,
+          $$LightingSetupsTableUpdateCompanionBuilder,
+          (LightingSetup, $$LightingSetupsTableReferences),
+          LightingSetup,
+          PrefetchHooks Function({bool bibleId})
+        > {
+  $$LightingSetupsTableTableManager(
+    _$AppDatabase db,
+    $LightingSetupsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LightingSetupsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LightingSetupsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LightingSetupsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> bibleId = const Value.absent(),
+                Value<String> setupName = const Value.absent(),
+                Value<String?> narrativeNote = const Value.absent(),
+                Value<String> diagramJson = const Value.absent(),
+                Value<String?> gelNotes = const Value.absent(),
+                Value<String?> practicalMotivation = const Value.absent(),
+                Value<String?> referenceImagePath = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => LightingSetupsCompanion(
+                id: id,
+                bibleId: bibleId,
+                setupName: setupName,
+                narrativeNote: narrativeNote,
+                diagramJson: diagramJson,
+                gelNotes: gelNotes,
+                practicalMotivation: practicalMotivation,
+                referenceImagePath: referenceImagePath,
+                sortOrder: sortOrder,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int bibleId,
+                required String setupName,
+                Value<String?> narrativeNote = const Value.absent(),
+                required String diagramJson,
+                Value<String?> gelNotes = const Value.absent(),
+                Value<String?> practicalMotivation = const Value.absent(),
+                Value<String?> referenceImagePath = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => LightingSetupsCompanion.insert(
+                id: id,
+                bibleId: bibleId,
+                setupName: setupName,
+                narrativeNote: narrativeNote,
+                diagramJson: diagramJson,
+                gelNotes: gelNotes,
+                practicalMotivation: practicalMotivation,
+                referenceImagePath: referenceImagePath,
+                sortOrder: sortOrder,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$LightingSetupsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({bibleId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (bibleId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.bibleId,
+                                referencedTable: $$LightingSetupsTableReferences
+                                    ._bibleIdTable(db),
+                                referencedColumn:
+                                    $$LightingSetupsTableReferences
+                                        ._bibleIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$LightingSetupsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LightingSetupsTable,
+      LightingSetup,
+      $$LightingSetupsTableFilterComposer,
+      $$LightingSetupsTableOrderingComposer,
+      $$LightingSetupsTableAnnotationComposer,
+      $$LightingSetupsTableCreateCompanionBuilder,
+      $$LightingSetupsTableUpdateCompanionBuilder,
+      (LightingSetup, $$LightingSetupsTableReferences),
+      LightingSetup,
+      PrefetchHooks Function({bool bibleId})
+    >;
+typedef $$CameraTestsTableCreateCompanionBuilder =
+    CameraTestsCompanion Function({
+      Value<int> id,
+      required int bibleId,
+      required String testName,
+      Value<int?> cameraId,
+      Value<int?> lensId,
+      Value<String?> lutName,
+      Value<String?> lightCondition,
+      Value<String?> notes,
+      required String imagePaths,
+      Value<DateTime?> testedAt,
+      Value<int> sortOrder,
+    });
+typedef $$CameraTestsTableUpdateCompanionBuilder =
+    CameraTestsCompanion Function({
+      Value<int> id,
+      Value<int> bibleId,
+      Value<String> testName,
+      Value<int?> cameraId,
+      Value<int?> lensId,
+      Value<String?> lutName,
+      Value<String?> lightCondition,
+      Value<String?> notes,
+      Value<String> imagePaths,
+      Value<DateTime?> testedAt,
+      Value<int> sortOrder,
+    });
+
+final class $$CameraTestsTableReferences
+    extends BaseReferences<_$AppDatabase, $CameraTestsTable, CameraTest> {
+  $$CameraTestsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $VisualBiblesTable _bibleIdTable(_$AppDatabase db) =>
+      db.visualBibles.createAlias(
+        $_aliasNameGenerator(db.cameraTests.bibleId, db.visualBibles.id),
+      );
+
+  $$VisualBiblesTableProcessedTableManager get bibleId {
+    final $_column = $_itemColumn<int>('bible_id')!;
+
+    final manager = $$VisualBiblesTableTableManager(
+      $_db,
+      $_db.visualBibles,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_bibleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $CamerasTable _cameraIdTable(_$AppDatabase db) =>
+      db.cameras.createAlias(
+        $_aliasNameGenerator(db.cameraTests.cameraId, db.cameras.id),
+      );
+
+  $$CamerasTableProcessedTableManager? get cameraId {
+    final $_column = $_itemColumn<int>('camera_id');
+    if ($_column == null) return null;
+    final manager = $$CamerasTableTableManager(
+      $_db,
+      $_db.cameras,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_cameraIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $LensesTable _lensIdTable(_$AppDatabase db) => db.lenses.createAlias(
+    $_aliasNameGenerator(db.cameraTests.lensId, db.lenses.id),
+  );
+
+  $$LensesTableProcessedTableManager? get lensId {
+    final $_column = $_itemColumn<int>('lens_id');
+    if ($_column == null) return null;
+    final manager = $$LensesTableTableManager(
+      $_db,
+      $_db.lenses,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_lensIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CameraTestsTableFilterComposer
+    extends Composer<_$AppDatabase, $CameraTestsTable> {
+  $$CameraTestsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get testName => $composableBuilder(
+    column: $table.testName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lutName => $composableBuilder(
+    column: $table.lutName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lightCondition => $composableBuilder(
+    column: $table.lightCondition,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get imagePaths => $composableBuilder(
+    column: $table.imagePaths,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get testedAt => $composableBuilder(
+    column: $table.testedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$VisualBiblesTableFilterComposer get bibleId {
+    final $$VisualBiblesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CamerasTableFilterComposer get cameraId {
+    final $$CamerasTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.cameraId,
+      referencedTable: $db.cameras,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CamerasTableFilterComposer(
+            $db: $db,
+            $table: $db.cameras,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LensesTableFilterComposer get lensId {
+    final $$LensesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.lensId,
+      referencedTable: $db.lenses,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LensesTableFilterComposer(
+            $db: $db,
+            $table: $db.lenses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CameraTestsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CameraTestsTable> {
+  $$CameraTestsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get testName => $composableBuilder(
+    column: $table.testName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lutName => $composableBuilder(
+    column: $table.lutName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lightCondition => $composableBuilder(
+    column: $table.lightCondition,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get imagePaths => $composableBuilder(
+    column: $table.imagePaths,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get testedAt => $composableBuilder(
+    column: $table.testedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$VisualBiblesTableOrderingComposer get bibleId {
+    final $$VisualBiblesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableOrderingComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CamerasTableOrderingComposer get cameraId {
+    final $$CamerasTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.cameraId,
+      referencedTable: $db.cameras,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CamerasTableOrderingComposer(
+            $db: $db,
+            $table: $db.cameras,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LensesTableOrderingComposer get lensId {
+    final $$LensesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.lensId,
+      referencedTable: $db.lenses,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LensesTableOrderingComposer(
+            $db: $db,
+            $table: $db.lenses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CameraTestsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CameraTestsTable> {
+  $$CameraTestsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get testName =>
+      $composableBuilder(column: $table.testName, builder: (column) => column);
+
+  GeneratedColumn<String> get lutName =>
+      $composableBuilder(column: $table.lutName, builder: (column) => column);
+
+  GeneratedColumn<String> get lightCondition => $composableBuilder(
+    column: $table.lightCondition,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get notes =>
+      $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  GeneratedColumn<String> get imagePaths => $composableBuilder(
+    column: $table.imagePaths,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get testedAt =>
+      $composableBuilder(column: $table.testedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  $$VisualBiblesTableAnnotationComposer get bibleId {
+    final $$VisualBiblesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CamerasTableAnnotationComposer get cameraId {
+    final $$CamerasTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.cameraId,
+      referencedTable: $db.cameras,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CamerasTableAnnotationComposer(
+            $db: $db,
+            $table: $db.cameras,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LensesTableAnnotationComposer get lensId {
+    final $$LensesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.lensId,
+      referencedTable: $db.lenses,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LensesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.lenses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CameraTestsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CameraTestsTable,
+          CameraTest,
+          $$CameraTestsTableFilterComposer,
+          $$CameraTestsTableOrderingComposer,
+          $$CameraTestsTableAnnotationComposer,
+          $$CameraTestsTableCreateCompanionBuilder,
+          $$CameraTestsTableUpdateCompanionBuilder,
+          (CameraTest, $$CameraTestsTableReferences),
+          CameraTest,
+          PrefetchHooks Function({bool bibleId, bool cameraId, bool lensId})
+        > {
+  $$CameraTestsTableTableManager(_$AppDatabase db, $CameraTestsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CameraTestsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CameraTestsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CameraTestsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> bibleId = const Value.absent(),
+                Value<String> testName = const Value.absent(),
+                Value<int?> cameraId = const Value.absent(),
+                Value<int?> lensId = const Value.absent(),
+                Value<String?> lutName = const Value.absent(),
+                Value<String?> lightCondition = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                Value<String> imagePaths = const Value.absent(),
+                Value<DateTime?> testedAt = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => CameraTestsCompanion(
+                id: id,
+                bibleId: bibleId,
+                testName: testName,
+                cameraId: cameraId,
+                lensId: lensId,
+                lutName: lutName,
+                lightCondition: lightCondition,
+                notes: notes,
+                imagePaths: imagePaths,
+                testedAt: testedAt,
+                sortOrder: sortOrder,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int bibleId,
+                required String testName,
+                Value<int?> cameraId = const Value.absent(),
+                Value<int?> lensId = const Value.absent(),
+                Value<String?> lutName = const Value.absent(),
+                Value<String?> lightCondition = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                required String imagePaths,
+                Value<DateTime?> testedAt = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => CameraTestsCompanion.insert(
+                id: id,
+                bibleId: bibleId,
+                testName: testName,
+                cameraId: cameraId,
+                lensId: lensId,
+                lutName: lutName,
+                lightCondition: lightCondition,
+                notes: notes,
+                imagePaths: imagePaths,
+                testedAt: testedAt,
+                sortOrder: sortOrder,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CameraTestsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({bibleId = false, cameraId = false, lensId = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (bibleId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.bibleId,
+                                    referencedTable:
+                                        $$CameraTestsTableReferences
+                                            ._bibleIdTable(db),
+                                    referencedColumn:
+                                        $$CameraTestsTableReferences
+                                            ._bibleIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (cameraId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.cameraId,
+                                    referencedTable:
+                                        $$CameraTestsTableReferences
+                                            ._cameraIdTable(db),
+                                    referencedColumn:
+                                        $$CameraTestsTableReferences
+                                            ._cameraIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (lensId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.lensId,
+                                    referencedTable:
+                                        $$CameraTestsTableReferences
+                                            ._lensIdTable(db),
+                                    referencedColumn:
+                                        $$CameraTestsTableReferences
+                                            ._lensIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$CameraTestsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CameraTestsTable,
+      CameraTest,
+      $$CameraTestsTableFilterComposer,
+      $$CameraTestsTableOrderingComposer,
+      $$CameraTestsTableAnnotationComposer,
+      $$CameraTestsTableCreateCompanionBuilder,
+      $$CameraTestsTableUpdateCompanionBuilder,
+      (CameraTest, $$CameraTestsTableReferences),
+      CameraTest,
+      PrefetchHooks Function({bool bibleId, bool cameraId, bool lensId})
+    >;
+typedef $$VisualBibleVersionsTableCreateCompanionBuilder =
+    VisualBibleVersionsCompanion Function({
+      Value<int> id,
+      required int bibleId,
+      required String label,
+      required String snapshotJson,
+      Value<String?> changeNote,
+      Value<DateTime> createdAt,
+    });
+typedef $$VisualBibleVersionsTableUpdateCompanionBuilder =
+    VisualBibleVersionsCompanion Function({
+      Value<int> id,
+      Value<int> bibleId,
+      Value<String> label,
+      Value<String> snapshotJson,
+      Value<String?> changeNote,
+      Value<DateTime> createdAt,
+    });
+
+final class $$VisualBibleVersionsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $VisualBibleVersionsTable,
+          VisualBibleVersion
+        > {
+  $$VisualBibleVersionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $VisualBiblesTable _bibleIdTable(_$AppDatabase db) =>
+      db.visualBibles.createAlias(
+        $_aliasNameGenerator(
+          db.visualBibleVersions.bibleId,
+          db.visualBibles.id,
+        ),
+      );
+
+  $$VisualBiblesTableProcessedTableManager get bibleId {
+    final $_column = $_itemColumn<int>('bible_id')!;
+
+    final manager = $$VisualBiblesTableTableManager(
+      $_db,
+      $_db.visualBibles,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_bibleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$VisualBibleVersionsTableFilterComposer
+    extends Composer<_$AppDatabase, $VisualBibleVersionsTable> {
+  $$VisualBibleVersionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshotJson => $composableBuilder(
+    column: $table.snapshotJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get changeNote => $composableBuilder(
+    column: $table.changeNote,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$VisualBiblesTableFilterComposer get bibleId {
+    final $$VisualBiblesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$VisualBibleVersionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $VisualBibleVersionsTable> {
+  $$VisualBibleVersionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshotJson => $composableBuilder(
+    column: $table.snapshotJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get changeNote => $composableBuilder(
+    column: $table.changeNote,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$VisualBiblesTableOrderingComposer get bibleId {
+    final $$VisualBiblesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableOrderingComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$VisualBibleVersionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $VisualBibleVersionsTable> {
+  $$VisualBibleVersionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshotJson => $composableBuilder(
+    column: $table.snapshotJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get changeNote => $composableBuilder(
+    column: $table.changeNote,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$VisualBiblesTableAnnotationComposer get bibleId {
+    final $$VisualBiblesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$VisualBibleVersionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $VisualBibleVersionsTable,
+          VisualBibleVersion,
+          $$VisualBibleVersionsTableFilterComposer,
+          $$VisualBibleVersionsTableOrderingComposer,
+          $$VisualBibleVersionsTableAnnotationComposer,
+          $$VisualBibleVersionsTableCreateCompanionBuilder,
+          $$VisualBibleVersionsTableUpdateCompanionBuilder,
+          (VisualBibleVersion, $$VisualBibleVersionsTableReferences),
+          VisualBibleVersion,
+          PrefetchHooks Function({bool bibleId})
+        > {
+  $$VisualBibleVersionsTableTableManager(
+    _$AppDatabase db,
+    $VisualBibleVersionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$VisualBibleVersionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$VisualBibleVersionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$VisualBibleVersionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> bibleId = const Value.absent(),
+                Value<String> label = const Value.absent(),
+                Value<String> snapshotJson = const Value.absent(),
+                Value<String?> changeNote = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => VisualBibleVersionsCompanion(
+                id: id,
+                bibleId: bibleId,
+                label: label,
+                snapshotJson: snapshotJson,
+                changeNote: changeNote,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int bibleId,
+                required String label,
+                required String snapshotJson,
+                Value<String?> changeNote = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => VisualBibleVersionsCompanion.insert(
+                id: id,
+                bibleId: bibleId,
+                label: label,
+                snapshotJson: snapshotJson,
+                changeNote: changeNote,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$VisualBibleVersionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({bibleId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (bibleId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.bibleId,
+                                referencedTable:
+                                    $$VisualBibleVersionsTableReferences
+                                        ._bibleIdTable(db),
+                                referencedColumn:
+                                    $$VisualBibleVersionsTableReferences
+                                        ._bibleIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$VisualBibleVersionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $VisualBibleVersionsTable,
+      VisualBibleVersion,
+      $$VisualBibleVersionsTableFilterComposer,
+      $$VisualBibleVersionsTableOrderingComposer,
+      $$VisualBibleVersionsTableAnnotationComposer,
+      $$VisualBibleVersionsTableCreateCompanionBuilder,
+      $$VisualBibleVersionsTableUpdateCompanionBuilder,
+      (VisualBibleVersion, $$VisualBibleVersionsTableReferences),
+      VisualBibleVersion,
+      PrefetchHooks Function({bool bibleId})
+    >;
+typedef $$BibleCommentsTableCreateCompanionBuilder =
+    BibleCommentsCompanion Function({
+      Value<int> id,
+      required int bibleId,
+      required String authorRole,
+      required String targetType,
+      Value<int?> targetId,
+      required String comment,
+      Value<DateTime> createdAt,
+    });
+typedef $$BibleCommentsTableUpdateCompanionBuilder =
+    BibleCommentsCompanion Function({
+      Value<int> id,
+      Value<int> bibleId,
+      Value<String> authorRole,
+      Value<String> targetType,
+      Value<int?> targetId,
+      Value<String> comment,
+      Value<DateTime> createdAt,
+    });
+
+final class $$BibleCommentsTableReferences
+    extends BaseReferences<_$AppDatabase, $BibleCommentsTable, BibleComment> {
+  $$BibleCommentsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $VisualBiblesTable _bibleIdTable(_$AppDatabase db) =>
+      db.visualBibles.createAlias(
+        $_aliasNameGenerator(db.bibleComments.bibleId, db.visualBibles.id),
+      );
+
+  $$VisualBiblesTableProcessedTableManager get bibleId {
+    final $_column = $_itemColumn<int>('bible_id')!;
+
+    final manager = $$VisualBiblesTableTableManager(
+      $_db,
+      $_db.visualBibles,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_bibleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$BibleCommentsTableFilterComposer
+    extends Composer<_$AppDatabase, $BibleCommentsTable> {
+  $$BibleCommentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get authorRole => $composableBuilder(
+    column: $table.authorRole,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get comment => $composableBuilder(
+    column: $table.comment,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$VisualBiblesTableFilterComposer get bibleId {
+    final $$VisualBiblesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BibleCommentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $BibleCommentsTable> {
+  $$BibleCommentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get authorRole => $composableBuilder(
+    column: $table.authorRole,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get comment => $composableBuilder(
+    column: $table.comment,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$VisualBiblesTableOrderingComposer get bibleId {
+    final $$VisualBiblesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableOrderingComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BibleCommentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BibleCommentsTable> {
+  $$BibleCommentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get authorRole => $composableBuilder(
+    column: $table.authorRole,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get targetId =>
+      $composableBuilder(column: $table.targetId, builder: (column) => column);
+
+  GeneratedColumn<String> get comment =>
+      $composableBuilder(column: $table.comment, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$VisualBiblesTableAnnotationComposer get bibleId {
+    final $$VisualBiblesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BibleCommentsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BibleCommentsTable,
+          BibleComment,
+          $$BibleCommentsTableFilterComposer,
+          $$BibleCommentsTableOrderingComposer,
+          $$BibleCommentsTableAnnotationComposer,
+          $$BibleCommentsTableCreateCompanionBuilder,
+          $$BibleCommentsTableUpdateCompanionBuilder,
+          (BibleComment, $$BibleCommentsTableReferences),
+          BibleComment,
+          PrefetchHooks Function({bool bibleId})
+        > {
+  $$BibleCommentsTableTableManager(_$AppDatabase db, $BibleCommentsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BibleCommentsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BibleCommentsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BibleCommentsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> bibleId = const Value.absent(),
+                Value<String> authorRole = const Value.absent(),
+                Value<String> targetType = const Value.absent(),
+                Value<int?> targetId = const Value.absent(),
+                Value<String> comment = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => BibleCommentsCompanion(
+                id: id,
+                bibleId: bibleId,
+                authorRole: authorRole,
+                targetType: targetType,
+                targetId: targetId,
+                comment: comment,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int bibleId,
+                required String authorRole,
+                required String targetType,
+                Value<int?> targetId = const Value.absent(),
+                required String comment,
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => BibleCommentsCompanion.insert(
+                id: id,
+                bibleId: bibleId,
+                authorRole: authorRole,
+                targetType: targetType,
+                targetId: targetId,
+                comment: comment,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$BibleCommentsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({bibleId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (bibleId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.bibleId,
+                                referencedTable: $$BibleCommentsTableReferences
+                                    ._bibleIdTable(db),
+                                referencedColumn: $$BibleCommentsTableReferences
+                                    ._bibleIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$BibleCommentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BibleCommentsTable,
+      BibleComment,
+      $$BibleCommentsTableFilterComposer,
+      $$BibleCommentsTableOrderingComposer,
+      $$BibleCommentsTableAnnotationComposer,
+      $$BibleCommentsTableCreateCompanionBuilder,
+      $$BibleCommentsTableUpdateCompanionBuilder,
+      (BibleComment, $$BibleCommentsTableReferences),
+      BibleComment,
+      PrefetchHooks Function({bool bibleId})
+    >;
+typedef $$CatalogSyncMetaTableCreateCompanionBuilder =
+    CatalogSyncMetaCompanion Function({
+      Value<int> id,
+      Value<String?> remoteVersion,
+      Value<String?> sourceUrl,
+      Value<DateTime?> lastSyncAt,
+    });
+typedef $$CatalogSyncMetaTableUpdateCompanionBuilder =
+    CatalogSyncMetaCompanion Function({
+      Value<int> id,
+      Value<String?> remoteVersion,
+      Value<String?> sourceUrl,
+      Value<DateTime?> lastSyncAt,
+    });
+
+class $$CatalogSyncMetaTableFilterComposer
+    extends Composer<_$AppDatabase, $CatalogSyncMetaTable> {
+  $$CatalogSyncMetaTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteVersion => $composableBuilder(
+    column: $table.remoteVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CatalogSyncMetaTableOrderingComposer
+    extends Composer<_$AppDatabase, $CatalogSyncMetaTable> {
+  $$CatalogSyncMetaTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remoteVersion => $composableBuilder(
+    column: $table.remoteVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CatalogSyncMetaTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CatalogSyncMetaTable> {
+  $$CatalogSyncMetaTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get remoteVersion => $composableBuilder(
+    column: $table.remoteVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceUrl =>
+      $composableBuilder(column: $table.sourceUrl, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => column,
+  );
+}
+
+class $$CatalogSyncMetaTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CatalogSyncMetaTable,
+          CatalogSyncMetaData,
+          $$CatalogSyncMetaTableFilterComposer,
+          $$CatalogSyncMetaTableOrderingComposer,
+          $$CatalogSyncMetaTableAnnotationComposer,
+          $$CatalogSyncMetaTableCreateCompanionBuilder,
+          $$CatalogSyncMetaTableUpdateCompanionBuilder,
+          (
+            CatalogSyncMetaData,
+            BaseReferences<
+              _$AppDatabase,
+              $CatalogSyncMetaTable,
+              CatalogSyncMetaData
+            >,
+          ),
+          CatalogSyncMetaData,
+          PrefetchHooks Function()
+        > {
+  $$CatalogSyncMetaTableTableManager(
+    _$AppDatabase db,
+    $CatalogSyncMetaTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CatalogSyncMetaTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CatalogSyncMetaTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CatalogSyncMetaTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> remoteVersion = const Value.absent(),
+                Value<String?> sourceUrl = const Value.absent(),
+                Value<DateTime?> lastSyncAt = const Value.absent(),
+              }) => CatalogSyncMetaCompanion(
+                id: id,
+                remoteVersion: remoteVersion,
+                sourceUrl: sourceUrl,
+                lastSyncAt: lastSyncAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> remoteVersion = const Value.absent(),
+                Value<String?> sourceUrl = const Value.absent(),
+                Value<DateTime?> lastSyncAt = const Value.absent(),
+              }) => CatalogSyncMetaCompanion.insert(
+                id: id,
+                remoteVersion: remoteVersion,
+                sourceUrl: sourceUrl,
+                lastSyncAt: lastSyncAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CatalogSyncMetaTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CatalogSyncMetaTable,
+      CatalogSyncMetaData,
+      $$CatalogSyncMetaTableFilterComposer,
+      $$CatalogSyncMetaTableOrderingComposer,
+      $$CatalogSyncMetaTableAnnotationComposer,
+      $$CatalogSyncMetaTableCreateCompanionBuilder,
+      $$CatalogSyncMetaTableUpdateCompanionBuilder,
+      (
+        CatalogSyncMetaData,
+        BaseReferences<
+          _$AppDatabase,
+          $CatalogSyncMetaTable,
+          CatalogSyncMetaData
+        >,
+      ),
+      CatalogSyncMetaData,
+      PrefetchHooks Function()
+    >;
+typedef $$BibleSectionEvidenceTableCreateCompanionBuilder =
+    BibleSectionEvidenceCompanion Function({
+      Value<int> id,
+      required int bibleId,
+      required String sectionId,
+      Value<String> targetType,
+      Value<int?> targetId,
+      required String imagePath,
+      Value<String?> caption,
+      Value<String?> equipmentRefJson,
+      Value<int> sortOrder,
+    });
+typedef $$BibleSectionEvidenceTableUpdateCompanionBuilder =
+    BibleSectionEvidenceCompanion Function({
+      Value<int> id,
+      Value<int> bibleId,
+      Value<String> sectionId,
+      Value<String> targetType,
+      Value<int?> targetId,
+      Value<String> imagePath,
+      Value<String?> caption,
+      Value<String?> equipmentRefJson,
+      Value<int> sortOrder,
+    });
+
+final class $$BibleSectionEvidenceTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $BibleSectionEvidenceTable,
+          BibleSectionEvidenceData
+        > {
+  $$BibleSectionEvidenceTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $VisualBiblesTable _bibleIdTable(_$AppDatabase db) =>
+      db.visualBibles.createAlias(
+        $_aliasNameGenerator(
+          db.bibleSectionEvidence.bibleId,
+          db.visualBibles.id,
+        ),
+      );
+
+  $$VisualBiblesTableProcessedTableManager get bibleId {
+    final $_column = $_itemColumn<int>('bible_id')!;
+
+    final manager = $$VisualBiblesTableTableManager(
+      $_db,
+      $_db.visualBibles,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_bibleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$BibleSectionEvidenceTableFilterComposer
+    extends Composer<_$AppDatabase, $BibleSectionEvidenceTable> {
+  $$BibleSectionEvidenceTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sectionId => $composableBuilder(
+    column: $table.sectionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get imagePath => $composableBuilder(
+    column: $table.imagePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get caption => $composableBuilder(
+    column: $table.caption,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get equipmentRefJson => $composableBuilder(
+    column: $table.equipmentRefJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$VisualBiblesTableFilterComposer get bibleId {
+    final $$VisualBiblesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BibleSectionEvidenceTableOrderingComposer
+    extends Composer<_$AppDatabase, $BibleSectionEvidenceTable> {
+  $$BibleSectionEvidenceTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sectionId => $composableBuilder(
+    column: $table.sectionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get imagePath => $composableBuilder(
+    column: $table.imagePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get caption => $composableBuilder(
+    column: $table.caption,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get equipmentRefJson => $composableBuilder(
+    column: $table.equipmentRefJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$VisualBiblesTableOrderingComposer get bibleId {
+    final $$VisualBiblesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableOrderingComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BibleSectionEvidenceTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BibleSectionEvidenceTable> {
+  $$BibleSectionEvidenceTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get sectionId =>
+      $composableBuilder(column: $table.sectionId, builder: (column) => column);
+
+  GeneratedColumn<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get targetId =>
+      $composableBuilder(column: $table.targetId, builder: (column) => column);
+
+  GeneratedColumn<String> get imagePath =>
+      $composableBuilder(column: $table.imagePath, builder: (column) => column);
+
+  GeneratedColumn<String> get caption =>
+      $composableBuilder(column: $table.caption, builder: (column) => column);
+
+  GeneratedColumn<String> get equipmentRefJson => $composableBuilder(
+    column: $table.equipmentRefJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  $$VisualBiblesTableAnnotationComposer get bibleId {
+    final $$VisualBiblesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BibleSectionEvidenceTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BibleSectionEvidenceTable,
+          BibleSectionEvidenceData,
+          $$BibleSectionEvidenceTableFilterComposer,
+          $$BibleSectionEvidenceTableOrderingComposer,
+          $$BibleSectionEvidenceTableAnnotationComposer,
+          $$BibleSectionEvidenceTableCreateCompanionBuilder,
+          $$BibleSectionEvidenceTableUpdateCompanionBuilder,
+          (BibleSectionEvidenceData, $$BibleSectionEvidenceTableReferences),
+          BibleSectionEvidenceData,
+          PrefetchHooks Function({bool bibleId})
+        > {
+  $$BibleSectionEvidenceTableTableManager(
+    _$AppDatabase db,
+    $BibleSectionEvidenceTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BibleSectionEvidenceTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BibleSectionEvidenceTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$BibleSectionEvidenceTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> bibleId = const Value.absent(),
+                Value<String> sectionId = const Value.absent(),
+                Value<String> targetType = const Value.absent(),
+                Value<int?> targetId = const Value.absent(),
+                Value<String> imagePath = const Value.absent(),
+                Value<String?> caption = const Value.absent(),
+                Value<String?> equipmentRefJson = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => BibleSectionEvidenceCompanion(
+                id: id,
+                bibleId: bibleId,
+                sectionId: sectionId,
+                targetType: targetType,
+                targetId: targetId,
+                imagePath: imagePath,
+                caption: caption,
+                equipmentRefJson: equipmentRefJson,
+                sortOrder: sortOrder,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int bibleId,
+                required String sectionId,
+                Value<String> targetType = const Value.absent(),
+                Value<int?> targetId = const Value.absent(),
+                required String imagePath,
+                Value<String?> caption = const Value.absent(),
+                Value<String?> equipmentRefJson = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => BibleSectionEvidenceCompanion.insert(
+                id: id,
+                bibleId: bibleId,
+                sectionId: sectionId,
+                targetType: targetType,
+                targetId: targetId,
+                imagePath: imagePath,
+                caption: caption,
+                equipmentRefJson: equipmentRefJson,
+                sortOrder: sortOrder,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$BibleSectionEvidenceTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({bibleId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (bibleId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.bibleId,
+                                referencedTable:
+                                    $$BibleSectionEvidenceTableReferences
+                                        ._bibleIdTable(db),
+                                referencedColumn:
+                                    $$BibleSectionEvidenceTableReferences
+                                        ._bibleIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$BibleSectionEvidenceTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BibleSectionEvidenceTable,
+      BibleSectionEvidenceData,
+      $$BibleSectionEvidenceTableFilterComposer,
+      $$BibleSectionEvidenceTableOrderingComposer,
+      $$BibleSectionEvidenceTableAnnotationComposer,
+      $$BibleSectionEvidenceTableCreateCompanionBuilder,
+      $$BibleSectionEvidenceTableUpdateCompanionBuilder,
+      (BibleSectionEvidenceData, $$BibleSectionEvidenceTableReferences),
+      BibleSectionEvidenceData,
+      PrefetchHooks Function({bool bibleId})
+    >;
+typedef $$LukaSyncMetaTableCreateCompanionBuilder =
+    LukaSyncMetaCompanion Function({
+      Value<int> id,
+      Value<String?> remoteVersion,
+      Value<String?> sourceUrl,
+      Value<DateTime?> lastSyncAt,
+    });
+typedef $$LukaSyncMetaTableUpdateCompanionBuilder =
+    LukaSyncMetaCompanion Function({
+      Value<int> id,
+      Value<String?> remoteVersion,
+      Value<String?> sourceUrl,
+      Value<DateTime?> lastSyncAt,
+    });
+
+class $$LukaSyncMetaTableFilterComposer
+    extends Composer<_$AppDatabase, $LukaSyncMetaTable> {
+  $$LukaSyncMetaTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteVersion => $composableBuilder(
+    column: $table.remoteVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LukaSyncMetaTableOrderingComposer
+    extends Composer<_$AppDatabase, $LukaSyncMetaTable> {
+  $$LukaSyncMetaTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remoteVersion => $composableBuilder(
+    column: $table.remoteVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LukaSyncMetaTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LukaSyncMetaTable> {
+  $$LukaSyncMetaTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get remoteVersion => $composableBuilder(
+    column: $table.remoteVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceUrl =>
+      $composableBuilder(column: $table.sourceUrl, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => column,
+  );
+}
+
+class $$LukaSyncMetaTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LukaSyncMetaTable,
+          LukaSyncMetaData,
+          $$LukaSyncMetaTableFilterComposer,
+          $$LukaSyncMetaTableOrderingComposer,
+          $$LukaSyncMetaTableAnnotationComposer,
+          $$LukaSyncMetaTableCreateCompanionBuilder,
+          $$LukaSyncMetaTableUpdateCompanionBuilder,
+          (
+            LukaSyncMetaData,
+            BaseReferences<_$AppDatabase, $LukaSyncMetaTable, LukaSyncMetaData>,
+          ),
+          LukaSyncMetaData,
+          PrefetchHooks Function()
+        > {
+  $$LukaSyncMetaTableTableManager(_$AppDatabase db, $LukaSyncMetaTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LukaSyncMetaTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LukaSyncMetaTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LukaSyncMetaTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> remoteVersion = const Value.absent(),
+                Value<String?> sourceUrl = const Value.absent(),
+                Value<DateTime?> lastSyncAt = const Value.absent(),
+              }) => LukaSyncMetaCompanion(
+                id: id,
+                remoteVersion: remoteVersion,
+                sourceUrl: sourceUrl,
+                lastSyncAt: lastSyncAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> remoteVersion = const Value.absent(),
+                Value<String?> sourceUrl = const Value.absent(),
+                Value<DateTime?> lastSyncAt = const Value.absent(),
+              }) => LukaSyncMetaCompanion.insert(
+                id: id,
+                remoteVersion: remoteVersion,
+                sourceUrl: sourceUrl,
+                lastSyncAt: lastSyncAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LukaSyncMetaTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LukaSyncMetaTable,
+      LukaSyncMetaData,
+      $$LukaSyncMetaTableFilterComposer,
+      $$LukaSyncMetaTableOrderingComposer,
+      $$LukaSyncMetaTableAnnotationComposer,
+      $$LukaSyncMetaTableCreateCompanionBuilder,
+      $$LukaSyncMetaTableUpdateCompanionBuilder,
+      (
+        LukaSyncMetaData,
+        BaseReferences<_$AppDatabase, $LukaSyncMetaTable, LukaSyncMetaData>,
+      ),
+      LukaSyncMetaData,
+      PrefetchHooks Function()
+    >;
+typedef $$OpticsLabSamplesTableCreateCompanionBuilder =
+    OpticsLabSamplesCompanion Function({
+      Value<int> id,
+      required int projectId,
+      required String imagePath,
+      Value<int> sortOrder,
+      Value<DateTime> createdAt,
+    });
+typedef $$OpticsLabSamplesTableUpdateCompanionBuilder =
+    OpticsLabSamplesCompanion Function({
+      Value<int> id,
+      Value<int> projectId,
+      Value<String> imagePath,
+      Value<int> sortOrder,
+      Value<DateTime> createdAt,
+    });
+
+final class $$OpticsLabSamplesTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $OpticsLabSamplesTable, OpticsLabSample> {
+  $$OpticsLabSamplesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.opticsLabSamples.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$OpticsLabSamplesTableFilterComposer
+    extends Composer<_$AppDatabase, $OpticsLabSamplesTable> {
+  $$OpticsLabSamplesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get imagePath => $composableBuilder(
+    column: $table.imagePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$OpticsLabSamplesTableOrderingComposer
+    extends Composer<_$AppDatabase, $OpticsLabSamplesTable> {
+  $$OpticsLabSamplesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get imagePath => $composableBuilder(
+    column: $table.imagePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$OpticsLabSamplesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $OpticsLabSamplesTable> {
+  $$OpticsLabSamplesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get imagePath =>
+      $composableBuilder(column: $table.imagePath, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$OpticsLabSamplesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $OpticsLabSamplesTable,
+          OpticsLabSample,
+          $$OpticsLabSamplesTableFilterComposer,
+          $$OpticsLabSamplesTableOrderingComposer,
+          $$OpticsLabSamplesTableAnnotationComposer,
+          $$OpticsLabSamplesTableCreateCompanionBuilder,
+          $$OpticsLabSamplesTableUpdateCompanionBuilder,
+          (OpticsLabSample, $$OpticsLabSamplesTableReferences),
+          OpticsLabSample,
+          PrefetchHooks Function({bool projectId})
+        > {
+  $$OpticsLabSamplesTableTableManager(
+    _$AppDatabase db,
+    $OpticsLabSamplesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$OpticsLabSamplesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$OpticsLabSamplesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$OpticsLabSamplesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<String> imagePath = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => OpticsLabSamplesCompanion(
+                id: id,
+                projectId: projectId,
+                imagePath: imagePath,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int projectId,
+                required String imagePath,
+                Value<int> sortOrder = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => OpticsLabSamplesCompanion.insert(
+                id: id,
+                projectId: projectId,
+                imagePath: imagePath,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$OpticsLabSamplesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({projectId = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [],
@@ -25602,26 +45720,11 @@ class $$MoodboardImagesTableTableManager
                                 currentTable: table,
                                 currentColumn: table.projectId,
                                 referencedTable:
-                                    $$MoodboardImagesTableReferences
+                                    $$OpticsLabSamplesTableReferences
                                         ._projectIdTable(db),
                                 referencedColumn:
-                                    $$MoodboardImagesTableReferences
+                                    $$OpticsLabSamplesTableReferences
                                         ._projectIdTable(db)
-                                        .id,
-                              )
-                              as T;
-                    }
-                    if (bibleId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.bibleId,
-                                referencedTable:
-                                    $$MoodboardImagesTableReferences
-                                        ._bibleIdTable(db),
-                                referencedColumn:
-                                    $$MoodboardImagesTableReferences
-                                        ._bibleIdTable(db)
                                         .id,
                               )
                               as T;
@@ -25638,19 +45741,263 @@ class $$MoodboardImagesTableTableManager
       );
 }
 
-typedef $$MoodboardImagesTableProcessedTableManager =
+typedef $$OpticsLabSamplesTableProcessedTableManager =
     ProcessedTableManager<
       _$AppDatabase,
-      $MoodboardImagesTable,
-      MoodboardImage,
-      $$MoodboardImagesTableFilterComposer,
-      $$MoodboardImagesTableOrderingComposer,
-      $$MoodboardImagesTableAnnotationComposer,
-      $$MoodboardImagesTableCreateCompanionBuilder,
-      $$MoodboardImagesTableUpdateCompanionBuilder,
-      (MoodboardImage, $$MoodboardImagesTableReferences),
-      MoodboardImage,
-      PrefetchHooks Function({bool projectId, bool bibleId})
+      $OpticsLabSamplesTable,
+      OpticsLabSample,
+      $$OpticsLabSamplesTableFilterComposer,
+      $$OpticsLabSamplesTableOrderingComposer,
+      $$OpticsLabSamplesTableAnnotationComposer,
+      $$OpticsLabSamplesTableCreateCompanionBuilder,
+      $$OpticsLabSamplesTableUpdateCompanionBuilder,
+      (OpticsLabSample, $$OpticsLabSamplesTableReferences),
+      OpticsLabSample,
+      PrefetchHooks Function({bool projectId})
+    >;
+typedef $$CloudSyncQueueTableCreateCompanionBuilder =
+    CloudSyncQueueCompanion Function({
+      Value<int> id,
+      required String entityType,
+      required String localEntityId,
+      required String operation,
+      Value<String?> payloadJson,
+      Value<DateTime> createdAt,
+      Value<bool> processed,
+    });
+typedef $$CloudSyncQueueTableUpdateCompanionBuilder =
+    CloudSyncQueueCompanion Function({
+      Value<int> id,
+      Value<String> entityType,
+      Value<String> localEntityId,
+      Value<String> operation,
+      Value<String?> payloadJson,
+      Value<DateTime> createdAt,
+      Value<bool> processed,
+    });
+
+class $$CloudSyncQueueTableFilterComposer
+    extends Composer<_$AppDatabase, $CloudSyncQueueTable> {
+  $$CloudSyncQueueTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localEntityId => $composableBuilder(
+    column: $table.localEntityId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get processed => $composableBuilder(
+    column: $table.processed,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CloudSyncQueueTableOrderingComposer
+    extends Composer<_$AppDatabase, $CloudSyncQueueTable> {
+  $$CloudSyncQueueTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localEntityId => $composableBuilder(
+    column: $table.localEntityId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get processed => $composableBuilder(
+    column: $table.processed,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CloudSyncQueueTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CloudSyncQueueTable> {
+  $$CloudSyncQueueTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get localEntityId => $composableBuilder(
+    column: $table.localEntityId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get operation =>
+      $composableBuilder(column: $table.operation, builder: (column) => column);
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get processed =>
+      $composableBuilder(column: $table.processed, builder: (column) => column);
+}
+
+class $$CloudSyncQueueTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CloudSyncQueueTable,
+          CloudSyncQueueData,
+          $$CloudSyncQueueTableFilterComposer,
+          $$CloudSyncQueueTableOrderingComposer,
+          $$CloudSyncQueueTableAnnotationComposer,
+          $$CloudSyncQueueTableCreateCompanionBuilder,
+          $$CloudSyncQueueTableUpdateCompanionBuilder,
+          (
+            CloudSyncQueueData,
+            BaseReferences<
+              _$AppDatabase,
+              $CloudSyncQueueTable,
+              CloudSyncQueueData
+            >,
+          ),
+          CloudSyncQueueData,
+          PrefetchHooks Function()
+        > {
+  $$CloudSyncQueueTableTableManager(
+    _$AppDatabase db,
+    $CloudSyncQueueTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CloudSyncQueueTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CloudSyncQueueTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CloudSyncQueueTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> entityType = const Value.absent(),
+                Value<String> localEntityId = const Value.absent(),
+                Value<String> operation = const Value.absent(),
+                Value<String?> payloadJson = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<bool> processed = const Value.absent(),
+              }) => CloudSyncQueueCompanion(
+                id: id,
+                entityType: entityType,
+                localEntityId: localEntityId,
+                operation: operation,
+                payloadJson: payloadJson,
+                createdAt: createdAt,
+                processed: processed,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String entityType,
+                required String localEntityId,
+                required String operation,
+                Value<String?> payloadJson = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<bool> processed = const Value.absent(),
+              }) => CloudSyncQueueCompanion.insert(
+                id: id,
+                entityType: entityType,
+                localEntityId: localEntityId,
+                operation: operation,
+                payloadJson: payloadJson,
+                createdAt: createdAt,
+                processed: processed,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CloudSyncQueueTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CloudSyncQueueTable,
+      CloudSyncQueueData,
+      $$CloudSyncQueueTableFilterComposer,
+      $$CloudSyncQueueTableOrderingComposer,
+      $$CloudSyncQueueTableAnnotationComposer,
+      $$CloudSyncQueueTableCreateCompanionBuilder,
+      $$CloudSyncQueueTableUpdateCompanionBuilder,
+      (
+        CloudSyncQueueData,
+        BaseReferences<_$AppDatabase, $CloudSyncQueueTable, CloudSyncQueueData>,
+      ),
+      CloudSyncQueueData,
+      PrefetchHooks Function()
     >;
 
 class $AppDatabaseManager {
@@ -25702,6 +46049,35 @@ class $AppDatabaseManager {
         _db,
         _db.visualBibleLocationRefs,
       );
+  $$MoodboardGroupsTableTableManager get moodboardGroups =>
+      $$MoodboardGroupsTableTableManager(_db, _db.moodboardGroups);
   $$MoodboardImagesTableTableManager get moodboardImages =>
       $$MoodboardImagesTableTableManager(_db, _db.moodboardImages);
+  $$BibleSectionGroupsTableTableManager get bibleSectionGroups =>
+      $$BibleSectionGroupsTableTableManager(_db, _db.bibleSectionGroups);
+  $$BibleSectionDefinitionsTableTableManager get bibleSectionDefinitions =>
+      $$BibleSectionDefinitionsTableTableManager(
+        _db,
+        _db.bibleSectionDefinitions,
+      );
+  $$ExposureBlocksTableTableManager get exposureBlocks =>
+      $$ExposureBlocksTableTableManager(_db, _db.exposureBlocks);
+  $$LightingSetupsTableTableManager get lightingSetups =>
+      $$LightingSetupsTableTableManager(_db, _db.lightingSetups);
+  $$CameraTestsTableTableManager get cameraTests =>
+      $$CameraTestsTableTableManager(_db, _db.cameraTests);
+  $$VisualBibleVersionsTableTableManager get visualBibleVersions =>
+      $$VisualBibleVersionsTableTableManager(_db, _db.visualBibleVersions);
+  $$BibleCommentsTableTableManager get bibleComments =>
+      $$BibleCommentsTableTableManager(_db, _db.bibleComments);
+  $$CatalogSyncMetaTableTableManager get catalogSyncMeta =>
+      $$CatalogSyncMetaTableTableManager(_db, _db.catalogSyncMeta);
+  $$BibleSectionEvidenceTableTableManager get bibleSectionEvidence =>
+      $$BibleSectionEvidenceTableTableManager(_db, _db.bibleSectionEvidence);
+  $$LukaSyncMetaTableTableManager get lukaSyncMeta =>
+      $$LukaSyncMetaTableTableManager(_db, _db.lukaSyncMeta);
+  $$OpticsLabSamplesTableTableManager get opticsLabSamples =>
+      $$OpticsLabSamplesTableTableManager(_db, _db.opticsLabSamples);
+  $$CloudSyncQueueTableTableManager get cloudSyncQueue =>
+      $$CloudSyncQueueTableTableManager(_db, _db.cloudSyncQueue);
 }

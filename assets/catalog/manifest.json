@@ -1,0 +1,8 @@
+{
+  "version": 6,
+  "camerasUrl": "cameras.json",
+  "camerasExpansionUrl": "cameras_expansion.json",
+  "lensesUrl": "lenses.json",
+  "lensesExpansionUrl": "lenses_expansion.json",
+  "lightsUrl": "lights.json"
+}

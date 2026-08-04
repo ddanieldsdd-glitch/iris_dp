@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.2+2
 
 environment:
   sdk: ^3.8.1
@@ -43,13 +43,17 @@ dependencies:
   file_picker: ^8.0.6
   syncfusion_flutter_pdf: ^25.1.41
   syncfusion_flutter_core: ^25.1.41
-  pdfx: ^2.6.0
+  pdf_render_maintained: ^1.6.2
   http: ^1.2.1
   pdf: ^3.10.8
-  printing: ^5.13.1
   google_fonts: ^6.2.1
   share_plus: ^10.0.2
   url_launcher: ^6.3.2
+  excel: ^4.0.6
+  supabase_flutter: ^2.8.0
+  shared_preferences: ^2.3.3
+  connectivity_plus: ^6.1.0
+  package_info_plus: ^8.1.1
 
 dev_dependencies:
   flutter_test:
@@ -72,6 +76,13 @@ flutter:
   assets:
     - assets/fonts/NotoSans-Regular.ttf
     - assets/fonts/NotoSans-Bold.ttf
+    - assets/catalog/manifest.json
+    - assets/catalog/cameras.json
+    - assets/catalog/cameras_expansion.json
+    - assets/catalog/lenses.json
+    - assets/catalog/lenses_expansion.json
+    - assets/catalog/lights.json
+    - assets/luka/manifest.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

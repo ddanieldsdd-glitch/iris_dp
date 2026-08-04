@@ -12,6 +12,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_format.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/scene_meta_display.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
 import '../pdf_export/camera_plan_pdf.dart';
@@ -111,15 +112,16 @@ class CameraPlanScreen extends ConsumerWidget {
               return StreamBuilder<List<LocationBasePlan>>(
                 stream: db.watchLocationsForProject(projectId),
                 builder: (context, locSnap) {
+                  final colors = ProjectColorScheme.resolve(
+                    sites: siteSnap.data ?? [],
+                    sets: locSnap.data ?? [],
+                    scenes: scenes,
+                  );
                   final hierarchy = buildCameraPlanHierarchy(
                     scenes: scenes,
                     sites: siteSnap.data ?? [],
                     allSets: locSnap.data ?? [],
-                  );
-                  final colors = ProjectColorScheme(
-                    sites: siteSnap.data ?? [],
-                    sets: locSnap.data ?? [],
-                    scenes: scenes,
+                    colors: colors,
                   );
 
                   return _CameraPlanBody(
@@ -1300,10 +1302,11 @@ class _SceneSection extends ConsumerWidget {
                       dayNight: scene.dayNight,
                       location: location,
                     ),
-              subtitle: formatSceneMetaLine(
+              subtitleWidget: SceneMetaDisplay(
                 intExt: scene.intExt,
                 dayNight: scene.dayNight,
                 location: location,
+                style: AppTypography.caption(palette),
               ),
               palette: palette,
             ),

@@ -12,6 +12,7 @@ import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_color.dart';
 import '../../core/utils/scene_format.dart';
 import '../../core/widgets/app_button.dart';
+import '../../core/widgets/color_scope_prompt_dialog.dart';
 import '../../core/widgets/scene_color_editor.dart';
 
 const kIntExtOptions = ['INT', 'EXT', 'INT/EXT'];
@@ -43,6 +44,9 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
   int _setsInSite = 0;
   bool _saving = false;
   bool _loadingColor = true;
+  bool _colorCustomizationConfirmed = false;
+  String _linkedSetName = '';
+  String _linkedSiteName = '';
 
   bool get _isEditing => widget.scene != null;
 
@@ -79,7 +83,7 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
     final sites = await db.watchSitesForProject(widget.projectId).first;
     final sets = await db.watchLocationsForProject(widget.projectId).first;
     final scenes = await db.watchScenesForProject(widget.projectId).first;
-    final scheme = ProjectColorScheme(
+    final scheme = ProjectColorScheme.resolve(
       sites: sites,
       sets: sets,
       scenes: scenes,
@@ -121,8 +125,37 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
       }
       _scenesInSet = scenesInSet;
       _setsInSite = setsInSite;
+      _linkedSetName = s.locationPureName;
+      _linkedSiteName = siteName;
+      _colorCustomizationConfirmed = hasOverride;
       _loadingColor = false;
     });
+  }
+
+  Future<void> _onColorChanged(String hex) async {
+    if (!_colorCustomizationConfirmed &&
+        _setsInSite > 1 &&
+        _colorScope != ColorEditScope.scene) {
+      final palette = context.palette;
+      final result = await showSetColorCustomizationDialog(
+        context,
+        palette: palette,
+        setName: _linkedSetName,
+        locationSiteName: _linkedSiteName,
+        initialHex: hex,
+        scenesInSet: _scenesInSet,
+        setsInSite: _setsInSite,
+      );
+      if (!mounted || result == null) return;
+      setState(() {
+        _pickedHex = result.colorHex;
+        _colorScope = result.scope;
+        _colorCustomizationConfirmed = true;
+      });
+      return;
+    }
+
+    setState(() => _pickedHex = hex);
   }
 
   Future<void> _prefillNextNumber() async {
@@ -307,8 +340,11 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
                 scope: _colorScope,
                 scenesInSet: _scenesInSet,
                 setsInSite: _setsInSite,
-                onColorChanged: (hex) => setState(() => _pickedHex = hex),
-                onScopeChanged: (scope) => setState(() => _colorScope = scope),
+                onColorChanged: _onColorChanged,
+                onScopeChanged: (scope) => setState(() {
+                  _colorScope = scope;
+                  _colorCustomizationConfirmed = true;
+                }),
               ),
             const SizedBox(height: AppSpacing.xl),
             AppButton(

@@ -28,8 +28,10 @@ void main() {
           location: 'COCINA',
           shootSet: 'COCINA',
           locationSite: 'CASA',
+          name: null,
           description: null,
           locationColor: '#FF0000',
+          charactersJson: '["MARÍA","GALA"]',
           sourceStartIndex: 100,
         ),
         (
@@ -38,8 +40,10 @@ void main() {
           location: 'CALLE',
           shootSet: 'CALLE',
           locationSite: 'PUEBLO',
+          name: 'La huida',
           description: 'Acción',
           locationColor: null,
+          charactersJson: null,
           sourceStartIndex: 200,
         ),
       ]);
@@ -48,7 +52,9 @@ void main() {
       expect(scenes.length, 2);
       expect(scenes[0].locationPureName, 'COCINA');
       expect(scenes[0].sourceStartIndex, 100);
+      expect(scenes[0].charactersJson, '["MARÍA","GALA"]');
       expect(scenes[1].dayNight, 'NOCHE');
+      expect(scenes[1].name, 'La huida');
     });
 
     test('preserva planos al sincronizar por sourceStartIndex', () async {
@@ -63,8 +69,10 @@ void main() {
           location: 'SALA',
           shootSet: 'SALA',
           locationSite: 'CASA',
+          name: null,
           description: null,
           locationColor: null,
+          charactersJson: null,
           sourceStartIndex: 50,
         ),
       ]);
@@ -86,8 +94,10 @@ void main() {
           location: 'SALA ACTUALIZADA',
           shootSet: 'SALA',
           locationSite: 'CASA',
+          name: null,
           description: null,
           locationColor: null,
+          charactersJson: null,
           sourceStartIndex: 50,
         ),
       ]);
@@ -114,8 +124,10 @@ void main() {
           location: 'A',
           shootSet: 'A',
           locationSite: 'A',
+          name: null,
           description: null,
           locationColor: null,
+          charactersJson: null,
           sourceStartIndex: 1,
         ),
         (
@@ -124,8 +136,10 @@ void main() {
           location: 'B',
           shootSet: 'B',
           locationSite: 'B',
+          name: null,
           description: null,
           locationColor: null,
+          charactersJson: null,
           sourceStartIndex: 2,
         ),
       ]);
@@ -137,8 +151,10 @@ void main() {
           location: 'A',
           shootSet: 'A',
           locationSite: 'A',
+          name: null,
           description: null,
           locationColor: null,
+          charactersJson: null,
           sourceStartIndex: 1,
         ),
       ]);
@@ -161,8 +177,10 @@ void main() {
           location: 'A',
           shootSet: 'A',
           locationSite: 'A',
+          name: null,
           description: null,
           locationColor: null,
+          charactersJson: null,
           sourceStartIndex: 10,
         ),
         (
@@ -171,8 +189,10 @@ void main() {
           location: 'B',
           shootSet: 'B',
           locationSite: 'B',
+          name: null,
           description: null,
           locationColor: null,
+          charactersJson: null,
           sourceStartIndex: 20,
         ),
       ]);
@@ -206,8 +226,10 @@ void main() {
           location: 'A',
           shootSet: 'A',
           locationSite: 'A',
+          name: null,
           description: null,
           locationColor: null,
+          charactersJson: null,
           sourceStartIndex: 10,
         ),
         (
@@ -216,8 +238,10 @@ void main() {
           location: 'B',
           shootSet: 'B',
           locationSite: 'B',
+          name: null,
           description: null,
           locationColor: null,
+          charactersJson: null,
           sourceStartIndex: 20,
         ),
       ]);

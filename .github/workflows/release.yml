@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Dependencies
+        run: |
+          flutter pub get
+          dart run build_runner build --delete-conflicting-outputs
+      - name: Analyze & test
+        run: |
+          flutter analyze --no-fatal-infos
+          flutter test
+      - name: Build macOS
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          flutter build macos --release \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+      - name: Create DMG
+        run: chmod +x scripts/build_macos_dmg.sh && ./scripts/build_macos_dmg.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iris-dp-macos-dmg
+          path: build/dmg/IRIS-DP.dmg
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Dependencies
+        run: |
+          flutter pub get
+          dart run build_runner build --delete-conflicting-outputs
+      - name: Build Windows
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          flutter build windows --release `
+            --dart-define=SUPABASE_URL=$env:SUPABASE_URL `
+            --dart-define=SUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iris-dp-windows
+          path: build/windows/x64/runner/Release/
+
+  publish:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: iris-dp-macos-dmg
+          path: artifacts/macos
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: iris-dp-windows
+          path: artifacts/windows
+
+      - name: Zip Windows build
+        run: |
+          cd artifacts/windows
+          zip -r ../../IRIS-DP-Windows.zip .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/macos/IRIS-DP.dmg
+            IRIS-DP-Windows.zip
+
+      - name: Register release in Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          chmod +x scripts/register_app_release.sh
+          ./scripts/register_app_release.sh \
+            --tag "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --notes "Colores de personajes en guion escaneado y mejoras de sync."
