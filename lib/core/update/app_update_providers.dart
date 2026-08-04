@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../cloud/cloud_providers.dart';
-import 'app_release.dart';
 import 'app_update_checker.dart';
+import 'app_release.dart';
 import 'app_update_store.dart';
 
 /// Estado de comprobación de actualización remota.
@@ -10,11 +10,13 @@ class AppUpdateState {
   final AppRelease? availableRelease;
   final bool checking;
   final String? error;
+  final bool checkCompleted;
 
   const AppUpdateState({
     this.availableRelease,
     this.checking = false,
     this.error,
+    this.checkCompleted = false,
   });
 
   bool get hasUpdate => availableRelease != null;
@@ -25,14 +27,26 @@ class AppUpdateState {
     bool? checking,
     String? error,
     bool clearError = false,
+    bool? checkCompleted,
   }) {
     return AppUpdateState(
       availableRelease:
           clearRelease ? null : (availableRelease ?? this.availableRelease),
       checking: checking ?? this.checking,
       error: clearError ? null : (error ?? this.error),
+      checkCompleted: checkCompleted ?? this.checkCompleted,
     );
   }
+}
+
+/// Aplica el resultado de [checkForAppUpdate] al estado del notifier.
+AppUpdateState applyAppUpdateCheckResult(AppUpdateCheckResult result) {
+  return AppUpdateState(
+    availableRelease: result.availableRelease,
+    checking: false,
+    error: result.error,
+    checkCompleted: true,
+  );
 }
 
 class AppUpdateNotifier extends Notifier<AppUpdateState> {
@@ -46,16 +60,7 @@ class AppUpdateNotifier extends Notifier<AppUpdateState> {
     state = state.copyWith(checking: true, clearError: true);
     final result = await checkForAppUpdate(client: client, force: force);
 
-    if (result.skippedThrottle && !force) {
-      state = state.copyWith(checking: false);
-      return;
-    }
-
-    state = AppUpdateState(
-      availableRelease: result.availableRelease,
-      checking: false,
-      error: result.error,
-    );
+    state = applyAppUpdateCheckResult(result);
   }
 
   Future<void> dismissLater() async {
