@@ -3,10 +3,10 @@
 # GitHub Actions compila macOS + Windows + iPad, crea el Release y registra Supabase.
 #
 # Uso:
-#   ./scripts/release.sh              # sube solo build (+1), tag v1.0.5+11
-#   ./scripts/release.sh 1.0.6        # versión 1.0.6+11 (build +1)
-#   ./scripts/release.sh 1.0.6 12       # versión 1.0.6 build 12 exactos
-#   ./scripts/release.sh --dry-run      # muestra qué haría sin cambiar nada
+#   ./scripts/release.sh              # build +1; si el tag ya existe, sube patch (1.0.6 → 1.0.7)
+#   ./scripts/release.sh 1.0.8        # versión 1.0.8+5 (build +1)
+#   ./scripts/release.sh 1.0.8 12     # versión 1.0.8 build 12 exactos
+#   ./scripts/release.sh --dry-run    # muestra qué haría sin cambiar nada
 #
 # Requisitos (una vez):
 #   - GitHub Secrets: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
@@ -32,13 +32,22 @@ CURRENT="${CURRENT// /}"
 CURRENT_NAME="${CURRENT%%+*}"
 CURRENT_BUILD="${CURRENT##*+}"
 
-NEW_NAME="${ARGS[0]:-$CURRENT_NAME}"
-NEW_BUILD="${ARGS[1]:-$((CURRENT_BUILD + 1))}"
-TAG="v${NEW_NAME}"
-NEW_VERSION="${NEW_NAME}+${NEW_BUILD}"
-
 semver_re='^[0-9]+\.[0-9]+\.[0-9]+$'
 build_re='^[0-9]+$'
+
+bump_patch() {
+  local major minor patch
+  IFS='.' read -r major minor patch <<< "$1"
+  echo "${major}.${minor}.$((patch + 1))"
+}
+
+tag_exists() {
+  git rev-parse "$1" >/dev/null 2>&1
+}
+
+NEW_NAME="${ARGS[0]:-$CURRENT_NAME}"
+NEW_BUILD="${ARGS[1]:-$((CURRENT_BUILD + 1))}"
+AUTO_BUMPED=0
 
 if [[ ! "$CURRENT_NAME" =~ $semver_re || ! "$CURRENT_BUILD" =~ $build_re ]]; then
   echo "✗ pubspec.yaml tiene una versión inválida: ${CURRENT_NAME}+${CURRENT_BUILD}"
@@ -58,10 +67,24 @@ if [[ ! "$NEW_BUILD" =~ $build_re ]]; then
   exit 1
 fi
 
+# Sin versión explícita: si vX.Y.Z ya existe, sube patch hasta encontrar tag libre.
+if [[ ${#ARGS[@]} -eq 0 ]]; then
+  while tag_exists "v${NEW_NAME}"; do
+    NEW_NAME="$(bump_patch "$NEW_NAME")"
+    AUTO_BUMPED=1
+  done
+fi
+
+TAG="v${NEW_NAME}"
+NEW_VERSION="${NEW_NAME}+${NEW_BUILD}"
+
 echo "=== IRIS DP Release ==="
 echo "  Actual:  ${CURRENT_NAME}+${CURRENT_BUILD}"
 echo "  Nueva:   ${NEW_VERSION}"
 echo "  Tag:     ${TAG}"
+if [[ "$AUTO_BUMPED" == "1" ]]; then
+  echo "  Nota:    tag v${CURRENT_NAME} ya existía → versión patch automática"
+fi
 echo ""
 
 if [[ "$DRY_RUN" == "1" ]]; then
@@ -70,8 +93,9 @@ if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
 
-if git rev-parse "$TAG" >/dev/null 2>&1; then
-  echo "✗ El tag ${TAG} ya existe. Elige otra versión."
+if tag_exists "$TAG"; then
+  echo "✗ El tag ${TAG} ya existe. Indica otra versión:"
+  echo "  ./scripts/release.sh 1.0.7"
   exit 1
 fi
 
