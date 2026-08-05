@@ -31,7 +31,7 @@ part 'app_database.g.dart';
   MoodboardImages, BibleSectionGroups, BibleSectionDefinitions, UserTemplates,
   ExposureBlocks, LightingSetups, CameraTests, VisualBibleVersions, BibleComments,
   CatalogSyncMeta, BibleSectionEvidence, LukaSyncMeta, OpticsLabSamples,
-  CloudSyncQueue,
+  CloudSyncQueue, PendingMediaUploads,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -39,7 +39,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 32;
+  int get schemaVersion => 33;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -312,6 +312,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 32) {
             await m.createTable(userTemplates);
+          }
+          if (from < 33) {
+            await m.createTable(pendingMediaUploads);
           }
         },
       );

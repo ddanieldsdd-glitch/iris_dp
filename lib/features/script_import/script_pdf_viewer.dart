@@ -29,8 +29,8 @@ class ScriptPdfViewer extends StatelessWidget {
 
     return ColoredBox(
       color: const Color(0xFF525659),
-      child: PdfRenderView.file(
-        file,
+      child: PdfViewer.openFile(
+        path,
         params: const PdfViewerParams(
           padding: AppSpacing.md,
           minScale: 1.0,

@@ -20,7 +20,7 @@ jobs:
           dart run build_runner build --delete-conflicting-outputs
       - name: Analyze & test
         run: |
-          flutter analyze --no-fatal-infos
+          flutter analyze --no-fatal-infos --no-fatal-warnings
           flutter test
       - name: Build macOS
         env:

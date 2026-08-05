@@ -665,3 +665,22 @@ class OpticsLabSamples extends Table {
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
+
+/// Cola local de subidas pendientes a Cloudinary.
+class PendingMediaUploads extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  TextColumn get projectCloudId => text().nullable()();
+  TextColumn get entityType => text()();
+  TextColumn get entityKey => text()();
+  TextColumn get localPath => text()();
+  TextColumn get publicId => text().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  IntColumn get priority => integer().withDefault(const Constant(0))();
+  IntColumn get retries => integer().withDefault(const Constant(0))();
+  TextColumn get source => text().nullable()();
+  TextColumn get lastError => text().nullable()();
+  TextColumn get status =>
+      text().withDefault(const Constant('pending'))(); // pending|processing|done|failed
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
