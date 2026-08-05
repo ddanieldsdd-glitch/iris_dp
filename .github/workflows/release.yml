@@ -26,10 +26,14 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
         run: |
           flutter build macos --release \
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
-            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=CLOUDINARY_CLOUD_NAME=$CLOUDINARY_CLOUD_NAME \
+            --dart-define=CLOUDINARY_UPLOAD_PRESET=$CLOUDINARY_UPLOAD_PRESET
       - name: Create DMG
         env:
           SKIP_FLUTTER_BUILD: "1"
@@ -38,10 +42,14 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
         run: |
           flutter build ios --release --no-codesign --no-tree-shake-icons \
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
-            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=CLOUDINARY_CLOUD_NAME=$CLOUDINARY_CLOUD_NAME \
+            --dart-define=CLOUDINARY_UPLOAD_PRESET=$CLOUDINARY_UPLOAD_PRESET
           chmod +x scripts/package_unsigned_ipa.sh
           ./scripts/package_unsigned_ipa.sh
       - uses: actions/upload-artifact@v4
@@ -69,10 +77,14 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
         run: |
           flutter build windows --release `
             --dart-define=SUPABASE_URL=$env:SUPABASE_URL `
-            --dart-define=SUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY
+            --dart-define=SUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY `
+            --dart-define=CLOUDINARY_CLOUD_NAME=$env:CLOUDINARY_CLOUD_NAME `
+            --dart-define=CLOUDINARY_UPLOAD_PRESET=$env:CLOUDINARY_UPLOAD_PRESET
       - uses: actions/upload-artifact@v4
         with:
           name: iris-dp-windows

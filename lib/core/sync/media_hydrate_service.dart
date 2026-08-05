@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:drift/drift.dart' show Value, OrderingTerm;
+import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 
 import '../database/app_database.dart';

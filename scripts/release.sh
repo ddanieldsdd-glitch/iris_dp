@@ -107,8 +107,10 @@ if tag_exists "$TAG"; then
 fi
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "→ Hay cambios sin commit en el repo (no se incluyen automáticamente)."
-  echo "  Haz commit antes del release si quieres que entren en el build."
+  echo "✗ Hay cambios sin commit."
+  echo "  El release solo sube pubspec.yaml — el código del build debe estar en main antes."
+  echo "  Haz: git add -A && git commit -m '...' && git push origin main"
+  exit 1
 fi
 
 # Actualizar pubspec.yaml

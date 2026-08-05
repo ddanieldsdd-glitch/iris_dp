@@ -5,6 +5,7 @@ import '../cloud/cloud_providers.dart';
 import '../cloud/cloud_session.dart';
 import '../cloud/supabase_config.dart';
 import '../sync/pending_sync_queue_provider.dart';
+import '../sync/media_sync_providers.dart';
 import '../sync/sync_engine.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
@@ -66,6 +67,15 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
     }
 
     final pendingCount = ref.watch(pendingSyncQueueCountProvider);
+    final mediaProgress = ref.watch(mediaUploadProgressProvider);
+    final mediaPending = mediaProgress.maybeWhen(
+      data: (p) => p.pending,
+      orElse: () => 0,
+    );
+    final mediaUploading = mediaProgress.maybeWhen(
+      data: (p) => p.isProcessing,
+      orElse: () => false,
+    );
 
     return FutureBuilder<String?>(
       future: CloudSessionStore.userRole(),
@@ -78,7 +88,7 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
           builder: (context, syncSnap) {
             final lastSync = syncSnap.data;
             final queueCount = pendingCount.valueOrNull ?? 0;
-            final hasPending = queueCount > 0;
+            final hasPending = queueCount > 0 || mediaPending > 0;
             final iconColor = hasPending
                 ? context.palette.warning
                 : context.palette.success;
@@ -90,8 +100,11 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
                   ? 'Última sync: ahora'
                   : 'Última sync: hace $mins min';
             }
-            if (hasPending) {
-              tooltip += ' · $queueCount pendiente(s)';
+            if (queueCount > 0) {
+              tooltip += ' · $queueCount cambio(s) pendiente(s)';
+            }
+            if (mediaPending > 0) {
+              tooltip += ' · ↑$mediaPending img en cola';
             }
 
             return Row(
@@ -110,7 +123,7 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
                   ),
                 IconButton(
                   tooltip: tooltip,
-                  icon: _syncing
+                  icon: _syncing || mediaUploading
                       ? SizedBox(
                           width: 20,
                           height: 20,
@@ -121,7 +134,7 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
                         )
                       : Icon(Icons.cloud_sync_outlined,
                           size: 20, color: iconColor),
-                  onPressed: _syncing ? null : _runSync,
+                  onPressed: (_syncing || mediaUploading) ? null : _runSync,
                 ),
               ],
             );

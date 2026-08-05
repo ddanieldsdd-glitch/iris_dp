@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 
 import '../database/app_database.dart';
+import 'media_entity_keys.dart';
 
 int? bundleInt(dynamic value) {
   if (value == null) return null;
@@ -94,7 +95,7 @@ class ContentSyncSummary {
 
 /// Exporta e importa el contenido completo de un proyecto como JSON.
 class ProjectContentBundle {
-  static const bundleVersion = 1;
+  static const bundleVersion = 2;
 
   static Future<Map<String, dynamic>> export(AppDatabase db, int projectId) async {
     final project = await db.getProject(projectId);
@@ -119,6 +120,10 @@ class ProjectContentBundle {
         siteImages.add({
           'siteKey': siteKeyById[site.id],
           'imagePath': img.imagePath,
+          'mediaKey': MediaEntityKeys.siteImage(
+            siteKey: siteKeyById[site.id]!,
+            sortOrder: img.sortOrder,
+          ),
           'caption': img.caption,
           'kind': img.kind,
           'timeOfDay': img.timeOfDay,
@@ -144,6 +149,10 @@ class ProjectContentBundle {
         locationImages.add({
           'setKey': setKeyById[set.id],
           'imagePath': img.imagePath,
+          'mediaKey': MediaEntityKeys.locationImage(
+            setKey: setKeyById[set.id]!,
+            sortOrder: img.sortOrder,
+          ),
           'caption': img.caption,
           'kind': img.kind,
           'timeOfDay': img.timeOfDay,
@@ -180,6 +189,10 @@ class ProjectContentBundle {
         shotReferences.add({
           'shotKey': shotKeyById[shot.id],
           'imagePath': ref.imagePath,
+          'mediaKey': MediaEntityKeys.shotReference(
+            shotKey: shotKeyById[shot.id]!,
+            sortOrder: ref.sortOrder,
+          ),
           'source': ref.source,
           'sortOrder': ref.sortOrder,
         });
@@ -485,6 +498,11 @@ class ProjectContentBundle {
                 'groupKey': m.groupId != null ? groupKeyById[m.groupId!] : null,
                 'bibleId': m.bibleId,
                 'imagePath': m.imagePath,
+                'mediaKey': MediaEntityKeys.moodboard(
+                  groupKey:
+                      m.groupId != null ? groupKeyById[m.groupId!] : null,
+                  sortOrder: m.sortOrder,
+                ),
                 'source': m.source,
                 'category': m.category,
                 'caption': m.caption,

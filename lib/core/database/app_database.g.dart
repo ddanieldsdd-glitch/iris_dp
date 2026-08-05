@@ -27801,6 +27801,799 @@ class CloudSyncQueueCompanion extends UpdateCompanion<CloudSyncQueueData> {
   }
 }
 
+class $PendingMediaUploadsTable extends PendingMediaUploads
+    with TableInfo<$PendingMediaUploadsTable, PendingMediaUpload> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PendingMediaUploadsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _projectCloudIdMeta = const VerificationMeta(
+    'projectCloudId',
+  );
+  @override
+  late final GeneratedColumn<String> projectCloudId = GeneratedColumn<String>(
+    'project_cloud_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _entityTypeMeta = const VerificationMeta(
+    'entityType',
+  );
+  @override
+  late final GeneratedColumn<String> entityType = GeneratedColumn<String>(
+    'entity_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityKeyMeta = const VerificationMeta(
+    'entityKey',
+  );
+  @override
+  late final GeneratedColumn<String> entityKey = GeneratedColumn<String>(
+    'entity_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localPathMeta = const VerificationMeta(
+    'localPath',
+  );
+  @override
+  late final GeneratedColumn<String> localPath = GeneratedColumn<String>(
+    'local_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _publicIdMeta = const VerificationMeta(
+    'publicId',
+  );
+  @override
+  late final GeneratedColumn<String> publicId = GeneratedColumn<String>(
+    'public_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _priorityMeta = const VerificationMeta(
+    'priority',
+  );
+  @override
+  late final GeneratedColumn<int> priority = GeneratedColumn<int>(
+    'priority',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _retriesMeta = const VerificationMeta(
+    'retries',
+  );
+  @override
+  late final GeneratedColumn<int> retries = GeneratedColumn<int>(
+    'retries',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+    'source',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastErrorMeta = const VerificationMeta(
+    'lastError',
+  );
+  @override
+  late final GeneratedColumn<String> lastError = GeneratedColumn<String>(
+    'last_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    projectId,
+    projectCloudId,
+    entityType,
+    entityKey,
+    localPath,
+    publicId,
+    sortOrder,
+    priority,
+    retries,
+    source,
+    lastError,
+    status,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'pending_media_uploads';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PendingMediaUpload> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('project_cloud_id')) {
+      context.handle(
+        _projectCloudIdMeta,
+        projectCloudId.isAcceptableOrUnknown(
+          data['project_cloud_id']!,
+          _projectCloudIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('entity_type')) {
+      context.handle(
+        _entityTypeMeta,
+        entityType.isAcceptableOrUnknown(data['entity_type']!, _entityTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityTypeMeta);
+    }
+    if (data.containsKey('entity_key')) {
+      context.handle(
+        _entityKeyMeta,
+        entityKey.isAcceptableOrUnknown(data['entity_key']!, _entityKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityKeyMeta);
+    }
+    if (data.containsKey('local_path')) {
+      context.handle(
+        _localPathMeta,
+        localPath.isAcceptableOrUnknown(data['local_path']!, _localPathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localPathMeta);
+    }
+    if (data.containsKey('public_id')) {
+      context.handle(
+        _publicIdMeta,
+        publicId.isAcceptableOrUnknown(data['public_id']!, _publicIdMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('priority')) {
+      context.handle(
+        _priorityMeta,
+        priority.isAcceptableOrUnknown(data['priority']!, _priorityMeta),
+      );
+    }
+    if (data.containsKey('retries')) {
+      context.handle(
+        _retriesMeta,
+        retries.isAcceptableOrUnknown(data['retries']!, _retriesMeta),
+      );
+    }
+    if (data.containsKey('source')) {
+      context.handle(
+        _sourceMeta,
+        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    }
+    if (data.containsKey('last_error')) {
+      context.handle(
+        _lastErrorMeta,
+        lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta),
+      );
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PendingMediaUpload map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PendingMediaUpload(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      projectCloudId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_cloud_id'],
+      ),
+      entityType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_type'],
+      )!,
+      entityKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_key'],
+      )!,
+      localPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_path'],
+      )!,
+      publicId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}public_id'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      priority: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}priority'],
+      )!,
+      retries: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}retries'],
+      )!,
+      source: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source'],
+      ),
+      lastError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error'],
+      ),
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PendingMediaUploadsTable createAlias(String alias) {
+    return $PendingMediaUploadsTable(attachedDatabase, alias);
+  }
+}
+
+class PendingMediaUpload extends DataClass
+    implements Insertable<PendingMediaUpload> {
+  final int id;
+  final int projectId;
+  final String? projectCloudId;
+  final String entityType;
+  final String entityKey;
+  final String localPath;
+  final String? publicId;
+  final int sortOrder;
+  final int priority;
+  final int retries;
+  final String? source;
+  final String? lastError;
+  final String status;
+  final DateTime createdAt;
+  const PendingMediaUpload({
+    required this.id,
+    required this.projectId,
+    this.projectCloudId,
+    required this.entityType,
+    required this.entityKey,
+    required this.localPath,
+    this.publicId,
+    required this.sortOrder,
+    required this.priority,
+    required this.retries,
+    this.source,
+    this.lastError,
+    required this.status,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['project_id'] = Variable<int>(projectId);
+    if (!nullToAbsent || projectCloudId != null) {
+      map['project_cloud_id'] = Variable<String>(projectCloudId);
+    }
+    map['entity_type'] = Variable<String>(entityType);
+    map['entity_key'] = Variable<String>(entityKey);
+    map['local_path'] = Variable<String>(localPath);
+    if (!nullToAbsent || publicId != null) {
+      map['public_id'] = Variable<String>(publicId);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['priority'] = Variable<int>(priority);
+    map['retries'] = Variable<int>(retries);
+    if (!nullToAbsent || source != null) {
+      map['source'] = Variable<String>(source);
+    }
+    if (!nullToAbsent || lastError != null) {
+      map['last_error'] = Variable<String>(lastError);
+    }
+    map['status'] = Variable<String>(status);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  PendingMediaUploadsCompanion toCompanion(bool nullToAbsent) {
+    return PendingMediaUploadsCompanion(
+      id: Value(id),
+      projectId: Value(projectId),
+      projectCloudId: projectCloudId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(projectCloudId),
+      entityType: Value(entityType),
+      entityKey: Value(entityKey),
+      localPath: Value(localPath),
+      publicId: publicId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(publicId),
+      sortOrder: Value(sortOrder),
+      priority: Value(priority),
+      retries: Value(retries),
+      source: source == null && nullToAbsent
+          ? const Value.absent()
+          : Value(source),
+      lastError: lastError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastError),
+      status: Value(status),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory PendingMediaUpload.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PendingMediaUpload(
+      id: serializer.fromJson<int>(json['id']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      projectCloudId: serializer.fromJson<String?>(json['projectCloudId']),
+      entityType: serializer.fromJson<String>(json['entityType']),
+      entityKey: serializer.fromJson<String>(json['entityKey']),
+      localPath: serializer.fromJson<String>(json['localPath']),
+      publicId: serializer.fromJson<String?>(json['publicId']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      priority: serializer.fromJson<int>(json['priority']),
+      retries: serializer.fromJson<int>(json['retries']),
+      source: serializer.fromJson<String?>(json['source']),
+      lastError: serializer.fromJson<String?>(json['lastError']),
+      status: serializer.fromJson<String>(json['status']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'projectId': serializer.toJson<int>(projectId),
+      'projectCloudId': serializer.toJson<String?>(projectCloudId),
+      'entityType': serializer.toJson<String>(entityType),
+      'entityKey': serializer.toJson<String>(entityKey),
+      'localPath': serializer.toJson<String>(localPath),
+      'publicId': serializer.toJson<String?>(publicId),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'priority': serializer.toJson<int>(priority),
+      'retries': serializer.toJson<int>(retries),
+      'source': serializer.toJson<String?>(source),
+      'lastError': serializer.toJson<String?>(lastError),
+      'status': serializer.toJson<String>(status),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  PendingMediaUpload copyWith({
+    int? id,
+    int? projectId,
+    Value<String?> projectCloudId = const Value.absent(),
+    String? entityType,
+    String? entityKey,
+    String? localPath,
+    Value<String?> publicId = const Value.absent(),
+    int? sortOrder,
+    int? priority,
+    int? retries,
+    Value<String?> source = const Value.absent(),
+    Value<String?> lastError = const Value.absent(),
+    String? status,
+    DateTime? createdAt,
+  }) => PendingMediaUpload(
+    id: id ?? this.id,
+    projectId: projectId ?? this.projectId,
+    projectCloudId: projectCloudId.present
+        ? projectCloudId.value
+        : this.projectCloudId,
+    entityType: entityType ?? this.entityType,
+    entityKey: entityKey ?? this.entityKey,
+    localPath: localPath ?? this.localPath,
+    publicId: publicId.present ? publicId.value : this.publicId,
+    sortOrder: sortOrder ?? this.sortOrder,
+    priority: priority ?? this.priority,
+    retries: retries ?? this.retries,
+    source: source.present ? source.value : this.source,
+    lastError: lastError.present ? lastError.value : this.lastError,
+    status: status ?? this.status,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  PendingMediaUpload copyWithCompanion(PendingMediaUploadsCompanion data) {
+    return PendingMediaUpload(
+      id: data.id.present ? data.id.value : this.id,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      projectCloudId: data.projectCloudId.present
+          ? data.projectCloudId.value
+          : this.projectCloudId,
+      entityType: data.entityType.present
+          ? data.entityType.value
+          : this.entityType,
+      entityKey: data.entityKey.present ? data.entityKey.value : this.entityKey,
+      localPath: data.localPath.present ? data.localPath.value : this.localPath,
+      publicId: data.publicId.present ? data.publicId.value : this.publicId,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      priority: data.priority.present ? data.priority.value : this.priority,
+      retries: data.retries.present ? data.retries.value : this.retries,
+      source: data.source.present ? data.source.value : this.source,
+      lastError: data.lastError.present ? data.lastError.value : this.lastError,
+      status: data.status.present ? data.status.value : this.status,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PendingMediaUpload(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('projectCloudId: $projectCloudId, ')
+          ..write('entityType: $entityType, ')
+          ..write('entityKey: $entityKey, ')
+          ..write('localPath: $localPath, ')
+          ..write('publicId: $publicId, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('priority: $priority, ')
+          ..write('retries: $retries, ')
+          ..write('source: $source, ')
+          ..write('lastError: $lastError, ')
+          ..write('status: $status, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    projectId,
+    projectCloudId,
+    entityType,
+    entityKey,
+    localPath,
+    publicId,
+    sortOrder,
+    priority,
+    retries,
+    source,
+    lastError,
+    status,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PendingMediaUpload &&
+          other.id == this.id &&
+          other.projectId == this.projectId &&
+          other.projectCloudId == this.projectCloudId &&
+          other.entityType == this.entityType &&
+          other.entityKey == this.entityKey &&
+          other.localPath == this.localPath &&
+          other.publicId == this.publicId &&
+          other.sortOrder == this.sortOrder &&
+          other.priority == this.priority &&
+          other.retries == this.retries &&
+          other.source == this.source &&
+          other.lastError == this.lastError &&
+          other.status == this.status &&
+          other.createdAt == this.createdAt);
+}
+
+class PendingMediaUploadsCompanion extends UpdateCompanion<PendingMediaUpload> {
+  final Value<int> id;
+  final Value<int> projectId;
+  final Value<String?> projectCloudId;
+  final Value<String> entityType;
+  final Value<String> entityKey;
+  final Value<String> localPath;
+  final Value<String?> publicId;
+  final Value<int> sortOrder;
+  final Value<int> priority;
+  final Value<int> retries;
+  final Value<String?> source;
+  final Value<String?> lastError;
+  final Value<String> status;
+  final Value<DateTime> createdAt;
+  const PendingMediaUploadsCompanion({
+    this.id = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.projectCloudId = const Value.absent(),
+    this.entityType = const Value.absent(),
+    this.entityKey = const Value.absent(),
+    this.localPath = const Value.absent(),
+    this.publicId = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.priority = const Value.absent(),
+    this.retries = const Value.absent(),
+    this.source = const Value.absent(),
+    this.lastError = const Value.absent(),
+    this.status = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  PendingMediaUploadsCompanion.insert({
+    this.id = const Value.absent(),
+    required int projectId,
+    this.projectCloudId = const Value.absent(),
+    required String entityType,
+    required String entityKey,
+    required String localPath,
+    this.publicId = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.priority = const Value.absent(),
+    this.retries = const Value.absent(),
+    this.source = const Value.absent(),
+    this.lastError = const Value.absent(),
+    this.status = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : projectId = Value(projectId),
+       entityType = Value(entityType),
+       entityKey = Value(entityKey),
+       localPath = Value(localPath);
+  static Insertable<PendingMediaUpload> custom({
+    Expression<int>? id,
+    Expression<int>? projectId,
+    Expression<String>? projectCloudId,
+    Expression<String>? entityType,
+    Expression<String>? entityKey,
+    Expression<String>? localPath,
+    Expression<String>? publicId,
+    Expression<int>? sortOrder,
+    Expression<int>? priority,
+    Expression<int>? retries,
+    Expression<String>? source,
+    Expression<String>? lastError,
+    Expression<String>? status,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (projectId != null) 'project_id': projectId,
+      if (projectCloudId != null) 'project_cloud_id': projectCloudId,
+      if (entityType != null) 'entity_type': entityType,
+      if (entityKey != null) 'entity_key': entityKey,
+      if (localPath != null) 'local_path': localPath,
+      if (publicId != null) 'public_id': publicId,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (priority != null) 'priority': priority,
+      if (retries != null) 'retries': retries,
+      if (source != null) 'source': source,
+      if (lastError != null) 'last_error': lastError,
+      if (status != null) 'status': status,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  PendingMediaUploadsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? projectId,
+    Value<String?>? projectCloudId,
+    Value<String>? entityType,
+    Value<String>? entityKey,
+    Value<String>? localPath,
+    Value<String?>? publicId,
+    Value<int>? sortOrder,
+    Value<int>? priority,
+    Value<int>? retries,
+    Value<String?>? source,
+    Value<String?>? lastError,
+    Value<String>? status,
+    Value<DateTime>? createdAt,
+  }) {
+    return PendingMediaUploadsCompanion(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      projectCloudId: projectCloudId ?? this.projectCloudId,
+      entityType: entityType ?? this.entityType,
+      entityKey: entityKey ?? this.entityKey,
+      localPath: localPath ?? this.localPath,
+      publicId: publicId ?? this.publicId,
+      sortOrder: sortOrder ?? this.sortOrder,
+      priority: priority ?? this.priority,
+      retries: retries ?? this.retries,
+      source: source ?? this.source,
+      lastError: lastError ?? this.lastError,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (projectCloudId.present) {
+      map['project_cloud_id'] = Variable<String>(projectCloudId.value);
+    }
+    if (entityType.present) {
+      map['entity_type'] = Variable<String>(entityType.value);
+    }
+    if (entityKey.present) {
+      map['entity_key'] = Variable<String>(entityKey.value);
+    }
+    if (localPath.present) {
+      map['local_path'] = Variable<String>(localPath.value);
+    }
+    if (publicId.present) {
+      map['public_id'] = Variable<String>(publicId.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (priority.present) {
+      map['priority'] = Variable<int>(priority.value);
+    }
+    if (retries.present) {
+      map['retries'] = Variable<int>(retries.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (lastError.present) {
+      map['last_error'] = Variable<String>(lastError.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PendingMediaUploadsCompanion(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('projectCloudId: $projectCloudId, ')
+          ..write('entityType: $entityType, ')
+          ..write('entityKey: $entityKey, ')
+          ..write('localPath: $localPath, ')
+          ..write('publicId: $publicId, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('priority: $priority, ')
+          ..write('retries: $retries, ')
+          ..write('source: $source, ')
+          ..write('lastError: $lastError, ')
+          ..write('status: $status, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -27863,6 +28656,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this,
   );
   late final $CloudSyncQueueTable cloudSyncQueue = $CloudSyncQueueTable(this);
+  late final $PendingMediaUploadsTable pendingMediaUploads =
+      $PendingMediaUploadsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -27905,6 +28700,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     lukaSyncMeta,
     opticsLabSamples,
     cloudSyncQueue,
+    pendingMediaUploads,
   ];
 }
 
@@ -28498,6 +29294,33 @@ final class $$ProjectsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<
+    $PendingMediaUploadsTable,
+    List<PendingMediaUpload>
+  >
+  _pendingMediaUploadsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.pendingMediaUploads,
+        aliasName: $_aliasNameGenerator(
+          db.projects.id,
+          db.pendingMediaUploads.projectId,
+        ),
+      );
+
+  $$PendingMediaUploadsTableProcessedTableManager get pendingMediaUploadsRefs {
+    final manager = $$PendingMediaUploadsTableTableManager(
+      $_db,
+      $_db.pendingMediaUploads,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _pendingMediaUploadsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ProjectsTableFilterComposer
@@ -28923,6 +29746,31 @@ class $$ProjectsTableFilterComposer
           }) => $$OpticsLabSamplesTableFilterComposer(
             $db: $db,
             $table: $db.opticsLabSamples,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> pendingMediaUploadsRefs(
+    Expression<bool> Function($$PendingMediaUploadsTableFilterComposer f) f,
+  ) {
+    final $$PendingMediaUploadsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.pendingMediaUploads,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PendingMediaUploadsTableFilterComposer(
+            $db: $db,
+            $table: $db.pendingMediaUploads,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -29481,6 +30329,32 @@ class $$ProjectsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> pendingMediaUploadsRefs<T extends Object>(
+    Expression<T> Function($$PendingMediaUploadsTableAnnotationComposer a) f,
+  ) {
+    final $$PendingMediaUploadsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.pendingMediaUploads,
+          getReferencedColumn: (t) => t.projectId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$PendingMediaUploadsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.pendingMediaUploads,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$ProjectsTableTableManager
@@ -29510,6 +30384,7 @@ class $$ProjectsTableTableManager
             bool moodboardGroupsRefs,
             bool moodboardImagesRefs,
             bool opticsLabSamplesRefs,
+            bool pendingMediaUploadsRefs,
           })
         > {
   $$ProjectsTableTableManager(_$AppDatabase db, $ProjectsTable table)
@@ -29638,6 +30513,7 @@ class $$ProjectsTableTableManager
                 moodboardGroupsRefs = false,
                 moodboardImagesRefs = false,
                 opticsLabSamplesRefs = false,
+                pendingMediaUploadsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -29654,6 +30530,7 @@ class $$ProjectsTableTableManager
                     if (moodboardGroupsRefs) db.moodboardGroups,
                     if (moodboardImagesRefs) db.moodboardImages,
                     if (opticsLabSamplesRefs) db.opticsLabSamples,
+                    if (pendingMediaUploadsRefs) db.pendingMediaUploads,
                   ],
                   addJoins:
                       <
@@ -29941,6 +30818,27 @@ class $$ProjectsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (pendingMediaUploadsRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          PendingMediaUpload
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._pendingMediaUploadsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).pendingMediaUploadsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -29975,6 +30873,7 @@ typedef $$ProjectsTableProcessedTableManager =
         bool moodboardGroupsRefs,
         bool moodboardImagesRefs,
         bool opticsLabSamplesRefs,
+        bool pendingMediaUploadsRefs,
       })
     >;
 typedef $$LocationSitesTableCreateCompanionBuilder =
@@ -50185,6 +51084,513 @@ typedef $$CloudSyncQueueTableProcessedTableManager =
       CloudSyncQueueData,
       PrefetchHooks Function()
     >;
+typedef $$PendingMediaUploadsTableCreateCompanionBuilder =
+    PendingMediaUploadsCompanion Function({
+      Value<int> id,
+      required int projectId,
+      Value<String?> projectCloudId,
+      required String entityType,
+      required String entityKey,
+      required String localPath,
+      Value<String?> publicId,
+      Value<int> sortOrder,
+      Value<int> priority,
+      Value<int> retries,
+      Value<String?> source,
+      Value<String?> lastError,
+      Value<String> status,
+      Value<DateTime> createdAt,
+    });
+typedef $$PendingMediaUploadsTableUpdateCompanionBuilder =
+    PendingMediaUploadsCompanion Function({
+      Value<int> id,
+      Value<int> projectId,
+      Value<String?> projectCloudId,
+      Value<String> entityType,
+      Value<String> entityKey,
+      Value<String> localPath,
+      Value<String?> publicId,
+      Value<int> sortOrder,
+      Value<int> priority,
+      Value<int> retries,
+      Value<String?> source,
+      Value<String?> lastError,
+      Value<String> status,
+      Value<DateTime> createdAt,
+    });
+
+final class $$PendingMediaUploadsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $PendingMediaUploadsTable,
+          PendingMediaUpload
+        > {
+  $$PendingMediaUploadsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.pendingMediaUploads.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$PendingMediaUploadsTableFilterComposer
+    extends Composer<_$AppDatabase, $PendingMediaUploadsTable> {
+  $$PendingMediaUploadsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectCloudId => $composableBuilder(
+    column: $table.projectCloudId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityKey => $composableBuilder(
+    column: $table.entityKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localPath => $composableBuilder(
+    column: $table.localPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get publicId => $composableBuilder(
+    column: $table.publicId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get retries => $composableBuilder(
+    column: $table.retries,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PendingMediaUploadsTableOrderingComposer
+    extends Composer<_$AppDatabase, $PendingMediaUploadsTable> {
+  $$PendingMediaUploadsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get projectCloudId => $composableBuilder(
+    column: $table.projectCloudId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityKey => $composableBuilder(
+    column: $table.entityKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localPath => $composableBuilder(
+    column: $table.localPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get publicId => $composableBuilder(
+    column: $table.publicId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get retries => $composableBuilder(
+    column: $table.retries,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PendingMediaUploadsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PendingMediaUploadsTable> {
+  $$PendingMediaUploadsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get projectCloudId => $composableBuilder(
+    column: $table.projectCloudId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get entityKey =>
+      $composableBuilder(column: $table.entityKey, builder: (column) => column);
+
+  GeneratedColumn<String> get localPath =>
+      $composableBuilder(column: $table.localPath, builder: (column) => column);
+
+  GeneratedColumn<String> get publicId =>
+      $composableBuilder(column: $table.publicId, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<int> get priority =>
+      $composableBuilder(column: $table.priority, builder: (column) => column);
+
+  GeneratedColumn<int> get retries =>
+      $composableBuilder(column: $table.retries, builder: (column) => column);
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<String> get lastError =>
+      $composableBuilder(column: $table.lastError, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PendingMediaUploadsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PendingMediaUploadsTable,
+          PendingMediaUpload,
+          $$PendingMediaUploadsTableFilterComposer,
+          $$PendingMediaUploadsTableOrderingComposer,
+          $$PendingMediaUploadsTableAnnotationComposer,
+          $$PendingMediaUploadsTableCreateCompanionBuilder,
+          $$PendingMediaUploadsTableUpdateCompanionBuilder,
+          (PendingMediaUpload, $$PendingMediaUploadsTableReferences),
+          PendingMediaUpload,
+          PrefetchHooks Function({bool projectId})
+        > {
+  $$PendingMediaUploadsTableTableManager(
+    _$AppDatabase db,
+    $PendingMediaUploadsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PendingMediaUploadsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PendingMediaUploadsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$PendingMediaUploadsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<String?> projectCloudId = const Value.absent(),
+                Value<String> entityType = const Value.absent(),
+                Value<String> entityKey = const Value.absent(),
+                Value<String> localPath = const Value.absent(),
+                Value<String?> publicId = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<int> priority = const Value.absent(),
+                Value<int> retries = const Value.absent(),
+                Value<String?> source = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => PendingMediaUploadsCompanion(
+                id: id,
+                projectId: projectId,
+                projectCloudId: projectCloudId,
+                entityType: entityType,
+                entityKey: entityKey,
+                localPath: localPath,
+                publicId: publicId,
+                sortOrder: sortOrder,
+                priority: priority,
+                retries: retries,
+                source: source,
+                lastError: lastError,
+                status: status,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int projectId,
+                Value<String?> projectCloudId = const Value.absent(),
+                required String entityType,
+                required String entityKey,
+                required String localPath,
+                Value<String?> publicId = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<int> priority = const Value.absent(),
+                Value<int> retries = const Value.absent(),
+                Value<String?> source = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => PendingMediaUploadsCompanion.insert(
+                id: id,
+                projectId: projectId,
+                projectCloudId: projectCloudId,
+                entityType: entityType,
+                entityKey: entityKey,
+                localPath: localPath,
+                publicId: publicId,
+                sortOrder: sortOrder,
+                priority: priority,
+                retries: retries,
+                source: source,
+                lastError: lastError,
+                status: status,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$PendingMediaUploadsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({projectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (projectId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.projectId,
+                                referencedTable:
+                                    $$PendingMediaUploadsTableReferences
+                                        ._projectIdTable(db),
+                                referencedColumn:
+                                    $$PendingMediaUploadsTableReferences
+                                        ._projectIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$PendingMediaUploadsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PendingMediaUploadsTable,
+      PendingMediaUpload,
+      $$PendingMediaUploadsTableFilterComposer,
+      $$PendingMediaUploadsTableOrderingComposer,
+      $$PendingMediaUploadsTableAnnotationComposer,
+      $$PendingMediaUploadsTableCreateCompanionBuilder,
+      $$PendingMediaUploadsTableUpdateCompanionBuilder,
+      (PendingMediaUpload, $$PendingMediaUploadsTableReferences),
+      PendingMediaUpload,
+      PrefetchHooks Function({bool projectId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -50272,4 +51678,6 @@ class $AppDatabaseManager {
       $$OpticsLabSamplesTableTableManager(_db, _db.opticsLabSamples);
   $$CloudSyncQueueTableTableManager get cloudSyncQueue =>
       $$CloudSyncQueueTableTableManager(_db, _db.cloudSyncQueue);
+  $$PendingMediaUploadsTableTableManager get pendingMediaUploads =>
+      $$PendingMediaUploadsTableTableManager(_db, _db.pendingMediaUploads);
 }

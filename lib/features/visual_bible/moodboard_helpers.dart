@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/database/app_database.dart';
+import '../../core/sync/media_sync_bridge.dart';
 import '../../core/utils/clipboard_image_reader.dart';
 import '../../core/utils/media_storage.dart';
 import 'moodboard_association.dart';
@@ -29,7 +30,7 @@ abstract final class MoodboardHelpers {
       bytes: bytes,
       fileName: 'paste_${DateTime.now().millisecondsSinceEpoch}$extension',
     );
-    await db.insertMoodboardImage(
+    final id = await db.insertMoodboardImage(
       MoodboardImagesCompanion.insert(
         projectId: projectId,
         bibleId: Value(bibleId),
@@ -37,6 +38,11 @@ abstract final class MoodboardHelpers {
         category: Value(category),
         source: const Value(MoodboardSource.manual),
       ),
+    );
+    await MediaSyncBridge.enqueueMoodboardImage(
+      db: db,
+      projectId: projectId,
+      imageId: id,
     );
   }
 
@@ -58,7 +64,7 @@ abstract final class MoodboardHelpers {
     );
     final category =
         MoodboardAssociation.deriveCategoryFromSections(assignedSections);
-    await db.insertMoodboardImage(
+    final id = await db.insertMoodboardImage(
       MoodboardImagesCompanion.insert(
         projectId: projectId,
         bibleId: Value(bibleId),
@@ -71,6 +77,11 @@ abstract final class MoodboardHelpers {
         linkedLocationName: Value(linkedLocationName),
         linkedLocationBasePlanId: Value(linkedLocationBasePlanId),
       ),
+    );
+    await MediaSyncBridge.enqueueMoodboardImage(
+      db: db,
+      projectId: projectId,
+      imageId: id,
     );
   }
 

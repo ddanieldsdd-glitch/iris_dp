@@ -33,17 +33,27 @@ Future<void> markAppUpdatedAndSync(BuildContext context, WidgetRef ref) async {
 }
 
 Future<void> _downloadIpa(BuildContext context, AppRelease release) async {
-  await openAppReleaseDownload(release.downloadUrl);
-  await SideStoreInstallStore.markInstalledNow();
-  if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Descarga iniciada. Abre el archivo con SideStore cuando termine.',
-        ),
-      ),
-    );
-  }
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) => _UpdateDownloadDialog(
+      release: release,
+      onComplete: (path) async {
+        await SideStoreInstallStore.markInstalledNow();
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'IPA descargado en ${path.split('/').last}. '
+                'Ábrelo con SideStore desde Archivos.',
+              ),
+            ),
+          );
+        }
+      },
+    ),
+  );
 }
 
 Future<void> _runDesktopUpdate(
@@ -66,8 +76,12 @@ Future<void> _runDesktopUpdate(
 
 class _UpdateDownloadDialog extends StatefulWidget {
   final AppRelease release;
+  final void Function(String path)? onComplete;
 
-  const _UpdateDownloadDialog({required this.release});
+  const _UpdateDownloadDialog({
+    required this.release,
+    this.onComplete,
+  });
 
   @override
   State<_UpdateDownloadDialog> createState() => _UpdateDownloadDialogState();
@@ -94,6 +108,13 @@ class _UpdateDownloadDialogState extends State<_UpdateDownloadDialog> {
       );
       if (!mounted) return;
       setState(() => _status = 'Abriendo instalador…');
+      if (widget.onComplete != null) {
+        if (mounted) {
+          Navigator.of(context).pop();
+          widget.onComplete!(path);
+        }
+        return;
+      }
       await launchDownloadedUpdate(path);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {

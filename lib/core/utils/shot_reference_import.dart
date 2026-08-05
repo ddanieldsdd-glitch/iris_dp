@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:drift/drift.dart' show Value;
 
 import '../database/app_database.dart';
+import '../sync/media_sync_bridge.dart';
 import 'export_file_saver.dart';
 import 'media_storage.dart';
 
@@ -52,6 +53,12 @@ Future<String> importShotReferenceImage({
   );
 
   await db.updateShot(shot.copyWith(referenceImagePath: Value(stored)));
+
+  final queue = MediaSyncBridge.uploadQueue;
+  if (queue != null) {
+    await queue.scanAndEnqueueProject(shot.projectId);
+  }
+
   return stored;
 }
 

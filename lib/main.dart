@@ -6,6 +6,7 @@ import 'core/cloud/connectivity_gate.dart';
 import 'core/storage/app_lifecycle_persistence.dart';
 import 'core/storage/app_storage_config.dart';
 import 'core/storage/storage_relocation_gate.dart';
+import 'core/sync/media_sync_binder.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_provider.dart';
 import 'core/update/app_update_gate.dart';
@@ -44,7 +45,9 @@ class IrisDPApp extends ConsumerWidget {
             child: StorageRelocationGate(
               child: ConnectivityGate(
                 child: AppUpdateGate(
-                  child: OnboardingGate(),
+                  child: MediaSyncBinder(
+                    child: OnboardingGate(),
+                  ),
                 ),
               ),
             ),

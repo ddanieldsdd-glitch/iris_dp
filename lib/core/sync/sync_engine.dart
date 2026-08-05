@@ -5,7 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../cloud/cloud_providers.dart';
 import '../cloud/cloud_session.dart';
 import '../database/database_provider.dart';
-import 'media_sync_service.dart';
+import 'media_hydrate_service.dart';
+import 'media_sync_providers.dart';
+import 'media_upload_queue.dart';
 import 'project_content_sync_service.dart';
 import 'project_sync_service.dart';
 import 'sync_conflict_resolution_sheet.dart';
@@ -26,11 +28,9 @@ class SyncEngine {
     return ProjectSyncService(_ref.read(databaseProvider), client);
   }
 
-  MediaSyncService? get _media {
-    final client = _ref.read(supabaseClientProvider);
-    if (client == null) return null;
-    return MediaSyncService(client);
-  }
+  MediaUploadQueue? get _uploadQueue => _ref.read(mediaUploadQueueProvider);
+
+  MediaHydrateService? get _hydrate => _ref.read(mediaHydrateServiceProvider);
 
   SupabaseClient? get _client => _ref.read(supabaseClientProvider);
 
@@ -104,7 +104,9 @@ class SyncEngine {
         pulled: base.pulled,
         deleted: base.deleted,
         invitationsAccepted: base.invitationsAccepted,
-        mediaSynced: base.mediaSynced,
+            mediaUploaded: base.mediaUploaded,
+            mediaDownloaded: base.mediaDownloaded,
+            bytesSaved: base.bytesSaved,
         message: _successMessage(base),
       );
     }
@@ -115,7 +117,9 @@ class SyncEngine {
       pulled: result?.pulled ?? 0,
       deleted: result?.deleted ?? 0,
       invitationsAccepted: result?.invitationsAccepted ?? 0,
-      mediaSynced: result?.mediaSynced ?? 0,
+      mediaUploaded: result?.mediaUploaded ?? 0,
+      mediaDownloaded: result?.mediaDownloaded ?? 0,
+      bytesSaved: result?.bytesSaved ?? 0,
       message:
           'Aplicado, pero quedan ${remaining.items.length} diferencias. Revisa de nuevo.',
       pendingReview: true,
@@ -138,8 +142,11 @@ class SyncEngine {
     if (result.pushed + result.pulled + result.deleted > 0) {
       parts.add('↑${result.pushed} ↓${result.pulled}');
     }
-    if (result.mediaSynced > 0) {
-      parts.add('${result.mediaSynced} imágenes');
+    if (result.mediaUploaded + result.mediaDownloaded > 0) {
+      parts.add('↑${result.mediaUploaded} ↓${result.mediaDownloaded} img');
+    }
+    if (result.bytesSaved > 0) {
+      parts.add('${(result.bytesSaved / 1024 / 1024).toStringAsFixed(1)} MB ahorrados');
     }
     return parts.join(' · ');
   }
@@ -223,19 +230,22 @@ class SyncEngine {
     final inviteService = ProjectInviteService(_client!);
     final accepted = await inviteService.acceptPendingInvitations();
 
-    var mediaSynced = 0;
-    final media = _media;
-    if (media != null) {
+    var mediaUploaded = 0;
+    var mediaDownloaded = 0;
+    var bytesSaved = 0;
+
+    final uploadQueue = _uploadQueue;
+    final hydrate = _hydrate;
+    if (uploadQueue != null && hydrate != null) {
       final db = _ref.read(databaseProvider);
       final allProjects = await db.watchProjects().first;
       for (final p in allProjects) {
         if (p.cloudId == null) continue;
-        mediaSynced += await media.syncMoodboardForProject(
-          db: db,
-          localProjectId: p.id,
-          projectCloudId: p.cloudId!,
-        );
+        mediaUploaded += await uploadQueue.scanAndEnqueueProject(p.id);
+        mediaDownloaded += await hydrate.hydrateProject(p.id, p.cloudId!);
       }
+      await uploadQueue.startWorker();
+      bytesSaved = uploadQueue.bytesSavedSession;
     }
 
     final client = _client;
@@ -257,7 +267,9 @@ class SyncEngine {
       pulled: pulled,
       deleted: deleted,
       invitationsAccepted: accepted,
-      mediaSynced: mediaSynced,
+      mediaUploaded: mediaUploaded,
+      mediaDownloaded: mediaDownloaded,
+      bytesSaved: bytesSaved,
     );
   }
 
@@ -270,7 +282,9 @@ class SyncResult {
   final int pulled;
   final int deleted;
   final int invitationsAccepted;
-  final int mediaSynced;
+  final int mediaUploaded;
+  final int mediaDownloaded;
+  final int bytesSaved;
   final String? message;
   final bool pendingReview;
 
@@ -279,10 +293,15 @@ class SyncResult {
     this.pulled = 0,
     this.deleted = 0,
     this.invitationsAccepted = 0,
-    this.mediaSynced = 0,
+    this.mediaUploaded = 0,
+    this.mediaDownloaded = 0,
+    this.bytesSaved = 0,
     this.message,
     this.pendingReview = false,
   });
+
+  /// Compatibilidad con código que usaba [mediaSynced].
+  int get mediaSynced => mediaUploaded + mediaDownloaded;
 
   factory SyncResult.skipped(String reason) =>
       SyncResult(message: reason);

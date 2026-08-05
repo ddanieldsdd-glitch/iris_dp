@@ -11,6 +11,7 @@ import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_theme_toggle.dart';
 import '../update/settings_update_section.dart';
+import 'settings_cloud_storage_section.dart';
 import 'settings_health_section.dart';
 import 'user_templates_settings_section.dart';
 import '../../features/onboarding/app_tutorial_store.dart';
@@ -174,6 +175,8 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
                     );
                   },
                 ),
+                const SizedBox(height: AppSpacing.lg),
+                const SettingsCloudStorageSection(),
                 const SizedBox(height: AppSpacing.lg),
                 const UserTemplatesSettingsSection(),
                 const SizedBox(height: AppSpacing.lg),

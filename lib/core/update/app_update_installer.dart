@@ -61,6 +61,14 @@ Future<String> downloadAppRelease(
 /// Abre el instalador descargado (semi-automático en escritorio).
 Future<void> launchDownloadedUpdate(String filePath) async {
   if (Platform.isMacOS) {
+    if (filePath.toLowerCase().endsWith('.dmg')) {
+      try {
+        await _applyMacOsDmgUpdate(filePath);
+        return;
+      } catch (_) {
+        // Fallback: abrir DMG manualmente
+      }
+    }
     final result = await Process.run('open', [filePath]);
     if (result.exitCode != 0) {
       throw Exception('No se pudo abrir el instalador: ${result.stderr}');
@@ -74,6 +82,71 @@ Future<void> launchDownloadedUpdate(String filePath) async {
   }
 
   throw UnsupportedError('Actualización automática no disponible en esta plataforma');
+}
+
+Future<void> _applyMacOsDmgUpdate(String dmgPath) async {
+  final attach = await Process.run('hdiutil', [
+    'attach',
+    '-nobrowse',
+    '-quiet',
+    dmgPath,
+  ]);
+  if (attach.exitCode != 0) {
+    throw Exception('No se pudo montar el DMG: ${attach.stderr}');
+  }
+
+  final attachOut = attach.stdout.toString();
+  final mountLine = attachOut.split('\n').firstWhere(
+        (l) => l.contains('/Volumes/'),
+        orElse: () => '',
+      );
+  if (mountLine.isEmpty) {
+    throw Exception('No se encontró punto de montaje del DMG');
+  }
+  final mountPath = mountLine.split('\t').last.trim();
+
+  try {
+    final volumeDir = Directory(mountPath);
+    if (!volumeDir.existsSync()) {
+      throw Exception('Volumen no encontrado: $mountPath');
+    }
+
+    Directory? appDir;
+    for (final entity in volumeDir.listSync()) {
+      if (entity is Directory && entity.path.endsWith('.app')) {
+        appDir = entity;
+        break;
+      }
+    }
+    if (appDir == null) {
+      throw Exception('No se encontró .app en el DMG');
+    }
+
+    final exePath = Platform.resolvedExecutable;
+    final currentApp = _macAppBundleDir(exePath);
+    if (currentApp == null) {
+      throw Exception('No se pudo localizar la app en ejecución');
+    }
+
+    await Process.run('rm', ['-rf', currentApp]);
+    final copy = await Process.run('cp', ['-R', appDir.path, currentApp]);
+    if (copy.exitCode != 0) {
+      throw Exception('Error al copiar la app: ${copy.stderr}');
+    }
+
+    await Process.run('open', ['-n', currentApp]);
+    exit(0);
+  } finally {
+    await Process.run('hdiutil', ['detach', mountPath, '-quiet']);
+  }
+}
+
+String? _macAppBundleDir(String executablePath) {
+  var dir = p.dirname(executablePath);
+  while (dir != '/' && !dir.endsWith('.app')) {
+    dir = p.dirname(dir);
+  }
+  return dir.endsWith('.app') ? dir : null;
 }
 
 Future<void> _applyWindowsUpdate(String zipPath) async {

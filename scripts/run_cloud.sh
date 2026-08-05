@@ -24,4 +24,6 @@ echo "   (Cierra la app anterior por completo antes de continuar)"
 # Rebuild limpio para que --dart-define se aplique (hot reload no basta).
 flutter run -d "${1:-macos}" \
   --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-  --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+  --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+  ${CLOUDINARY_CLOUD_NAME:+--dart-define=CLOUDINARY_CLOUD_NAME="$CLOUDINARY_CLOUD_NAME"} \
+  ${CLOUDINARY_UPLOAD_PRESET:+--dart-define=CLOUDINARY_UPLOAD_PRESET="$CLOUDINARY_UPLOAD_PRESET"}

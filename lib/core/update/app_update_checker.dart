@@ -114,7 +114,7 @@ Future<AppUpdateCheckResult> checkForAppUpdate({
   if (!force) {
     final last = await AppUpdateStore.lastCheckAt();
     if (last != null &&
-        DateTime.now().difference(last) < const Duration(hours: 24)) {
+        DateTime.now().difference(last) < const Duration(hours: 6)) {
       final cached = await _resolveCachedUpdate(
         platform,
         localBuild: localBuild,

@@ -45,19 +45,30 @@ abstract final class ClipboardImageReader {
       'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
   static Future<ClipboardImageReadResult> read() async {
-    if (!kIsWeb && Platform.isMacOS) {
+    if (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isIOS)) {
       try {
-        final native = await _readMacClipboard();
+        final native = await _readNativeClipboard();
         if (native != null) return native;
       } on MissingPluginException {
-        return const ClipboardImageReadResult(
-          status: ClipboardImageReadStatus.pluginUnavailable,
-        );
+        if (Platform.isMacOS) {
+          return const ClipboardImageReadResult(
+            status: ClipboardImageReadStatus.pluginUnavailable,
+          );
+        }
       }
     }
 
     final textData = await Clipboard.getData(Clipboard.kTextPlain);
     return _readFromText(textData?.text);
+  }
+
+  static Future<ClipboardImageReadResult?> _readNativeClipboard() async {
+    try {
+      final raw = await _macChannel.invokeMethod<Object?>('readClipboard');
+      return _parseNativeClipboardMap(raw);
+    } on PlatformException {
+      return null;
+    }
   }
 
   static Future<ClipboardImageReadResult> _readFromText(String? text) async {
@@ -161,42 +172,42 @@ abstract final class ClipboardImageReader {
     return extractHttpUrl(trimmed);
   }
 
-  static Future<ClipboardImageReadResult?> _readMacClipboard() async {
-    try {
-      final raw = await _macChannel.invokeMethod<Object?>('readClipboard');
-      if (raw is! Map) return null;
-      final map = Map<Object?, Object?>.from(raw);
-      final kind = map['kind'] as String?;
+  static Future<ClipboardImageReadResult?> _readMacClipboard() =>
+      _readNativeClipboard();
 
-      final imageResult = await _payloadFromNativeImage(map, kind);
-      if (imageResult != null) return imageResult;
+  static Future<ClipboardImageReadResult?> _parseNativeClipboardMap(
+    Object? raw,
+  ) async {
+    if (raw is! Map) return null;
+    final map = Map<Object?, Object?>.from(raw);
+    final kind = map['kind'] as String?;
 
-      if (kind == 'html') {
-        final html = map['html'] as String?;
-        final url = html != null ? extractImageUrlFromHtml(html) : null;
-        if (url != null) {
-          final downloaded = await _downloadImage(url);
-          if (downloaded != null) {
-            return ClipboardImageReadResult(
-              status: ClipboardImageReadStatus.success,
-              payload: downloaded,
-            );
-          }
-          return const ClipboardImageReadResult(
-            status: ClipboardImageReadStatus.downloadFailed,
+    final imageResult = await _payloadFromNativeImage(map, kind);
+    if (imageResult != null) return imageResult;
+
+    if (kind == 'html') {
+      final html = map['html'] as String?;
+      final url = html != null ? extractImageUrlFromHtml(html) : null;
+      if (url != null) {
+        final downloaded = await _downloadImage(url);
+        if (downloaded != null) {
+          return ClipboardImageReadResult(
+            status: ClipboardImageReadStatus.success,
+            payload: downloaded,
           );
         }
-      }
-      if (kind == 'text') {
-        return _readFromText(map['text'] as String?);
-      }
-      if (kind == 'empty') {
         return const ClipboardImageReadResult(
-          status: ClipboardImageReadStatus.noImage,
+          status: ClipboardImageReadStatus.downloadFailed,
         );
       }
-    } on PlatformException {
-      return null;
+    }
+    if (kind == 'text') {
+      return _readFromText(map['text'] as String?);
+    }
+    if (kind == 'empty') {
+      return const ClipboardImageReadResult(
+        status: ClipboardImageReadStatus.noImage,
+      );
     }
     return null;
   }

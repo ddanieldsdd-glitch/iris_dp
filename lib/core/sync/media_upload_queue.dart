@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:drift/drift.dart' show Value, OrderingTerm;
+import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -469,4 +469,6 @@ class MediaUploadQueue {
   void dispose() {
     _progressController.close();
   }
+
+  int get bytesSavedSession => _bytesSavedSession;
 }
