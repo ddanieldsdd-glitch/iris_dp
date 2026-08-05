@@ -1,12 +1,12 @@
-# Release IRIS DP — macOS + Windows
+# Release IRIS DP — macOS + Windows + iPad
 
 ## Publicación automática (recomendado)
 
-Tag `v*` en GitHub dispara [`.github/workflows/release.yml`](../.github/workflows/release.yml) en la raíz del repo:
+Tag `v*` en GitHub dispara [`.github/workflows/release.yml`](../.github/workflows/release.yml):
 
-1. Build macOS (`.dmg`) y Windows (`.zip`)
-2. Crea **GitHub Release** con los assets
-3. Registra URLs en Supabase (`app_releases`) — aviso automático en la app
+1. Build macOS (`.dmg`), Windows (`.zip`) e iPad (`.ipa` sin firma)
+2. Crea **GitHub Release** con los tres assets
+3. Registra URLs en Supabase (`app_releases` para macos, windows, ipad)
 
 ```bash
 # 1. Bump version en pubspec.yaml
@@ -36,6 +36,26 @@ export SUPABASE_SERVICE_ROLE_KEY=eyJ...
 ./scripts/publish_release.sh v1.0.2 owner/repo
 ```
 
+El script [`scripts/register_app_release.sh`](../scripts/register_app_release.sh) registra tres plataformas:
+
+- `macos` → `IRIS-DP.dmg`
+- `windows` → `IRIS-DP-Windows.zip`
+- `ipad` → `IRIS-DP.ipa`
+
+---
+
+## Actualizador en la app (escritorio)
+
+Mac y Windows pueden actualizar **desde la app** sin abrir GitHub:
+
+1. Banner detecta versión en Supabase
+2. **Actualizar ahora** descarga el asset del Release
+3. macOS: abre el `.dmg` montado
+4. Windows: descomprime, reemplaza archivos y reinicia
+5. **Ya actualicé** dispara sync con la nube
+
+Código: [`lib/core/update/app_update_installer.dart`](../lib/core/update/app_update_installer.dart)
+
 ---
 
 ## macOS (.dmg) — build local
@@ -45,7 +65,7 @@ chmod +x scripts/build_macos_dmg.sh
 ./scripts/build_macos_dmg.sh
 ```
 
-### Notarización Apple (App Store / distribución fuera de store)
+### Notarización Apple (opcional, distribución fuera de store)
 
 1. Certificado **Developer ID Application** en Keychain
 2. Firmar: `codesign --deep --force --verify --verbose --sign "Developer ID Application: …" build/macos/Build/Products/Release/iris_dp.app`
@@ -58,22 +78,38 @@ chmod +x scripts/build_macos_dmg.sh
 .\scripts\build_windows.ps1
 ```
 
-Distribuir carpeta `Release` o empaquetar con MSIX / Inno Setup.
+Distribuir `IRIS-DP-Windows.zip` del Release o carpeta `Release`.
 
-## iPad (TestFlight)
+## iPad (SideStore — CI sin firma)
+
+GitHub Actions ejecuta:
 
 ```bash
-flutter build ipa --release \
+flutter build ios --release --no-codesign \
   --dart-define=SUPABASE_URL=... \
   --dart-define=SUPABASE_ANON_KEY=...
+./scripts/package_unsigned_ipa.sh
 ```
 
-Subir con Transporter o `xcrun altool`.
+SideStore re-firma el IPA en cada dispositivo con el Apple ID del usuario.
+
+Build local equivalente:
+
+```bash
+./scripts/build_ipad.sh
+# o
+flutter build ios --release --no-codesign ...
+./scripts/package_unsigned_ipa.sh
+```
+
+### TestFlight (Apple Developer $99/año)
+
+Subir IPA firmado con Transporter o `xcrun altool`.
 
 ## Variables de entorno en CI
 
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY` (registrar `app_releases`; solo CI)
-- `APPLE_CERTIFICATE` / `APPLE_CERTIFICATE_PASSWORD` (macOS)
-- `WINDOWS_CERTIFICATE` (opcional)
+
+No se requieren certificados Apple para el IPA de SideStore (build `--no-codesign`).

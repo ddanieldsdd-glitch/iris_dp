@@ -36,6 +36,7 @@ BUILD="${FULL##*+}"
 
 MACOS_URL="https://github.com/${REPO}/releases/download/${TAG}/IRIS-DP.dmg"
 WIN_URL="https://github.com/${REPO}/releases/download/${TAG}/IRIS-DP-Windows.zip"
+IPAD_URL="https://github.com/${REPO}/releases/download/${TAG}/IRIS-DP.ipa"
 
 notes_json="null"
 if [[ -n "$NOTES" ]]; then
@@ -57,6 +58,13 @@ payload=$(cat <<EOF
     "build_number": ${BUILD},
     "download_url": "${WIN_URL}",
     "release_notes": ${notes_json}
+  },
+  {
+    "platform": "ipad",
+    "version": "${VERSION}",
+    "build_number": ${BUILD},
+    "download_url": "${IPAD_URL}",
+    "release_notes": ${notes_json}
   }
 ]
 EOF
@@ -74,3 +82,4 @@ curl -sf -X POST "${SUPABASE_URL}/rest/v1/app_releases?on_conflict=platform,buil
 echo ""
 echo "✓ macOS: ${MACOS_URL}"
 echo "✓ Windows: ${WIN_URL}"
+echo "✓ iPad: ${IPAD_URL}"

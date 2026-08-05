@@ -31,11 +31,27 @@ jobs:
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
       - name: Create DMG
+        env:
+          SKIP_FLUTTER_BUILD: "1"
         run: chmod +x scripts/build_macos_dmg.sh && ./scripts/build_macos_dmg.sh
+      - name: Build iOS (unsigned IPA for SideStore)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          flutter build ios --release --no-codesign \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+          chmod +x scripts/package_unsigned_ipa.sh
+          ./scripts/package_unsigned_ipa.sh
       - uses: actions/upload-artifact@v4
         with:
           name: iris-dp-macos-dmg
           path: build/dmg/IRIS-DP.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iris-dp-ios-ipa
+          path: build/ios/ipa/IRIS-DP.ipa
 
   build-windows:
     runs-on: windows-latest
@@ -80,6 +96,11 @@ jobs:
           name: iris-dp-windows
           path: artifacts/windows
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: iris-dp-ios-ipa
+          path: artifacts/ios
+
       - name: Zip Windows build
         run: |
           cd artifacts/windows
@@ -92,6 +113,7 @@ jobs:
           files: |
             artifacts/macos/IRIS-DP.dmg
             IRIS-DP-Windows.zip
+            artifacts/ios/IRIS-DP.ipa
 
       - name: Register release in Supabase
         env:
@@ -99,7 +121,12 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           chmod +x scripts/register_app_release.sh
+          NOTES=$(git tag -l --format='%(contents:subject)' "${{ github.ref_name }}" 2>/dev/null || true)
+          EXTRA=()
+          if [[ -n "$NOTES" ]]; then
+            EXTRA=(--notes "$NOTES")
+          fi
           ./scripts/register_app_release.sh \
             --tag "${{ github.ref_name }}" \
             --repo "${{ github.repository }}" \
-            --notes "Colores de personajes en guion escaneado y mejoras de sync."
+            "${EXTRA[@]}"

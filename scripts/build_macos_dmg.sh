@@ -26,7 +26,11 @@ if [[ -n "$SUPABASE_URL" && -n "$SUPABASE_ANON_KEY" ]]; then
   echo "→ Incluyendo credenciales Supabase desde .env"
 fi
 
-flutter "${BUILD_ARGS[@]}"
+if [[ "${SKIP_FLUTTER_BUILD:-}" != "1" ]]; then
+  flutter "${BUILD_ARGS[@]}"
+else
+  echo "→ SKIP_FLUTTER_BUILD=1 (solo empaquetar DMG)"
+fi
 
 mkdir -p "$DMG_DIR"
 rm -f "$DMG_DIR/$DMG_NAME"
@@ -37,6 +41,7 @@ rm -rf "$STAGING"
 mkdir -p "$STAGING"
 cp -R "$BUILD_DIR/$APP_NAME.app" "$STAGING/"
 ln -s /Applications "$STAGING/Applications"
+cp "$ROOT/assets/branding/iris_dp_logo_master.png" "$STAGING/IRIS-DP-logo.png"
 
 hdiutil create -volname "IRIS DP" -srcfolder "$STAGING" -ov -format UDZO "$DMG_DIR/$DMG_NAME"
 echo "✓ $DMG_DIR/$DMG_NAME"

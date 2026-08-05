@@ -8,10 +8,10 @@ No existe un **único instalador universal** que detecte solo y funcione en Mac,
 
 | Dispositivo | Archivo | Cómo generarlo |
 |-------------|---------|----------------|
-| **Mac** | `IRIS-DP.dmg` | `./scripts/build_release.sh` (en Mac) |
+| **Mac** | `IRIS-DP.dmg` | Tag `v*` → GitHub Actions, o `./scripts/build_release.sh` local |
 | **Otro Mac** | Mismo `.dmg` | AirDrop, USB, Google Drive, email… |
-| **Windows** | Carpeta `Release/` | `./scripts/build_release.sh` en Windows |
-| **iPad** | `.ipa` | `./scripts/build_ipad.sh` + TestFlight o Xcode |
+| **Windows** | `IRIS-DP-Windows.zip` | Tag `v*` → GitHub Actions, o build local |
+| **iPad** | `IRIS-DP.ipa` | Tag `v*` → GitHub Actions (sin firma, SideStore), o `./scripts/build_ipad.sh` local |
 
 Todos los scripts leen **`.env`** con `SUPABASE_URL` y `SUPABASE_ANON_KEY` para incluir la nube en el instalador.
 
@@ -37,6 +37,16 @@ SUPABASE_ANON_KEY=eyJ...
 
 ## 2. Instalar en macOS (este Mac)
 
+### Opción A — Desde la app (recomendado para amigos)
+
+1. Inicia sesión en IRIS DP
+2. Si hay versión nueva, pulsa **Actualizar ahora** en el banner
+3. Se descarga el `.dmg` y se abre solo
+4. Arrastra **IRIS DP** a **Aplicaciones**
+5. Pulsa **Ya actualicé** en la app
+
+### Opción B — Build local
+
 ```bash
 cd iris_dp
 chmod +x scripts/build_release.sh
@@ -61,50 +71,63 @@ Resultado: `build/dmg/IRIS-DP.dmg`
 
 ---
 
-## 4. Instalar en iPad
+## 4. Instalar en iPad (SideStore — gratis)
 
-Requisitos: **Mac con Xcode**, cuenta **Apple Developer** (99 €/año para TestFlight/App Store, o cuenta gratuita solo para tu iPad en desarrollo).
+Cada release en GitHub incluye **`IRIS-DP.ipa`** (generado por CI, sin firma). SideStore re-firma en el iPad con tu Apple ID gratuito.
+
+### Primera vez
+
+1. En el Mac: instala **SideServer** y empareja el iPad (sidestore.io)
+2. En el iPad: instala **SideStore**
+3. Descarga el IPA:
+   - Desde IRIS DP en el iPad: banner → **Descargar IPA**
+   - Desde Mac/Windows: Ajustes → **Estado del sistema** → **Descargar para iPad**
+4. Abre el `.ipa` con **SideStore**
+5. Inicia sesión en IRIS DP con el mismo email y pulsa sync
+
+### Actualizar
+
+1. Descarga el IPA nuevo (mismo flujo)
+2. Reinstala en SideStore encima de la versión anterior
+3. Pulsa sync en la app
+
+### Refrescar firma (~7 días)
+
+Con Apple ID gratuito la app caduca si SideStore no refresca. Abre **SideStore en Wi‑Fi** cada semana. La app avisa a los 5 días.
+
+### Build local (opcional)
 
 ```bash
 cd iris_dp
-chmod +x scripts/build_ipad.sh
+chmod +x scripts/build_ipad.sh scripts/package_unsigned_ipa.sh
 ./scripts/build_ipad.sh
+# o tras flutter build ios --release --no-codesign:
+./scripts/package_unsigned_ipa.sh
 ```
 
-El `.ipa` queda en `build/ios/ipa/`.
+### TestFlight (cuando pagues Apple Developer $99/año)
 
-### Opción A — TestFlight (recomendado para varios iPads)
-
-1. Sube el IPA con la app **Transporter** (Mac App Store)
-2. En App Store Connect crea la app y añade testers
-3. En el iPad instala **TestFlight** y acepta la invitación
-
-### Opción B — Tu iPad con cable (desarrollo)
-
-1. Conecta el iPad al Mac
-2. Xcode → **Window → Devices and Simulators**
-3. Selecciona el iPad → arrastra el `.ipa` o instala desde Xcode con `flutter run -d <id-del-ipad>`
-
-### Opción C — Mismo WiFi (desarrollo rápido)
-
-```bash
-./scripts/run_cloud.sh   # detecta dispositivos
-flutter devices          # copia el ID del iPad
-flutter run -d <ID_IPAD> --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
-```
+1. Sube el IPA con **Transporter**
+2. Invita testers en App Store Connect
+3. Instala **TestFlight** en el iPad
 
 ---
 
 ## 5. Windows
 
-En un PC con Flutter instalado:
+### Desde la app
+
+1. Banner → **Actualizar ahora**
+2. La app descarga, reemplaza archivos y se reinicia
+
+### Build local
 
 ```powershell
 cd iris_dp
-.\scripts\build_release.sh   # o build_windows.ps1
+.\scripts\build_release.sh
 ```
 
-Comparte la carpeta `build\windows\x64\runner\Release\` (zip). El usuario ejecuta `iris_dp.exe`.
+Comparte `IRIS-DP-Windows.zip` del GitHub Release o la carpeta `build\windows\x64\runner\Release\`.
 
 ---
 
@@ -112,7 +135,15 @@ Comparte la carpeta `build\windows\x64\runner\Release\` (zip). El usuario ejecut
 
 ### Aviso automático (modo nube)
 
-Con sesión iniciada, IRIS DP comprueba **una vez al día** si hay una versión nueva en Supabase (`app_releases`). Si la hay, verás un **banner azul** en la pantalla de proyectos con enlace a **GitHub Releases** (gratis; los instaladores no están en Supabase).
+Con sesión iniciada, IRIS DP comprueba **una vez al día** si hay versión nueva en Supabase (`app_releases`). Si la hay, verás un **banner** en proyectos:
+
+| Plataforma | Acción |
+|------------|--------|
+| macOS | **Actualizar ahora** → descarga `.dmg` y lo abre |
+| Windows | **Actualizar ahora** → descarga `.zip` e instala |
+| iPad | **Descargar IPA** → abrir con SideStore |
+
+Los instaladores viven en **GitHub Releases** (gratis). Supabase solo guarda metadatos y URLs.
 
 ### Publicar una versión nueva (DP)
 
@@ -121,8 +152,8 @@ Con sesión iniciada, IRIS DP comprueba **una vez al día** si hay una versión 
    ```bash
    git tag v1.0.1 && git push origin v1.0.1
    ```
-3. **GitHub Actions** compila macOS/Windows, crea el Release en GitHub y registra la URL en Supabase.
-4. Todos los directores verán el banner al abrir la app (con internet).
+3. **GitHub Actions** compila macOS, Windows e iPad, crea el Release y registra URLs en Supabase (macos, windows, ipad).
+4. Todos los usuarios verán el banner al abrir la app (con internet).
 
 **Secretos en GitHub** (Settings → Secrets → Actions):
 
@@ -137,7 +168,7 @@ Con sesión iniciada, IRIS DP comprueba **una vez al día** si hay una versión 
 **Fallback manual** (si el CI falla pero ya subiste el Release a GitHub):
 
 ```bash
-export SUPABASE_SERVICE_ROLE_KEY=eyJ...   # Dashboard → Settings → API → service_role
+export SUPABASE_SERVICE_ROLE_KEY=eyJ...
 ./scripts/publish_release.sh v1.0.1 tu-usuario/tu-repo
 ```
 
@@ -149,22 +180,30 @@ export SUPABASE_SERVICE_ROLE_KEY=eyJ...   # Dashboard → Settings → API → s
 
 Los **proyectos no se pierden**: están en Supabase, no dentro del instalador.
 
+### Conectividad
+
+- Sin internet: banner «Sin conexión — los cambios se guardan localmente»
+- Al reconectar: sync automático en segundo plano
+- Cola pendiente visible en el icono de nube (Ajustes → Estado del sistema)
+
 ---
 
 ## 7. ¿Por qué no hay un instalador «inteligente» único?
 
 - **macOS** usa `.app` / `.dmg` (Apple)
 - **Windows** usa `.exe` / MSIX (Microsoft)  
-- **iPad** solo acepta apps firmadas por Apple (`.ipa`, App Store, TestFlight)
+- **iPad** solo acepta apps firmadas por Apple (`.ipa`, App Store, TestFlight, SideStore)
 
 Un solo archivo `.exe` no puede instalarse en Mac ni iPad, y viceversa. El script `build_release.sh` **detecta en qué sistema lo ejecutas** y genera el formato correcto **para esa plataforma**.
 
 ---
 
-## Solución de problemas de login
+## Solución de problemas
 
 | Error | Causa | Solución |
 |-------|--------|----------|
 | `Failed host lookup` | URL Supabase incorrecta | Copia Project URL real desde supabase.com |
 | `Invalid login` | Email/contraseña | Usa «Crear cuenta» o corrige credenciales |
 | `Email not confirmed` | Confirmación activa | Desactiva en Supabase Auth → Email |
+| iPad «no abre» tras ~7 días | Firma SideStore caducada | Abre SideStore en Wi‑Fi para refrescar |
+| No veo actualización | Sin sesión o throttle 24h | Inicia sesión; Ajustes → Buscar actualizaciones |

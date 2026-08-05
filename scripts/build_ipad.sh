@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Genera IRIS-DP.ipa para iPad/iPhone (requiere Mac + Xcode + cuenta Apple Developer).
+# Genera IRIS-DP.ipa sin firma (SideStore re-firma en el iPad).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -13,28 +13,30 @@ if [[ -f "$ENV_FILE" ]]; then
   source "$ENV_FILE"
 fi
 
-ARGS=(build ipa --release)
+ARGS=(build ios --release --no-codesign)
 if [[ -n "$SUPABASE_URL" && -n "$SUPABASE_ANON_KEY" ]]; then
   ARGS+=(
     --dart-define=SUPABASE_URL="$SUPABASE_URL"
     --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
   )
+  echo "→ Modo nube: credenciales desde .env"
 fi
 
-echo "=== Build iPad/iPhone (IPA) ==="
+echo "=== Build iPad/iPhone (IPA sin firma) ==="
 flutter "${ARGS[@]}"
 
-IPA=$(find build/ios/ipa -name '*.ipa' 2>/dev/null | head -1)
+chmod +x scripts/package_unsigned_ipa.sh
+./scripts/package_unsigned_ipa.sh
+
+IPA="$ROOT/build/ios/ipa/IRIS-DP.ipa"
 echo ""
-if [[ -n "$IPA" ]]; then
-  echo "✓ IPA generado: $IPA"
-else
-  echo "✓ Build completado. Busca el .ipa en build/ios/ipa/"
-fi
+echo "✓ IPA listo: $IPA"
 echo ""
-echo "Cómo instalar en iPad:"
-echo "  A) TestFlight — sube el IPA con la app Transporter (App Store Connect)"
-echo "  B) Desarrollo — conecta el iPad al Mac, abre Xcode → Window → Devices, arrastra el IPA"
-echo "  C) Apple Configurator — instala el IPA en iPads gestionados"
+echo "=== Instalar en iPad con SideStore ==="
+echo "  1. Mac (solo la 1ª vez): instala SideServer desde sidestore.io"
+echo "  2. iPad: instala SideStore (misma web)"
+echo "  3. Empareja iPad ↔ Mac por USB"
+echo "  4. Pasa el IPA al iPad (AirDrop, Archivos, o descarga del GitHub Release)"
+echo "  5. Abrir IRIS-DP.ipa con SideStore"
 echo ""
-echo "Ver docs/distribuir_app.md para más detalle."
+echo "Guía: docs/ipad_sidestore.md"
