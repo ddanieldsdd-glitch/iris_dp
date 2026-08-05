@@ -37,6 +37,27 @@ NEW_BUILD="${ARGS[1]:-$((CURRENT_BUILD + 1))}"
 TAG="v${NEW_NAME}"
 NEW_VERSION="${NEW_NAME}+${NEW_BUILD}"
 
+semver_re='^[0-9]+\.[0-9]+\.[0-9]+$'
+build_re='^[0-9]+$'
+
+if [[ ! "$CURRENT_NAME" =~ $semver_re || ! "$CURRENT_BUILD" =~ $build_re ]]; then
+  echo "✗ pubspec.yaml tiene una versión inválida: ${CURRENT_NAME}+${CURRENT_BUILD}"
+  echo "  Corrige la línea version: (ej. version: 1.0.3+3)"
+  exit 1
+fi
+
+if [[ ${#ARGS[@]} -ge 1 && ! "$NEW_NAME" =~ $semver_re ]]; then
+  echo "✗ Versión inválida: «${NEW_NAME}»"
+  echo "  Uso: ./scripts/release.sh [1.0.4] [build_number]"
+  echo "  No pegues comentarios (# ...) en la misma línea del comando."
+  exit 1
+fi
+
+if [[ ! "$NEW_BUILD" =~ $build_re ]]; then
+  echo "✗ Build number inválido: «${NEW_BUILD}»"
+  exit 1
+fi
+
 echo "=== IRIS DP Release ==="
 echo "  Actual:  ${CURRENT_NAME}+${CURRENT_BUILD}"
 echo "  Nueva:   ${NEW_VERSION}"
@@ -85,7 +106,7 @@ echo "  • IRIS-DP.ipa (iPad / SideStore)"
 echo "  • Registro automático en Supabase"
 echo ""
 echo "Sigue el progreso:"
-REPO=$(git config --get remote.origin.url | sed -E 's#.*github.com[:/](.+)(\.git)?#\1#')
+REPO=$(git config --get remote.origin.url | sed -E 's#.*github.com[:/]([^/]+/[^/.]+)(\.git)?#\1#')
 echo "  https://github.com/${REPO}/actions"
 echo ""
 echo "iPad — cuando termine CI:"
