@@ -49,7 +49,7 @@ case "$OS" in
     ;;
   MINGW*|MSYS*|CYGWIN*|Windows*)
     echo "=== Build Windows ==="
-    flutter build windows --release "${DART_DEFINES[@]:-}"
+    flutter build windows --release --no-tree-shake-icons "${DART_DEFINES[@]:-}"
     echo "✓ Carpeta: build/windows/x64/runner/Release/"
     echo "  Comprime y comparte esa carpeta con otros PCs Windows."
     ;;

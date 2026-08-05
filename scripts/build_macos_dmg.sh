@@ -17,13 +17,19 @@ if [[ -f "$ENV_FILE" ]]; then
   source "$ENV_FILE"
 fi
 
-BUILD_ARGS=(build macos --release)
+BUILD_ARGS=(build macos --release --no-tree-shake-icons)
 if [[ -n "$SUPABASE_URL" && -n "$SUPABASE_ANON_KEY" ]]; then
   BUILD_ARGS+=(
     --dart-define=SUPABASE_URL="$SUPABASE_URL"
     --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
   )
   echo "→ Incluyendo credenciales Supabase desde .env"
+fi
+if [[ -n "${CLOUDINARY_CLOUD_NAME:-}" && -n "${CLOUDINARY_UPLOAD_PRESET:-}" ]]; then
+  BUILD_ARGS+=(
+    --dart-define=CLOUDINARY_CLOUD_NAME="$CLOUDINARY_CLOUD_NAME"
+    --dart-define=CLOUDINARY_UPLOAD_PRESET="$CLOUDINARY_UPLOAD_PRESET"
+  )
 fi
 
 if [[ "${SKIP_FLUTTER_BUILD:-}" != "1" ]]; then
