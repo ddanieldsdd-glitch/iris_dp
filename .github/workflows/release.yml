@@ -63,7 +63,7 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    continue-on-error: true # <-- CAMBIO: si falla, no marca todo el workflow en rojo, solo este job
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -74,6 +74,11 @@ jobs:
         run: |
           flutter pub get
           dart run build_runner build --delete-conflicting-outputs
+      - name: Patch pdf_render_maintained (bug CMake target name)
+        shell: bash
+        run: |
+          chmod +x scripts/patch_pdf_render_windows.sh
+          ./scripts/patch_pdf_render_windows.sh
       - name: Build Windows
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -90,11 +95,11 @@ jobs:
         with:
           name: iris-dp-windows
           path: build/windows/x64/runner/Release/
-        if: success() # <-- CAMBIO: solo sube el artifact si el build anterior fue bien
+        if: success()
 
   publish:
     needs: [build-macos, build-windows]
-    if: always() && needs.build-macos.result == 'success' # <-- CAMBIO: publica aunque Windows falle, siempre que macOS vaya bien
+    if: always() && needs.build-macos.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -110,7 +115,7 @@ jobs:
         with:
           name: iris-dp-windows
           path: artifacts/windows
-        continue-on-error: true # <-- CAMBIO: si no existe (Windows falló), no rompe el job
+        continue-on-error: true
 
       - uses: actions/download-artifact@v4
         with:
@@ -128,7 +133,6 @@ jobs:
           else
             echo "Windows build no disponible, se omite del release."
           fi
-        # <-- CAMBIO: ahora comprueba si la carpeta existe antes de zippear, en vez de asumir que siempre está
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -138,8 +142,6 @@ jobs:
             artifacts/macos/IRIS-DP.dmg
             IRIS-DP-Windows.zip
             artifacts/ios/IRIS-DP.ipa
-          # Nota: si IRIS-DP-Windows.zip o el .ipa no existen, softprops/action-gh-release
-          # simplemente los omite del release sin fallar.
 
       - name: Register release in Supabase
         env:
