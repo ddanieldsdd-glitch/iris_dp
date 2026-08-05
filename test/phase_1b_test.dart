@@ -111,8 +111,9 @@ void main() {
   });
 
   group('Fase 1B — UI', () {
-    testWidgets('hub del proyecto muestra accesos a importar y guion técnico',
-        (tester) async {
+    testWidgets(
+      'hub del proyecto muestra accesos a importar y guion técnico',
+      (tester) async {
       final projectId = await db.insertProject(
         ProjectsCompanion.insert(name: 'Mi Película'),
       );
@@ -138,6 +139,8 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-    }, skip: 'ProjectHub + NativeDatabase cuelga el runner en algunos entornos');
+    },
+      skip: true, // ProjectHub + NativeDatabase cuelga el runner en algunos entornos
+    );
   });
 }
