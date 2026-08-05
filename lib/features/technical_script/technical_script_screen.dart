@@ -15,11 +15,15 @@ import '../../core/theme/app_typography.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_format.dart';
 import '../../core/utils/shot_reference_import.dart';
+import '../../core/utils/scene_characters.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
 import '../camera_plan/camera_plan_status_cell.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
+import '../shoot_documents/shoot_document_composer.dart';
+import '../shoot_documents/shoot_document_import_actions.dart';
+import '../shoot_documents/shoot_document_service.dart';
 import '../pdf_export/technical_script_pdf.dart';
 import 'scene_form_sheet.dart';
 import '../../core/utils/shot_technical_options.dart';
@@ -68,7 +72,11 @@ class TechnicalScriptScreen extends ConsumerWidget {
             },
           ),
           IconButton(
-            tooltip: 'Exportar PDF',
+            tooltip: 'Añadir al documento de rodaje',
+            icon: Icon(Icons.description_outlined, color: palette.accent),
+            onPressed: () => _addAllShotsToDocument(context, ref),
+          ),
+          IconButton(
             icon: Icon(Icons.picture_as_pdf_outlined, color: palette.accent),
             onPressed: () => _exportPdf(context, ref),
           ),
@@ -129,6 +137,37 @@ class TechnicalScriptScreen extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  Future<void> _addAllShotsToDocument(BuildContext context, WidgetRef ref) async {
+    final db = ref.read(databaseProvider);
+    final scenes = await db.watchScenesForProject(projectId).first;
+    if (scenes.isEmpty) {
+      if (!context.mounted) return;
+      AppSnackBar.show(context, 'No hay escenas.');
+      return;
+    }
+    final doc = await ShootDocumentImportActions.pickDocument(
+      context,
+      db,
+      projectId,
+      title: 'Añadir guion técnico al documento',
+    );
+    if (doc == null || !context.mounted) return;
+
+    final companions = await ShootDocumentComposer.compose(
+      db: db,
+      projectId: projectId,
+      template: ShootDocumentTemplate.fullTechnical,
+    );
+    var order = await ShootDocumentService.nextSortOrder(db, doc.id);
+    for (final c in companions) {
+      await db.insertShootDocumentBlock(
+        c.copyWith(documentId: Value(doc.id), sortOrder: Value(order++)),
+      );
+    }
+    if (!context.mounted) return;
+    AppSnackBar.show(context, 'Planos añadidos a «${doc.name}»');
   }
 
   Future<void> _exportPdf(BuildContext context, WidgetRef ref) async {
@@ -238,6 +277,17 @@ class _SceneSection extends ConsumerWidget {
                 ),
               ),
               IconButton(
+                tooltip: 'Añadir escena al documento de rodaje',
+                icon: Icon(Icons.description_outlined,
+                    color: palette.textSecondary, size: 18),
+                onPressed: () => ShootDocumentImportActions.addSceneBlocks(
+                  context: context,
+                  db: ref.read(databaseProvider),
+                  projectId: scene.projectId,
+                  scene: scene,
+                ),
+              ),
+              IconButton(
                 tooltip: 'Editar escena',
                 icon: Icon(Icons.edit_outlined,
                     color: palette.textSecondary, size: 18),
@@ -294,13 +344,15 @@ const kTechnicalScriptTableWidth = AppLayout.technicalScriptTableWidth;
 abstract final class _TechnicalScriptColumns {
   static const esc = 40.0;
   static const plano = 50.0;
-  static const encuadre = 140.0;
+  static const encuadre = 120.0;
   static const lens = 150.0;
-  static const fStop = 50.0;
-  static const action = 200.0;
-  static const referencia = 110.0;
+  static const fStop = 30.0;
+  static const personajes = 100.0;
+  static const duracion = 60.0;
+  static const action = 140.0;
+  static const referencia = 90.0;
   static const planta = 56.0;
-  static const apuntes = 140.0;
+  static const apuntes = 100.0;
 }
 
 class _TableHeader extends StatelessWidget {
@@ -326,6 +378,8 @@ class _TableHeader extends StatelessWidget {
             _HeaderCell('Encuadre', _TechnicalScriptColumns.encuadre, palette),
             _HeaderCell('LENTE / MOV / ANG', _TechnicalScriptColumns.lens, palette),
             _HeaderCell('F', _TechnicalScriptColumns.fStop, palette),
+            _HeaderCell('PERS.', _TechnicalScriptColumns.personajes, palette),
+            _HeaderCell('DUR.', _TechnicalScriptColumns.duracion, palette),
             SizedBox(
               width: _TechnicalScriptColumns.action,
               child: Text('ACCIÓN', style: AppTypography.caption(palette)),
@@ -457,6 +511,33 @@ class _ShotRow extends ConsumerWidget {
                 ),
               ),
               SizedBox(
+                width: _TechnicalScriptColumns.personajes,
+                child: InlineEditField(
+                  value: decodeSceneCharacters(shot.charactersJson).join(', '),
+                  hint: 'Ana, Luis…',
+                  palette: palette,
+                  minLines: 2,
+                  onChanged: (v) => db.updateShot(
+                    shot.copyWith(
+                      charactersJson: Value(
+                        encodeSceneCharacters(parseCharactersInput(v)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: _TechnicalScriptColumns.duracion,
+                child: InlineEditField(
+                  value: shot.durationSeconds?.toString(),
+                  hint: 'seg',
+                  palette: palette,
+                  onChanged: (v) => db.updateShot(
+                    shot.copyWith(durationSeconds: Value(int.tryParse(v.trim()))),
+                  ),
+                ),
+              ),
+              SizedBox(
                 width: _TechnicalScriptColumns.action,
                 child: InlineEditField(
                   value: shot.action,
@@ -482,7 +563,22 @@ class _ShotRow extends ConsumerWidget {
               SizedBox(
                 width: _TechnicalScriptColumns.apuntes,
                 height: 72,
-                child: _NotesCell(shot: shot, palette: palette),
+                child: Row(
+                  children: [
+                    Expanded(child: _NotesCell(shot: shot, palette: palette)),
+                    IconButton(
+                      tooltip: 'Añadir plano al documento',
+                      icon: Icon(Icons.add_link, color: palette.accent, size: 18),
+                      onPressed: () => ShootDocumentImportActions.addShotBlock(
+                        context: context,
+                        db: db,
+                        projectId: scene.projectId,
+                        shot: shot,
+                        scene: scene,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

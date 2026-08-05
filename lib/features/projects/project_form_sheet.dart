@@ -6,10 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
-import '../../core/cloud/cloud_providers.dart';
+import '../../core/sync/project_cloud_actions.dart';
 import '../../core/cloud/supabase_config.dart';
 import '../../core/database/app_database.dart';
-import '../../core/sync/project_sync_service.dart';
 import '../auth/invite_director_sheet.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
@@ -117,20 +116,15 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
         coverImagePath: Value(_coverImagePath),
         updatedAt: DateTime.now(),
       );
-      await db.updateProject(updated);
-      final client = ref.read(supabaseClientProvider);
-      if (client != null && updated.cloudId != null) {
-        await ProjectSyncService(db, client).updateProject(updated);
-      }
+      await ProjectCloudActions.saveProject(ref, updated);
     } else {
-      final newId = await db.insertProject(
-        ProjectsCompanion.insert(
-          name: name,
-          director: Value(director.isEmpty ? null : director),
-          status: Value(_status),
-          iconCode: Value(_selectedIcon),
-          groupId: Value(_groupId),
-        ),
+      final newId = await ProjectCloudActions.createProject(
+        ref,
+        name: name,
+        director: director.isEmpty ? null : director,
+        status: _status,
+        iconCode: _selectedIcon,
+        groupId: _groupId,
       );
       if (_coverImagePath != null) {
         final stored = await _persistCoverForNewProject(newId);

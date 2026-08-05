@@ -49,8 +49,8 @@ class UpdateAvailableBanner extends ConsumerWidget {
                   Text(
                     release.releaseNotes?.isNotEmpty == true
                         ? release.releaseNotes!
-                        : 'Descarga la actualización desde GitHub e instala '
-                            'como siempre. Tus proyectos siguen en la nube.',
+                        : 'Descarga e instala la actualización. '
+                            'Tus proyectos siguen en la nube.',
                     style: AppTypography.caption(palette).copyWith(
                       color: palette.textSecondary,
                     ),

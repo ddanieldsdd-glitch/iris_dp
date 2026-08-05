@@ -8,33 +8,59 @@ import 'app_update_store.dart';
 /// Estado de comprobación de actualización remota.
 class AppUpdateState {
   final AppRelease? availableRelease;
+  final AppRelease? remoteLatest;
+  final String localVersionLabel;
+  final bool installedIsNewerThanPublished;
   final bool checking;
   final String? error;
   final bool checkCompleted;
+  final bool skippedThrottle;
 
   const AppUpdateState({
     this.availableRelease,
+    this.remoteLatest,
+    this.localVersionLabel = '',
+    this.installedIsNewerThanPublished = false,
     this.checking = false,
     this.error,
     this.checkCompleted = false,
+    this.skippedThrottle = false,
   });
 
   bool get hasUpdate => availableRelease != null;
 
+  String? get remoteVersionLabel {
+    final remote = remoteLatest;
+    if (remote == null) return null;
+    return '${remote.version} (${remote.buildNumber})';
+  }
+
   AppUpdateState copyWith({
     AppRelease? availableRelease,
+    AppRelease? remoteLatest,
     bool clearRelease = false,
+    bool clearRemoteLatest = false,
+    String? localVersionLabel,
+    bool? installedIsNewerThanPublished,
     bool? checking,
     String? error,
     bool clearError = false,
     bool? checkCompleted,
+    bool? skippedThrottle,
   }) {
     return AppUpdateState(
       availableRelease:
           clearRelease ? null : (availableRelease ?? this.availableRelease),
+      remoteLatest: clearRemoteLatest
+          ? null
+          : (remoteLatest ?? this.remoteLatest),
+      localVersionLabel: localVersionLabel ?? this.localVersionLabel,
+      installedIsNewerThanPublished: installedIsNewerThanPublished ??
+          this.installedIsNewerThanPublished,
       checking: checking ?? this.checking,
       error: clearError ? null : (error ?? this.error),
       checkCompleted: checkCompleted ?? this.checkCompleted,
+      skippedThrottle: skippedThrottle ?? this.skippedThrottle,
     );
   }
 }
@@ -43,9 +69,13 @@ class AppUpdateState {
 AppUpdateState applyAppUpdateCheckResult(AppUpdateCheckResult result) {
   return AppUpdateState(
     availableRelease: result.availableRelease,
+    remoteLatest: result.remoteLatest,
+    localVersionLabel: result.localVersionLabel,
+    installedIsNewerThanPublished: result.installedIsNewerThanPublished,
     checking: false,
     error: result.error,
     checkCompleted: true,
+    skippedThrottle: result.skippedThrottle,
   );
 }
 
@@ -55,9 +85,21 @@ class AppUpdateNotifier extends Notifier<AppUpdateState> {
 
   Future<void> check({bool force = false}) async {
     final client = ref.read(supabaseClientProvider);
-    if (client == null) return;
+    if (client == null) {
+      state = state.copyWith(
+        checking: false,
+        checkCompleted: true,
+        error: 'Supabase no configurado en esta compilación',
+      );
+      return;
+    }
 
-    state = state.copyWith(checking: true, clearError: true);
+    state = state.copyWith(
+      checking: true,
+      clearError: true,
+      clearRelease: true,
+      clearRemoteLatest: true,
+    );
     final result = await checkForAppUpdate(client: client, force: force);
 
     state = applyAppUpdateCheckResult(result);

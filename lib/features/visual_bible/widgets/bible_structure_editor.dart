@@ -4,6 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/app_database.dart' hide BibleSectionGroup;
 import '../../../core/database/app_database.dart' as app_db show BibleSectionGroup;
 import '../../../core/database/database_provider.dart';
+import '../../../core/settings/user_templates_settings_section.dart';
+import '../../../core/templates/user_template_models.dart';
+import '../../../core/templates/user_template_preferences.dart';
+import '../../../core/templates/user_template_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -14,8 +18,13 @@ import 'bible_section_fields_editor.dart';
 /// Editor de estructura: renombrar, reordenar y configurar sub-apartados.
 class BibleStructureEditor extends ConsumerStatefulWidget {
   final int bibleId;
+  final int projectId;
 
-  const BibleStructureEditor({super.key, required this.bibleId});
+  const BibleStructureEditor({
+    super.key,
+    required this.bibleId,
+    required this.projectId,
+  });
 
   @override
   ConsumerState<BibleStructureEditor> createState() =>
@@ -53,6 +62,11 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
                       style: AppTypography.caption(palette),
                     ),
                     const SizedBox(height: AppSpacing.lg),
+                    _TemplateToolbar(
+                      bibleId: widget.bibleId,
+                      projectId: widget.projectId,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
                     Expanded(
                       child: ListView(
                         children: [
@@ -81,6 +95,17 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
                                 bibleId: widget.bibleId,
                                 definition: def,
                               ),
+                              onToggleHidden: (def, hidden) => ref
+                                  .read(databaseProvider)
+                                  .setBibleSectionHidden(
+                                    bibleId: widget.bibleId,
+                                    sectionId: def.id,
+                                    hidden: hidden,
+                                  ),
+                              onDelete: (def) {
+                                if (def.isBuiltIn) return;
+                                _deleteSection(context, def);
+                              },
                             ),
                             ListTile(
                               leading: const Icon(Icons.add, size: 20),
@@ -136,6 +161,37 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
     }
   }
 
+  Future<void> _deleteSection(
+    BuildContext context,
+    BibleSectionDefinition def,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar sección'),
+        content: Text('¿Eliminar «${def.label}»?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await ref.read(databaseProvider).deleteCustomBibleSection(
+          bibleId: widget.bibleId,
+          sectionId: def.id,
+        );
+    if (context.mounted) {
+      AppSnackBar.show(context, 'Sección eliminada');
+    }
+  }
+
   Future<String?> _promptLabel(
     BuildContext context,
     String title,
@@ -166,17 +222,204 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
   }
 }
 
+class _TemplateToolbar extends ConsumerWidget {
+  final int bibleId;
+  final int projectId;
+
+  const _TemplateToolbar({
+    required this.bibleId,
+    required this.projectId,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final db = ref.read(databaseProvider);
+
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        OutlinedButton.icon(
+          icon: const Icon(Icons.save_outlined, size: 18),
+          label: const Text('Guardar como plantilla'),
+          onPressed: () async {
+            final name = await promptSaveUserTemplate(
+              context,
+              title: 'Guardar estructura de biblia',
+              initialName: 'Mi biblia de fotografía',
+            );
+            if (name == null || !context.mounted) return;
+            final id = await UserTemplateService.saveBibleLayoutTemplate(
+              db: db,
+              name: name,
+              bibleId: bibleId,
+            );
+            final prefs = await UserTemplatePreferences.load();
+            final setDefault = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Plantilla predeterminada'),
+                content: const Text(
+                  '¿Usar esta plantilla como predeterminada para '
+                  'nuevos proyectos?',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('No'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Sí, predeterminada'),
+                  ),
+                ],
+              ),
+            );
+            if (setDefault == true) {
+              prefs.defaultBibleLayoutTemplateId = id;
+              prefs.bibleAutoApply = TemplateAutoApplyMode.always;
+              await prefs.save();
+              await UserTemplateService.setDefaultTemplate(
+                db,
+                UserTemplateType.bibleLayout,
+                id,
+              );
+            }
+            if (context.mounted) {
+              AppSnackBar.show(context, 'Plantilla «$name» guardada');
+            }
+          },
+        ),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.file_open_outlined, size: 18),
+          label: const Text('Aplicar plantilla'),
+          onPressed: () => _applyTemplate(context, ref),
+        ),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.restore_outlined, size: 18),
+          label: const Text('Restaurar base IRIS'),
+          onPressed: () async {
+            final ok = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Restaurar plantilla base'),
+                content: const Text(
+                  'Se restaurará la estructura original de la biblia IRIS. '
+                  'Los nombres y sub-apartados personalizados se perderán.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancelar'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Restaurar'),
+                  ),
+                ],
+              ),
+            );
+            if (ok != true) return;
+            await db.resetBibleSectionLayoutToBuiltin(bibleId);
+            if (context.mounted) {
+              AppSnackBar.show(context, 'Estructura base restaurada');
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _applyTemplate(BuildContext context, WidgetRef ref) async {
+    final db = ref.read(databaseProvider);
+    final templates = await UserTemplateService.listTemplates(
+      db,
+      UserTemplateType.bibleLayout,
+    );
+    if (!context.mounted) return;
+
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.palette.surfaceElevated,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.auto_stories_outlined),
+              title: const Text('Plantilla IRIS (base de fotografía)'),
+              onTap: () =>
+                  Navigator.pop(ctx, kBuiltinBibleLayoutTemplateId),
+            ),
+            for (final t in templates)
+              ListTile(
+                leading: const Icon(Icons.bookmark_outline),
+                title: Text(t.name),
+                subtitle: t.description != null ? Text(t.description!) : null,
+                onTap: () => Navigator.pop(ctx, t.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Aplicar plantilla'),
+        content: const Text(
+          'Se reemplazará la estructura actual (grupos, secciones y '
+          'sub-apartados). El contenido escrito se conserva donde los IDs coincidan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Aplicar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    await UserTemplateService.applyBibleLayoutTemplate(
+      db: db,
+      bibleId: bibleId,
+      templateId: picked,
+    );
+
+    final prefs = await UserTemplatePreferences.load();
+    if (prefs.bibleAutoApply == TemplateAutoApplyMode.perProject) {
+      prefs.projectBibleTemplateIds[projectId] = picked;
+      await prefs.save();
+    }
+
+    if (context.mounted) {
+      AppSnackBar.show(context, 'Plantilla aplicada');
+    }
+  }
+}
+
 class _ReorderableSectionList extends StatefulWidget {
   final List<BibleSectionDefinition> defs;
   final Future<void> Function(List<BibleSectionDefinition> ordered) onReorder;
   final void Function(BibleSectionDefinition def) onRename;
   final void Function(BibleSectionDefinition def) onEditFields;
+  final void Function(BibleSectionDefinition def, bool hidden)? onToggleHidden;
+  final void Function(BibleSectionDefinition def)? onDelete;
 
   const _ReorderableSectionList({
     required this.defs,
     required this.onReorder,
     required this.onRename,
     required this.onEditFields,
+    this.onToggleHidden,
+    this.onDelete,
   });
 
   @override
@@ -241,6 +484,18 @@ class _ReorderableSectionListState extends State<_ReorderableSectionList> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (widget.onToggleHidden != null)
+                IconButton(
+                  icon: Icon(
+                    def.isHidden
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 18,
+                  ),
+                  tooltip: def.isHidden ? 'Mostrar sección' : 'Ocultar sección',
+                  onPressed: () =>
+                      widget.onToggleHidden!(def, !def.isHidden),
+                ),
               IconButton(
                 icon: const Icon(Icons.view_list_outlined, size: 18),
                 tooltip: 'Sub-apartados',
@@ -250,6 +505,12 @@ class _ReorderableSectionListState extends State<_ReorderableSectionList> {
                 icon: const Icon(Icons.edit_outlined, size: 18),
                 onPressed: () => widget.onRename(def),
               ),
+              if (widget.onDelete != null && !def.isBuiltIn)
+                IconButton(
+                  icon: Icon(Icons.delete_outline,
+                      size: 18, color: palette.error),
+                  onPressed: () => widget.onDelete!(def),
+                ),
             ],
           ),
         );

@@ -10,28 +10,52 @@ import 'open_script_file.dart';
 import 'script_file_reader.dart';
 import 'script_parser.dart';
 import 'script_pdf_viewer.dart';
+import 'script_preview_controller.dart';
 import 'script_scanned_view.dart';
+import 'script_context_menu.dart';
+import 'script_selection_toolbar.dart';
 import '../../core/widgets/app_snackbar.dart';
 
 enum ScriptPreviewMode { original, scanned }
 
 /// Visor del guion: documento original o texto escaneado con sluglines pulsables.
 class ScriptPreviewPanel extends StatefulWidget {
+  static const defaultFontSize = 14.0;
+
   final LoadedScript? script;
+  final ScriptPreviewController? controller;
   final Set<int> includedSceneStartIndices;
   final Map<int, Color> sceneColorsByStartIndex;
   final Map<String, Color> characterColorsByName;
+  final Set<String> manualCharacterLines;
+  final Map<String, String> lineTextOverrides;
   final ValueChanged<RawSlugline>? onSluglineTap;
   final ValueChanged<String>? onCharacterTap;
+  final Future<void> Function(ScriptLineContext line, ScriptContextAction action)?
+      onLineContextAction;
+  final ValueChanged<int?>? onActiveCharIndexChanged;
+  final VoidCallback? onFullscreenRequest;
+  final bool showFullscreenButton;
+  final bool isFullscreen;
+  final List<String> existingCharacterNames;
 
   const ScriptPreviewPanel({
     super.key,
     this.script,
+    this.controller,
     this.includedSceneStartIndices = const {},
     this.sceneColorsByStartIndex = const {},
     this.characterColorsByName = const {},
+    this.manualCharacterLines = const {},
+    this.lineTextOverrides = const {},
     this.onSluglineTap,
     this.onCharacterTap,
+    this.onLineContextAction,
+    this.onActiveCharIndexChanged,
+    this.onFullscreenRequest,
+    this.showFullscreenButton = true,
+    this.isFullscreen = false,
+    this.existingCharacterNames = const [],
   });
 
   @override
@@ -41,30 +65,81 @@ class ScriptPreviewPanel extends StatefulWidget {
 class _ScriptPreviewPanelState extends State<ScriptPreviewPanel> {
   static const _minFontSize = 11.0;
   static const _maxFontSize = 22.0;
-  static const _defaultFontSize = 14.0;
 
   static const _paperColor = Color(0xFFF8F6F0);
   static const _inkColor = Color(0xFF1A1A1A);
 
-  double _fontSize = _defaultFontSize;
-  ScriptPreviewMode _mode = ScriptPreviewMode.original;
-  final _scannedScrollController = ScrollController();
-  final _textScrollController = ScrollController();
+  ScriptPreviewController? _ownedController;
+  ScriptPreviewController get _ctrl =>
+      widget.controller ?? _ownedController!;
+
+  ScriptPreviewMode get _mode => _ctrl.mode;
+  double get _fontSize => _ctrl.fontSize;
+
+  final _selectionLink = LayerLink();
+  OverlayEntry? _selectionOverlay;
 
   @override
-  void didUpdateWidget(ScriptPreviewPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.script?.path != widget.script?.path) {
-      _fontSize = _defaultFontSize;
-      _mode = ScriptPreviewMode.original;
+  void initState() {
+    super.initState();
+    if (widget.controller == null) {
+      _ownedController = ScriptPreviewController();
     }
   }
 
   @override
   void dispose() {
-    _scannedScrollController.dispose();
-    _textScrollController.dispose();
+    _removeSelectionOverlay();
+    _ownedController?.dispose();
     super.dispose();
+  }
+
+  void _removeSelectionOverlay() {
+    _selectionOverlay?.remove();
+    _selectionOverlay = null;
+  }
+
+  void _setMode(ScriptPreviewMode mode) {
+    setState(() => _ctrl.mode = mode);
+  }
+
+  void _setFontSize(double size) {
+    setState(() => _ctrl.fontSize = size);
+  }
+
+  void _handleTextSelection(ScriptTextSelection selection) {
+    if (_mode != ScriptPreviewMode.scanned) return;
+    _removeSelectionOverlay();
+    _selectionOverlay = showScriptSelectionOverlay(
+      context: context,
+      layerLink: _selectionLink,
+      toolbar: ScriptSelectionToolbar(
+        selection: selection,
+        existingCharacters: widget.existingCharacterNames,
+        onDismiss: _removeSelectionOverlay,
+        onAction: (action) async {
+          final line = selection.toLineContext();
+          await widget.onLineContextAction?.call(line, action);
+          _removeSelectionOverlay();
+        },
+        onAssignExistingCharacter: (name) async {
+          await widget.onLineContextAction?.call(
+            selection.toLineContext().copyWithCharacterName(name),
+            ScriptContextAction.markAsCharacter,
+          );
+          _removeSelectionOverlay();
+        },
+      ),
+    );
+  }
+
+  @override
+  void didUpdateWidget(ScriptPreviewPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.script?.path != widget.script?.path) {
+      _setFontSize(ScriptPreviewPanel.defaultFontSize);
+      _setMode(ScriptPreviewMode.scanned);
+    }
   }
 
   Future<void> _openExternally(String path) async {
@@ -125,15 +200,15 @@ class _ScriptPreviewPanelState extends State<ScriptPreviewPanel> {
           canScan: _canScan,
           fontSize: _fontSize,
           showTextZoom: _showTextZoom,
-          onModeChanged: (mode) => setState(() => _mode = mode),
-          onZoomIn: () => setState(() {
-            _fontSize = (_fontSize + 1).clamp(_minFontSize, _maxFontSize);
-          }),
-          onZoomOut: () => setState(() {
-            _fontSize = (_fontSize - 1).clamp(_minFontSize, _maxFontSize);
-          }),
-          onResetZoom: () => setState(() => _fontSize = _defaultFontSize),
+          showFullscreenButton: widget.showFullscreenButton && !widget.isFullscreen,
+          onModeChanged: _setMode,
+          onZoomIn: () =>
+              _setFontSize((_fontSize + 1).clamp(_minFontSize, _maxFontSize)),
+          onZoomOut: () =>
+              _setFontSize((_fontSize - 1).clamp(_minFontSize, _maxFontSize)),
+          onResetZoom: () => _setFontSize(ScriptPreviewPanel.defaultFontSize),
           onOpenExternally: () => _openExternally(script.path),
+          onFullscreen: widget.onFullscreenRequest,
         ),
         if (_mode == ScriptPreviewMode.scanned) ...[
           Divider(height: 1, color: palette.divider),
@@ -143,7 +218,12 @@ class _ScriptPreviewPanelState extends State<ScriptPreviewPanel> {
           ),
         ],
         Divider(height: 1, color: palette.divider),
-        Expanded(child: _buildDocumentView(script)),
+        Expanded(
+          child: CompositedTransformTarget(
+            link: _selectionLink,
+            child: _buildDocumentView(script),
+          ),
+        ),
       ],
     );
   }
@@ -158,13 +238,13 @@ class _ScriptPreviewPanelState extends State<ScriptPreviewPanel> {
         ScriptFileKind.text => _PlainTextDocumentView(
             path: script.path,
             fontSize: _fontSize,
-            scrollController: _textScrollController,
+            scrollController: _ctrl.textScrollController,
           ),
         ScriptFileKind.docx => _DocxReferenceView(
             path: script.path,
             fallbackText: script.displayText,
             fontSize: _fontSize,
-            scrollController: _textScrollController,
+            scrollController: _ctrl.textScrollController,
             onOpenExternally: () => _openExternally(script.path),
           ),
         _ => const SizedBox.shrink(),
@@ -182,27 +262,33 @@ class _ScriptPreviewPanelState extends State<ScriptPreviewPanel> {
           _PlainTextDocumentView(
             path: script.path,
             fontSize: _fontSize,
-            scrollController: _textScrollController,
+            scrollController: _ctrl.textScrollController,
           )
         else if (script.kind == ScriptFileKind.docx)
           _DocxReferenceView(
             path: script.path,
             fallbackText: script.displayText,
             fontSize: _fontSize,
-            scrollController: _textScrollController,
+            scrollController: _ctrl.textScrollController,
             onOpenExternally: () => _openExternally(script.path),
           )
         else
           const SizedBox.shrink(),
         ScriptScannedView(
+          key: _ctrl.scannedViewKey,
           text: script.displayText,
           fontSize: _fontSize,
-          scrollController: _scannedScrollController,
+          scrollController: _ctrl.scannedScrollController,
           includedStartIndices: widget.includedSceneStartIndices,
           sceneColorsByStartIndex: widget.sceneColorsByStartIndex,
           characterColorsByName: widget.characterColorsByName,
+          manualCharacterLines: widget.manualCharacterLines,
+          lineTextOverrides: widget.lineTextOverrides,
           onSluglineTap: widget.onSluglineTap ?? (_) {},
           onCharacterTap: widget.onCharacterTap,
+          onLineContextAction: widget.onLineContextAction,
+          onActiveCharIndexChanged: widget.onActiveCharIndexChanged,
+          onTextSelectionChanged: _handleTextSelection,
         ),
       ],
     );
@@ -216,11 +302,13 @@ class _PreviewToolbar extends StatelessWidget {
   final bool canScan;
   final double fontSize;
   final bool showTextZoom;
+  final bool showFullscreenButton;
   final ValueChanged<ScriptPreviewMode> onModeChanged;
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
   final VoidCallback onResetZoom;
   final VoidCallback onOpenExternally;
+  final VoidCallback? onFullscreen;
 
   const _PreviewToolbar({
     required this.palette,
@@ -229,11 +317,13 @@ class _PreviewToolbar extends StatelessWidget {
     required this.canScan,
     required this.fontSize,
     required this.showTextZoom,
+    required this.showFullscreenButton,
     required this.onModeChanged,
     required this.onZoomIn,
     required this.onZoomOut,
     required this.onResetZoom,
     required this.onOpenExternally,
+    this.onFullscreen,
   });
 
   @override
@@ -271,6 +361,13 @@ class _PreviewToolbar extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                 ),
               ),
+              if (showFullscreenButton && onFullscreen != null)
+                IconButton(
+                  tooltip: 'Pantalla completa',
+                  icon: Icon(Icons.fullscreen, color: palette.accent, size: 20),
+                  onPressed: onFullscreen,
+                  visualDensity: VisualDensity.compact,
+                ),
             ],
           ),
           const SizedBox(height: 8),
@@ -301,7 +398,7 @@ class _PreviewToolbar extends StatelessWidget {
               Expanded(
                 child: Text(
                   mode == ScriptPreviewMode.scanned
-                      ? 'Pulsa escenas o personajes para editarlos'
+                      ? 'Selecciona texto o clic derecho para marcar personajes y escenas'
                       : 'Lectura fiel del documento',
                   style: AppTypography.caption(palette),
                 ),
@@ -378,6 +475,12 @@ class _ScannedLegend extends StatelessWidget {
                 palette.accent.withValues(alpha: 0.18),
                 Icons.edit_outlined,
                 'Escena en la lista',
+              ),
+              _legendChip(
+                palette,
+                palette.surfaceOverlay,
+                Icons.touch_app_outlined,
+                'Selecciona texto o clic derecho / pulsación larga',
               ),
             ],
           ),

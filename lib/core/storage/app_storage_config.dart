@@ -73,7 +73,7 @@ abstract final class AppStorageConfig {
     await Directory(p.join(paths.documentsPath, 'projects'))
         .create(recursive: true);
     final file = await _bootstrapFile();
-    await file.writeAsString(jsonEncode(paths.toJson()));
+    await file.writeAsString(jsonEncode(paths.toJson()), flush: true);
     _cached = paths;
   }
 

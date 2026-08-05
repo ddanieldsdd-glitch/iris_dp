@@ -2,17 +2,14 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../../../core/theme/app_typography.dart';
-import '../../../../core/widgets/app_card.dart';
-import '../../visual_bible_model.dart';
+import '../../bible_section_fields.dart';
 import '../bible_form_widgets.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_unified_references_panel.dart';
 import '../narrative_bridge_card.dart';
 
-/// Sección personalizada de la biblia (template freeform).
+/// Sección personalizada con sub-apartados configurables (texto, imágenes…).
 class CustomBibleSection extends StatefulWidget {
   final int projectId;
   final String sectionId;
@@ -34,28 +31,39 @@ class CustomBibleSection extends StatefulWidget {
 }
 
 class _CustomBibleSectionState extends State<CustomBibleSection> {
-  late TextEditingController _body;
-  late TextEditingController _notes;
+  late Map<String, String> _values;
+  late List<BibleSectionField> _fields;
 
   @override
   void initState() {
     super.initState();
-    final parsed = _parse(widget.contentJson);
-    _body = TextEditingController(text: parsed.$1);
-    _notes = TextEditingController(text: parsed.$2);
+    _reloadFromJson();
   }
 
   @override
   void didUpdateWidget(CustomBibleSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.contentJson != widget.contentJson) {
-      final parsed = _parse(widget.contentJson);
-      _body.text = parsed.$1;
-      _notes.text = parsed.$2;
+      _reloadFromJson();
     }
   }
 
-  (String, String) _parse(String? json) {
+  void _reloadFromJson() {
+    _fields = BibleSectionFieldsConfig.parse(
+      widget.contentJson,
+      widget.sectionId,
+    );
+    _values = BibleSectionFieldsConfig.parseValues(widget.contentJson);
+    final legacy = _parseLegacy(widget.contentJson);
+    if (legacy.$1.isNotEmpty && !_values.containsKey('body')) {
+      _values['body'] = legacy.$1;
+    }
+    if (legacy.$2.isNotEmpty && !_values.containsKey('narrative')) {
+      _values['narrative'] = legacy.$2;
+    }
+  }
+
+  (String, String) _parseLegacy(String? json) {
     if (json == null || json.isEmpty) return ('', '');
     try {
       final decoded = jsonDecode(json);
@@ -71,66 +79,65 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
 
   void _persist() {
     widget.onContentChanged(
-      jsonEncode({
-        'body': _body.text.trim(),
-        'notes': _notes.text.trim(),
-      }),
+      BibleSectionFieldsConfig.encode(_fields, values: _values),
     );
   }
 
-  @override
-  void dispose() {
-    _body.dispose();
-    _notes.dispose();
-    super.dispose();
+  void _setValue(String key, String? value) {
+    setState(() {
+      if (value == null || value.trim().isEmpty) {
+        _values.remove(key);
+      } else {
+        _values[key] = value.trim();
+      }
+    });
+    _persist();
   }
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
+    final items = <Widget>[];
+    for (final field in _fields) {
+      final widget = _buildField(field);
+      if (widget != null) {
+        if (items.isNotEmpty) items.add(const SizedBox(height: AppSpacing.lg));
+        items.add(widget);
+      }
+    }
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      children: [
-        NarrativeBridgeCard(
-          hint: 'Intención narrativa de «${widget.label}»…',
-          value: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
-          onChanged: (v) {
-            _notes.text = v;
-            _persist();
-          },
+      children: items,
+    );
+  }
+
+  Widget? _buildField(BibleSectionField field) {
+    return switch (field.type) {
+      BibleSectionFieldType.narrative => NarrativeBridgeCard(
+          title: field.label,
+          hint: field.hint ?? 'Intención narrativa de «${widget.label}»…',
+          value: _values[field.key],
+          onChanged: (v) => _setValue(field.key, v),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        AppCard(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(widget.label, style: AppTypography.titleMedium(palette)),
-              const SizedBox(height: AppSpacing.md),
-              BibleTextField(
-                label: 'Contenido',
-                hint: 'Notas, criterios, referencias escritas…',
-                maxLines: 12,
-                initialValue: _body.text,
-                onChanged: (v) {
-                  _body.text = v;
-                  _persist();
-                },
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xl),
+      BibleSectionFieldType.references ||
+      BibleSectionFieldType.image =>
         BibleReferencesPanel(
           projectId: widget.projectId,
           sectionId: widget.sectionId,
+          title: field.label,
           onOpenMoodboard: () => BibleNavigationScope.openMoodboardForSection(
             context,
             widget.sectionId,
           ),
         ),
-      ],
-    );
+      BibleSectionFieldType.blocks => null,
+      BibleSectionFieldType.text => BibleTextField(
+          label: field.label,
+          hint: field.hint ?? '',
+          maxLines: field.maxLines,
+          initialValue: _values[field.key] ?? '',
+          onChanged: (v) => _setValue(field.key, v),
+        ),
+    };
   }
 }

@@ -3,8 +3,8 @@
 ## Setup
 
 1. Crea un proyecto en [supabase.com](https://supabase.com)
-2. Ejecuta las migraciones en orden (SQL Editor): `001` … `006_app_releases.sql`
-3. Crea bucket Storage `project-media` (público: no; RLS: sí)
+2. Ejecuta las migraciones en orden (SQL Editor): `001` … `008_storage_project_media_rls.sql`
+3. Verifica el bucket Storage `project-media` (privado, RLS activo — la migración 008 crea políticas)
 4. Copia URL y anon key a las variables de entorno de la app
 
 ## Variables de entorno (build / run)

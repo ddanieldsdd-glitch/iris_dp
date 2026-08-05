@@ -50,14 +50,17 @@ Future<AppVersionSyncResult> syncAfterAppUpdateIfNeeded(WidgetRef ref) async {
   }
 
   try {
-    final result = await ref.read(syncEngineProvider).syncAll();
+    final result = await ref.read(syncEngineProvider).syncOnStartup();
     await CloudSessionStore.setLastSyncedAppVersion(current);
     return AppVersionSyncResult(
       versionChanged: true,
-      syncRan: true,
-      message: result.ok
-          ? 'App actualizada (v${info.version}). Proyectos sincronizados desde la nube.'
-          : result.message ?? 'App actualizada. Revisa la conexión e intenta sync de nuevo.',
+      syncRan: !result.pendingReview,
+      message: result.pendingReview
+          ? result.message
+          : result.ok
+              ? 'App actualizada (v${info.version}). Proyectos sincronizados.'
+              : result.message ??
+                  'App actualizada. Revisa la conexión e intenta sync de nuevo.',
     );
   } catch (e) {
     return AppVersionSyncResult(

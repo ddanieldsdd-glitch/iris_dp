@@ -14,11 +14,13 @@ import '../visual_bible/visual_bible_screen.dart';
 import '../luka_export/luka_bridge_screen.dart';
 import '../storyboard/storyboard_screen.dart';
 import '../camera_plan/camera_plan_screen.dart';
-import '../daily_pdf/daily_order_screen.dart';
+import '../shoot_documents/shoot_documents_screen.dart';
 import '../equipment/equipment_screen.dart';
 import '../locations/locations_screen.dart';
 import '../script_import/script_import_screen.dart';
 import '../technical_script/technical_script_screen.dart';
+import '../shoot_documents/shoot_document_import_actions.dart';
+import '../shoot_documents/shoot_document_service.dart';
 import 'project_hub_destinations.dart';
 import 'project_hub_cover.dart';
 import 'project_module_stub_screen.dart';
@@ -35,13 +37,17 @@ class ProjectHubScreen extends ConsumerStatefulWidget {
 class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
   int _sceneCount = 0;
   int _planCount = 0;
+  ShootDocument? _primaryShootDoc;
   int _statsToken = 0;
   int _visualsToken = 0;
   List<String> _moodboardPaths = const [];
   List<String> _storyboardPaths = const [];
 
-  ProjectHubStats get _stats =>
-      ProjectHubStats(sceneCount: _sceneCount, planCount: _planCount);
+  ProjectHubStats get _stats => ProjectHubStats(
+        sceneCount: _sceneCount,
+        planCount: _planCount,
+        projectStatus: widget.project.status,
+      );
 
   @override
   void initState() {
@@ -81,9 +87,15 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
     if (!mounted || token != _statsToken) return;
     final plans = await db.countShotsWithCameraPlan(widget.project.id);
     if (!mounted || token != _statsToken) return;
+    final primaryDoc = await ShootDocumentService.primaryDocument(
+      db,
+      widget.project.id,
+    );
+    if (!mounted || token != _statsToken) return;
     setState(() {
       _sceneCount = scenes.length;
       _planCount = plans;
+      _primaryShootDoc = primaryDoc;
     });
   }
 
@@ -103,9 +115,10 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
         CameraPlanScreen(projectId: projectId),
       ProjectHubDestinationId.technicalScript =>
         TechnicalScriptScreen(projectId: projectId),
-      ProjectHubDestinationId.dailyOrder => DailyOrderScreen(
+      ProjectHubDestinationId.dailyOrder => ShootDocumentsScreen(
           projectId: projectId,
           projectName: widget.project.name,
+          projectStatus: widget.project.status,
         ),
       ProjectHubDestinationId.equipment =>
         EquipmentScreen(projectId: projectId),
@@ -233,6 +246,40 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
                     'Maestro → Set → Plano: guion, localizaciones, plantas y guion técnico.',
                     style: AppTypography.bodyMedium(palette),
                   ),
+                  if (_stats.isShooting && _primaryShootDoc != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    AppCard(
+                      onTap: () => ShootDocumentImportActions.openEditor(
+                        context,
+                        projectId: widget.project.id,
+                        documentId: _primaryShootDoc!.id,
+                      ),
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      focused: true,
+                      child: Row(
+                        children: [
+                          Icon(Icons.star, color: palette.accent, size: 20),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Documento activo hoy',
+                                  style: AppTypography.label(palette),
+                                ),
+                                Text(
+                                  _primaryShootDoc!.name,
+                                  style: AppTypography.titleMedium(palette),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right, color: palette.textSecondary),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (_stats.hasScenes) ...[
                     const SizedBox(height: AppSpacing.md),
                     AppCard(
@@ -375,7 +422,7 @@ class _HubCard extends StatelessWidget {
               const Spacer(),
               if (highlighted)
                 _Badge(
-                  label: 'Empezar aquí',
+                  label: stats.isShooting ? 'En rodaje' : 'Empezar aquí',
                   color: destination.accentColor,
                   palette: palette,
                 )

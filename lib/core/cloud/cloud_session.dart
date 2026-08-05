@@ -8,6 +8,30 @@ class CloudSessionStore {
   static const _onboardingDoneKey = 'iris_onboarding_complete';
   static const _migrationDoneKey = 'iris_cloud_migration_done';
   static const _lastSyncedVersionKey = 'iris_last_synced_app_version';
+  static const _lastSyncAtKey = 'iris_last_cloud_sync_at';
+  static const _deletedCloudProjectsKey = 'iris_deleted_cloud_project_ids';
+
+  static Future<Set<String>> tombstonedCloudProjectIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getStringList(_deletedCloudProjectsKey) ?? []).toSet();
+  }
+
+  static Future<void> tombstoneCloudProject(String cloudId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_deletedCloudProjectsKey) ?? [];
+    if (!list.contains(cloudId)) {
+      list.add(cloudId);
+      await prefs.setStringList(_deletedCloudProjectsKey, list);
+    }
+  }
+
+  static Future<void> clearTombstone(String cloudId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_deletedCloudProjectsKey) ?? [];
+    if (list.remove(cloudId)) {
+      await prefs.setStringList(_deletedCloudProjectsKey, list);
+    }
+  }
 
   static Future<String?> workspaceId() async {
     final prefs = await SharedPreferences.getInstance();
@@ -63,6 +87,18 @@ class CloudSessionStore {
   static Future<void> setLastSyncedAppVersion(String version) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastSyncedVersionKey, version);
+  }
+
+  static Future<DateTime?> lastSyncAt() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ms = prefs.getInt(_lastSyncAtKey);
+    if (ms == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(ms);
+  }
+
+  static Future<void> setLastSyncAt(DateTime time) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_lastSyncAtKey, time.millisecondsSinceEpoch);
   }
 
   static Future<void> clear() async {

@@ -16,6 +16,8 @@ import '../look_bible/look_bible_model.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import 'moodboard_association.dart';
 import '../locations/locations_screen.dart';
+import '../../core/templates/user_template_service.dart';
+import 'bible_style_guide_sheet.dart';
 import 'visual_bible_model.dart';
 import 'visual_bible_pdf_service.dart';
 import 'widgets/bible_navigation_scope.dart';
@@ -64,7 +66,15 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
 
   Future<void> _bootstrap() async {
     final db = ref.read(databaseProvider);
+    final hadBible = await db.getVisualBibleForProject(widget.projectId) != null;
     final bible = await db.ensureVisualBibleForProject(widget.projectId);
+    if (!hadBible) {
+      await UserTemplateService.maybeApplyBibleTemplateOnCreate(
+        db: db,
+        projectId: widget.projectId,
+        bibleId: bible.id,
+      );
+    }
     final project = await db.getProject(widget.projectId);
     if (mounted) {
       setState(() {
@@ -78,12 +88,21 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
   @override
   void dispose() {
     _saveDebounce?.cancel();
+    if (!_saved && _data != null) {
+      unawaited(_persistNow(_data!));
+    }
     super.dispose();
   }
 
   void _scheduleSave(VisualBibleData data) {
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(milliseconds: 600), () => _save(data));
+  }
+
+  Future<void> _persistNow(VisualBibleData data) async {
+    final db = ref.read(databaseProvider);
+    final id = await db.upsertVisualBible(data.toCompanion());
+    data.id = id;
   }
 
   Future<void> _save(VisualBibleData data) async {
@@ -428,6 +447,18 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
               },
             ),
           IconButton(
+            icon: Icon(Icons.palette_outlined, color: palette.accent),
+            tooltip: 'Guía visual del proyecto',
+            onPressed: () {
+              final bibleId = _data?.id ?? 0;
+              BibleStyleGuideSheet.show(
+                context,
+                projectId: widget.projectId,
+                bibleId: bibleId > 0 ? bibleId : null,
+              );
+            },
+          ),
+          IconButton(
             icon: Icon(Icons.picture_as_pdf_outlined, color: palette.textSecondary),
             tooltip: 'Exportar PDF',
             onPressed: () => _exportPdf(),
@@ -494,6 +525,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                                     isScrollControlled: true,
                                     builder: (_) => BibleStructureEditor(
                                       bibleId: bibleId,
+                                      projectId: widget.projectId,
                                     ),
                                   )
                               : null,

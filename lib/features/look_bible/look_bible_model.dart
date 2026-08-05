@@ -19,6 +19,7 @@ abstract final class GoodNotesModuleType {
   static const guionTecnico = 'guion_tecnico';
   static const plantaCamara = 'planta_camara';
   static const ordenRodaje = 'orden_rodaje';
+  static const shootDocument = 'shoot_document';
   static const lookBible = 'look_bible';
   static const visualBible = 'visual_bible';
   static const storyboard = 'storyboard';
@@ -26,7 +27,8 @@ abstract final class GoodNotesModuleType {
   static String label(String type) => switch (type) {
         guionTecnico => 'Guion técnico',
         plantaCamara => 'Planta de cámara',
-        ordenRodaje => 'Orden de rodaje',
+        ordenRodaje => 'Documentos para el rodaje',
+        shootDocument => 'Documento de rodaje',
         lookBible => 'Look Bible',
         visualBible => 'Biblia Visual',
         storyboard => 'Storyboard',

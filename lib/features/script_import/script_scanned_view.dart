@@ -4,9 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import 'script_context_menu.dart';
 import 'script_file_reader.dart';
 import 'script_parser.dart';
 import 'script_screenplay_layout.dart';
+import 'script_selection_toolbar.dart';
 
 enum _ScriptEntryKind { blank, pageBreak, slugline, screenplayLine, characterLine }
 
@@ -17,8 +19,10 @@ class _ScriptEntry {
   final RawSlugline? slug;
   final String? displayLine;
   final String? text;
+  final int? charStartIndex;
   final ScreenplayLineKind? lineKind;
   final bool included;
+  final bool isManualCharacter;
   final Color? sceneColor;
   final String? characterName;
   final Color? characterColor;
@@ -30,8 +34,10 @@ class _ScriptEntry {
     this.slug,
     this.displayLine,
     this.text,
+    this.charStartIndex,
     this.lineKind,
     this.included = false,
+    this.isManualCharacter = false,
     this.sceneColor,
     this.characterName,
     this.characterColor,
@@ -64,17 +70,21 @@ class _ScriptEntry {
   factory _ScriptEntry.screenplayLine({
     required String text,
     required ScreenplayLineKind lineKind,
+    int? charStartIndex,
   }) =>
       _ScriptEntry._(
         kind: _ScriptEntryKind.screenplayLine,
         text: text,
         lineKind: lineKind,
+        charStartIndex: charStartIndex,
       );
 
   factory _ScriptEntry.characterLine({
     required String text,
     required String characterName,
     required Color characterColor,
+    int? charStartIndex,
+    bool isManualCharacter = false,
   }) =>
       _ScriptEntry._(
         kind: _ScriptEntryKind.characterLine,
@@ -82,6 +92,8 @@ class _ScriptEntry {
         lineKind: ScreenplayLineKind.character,
         characterName: characterName,
         characterColor: characterColor,
+        charStartIndex: charStartIndex,
+        isManualCharacter: isManualCharacter,
       );
 }
 
@@ -93,8 +105,14 @@ class ScriptScannedView extends StatefulWidget {
   final Set<int> includedStartIndices;
   final Map<int, Color> sceneColorsByStartIndex;
   final Map<String, Color> characterColorsByName;
+  final Set<String> manualCharacterLines;
+  final Map<String, String> lineTextOverrides;
   final ValueChanged<RawSlugline> onSluglineTap;
   final ValueChanged<String>? onCharacterTap;
+  final Future<void> Function(ScriptLineContext line, ScriptContextAction action)?
+      onLineContextAction;
+  final ValueChanged<int?>? onActiveCharIndexChanged;
+  final ValueChanged<ScriptTextSelection>? onTextSelectionChanged;
 
   const ScriptScannedView({
     super.key,
@@ -104,15 +122,20 @@ class ScriptScannedView extends StatefulWidget {
     required this.includedStartIndices,
     this.sceneColorsByStartIndex = const {},
     this.characterColorsByName = const {},
+    this.manualCharacterLines = const {},
+    this.lineTextOverrides = const {},
     required this.onSluglineTap,
     this.onCharacterTap,
+    this.onLineContextAction,
+    this.onActiveCharIndexChanged,
+    this.onTextSelectionChanged,
   });
 
   @override
-  State<ScriptScannedView> createState() => _ScriptScannedViewState();
+  State<ScriptScannedView> createState() => ScriptScannedViewState();
 }
 
-class _ScriptScannedViewState extends State<ScriptScannedView> {
+class ScriptScannedViewState extends State<ScriptScannedView> {
   static const _paperColor = Color(0xFFF8F6F0);
   static const _inkColor = Color(0xFF1A1A1A);
   static const _lineHeight = 1.65;
@@ -120,11 +143,83 @@ class _ScriptScannedViewState extends State<ScriptScannedView> {
 
   List<_ScriptEntry>? _entries;
   TextStyle? _baseStyle;
+  final Map<int, GlobalKey> _sluglineKeys = {};
+  final List<int> _scrollAnchorIndices = [];
 
   @override
   void initState() {
     super.initState();
     _rebuildEntries();
+    widget.scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    widget.scrollController.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  Future<void> scrollToCharIndex(int charIndex) async {
+    GlobalKey? key;
+    var nearestDistance = 1 << 30;
+    for (final entry in _sluglineKeys.entries) {
+      final distance = (entry.key - charIndex).abs();
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        key = entry.value;
+      }
+    }
+    if (key?.currentContext != null) {
+      await Scrollable.ensureVisible(
+        key!.currentContext!,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+        alignment: 0.08,
+      );
+      return;
+    }
+
+    if (_scrollAnchorIndices.isEmpty) return;
+    var targetListIndex = 0;
+    for (var i = 0; i < _scrollAnchorIndices.length; i++) {
+      if (_scrollAnchorIndices[i] <= charIndex) {
+        targetListIndex = i;
+      } else {
+        break;
+      }
+    }
+    final estimatedOffset = targetListIndex * widget.fontSize * _lineHeight * 1.2;
+    if (widget.scrollController.hasClients) {
+      await widget.scrollController.animateTo(
+        estimatedOffset.clamp(
+          0.0,
+          widget.scrollController.position.maxScrollExtent,
+        ),
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _onScroll() {
+    if (!widget.scrollController.hasClients || _scrollAnchorIndices.isEmpty) {
+      return;
+    }
+    final offset = widget.scrollController.offset + 48;
+    var activeIndex = _scrollAnchorIndices.first;
+    final lineHeight = widget.fontSize * _lineHeight;
+    final approxLine = (offset / (lineHeight * 0.95)).floor();
+    if (approxLine >= 0 && approxLine < _scrollAnchorIndices.length) {
+      activeIndex = _scrollAnchorIndices[approxLine.clamp(
+        0,
+        _scrollAnchorIndices.length - 1,
+      )];
+    } else {
+      for (final anchor in _scrollAnchorIndices) {
+        if (anchor <= offset) activeIndex = anchor;
+      }
+    }
+    widget.onActiveCharIndexChanged?.call(activeIndex);
   }
 
   @override
@@ -134,9 +229,42 @@ class _ScriptScannedViewState extends State<ScriptScannedView> {
         oldWidget.fontSize != widget.fontSize ||
         oldWidget.includedStartIndices != widget.includedStartIndices ||
         oldWidget.sceneColorsByStartIndex != widget.sceneColorsByStartIndex ||
-        oldWidget.characterColorsByName != widget.characterColorsByName) {
+        oldWidget.characterColorsByName != widget.characterColorsByName ||
+        oldWidget.manualCharacterLines != widget.manualCharacterLines ||
+        oldWidget.lineTextOverrides != widget.lineTextOverrides) {
       _rebuildEntries();
     }
+  }
+
+  String _displayTextForLine(String rawLine) {
+    return widget.lineTextOverrides[rawLine.trim()] ?? rawLine.trim();
+  }
+
+  bool _isManualCharacterLine(String trimmed) =>
+      widget.manualCharacterLines.contains(trimmed);
+
+  _ScriptEntry? _tryBuildCharacterEntry({
+    required String rawLine,
+    required String trimmed,
+    required int charStartIndex,
+    required bool forced,
+  }) {
+    final display = _displayTextForLine(rawLine);
+    final parsedName =
+        ScreenplayLineClassifier.parseCharacterName(display) ??
+            ScreenplayLineClassifier.parseCharacterName(trimmed);
+    final characterName = parsedName ?? display.toUpperCase();
+    final colorKey = characterName.toUpperCase();
+    final characterColor = widget.characterColorsByName[colorKey];
+    if (characterColor == null && !forced) return null;
+
+    return _ScriptEntry.characterLine(
+      text: display,
+      characterName: characterName,
+      characterColor: characterColor ?? const Color(0xFF2997FF),
+      charStartIndex: charStartIndex,
+      isManualCharacter: forced || _isManualCharacterLine(trimmed),
+    );
   }
 
   void _rebuildEntries() {
@@ -164,8 +292,9 @@ class _ScriptScannedViewState extends State<ScriptScannedView> {
     }
 
     for (var i = 0; i < lines.length; i++) {
-      final line = lines[i];
+      var line = lines[i];
       final trimmed = line.trim();
+      final lineStartIndex = charIndex;
 
       if (trimmed.isEmpty) {
         pendingBlankLines++;
@@ -173,7 +302,10 @@ class _ScriptScannedViewState extends State<ScriptScannedView> {
         continue;
       }
 
-      if (isScriptPageMarker(trimmed)) {
+      line = widget.lineTextOverrides[trimmed] ?? line;
+      final displayTrimmed = line.trim();
+
+      if (isScriptPageMarker(displayTrimmed)) {
         flushBlanks();
         classifier.reset();
         entries.add(_ScriptEntry.pageBreak(pageNumberFromMarker(trimmed)));
@@ -208,49 +340,135 @@ class _ScriptScannedViewState extends State<ScriptScannedView> {
         continue;
       }
 
-      if (RegExp(r'^\d+\.?\s*$').hasMatch(trimmed)) {
+      if (RegExp(r'^\d+\.?\s*$').hasMatch(displayTrimmed)) {
         entries.add(_ScriptEntry.screenplayLine(
-          text: trimmed,
+          text: displayTrimmed,
           lineKind: ScreenplayLineKind.pageNumber,
+          charStartIndex: lineStartIndex,
         ));
-        charIndex += line.length + 1;
+        charIndex += lines[i].length + 1;
         continue;
+      }
+
+      if (_isManualCharacterLine(trimmed)) {
+        classifier.reset();
+        final manualEntry = _tryBuildCharacterEntry(
+          rawLine: lines[i],
+          trimmed: trimmed,
+          charStartIndex: lineStartIndex,
+          forced: true,
+        );
+        if (manualEntry != null) {
+          entries.add(manualEntry);
+          charIndex += lines[i].length + 1;
+          continue;
+        }
       }
 
       final leadingSpaces = line.length - line.trimLeft().length;
       final kind = classifier.classifyLine(
-        trimmed,
+        displayTrimmed,
         isSlugline: false,
         leadingSpaces: leadingSpaces,
       );
       if (kind == ScreenplayLineKind.blank) {
-        charIndex += line.length + 1;
+        charIndex += lines[i].length + 1;
         continue;
       }
 
       if (kind == ScreenplayLineKind.character) {
-        final characterName = ScreenplayLineClassifier.parseCharacterName(trimmed);
-        if (characterName != null) {
-          final colorKey = characterName.toUpperCase();
-          final characterColor = widget.characterColorsByName[colorKey];
-          if (characterColor != null) {
-            entries.add(_ScriptEntry.characterLine(
-              text: trimmed,
-              characterName: characterName,
-              characterColor: characterColor,
-            ));
-            charIndex += line.length + 1;
-            continue;
-          }
+        final characterEntry = _tryBuildCharacterEntry(
+          rawLine: lines[i],
+          trimmed: trimmed,
+          charStartIndex: lineStartIndex,
+          forced: false,
+        );
+        if (characterEntry != null) {
+          entries.add(characterEntry);
+          charIndex += lines[i].length + 1;
+          continue;
         }
       }
 
-      entries.add(_ScriptEntry.screenplayLine(text: trimmed, lineKind: kind));
-      charIndex += line.length + 1;
+      entries.add(_ScriptEntry.screenplayLine(
+        text: displayTrimmed,
+        lineKind: kind,
+        charStartIndex: lineStartIndex,
+      ));
+      charIndex += lines[i].length + 1;
     }
 
     flushBlanks();
     _entries = entries;
+    _sluglineKeys.clear();
+    _scrollAnchorIndices.clear();
+    for (final entry in entries) {
+      if (entry.charStartIndex != null) {
+        _scrollAnchorIndices.add(entry.charStartIndex!);
+      }
+      if (entry.kind == _ScriptEntryKind.slugline && entry.slug != null) {
+        _sluglineKeys.putIfAbsent(entry.slug!.startIndex, () => GlobalKey());
+      }
+    }
+  }
+
+  void _notifySelection({
+    required String lineText,
+    required TextSelection selection,
+    int? charStartIndex,
+    ScreenplayLineKind? lineKind,
+  }) {
+    if (selection.isCollapsed || widget.onTextSelectionChanged == null) return;
+    final start = selection.start.clamp(0, lineText.length);
+    final end = selection.end.clamp(0, lineText.length);
+    if (start >= end) return;
+    widget.onTextSelectionChanged!(ScriptTextSelection(
+      selectedText: lineText.substring(start, end),
+      lineText: lineText,
+      charStartIndex:
+          charStartIndex != null ? charStartIndex + start : null,
+      charEndIndex: charStartIndex != null ? charStartIndex + end : null,
+      lineKind: lineKind,
+    ));
+  }
+
+  Future<void> _openContextMenu(
+    BuildContext context,
+    Offset globalPosition,
+    _ScriptEntry entry,
+  ) async {
+    if (widget.onLineContextAction == null) return;
+
+    final lineContext = switch (entry.kind) {
+      _ScriptEntryKind.slugline => ScriptLineContext(
+          lineText: entry.displayLine!,
+          charStartIndex: entry.slug!.startIndex,
+          lineKind: ScreenplayLineKind.slugline,
+          slugline: entry.slug,
+        ),
+      _ScriptEntryKind.characterLine => ScriptLineContext(
+          lineText: entry.text!,
+          charStartIndex: entry.charStartIndex,
+          lineKind: ScreenplayLineKind.character,
+          characterName: entry.characterName,
+          isManualCharacter: entry.isManualCharacter,
+        ),
+      _ScriptEntryKind.screenplayLine => ScriptLineContext(
+          lineText: entry.text!,
+          charStartIndex: entry.charStartIndex,
+          lineKind: entry.lineKind,
+        ),
+      _ => null,
+    };
+    if (lineContext == null) return;
+
+    final action = await showScriptContextMenu(
+      context,
+      globalPosition: globalPosition,
+      line: lineContext,
+    );
+    if (action == null) return;
+    await widget.onLineContextAction!(lineContext, action);
   }
 
   @override
@@ -295,8 +513,12 @@ class _ScriptScannedViewState extends State<ScriptScannedView> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: entries.length,
-                    itemBuilder: (context, index) =>
-                        _buildEntry(context, entries[index], baseStyle, palette),
+                    itemBuilder: (context, index) => _buildEntry(
+                      context,
+                      entries[index],
+                      baseStyle,
+                      palette,
+                    ),
                   ),
                 ),
               ),
@@ -317,6 +539,7 @@ class _ScriptScannedViewState extends State<ScriptScannedView> {
       _ScriptEntryKind.blank => SizedBox(height: entry.height),
       _ScriptEntryKind.pageBreak => _PageBreak(page: entry.page, palette: palette),
       _ScriptEntryKind.slugline => _SluglineRow(
+          key: _sluglineKeys[entry.slug!.startIndex],
           slug: entry.slug!,
           displayLine: entry.displayLine!,
           baseStyle: baseStyle,
@@ -325,6 +548,12 @@ class _ScriptScannedViewState extends State<ScriptScannedView> {
           palette: palette,
           innerWidth: _innerMaxWidth,
           onTap: () => widget.onSluglineTap(entry.slug!),
+          onSecondaryTap: widget.onLineContextAction == null
+              ? null
+              : (position) => _openContextMenu(context, position, entry),
+          onLongPress: widget.onLineContextAction == null
+              ? null
+              : (position) => _openContextMenu(context, position, entry),
         ),
       _ScriptEntryKind.screenplayLine => _ScreenplayLine(
           text: entry.text!,
@@ -336,6 +565,20 @@ class _ScriptScannedViewState extends State<ScriptScannedView> {
                 )
               : _styleForKind(baseStyle, entry.lineKind!),
           innerWidth: _innerMaxWidth,
+          onSecondaryTap: widget.onLineContextAction == null
+              ? null
+              : (position) => _openContextMenu(context, position, entry),
+          onLongPress: widget.onLineContextAction == null
+              ? null
+              : (position) => _openContextMenu(context, position, entry),
+          onSelectionChanged: widget.onTextSelectionChanged == null
+              ? null
+              : (selection, _) => _notifySelection(
+                    lineText: entry.text!,
+                    selection: selection,
+                    charStartIndex: entry.charStartIndex,
+                    lineKind: entry.lineKind,
+                  ),
         ),
       _ScriptEntryKind.characterLine => _CharacterLineRow(
           text: entry.text!,
@@ -347,6 +590,20 @@ class _ScriptScannedViewState extends State<ScriptScannedView> {
           onTap: widget.onCharacterTap == null
               ? null
               : () => widget.onCharacterTap!(entry.characterName!),
+          onSecondaryTap: widget.onLineContextAction == null
+              ? null
+              : (position) => _openContextMenu(context, position, entry),
+          onLongPress: widget.onLineContextAction == null
+              ? null
+              : (position) => _openContextMenu(context, position, entry),
+          onSelectionChanged: widget.onTextSelectionChanged == null
+              ? null
+              : (selection, _) => _notifySelection(
+                    lineText: entry.text!,
+                    selection: selection,
+                    charStartIndex: entry.charStartIndex,
+                    lineKind: ScreenplayLineKind.character,
+                  ),
         ),
     };
   }
@@ -373,26 +630,42 @@ class _ScreenplayLine extends StatelessWidget {
   final ScreenplayLineKind kind;
   final TextStyle style;
   final double innerWidth;
+  final ValueChanged<Offset>? onSecondaryTap;
+  final ValueChanged<Offset>? onLongPress;
+  final void Function(TextSelection selection, SelectionChangedCause? cause)?
+      onSelectionChanged;
 
   const _ScreenplayLine({
     required this.text,
     required this.kind,
     required this.style,
     required this.innerWidth,
+    this.onSecondaryTap,
+    this.onLongPress,
+    this.onSelectionChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     final margins = ScreenplayMargins.forKind(kind, innerWidth);
-    return Padding(
-      padding: EdgeInsets.only(
-        left: margins.left,
-        right: margins.right,
-        bottom: kind == ScreenplayLineKind.character ? 2 : 0,
-      ),
-      child: SelectableText(
-        text,
-        style: style,
+    return GestureDetector(
+      onSecondaryTapUp: onSecondaryTap == null
+          ? null
+          : (details) => onSecondaryTap!(details.globalPosition),
+      onLongPressStart: onLongPress == null
+          ? null
+          : (details) => onLongPress!(details.globalPosition),
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: margins.left,
+          right: margins.right,
+          bottom: kind == ScreenplayLineKind.character ? 2 : 0,
+        ),
+        child: SelectableText(
+          text,
+          style: style,
+          onSelectionChanged: onSelectionChanged,
+        ),
       ),
     );
   }
@@ -434,8 +707,11 @@ class _SluglineRow extends StatelessWidget {
   final AppPalette palette;
   final double innerWidth;
   final VoidCallback onTap;
+  final ValueChanged<Offset>? onSecondaryTap;
+  final ValueChanged<Offset>? onLongPress;
 
   const _SluglineRow({
+    super.key,
     required this.slug,
     required this.displayLine,
     required this.baseStyle,
@@ -444,6 +720,8 @@ class _SluglineRow extends StatelessWidget {
     required this.palette,
     required this.innerWidth,
     required this.onTap,
+    this.onSecondaryTap,
+    this.onLongPress,
   });
 
   @override
@@ -467,6 +745,16 @@ class _SluglineRow extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(4),
           onTap: onTap,
+          onSecondaryTapUp: onSecondaryTap == null
+              ? null
+              : (details) => onSecondaryTap!(details.globalPosition),
+          onLongPress: onLongPress == null
+              ? null
+              : () {
+                  final box = context.findRenderObject() as RenderBox?;
+                  if (box == null) return;
+                  onLongPress!(box.localToGlobal(Offset.zero));
+                },
           child: Container(
             width: innerWidth,
             decoration: BoxDecoration(
@@ -516,6 +804,10 @@ class _CharacterLineRow extends StatelessWidget {
   final AppPalette palette;
   final double innerWidth;
   final VoidCallback? onTap;
+  final ValueChanged<Offset>? onSecondaryTap;
+  final ValueChanged<Offset>? onLongPress;
+  final void Function(TextSelection selection, SelectionChangedCause? cause)?
+      onSelectionChanged;
 
   const _CharacterLineRow({
     required this.text,
@@ -525,6 +817,9 @@ class _CharacterLineRow extends StatelessWidget {
     required this.palette,
     required this.innerWidth,
     this.onTap,
+    this.onSecondaryTap,
+    this.onLongPress,
+    this.onSelectionChanged,
   });
 
   @override
@@ -548,6 +843,16 @@ class _CharacterLineRow extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(4),
           onTap: onTap,
+          onSecondaryTapUp: onSecondaryTap == null
+              ? null
+              : (details) => onSecondaryTap!(details.globalPosition),
+          onLongPress: onLongPress == null
+              ? null
+              : () {
+                  final box = context.findRenderObject() as RenderBox?;
+                  if (box == null) return;
+                  onLongPress!(box.localToGlobal(Offset.zero));
+                },
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(4),
@@ -566,9 +871,10 @@ class _CharacterLineRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
+                  child: SelectableText(
                     text,
                     style: baseStyle.copyWith(fontWeight: FontWeight.w700),
+                    onSelectionChanged: onSelectionChanged,
                   ),
                 ),
                 if (onTap != null)

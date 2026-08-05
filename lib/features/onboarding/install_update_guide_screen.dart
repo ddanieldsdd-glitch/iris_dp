@@ -1,18 +1,25 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/cloud/cloud_providers.dart';
 import '../../core/cloud/supabase_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/update/app_release_service.dart';
+import '../../core/update/sidestore_guide_sheet.dart';
+import '../../core/update/update_actions_row.dart';
 import '../../core/widgets/app_button.dart';
 import 'cloud_connection_widgets.dart';
 
 /// Guía completa de instalación y actualización multi-dispositivo.
-class InstallUpdateGuideScreen extends StatelessWidget {
+class InstallUpdateGuideScreen extends ConsumerWidget {
   const InstallUpdateGuideScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final cloud = SupabaseConfig.isConfigured;
 
@@ -28,7 +35,16 @@ class InstallUpdateGuideScreen extends StatelessWidget {
             icon: Icons.download_outlined,
             children: [
               _SubSection(
-                title: 'macOS — generar instalador',
+                title: 'macOS / Windows — actualizar desde la app',
+                bullets: const [
+                  'Con sesión iniciada verás un banner cuando haya versión nueva',
+                  'Pulsa «Actualizar ahora» — descarga e instala sin abrir GitHub',
+                  'En Mac: arrastra la app del .dmg a Aplicaciones',
+                  'Pulsa «Ya actualicé» para sincronizar proyectos',
+                ],
+              ),
+              _SubSection(
+                title: 'macOS — generar instalador manual',
                 bullets: const [
                   'En Terminal: cd iris_dp && ./scripts/build_release.sh',
                   'Abre build/dmg/IRIS-DP.dmg → arrastra a Aplicaciones',
@@ -52,14 +68,35 @@ class InstallUpdateGuideScreen extends StatelessWidget {
                 ],
               ),
               _SubSection(
-                title: 'iPad — generar e instalar',
+                title: 'iPad — SideStore (gratis, uso personal)',
                 bullets: const [
-                  'En Mac: ./scripts/build_ipad.sh (requiere Xcode)',
-                  'TestFlight: sube el .ipa con Transporter → invita testers',
-                  'Desarrollo: conecta iPad al Mac → flutter run -d <id>',
+                  'Cada release incluye IRIS-DP.ipa en GitHub (generado por CI)',
+                  'Descarga el IPA desde la app (banner o Ajustes → Estado del sistema)',
+                  'Abre el archivo con SideStore — re-firma con tu Apple ID',
+                  'Refresca SideStore en Wi‑Fi cada ~7 días para evitar caducidad',
                   'Inicia sesión con el mismo email y pulsa sync',
                 ],
               ),
+              if (cloud && !Platform.isIOS)
+                _IpadDownloadSection(ref: ref),
+              if (cloud && Platform.isIOS)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.md),
+                  child: AppButton(
+                    label: 'Guía SideStore',
+                    icon: Icons.tablet_mac_outlined,
+                    onTap: () async {
+                      final release = await fetchIpadRelease(
+                        client: ref.read(supabaseClientProvider),
+                      );
+                      if (!context.mounted) return;
+                      await SideStoreGuideSheet.show(
+                        context,
+                        ipaDownloadUrl: release?.downloadUrl,
+                      );
+                    },
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -379,6 +416,38 @@ class _FaqTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _IpadDownloadSection extends StatelessWidget {
+  final WidgetRef ref;
+
+  const _IpadDownloadSection({required this.ref});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return FutureBuilder(
+      future: fetchIpadRelease(client: ref.read(supabaseClientProvider)),
+      builder: (context, snap) {
+        final release = snap.data;
+        if (release == null) {
+          return Text(
+            'Inicia sesión para ver el enlace IPA más reciente.',
+            style: AppTypography.caption(palette),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.md),
+          child: IpadDownloadLinkRow(
+            downloadUrl: release.downloadUrl,
+            version: release.version,
+          ),
+        );
+      },
     );
   }
 }

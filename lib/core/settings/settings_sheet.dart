@@ -11,6 +11,8 @@ import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_theme_toggle.dart';
 import '../update/settings_update_section.dart';
+import 'settings_health_section.dart';
+import 'user_templates_settings_section.dart';
 import '../../features/onboarding/app_tutorial_store.dart';
 import '../../features/onboarding/initial_tutorial_flow.dart';
 import '../../features/onboarding/install_update_guide_screen.dart';
@@ -173,7 +175,11 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
                   },
                 ),
                 const SizedBox(height: AppSpacing.lg),
+                const UserTemplatesSettingsSection(),
+                const SizedBox(height: AppSpacing.lg),
                 const SettingsUpdateSection(),
+                const SizedBox(height: AppSpacing.lg),
+                const SettingsHealthSection(),
               ],
               const SizedBox(height: AppSpacing.lg),
               Text('Ayuda', style: AppTypography.titleMedium(palette)),

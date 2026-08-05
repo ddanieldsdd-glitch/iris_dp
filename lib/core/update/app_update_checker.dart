@@ -11,16 +11,49 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Resultado de comprobar si hay una versión más nueva en la nube.
 class AppUpdateCheckResult {
   final AppRelease? availableRelease;
+  final AppRelease? remoteLatest;
+  final String localVersion;
+  final int localBuild;
+  final int? dismissedBuild;
   final bool skippedThrottle;
   final String? error;
 
   const AppUpdateCheckResult({
     this.availableRelease,
+    this.remoteLatest,
+    this.localVersion = '',
+    this.localBuild = 0,
+    this.dismissedBuild,
     this.skippedThrottle = false,
     this.error,
   });
 
   bool get hasUpdate => availableRelease != null;
+
+  bool get hasRemoteRelease => remoteLatest != null;
+
+  /// La app en ejecución es más nueva que lo publicado en Supabase.
+  bool get installedIsNewerThanPublished {
+    final remote = remoteLatest;
+    if (remote == null) return false;
+    return !isRemoteNewer(
+      localBuild: localBuild,
+      localVersion: localVersion,
+      remoteBuild: remote.buildNumber,
+      remoteVersion: remote.version,
+    ) &&
+        (localBuild > remote.buildNumber ||
+            _compareSemver(localVersion, remote.version) > 0);
+  }
+
+  String get localVersionLabel =>
+      localVersion.isEmpty ? '—' : '$localVersion ($localBuild)';
+
+  String? get remoteVersionLabel {
+    final remote = remoteLatest;
+    if (remote == null) return null;
+    return '${remote.version} (${remote.buildNumber})';
+  }
 }
 
 /// Plataforma actual para consultar `app_releases`.
@@ -74,16 +107,30 @@ Future<AppUpdateCheckResult> checkForAppUpdate({
 
   final platform = currentReleasePlatform();
 
+  final info = await PackageInfo.fromPlatform();
+  final localBuild = int.tryParse(info.buildNumber) ?? 0;
+  final localVersion = info.version;
+
   if (!force) {
     final last = await AppUpdateStore.lastCheckAt();
     if (last != null &&
         DateTime.now().difference(last) < const Duration(hours: 24)) {
-      final cached = await _resolveCachedUpdate(platform);
+      final cached = await _resolveCachedUpdate(
+        platform,
+        localBuild: localBuild,
+        localVersion: localVersion,
+        ignoreDismissed: false,
+      );
       return AppUpdateCheckResult(
         availableRelease: cached,
+        remoteLatest: cached,
+        localVersion: localVersion,
+        localBuild: localBuild,
         skippedThrottle: true,
       );
     }
+  } else {
+    await AppUpdateStore.clearCachedRelease();
   }
 
   try {
@@ -98,33 +145,56 @@ Future<AppUpdateCheckResult> checkForAppUpdate({
     await AppUpdateStore.setLastCheckAt(DateTime.now());
 
     if (row == null) {
-      return const AppUpdateCheckResult();
+      return AppUpdateCheckResult(
+        localVersion: localVersion,
+        localBuild: localBuild,
+      );
     }
 
     final release = AppRelease.fromJson(Map<String, dynamic>.from(row));
-    final info = await PackageInfo.fromPlatform();
-    final localBuild = int.tryParse(info.buildNumber) ?? 0;
+    final dismissed = await AppUpdateStore.dismissedBuild(platform);
 
     if (!isRemoteNewer(
       localBuild: localBuild,
-      localVersion: info.version,
+      localVersion: localVersion,
       remoteBuild: release.buildNumber,
       remoteVersion: release.version,
     )) {
       await AppUpdateStore.clearCachedRelease();
-      return const AppUpdateCheckResult();
+      return AppUpdateCheckResult(
+        remoteLatest: release,
+        localVersion: localVersion,
+        localBuild: localBuild,
+        dismissedBuild: dismissed,
+      );
     }
 
-    final dismissed = await AppUpdateStore.dismissedBuild(platform);
-    if (dismissed != null && release.buildNumber <= dismissed) {
-      return const AppUpdateCheckResult();
+    if (!force &&
+        dismissed != null &&
+        release.buildNumber <= dismissed) {
+      return AppUpdateCheckResult(
+        remoteLatest: release,
+        localVersion: localVersion,
+        localBuild: localBuild,
+        dismissedBuild: dismissed,
+      );
     }
 
     await AppUpdateStore.cacheRelease(release);
-    return AppUpdateCheckResult(availableRelease: release);
+    return AppUpdateCheckResult(
+      availableRelease: release,
+      remoteLatest: release,
+      localVersion: localVersion,
+      localBuild: localBuild,
+      dismissedBuild: dismissed,
+    );
   } catch (e, st) {
     debugPrint('checkForAppUpdate: $e\n$st');
-    return AppUpdateCheckResult(error: e.toString());
+    return AppUpdateCheckResult(
+      localVersion: localVersion,
+      localBuild: localBuild,
+      error: e.toString(),
+    );
   }
 }
 
@@ -136,16 +206,18 @@ SupabaseClient? _tryClient() {
   }
 }
 
-Future<AppRelease?> _resolveCachedUpdate(String platform) async {
+Future<AppRelease?> _resolveCachedUpdate(
+  String platform, {
+  required int localBuild,
+  required String localVersion,
+  required bool ignoreDismissed,
+}) async {
   final cached = await AppUpdateStore.cachedRelease();
   if (cached == null || cached.platform != platform) return null;
 
-  final info = await PackageInfo.fromPlatform();
-  final localBuild = int.tryParse(info.buildNumber) ?? 0;
-
   if (!isRemoteNewer(
     localBuild: localBuild,
-    localVersion: info.version,
+    localVersion: localVersion,
     remoteBuild: cached.buildNumber,
     remoteVersion: cached.version,
   )) {
@@ -153,8 +225,10 @@ Future<AppRelease?> _resolveCachedUpdate(String platform) async {
     return null;
   }
 
-  final dismissed = await AppUpdateStore.dismissedBuild(platform);
-  if (dismissed != null && cached.buildNumber <= dismissed) return null;
+  if (!ignoreDismissed) {
+    final dismissed = await AppUpdateStore.dismissedBuild(platform);
+    if (dismissed != null && cached.buildNumber <= dismissed) return null;
+  }
 
   return cached;
 }

@@ -7,6 +7,9 @@ import 'scene_color.dart';
 /// Normaliza el nombre de personaje para claves consistentes.
 String characterColorKey(String name) => name.trim().toUpperCase();
 
+const _manualCharacterLinesKey = '_manualCharacterLines';
+const _lineTextOverridesKey = '_lineTextOverrides';
+
 Map<String, String> decodeCharacterColors(String? json) {
   if (json == null || json.trim().isEmpty) return {};
   try {
@@ -15,6 +18,7 @@ Map<String, String> decodeCharacterColors(String? json) {
     return {
       for (final entry in decoded.entries)
         if (entry.key is String &&
+            !entry.key.toString().startsWith('_') &&
             entry.value is String &&
             entry.value.toString().trim().isNotEmpty)
           characterColorKey(entry.key as String): entry.value as String,
@@ -24,8 +28,45 @@ Map<String, String> decodeCharacterColors(String? json) {
   }
 }
 
-String? encodeCharacterColors(Map<String, String> colors) {
-  if (colors.isEmpty) return null;
+Set<String> decodeManualCharacterLines(String? json) {
+  if (json == null || json.trim().isEmpty) return {};
+  try {
+    final decoded = jsonDecode(json);
+    if (decoded is! Map) return {};
+    final raw = decoded[_manualCharacterLinesKey];
+    if (raw is! List) return {};
+    return raw
+        .whereType<String>()
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toSet();
+  } catch (_) {
+    return {};
+  }
+}
+
+Map<String, String> decodeLineTextOverrides(String? json) {
+  if (json == null || json.trim().isEmpty) return {};
+  try {
+    final decoded = jsonDecode(json);
+    if (decoded is! Map) return {};
+    final raw = decoded[_lineTextOverridesKey];
+    if (raw is! Map) return {};
+    return {
+      for (final entry in raw.entries)
+        if (entry.key is String && entry.value is String)
+          entry.key as String: entry.value as String,
+    };
+  } catch (_) {
+    return {};
+  }
+}
+
+String? encodeCharacterColors(
+  Map<String, String> colors, {
+  Set<String>? manualCharacterLines,
+  Map<String, String>? lineTextOverrides,
+}) {
   final cleaned = <String, String>{};
   for (final entry in colors.entries) {
     final key = characterColorKey(entry.key);
@@ -33,8 +74,31 @@ String? encodeCharacterColors(Map<String, String> colors) {
     if (key.isEmpty || hex.isEmpty) continue;
     cleaned[key] = hex;
   }
-  if (cleaned.isEmpty) return null;
-  return jsonEncode(cleaned);
+
+  final manual = manualCharacterLines
+          ?.map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .toList(growable: false) ??
+      const <String>[];
+  final overrides = <String, String>{};
+  lineTextOverrides?.forEach((key, value) {
+    final k = key.trim();
+    final v = value.trim();
+    if (k.isNotEmpty && v.isNotEmpty && k != v) {
+      overrides[k] = v;
+    }
+  });
+
+  if (cleaned.isEmpty && manual.isEmpty && overrides.isEmpty) return null;
+
+  final payload = <String, dynamic>{...cleaned};
+  if (manual.isNotEmpty) {
+    payload[_manualCharacterLinesKey] = manual;
+  }
+  if (overrides.isNotEmpty) {
+    payload[_lineTextOverridesKey] = overrides;
+  }
+  return jsonEncode(payload);
 }
 
 Color characterDisplayColor(String? hex, {int? characterIndex}) {

@@ -70,19 +70,21 @@ class BibleSectionScaffold extends StatelessWidget {
             onChanged(data);
           },
         ),
-      BibleSectionFieldType.references => data.id > 0
-          ? BibleReferencesPanel(
-              projectId: projectId,
-              sectionId: sectionId,
-              bibleId: data.id,
-              title: field.label,
-              onOpenMoodboard: () =>
-                  BibleNavigationScope.openMoodboardForSection(
-                context,
-                sectionId,
-              ),
-            )
-          : null,
+      BibleSectionFieldType.references ||
+      BibleSectionFieldType.image =>
+        data.id > 0
+            ? BibleReferencesPanel(
+                projectId: projectId,
+                sectionId: sectionId,
+                bibleId: data.id,
+                title: field.label,
+                onOpenMoodboard: () =>
+                    BibleNavigationScope.openMoodboardForSection(
+                  context,
+                  sectionId,
+                ),
+              )
+            : null,
       BibleSectionFieldType.blocks ||
       BibleSectionFieldType.text =>
         fieldWidgets[field.key],

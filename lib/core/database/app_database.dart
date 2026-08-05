@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../storage/app_storage_config.dart';
 import '../utils/media_storage.dart';
@@ -12,6 +11,7 @@ import '../../features/visual_bible/bible_section_fields.dart';
 import '../../features/visual_bible/moodboard_association.dart';
 import '../../features/visual_bible/visual_bible_completion.dart' as bible_layout;
 import '../../features/visual_bible/visual_bible_model.dart';
+import '../templates/user_template_models.dart';
 import 'seed_data.dart';
 import '../../features/equipment/services/catalog_importer.dart';
 import 'tables.dart';
@@ -20,6 +20,7 @@ part 'app_database.g.dart';
 
 @DriftDatabase(tables: [
   ProjectGroups, Projects, Scenes, Shots,
+  ShootDocuments, ShootDocumentBlocks,
   ShotReferences, CameraPlanElements, CameraPathPoints, LocationSites,
   LocationBasePlans,
   LocationImages,
@@ -27,7 +28,7 @@ part 'app_database.g.dart';
   Cameras, Lenses, Lights, ProjectEquipment,
   LookBibles, ProjectAnnotatedPdfs,
   VisualBibles, VisualBibleColorBlocks, VisualBibleLocationRefs, MoodboardGroups,
-  MoodboardImages, BibleSectionGroups, BibleSectionDefinitions,
+  MoodboardImages, BibleSectionGroups, BibleSectionDefinitions, UserTemplates,
   ExposureBlocks, LightingSetups, CameraTests, VisualBibleVersions, BibleComments,
   CatalogSyncMeta, BibleSectionEvidence, LukaSyncMeta, OpticsLabSamples,
   CloudSyncQueue,
@@ -38,7 +39,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 29;
+  int get schemaVersion => 32;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -299,6 +300,19 @@ class AppDatabase extends _$AppDatabase {
           if (from < 29) {
             await m.addColumn(projects, projects.characterColorsJson);
           }
+          if (from < 30) {
+            await m.createTable(shootDocuments);
+            await m.createTable(shootDocumentBlocks);
+            await m.addColumn(shots, shots.charactersJson);
+            await m.addColumn(shots, shots.durationSeconds);
+            await m.addColumn(shots, shots.scriptAnchorIndex);
+          }
+          if (from < 31) {
+            await m.addColumn(projects, projects.contentSyncUpdatedAt);
+          }
+          if (from < 32) {
+            await m.createTable(userTemplates);
+          }
         },
       );
 
@@ -451,9 +465,139 @@ class AppDatabase extends _$AppDatabase {
         await (delete(siteImages)..where((i) => i.siteId.equals(site.id))).go();
       }
       await (delete(locationSites)..where((s) => s.projectId.equals(id))).go();
+
+      final shootDocs = await (select(shootDocuments)
+            ..where((d) => d.projectId.equals(id)))
+          .get();
+      for (final doc in shootDocs) {
+        await (delete(shootDocumentBlocks)
+              ..where((b) => b.documentId.equals(doc.id)))
+            .go();
+      }
+      await (delete(shootDocuments)..where((d) => d.projectId.equals(id))).go();
+
       await (delete(projects)..where((p) => p.id.equals(id))).go();
     });
     await MediaStorage.deleteProjectDirectory(id);
+  }
+
+  /// Elimina todo el contenido del proyecto pero conserva la fila Projects.
+  Future<void> deleteProjectContentOnly(int id) async {
+    await transaction(() async {
+      final vbs = await (select(visualBibles)
+            ..where((v) => v.projectId.equals(id)))
+          .get();
+      for (final vb in vbs) {
+        await (delete(bibleComments)..where((c) => c.bibleId.equals(vb.id))).go();
+        await (delete(bibleSectionDefinitions)
+              ..where((s) => s.bibleId.equals(vb.id)))
+            .go();
+        await (delete(bibleSectionGroups)
+              ..where((g) => g.bibleId.equals(vb.id)))
+            .go();
+        await (delete(bibleSectionEvidence)
+              ..where((e) => e.bibleId.equals(vb.id)))
+            .go();
+        await (delete(exposureBlocks)..where((e) => e.bibleId.equals(vb.id)))
+            .go();
+        await (delete(lightingSetups)..where((l) => l.bibleId.equals(vb.id)))
+            .go();
+        await (delete(cameraTests)..where((c) => c.bibleId.equals(vb.id))).go();
+        await (delete(visualBibleLocationRefs)
+              ..where((r) => r.bibleId.equals(vb.id)))
+            .go();
+        await (delete(visualBibleColorBlocks)
+              ..where((b) => b.bibleId.equals(vb.id)))
+            .go();
+        await (delete(visualBibleVersions)
+              ..where((v) => v.bibleId.equals(vb.id)))
+            .go();
+      }
+      await (delete(visualBibles)..where((v) => v.projectId.equals(id))).go();
+      await (delete(lookBibles)..where((l) => l.projectId.equals(id))).go();
+      await (delete(moodboardImages)..where((m) => m.projectId.equals(id)))
+          .go();
+      await (delete(moodboardGroups)..where((g) => g.projectId.equals(id)))
+          .go();
+      await (delete(opticsLabSamples)..where((o) => o.projectId.equals(id)))
+          .go();
+      await (delete(projectAnnotatedPdfs)
+            ..where((p) => p.projectId.equals(id)))
+          .go();
+
+      final projectShots = await (select(shots)
+            ..where((s) => s.projectId.equals(id)))
+          .get();
+      for (final shot in projectShots) {
+        final elements = await getCameraPlanElementsForShot(shot.id);
+        for (final el in elements) {
+          await deleteCameraPlanElement(el.id);
+        }
+        await (delete(shotReferences)..where((r) => r.shotId.equals(shot.id)))
+            .go();
+      }
+      await (delete(shots)..where((s) => s.projectId.equals(id))).go();
+      await (delete(scenes)..where((s) => s.projectId.equals(id))).go();
+      await (delete(projectEquipment)..where((e) => e.projectId.equals(id)))
+          .go();
+
+      final shootDocs = await (select(shootDocuments)
+            ..where((d) => d.projectId.equals(id)))
+          .get();
+      for (final doc in shootDocs) {
+        await (delete(shootDocumentBlocks)
+              ..where((b) => b.documentId.equals(doc.id)))
+            .go();
+      }
+      await (delete(shootDocuments)..where((d) => d.projectId.equals(id))).go();
+
+      final sets = await (select(locationBasePlans)
+            ..where((l) => l.projectId.equals(id)))
+          .get();
+      for (final set in sets) {
+        await (delete(locationImages)..where((i) => i.locationId.equals(set.id)))
+            .go();
+      }
+      await (delete(locationBasePlans)..where((l) => l.projectId.equals(id)))
+          .go();
+
+      final sites = await (select(locationSites)
+            ..where((s) => s.projectId.equals(id)))
+          .get();
+      for (final site in sites) {
+        await (delete(siteImages)..where((i) => i.siteId.equals(site.id))).go();
+      }
+      await (delete(locationSites)..where((s) => s.projectId.equals(id))).go();
+    });
+  }
+
+  /// Marca el contenido del proyecto como modificado (sync cloud).
+  Future<void> touchProjectContent(int projectId) async {
+    await (update(projects)..where((p) => p.id.equals(projectId))).write(
+      ProjectsCompanion(
+        contentSyncUpdatedAt: Value(DateTime.now()),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+    final project = await getProject(projectId);
+    if (project?.cloudId != null) {
+      final pending = await (select(cloudSyncQueue)
+            ..where((q) =>
+                q.entityType.equals('project_content') &
+                q.localEntityId.equals('$projectId') &
+                q.processed.equals(false)))
+          .get();
+      if (pending.isEmpty) {
+        await into(cloudSyncQueue).insert(
+          CloudSyncQueueCompanion.insert(
+            entityType: 'project_content',
+            localEntityId: '$projectId',
+            operation: 'upsert',
+            payloadJson: Value('{"cloudId":"${project!.cloudId}"}'),
+          ),
+        );
+      }
+    }
   }
 
   Future<Project?> getProject(int id) =>
@@ -682,10 +826,25 @@ class AppDatabase extends _$AppDatabase {
         ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
           .watch();
 
-  Future<int> insertScene(ScenesCompanion scene) => into(scenes).insert(scene);
-  Future<bool> updateScene(Scene scene) => update(scenes).replace(scene);
-  Future<int> deleteScene(int id) =>
-      (delete(scenes)..where((s) => s.id.equals(id))).go();
+  Future<int> insertScene(ScenesCompanion scene) async {
+    final id = await into(scenes).insert(scene);
+    await touchProjectContent(scene.projectId.value);
+    return id;
+  }
+
+  Future<bool> updateScene(Scene scene) async {
+    final ok = await update(scenes).replace(scene);
+    await touchProjectContent(scene.projectId);
+    return ok;
+  }
+
+  Future<int> deleteScene(int id) async {
+    final scene = await (select(scenes)..where((s) => s.id.equals(id)))
+        .getSingleOrNull();
+    final count = await (delete(scenes)..where((s) => s.id.equals(id))).go();
+    if (scene != null) await touchProjectContent(scene.projectId);
+    return count;
+  }
 
   /// Reemplaza todas las escenas del proyecto (y sus planos) en el orden indicado.
   Future<void> replaceScenesForProject(
@@ -699,6 +858,7 @@ class AppDatabase extends _$AppDatabase {
         await into(scenes).insert(scene);
       }
     });
+    await touchProjectContent(projectId);
   }
 
   /// Sincroniza escenas desde el espacio de trabajo preservando planos cuando es posible.
@@ -811,6 +971,7 @@ class AppDatabase extends _$AppDatabase {
 
       await linkScenesToLocations(projectId);
     });
+    await touchProjectContent(projectId);
   }
 
   /// Escenas que se eliminarían al sincronizar y tienen planos.
@@ -884,14 +1045,28 @@ class AppDatabase extends _$AppDatabase {
         ..where((s) => s.projectId.equals(projectId))
         ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)])).watch();
 
-  Future<int> insertShot(ShotsCompanion shot) => into(shots).insert(shot);
-  Future<bool> updateShot(Shot shot) => update(shots).replace(shot);
+  Future<int> insertShot(ShotsCompanion shot) async {
+    final id = await into(shots).insert(shot);
+    await touchProjectContent(shot.projectId.value);
+    return id;
+  }
+
+  Future<bool> updateShot(Shot shot) async {
+    final ok = await update(shots).replace(shot);
+    await touchProjectContent(shot.projectId);
+    return ok;
+  }
+
   Future<int> deleteShot(int id) async {
+    final shot = await (select(shots)..where((s) => s.id.equals(id)))
+        .getSingleOrNull();
     final elements = await getCameraPlanElementsForShot(id);
     for (final el in elements) {
       await deleteCameraPlanElement(el.id);
     }
-    return (delete(shots)..where((s) => s.id.equals(id))).go();
+    final count = await (delete(shots)..where((s) => s.id.equals(id))).go();
+    if (shot != null) await touchProjectContent(shot.projectId);
+    return count;
   }
 
   Future<int> countShotsWithCameraPlan(int projectId) async {
@@ -902,6 +1077,107 @@ class AppDatabase extends _$AppDatabase {
           ..where((e) => e.shotId.isIn(shotIds)))
         .get();
     return elements.map((e) => e.shotId).toSet().length;
+  }
+
+  // ── Documentos de rodaje ───────────────────────
+  Stream<List<ShootDocument>> watchShootDocumentsForProject(int projectId) =>
+      (select(shootDocuments)
+        ..where((d) => d.projectId.equals(projectId))
+        ..orderBy([
+          (d) => OrderingTerm.desc(d.isPrimaryOnSet),
+          (d) => OrderingTerm.desc(d.updatedAt),
+        ])).watch();
+
+  Future<ShootDocument?> getShootDocument(int id) =>
+      (select(shootDocuments)..where((d) => d.id.equals(id)))
+          .getSingleOrNull();
+
+  Future<int> insertShootDocument(ShootDocumentsCompanion doc) async {
+    final id = await into(shootDocuments).insert(doc);
+    await touchProjectContent(doc.projectId.value);
+    return id;
+  }
+
+  Future<bool> updateShootDocument(ShootDocument doc) async {
+    final ok = await update(shootDocuments).replace(doc);
+    await touchProjectContent(doc.projectId);
+    return ok;
+  }
+
+  Future<int> deleteShootDocument(int id) async {
+    final doc = await getShootDocument(id);
+    await (delete(shootDocumentBlocks)
+          ..where((b) => b.documentId.equals(id)))
+        .go();
+    final count =
+        await (delete(shootDocuments)..where((d) => d.id.equals(id))).go();
+    if (doc != null) await touchProjectContent(doc.projectId);
+    return count;
+  }
+
+  Future<void> setPrimaryShootDocument(int projectId, int documentId) async {
+    await transaction(() async {
+      await (update(shootDocuments)
+            ..where((d) => d.projectId.equals(projectId)))
+          .write(const ShootDocumentsCompanion(isPrimaryOnSet: Value(false)));
+      await (update(shootDocuments)..where((d) => d.id.equals(documentId)))
+          .write(const ShootDocumentsCompanion(isPrimaryOnSet: Value(true)));
+    });
+    await touchProjectContent(projectId);
+  }
+
+  Stream<List<ShootDocumentBlock>> watchBlocksForShootDocument(int documentId) =>
+      (select(shootDocumentBlocks)
+        ..where((b) => b.documentId.equals(documentId))
+        ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)])).watch();
+
+  Future<List<ShootDocumentBlock>> getBlocksForShootDocument(int documentId) =>
+      (select(shootDocumentBlocks)
+        ..where((b) => b.documentId.equals(documentId))
+        ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)])).get();
+
+  Future<int> insertShootDocumentBlock(ShootDocumentBlocksCompanion block) async {
+    final id = await into(shootDocumentBlocks).insert(block);
+    final doc = await getShootDocument(block.documentId.value);
+    if (doc != null) await touchProjectContent(doc.projectId);
+    return id;
+  }
+
+  Future<bool> updateShootDocumentBlock(ShootDocumentBlock block) async {
+    final ok = await update(shootDocumentBlocks).replace(block);
+    final doc = await getShootDocument(block.documentId);
+    if (doc != null) await touchProjectContent(doc.projectId);
+    return ok;
+  }
+
+  Future<int> deleteShootDocumentBlock(int id) async {
+    final block = await (select(shootDocumentBlocks)
+          ..where((b) => b.id.equals(id)))
+        .getSingleOrNull();
+    final count =
+        await (delete(shootDocumentBlocks)..where((b) => b.id.equals(id))).go();
+    if (block != null) {
+      final doc = await getShootDocument(block.documentId);
+      if (doc != null) await touchProjectContent(doc.projectId);
+    }
+    return count;
+  }
+
+  Future<void> reorderShootDocumentBlocks(
+    int documentId,
+    List<int> blockIdsInOrder,
+  ) async {
+    await transaction(() async {
+      for (var i = 0; i < blockIdsInOrder.length; i++) {
+        await (update(shootDocumentBlocks)
+              ..where(
+                (b) =>
+                    b.id.equals(blockIdsInOrder[i]) &
+                    b.documentId.equals(documentId),
+              ))
+            .write(ShootDocumentBlocksCompanion(sortOrder: Value(i)));
+      }
+    });
   }
 
   // ── Localizaciones (contenedores) ───────────
@@ -2068,6 +2344,100 @@ class AppDatabase extends _$AppDatabase {
     return (await (select(visualBibles)..where((v) => v.id.equals(id))).getSingle())!;
   }
 
+  /// Aplica una plantilla de estructura de biblia (grupos + secciones).
+  Future<void> applyBibleLayoutTemplate(
+    int bibleId,
+    BibleLayoutTemplatePayload layout,
+  ) async {
+    await transaction(() async {
+      await (delete(bibleSectionDefinitions)
+            ..where((d) => d.bibleId.equals(bibleId)))
+          .go();
+      await (delete(bibleSectionGroups)
+            ..where((g) => g.bibleId.equals(bibleId)))
+          .go();
+
+      for (final group in layout.groups) {
+        await into(bibleSectionGroups).insert(
+          BibleSectionGroupsCompanion.insert(
+            id: group.id,
+            bibleId: bibleId,
+            label: group.label,
+            sortOrder: Value(group.sortOrder),
+            isBuiltIn: Value(group.isBuiltIn),
+          ),
+        );
+      }
+
+      for (final section in layout.sections) {
+        await into(bibleSectionDefinitions).insert(
+          BibleSectionDefinitionsCompanion.insert(
+            id: section.id,
+            bibleId: bibleId,
+            groupId: section.groupId,
+            label: section.label,
+            iconKey: Value(section.iconKey),
+            sortOrder: Value(section.sortOrder),
+            isBuiltIn: Value(section.isBuiltIn),
+            isHidden: Value(section.isHidden),
+            template: Value(section.template),
+            contentJson: Value(section.contentJson),
+          ),
+        );
+      }
+    });
+  }
+
+  /// Restaura la estructura built-in de la biblia (plantilla IRIS base).
+  Future<void> resetBibleSectionLayoutToBuiltin(int bibleId) async {
+    await transaction(() async {
+      await (delete(bibleSectionDefinitions)
+            ..where((d) => d.bibleId.equals(bibleId)))
+          .go();
+      await (delete(bibleSectionGroups)
+            ..where((g) => g.bibleId.equals(bibleId)))
+          .go();
+    });
+    await _seedBibleSectionLayout(bibleId);
+  }
+
+  Future<void> setBibleSectionHidden({
+    required int bibleId,
+    required String sectionId,
+    required bool hidden,
+  }) async {
+    final def = await (select(bibleSectionDefinitions)
+          ..where(
+            (d) => d.bibleId.equals(bibleId) & d.id.equals(sectionId),
+          ))
+        .getSingleOrNull();
+    if (def == null) return;
+    await upsertBibleSectionDefinition(def.copyWith(isHidden: hidden));
+  }
+
+  Future<void> deleteCustomBibleSection({
+    required int bibleId,
+    required String sectionId,
+  }) async {
+    await (delete(bibleSectionDefinitions)
+          ..where(
+            (d) =>
+                d.bibleId.equals(bibleId) &
+                d.id.equals(sectionId) &
+                d.isBuiltIn.equals(false),
+          ))
+        .go();
+  }
+
+  Stream<List<UserTemplate>> watchUserTemplates(String type) =>
+      (select(userTemplates)
+            ..where((t) => t.type.equals(type))
+            ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
+          .watch();
+
+  Future<UserTemplate?> getUserTemplate(String id) =>
+      (select(userTemplates)..where((t) => t.id.equals(id))).getSingleOrNull();
+
   Future<int> upsertVisualBible(VisualBiblesCompanion row) async {
     final existing = await getVisualBibleForProject(row.projectId.value);
     if (existing == null) {
@@ -2346,7 +2716,12 @@ class AppDatabase extends _$AppDatabase {
         sortOrder: Value(maxOrder + 1),
         isBuiltIn: const Value(false),
         template: Value(template),
-        contentJson: Value(contentJson),
+        contentJson: Value(
+          contentJson ??
+              BibleSectionFieldsConfig.encode(
+                BibleSectionFieldsConfig.freeformDefaults(label),
+              ),
+        ),
       ),
     );
   }
@@ -2386,9 +2761,12 @@ class AppDatabase extends _$AppDatabase {
           ))
         .getSingleOrNull();
     if (def == null) return;
+    final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
     await upsertBibleSectionDefinition(
       def.copyWith(
-        contentJson: Value(BibleSectionFieldsConfig.encode(fields)),
+        contentJson: Value(
+          BibleSectionFieldsConfig.encode(fields, values: values),
+        ),
       ),
     );
   }
@@ -2749,13 +3127,14 @@ class AppDatabase extends _$AppDatabase {
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
+    final File file;
     if (AppStorageConfig.isConfigured) {
-      final file = File(AppStorageConfig.current!.databaseFile);
-      await Directory(p.dirname(file.path)).create(recursive: true);
-      return NativeDatabase.createInBackground(file);
+      file = File(AppStorageConfig.current!.databaseFile);
+    } else {
+      final defaults = await AppStorageConfig.defaultPaths();
+      file = File(defaults.databaseFile);
     }
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dir.path, 'iris_dp.db'));
+    await Directory(p.dirname(file.path)).create(recursive: true);
     return NativeDatabase.createInBackground(file);
   });
 }

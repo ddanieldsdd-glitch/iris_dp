@@ -17,13 +17,16 @@ enum ProjectHubDestinationId {
 class ProjectHubStats {
   final int sceneCount;
   final int planCount;
+  final String projectStatus;
 
   const ProjectHubStats({
     required this.sceneCount,
     required this.planCount,
+    this.projectStatus = 'preproduction',
   });
 
   bool get hasScenes => sceneCount > 0;
+  bool get isShooting => projectStatus == 'shooting';
 }
 
 /// Destino del hub: metadatos de tarjeta + disponibilidad.
@@ -92,12 +95,13 @@ List<ProjectHubDestination> buildProjectHubDestinations() {
     ),
     ProjectHubDestination(
       id: ProjectHubDestinationId.dailyOrder,
-      icon: Icons.calendar_today_outlined,
-      title: 'Jornada de rodaje',
+      icon: Icons.description_outlined,
+      title: 'Documentos para el rodaje',
       subtitle: (_) =>
-          'Orden del día en set · PDF para el equipo (fase rodaje)',
+          'Tu referencia en set — guion, planos, personajes y refs visuales',
       accentColor: const Color(0xFFBF5AF2),
-      isAvailable: (_) => false,
+      isAvailable: (_) => true,
+      highlight: (s) => s.isShooting,
     ),
     ProjectHubDestination(
       id: ProjectHubDestinationId.equipment,

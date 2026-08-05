@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../database/app_database.dart';
-import '../cloud/supabase_config.dart';
+import '../cloud/cloud_session.dart';
 
 /// Push/pull de proyectos entre Drift (cache) y Supabase.
 class ProjectSyncService {
@@ -13,6 +13,19 @@ class ProjectSyncService {
 
   ProjectSyncService(this._db, this._client);
 
+  /// Reintenta borrados pendientes en la nube (p. ej. sin conexión previa).
+  Future<void> processPendingDeletions() async {
+    final tombstones = await CloudSessionStore.tombstonedCloudProjectIds();
+    for (final cloudId in tombstones) {
+      try {
+        await _client.from('cloud_projects').delete().eq('id', cloudId);
+        await CloudSessionStore.clearTombstone(cloudId);
+      } catch (_) {
+        // Se reintentará en el próximo sync.
+      }
+    }
+  }
+
   /// Descarga proyectos visibles para el usuario y los refleja en cache local.
   Future<int> pullProjects(String workspaceId) async {
     final rows = await _client
@@ -21,9 +34,22 @@ class ProjectSyncService {
         .eq('workspace_id', workspaceId)
         .order('sort_order');
 
+    final tombstones = await CloudSessionStore.tombstonedCloudProjectIds();
+    final cloudIds = <String>{};
     var count = 0;
+
     for (final row in rows as List) {
       final cloudId = row['id'] as String;
+      if (tombstones.contains(cloudId)) {
+        try {
+          await _client.from('cloud_projects').delete().eq('id', cloudId);
+          await CloudSessionStore.clearTombstone(cloudId);
+        } catch (_) {
+          continue;
+        }
+      }
+
+      cloudIds.add(cloudId);
       final existing = await (_db.select(_db.projects)
             ..where((p) => p.cloudId.equals(cloudId)))
           .getSingleOrNull();
@@ -36,13 +62,21 @@ class ProjectSyncService {
         clientName: Value(row['client_name'] as String?),
         status: Value(row['status'] as String? ?? 'preproduction'),
         iconCode: Value(row['icon_code'] as int? ?? 0xe3f4),
-        coverImagePath: Value(null),
+        coverImagePath: const Value(null),
         sortOrder: Value(row['sort_order'] as int? ?? 0),
         syncUpdatedAt: Value(DateTime.tryParse(row['updated_at'] as String? ?? '')),
         updatedAt: Value(DateTime.now()),
       );
 
       if (existing != null) {
+        final cloudUpdated =
+            DateTime.tryParse(row['updated_at'] as String? ?? '');
+        final localUpdated = existing.syncUpdatedAt ?? existing.updatedAt;
+        if (cloudUpdated != null &&
+            localUpdated != null &&
+            localUpdated.isAfter(cloudUpdated)) {
+          continue;
+        }
         await (_db.update(_db.projects)..where((p) => p.id.equals(existing.id)))
             .write(companion);
       } else {
@@ -50,7 +84,21 @@ class ProjectSyncService {
       }
       count++;
     }
+
+    await _purgeOrphanCloudProjects(cloudIds);
     return count;
+  }
+
+  Future<void> _purgeOrphanCloudProjects(Set<String> cloudIds) async {
+    final linked = await (_db.select(_db.projects)
+          ..where((p) => p.cloudId.isNotNull()))
+        .get();
+    for (final local in linked) {
+      final id = local.cloudId;
+      if (id != null && !cloudIds.contains(id)) {
+        await _db.deleteProjectFully(local.id);
+      }
+    }
   }
 
   /// Sube proyectos locales sin cloudId al workspace.
@@ -136,7 +184,12 @@ class ProjectSyncService {
 
   Future<void> deleteProject(Project project) async {
     if (project.cloudId != null) {
-      await _client.from('cloud_projects').delete().eq('id', project.cloudId!);
+      try {
+        await _client.from('cloud_projects').delete().eq('id', project.cloudId!);
+        await CloudSessionStore.clearTombstone(project.cloudId!);
+      } catch (_) {
+        await CloudSessionStore.tombstoneCloudProject(project.cloudId!);
+      }
     }
     await _db.deleteProjectFully(project.id);
   }

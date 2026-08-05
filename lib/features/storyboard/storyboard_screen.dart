@@ -21,6 +21,7 @@ import '../camera_plan/camera_plan_grouping.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
 import '../pdf_export/storyboard_pdf.dart';
+import '../shoot_documents/shoot_document_import_actions.dart';
 import '../technical_script/technical_script_screen.dart';
 import 'storyboard_export_options_sheet.dart';
 import 'storyboard_shot_export_service.dart';
@@ -1323,6 +1324,34 @@ class _FrameDetailSheet extends ConsumerWidget {
               onTap: () => onImport(ShotReferenceSource.unrealRender),
             ),
             const SizedBox(height: AppSpacing.md),
+            AppButton(
+              label: 'Añadir al documento de rodaje',
+              icon: Icons.description_outlined,
+              variant: AppButtonVariant.secondary,
+              onTap: () async {
+                final db = ref.read(databaseProvider);
+                final path = shot.referenceImagePath;
+                if (path != null) {
+                  await ShootDocumentImportActions.addImageBlock(
+                    context: context,
+                    db: db,
+                    projectId: scene.projectId,
+                    imagePath: path,
+                    shotId: shot.id,
+                    sceneId: scene.id,
+                  );
+                } else {
+                  await ShootDocumentImportActions.addShotBlock(
+                    context: context,
+                    db: db,
+                    projectId: scene.projectId,
+                    shot: shot,
+                    scene: scene,
+                  );
+                }
+              },
+            ),
+            const SizedBox(height: AppSpacing.sm),
             AppButton(
               label: 'Exportar plano',
               icon: Icons.ios_share_outlined,

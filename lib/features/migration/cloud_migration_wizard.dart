@@ -44,7 +44,7 @@ class _CloudMigrationWizardState extends ConsumerState<CloudMigrationWizard> {
     });
 
     try {
-      final result = await ref.read(syncEngineProvider).syncAll();
+      final result = await ref.read(syncEngineProvider).syncApplyDefaults();
       await CloudSessionStore.setMigrationComplete(true);
       if (mounted) {
         setState(() {

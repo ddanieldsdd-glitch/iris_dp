@@ -169,7 +169,7 @@ class _InitialTutorialFlowState extends ConsumerState<InitialTutorialFlow> {
     final user = ref.read(supabaseClientProvider)?.auth.currentUser;
     if (user == null) return;
     try {
-      await ref.read(syncEngineProvider).syncAll();
+      await ref.read(syncEngineProvider).syncOnStartup();
     } catch (_) {}
   }
 

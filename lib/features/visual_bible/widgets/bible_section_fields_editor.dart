@@ -6,9 +6,10 @@ import '../../../core/database/database_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../bible_section_fields.dart';
 
-/// Editor de sub-apartados (nombre y orden) de una sección.
+/// Editor de sub-apartados: añadir, quitar, cambiar tipo y reordenar.
 class BibleSectionFieldsEditor extends ConsumerStatefulWidget {
   final int bibleId;
   final BibleSectionDefinition definition;
@@ -97,6 +98,64 @@ class _BibleSectionFieldsEditorState
     });
   }
 
+  Future<void> _changeType(int index) async {
+    final field = _fields[index];
+    final picked = await showModalBottomSheet<BibleSectionFieldType>(
+      context: context,
+      backgroundColor: context.palette.surfaceElevated,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Text(
+                'Tipo de sub-apartado',
+                style: AppTypography.titleMedium(context.palette),
+              ),
+            ),
+            for (final type in BibleSectionFieldType.values)
+              ListTile(
+                leading: Icon(_iconForType(type)),
+                title: Text(BibleSectionFieldsConfig.labelForType(type)),
+                selected: field.type == type,
+                onTap: () => Navigator.pop(ctx, type),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    setState(() {
+      _fields[index] = field.copyWith(type: picked);
+    });
+  }
+
+  void _addField() {
+    final key = BibleSectionFieldsConfig.newFieldKey();
+    setState(() {
+      _fields.add(
+        BibleSectionField(
+          key: key,
+          label: 'Nuevo apartado',
+          maxLines: 4,
+        ),
+      );
+    });
+  }
+
+  void _removeField(int index) {
+    setState(() => _fields.removeAt(index));
+  }
+
+  IconData _iconForType(BibleSectionFieldType type) => switch (type) {
+        BibleSectionFieldType.text => Icons.notes_outlined,
+        BibleSectionFieldType.narrative => Icons.auto_stories_outlined,
+        BibleSectionFieldType.references => Icons.collections_outlined,
+        BibleSectionFieldType.image => Icons.image_outlined,
+        BibleSectionFieldType.blocks => Icons.view_agenda_outlined,
+      };
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -112,8 +171,9 @@ class _BibleSectionFieldsEditorState
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'Arrastra para reordenar. Los tipos especiales (referencias, bloques) '
-            'mantienen su comportamiento.',
+            'Añade campos de texto, imágenes o referencias moodboard en cualquier '
+            'orden. Por ejemplo, convierte «Referencias cinematográficas» en '
+            'imágenes.',
             style: AppTypography.caption(palette),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -131,25 +191,43 @@ class _BibleSectionFieldsEditorState
                 final field = _fields[index];
                 return ListTile(
                   key: ValueKey(field.key),
-                  leading: const Icon(Icons.drag_handle),
+                  leading: Icon(_iconForType(field.type)),
                   title: Text(field.label),
                   subtitle: Text(
-                    switch (field.type) {
-                      BibleSectionFieldType.narrative => 'Intención narrativa',
-                      BibleSectionFieldType.references => 'Referencias moodboard',
-                      BibleSectionFieldType.blocks => 'Bloques dinámicos',
-                      BibleSectionFieldType.text => 'Campo de texto',
-                    },
+                    BibleSectionFieldsConfig.labelForType(field.type),
                     style: AppTypography.caption(palette),
                   ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    onPressed: () => _renameField(index),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.category_outlined, size: 18),
+                        tooltip: 'Cambiar tipo',
+                        onPressed: () => _changeType(index),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        tooltip: 'Renombrar',
+                        onPressed: () => _renameField(index),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.delete_outline,
+                            size: 18, color: palette.error),
+                        tooltip: 'Eliminar',
+                        onPressed: () => _removeField(index),
+                      ),
+                    ],
                   ),
                 );
               },
             ),
           ),
+          OutlinedButton.icon(
+            onPressed: _addField,
+            icon: const Icon(Icons.add),
+            label: const Text('Añadir sub-apartado'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           FilledButton(
             onPressed: _save,
             child: const Text('Guardar sub-apartados'),

@@ -30,6 +30,8 @@ class Projects extends Table {
   /// UUID en Supabase cuando sync cloud está activo.
   TextColumn get cloudId => text().nullable()();
   DateTimeColumn get syncUpdatedAt => dateTime().nullable()();
+  /// Última modificación del contenido del proyecto (escenas, planos, etc.).
+  DateTimeColumn get contentSyncUpdatedAt => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
@@ -93,8 +95,47 @@ class Shots extends Table {
   TextColumn get description => text().nullable()();
   TextColumn get referenceImagePath => text().nullable()();
   TextColumn get cameraPlanImagePath => text().nullable()();
+  TextColumn get charactersJson => text().nullable()();
+  IntColumn get durationSeconds => integer().nullable()();
+  IntColumn get scriptAnchorIndex => integer().nullable()();
   BoolColumn get autoNumbering => boolean().withDefault(const Constant(true))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+}
+
+/// Documento de rodaje (Plani, jornada, referencia en set).
+class ShootDocuments extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  TextColumn get name => text()();
+  TextColumn get description => text().nullable()();
+  TextColumn get defaultVisibilityJson => text().nullable()();
+  TextColumn get layoutPreset =>
+      text().withDefault(const Constant('freeform'))();
+  TextColumn get shootDate => text().nullable()();
+  BoolColumn get isPrimaryOnSet =>
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get includeCoverInPdf =>
+      boolean().withDefault(const Constant(true))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+/// Bloque composable dentro de un documento de rodaje.
+class ShootDocumentBlocks extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get documentId => integer().references(ShootDocuments, #id)();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  TextColumn get blockType => text()();
+  IntColumn get sceneId => integer().nullable().references(Scenes, #id)();
+  IntColumn get shotId => integer().nullable().references(Shots, #id)();
+  TextColumn get scriptExcerpt => text().nullable()();
+  TextColumn get customLabel => text().nullable()();
+  TextColumn get noteBody => text().nullable()();
+  TextColumn get imagePath => text().nullable()();
+  TextColumn get charactersJson => text().nullable()();
+  IntColumn get durationSeconds => integer().nullable()();
+  TextColumn get visibilityJson => text().nullable()();
+  TextColumn get contentOverridesJson => text().nullable()();
 }
 
 class ShotReferences extends Table {
@@ -569,6 +610,22 @@ class BibleSectionDefinitions extends Table {
 
   @override
   Set<Column> get primaryKey => {id, bibleId};
+}
+
+/// Plantillas de usuario (biblia visual, documentos de rodaje).
+class UserTemplates extends Table {
+  TextColumn get id => text()();
+  /// `bible_layout` | `shoot_document`
+  TextColumn get type => text()();
+  TextColumn get name => text()();
+  TextColumn get description => text().nullable()();
+  TextColumn get payloadJson => text()();
+  BoolColumn get isDefault => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {id};
 }
 
 class MoodboardGroups extends Table {

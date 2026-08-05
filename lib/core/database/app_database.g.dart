@@ -459,6 +459,17 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         type: DriftSqlType.dateTime,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _contentSyncUpdatedAtMeta =
+      const VerificationMeta('contentSyncUpdatedAt');
+  @override
+  late final GeneratedColumn<DateTime> contentSyncUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'content_sync_updated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -503,6 +514,7 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     sortOrder,
     cloudId,
     syncUpdatedAt,
+    contentSyncUpdatedAt,
     createdAt,
     updatedAt,
   ];
@@ -652,6 +664,15 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         ),
       );
     }
+    if (data.containsKey('content_sync_updated_at')) {
+      context.handle(
+        _contentSyncUpdatedAtMeta,
+        contentSyncUpdatedAt.isAcceptableOrUnknown(
+          data['content_sync_updated_at']!,
+          _contentSyncUpdatedAtMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -745,6 +766,10 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}sync_updated_at'],
       ),
+      contentSyncUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}content_sync_updated_at'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -783,6 +808,9 @@ class Project extends DataClass implements Insertable<Project> {
   /// UUID en Supabase cuando sync cloud está activo.
   final String? cloudId;
   final DateTime? syncUpdatedAt;
+
+  /// Última modificación del contenido del proyecto (escenas, planos, etc.).
+  final DateTime? contentSyncUpdatedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
   const Project({
@@ -804,6 +832,7 @@ class Project extends DataClass implements Insertable<Project> {
     required this.sortOrder,
     this.cloudId,
     this.syncUpdatedAt,
+    this.contentSyncUpdatedAt,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -853,6 +882,9 @@ class Project extends DataClass implements Insertable<Project> {
     }
     if (!nullToAbsent || syncUpdatedAt != null) {
       map['sync_updated_at'] = Variable<DateTime>(syncUpdatedAt);
+    }
+    if (!nullToAbsent || contentSyncUpdatedAt != null) {
+      map['content_sync_updated_at'] = Variable<DateTime>(contentSyncUpdatedAt);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -905,6 +937,9 @@ class Project extends DataClass implements Insertable<Project> {
       syncUpdatedAt: syncUpdatedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(syncUpdatedAt),
+      contentSyncUpdatedAt: contentSyncUpdatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contentSyncUpdatedAt),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -938,6 +973,9 @@ class Project extends DataClass implements Insertable<Project> {
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       cloudId: serializer.fromJson<String?>(json['cloudId']),
       syncUpdatedAt: serializer.fromJson<DateTime?>(json['syncUpdatedAt']),
+      contentSyncUpdatedAt: serializer.fromJson<DateTime?>(
+        json['contentSyncUpdatedAt'],
+      ),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -964,6 +1002,9 @@ class Project extends DataClass implements Insertable<Project> {
       'sortOrder': serializer.toJson<int>(sortOrder),
       'cloudId': serializer.toJson<String?>(cloudId),
       'syncUpdatedAt': serializer.toJson<DateTime?>(syncUpdatedAt),
+      'contentSyncUpdatedAt': serializer.toJson<DateTime?>(
+        contentSyncUpdatedAt,
+      ),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -988,6 +1029,7 @@ class Project extends DataClass implements Insertable<Project> {
     int? sortOrder,
     Value<String?> cloudId = const Value.absent(),
     Value<DateTime?> syncUpdatedAt = const Value.absent(),
+    Value<DateTime?> contentSyncUpdatedAt = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Project(
@@ -1023,6 +1065,9 @@ class Project extends DataClass implements Insertable<Project> {
     syncUpdatedAt: syncUpdatedAt.present
         ? syncUpdatedAt.value
         : this.syncUpdatedAt,
+    contentSyncUpdatedAt: contentSyncUpdatedAt.present
+        ? contentSyncUpdatedAt.value
+        : this.contentSyncUpdatedAt,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1066,6 +1111,9 @@ class Project extends DataClass implements Insertable<Project> {
       syncUpdatedAt: data.syncUpdatedAt.present
           ? data.syncUpdatedAt.value
           : this.syncUpdatedAt,
+      contentSyncUpdatedAt: data.contentSyncUpdatedAt.present
+          ? data.contentSyncUpdatedAt.value
+          : this.contentSyncUpdatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1092,6 +1140,7 @@ class Project extends DataClass implements Insertable<Project> {
           ..write('sortOrder: $sortOrder, ')
           ..write('cloudId: $cloudId, ')
           ..write('syncUpdatedAt: $syncUpdatedAt, ')
+          ..write('contentSyncUpdatedAt: $contentSyncUpdatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1099,7 +1148,7 @@ class Project extends DataClass implements Insertable<Project> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     groupId,
     name,
@@ -1118,9 +1167,10 @@ class Project extends DataClass implements Insertable<Project> {
     sortOrder,
     cloudId,
     syncUpdatedAt,
+    contentSyncUpdatedAt,
     createdAt,
     updatedAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1143,6 +1193,7 @@ class Project extends DataClass implements Insertable<Project> {
           other.sortOrder == this.sortOrder &&
           other.cloudId == this.cloudId &&
           other.syncUpdatedAt == this.syncUpdatedAt &&
+          other.contentSyncUpdatedAt == this.contentSyncUpdatedAt &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1166,6 +1217,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
   final Value<int> sortOrder;
   final Value<String?> cloudId;
   final Value<DateTime?> syncUpdatedAt;
+  final Value<DateTime?> contentSyncUpdatedAt;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   const ProjectsCompanion({
@@ -1187,6 +1239,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.sortOrder = const Value.absent(),
     this.cloudId = const Value.absent(),
     this.syncUpdatedAt = const Value.absent(),
+    this.contentSyncUpdatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -1209,6 +1262,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.sortOrder = const Value.absent(),
     this.cloudId = const Value.absent(),
     this.syncUpdatedAt = const Value.absent(),
+    this.contentSyncUpdatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   }) : name = Value(name);
@@ -1231,6 +1285,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Expression<int>? sortOrder,
     Expression<String>? cloudId,
     Expression<DateTime>? syncUpdatedAt,
+    Expression<DateTime>? contentSyncUpdatedAt,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
   }) {
@@ -1254,6 +1309,8 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       if (sortOrder != null) 'sort_order': sortOrder,
       if (cloudId != null) 'cloud_id': cloudId,
       if (syncUpdatedAt != null) 'sync_updated_at': syncUpdatedAt,
+      if (contentSyncUpdatedAt != null)
+        'content_sync_updated_at': contentSyncUpdatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -1278,6 +1335,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Value<int>? sortOrder,
     Value<String?>? cloudId,
     Value<DateTime?>? syncUpdatedAt,
+    Value<DateTime?>? contentSyncUpdatedAt,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
   }) {
@@ -1300,6 +1358,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       sortOrder: sortOrder ?? this.sortOrder,
       cloudId: cloudId ?? this.cloudId,
       syncUpdatedAt: syncUpdatedAt ?? this.syncUpdatedAt,
+      contentSyncUpdatedAt: contentSyncUpdatedAt ?? this.contentSyncUpdatedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -1364,6 +1423,11 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     if (syncUpdatedAt.present) {
       map['sync_updated_at'] = Variable<DateTime>(syncUpdatedAt.value);
     }
+    if (contentSyncUpdatedAt.present) {
+      map['content_sync_updated_at'] = Variable<DateTime>(
+        contentSyncUpdatedAt.value,
+      );
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1394,6 +1458,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
           ..write('sortOrder: $sortOrder, ')
           ..write('cloudId: $cloudId, ')
           ..write('syncUpdatedAt: $syncUpdatedAt, ')
+          ..write('contentSyncUpdatedAt: $contentSyncUpdatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -4078,6 +4143,39 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _charactersJsonMeta = const VerificationMeta(
+    'charactersJson',
+  );
+  @override
+  late final GeneratedColumn<String> charactersJson = GeneratedColumn<String>(
+    'characters_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _durationSecondsMeta = const VerificationMeta(
+    'durationSeconds',
+  );
+  @override
+  late final GeneratedColumn<int> durationSeconds = GeneratedColumn<int>(
+    'duration_seconds',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _scriptAnchorIndexMeta = const VerificationMeta(
+    'scriptAnchorIndex',
+  );
+  @override
+  late final GeneratedColumn<int> scriptAnchorIndex = GeneratedColumn<int>(
+    'script_anchor_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _autoNumberingMeta = const VerificationMeta(
     'autoNumbering',
   );
@@ -4124,6 +4222,9 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
     description,
     referenceImagePath,
     cameraPlanImagePath,
+    charactersJson,
+    durationSeconds,
+    scriptAnchorIndex,
     autoNumbering,
     sortOrder,
   ];
@@ -4259,6 +4360,33 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         ),
       );
     }
+    if (data.containsKey('characters_json')) {
+      context.handle(
+        _charactersJsonMeta,
+        charactersJson.isAcceptableOrUnknown(
+          data['characters_json']!,
+          _charactersJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('duration_seconds')) {
+      context.handle(
+        _durationSecondsMeta,
+        durationSeconds.isAcceptableOrUnknown(
+          data['duration_seconds']!,
+          _durationSecondsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('script_anchor_index')) {
+      context.handle(
+        _scriptAnchorIndexMeta,
+        scriptAnchorIndex.isAcceptableOrUnknown(
+          data['script_anchor_index']!,
+          _scriptAnchorIndexMeta,
+        ),
+      );
+    }
     if (data.containsKey('auto_numbering')) {
       context.handle(
         _autoNumberingMeta,
@@ -4351,6 +4479,18 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         DriftSqlType.string,
         data['${effectivePrefix}camera_plan_image_path'],
       ),
+      charactersJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}characters_json'],
+      ),
+      durationSeconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_seconds'],
+      ),
+      scriptAnchorIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}script_anchor_index'],
+      ),
       autoNumbering: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}auto_numbering'],
@@ -4386,6 +4526,9 @@ class Shot extends DataClass implements Insertable<Shot> {
   final String? description;
   final String? referenceImagePath;
   final String? cameraPlanImagePath;
+  final String? charactersJson;
+  final int? durationSeconds;
+  final int? scriptAnchorIndex;
   final bool autoNumbering;
   final int sortOrder;
   const Shot({
@@ -4406,6 +4549,9 @@ class Shot extends DataClass implements Insertable<Shot> {
     this.description,
     this.referenceImagePath,
     this.cameraPlanImagePath,
+    this.charactersJson,
+    this.durationSeconds,
+    this.scriptAnchorIndex,
     required this.autoNumbering,
     required this.sortOrder,
   });
@@ -4455,6 +4601,15 @@ class Shot extends DataClass implements Insertable<Shot> {
     if (!nullToAbsent || cameraPlanImagePath != null) {
       map['camera_plan_image_path'] = Variable<String>(cameraPlanImagePath);
     }
+    if (!nullToAbsent || charactersJson != null) {
+      map['characters_json'] = Variable<String>(charactersJson);
+    }
+    if (!nullToAbsent || durationSeconds != null) {
+      map['duration_seconds'] = Variable<int>(durationSeconds);
+    }
+    if (!nullToAbsent || scriptAnchorIndex != null) {
+      map['script_anchor_index'] = Variable<int>(scriptAnchorIndex);
+    }
     map['auto_numbering'] = Variable<bool>(autoNumbering);
     map['sort_order'] = Variable<int>(sortOrder);
     return map;
@@ -4501,6 +4656,15 @@ class Shot extends DataClass implements Insertable<Shot> {
       cameraPlanImagePath: cameraPlanImagePath == null && nullToAbsent
           ? const Value.absent()
           : Value(cameraPlanImagePath),
+      charactersJson: charactersJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(charactersJson),
+      durationSeconds: durationSeconds == null && nullToAbsent
+          ? const Value.absent()
+          : Value(durationSeconds),
+      scriptAnchorIndex: scriptAnchorIndex == null && nullToAbsent
+          ? const Value.absent()
+          : Value(scriptAnchorIndex),
       autoNumbering: Value(autoNumbering),
       sortOrder: Value(sortOrder),
     );
@@ -4533,6 +4697,9 @@ class Shot extends DataClass implements Insertable<Shot> {
       cameraPlanImagePath: serializer.fromJson<String?>(
         json['cameraPlanImagePath'],
       ),
+      charactersJson: serializer.fromJson<String?>(json['charactersJson']),
+      durationSeconds: serializer.fromJson<int?>(json['durationSeconds']),
+      scriptAnchorIndex: serializer.fromJson<int?>(json['scriptAnchorIndex']),
       autoNumbering: serializer.fromJson<bool>(json['autoNumbering']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
     );
@@ -4558,6 +4725,9 @@ class Shot extends DataClass implements Insertable<Shot> {
       'description': serializer.toJson<String?>(description),
       'referenceImagePath': serializer.toJson<String?>(referenceImagePath),
       'cameraPlanImagePath': serializer.toJson<String?>(cameraPlanImagePath),
+      'charactersJson': serializer.toJson<String?>(charactersJson),
+      'durationSeconds': serializer.toJson<int?>(durationSeconds),
+      'scriptAnchorIndex': serializer.toJson<int?>(scriptAnchorIndex),
       'autoNumbering': serializer.toJson<bool>(autoNumbering),
       'sortOrder': serializer.toJson<int>(sortOrder),
     };
@@ -4581,6 +4751,9 @@ class Shot extends DataClass implements Insertable<Shot> {
     Value<String?> description = const Value.absent(),
     Value<String?> referenceImagePath = const Value.absent(),
     Value<String?> cameraPlanImagePath = const Value.absent(),
+    Value<String?> charactersJson = const Value.absent(),
+    Value<int?> durationSeconds = const Value.absent(),
+    Value<int?> scriptAnchorIndex = const Value.absent(),
     bool? autoNumbering,
     int? sortOrder,
   }) => Shot(
@@ -4607,6 +4780,15 @@ class Shot extends DataClass implements Insertable<Shot> {
     cameraPlanImagePath: cameraPlanImagePath.present
         ? cameraPlanImagePath.value
         : this.cameraPlanImagePath,
+    charactersJson: charactersJson.present
+        ? charactersJson.value
+        : this.charactersJson,
+    durationSeconds: durationSeconds.present
+        ? durationSeconds.value
+        : this.durationSeconds,
+    scriptAnchorIndex: scriptAnchorIndex.present
+        ? scriptAnchorIndex.value
+        : this.scriptAnchorIndex,
     autoNumbering: autoNumbering ?? this.autoNumbering,
     sortOrder: sortOrder ?? this.sortOrder,
   );
@@ -4639,6 +4821,15 @@ class Shot extends DataClass implements Insertable<Shot> {
       cameraPlanImagePath: data.cameraPlanImagePath.present
           ? data.cameraPlanImagePath.value
           : this.cameraPlanImagePath,
+      charactersJson: data.charactersJson.present
+          ? data.charactersJson.value
+          : this.charactersJson,
+      durationSeconds: data.durationSeconds.present
+          ? data.durationSeconds.value
+          : this.durationSeconds,
+      scriptAnchorIndex: data.scriptAnchorIndex.present
+          ? data.scriptAnchorIndex.value
+          : this.scriptAnchorIndex,
       autoNumbering: data.autoNumbering.present
           ? data.autoNumbering.value
           : this.autoNumbering,
@@ -4666,6 +4857,9 @@ class Shot extends DataClass implements Insertable<Shot> {
           ..write('description: $description, ')
           ..write('referenceImagePath: $referenceImagePath, ')
           ..write('cameraPlanImagePath: $cameraPlanImagePath, ')
+          ..write('charactersJson: $charactersJson, ')
+          ..write('durationSeconds: $durationSeconds, ')
+          ..write('scriptAnchorIndex: $scriptAnchorIndex, ')
           ..write('autoNumbering: $autoNumbering, ')
           ..write('sortOrder: $sortOrder')
           ..write(')'))
@@ -4673,7 +4867,7 @@ class Shot extends DataClass implements Insertable<Shot> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     sceneId,
     projectId,
@@ -4691,9 +4885,12 @@ class Shot extends DataClass implements Insertable<Shot> {
     description,
     referenceImagePath,
     cameraPlanImagePath,
+    charactersJson,
+    durationSeconds,
+    scriptAnchorIndex,
     autoNumbering,
     sortOrder,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -4715,6 +4912,9 @@ class Shot extends DataClass implements Insertable<Shot> {
           other.description == this.description &&
           other.referenceImagePath == this.referenceImagePath &&
           other.cameraPlanImagePath == this.cameraPlanImagePath &&
+          other.charactersJson == this.charactersJson &&
+          other.durationSeconds == this.durationSeconds &&
+          other.scriptAnchorIndex == this.scriptAnchorIndex &&
           other.autoNumbering == this.autoNumbering &&
           other.sortOrder == this.sortOrder);
 }
@@ -4737,6 +4937,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
   final Value<String?> description;
   final Value<String?> referenceImagePath;
   final Value<String?> cameraPlanImagePath;
+  final Value<String?> charactersJson;
+  final Value<int?> durationSeconds;
+  final Value<int?> scriptAnchorIndex;
   final Value<bool> autoNumbering;
   final Value<int> sortOrder;
   const ShotsCompanion({
@@ -4757,6 +4960,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     this.description = const Value.absent(),
     this.referenceImagePath = const Value.absent(),
     this.cameraPlanImagePath = const Value.absent(),
+    this.charactersJson = const Value.absent(),
+    this.durationSeconds = const Value.absent(),
+    this.scriptAnchorIndex = const Value.absent(),
     this.autoNumbering = const Value.absent(),
     this.sortOrder = const Value.absent(),
   });
@@ -4778,6 +4984,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     this.description = const Value.absent(),
     this.referenceImagePath = const Value.absent(),
     this.cameraPlanImagePath = const Value.absent(),
+    this.charactersJson = const Value.absent(),
+    this.durationSeconds = const Value.absent(),
+    this.scriptAnchorIndex = const Value.absent(),
     this.autoNumbering = const Value.absent(),
     this.sortOrder = const Value.absent(),
   }) : sceneId = Value(sceneId),
@@ -4801,6 +5010,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     Expression<String>? description,
     Expression<String>? referenceImagePath,
     Expression<String>? cameraPlanImagePath,
+    Expression<String>? charactersJson,
+    Expression<int>? durationSeconds,
+    Expression<int>? scriptAnchorIndex,
     Expression<bool>? autoNumbering,
     Expression<int>? sortOrder,
   }) {
@@ -4824,6 +5036,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
         'reference_image_path': referenceImagePath,
       if (cameraPlanImagePath != null)
         'camera_plan_image_path': cameraPlanImagePath,
+      if (charactersJson != null) 'characters_json': charactersJson,
+      if (durationSeconds != null) 'duration_seconds': durationSeconds,
+      if (scriptAnchorIndex != null) 'script_anchor_index': scriptAnchorIndex,
       if (autoNumbering != null) 'auto_numbering': autoNumbering,
       if (sortOrder != null) 'sort_order': sortOrder,
     });
@@ -4847,6 +5062,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     Value<String?>? description,
     Value<String?>? referenceImagePath,
     Value<String?>? cameraPlanImagePath,
+    Value<String?>? charactersJson,
+    Value<int?>? durationSeconds,
+    Value<int?>? scriptAnchorIndex,
     Value<bool>? autoNumbering,
     Value<int>? sortOrder,
   }) {
@@ -4868,6 +5086,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
       description: description ?? this.description,
       referenceImagePath: referenceImagePath ?? this.referenceImagePath,
       cameraPlanImagePath: cameraPlanImagePath ?? this.cameraPlanImagePath,
+      charactersJson: charactersJson ?? this.charactersJson,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
+      scriptAnchorIndex: scriptAnchorIndex ?? this.scriptAnchorIndex,
       autoNumbering: autoNumbering ?? this.autoNumbering,
       sortOrder: sortOrder ?? this.sortOrder,
     );
@@ -4929,6 +5150,15 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
         cameraPlanImagePath.value,
       );
     }
+    if (charactersJson.present) {
+      map['characters_json'] = Variable<String>(charactersJson.value);
+    }
+    if (durationSeconds.present) {
+      map['duration_seconds'] = Variable<int>(durationSeconds.value);
+    }
+    if (scriptAnchorIndex.present) {
+      map['script_anchor_index'] = Variable<int>(scriptAnchorIndex.value);
+    }
     if (autoNumbering.present) {
       map['auto_numbering'] = Variable<bool>(autoNumbering.value);
     }
@@ -4958,8 +5188,1545 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
           ..write('description: $description, ')
           ..write('referenceImagePath: $referenceImagePath, ')
           ..write('cameraPlanImagePath: $cameraPlanImagePath, ')
+          ..write('charactersJson: $charactersJson, ')
+          ..write('durationSeconds: $durationSeconds, ')
+          ..write('scriptAnchorIndex: $scriptAnchorIndex, ')
           ..write('autoNumbering: $autoNumbering, ')
           ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ShootDocumentsTable extends ShootDocuments
+    with TableInfo<$ShootDocumentsTable, ShootDocument> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ShootDocumentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _defaultVisibilityJsonMeta =
+      const VerificationMeta('defaultVisibilityJson');
+  @override
+  late final GeneratedColumn<String> defaultVisibilityJson =
+      GeneratedColumn<String>(
+        'default_visibility_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _layoutPresetMeta = const VerificationMeta(
+    'layoutPreset',
+  );
+  @override
+  late final GeneratedColumn<String> layoutPreset = GeneratedColumn<String>(
+    'layout_preset',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('freeform'),
+  );
+  static const VerificationMeta _shootDateMeta = const VerificationMeta(
+    'shootDate',
+  );
+  @override
+  late final GeneratedColumn<String> shootDate = GeneratedColumn<String>(
+    'shoot_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isPrimaryOnSetMeta = const VerificationMeta(
+    'isPrimaryOnSet',
+  );
+  @override
+  late final GeneratedColumn<bool> isPrimaryOnSet = GeneratedColumn<bool>(
+    'is_primary_on_set',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_primary_on_set" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _includeCoverInPdfMeta = const VerificationMeta(
+    'includeCoverInPdf',
+  );
+  @override
+  late final GeneratedColumn<bool> includeCoverInPdf = GeneratedColumn<bool>(
+    'include_cover_in_pdf',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("include_cover_in_pdf" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    projectId,
+    name,
+    description,
+    defaultVisibilityJson,
+    layoutPreset,
+    shootDate,
+    isPrimaryOnSet,
+    includeCoverInPdf,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shoot_documents';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ShootDocument> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('default_visibility_json')) {
+      context.handle(
+        _defaultVisibilityJsonMeta,
+        defaultVisibilityJson.isAcceptableOrUnknown(
+          data['default_visibility_json']!,
+          _defaultVisibilityJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('layout_preset')) {
+      context.handle(
+        _layoutPresetMeta,
+        layoutPreset.isAcceptableOrUnknown(
+          data['layout_preset']!,
+          _layoutPresetMeta,
+        ),
+      );
+    }
+    if (data.containsKey('shoot_date')) {
+      context.handle(
+        _shootDateMeta,
+        shootDate.isAcceptableOrUnknown(data['shoot_date']!, _shootDateMeta),
+      );
+    }
+    if (data.containsKey('is_primary_on_set')) {
+      context.handle(
+        _isPrimaryOnSetMeta,
+        isPrimaryOnSet.isAcceptableOrUnknown(
+          data['is_primary_on_set']!,
+          _isPrimaryOnSetMeta,
+        ),
+      );
+    }
+    if (data.containsKey('include_cover_in_pdf')) {
+      context.handle(
+        _includeCoverInPdfMeta,
+        includeCoverInPdf.isAcceptableOrUnknown(
+          data['include_cover_in_pdf']!,
+          _includeCoverInPdfMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ShootDocument map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ShootDocument(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      defaultVisibilityJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}default_visibility_json'],
+      ),
+      layoutPreset: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layout_preset'],
+      )!,
+      shootDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}shoot_date'],
+      ),
+      isPrimaryOnSet: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_primary_on_set'],
+      )!,
+      includeCoverInPdf: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}include_cover_in_pdf'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ShootDocumentsTable createAlias(String alias) {
+    return $ShootDocumentsTable(attachedDatabase, alias);
+  }
+}
+
+class ShootDocument extends DataClass implements Insertable<ShootDocument> {
+  final int id;
+  final int projectId;
+  final String name;
+  final String? description;
+  final String? defaultVisibilityJson;
+  final String layoutPreset;
+  final String? shootDate;
+  final bool isPrimaryOnSet;
+  final bool includeCoverInPdf;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const ShootDocument({
+    required this.id,
+    required this.projectId,
+    required this.name,
+    this.description,
+    this.defaultVisibilityJson,
+    required this.layoutPreset,
+    this.shootDate,
+    required this.isPrimaryOnSet,
+    required this.includeCoverInPdf,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['project_id'] = Variable<int>(projectId);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    if (!nullToAbsent || defaultVisibilityJson != null) {
+      map['default_visibility_json'] = Variable<String>(defaultVisibilityJson);
+    }
+    map['layout_preset'] = Variable<String>(layoutPreset);
+    if (!nullToAbsent || shootDate != null) {
+      map['shoot_date'] = Variable<String>(shootDate);
+    }
+    map['is_primary_on_set'] = Variable<bool>(isPrimaryOnSet);
+    map['include_cover_in_pdf'] = Variable<bool>(includeCoverInPdf);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  ShootDocumentsCompanion toCompanion(bool nullToAbsent) {
+    return ShootDocumentsCompanion(
+      id: Value(id),
+      projectId: Value(projectId),
+      name: Value(name),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      defaultVisibilityJson: defaultVisibilityJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(defaultVisibilityJson),
+      layoutPreset: Value(layoutPreset),
+      shootDate: shootDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(shootDate),
+      isPrimaryOnSet: Value(isPrimaryOnSet),
+      includeCoverInPdf: Value(includeCoverInPdf),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory ShootDocument.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ShootDocument(
+      id: serializer.fromJson<int>(json['id']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      name: serializer.fromJson<String>(json['name']),
+      description: serializer.fromJson<String?>(json['description']),
+      defaultVisibilityJson: serializer.fromJson<String?>(
+        json['defaultVisibilityJson'],
+      ),
+      layoutPreset: serializer.fromJson<String>(json['layoutPreset']),
+      shootDate: serializer.fromJson<String?>(json['shootDate']),
+      isPrimaryOnSet: serializer.fromJson<bool>(json['isPrimaryOnSet']),
+      includeCoverInPdf: serializer.fromJson<bool>(json['includeCoverInPdf']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'projectId': serializer.toJson<int>(projectId),
+      'name': serializer.toJson<String>(name),
+      'description': serializer.toJson<String?>(description),
+      'defaultVisibilityJson': serializer.toJson<String?>(
+        defaultVisibilityJson,
+      ),
+      'layoutPreset': serializer.toJson<String>(layoutPreset),
+      'shootDate': serializer.toJson<String?>(shootDate),
+      'isPrimaryOnSet': serializer.toJson<bool>(isPrimaryOnSet),
+      'includeCoverInPdf': serializer.toJson<bool>(includeCoverInPdf),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  ShootDocument copyWith({
+    int? id,
+    int? projectId,
+    String? name,
+    Value<String?> description = const Value.absent(),
+    Value<String?> defaultVisibilityJson = const Value.absent(),
+    String? layoutPreset,
+    Value<String?> shootDate = const Value.absent(),
+    bool? isPrimaryOnSet,
+    bool? includeCoverInPdf,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => ShootDocument(
+    id: id ?? this.id,
+    projectId: projectId ?? this.projectId,
+    name: name ?? this.name,
+    description: description.present ? description.value : this.description,
+    defaultVisibilityJson: defaultVisibilityJson.present
+        ? defaultVisibilityJson.value
+        : this.defaultVisibilityJson,
+    layoutPreset: layoutPreset ?? this.layoutPreset,
+    shootDate: shootDate.present ? shootDate.value : this.shootDate,
+    isPrimaryOnSet: isPrimaryOnSet ?? this.isPrimaryOnSet,
+    includeCoverInPdf: includeCoverInPdf ?? this.includeCoverInPdf,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  ShootDocument copyWithCompanion(ShootDocumentsCompanion data) {
+    return ShootDocument(
+      id: data.id.present ? data.id.value : this.id,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      name: data.name.present ? data.name.value : this.name,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      defaultVisibilityJson: data.defaultVisibilityJson.present
+          ? data.defaultVisibilityJson.value
+          : this.defaultVisibilityJson,
+      layoutPreset: data.layoutPreset.present
+          ? data.layoutPreset.value
+          : this.layoutPreset,
+      shootDate: data.shootDate.present ? data.shootDate.value : this.shootDate,
+      isPrimaryOnSet: data.isPrimaryOnSet.present
+          ? data.isPrimaryOnSet.value
+          : this.isPrimaryOnSet,
+      includeCoverInPdf: data.includeCoverInPdf.present
+          ? data.includeCoverInPdf.value
+          : this.includeCoverInPdf,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShootDocument(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('name: $name, ')
+          ..write('description: $description, ')
+          ..write('defaultVisibilityJson: $defaultVisibilityJson, ')
+          ..write('layoutPreset: $layoutPreset, ')
+          ..write('shootDate: $shootDate, ')
+          ..write('isPrimaryOnSet: $isPrimaryOnSet, ')
+          ..write('includeCoverInPdf: $includeCoverInPdf, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    projectId,
+    name,
+    description,
+    defaultVisibilityJson,
+    layoutPreset,
+    shootDate,
+    isPrimaryOnSet,
+    includeCoverInPdf,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ShootDocument &&
+          other.id == this.id &&
+          other.projectId == this.projectId &&
+          other.name == this.name &&
+          other.description == this.description &&
+          other.defaultVisibilityJson == this.defaultVisibilityJson &&
+          other.layoutPreset == this.layoutPreset &&
+          other.shootDate == this.shootDate &&
+          other.isPrimaryOnSet == this.isPrimaryOnSet &&
+          other.includeCoverInPdf == this.includeCoverInPdf &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
+  final Value<int> id;
+  final Value<int> projectId;
+  final Value<String> name;
+  final Value<String?> description;
+  final Value<String?> defaultVisibilityJson;
+  final Value<String> layoutPreset;
+  final Value<String?> shootDate;
+  final Value<bool> isPrimaryOnSet;
+  final Value<bool> includeCoverInPdf;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  const ShootDocumentsCompanion({
+    this.id = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.description = const Value.absent(),
+    this.defaultVisibilityJson = const Value.absent(),
+    this.layoutPreset = const Value.absent(),
+    this.shootDate = const Value.absent(),
+    this.isPrimaryOnSet = const Value.absent(),
+    this.includeCoverInPdf = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  ShootDocumentsCompanion.insert({
+    this.id = const Value.absent(),
+    required int projectId,
+    required String name,
+    this.description = const Value.absent(),
+    this.defaultVisibilityJson = const Value.absent(),
+    this.layoutPreset = const Value.absent(),
+    this.shootDate = const Value.absent(),
+    this.isPrimaryOnSet = const Value.absent(),
+    this.includeCoverInPdf = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  }) : projectId = Value(projectId),
+       name = Value(name);
+  static Insertable<ShootDocument> custom({
+    Expression<int>? id,
+    Expression<int>? projectId,
+    Expression<String>? name,
+    Expression<String>? description,
+    Expression<String>? defaultVisibilityJson,
+    Expression<String>? layoutPreset,
+    Expression<String>? shootDate,
+    Expression<bool>? isPrimaryOnSet,
+    Expression<bool>? includeCoverInPdf,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (projectId != null) 'project_id': projectId,
+      if (name != null) 'name': name,
+      if (description != null) 'description': description,
+      if (defaultVisibilityJson != null)
+        'default_visibility_json': defaultVisibilityJson,
+      if (layoutPreset != null) 'layout_preset': layoutPreset,
+      if (shootDate != null) 'shoot_date': shootDate,
+      if (isPrimaryOnSet != null) 'is_primary_on_set': isPrimaryOnSet,
+      if (includeCoverInPdf != null) 'include_cover_in_pdf': includeCoverInPdf,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  ShootDocumentsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? projectId,
+    Value<String>? name,
+    Value<String?>? description,
+    Value<String?>? defaultVisibilityJson,
+    Value<String>? layoutPreset,
+    Value<String?>? shootDate,
+    Value<bool>? isPrimaryOnSet,
+    Value<bool>? includeCoverInPdf,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+  }) {
+    return ShootDocumentsCompanion(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      defaultVisibilityJson:
+          defaultVisibilityJson ?? this.defaultVisibilityJson,
+      layoutPreset: layoutPreset ?? this.layoutPreset,
+      shootDate: shootDate ?? this.shootDate,
+      isPrimaryOnSet: isPrimaryOnSet ?? this.isPrimaryOnSet,
+      includeCoverInPdf: includeCoverInPdf ?? this.includeCoverInPdf,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (defaultVisibilityJson.present) {
+      map['default_visibility_json'] = Variable<String>(
+        defaultVisibilityJson.value,
+      );
+    }
+    if (layoutPreset.present) {
+      map['layout_preset'] = Variable<String>(layoutPreset.value);
+    }
+    if (shootDate.present) {
+      map['shoot_date'] = Variable<String>(shootDate.value);
+    }
+    if (isPrimaryOnSet.present) {
+      map['is_primary_on_set'] = Variable<bool>(isPrimaryOnSet.value);
+    }
+    if (includeCoverInPdf.present) {
+      map['include_cover_in_pdf'] = Variable<bool>(includeCoverInPdf.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShootDocumentsCompanion(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('name: $name, ')
+          ..write('description: $description, ')
+          ..write('defaultVisibilityJson: $defaultVisibilityJson, ')
+          ..write('layoutPreset: $layoutPreset, ')
+          ..write('shootDate: $shootDate, ')
+          ..write('isPrimaryOnSet: $isPrimaryOnSet, ')
+          ..write('includeCoverInPdf: $includeCoverInPdf, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ShootDocumentBlocksTable extends ShootDocumentBlocks
+    with TableInfo<$ShootDocumentBlocksTable, ShootDocumentBlock> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ShootDocumentBlocksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _documentIdMeta = const VerificationMeta(
+    'documentId',
+  );
+  @override
+  late final GeneratedColumn<int> documentId = GeneratedColumn<int>(
+    'document_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES shoot_documents (id)',
+    ),
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _blockTypeMeta = const VerificationMeta(
+    'blockType',
+  );
+  @override
+  late final GeneratedColumn<String> blockType = GeneratedColumn<String>(
+    'block_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sceneIdMeta = const VerificationMeta(
+    'sceneId',
+  );
+  @override
+  late final GeneratedColumn<int> sceneId = GeneratedColumn<int>(
+    'scene_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES scenes (id)',
+    ),
+  );
+  static const VerificationMeta _shotIdMeta = const VerificationMeta('shotId');
+  @override
+  late final GeneratedColumn<int> shotId = GeneratedColumn<int>(
+    'shot_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES shots (id)',
+    ),
+  );
+  static const VerificationMeta _scriptExcerptMeta = const VerificationMeta(
+    'scriptExcerpt',
+  );
+  @override
+  late final GeneratedColumn<String> scriptExcerpt = GeneratedColumn<String>(
+    'script_excerpt',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _customLabelMeta = const VerificationMeta(
+    'customLabel',
+  );
+  @override
+  late final GeneratedColumn<String> customLabel = GeneratedColumn<String>(
+    'custom_label',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteBodyMeta = const VerificationMeta(
+    'noteBody',
+  );
+  @override
+  late final GeneratedColumn<String> noteBody = GeneratedColumn<String>(
+    'note_body',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _imagePathMeta = const VerificationMeta(
+    'imagePath',
+  );
+  @override
+  late final GeneratedColumn<String> imagePath = GeneratedColumn<String>(
+    'image_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _charactersJsonMeta = const VerificationMeta(
+    'charactersJson',
+  );
+  @override
+  late final GeneratedColumn<String> charactersJson = GeneratedColumn<String>(
+    'characters_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _durationSecondsMeta = const VerificationMeta(
+    'durationSeconds',
+  );
+  @override
+  late final GeneratedColumn<int> durationSeconds = GeneratedColumn<int>(
+    'duration_seconds',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _visibilityJsonMeta = const VerificationMeta(
+    'visibilityJson',
+  );
+  @override
+  late final GeneratedColumn<String> visibilityJson = GeneratedColumn<String>(
+    'visibility_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _contentOverridesJsonMeta =
+      const VerificationMeta('contentOverridesJson');
+  @override
+  late final GeneratedColumn<String> contentOverridesJson =
+      GeneratedColumn<String>(
+        'content_overrides_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    documentId,
+    sortOrder,
+    blockType,
+    sceneId,
+    shotId,
+    scriptExcerpt,
+    customLabel,
+    noteBody,
+    imagePath,
+    charactersJson,
+    durationSeconds,
+    visibilityJson,
+    contentOverridesJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shoot_document_blocks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ShootDocumentBlock> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('document_id')) {
+      context.handle(
+        _documentIdMeta,
+        documentId.isAcceptableOrUnknown(data['document_id']!, _documentIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_documentIdMeta);
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('block_type')) {
+      context.handle(
+        _blockTypeMeta,
+        blockType.isAcceptableOrUnknown(data['block_type']!, _blockTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_blockTypeMeta);
+    }
+    if (data.containsKey('scene_id')) {
+      context.handle(
+        _sceneIdMeta,
+        sceneId.isAcceptableOrUnknown(data['scene_id']!, _sceneIdMeta),
+      );
+    }
+    if (data.containsKey('shot_id')) {
+      context.handle(
+        _shotIdMeta,
+        shotId.isAcceptableOrUnknown(data['shot_id']!, _shotIdMeta),
+      );
+    }
+    if (data.containsKey('script_excerpt')) {
+      context.handle(
+        _scriptExcerptMeta,
+        scriptExcerpt.isAcceptableOrUnknown(
+          data['script_excerpt']!,
+          _scriptExcerptMeta,
+        ),
+      );
+    }
+    if (data.containsKey('custom_label')) {
+      context.handle(
+        _customLabelMeta,
+        customLabel.isAcceptableOrUnknown(
+          data['custom_label']!,
+          _customLabelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('note_body')) {
+      context.handle(
+        _noteBodyMeta,
+        noteBody.isAcceptableOrUnknown(data['note_body']!, _noteBodyMeta),
+      );
+    }
+    if (data.containsKey('image_path')) {
+      context.handle(
+        _imagePathMeta,
+        imagePath.isAcceptableOrUnknown(data['image_path']!, _imagePathMeta),
+      );
+    }
+    if (data.containsKey('characters_json')) {
+      context.handle(
+        _charactersJsonMeta,
+        charactersJson.isAcceptableOrUnknown(
+          data['characters_json']!,
+          _charactersJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('duration_seconds')) {
+      context.handle(
+        _durationSecondsMeta,
+        durationSeconds.isAcceptableOrUnknown(
+          data['duration_seconds']!,
+          _durationSecondsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('visibility_json')) {
+      context.handle(
+        _visibilityJsonMeta,
+        visibilityJson.isAcceptableOrUnknown(
+          data['visibility_json']!,
+          _visibilityJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('content_overrides_json')) {
+      context.handle(
+        _contentOverridesJsonMeta,
+        contentOverridesJson.isAcceptableOrUnknown(
+          data['content_overrides_json']!,
+          _contentOverridesJsonMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ShootDocumentBlock map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ShootDocumentBlock(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      documentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}document_id'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      blockType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}block_type'],
+      )!,
+      sceneId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}scene_id'],
+      ),
+      shotId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}shot_id'],
+      ),
+      scriptExcerpt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}script_excerpt'],
+      ),
+      customLabel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}custom_label'],
+      ),
+      noteBody: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note_body'],
+      ),
+      imagePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}image_path'],
+      ),
+      charactersJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}characters_json'],
+      ),
+      durationSeconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_seconds'],
+      ),
+      visibilityJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}visibility_json'],
+      ),
+      contentOverridesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_overrides_json'],
+      ),
+    );
+  }
+
+  @override
+  $ShootDocumentBlocksTable createAlias(String alias) {
+    return $ShootDocumentBlocksTable(attachedDatabase, alias);
+  }
+}
+
+class ShootDocumentBlock extends DataClass
+    implements Insertable<ShootDocumentBlock> {
+  final int id;
+  final int documentId;
+  final int sortOrder;
+  final String blockType;
+  final int? sceneId;
+  final int? shotId;
+  final String? scriptExcerpt;
+  final String? customLabel;
+  final String? noteBody;
+  final String? imagePath;
+  final String? charactersJson;
+  final int? durationSeconds;
+  final String? visibilityJson;
+  final String? contentOverridesJson;
+  const ShootDocumentBlock({
+    required this.id,
+    required this.documentId,
+    required this.sortOrder,
+    required this.blockType,
+    this.sceneId,
+    this.shotId,
+    this.scriptExcerpt,
+    this.customLabel,
+    this.noteBody,
+    this.imagePath,
+    this.charactersJson,
+    this.durationSeconds,
+    this.visibilityJson,
+    this.contentOverridesJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['document_id'] = Variable<int>(documentId);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['block_type'] = Variable<String>(blockType);
+    if (!nullToAbsent || sceneId != null) {
+      map['scene_id'] = Variable<int>(sceneId);
+    }
+    if (!nullToAbsent || shotId != null) {
+      map['shot_id'] = Variable<int>(shotId);
+    }
+    if (!nullToAbsent || scriptExcerpt != null) {
+      map['script_excerpt'] = Variable<String>(scriptExcerpt);
+    }
+    if (!nullToAbsent || customLabel != null) {
+      map['custom_label'] = Variable<String>(customLabel);
+    }
+    if (!nullToAbsent || noteBody != null) {
+      map['note_body'] = Variable<String>(noteBody);
+    }
+    if (!nullToAbsent || imagePath != null) {
+      map['image_path'] = Variable<String>(imagePath);
+    }
+    if (!nullToAbsent || charactersJson != null) {
+      map['characters_json'] = Variable<String>(charactersJson);
+    }
+    if (!nullToAbsent || durationSeconds != null) {
+      map['duration_seconds'] = Variable<int>(durationSeconds);
+    }
+    if (!nullToAbsent || visibilityJson != null) {
+      map['visibility_json'] = Variable<String>(visibilityJson);
+    }
+    if (!nullToAbsent || contentOverridesJson != null) {
+      map['content_overrides_json'] = Variable<String>(contentOverridesJson);
+    }
+    return map;
+  }
+
+  ShootDocumentBlocksCompanion toCompanion(bool nullToAbsent) {
+    return ShootDocumentBlocksCompanion(
+      id: Value(id),
+      documentId: Value(documentId),
+      sortOrder: Value(sortOrder),
+      blockType: Value(blockType),
+      sceneId: sceneId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sceneId),
+      shotId: shotId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(shotId),
+      scriptExcerpt: scriptExcerpt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(scriptExcerpt),
+      customLabel: customLabel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customLabel),
+      noteBody: noteBody == null && nullToAbsent
+          ? const Value.absent()
+          : Value(noteBody),
+      imagePath: imagePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(imagePath),
+      charactersJson: charactersJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(charactersJson),
+      durationSeconds: durationSeconds == null && nullToAbsent
+          ? const Value.absent()
+          : Value(durationSeconds),
+      visibilityJson: visibilityJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(visibilityJson),
+      contentOverridesJson: contentOverridesJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contentOverridesJson),
+    );
+  }
+
+  factory ShootDocumentBlock.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ShootDocumentBlock(
+      id: serializer.fromJson<int>(json['id']),
+      documentId: serializer.fromJson<int>(json['documentId']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      blockType: serializer.fromJson<String>(json['blockType']),
+      sceneId: serializer.fromJson<int?>(json['sceneId']),
+      shotId: serializer.fromJson<int?>(json['shotId']),
+      scriptExcerpt: serializer.fromJson<String?>(json['scriptExcerpt']),
+      customLabel: serializer.fromJson<String?>(json['customLabel']),
+      noteBody: serializer.fromJson<String?>(json['noteBody']),
+      imagePath: serializer.fromJson<String?>(json['imagePath']),
+      charactersJson: serializer.fromJson<String?>(json['charactersJson']),
+      durationSeconds: serializer.fromJson<int?>(json['durationSeconds']),
+      visibilityJson: serializer.fromJson<String?>(json['visibilityJson']),
+      contentOverridesJson: serializer.fromJson<String?>(
+        json['contentOverridesJson'],
+      ),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'documentId': serializer.toJson<int>(documentId),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'blockType': serializer.toJson<String>(blockType),
+      'sceneId': serializer.toJson<int?>(sceneId),
+      'shotId': serializer.toJson<int?>(shotId),
+      'scriptExcerpt': serializer.toJson<String?>(scriptExcerpt),
+      'customLabel': serializer.toJson<String?>(customLabel),
+      'noteBody': serializer.toJson<String?>(noteBody),
+      'imagePath': serializer.toJson<String?>(imagePath),
+      'charactersJson': serializer.toJson<String?>(charactersJson),
+      'durationSeconds': serializer.toJson<int?>(durationSeconds),
+      'visibilityJson': serializer.toJson<String?>(visibilityJson),
+      'contentOverridesJson': serializer.toJson<String?>(contentOverridesJson),
+    };
+  }
+
+  ShootDocumentBlock copyWith({
+    int? id,
+    int? documentId,
+    int? sortOrder,
+    String? blockType,
+    Value<int?> sceneId = const Value.absent(),
+    Value<int?> shotId = const Value.absent(),
+    Value<String?> scriptExcerpt = const Value.absent(),
+    Value<String?> customLabel = const Value.absent(),
+    Value<String?> noteBody = const Value.absent(),
+    Value<String?> imagePath = const Value.absent(),
+    Value<String?> charactersJson = const Value.absent(),
+    Value<int?> durationSeconds = const Value.absent(),
+    Value<String?> visibilityJson = const Value.absent(),
+    Value<String?> contentOverridesJson = const Value.absent(),
+  }) => ShootDocumentBlock(
+    id: id ?? this.id,
+    documentId: documentId ?? this.documentId,
+    sortOrder: sortOrder ?? this.sortOrder,
+    blockType: blockType ?? this.blockType,
+    sceneId: sceneId.present ? sceneId.value : this.sceneId,
+    shotId: shotId.present ? shotId.value : this.shotId,
+    scriptExcerpt: scriptExcerpt.present
+        ? scriptExcerpt.value
+        : this.scriptExcerpt,
+    customLabel: customLabel.present ? customLabel.value : this.customLabel,
+    noteBody: noteBody.present ? noteBody.value : this.noteBody,
+    imagePath: imagePath.present ? imagePath.value : this.imagePath,
+    charactersJson: charactersJson.present
+        ? charactersJson.value
+        : this.charactersJson,
+    durationSeconds: durationSeconds.present
+        ? durationSeconds.value
+        : this.durationSeconds,
+    visibilityJson: visibilityJson.present
+        ? visibilityJson.value
+        : this.visibilityJson,
+    contentOverridesJson: contentOverridesJson.present
+        ? contentOverridesJson.value
+        : this.contentOverridesJson,
+  );
+  ShootDocumentBlock copyWithCompanion(ShootDocumentBlocksCompanion data) {
+    return ShootDocumentBlock(
+      id: data.id.present ? data.id.value : this.id,
+      documentId: data.documentId.present
+          ? data.documentId.value
+          : this.documentId,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      blockType: data.blockType.present ? data.blockType.value : this.blockType,
+      sceneId: data.sceneId.present ? data.sceneId.value : this.sceneId,
+      shotId: data.shotId.present ? data.shotId.value : this.shotId,
+      scriptExcerpt: data.scriptExcerpt.present
+          ? data.scriptExcerpt.value
+          : this.scriptExcerpt,
+      customLabel: data.customLabel.present
+          ? data.customLabel.value
+          : this.customLabel,
+      noteBody: data.noteBody.present ? data.noteBody.value : this.noteBody,
+      imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
+      charactersJson: data.charactersJson.present
+          ? data.charactersJson.value
+          : this.charactersJson,
+      durationSeconds: data.durationSeconds.present
+          ? data.durationSeconds.value
+          : this.durationSeconds,
+      visibilityJson: data.visibilityJson.present
+          ? data.visibilityJson.value
+          : this.visibilityJson,
+      contentOverridesJson: data.contentOverridesJson.present
+          ? data.contentOverridesJson.value
+          : this.contentOverridesJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShootDocumentBlock(')
+          ..write('id: $id, ')
+          ..write('documentId: $documentId, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('blockType: $blockType, ')
+          ..write('sceneId: $sceneId, ')
+          ..write('shotId: $shotId, ')
+          ..write('scriptExcerpt: $scriptExcerpt, ')
+          ..write('customLabel: $customLabel, ')
+          ..write('noteBody: $noteBody, ')
+          ..write('imagePath: $imagePath, ')
+          ..write('charactersJson: $charactersJson, ')
+          ..write('durationSeconds: $durationSeconds, ')
+          ..write('visibilityJson: $visibilityJson, ')
+          ..write('contentOverridesJson: $contentOverridesJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    documentId,
+    sortOrder,
+    blockType,
+    sceneId,
+    shotId,
+    scriptExcerpt,
+    customLabel,
+    noteBody,
+    imagePath,
+    charactersJson,
+    durationSeconds,
+    visibilityJson,
+    contentOverridesJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ShootDocumentBlock &&
+          other.id == this.id &&
+          other.documentId == this.documentId &&
+          other.sortOrder == this.sortOrder &&
+          other.blockType == this.blockType &&
+          other.sceneId == this.sceneId &&
+          other.shotId == this.shotId &&
+          other.scriptExcerpt == this.scriptExcerpt &&
+          other.customLabel == this.customLabel &&
+          other.noteBody == this.noteBody &&
+          other.imagePath == this.imagePath &&
+          other.charactersJson == this.charactersJson &&
+          other.durationSeconds == this.durationSeconds &&
+          other.visibilityJson == this.visibilityJson &&
+          other.contentOverridesJson == this.contentOverridesJson);
+}
+
+class ShootDocumentBlocksCompanion extends UpdateCompanion<ShootDocumentBlock> {
+  final Value<int> id;
+  final Value<int> documentId;
+  final Value<int> sortOrder;
+  final Value<String> blockType;
+  final Value<int?> sceneId;
+  final Value<int?> shotId;
+  final Value<String?> scriptExcerpt;
+  final Value<String?> customLabel;
+  final Value<String?> noteBody;
+  final Value<String?> imagePath;
+  final Value<String?> charactersJson;
+  final Value<int?> durationSeconds;
+  final Value<String?> visibilityJson;
+  final Value<String?> contentOverridesJson;
+  const ShootDocumentBlocksCompanion({
+    this.id = const Value.absent(),
+    this.documentId = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.blockType = const Value.absent(),
+    this.sceneId = const Value.absent(),
+    this.shotId = const Value.absent(),
+    this.scriptExcerpt = const Value.absent(),
+    this.customLabel = const Value.absent(),
+    this.noteBody = const Value.absent(),
+    this.imagePath = const Value.absent(),
+    this.charactersJson = const Value.absent(),
+    this.durationSeconds = const Value.absent(),
+    this.visibilityJson = const Value.absent(),
+    this.contentOverridesJson = const Value.absent(),
+  });
+  ShootDocumentBlocksCompanion.insert({
+    this.id = const Value.absent(),
+    required int documentId,
+    this.sortOrder = const Value.absent(),
+    required String blockType,
+    this.sceneId = const Value.absent(),
+    this.shotId = const Value.absent(),
+    this.scriptExcerpt = const Value.absent(),
+    this.customLabel = const Value.absent(),
+    this.noteBody = const Value.absent(),
+    this.imagePath = const Value.absent(),
+    this.charactersJson = const Value.absent(),
+    this.durationSeconds = const Value.absent(),
+    this.visibilityJson = const Value.absent(),
+    this.contentOverridesJson = const Value.absent(),
+  }) : documentId = Value(documentId),
+       blockType = Value(blockType);
+  static Insertable<ShootDocumentBlock> custom({
+    Expression<int>? id,
+    Expression<int>? documentId,
+    Expression<int>? sortOrder,
+    Expression<String>? blockType,
+    Expression<int>? sceneId,
+    Expression<int>? shotId,
+    Expression<String>? scriptExcerpt,
+    Expression<String>? customLabel,
+    Expression<String>? noteBody,
+    Expression<String>? imagePath,
+    Expression<String>? charactersJson,
+    Expression<int>? durationSeconds,
+    Expression<String>? visibilityJson,
+    Expression<String>? contentOverridesJson,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (documentId != null) 'document_id': documentId,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (blockType != null) 'block_type': blockType,
+      if (sceneId != null) 'scene_id': sceneId,
+      if (shotId != null) 'shot_id': shotId,
+      if (scriptExcerpt != null) 'script_excerpt': scriptExcerpt,
+      if (customLabel != null) 'custom_label': customLabel,
+      if (noteBody != null) 'note_body': noteBody,
+      if (imagePath != null) 'image_path': imagePath,
+      if (charactersJson != null) 'characters_json': charactersJson,
+      if (durationSeconds != null) 'duration_seconds': durationSeconds,
+      if (visibilityJson != null) 'visibility_json': visibilityJson,
+      if (contentOverridesJson != null)
+        'content_overrides_json': contentOverridesJson,
+    });
+  }
+
+  ShootDocumentBlocksCompanion copyWith({
+    Value<int>? id,
+    Value<int>? documentId,
+    Value<int>? sortOrder,
+    Value<String>? blockType,
+    Value<int?>? sceneId,
+    Value<int?>? shotId,
+    Value<String?>? scriptExcerpt,
+    Value<String?>? customLabel,
+    Value<String?>? noteBody,
+    Value<String?>? imagePath,
+    Value<String?>? charactersJson,
+    Value<int?>? durationSeconds,
+    Value<String?>? visibilityJson,
+    Value<String?>? contentOverridesJson,
+  }) {
+    return ShootDocumentBlocksCompanion(
+      id: id ?? this.id,
+      documentId: documentId ?? this.documentId,
+      sortOrder: sortOrder ?? this.sortOrder,
+      blockType: blockType ?? this.blockType,
+      sceneId: sceneId ?? this.sceneId,
+      shotId: shotId ?? this.shotId,
+      scriptExcerpt: scriptExcerpt ?? this.scriptExcerpt,
+      customLabel: customLabel ?? this.customLabel,
+      noteBody: noteBody ?? this.noteBody,
+      imagePath: imagePath ?? this.imagePath,
+      charactersJson: charactersJson ?? this.charactersJson,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
+      visibilityJson: visibilityJson ?? this.visibilityJson,
+      contentOverridesJson: contentOverridesJson ?? this.contentOverridesJson,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (documentId.present) {
+      map['document_id'] = Variable<int>(documentId.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (blockType.present) {
+      map['block_type'] = Variable<String>(blockType.value);
+    }
+    if (sceneId.present) {
+      map['scene_id'] = Variable<int>(sceneId.value);
+    }
+    if (shotId.present) {
+      map['shot_id'] = Variable<int>(shotId.value);
+    }
+    if (scriptExcerpt.present) {
+      map['script_excerpt'] = Variable<String>(scriptExcerpt.value);
+    }
+    if (customLabel.present) {
+      map['custom_label'] = Variable<String>(customLabel.value);
+    }
+    if (noteBody.present) {
+      map['note_body'] = Variable<String>(noteBody.value);
+    }
+    if (imagePath.present) {
+      map['image_path'] = Variable<String>(imagePath.value);
+    }
+    if (charactersJson.present) {
+      map['characters_json'] = Variable<String>(charactersJson.value);
+    }
+    if (durationSeconds.present) {
+      map['duration_seconds'] = Variable<int>(durationSeconds.value);
+    }
+    if (visibilityJson.present) {
+      map['visibility_json'] = Variable<String>(visibilityJson.value);
+    }
+    if (contentOverridesJson.present) {
+      map['content_overrides_json'] = Variable<String>(
+        contentOverridesJson.value,
+      );
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShootDocumentBlocksCompanion(')
+          ..write('id: $id, ')
+          ..write('documentId: $documentId, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('blockType: $blockType, ')
+          ..write('sceneId: $sceneId, ')
+          ..write('shotId: $shotId, ')
+          ..write('scriptExcerpt: $scriptExcerpt, ')
+          ..write('customLabel: $customLabel, ')
+          ..write('noteBody: $noteBody, ')
+          ..write('imagePath: $imagePath, ')
+          ..write('charactersJson: $charactersJson, ')
+          ..write('durationSeconds: $durationSeconds, ')
+          ..write('visibilityJson: $visibilityJson, ')
+          ..write('contentOverridesJson: $contentOverridesJson')
           ..write(')'))
         .toString();
   }
@@ -20774,6 +22541,524 @@ class BibleSectionDefinitionsCompanion
   }
 }
 
+class $UserTemplatesTable extends UserTemplates
+    with TableInfo<$UserTemplatesTable, UserTemplate> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $UserTemplatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isDefaultMeta = const VerificationMeta(
+    'isDefault',
+  );
+  @override
+  late final GeneratedColumn<bool> isDefault = GeneratedColumn<bool>(
+    'is_default',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_default" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    type,
+    name,
+    description,
+    payloadJson,
+    isDefault,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'user_templates';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<UserTemplate> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadJsonMeta);
+    }
+    if (data.containsKey('is_default')) {
+      context.handle(
+        _isDefaultMeta,
+        isDefault.isAcceptableOrUnknown(data['is_default']!, _isDefaultMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  UserTemplate map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return UserTemplate(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      )!,
+      isDefault: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_default'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $UserTemplatesTable createAlias(String alias) {
+    return $UserTemplatesTable(attachedDatabase, alias);
+  }
+}
+
+class UserTemplate extends DataClass implements Insertable<UserTemplate> {
+  final String id;
+
+  /// `bible_layout` | `shoot_document`
+  final String type;
+  final String name;
+  final String? description;
+  final String payloadJson;
+  final bool isDefault;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const UserTemplate({
+    required this.id,
+    required this.type,
+    required this.name,
+    this.description,
+    required this.payloadJson,
+    required this.isDefault,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['type'] = Variable<String>(type);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    map['payload_json'] = Variable<String>(payloadJson);
+    map['is_default'] = Variable<bool>(isDefault);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  UserTemplatesCompanion toCompanion(bool nullToAbsent) {
+    return UserTemplatesCompanion(
+      id: Value(id),
+      type: Value(type),
+      name: Value(name),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      payloadJson: Value(payloadJson),
+      isDefault: Value(isDefault),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory UserTemplate.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return UserTemplate(
+      id: serializer.fromJson<String>(json['id']),
+      type: serializer.fromJson<String>(json['type']),
+      name: serializer.fromJson<String>(json['name']),
+      description: serializer.fromJson<String?>(json['description']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+      isDefault: serializer.fromJson<bool>(json['isDefault']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'type': serializer.toJson<String>(type),
+      'name': serializer.toJson<String>(name),
+      'description': serializer.toJson<String?>(description),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+      'isDefault': serializer.toJson<bool>(isDefault),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  UserTemplate copyWith({
+    String? id,
+    String? type,
+    String? name,
+    Value<String?> description = const Value.absent(),
+    String? payloadJson,
+    bool? isDefault,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => UserTemplate(
+    id: id ?? this.id,
+    type: type ?? this.type,
+    name: name ?? this.name,
+    description: description.present ? description.value : this.description,
+    payloadJson: payloadJson ?? this.payloadJson,
+    isDefault: isDefault ?? this.isDefault,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  UserTemplate copyWithCompanion(UserTemplatesCompanion data) {
+    return UserTemplate(
+      id: data.id.present ? data.id.value : this.id,
+      type: data.type.present ? data.type.value : this.type,
+      name: data.name.present ? data.name.value : this.name,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
+      isDefault: data.isDefault.present ? data.isDefault.value : this.isDefault,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UserTemplate(')
+          ..write('id: $id, ')
+          ..write('type: $type, ')
+          ..write('name: $name, ')
+          ..write('description: $description, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('isDefault: $isDefault, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    type,
+    name,
+    description,
+    payloadJson,
+    isDefault,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is UserTemplate &&
+          other.id == this.id &&
+          other.type == this.type &&
+          other.name == this.name &&
+          other.description == this.description &&
+          other.payloadJson == this.payloadJson &&
+          other.isDefault == this.isDefault &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class UserTemplatesCompanion extends UpdateCompanion<UserTemplate> {
+  final Value<String> id;
+  final Value<String> type;
+  final Value<String> name;
+  final Value<String?> description;
+  final Value<String> payloadJson;
+  final Value<bool> isDefault;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const UserTemplatesCompanion({
+    this.id = const Value.absent(),
+    this.type = const Value.absent(),
+    this.name = const Value.absent(),
+    this.description = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.isDefault = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  UserTemplatesCompanion.insert({
+    required String id,
+    required String type,
+    required String name,
+    this.description = const Value.absent(),
+    required String payloadJson,
+    this.isDefault = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       type = Value(type),
+       name = Value(name),
+       payloadJson = Value(payloadJson);
+  static Insertable<UserTemplate> custom({
+    Expression<String>? id,
+    Expression<String>? type,
+    Expression<String>? name,
+    Expression<String>? description,
+    Expression<String>? payloadJson,
+    Expression<bool>? isDefault,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (type != null) 'type': type,
+      if (name != null) 'name': name,
+      if (description != null) 'description': description,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (isDefault != null) 'is_default': isDefault,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  UserTemplatesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? type,
+    Value<String>? name,
+    Value<String?>? description,
+    Value<String>? payloadJson,
+    Value<bool>? isDefault,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return UserTemplatesCompanion(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      payloadJson: payloadJson ?? this.payloadJson,
+      isDefault: isDefault ?? this.isDefault,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (isDefault.present) {
+      map['is_default'] = Variable<bool>(isDefault.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UserTemplatesCompanion(')
+          ..write('id: $id, ')
+          ..write('type: $type, ')
+          ..write('name: $name, ')
+          ..write('description: $description, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('isDefault: $isDefault, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $ExposureBlocksTable extends ExposureBlocks
     with TableInfo<$ExposureBlocksTable, ExposureBlock> {
   @override
@@ -25526,6 +27811,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $LocationBasePlansTable(this);
   late final $ScenesTable scenes = $ScenesTable(this);
   late final $ShotsTable shots = $ShotsTable(this);
+  late final $ShootDocumentsTable shootDocuments = $ShootDocumentsTable(this);
+  late final $ShootDocumentBlocksTable shootDocumentBlocks =
+      $ShootDocumentBlocksTable(this);
   late final $ShotReferencesTable shotReferences = $ShotReferencesTable(this);
   late final $CameraPlanElementsTable cameraPlanElements =
       $CameraPlanElementsTable(this);
@@ -25558,6 +27846,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $BibleSectionGroupsTable(this);
   late final $BibleSectionDefinitionsTable bibleSectionDefinitions =
       $BibleSectionDefinitionsTable(this);
+  late final $UserTemplatesTable userTemplates = $UserTemplatesTable(this);
   late final $ExposureBlocksTable exposureBlocks = $ExposureBlocksTable(this);
   late final $LightingSetupsTable lightingSetups = $LightingSetupsTable(this);
   late final $CameraTestsTable cameraTests = $CameraTestsTable(this);
@@ -25585,6 +27874,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     locationBasePlans,
     scenes,
     shots,
+    shootDocuments,
+    shootDocumentBlocks,
     shotReferences,
     cameraPlanElements,
     cameraPathPoints,
@@ -25603,6 +27894,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     moodboardImages,
     bibleSectionGroups,
     bibleSectionDefinitions,
+    userTemplates,
     exposureBlocks,
     lightingSetups,
     cameraTests,
@@ -25898,6 +28190,7 @@ typedef $$ProjectsTableCreateCompanionBuilder =
       Value<int> sortOrder,
       Value<String?> cloudId,
       Value<DateTime?> syncUpdatedAt,
+      Value<DateTime?> contentSyncUpdatedAt,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
     });
@@ -25921,6 +28214,7 @@ typedef $$ProjectsTableUpdateCompanionBuilder =
       Value<int> sortOrder,
       Value<String?> cloudId,
       Value<DateTime?> syncUpdatedAt,
+      Value<DateTime?> contentSyncUpdatedAt,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
     });
@@ -26023,6 +28317,27 @@ final class $$ProjectsTableReferences
     ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_shotsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ShootDocumentsTable, List<ShootDocument>>
+  _shootDocumentsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.shootDocuments,
+    aliasName: $_aliasNameGenerator(
+      db.projects.id,
+      db.shootDocuments.projectId,
+    ),
+  );
+
+  $$ShootDocumentsTableProcessedTableManager get shootDocumentsRefs {
+    final manager = $$ShootDocumentsTableTableManager(
+      $_db,
+      $_db.shootDocuments,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_shootDocumentsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -26279,6 +28594,11 @@ class $$ProjectsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<DateTime> get contentSyncUpdatedAt => $composableBuilder(
+    column: $table.contentSyncUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
@@ -26403,6 +28723,31 @@ class $$ProjectsTableFilterComposer
           }) => $$ShotsTableFilterComposer(
             $db: $db,
             $table: $db.shots,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> shootDocumentsRefs(
+    Expression<bool> Function($$ShootDocumentsTableFilterComposer f) f,
+  ) {
+    final $$ShootDocumentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.shootDocuments,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShootDocumentsTableFilterComposer(
+            $db: $db,
+            $table: $db.shootDocuments,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -26682,6 +29027,11 @@ class $$ProjectsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get contentSyncUpdatedAt => $composableBuilder(
+    column: $table.contentSyncUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -26793,6 +29143,11 @@ class $$ProjectsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get syncUpdatedAt => $composableBuilder(
     column: $table.syncUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get contentSyncUpdatedAt => $composableBuilder(
+    column: $table.contentSyncUpdatedAt,
     builder: (column) => column,
   );
 
@@ -26917,6 +29272,31 @@ class $$ProjectsTableAnnotationComposer
           }) => $$ShotsTableAnnotationComposer(
             $db: $db,
             $table: $db.shots,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> shootDocumentsRefs<T extends Object>(
+    Expression<T> Function($$ShootDocumentsTableAnnotationComposer a) f,
+  ) {
+    final $$ShootDocumentsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.shootDocuments,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShootDocumentsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.shootDocuments,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -27122,6 +29502,7 @@ class $$ProjectsTableTableManager
             bool locationBasePlansRefs,
             bool scenesRefs,
             bool shotsRefs,
+            bool shootDocumentsRefs,
             bool projectEquipmentRefs,
             bool lookBiblesRefs,
             bool projectAnnotatedPdfsRefs,
@@ -27162,6 +29543,7 @@ class $$ProjectsTableTableManager
                 Value<int> sortOrder = const Value.absent(),
                 Value<String?> cloudId = const Value.absent(),
                 Value<DateTime?> syncUpdatedAt = const Value.absent(),
+                Value<DateTime?> contentSyncUpdatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => ProjectsCompanion(
@@ -27183,6 +29565,7 @@ class $$ProjectsTableTableManager
                 sortOrder: sortOrder,
                 cloudId: cloudId,
                 syncUpdatedAt: syncUpdatedAt,
+                contentSyncUpdatedAt: contentSyncUpdatedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),
@@ -27206,6 +29589,7 @@ class $$ProjectsTableTableManager
                 Value<int> sortOrder = const Value.absent(),
                 Value<String?> cloudId = const Value.absent(),
                 Value<DateTime?> syncUpdatedAt = const Value.absent(),
+                Value<DateTime?> contentSyncUpdatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => ProjectsCompanion.insert(
@@ -27227,6 +29611,7 @@ class $$ProjectsTableTableManager
                 sortOrder: sortOrder,
                 cloudId: cloudId,
                 syncUpdatedAt: syncUpdatedAt,
+                contentSyncUpdatedAt: contentSyncUpdatedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),
@@ -27245,6 +29630,7 @@ class $$ProjectsTableTableManager
                 locationBasePlansRefs = false,
                 scenesRefs = false,
                 shotsRefs = false,
+                shootDocumentsRefs = false,
                 projectEquipmentRefs = false,
                 lookBiblesRefs = false,
                 projectAnnotatedPdfsRefs = false,
@@ -27260,6 +29646,7 @@ class $$ProjectsTableTableManager
                     if (locationBasePlansRefs) db.locationBasePlans,
                     if (scenesRefs) db.scenes,
                     if (shotsRefs) db.shots,
+                    if (shootDocumentsRefs) db.shootDocuments,
                     if (projectEquipmentRefs) db.projectEquipment,
                     if (lookBiblesRefs) db.lookBibles,
                     if (projectAnnotatedPdfsRefs) db.projectAnnotatedPdfs,
@@ -27380,6 +29767,27 @@ class $$ProjectsTableTableManager
                                 table,
                                 p0,
                               ).shotsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (shootDocumentsRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          ShootDocument
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._shootDocumentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).shootDocumentsRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.projectId == item.id,
@@ -27559,6 +29967,7 @@ typedef $$ProjectsTableProcessedTableManager =
         bool locationBasePlansRefs,
         bool scenesRefs,
         bool shotsRefs,
+        bool shootDocumentsRefs,
         bool projectEquipmentRefs,
         bool lookBiblesRefs,
         bool projectAnnotatedPdfsRefs,
@@ -29530,6 +31939,33 @@ final class $$ScenesTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<
+    $ShootDocumentBlocksTable,
+    List<ShootDocumentBlock>
+  >
+  _shootDocumentBlocksRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.shootDocumentBlocks,
+        aliasName: $_aliasNameGenerator(
+          db.scenes.id,
+          db.shootDocumentBlocks.sceneId,
+        ),
+      );
+
+  $$ShootDocumentBlocksTableProcessedTableManager get shootDocumentBlocksRefs {
+    final manager = $$ShootDocumentBlocksTableTableManager(
+      $_db,
+      $_db.shootDocumentBlocks,
+    ).filter((f) => f.sceneId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _shootDocumentBlocksRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ScenesTableFilterComposer
@@ -29701,6 +32137,31 @@ class $$ScenesTableFilterComposer
           }) => $$ShotsTableFilterComposer(
             $db: $db,
             $table: $db.shots,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> shootDocumentBlocksRefs(
+    Expression<bool> Function($$ShootDocumentBlocksTableFilterComposer f) f,
+  ) {
+    final $$ShootDocumentBlocksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.shootDocumentBlocks,
+      getReferencedColumn: (t) => t.sceneId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShootDocumentBlocksTableFilterComposer(
+            $db: $db,
+            $table: $db.shootDocumentBlocks,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -30031,6 +32492,32 @@ class $$ScenesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> shootDocumentBlocksRefs<T extends Object>(
+    Expression<T> Function($$ShootDocumentBlocksTableAnnotationComposer a) f,
+  ) {
+    final $$ShootDocumentBlocksTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.shootDocumentBlocks,
+          getReferencedColumn: (t) => t.sceneId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ShootDocumentBlocksTableAnnotationComposer(
+                $db: $db,
+                $table: $db.shootDocumentBlocks,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$ScenesTableTableManager
@@ -30051,6 +32538,7 @@ class $$ScenesTableTableManager
             bool locationSiteId,
             bool locationId,
             bool shotsRefs,
+            bool shootDocumentBlocksRefs,
           })
         > {
   $$ScenesTableTableManager(_$AppDatabase db, $ScenesTable table)
@@ -30156,10 +32644,14 @@ class $$ScenesTableTableManager
                 locationSiteId = false,
                 locationId = false,
                 shotsRefs = false,
+                shootDocumentBlocksRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
-                  explicitlyWatchedTables: [if (shotsRefs) db.shots],
+                  explicitlyWatchedTables: [
+                    if (shotsRefs) db.shots,
+                    if (shootDocumentBlocksRefs) db.shootDocumentBlocks,
+                  ],
                   addJoins:
                       <
                         T extends TableManagerState<
@@ -30233,6 +32725,27 @@ class $$ScenesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (shootDocumentBlocksRefs)
+                        await $_getPrefetchedData<
+                          Scene,
+                          $ScenesTable,
+                          ShootDocumentBlock
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ScenesTableReferences
+                              ._shootDocumentBlocksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ScenesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).shootDocumentBlocksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.sceneId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -30258,6 +32771,7 @@ typedef $$ScenesTableProcessedTableManager =
         bool locationSiteId,
         bool locationId,
         bool shotsRefs,
+        bool shootDocumentBlocksRefs,
       })
     >;
 typedef $$ShotsTableCreateCompanionBuilder =
@@ -30279,6 +32793,9 @@ typedef $$ShotsTableCreateCompanionBuilder =
       Value<String?> description,
       Value<String?> referenceImagePath,
       Value<String?> cameraPlanImagePath,
+      Value<String?> charactersJson,
+      Value<int?> durationSeconds,
+      Value<int?> scriptAnchorIndex,
       Value<bool> autoNumbering,
       Value<int> sortOrder,
     });
@@ -30301,6 +32818,9 @@ typedef $$ShotsTableUpdateCompanionBuilder =
       Value<String?> description,
       Value<String?> referenceImagePath,
       Value<String?> cameraPlanImagePath,
+      Value<String?> charactersJson,
+      Value<int?> durationSeconds,
+      Value<int?> scriptAnchorIndex,
       Value<bool> autoNumbering,
       Value<int> sortOrder,
     });
@@ -30341,6 +32861,33 @@ final class $$ShotsTableReferences
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $ShootDocumentBlocksTable,
+    List<ShootDocumentBlock>
+  >
+  _shootDocumentBlocksRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.shootDocumentBlocks,
+        aliasName: $_aliasNameGenerator(
+          db.shots.id,
+          db.shootDocumentBlocks.shotId,
+        ),
+      );
+
+  $$ShootDocumentBlocksTableProcessedTableManager get shootDocumentBlocksRefs {
+    final manager = $$ShootDocumentBlocksTableTableManager(
+      $_db,
+      $_db.shootDocumentBlocks,
+    ).filter((f) => f.shotId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _shootDocumentBlocksRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
     );
   }
 
@@ -30470,6 +33017,21 @@ class $$ShotsTableFilterComposer extends Composer<_$AppDatabase, $ShotsTable> {
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get charactersJson => $composableBuilder(
+    column: $table.charactersJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get scriptAnchorIndex => $composableBuilder(
+    column: $table.scriptAnchorIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<bool> get autoNumbering => $composableBuilder(
     column: $table.autoNumbering,
     builder: (column) => ColumnFilters(column),
@@ -30524,6 +33086,31 @@ class $$ShotsTableFilterComposer extends Composer<_$AppDatabase, $ShotsTable> {
           ),
     );
     return composer;
+  }
+
+  Expression<bool> shootDocumentBlocksRefs(
+    Expression<bool> Function($$ShootDocumentBlocksTableFilterComposer f) f,
+  ) {
+    final $$ShootDocumentBlocksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.shootDocumentBlocks,
+      getReferencedColumn: (t) => t.shotId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShootDocumentBlocksTableFilterComposer(
+            $db: $db,
+            $table: $db.shootDocumentBlocks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
   }
 
   Expression<bool> shotReferencesRefs(
@@ -30661,6 +33248,21 @@ class $$ShotsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get charactersJson => $composableBuilder(
+    column: $table.charactersJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get scriptAnchorIndex => $composableBuilder(
+    column: $table.scriptAnchorIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get autoNumbering => $composableBuilder(
     column: $table.autoNumbering,
     builder: (column) => ColumnOrderings(column),
@@ -30782,6 +33384,21 @@ class $$ShotsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get charactersJson => $composableBuilder(
+    column: $table.charactersJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get scriptAnchorIndex => $composableBuilder(
+    column: $table.scriptAnchorIndex,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<bool> get autoNumbering => $composableBuilder(
     column: $table.autoNumbering,
     builder: (column) => column,
@@ -30834,6 +33451,32 @@ class $$ShotsTableAnnotationComposer
           ),
     );
     return composer;
+  }
+
+  Expression<T> shootDocumentBlocksRefs<T extends Object>(
+    Expression<T> Function($$ShootDocumentBlocksTableAnnotationComposer a) f,
+  ) {
+    final $$ShootDocumentBlocksTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.shootDocumentBlocks,
+          getReferencedColumn: (t) => t.shotId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ShootDocumentBlocksTableAnnotationComposer(
+                $db: $db,
+                $table: $db.shootDocumentBlocks,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
   }
 
   Expression<T> shotReferencesRefs<T extends Object>(
@@ -30904,6 +33547,7 @@ class $$ShotsTableTableManager
           PrefetchHooks Function({
             bool sceneId,
             bool projectId,
+            bool shootDocumentBlocksRefs,
             bool shotReferencesRefs,
             bool cameraPlanElementsRefs,
           })
@@ -30938,6 +33582,9 @@ class $$ShotsTableTableManager
                 Value<String?> description = const Value.absent(),
                 Value<String?> referenceImagePath = const Value.absent(),
                 Value<String?> cameraPlanImagePath = const Value.absent(),
+                Value<String?> charactersJson = const Value.absent(),
+                Value<int?> durationSeconds = const Value.absent(),
+                Value<int?> scriptAnchorIndex = const Value.absent(),
                 Value<bool> autoNumbering = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
               }) => ShotsCompanion(
@@ -30958,6 +33605,9 @@ class $$ShotsTableTableManager
                 description: description,
                 referenceImagePath: referenceImagePath,
                 cameraPlanImagePath: cameraPlanImagePath,
+                charactersJson: charactersJson,
+                durationSeconds: durationSeconds,
+                scriptAnchorIndex: scriptAnchorIndex,
                 autoNumbering: autoNumbering,
                 sortOrder: sortOrder,
               ),
@@ -30980,6 +33630,9 @@ class $$ShotsTableTableManager
                 Value<String?> description = const Value.absent(),
                 Value<String?> referenceImagePath = const Value.absent(),
                 Value<String?> cameraPlanImagePath = const Value.absent(),
+                Value<String?> charactersJson = const Value.absent(),
+                Value<int?> durationSeconds = const Value.absent(),
+                Value<int?> scriptAnchorIndex = const Value.absent(),
                 Value<bool> autoNumbering = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
               }) => ShotsCompanion.insert(
@@ -31000,6 +33653,9 @@ class $$ShotsTableTableManager
                 description: description,
                 referenceImagePath: referenceImagePath,
                 cameraPlanImagePath: cameraPlanImagePath,
+                charactersJson: charactersJson,
+                durationSeconds: durationSeconds,
+                scriptAnchorIndex: scriptAnchorIndex,
                 autoNumbering: autoNumbering,
                 sortOrder: sortOrder,
               ),
@@ -31013,12 +33669,14 @@ class $$ShotsTableTableManager
               ({
                 sceneId = false,
                 projectId = false,
+                shootDocumentBlocksRefs = false,
                 shotReferencesRefs = false,
                 cameraPlanElementsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
+                    if (shootDocumentBlocksRefs) db.shootDocumentBlocks,
                     if (shotReferencesRefs) db.shotReferences,
                     if (cameraPlanElementsRefs) db.cameraPlanElements,
                   ],
@@ -31069,6 +33727,27 @@ class $$ShotsTableTableManager
                       },
                   getPrefetchedDataCallback: (items) async {
                     return [
+                      if (shootDocumentBlocksRefs)
+                        await $_getPrefetchedData<
+                          Shot,
+                          $ShotsTable,
+                          ShootDocumentBlock
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ShotsTableReferences
+                              ._shootDocumentBlocksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ShotsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).shootDocumentBlocksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.shotId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (shotReferencesRefs)
                         await $_getPrefetchedData<
                           Shot,
@@ -31134,9 +33813,1255 @@ typedef $$ShotsTableProcessedTableManager =
       PrefetchHooks Function({
         bool sceneId,
         bool projectId,
+        bool shootDocumentBlocksRefs,
         bool shotReferencesRefs,
         bool cameraPlanElementsRefs,
       })
+    >;
+typedef $$ShootDocumentsTableCreateCompanionBuilder =
+    ShootDocumentsCompanion Function({
+      Value<int> id,
+      required int projectId,
+      required String name,
+      Value<String?> description,
+      Value<String?> defaultVisibilityJson,
+      Value<String> layoutPreset,
+      Value<String?> shootDate,
+      Value<bool> isPrimaryOnSet,
+      Value<bool> includeCoverInPdf,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+typedef $$ShootDocumentsTableUpdateCompanionBuilder =
+    ShootDocumentsCompanion Function({
+      Value<int> id,
+      Value<int> projectId,
+      Value<String> name,
+      Value<String?> description,
+      Value<String?> defaultVisibilityJson,
+      Value<String> layoutPreset,
+      Value<String?> shootDate,
+      Value<bool> isPrimaryOnSet,
+      Value<bool> includeCoverInPdf,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+
+final class $$ShootDocumentsTableReferences
+    extends BaseReferences<_$AppDatabase, $ShootDocumentsTable, ShootDocument> {
+  $$ShootDocumentsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.shootDocuments.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $ShootDocumentBlocksTable,
+    List<ShootDocumentBlock>
+  >
+  _shootDocumentBlocksRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.shootDocumentBlocks,
+        aliasName: $_aliasNameGenerator(
+          db.shootDocuments.id,
+          db.shootDocumentBlocks.documentId,
+        ),
+      );
+
+  $$ShootDocumentBlocksTableProcessedTableManager get shootDocumentBlocksRefs {
+    final manager = $$ShootDocumentBlocksTableTableManager(
+      $_db,
+      $_db.shootDocumentBlocks,
+    ).filter((f) => f.documentId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _shootDocumentBlocksRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$ShootDocumentsTableFilterComposer
+    extends Composer<_$AppDatabase, $ShootDocumentsTable> {
+  $$ShootDocumentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get defaultVisibilityJson => $composableBuilder(
+    column: $table.defaultVisibilityJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get layoutPreset => $composableBuilder(
+    column: $table.layoutPreset,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get shootDate => $composableBuilder(
+    column: $table.shootDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isPrimaryOnSet => $composableBuilder(
+    column: $table.isPrimaryOnSet,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get includeCoverInPdf => $composableBuilder(
+    column: $table.includeCoverInPdf,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> shootDocumentBlocksRefs(
+    Expression<bool> Function($$ShootDocumentBlocksTableFilterComposer f) f,
+  ) {
+    final $$ShootDocumentBlocksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.shootDocumentBlocks,
+      getReferencedColumn: (t) => t.documentId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShootDocumentBlocksTableFilterComposer(
+            $db: $db,
+            $table: $db.shootDocumentBlocks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$ShootDocumentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ShootDocumentsTable> {
+  $$ShootDocumentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get defaultVisibilityJson => $composableBuilder(
+    column: $table.defaultVisibilityJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get layoutPreset => $composableBuilder(
+    column: $table.layoutPreset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get shootDate => $composableBuilder(
+    column: $table.shootDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isPrimaryOnSet => $composableBuilder(
+    column: $table.isPrimaryOnSet,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get includeCoverInPdf => $composableBuilder(
+    column: $table.includeCoverInPdf,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ShootDocumentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ShootDocumentsTable> {
+  $$ShootDocumentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get defaultVisibilityJson => $composableBuilder(
+    column: $table.defaultVisibilityJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get layoutPreset => $composableBuilder(
+    column: $table.layoutPreset,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get shootDate =>
+      $composableBuilder(column: $table.shootDate, builder: (column) => column);
+
+  GeneratedColumn<bool> get isPrimaryOnSet => $composableBuilder(
+    column: $table.isPrimaryOnSet,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get includeCoverInPdf => $composableBuilder(
+    column: $table.includeCoverInPdf,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> shootDocumentBlocksRefs<T extends Object>(
+    Expression<T> Function($$ShootDocumentBlocksTableAnnotationComposer a) f,
+  ) {
+    final $$ShootDocumentBlocksTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.shootDocumentBlocks,
+          getReferencedColumn: (t) => t.documentId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ShootDocumentBlocksTableAnnotationComposer(
+                $db: $db,
+                $table: $db.shootDocumentBlocks,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$ShootDocumentsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ShootDocumentsTable,
+          ShootDocument,
+          $$ShootDocumentsTableFilterComposer,
+          $$ShootDocumentsTableOrderingComposer,
+          $$ShootDocumentsTableAnnotationComposer,
+          $$ShootDocumentsTableCreateCompanionBuilder,
+          $$ShootDocumentsTableUpdateCompanionBuilder,
+          (ShootDocument, $$ShootDocumentsTableReferences),
+          ShootDocument,
+          PrefetchHooks Function({bool projectId, bool shootDocumentBlocksRefs})
+        > {
+  $$ShootDocumentsTableTableManager(
+    _$AppDatabase db,
+    $ShootDocumentsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ShootDocumentsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ShootDocumentsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ShootDocumentsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<String?> defaultVisibilityJson = const Value.absent(),
+                Value<String> layoutPreset = const Value.absent(),
+                Value<String?> shootDate = const Value.absent(),
+                Value<bool> isPrimaryOnSet = const Value.absent(),
+                Value<bool> includeCoverInPdf = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => ShootDocumentsCompanion(
+                id: id,
+                projectId: projectId,
+                name: name,
+                description: description,
+                defaultVisibilityJson: defaultVisibilityJson,
+                layoutPreset: layoutPreset,
+                shootDate: shootDate,
+                isPrimaryOnSet: isPrimaryOnSet,
+                includeCoverInPdf: includeCoverInPdf,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int projectId,
+                required String name,
+                Value<String?> description = const Value.absent(),
+                Value<String?> defaultVisibilityJson = const Value.absent(),
+                Value<String> layoutPreset = const Value.absent(),
+                Value<String?> shootDate = const Value.absent(),
+                Value<bool> isPrimaryOnSet = const Value.absent(),
+                Value<bool> includeCoverInPdf = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => ShootDocumentsCompanion.insert(
+                id: id,
+                projectId: projectId,
+                name: name,
+                description: description,
+                defaultVisibilityJson: defaultVisibilityJson,
+                layoutPreset: layoutPreset,
+                shootDate: shootDate,
+                isPrimaryOnSet: isPrimaryOnSet,
+                includeCoverInPdf: includeCoverInPdf,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ShootDocumentsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({projectId = false, shootDocumentBlocksRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (shootDocumentBlocksRefs) db.shootDocumentBlocks,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (projectId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.projectId,
+                                    referencedTable:
+                                        $$ShootDocumentsTableReferences
+                                            ._projectIdTable(db),
+                                    referencedColumn:
+                                        $$ShootDocumentsTableReferences
+                                            ._projectIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (shootDocumentBlocksRefs)
+                        await $_getPrefetchedData<
+                          ShootDocument,
+                          $ShootDocumentsTable,
+                          ShootDocumentBlock
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ShootDocumentsTableReferences
+                              ._shootDocumentBlocksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ShootDocumentsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).shootDocumentBlocksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.documentId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$ShootDocumentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ShootDocumentsTable,
+      ShootDocument,
+      $$ShootDocumentsTableFilterComposer,
+      $$ShootDocumentsTableOrderingComposer,
+      $$ShootDocumentsTableAnnotationComposer,
+      $$ShootDocumentsTableCreateCompanionBuilder,
+      $$ShootDocumentsTableUpdateCompanionBuilder,
+      (ShootDocument, $$ShootDocumentsTableReferences),
+      ShootDocument,
+      PrefetchHooks Function({bool projectId, bool shootDocumentBlocksRefs})
+    >;
+typedef $$ShootDocumentBlocksTableCreateCompanionBuilder =
+    ShootDocumentBlocksCompanion Function({
+      Value<int> id,
+      required int documentId,
+      Value<int> sortOrder,
+      required String blockType,
+      Value<int?> sceneId,
+      Value<int?> shotId,
+      Value<String?> scriptExcerpt,
+      Value<String?> customLabel,
+      Value<String?> noteBody,
+      Value<String?> imagePath,
+      Value<String?> charactersJson,
+      Value<int?> durationSeconds,
+      Value<String?> visibilityJson,
+      Value<String?> contentOverridesJson,
+    });
+typedef $$ShootDocumentBlocksTableUpdateCompanionBuilder =
+    ShootDocumentBlocksCompanion Function({
+      Value<int> id,
+      Value<int> documentId,
+      Value<int> sortOrder,
+      Value<String> blockType,
+      Value<int?> sceneId,
+      Value<int?> shotId,
+      Value<String?> scriptExcerpt,
+      Value<String?> customLabel,
+      Value<String?> noteBody,
+      Value<String?> imagePath,
+      Value<String?> charactersJson,
+      Value<int?> durationSeconds,
+      Value<String?> visibilityJson,
+      Value<String?> contentOverridesJson,
+    });
+
+final class $$ShootDocumentBlocksTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $ShootDocumentBlocksTable,
+          ShootDocumentBlock
+        > {
+  $$ShootDocumentBlocksTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ShootDocumentsTable _documentIdTable(_$AppDatabase db) =>
+      db.shootDocuments.createAlias(
+        $_aliasNameGenerator(
+          db.shootDocumentBlocks.documentId,
+          db.shootDocuments.id,
+        ),
+      );
+
+  $$ShootDocumentsTableProcessedTableManager get documentId {
+    final $_column = $_itemColumn<int>('document_id')!;
+
+    final manager = $$ShootDocumentsTableTableManager(
+      $_db,
+      $_db.shootDocuments,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_documentIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $ScenesTable _sceneIdTable(_$AppDatabase db) => db.scenes.createAlias(
+    $_aliasNameGenerator(db.shootDocumentBlocks.sceneId, db.scenes.id),
+  );
+
+  $$ScenesTableProcessedTableManager? get sceneId {
+    final $_column = $_itemColumn<int>('scene_id');
+    if ($_column == null) return null;
+    final manager = $$ScenesTableTableManager(
+      $_db,
+      $_db.scenes,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_sceneIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $ShotsTable _shotIdTable(_$AppDatabase db) => db.shots.createAlias(
+    $_aliasNameGenerator(db.shootDocumentBlocks.shotId, db.shots.id),
+  );
+
+  $$ShotsTableProcessedTableManager? get shotId {
+    final $_column = $_itemColumn<int>('shot_id');
+    if ($_column == null) return null;
+    final manager = $$ShotsTableTableManager(
+      $_db,
+      $_db.shots,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_shotIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ShootDocumentBlocksTableFilterComposer
+    extends Composer<_$AppDatabase, $ShootDocumentBlocksTable> {
+  $$ShootDocumentBlocksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get blockType => $composableBuilder(
+    column: $table.blockType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get scriptExcerpt => $composableBuilder(
+    column: $table.scriptExcerpt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customLabel => $composableBuilder(
+    column: $table.customLabel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get noteBody => $composableBuilder(
+    column: $table.noteBody,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get imagePath => $composableBuilder(
+    column: $table.imagePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get charactersJson => $composableBuilder(
+    column: $table.charactersJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get visibilityJson => $composableBuilder(
+    column: $table.visibilityJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentOverridesJson => $composableBuilder(
+    column: $table.contentOverridesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ShootDocumentsTableFilterComposer get documentId {
+    final $$ShootDocumentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.documentId,
+      referencedTable: $db.shootDocuments,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShootDocumentsTableFilterComposer(
+            $db: $db,
+            $table: $db.shootDocuments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ScenesTableFilterComposer get sceneId {
+    final $$ScenesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sceneId,
+      referencedTable: $db.scenes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ScenesTableFilterComposer(
+            $db: $db,
+            $table: $db.scenes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ShotsTableFilterComposer get shotId {
+    final $$ShotsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.shotId,
+      referencedTable: $db.shots,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShotsTableFilterComposer(
+            $db: $db,
+            $table: $db.shots,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ShootDocumentBlocksTableOrderingComposer
+    extends Composer<_$AppDatabase, $ShootDocumentBlocksTable> {
+  $$ShootDocumentBlocksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get blockType => $composableBuilder(
+    column: $table.blockType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get scriptExcerpt => $composableBuilder(
+    column: $table.scriptExcerpt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get customLabel => $composableBuilder(
+    column: $table.customLabel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get noteBody => $composableBuilder(
+    column: $table.noteBody,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get imagePath => $composableBuilder(
+    column: $table.imagePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get charactersJson => $composableBuilder(
+    column: $table.charactersJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get visibilityJson => $composableBuilder(
+    column: $table.visibilityJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentOverridesJson => $composableBuilder(
+    column: $table.contentOverridesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ShootDocumentsTableOrderingComposer get documentId {
+    final $$ShootDocumentsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.documentId,
+      referencedTable: $db.shootDocuments,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShootDocumentsTableOrderingComposer(
+            $db: $db,
+            $table: $db.shootDocuments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ScenesTableOrderingComposer get sceneId {
+    final $$ScenesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sceneId,
+      referencedTable: $db.scenes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ScenesTableOrderingComposer(
+            $db: $db,
+            $table: $db.scenes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ShotsTableOrderingComposer get shotId {
+    final $$ShotsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.shotId,
+      referencedTable: $db.shots,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShotsTableOrderingComposer(
+            $db: $db,
+            $table: $db.shots,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ShootDocumentBlocksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ShootDocumentBlocksTable> {
+  $$ShootDocumentBlocksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<String> get blockType =>
+      $composableBuilder(column: $table.blockType, builder: (column) => column);
+
+  GeneratedColumn<String> get scriptExcerpt => $composableBuilder(
+    column: $table.scriptExcerpt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get customLabel => $composableBuilder(
+    column: $table.customLabel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get noteBody =>
+      $composableBuilder(column: $table.noteBody, builder: (column) => column);
+
+  GeneratedColumn<String> get imagePath =>
+      $composableBuilder(column: $table.imagePath, builder: (column) => column);
+
+  GeneratedColumn<String> get charactersJson => $composableBuilder(
+    column: $table.charactersJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get visibilityJson => $composableBuilder(
+    column: $table.visibilityJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get contentOverridesJson => $composableBuilder(
+    column: $table.contentOverridesJson,
+    builder: (column) => column,
+  );
+
+  $$ShootDocumentsTableAnnotationComposer get documentId {
+    final $$ShootDocumentsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.documentId,
+      referencedTable: $db.shootDocuments,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShootDocumentsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.shootDocuments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ScenesTableAnnotationComposer get sceneId {
+    final $$ScenesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sceneId,
+      referencedTable: $db.scenes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ScenesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.scenes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ShotsTableAnnotationComposer get shotId {
+    final $$ShotsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.shotId,
+      referencedTable: $db.shots,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShotsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.shots,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ShootDocumentBlocksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ShootDocumentBlocksTable,
+          ShootDocumentBlock,
+          $$ShootDocumentBlocksTableFilterComposer,
+          $$ShootDocumentBlocksTableOrderingComposer,
+          $$ShootDocumentBlocksTableAnnotationComposer,
+          $$ShootDocumentBlocksTableCreateCompanionBuilder,
+          $$ShootDocumentBlocksTableUpdateCompanionBuilder,
+          (ShootDocumentBlock, $$ShootDocumentBlocksTableReferences),
+          ShootDocumentBlock,
+          PrefetchHooks Function({bool documentId, bool sceneId, bool shotId})
+        > {
+  $$ShootDocumentBlocksTableTableManager(
+    _$AppDatabase db,
+    $ShootDocumentBlocksTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ShootDocumentBlocksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ShootDocumentBlocksTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ShootDocumentBlocksTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> documentId = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<String> blockType = const Value.absent(),
+                Value<int?> sceneId = const Value.absent(),
+                Value<int?> shotId = const Value.absent(),
+                Value<String?> scriptExcerpt = const Value.absent(),
+                Value<String?> customLabel = const Value.absent(),
+                Value<String?> noteBody = const Value.absent(),
+                Value<String?> imagePath = const Value.absent(),
+                Value<String?> charactersJson = const Value.absent(),
+                Value<int?> durationSeconds = const Value.absent(),
+                Value<String?> visibilityJson = const Value.absent(),
+                Value<String?> contentOverridesJson = const Value.absent(),
+              }) => ShootDocumentBlocksCompanion(
+                id: id,
+                documentId: documentId,
+                sortOrder: sortOrder,
+                blockType: blockType,
+                sceneId: sceneId,
+                shotId: shotId,
+                scriptExcerpt: scriptExcerpt,
+                customLabel: customLabel,
+                noteBody: noteBody,
+                imagePath: imagePath,
+                charactersJson: charactersJson,
+                durationSeconds: durationSeconds,
+                visibilityJson: visibilityJson,
+                contentOverridesJson: contentOverridesJson,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int documentId,
+                Value<int> sortOrder = const Value.absent(),
+                required String blockType,
+                Value<int?> sceneId = const Value.absent(),
+                Value<int?> shotId = const Value.absent(),
+                Value<String?> scriptExcerpt = const Value.absent(),
+                Value<String?> customLabel = const Value.absent(),
+                Value<String?> noteBody = const Value.absent(),
+                Value<String?> imagePath = const Value.absent(),
+                Value<String?> charactersJson = const Value.absent(),
+                Value<int?> durationSeconds = const Value.absent(),
+                Value<String?> visibilityJson = const Value.absent(),
+                Value<String?> contentOverridesJson = const Value.absent(),
+              }) => ShootDocumentBlocksCompanion.insert(
+                id: id,
+                documentId: documentId,
+                sortOrder: sortOrder,
+                blockType: blockType,
+                sceneId: sceneId,
+                shotId: shotId,
+                scriptExcerpt: scriptExcerpt,
+                customLabel: customLabel,
+                noteBody: noteBody,
+                imagePath: imagePath,
+                charactersJson: charactersJson,
+                durationSeconds: durationSeconds,
+                visibilityJson: visibilityJson,
+                contentOverridesJson: contentOverridesJson,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ShootDocumentBlocksTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({documentId = false, sceneId = false, shotId = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (documentId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.documentId,
+                                    referencedTable:
+                                        $$ShootDocumentBlocksTableReferences
+                                            ._documentIdTable(db),
+                                    referencedColumn:
+                                        $$ShootDocumentBlocksTableReferences
+                                            ._documentIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (sceneId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.sceneId,
+                                    referencedTable:
+                                        $$ShootDocumentBlocksTableReferences
+                                            ._sceneIdTable(db),
+                                    referencedColumn:
+                                        $$ShootDocumentBlocksTableReferences
+                                            ._sceneIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (shotId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.shotId,
+                                    referencedTable:
+                                        $$ShootDocumentBlocksTableReferences
+                                            ._shotIdTable(db),
+                                    referencedColumn:
+                                        $$ShootDocumentBlocksTableReferences
+                                            ._shotIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$ShootDocumentBlocksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ShootDocumentBlocksTable,
+      ShootDocumentBlock,
+      $$ShootDocumentBlocksTableFilterComposer,
+      $$ShootDocumentBlocksTableOrderingComposer,
+      $$ShootDocumentBlocksTableAnnotationComposer,
+      $$ShootDocumentBlocksTableCreateCompanionBuilder,
+      $$ShootDocumentBlocksTableUpdateCompanionBuilder,
+      (ShootDocumentBlock, $$ShootDocumentBlocksTableReferences),
+      ShootDocumentBlock,
+      PrefetchHooks Function({bool documentId, bool sceneId, bool shotId})
     >;
 typedef $$ShotReferencesTableCreateCompanionBuilder =
     ShotReferencesCompanion Function({
@@ -42510,6 +46435,267 @@ typedef $$BibleSectionDefinitionsTableProcessedTableManager =
       BibleSectionDefinition,
       PrefetchHooks Function({bool bibleId})
     >;
+typedef $$UserTemplatesTableCreateCompanionBuilder =
+    UserTemplatesCompanion Function({
+      required String id,
+      required String type,
+      required String name,
+      Value<String?> description,
+      required String payloadJson,
+      Value<bool> isDefault,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$UserTemplatesTableUpdateCompanionBuilder =
+    UserTemplatesCompanion Function({
+      Value<String> id,
+      Value<String> type,
+      Value<String> name,
+      Value<String?> description,
+      Value<String> payloadJson,
+      Value<bool> isDefault,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$UserTemplatesTableFilterComposer
+    extends Composer<_$AppDatabase, $UserTemplatesTable> {
+  $$UserTemplatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isDefault => $composableBuilder(
+    column: $table.isDefault,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$UserTemplatesTableOrderingComposer
+    extends Composer<_$AppDatabase, $UserTemplatesTable> {
+  $$UserTemplatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isDefault => $composableBuilder(
+    column: $table.isDefault,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$UserTemplatesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $UserTemplatesTable> {
+  $$UserTemplatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isDefault =>
+      $composableBuilder(column: $table.isDefault, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$UserTemplatesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $UserTemplatesTable,
+          UserTemplate,
+          $$UserTemplatesTableFilterComposer,
+          $$UserTemplatesTableOrderingComposer,
+          $$UserTemplatesTableAnnotationComposer,
+          $$UserTemplatesTableCreateCompanionBuilder,
+          $$UserTemplatesTableUpdateCompanionBuilder,
+          (
+            UserTemplate,
+            BaseReferences<_$AppDatabase, $UserTemplatesTable, UserTemplate>,
+          ),
+          UserTemplate,
+          PrefetchHooks Function()
+        > {
+  $$UserTemplatesTableTableManager(_$AppDatabase db, $UserTemplatesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$UserTemplatesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$UserTemplatesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$UserTemplatesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<bool> isDefault = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => UserTemplatesCompanion(
+                id: id,
+                type: type,
+                name: name,
+                description: description,
+                payloadJson: payloadJson,
+                isDefault: isDefault,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String type,
+                required String name,
+                Value<String?> description = const Value.absent(),
+                required String payloadJson,
+                Value<bool> isDefault = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => UserTemplatesCompanion.insert(
+                id: id,
+                type: type,
+                name: name,
+                description: description,
+                payloadJson: payloadJson,
+                isDefault: isDefault,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$UserTemplatesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $UserTemplatesTable,
+      UserTemplate,
+      $$UserTemplatesTableFilterComposer,
+      $$UserTemplatesTableOrderingComposer,
+      $$UserTemplatesTableAnnotationComposer,
+      $$UserTemplatesTableCreateCompanionBuilder,
+      $$UserTemplatesTableUpdateCompanionBuilder,
+      (
+        UserTemplate,
+        BaseReferences<_$AppDatabase, $UserTemplatesTable, UserTemplate>,
+      ),
+      UserTemplate,
+      PrefetchHooks Function()
+    >;
 typedef $$ExposureBlocksTableCreateCompanionBuilder =
     ExposureBlocksCompanion Function({
       Value<int> id,
@@ -46015,6 +50201,10 @@ class $AppDatabaseManager {
       $$ScenesTableTableManager(_db, _db.scenes);
   $$ShotsTableTableManager get shots =>
       $$ShotsTableTableManager(_db, _db.shots);
+  $$ShootDocumentsTableTableManager get shootDocuments =>
+      $$ShootDocumentsTableTableManager(_db, _db.shootDocuments);
+  $$ShootDocumentBlocksTableTableManager get shootDocumentBlocks =>
+      $$ShootDocumentBlocksTableTableManager(_db, _db.shootDocumentBlocks);
   $$ShotReferencesTableTableManager get shotReferences =>
       $$ShotReferencesTableTableManager(_db, _db.shotReferences);
   $$CameraPlanElementsTableTableManager get cameraPlanElements =>
@@ -46060,6 +50250,8 @@ class $AppDatabaseManager {
         _db,
         _db.bibleSectionDefinitions,
       );
+  $$UserTemplatesTableTableManager get userTemplates =>
+      $$UserTemplatesTableTableManager(_db, _db.userTemplates);
   $$ExposureBlocksTableTableManager get exposureBlocks =>
       $$ExposureBlocksTableTableManager(_db, _db.exposureBlocks);
   $$LightingSetupsTableTableManager get lightingSetups =>

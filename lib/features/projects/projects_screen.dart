@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/sync/project_cloud_actions.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/settings/settings_sheet.dart';
@@ -17,7 +18,12 @@ import 'project_overview.dart';
 import 'project_overview_metrics.dart';
 import '../project_hub/project_hub_screen.dart';
 import '../../core/widgets/app_snackbar.dart';
+import '../../core/sync/sync_conflict_resolution_sheet.dart';
+import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sync_status_indicator.dart';
+import '../../core/update/update_available_banner.dart';
+import '../../core/update/sidestore_reminder_banner.dart';
+import '../../core/cloud/connectivity_gate.dart';
 
 class ProjectsScreen extends ConsumerWidget {
   const ProjectsScreen({super.key});
@@ -26,11 +32,31 @@ class ProjectsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseProvider);
     final palette = context.palette;
+    final pendingPlan = ref.watch(pendingSyncPlanProvider);
+
+    Future<void> reviewSync() async {
+      final syncResult =
+          await ref.read(syncEngineProvider).syncWithConfirmation(context);
+      if (!context.mounted) return;
+      final msg = syncResult.message ??
+          (syncResult.pendingReview
+              ? 'Revisión pendiente'
+              : 'Sincronizado correctamente');
+      AppSnackBar.show(
+        context,
+        msg,
+        isError: syncResult.pendingReview &&
+            syncResult.message?.contains('quedan') == true,
+      );
+    }
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
+            const OfflineStatusBanner(),
+            const UpdateAvailableBanner(),
+            const SideStoreReminderBanner(),
             Padding(
               padding: const EdgeInsets.fromLTRB(
                   AppSpacing.xl, AppSpacing.xl, AppSpacing.xl, AppSpacing.lg),
@@ -77,8 +103,21 @@ class ProjectsScreen extends ConsumerWidget {
                       final allProjects = projectSnap.data ?? [];
 
                       if (allProjects.isEmpty) {
-                        return _EmptyState(
-                            onTap: () => _showCreateProject(context, ref));
+                        return ListView(
+                          padding: const EdgeInsets.all(AppSpacing.xl),
+                          children: [
+                            if (pendingPlan != null) ...[
+                              PendingSyncBanner(
+                                plan: pendingPlan,
+                                onReview: reviewSync,
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                            ],
+                            _EmptyState(
+                              onTap: () => _showCreateProject(context, ref),
+                            ),
+                          ],
+                        );
                       }
 
                       final ungrouped =
@@ -87,6 +126,13 @@ class ProjectsScreen extends ConsumerWidget {
                       return ListView(
                         padding: const EdgeInsets.all(AppSpacing.xl),
                         children: [
+                          if (pendingPlan != null) ...[
+                            PendingSyncBanner(
+                              plan: pendingPlan,
+                              onReview: reviewSync,
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                          ],
                           if (ungrouped.isNotEmpty)
                             _ProjectGrid(
                               projects: ungrouped,
@@ -226,7 +272,7 @@ class ProjectsScreen extends ConsumerWidget {
     );
     if (confirm == true) {
       try {
-        await ref.read(databaseProvider).deleteProjectFully(p.id);
+        await ProjectCloudActions.deleteProject(ref, p);
       } catch (e) {
         if (context.mounted) {
           AppSnackBar.show(context, userFriendlyError(e));

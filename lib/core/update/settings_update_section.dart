@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../cloud/app_version_sync.dart';
 import '../cloud/cloud_providers.dart';
+import '../storage/app_storage_config.dart';
+import '../storage/legacy_storage_discovery.dart';
+import '../storage/storage_relocation_dialog.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_button.dart';
+import 'app_update_checker.dart';
 import 'app_update_providers.dart';
 import 'update_actions_row.dart';
 import '../../features/auth/auth_screen.dart';
@@ -21,21 +24,24 @@ class SettingsUpdateSection extends ConsumerStatefulWidget {
 }
 
 class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
-  String? _installedVersion;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadVersion();
-  }
-
-  Future<void> _loadVersion() async {
-    final label = await currentAppVersionLabel();
-    if (mounted) setState(() => _installedVersion = label);
-  }
-
   Future<void> _checkUpdates() async {
     await ref.read(appUpdateProvider.notifier).check(force: true);
+  }
+
+  Future<void> _scanLegacyStorage() async {
+    final proposal = await LegacyStorageDiscovery.findRelocationProposal();
+    if (!mounted) return;
+
+    if (proposal == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay datos en otras ubicaciones que mover.'),
+        ),
+      );
+      return;
+    }
+
+    await runStorageRelocationFlow(context, proposal);
   }
 
   @override
@@ -43,22 +49,39 @@ class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
     final palette = context.palette;
     final user = ref.watch(currentUserProvider);
     final update = ref.watch(appUpdateProvider);
+    final installedLabel = update.localVersionLabel.isNotEmpty
+        ? update.localVersionLabel
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text('Actualizaciones', style: AppTypography.titleMedium(palette)),
         const SizedBox(height: AppSpacing.sm),
-        if (_installedVersion != null)
+        if (installedLabel != null)
           Text(
-            'Versión instalada: $_installedVersion',
+            'Versión en ejecución: $installedLabel',
             style: AppTypography.bodyMedium(palette),
+          )
+        else
+          Text(
+            'Pulsa «Buscar actualizaciones» para leer la versión instalada.',
+            style: AppTypography.caption(palette),
           ),
+        if (update.remoteVersionLabel != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Última publicada en nube: ${update.remoteVersionLabel}',
+            style: AppTypography.caption(palette),
+          ),
+        ],
         const SizedBox(height: AppSpacing.sm),
         Text(
-          'IRIS DP comprueba la nube si hay una versión nueva. '
-          'El instalador se descarga desde GitHub.',
-          style: AppTypography.caption(palette),
+          'La versión en ejecución es la del binario instalado (.app / .exe). '
+          'Si compilaste código nuevo sin reinstalar, seguirá mostrando la anterior.',
+          style: AppTypography.caption(palette).copyWith(
+            color: palette.textSecondary,
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         if (user == null) ...[
@@ -89,6 +112,24 @@ class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
             _buildCheckResult(context, palette, update),
           ],
         ],
+        if (AppStorageConfig.isConfigured) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Text('Datos del proyecto', style: AppTypography.titleMedium(palette)),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Carpeta actual: ${AppStorageConfig.current!.documentsPath}',
+            style: AppTypography.caption(palette).copyWith(
+              fontFamily: 'monospace',
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            label: 'Buscar datos en otras ubicaciones',
+            icon: Icons.folder_shared_outlined,
+            variant: AppButtonVariant.secondary,
+            onTap: _scanLegacyStorage,
+          ),
+        ],
       ],
     );
   }
@@ -111,7 +152,7 @@ class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Nueva versión ${release.version} disponible',
+            'Nueva versión ${release.version} (${release.buildNumber}) disponible',
             style: AppTypography.label(palette),
           ),
           if (release.releaseNotes?.isNotEmpty == true) ...[
@@ -130,16 +171,59 @@ class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
       );
     }
 
-    return Row(
-      children: [
-        Icon(Icons.check_circle_outline, color: palette.accent, size: 18),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Text(
-            'Tienes la última versión',
-            style: AppTypography.bodyMedium(palette),
+    if (update.remoteLatest == null) {
+      return Text(
+        'No hay releases registradas en Supabase para '
+        '${currentReleasePlatform()}. Publica un tag (v*) o ejecuta '
+        'register_app_release.sh.',
+        style: AppTypography.caption(palette).copyWith(color: palette.warning),
+      );
+    }
+
+    if (update.installedIsNewerThanPublished) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Tu app (${update.localVersionLabel}) es más reciente que la '
+            'última publicada en nube (${update.remoteVersionLabel}).',
+            style: AppTypography.bodyMedium(palette).copyWith(
+              color: palette.warning,
+            ),
           ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Registra la versión en Supabase tras crear el GitHub Release, '
+            'o reinstala el .dmg/.exe del release publicado.',
+            style: AppTypography.caption(palette),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.check_circle_outline, color: palette.accent, size: 18),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                'Tienes la última versión publicada',
+                style: AppTypography.bodyMedium(palette),
+              ),
+            ),
+          ],
         ),
+        if (update.skippedThrottle) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Comprobación reciente en caché (máx. 1/día). '
+            'El botón fuerza consulta completa.',
+            style: AppTypography.caption(palette),
+          ),
+        ],
       ],
     );
   }

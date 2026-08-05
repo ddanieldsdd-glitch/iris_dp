@@ -48,6 +48,10 @@ class _LookBibleScreenState extends ConsumerState<LookBibleScreen> {
   @override
   void dispose() {
     _saveDebounce?.cancel();
+    if (_data != null) {
+      _syncFromControllers();
+      unawaited(_persistNow(_data!));
+    }
     _conceptCtrl.dispose();
     _lutCtrl.dispose();
     _philosophyCtrl.dispose();
@@ -91,15 +95,19 @@ class _LookBibleScreenState extends ConsumerState<LookBibleScreen> {
     _saveDebounce = Timer(const Duration(milliseconds: 600), _save);
   }
 
+  Future<void> _persistNow(LookBibleData data) async {
+    final db = ref.read(databaseProvider);
+    final id = await db.upsertLookBible(data.toCompanion());
+    data.id = id;
+  }
+
   Future<void> _save() async {
     final data = _data;
     if (data == null) return;
     _syncFromControllers();
     setState(() => _saving = true);
     try {
-      final db = ref.read(databaseProvider);
-      final id = await db.upsertLookBible(data.toCompanion());
-      data.id = id;
+      await _persistNow(data);
     } finally {
       if (mounted) setState(() => _saving = false);
     }

@@ -24,6 +24,9 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/scene_character_chips.dart';
 import '../../core/widgets/scene_meta_display.dart';
+import '../shoot_documents/shoot_document_composer.dart';
+import '../shoot_documents/shoot_document_import_actions.dart';
+import '../shoot_documents/shoot_document_service.dart';
 import '../technical_script/technical_script_screen.dart';
 import 'import_scene_sheet.dart';
 import 'normalized_scene.dart';
@@ -33,6 +36,11 @@ import 'script_file_reader.dart';
 import 'script_parser.dart';
 import 'script_preview_panel.dart';
 import 'script_scene_mapper.dart';
+import 'script_context_menu.dart';
+import 'script_screenplay_layout.dart';
+import 'script_preview_controller.dart';
+import 'script_fullscreen_reader.dart';
+import 'script_scene_index_panel.dart';
 import '../../core/widgets/app_snackbar.dart';
 
 class _SceneListItem {
@@ -74,11 +82,22 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
   LoadedScript? _loadedScript;
   final Map<String, String> _pendingSetColors = {};
   final Map<String, String> _characterColors = {};
+  final Set<String> _manualCharacterLines = {};
+  final Map<String, String> _lineTextOverrides = {};
+  late final ScriptPreviewController _previewController;
+  int? _activeSceneIndex;
 
   @override
   void initState() {
     super.initState();
+    _previewController = ScriptPreviewController();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadWorkspace());
+  }
+
+  @override
+  void dispose() {
+    _previewController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadWorkspace() async {
@@ -103,6 +122,12 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
           _characterColors
             ..clear()
             ..addAll(decodeCharacterColors(project.characterColorsJson));
+          _manualCharacterLines
+            ..clear()
+            ..addAll(decodeManualCharacterLines(project.characterColorsJson));
+          _lineTextOverrides
+            ..clear()
+            ..addAll(decodeLineTextOverrides(project.characterColorsJson));
           _syncCharacterColorsFromScript(loaded.parseText);
           _scenes.clear();
           for (final scene in dbScenes) {
@@ -215,9 +240,342 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     final project = await db.getProject(widget.projectId);
     if (project == null) return;
     await db.updateProject(project.copyWith(
-      characterColorsJson: Value(encodeCharacterColors(_characterColors)),
+      characterColorsJson: Value(encodeCharacterColors(
+        _characterColors,
+        manualCharacterLines: _manualCharacterLines,
+        lineTextOverrides: _lineTextOverrides,
+      )),
       updatedAt: DateTime.now(),
     ));
+  }
+
+  Future<void> _onLineContextAction(
+    ScriptLineContext line,
+    ScriptContextAction action,
+    ProjectSceneColors colorCtx,
+  ) async {
+    switch (action) {
+      case ScriptContextAction.copy:
+        await handleScriptContextCopy(line.lineText);
+        if (mounted) {
+          AppSnackBar.show(context, 'Texto copiado');
+        }
+      case ScriptContextAction.markAsCharacter:
+        if (line.characterName != null && line.characterName!.trim().isNotEmpty) {
+          await _assignExistingCharacterToLine(line.lineText, line.characterName!);
+        } else {
+          await _markLineAsCharacter(line.lineText);
+        }
+      case ScriptContextAction.editCharacterColor:
+        if (line.characterName != null) {
+          await _onCharacterTap(line.characterName!);
+        }
+      case ScriptContextAction.removeCharacterMark:
+        setState(() {
+          _manualCharacterLines.remove(line.lineText.trim());
+        });
+        await _persistCharacterColors();
+      case ScriptContextAction.addOrEditScene:
+        if (line.slugline != null) {
+          await _onSluglineTap(line.slugline!, colorCtx);
+        }
+      case ScriptContextAction.addCharacterToScene:
+        await _addCharacterToNearestScene(line);
+      case ScriptContextAction.markAsSlugline:
+        await _createSceneFromLine(line, colorCtx);
+      case ScriptContextAction.editLineText:
+        await _editScriptLine(line.lineText);
+    }
+  }
+
+  Future<void> _markLineAsCharacter(String lineText) async {
+    final trimmed = lineText.trim();
+    if (trimmed.isEmpty) return;
+
+    final suggested =
+        ScreenplayLineClassifier.parseCharacterName(trimmed) ??
+            trimmed.toUpperCase();
+    final name = await _promptCharacterName(suggested);
+    if (name == null || name.trim().isEmpty) return;
+
+    await _assignExistingCharacterToLine(trimmed, name);
+  }
+
+  Future<void> _assignExistingCharacterToLine(
+    String lineText,
+    String name,
+  ) async {
+    final trimmed = lineText.trim();
+    if (trimmed.isEmpty) return;
+
+    final key = characterColorKey(name);
+    setState(() {
+      _manualCharacterLines.add(trimmed);
+      _characterColors.putIfAbsent(
+        key,
+        () => defaultSceneColorForIndex(_characterColors.length),
+      );
+    });
+    await _persistCharacterColors();
+  }
+
+  Future<String?> _promptCharacterName(String initial) async {
+    final palette = context.palette;
+    final controller = TextEditingController(text: initial);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.surfaceElevated,
+        title: Text('Nombre del personaje', style: AppTypography.titleLarge(palette)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(hintText: 'Ej. MARÍA'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancelar', style: AppTypography.bodyMedium(palette)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: Text('Guardar', style: AppTypography.bodyMedium(palette)
+                .copyWith(color: palette.accent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editScriptLine(String originalLine) async {
+    final palette = context.palette;
+    final trimmed = originalLine.trim();
+    final controller = TextEditingController(
+      text: _lineTextOverrides[trimmed] ?? trimmed,
+    );
+    final edited = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.surfaceElevated,
+        title: Text('Editar línea', style: AppTypography.titleLarge(palette)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 4,
+          minLines: 1,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancelar', style: AppTypography.bodyMedium(palette)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: Text('Guardar', style: AppTypography.bodyMedium(palette)
+                .copyWith(color: palette.accent)),
+          ),
+        ],
+      ),
+    );
+    if (edited == null) return;
+
+    setState(() {
+      if (edited == trimmed) {
+        _lineTextOverrides.remove(trimmed);
+      } else {
+        _lineTextOverrides[trimmed] = edited;
+      }
+    });
+    await _persistCharacterColors();
+  }
+
+  int? _sceneIndexForCharIndex(int? charIndex) {
+    if (charIndex == null || _scenes.isEmpty) return null;
+    int? bestIndex;
+    int? bestDistance;
+    for (var i = 0; i < _scenes.length; i++) {
+      final start = _scenes[i].sourceStartIndex;
+      if (start == null || start > charIndex) continue;
+      final distance = charIndex - start;
+      if (bestDistance == null || distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = i;
+      }
+    }
+    return bestIndex ?? (_scenes.isNotEmpty ? _scenes.length - 1 : null);
+  }
+
+  void _handleActiveCharIndex(int? charIndex) {
+    final sceneIndex = _sceneIndexForCharIndex(charIndex);
+    if (_activeSceneIndex != sceneIndex && mounted) {
+      setState(() => _activeSceneIndex = sceneIndex);
+    }
+  }
+
+  List<ScriptSceneIndexEntry> _buildSceneIndexEntries(ProjectSceneColors colorCtx) {
+    return [
+      for (var i = 0; i < _scenes.length; i++)
+        ScriptSceneIndexEntry(
+          sceneIndex: i,
+          sourceStartIndex: _scenes[i].sourceStartIndex,
+          scene: _scenes[i].data,
+          accentColor: colorCtx.effective(
+            shootSet: _scenes[i].data.shootSet,
+            sceneColorOverride: _scenes[i].data.locationColor,
+            locationSite: _scenes[i].data.locationSite,
+          ),
+        ),
+    ];
+  }
+
+  Future<void> _openFullscreenReader(
+    ProjectSceneColors colorCtx,
+    Map<int, Color> slugColors,
+  ) async {
+    if (_loadedScript == null) return;
+    await showScriptFullscreenReader(
+      context: context,
+      controller: _previewController,
+      script: _loadedScript!,
+      includedSceneStartIndices: _includedStartIndices,
+      sceneColorsByStartIndex: slugColors,
+      characterColorsByName: _characterColorMap,
+      manualCharacterLines: _manualCharacterLines,
+      lineTextOverrides: _lineTextOverrides,
+      sceneIndexEntries: _buildSceneIndexEntries(colorCtx),
+      onSluglineTap: (slug) => _onSluglineTap(slug, colorCtx),
+      onCharacterTap: _onCharacterTap,
+      onLineContextAction: (line, action) =>
+          _onLineContextAction(line, action, colorCtx),
+      onActiveSceneIndexChanged: (index) {
+        if (mounted) setState(() => _activeSceneIndex = index);
+      },
+      onEditScene: (index) => _editScene(index, colorCtx),
+    );
+  }
+
+  Future<void> _scrollToScene(int index) async {
+    final start = _scenes[index].sourceStartIndex;
+    if (start == null) return;
+    setState(() {
+      _activeSceneIndex = index;
+      _previewController.mode = ScriptPreviewMode.scanned;
+    });
+    await _previewController.scrollToSluglineStartIndex(start);
+  }
+
+  Widget _buildPreviewPanel(
+    ProjectSceneColors colorCtx,
+    Map<int, Color> slugColors,
+  ) {
+    return ScriptPreviewPanel(
+      controller: _previewController,
+      script: _loadedScript,
+      includedSceneStartIndices: _includedStartIndices,
+      sceneColorsByStartIndex: slugColors,
+      characterColorsByName: _characterColorMap,
+      manualCharacterLines: _manualCharacterLines,
+      lineTextOverrides: _lineTextOverrides,
+      existingCharacterNames: _characterColors.keys.toList(growable: false),
+      onSluglineTap: (slug) => _onSluglineTap(slug, colorCtx),
+      onCharacterTap: _onCharacterTap,
+      onLineContextAction: (line, action) =>
+          _onLineContextAction(line, action, colorCtx),
+      onActiveCharIndexChanged: _handleActiveCharIndex,
+      onFullscreenRequest: () => _openFullscreenReader(colorCtx, slugColors),
+    );
+  }
+
+  Future<void> _addCharacterToNearestScene(ScriptLineContext line) async {
+    final name = line.characterName ??
+        ScreenplayLineClassifier.parseCharacterName(line.lineText) ??
+        line.lineText.trim().toUpperCase();
+    if (name.isEmpty) return;
+
+    final sceneIndex = _sceneIndexForCharIndex(line.charStartIndex);
+    if (sceneIndex == null) {
+      if (mounted) {
+        AppSnackBar.show(context, 'Añade una escena antes de asignar personajes.');
+      }
+      return;
+    }
+
+    final scene = _scenes[sceneIndex].data;
+    if (scene.characters.any((c) => c.toUpperCase() == name.toUpperCase())) {
+      if (mounted) AppSnackBar.show(context, '$name ya está en escena ${scene.number}.');
+      return;
+    }
+
+    setState(() {
+      _scenes[sceneIndex].data = scene.copyWith(
+        characters: [...scene.characters, name.toUpperCase()],
+      );
+      final trimmed = line.lineText.trim();
+      final key = characterColorKey(name);
+      _manualCharacterLines.add(trimmed);
+      _characterColors.putIfAbsent(
+        key,
+        () => defaultSceneColorForIndex(_characterColors.length),
+      );
+    });
+    await _persistCharacterColors();
+    if (mounted) {
+      AppSnackBar.show(context, '$name añadido a escena ${scene.number}.');
+    }
+  }
+
+  Future<void> _createSceneFromLine(
+    ScriptLineContext line,
+    ProjectSceneColors colorCtx,
+  ) async {
+    final slug = ScriptParser.tryParseSlugline(line.lineText, startIndex: 0);
+    if (slug != null) {
+      await _onSluglineTap(slug, colorCtx);
+      return;
+    }
+
+    final palette = context.palette;
+    final controller = TextEditingController(text: line.lineText.trim());
+    final slugText = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.surfaceElevated,
+        title: Text('Marcar como escena', style: AppTypography.titleLarge(palette)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'INT. LUGAR - DÍA',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancelar', style: AppTypography.bodyMedium(palette)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: Text('Continuar', style: AppTypography.bodyMedium(palette)
+                .copyWith(color: palette.accent)),
+          ),
+        ],
+      ),
+    );
+    if (slugText == null || slugText.isEmpty) return;
+
+    final parsed = ScriptParser.tryParseSlugline(slugText, startIndex: 0);
+    if (parsed == null) {
+      if (mounted) {
+        AppSnackBar.showError(
+          context,
+          'No se reconoce como slugline. Usa formato INT./EXT. LUGAR - DÍA/NOCHE.',
+        );
+      }
+      return;
+    }
+    await _onSluglineTap(parsed, colorCtx);
   }
 
   Future<void> _onCharacterTap(String characterName) async {
@@ -760,6 +1118,46 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
             actions: [
               if (_projectHasSyncedScenes)
                 TextButton.icon(
+                  onPressed: () async {
+                    final db = ref.read(databaseProvider);
+                    final doc = await ShootDocumentImportActions.pickDocument(
+                      context,
+                      db,
+                      widget.projectId,
+                      title: 'Añadir escenas al documento',
+                    );
+                    if (doc == null || !context.mounted) return;
+                    final companions = await ShootDocumentComposer.compose(
+                      db: db,
+                      projectId: widget.projectId,
+                      template: ShootDocumentTemplate.narrativeScenes,
+                    );
+                    var order =
+                        await ShootDocumentService.nextSortOrder(db, doc.id);
+                    for (final c in companions) {
+                      await db.insertShootDocumentBlock(
+                        c.copyWith(
+                          documentId: Value(doc.id),
+                          sortOrder: Value(order++),
+                        ),
+                      );
+                    }
+                    if (!context.mounted) return;
+                    AppSnackBar.show(
+                      context,
+                      'Escenas añadidas a «${doc.name}»',
+                    );
+                  },
+                  icon: Icon(Icons.description_outlined,
+                      color: palette.accent, size: 18),
+                  label: Text(
+                    'Al documento',
+                    style: AppTypography.caption(palette)
+                        .copyWith(color: palette.accent),
+                  ),
+                ),
+              if (_projectHasSyncedScenes)
+                TextButton.icon(
                   onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -795,15 +1193,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
                           border:
                               Border(right: BorderSide(color: palette.divider)),
                         ),
-                        child: ScriptPreviewPanel(
-                          script: _loadedScript,
-                          includedSceneStartIndices: _includedStartIndices,
-                          sceneColorsByStartIndex: slugColors,
-                          characterColorsByName: _characterColorMap,
-                          onSluglineTap: (slug) =>
-                              _onSluglineTap(slug, colorCtx),
-                          onCharacterTap: _onCharacterTap,
-                        ),
+                        child: _buildPreviewPanel(colorCtx, slugColors),
                       ),
                     ),
                     Expanded(
@@ -830,15 +1220,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
                     Expanded(
                       child: TabBarView(
                         children: [
-                          ScriptPreviewPanel(
-                            script: _loadedScript,
-                            includedSceneStartIndices: _includedStartIndices,
-                            sceneColorsByStartIndex: slugColors,
-                            characterColorsByName: _characterColorMap,
-                            onSluglineTap: (slug) =>
-                                _onSluglineTap(slug, colorCtx),
-                            onCharacterTap: _onCharacterTap,
-                          ),
+                          _buildPreviewPanel(colorCtx, slugColors),
                           _buildScenesPanel(palette, colorCtx),
                         ],
                       ),
@@ -866,14 +1248,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: ScriptPreviewPanel(
-              script: _loadedScript,
-              includedSceneStartIndices: _includedStartIndices,
-              sceneColorsByStartIndex: slugColors,
-              characterColorsByName: _characterColorMap,
-              onSluglineTap: (slug) => _onSluglineTap(slug, colorCtx),
-              onCharacterTap: _onCharacterTap,
-            ),
+            child: _buildPreviewPanel(colorCtx, slugColors),
           ),
           const SizedBox(height: AppSpacing.lg),
           AppButton(
@@ -892,6 +1267,8 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
   }
 
   Widget _buildScenesPanel(AppPalette palette, ProjectSceneColors colorCtx) {
+    final indexEntries = _buildSceneIndexEntries(colorCtx);
+
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
@@ -927,6 +1304,31 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
           if (_status.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.md),
             Text(_status, style: AppTypography.bodyMedium(palette)),
+          ],
+          if (_scenes.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              height: 180,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: palette.divider),
+                  borderRadius: BorderRadius.circular(8),
+                  color: palette.surfaceElevated,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: ScriptSceneIndexPanel(
+                    entries: indexEntries,
+                    activeSceneIndex: _activeSceneIndex,
+                    compact: true,
+                    onSceneTap: (entry) => _scrollToScene(entry.sceneIndex),
+                    onEditActiveScene: _activeSceneIndex != null
+                        ? () => _editScene(_activeSceneIndex!, colorCtx)
+                        : null,
+                  ),
+                ),
+              ),
+            ),
           ],
           const SizedBox(height: AppSpacing.lg),
           Row(
@@ -1010,93 +1412,105 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
 
     return AppCard(
       key: key,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ReorderableDragStartListener(
-            index: i,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 8, top: 2),
-              child: Icon(Icons.drag_handle,
-                  color: palette.textTertiary, size: 22),
+      child: InkWell(
+        onTap: _scenes[i].sourceStartIndex != null
+            ? () => _scrollToScene(i)
+            : null,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ReorderableDragStartListener(
+              index: i,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8, top: 2),
+                child: Icon(Icons.drag_handle,
+                    color: palette.textTertiary, size: 22),
+              ),
             ),
-          ),
-          Container(
-            width: 4,
-            height: 44,
-            margin: const EdgeInsets.only(right: 10),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(2),
+            Container(
+              width: 4,
+              height: 44,
+              margin: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          Text('${s.number}.',
-              style: AppTypography.mono(palette)
-                  .copyWith(color: palette.accent)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (s.name != null &&
-                    s.name!.trim().isNotEmpty &&
-                    !isAutoGeneratedSceneName(
-                      name: s.name,
-                      intExt: s.intExt,
-                      dayNight: s.dayNight,
-                      location: s.location,
-                    )) ...[
-                  Text(
-                    s.name!,
-                    style: AppTypography.label(palette),
+            Text('${s.number}.',
+                style: AppTypography.mono(palette)
+                    .copyWith(color: palette.accent)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (s.name != null &&
+                      s.name!.trim().isNotEmpty &&
+                      !isAutoGeneratedSceneName(
+                        name: s.name,
+                        intExt: s.intExt,
+                        dayNight: s.dayNight,
+                        location: s.location,
+                      )) ...[
+                    Text(
+                      s.name!,
+                      style: AppTypography.label(palette),
+                    ),
+                    const SizedBox(height: 2),
+                  ],
+                  SceneMetaDisplay(
+                    intExt: s.intExt,
+                    dayNight: s.dayNight,
+                    location: s.location,
+                    style: AppTypography.bodyLarge(palette),
                   ),
-                  const SizedBox(height: 2),
+                  if (s.shootSet != s.location || s.locationSite != s.shootSet)
+                    Text(
+                      '${s.locationSite} › ${s.shootSet}',
+                      style: AppTypography.caption(palette)
+                          .copyWith(color: palette.accent),
+                    ),
+                  if (s.characters.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    SceneCharacterChips(
+                      characters: s.characters,
+                      palette: palette,
+                      compact: true,
+                      characterColors: _characterColorMap,
+                    ),
+                  ],
+                  if (s.description != null && s.description!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      s.description!,
+                      style: AppTypography.caption(palette),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ],
-                SceneMetaDisplay(
-                  intExt: s.intExt,
-                  dayNight: s.dayNight,
-                  location: s.location,
-                  style: AppTypography.bodyLarge(palette),
-                ),
-                if (s.shootSet != s.location || s.locationSite != s.shootSet)
-                  Text(
-                    '${s.locationSite} › ${s.shootSet}',
-                    style: AppTypography.caption(palette)
-                        .copyWith(color: palette.accent),
-                  ),
-                if (s.characters.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  SceneCharacterChips(
-                    characters: s.characters,
-                    palette: palette,
-                    compact: true,
-                    characterColors: _characterColorMap,
-                  ),
-                ],
-                if (s.description != null && s.description!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    s.description!,
-                    style: AppTypography.caption(palette),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ],
+              ),
             ),
-          ),
-          IconButton(
-            tooltip: 'Editar',
-            icon: Icon(Icons.edit_outlined,
-                color: palette.textSecondary, size: 18),
-            onPressed: () => _editScene(i, colorCtx),
-          ),
-          IconButton(
-            tooltip: 'Eliminar',
-            icon: Icon(Icons.delete_outline, color: palette.error, size: 18),
-            onPressed: () => _deleteScene(i),
-          ),
-        ],
+            if (_scenes[i].sourceStartIndex != null)
+              IconButton(
+                tooltip: 'Ir al guion',
+                icon: Icon(Icons.my_location_outlined,
+                    color: palette.accent, size: 18),
+                onPressed: () => _scrollToScene(i),
+              ),
+            IconButton(
+              tooltip: 'Editar',
+              icon: Icon(Icons.edit_outlined,
+                  color: palette.textSecondary, size: 18),
+              onPressed: () => _editScene(i, colorCtx),
+            ),
+            IconButton(
+              tooltip: 'Eliminar',
+              icon: Icon(Icons.delete_outline, color: palette.error, size: 18),
+              onPressed: () => _deleteScene(i),
+            ),
+          ],
+        ),
       ),
     );
   }

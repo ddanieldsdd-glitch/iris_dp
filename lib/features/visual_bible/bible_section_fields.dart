@@ -7,6 +7,7 @@ enum BibleSectionFieldType {
   text,
   narrative,
   references,
+  image,
   blocks,
 }
 
@@ -66,6 +67,7 @@ class BibleSectionField {
 /// Serialización de sub-apartados en `BibleSectionDefinitions.contentJson`.
 abstract final class BibleSectionFieldsConfig {
   static const _fieldsKey = 'fields';
+  static const _valuesKey = 'values';
 
   static List<BibleSectionField> defaultsFor(String sectionId) =>
       switch (sectionId) {
@@ -245,7 +247,12 @@ abstract final class BibleSectionFieldsConfig {
         return defaultsFor(sectionId);
       }
       final raw = decoded[_fieldsKey];
-      if (raw is! List) return defaultsFor(sectionId);
+      if (raw is! List) {
+        if (sectionId.startsWith('custom_')) {
+          return freeformDefaults(sectionId);
+        }
+        return defaultsFor(sectionId);
+      }
       return raw
           .whereType<Map<String, dynamic>>()
           .map(BibleSectionField.fromJson)
@@ -255,8 +262,60 @@ abstract final class BibleSectionFieldsConfig {
     }
   }
 
-  static String encode(List<BibleSectionField> fields) =>
-      jsonEncode({_fieldsKey: fields.map((f) => f.toJson()).toList()});
+  static Map<String, String> parseValues(String? contentJson) {
+    if (contentJson == null || contentJson.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(contentJson);
+      if (decoded is! Map<String, dynamic>) return {};
+      final raw = decoded[_valuesKey];
+      if (raw is! Map) return {};
+      return raw.map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static String encode(
+    List<BibleSectionField> fields, {
+    Map<String, String>? values,
+  }) =>
+      jsonEncode({
+        _fieldsKey: fields.map((f) => f.toJson()).toList(),
+        if (values != null && values.isNotEmpty) _valuesKey: values,
+      });
+
+  /// Campos por defecto para secciones personalizadas (libres).
+  static List<BibleSectionField> freeformDefaults(String sectionLabel) => [
+        BibleSectionField(
+          key: 'narrative',
+          label: 'Intención narrativa',
+          hint: 'Intención narrativa de «$sectionLabel»…',
+          maxLines: 4,
+          type: BibleSectionFieldType.narrative,
+        ),
+        BibleSectionField(
+          key: 'body',
+          label: 'Contenido',
+          hint: 'Notas, criterios, referencias escritas…',
+          maxLines: 12,
+        ),
+        BibleSectionField(
+          key: 'references',
+          label: 'Referencias visuales',
+          type: BibleSectionFieldType.references,
+        ),
+      ];
+
+  static String newFieldKey() =>
+      'field_${DateTime.now().millisecondsSinceEpoch}';
+
+  static String labelForType(BibleSectionFieldType type) => switch (type) {
+        BibleSectionFieldType.narrative => 'Intención narrativa',
+        BibleSectionFieldType.references => 'Referencias moodboard',
+        BibleSectionFieldType.image => 'Imágenes / referencias',
+        BibleSectionFieldType.blocks => 'Bloques dinámicos',
+        BibleSectionFieldType.text => 'Campo de texto',
+      };
 
   static String labelFor(
     String? contentJson,
