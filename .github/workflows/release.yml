@@ -39,7 +39,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          flutter build ios --release --no-codesign \
+          flutter build ios --release --no-codesign --no-tree-shake-icons \
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
           chmod +x scripts/package_unsigned_ipa.sh

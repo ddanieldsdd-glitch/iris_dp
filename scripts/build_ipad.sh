@@ -13,7 +13,7 @@ if [[ -f "$ENV_FILE" ]]; then
   source "$ENV_FILE"
 fi
 
-ARGS=(build ios --release --no-codesign)
+ARGS=(build ios --release --no-codesign --no-tree-shake-icons)
 if [[ -n "$SUPABASE_URL" && -n "$SUPABASE_ANON_KEY" ]]; then
   ARGS+=(
     --dart-define=SUPABASE_URL="$SUPABASE_URL"
