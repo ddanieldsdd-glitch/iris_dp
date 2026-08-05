@@ -87,6 +87,13 @@ if [[ "$AUTO_BUMPED" == "1" ]]; then
 fi
 echo ""
 
+CURRENT_BRANCH="$(git branch --show-current)"
+if [[ "$CURRENT_BRANCH" != "main" ]]; then
+  echo "⚠ Estás en la rama «${CURRENT_BRANCH}», no en main."
+  echo "  El release funcionará, pero conviene: git checkout main && git pull"
+  echo ""
+fi
+
 if [[ "$DRY_RUN" == "1" ]]; then
   echo "(dry-run) No se modificó nada."
   echo "GitHub Actions publicaría .dmg, .zip, .ipa y registraría Supabase."
