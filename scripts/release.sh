@@ -107,7 +107,8 @@ if tag_exists "$TAG"; then
 fi
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "→ Hay cambios sin commit. Se incluirán en el release."
+  echo "→ Hay cambios sin commit en el repo (no se incluyen automáticamente)."
+  echo "  Haz commit antes del release si quieres que entren en el build."
 fi
 
 # Actualizar pubspec.yaml
