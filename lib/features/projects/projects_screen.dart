@@ -14,6 +14,10 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_card.dart';
 import 'create_project_sheet.dart';
 import '../auth/auth_screen.dart';
+import '../migration/cloud_migration_wizard.dart';
+import '../onboarding/app_tutorial_store.dart';
+import '../onboarding/initial_tutorial_flow.dart';
+import '../onboarding/install_update_guide_screen.dart';
 import 'project_form_sheet.dart';
 import 'project_overview.dart';
 import 'project_overview_metrics.dart';
@@ -36,17 +40,20 @@ class ProjectsScreen extends ConsumerWidget {
     final pendingPlan = ref.watch(pendingSyncPlanProvider);
 
     Future<void> reviewSync() async {
-      final syncResult =
-          await ref.read(syncEngineProvider).syncWithConfirmation(context);
+      final syncResult = await ref
+          .read(syncEngineProvider)
+          .syncWithConfirmation(context);
       if (!context.mounted) return;
-      final msg = syncResult.message ??
+      final msg =
+          syncResult.message ??
           (syncResult.pendingReview
               ? 'Revisión pendiente'
               : 'Sincronizado correctamente');
       AppSnackBar.show(
         context,
         msg,
-        isError: syncResult.pendingReview &&
+        isError:
+            syncResult.pendingReview &&
             syncResult.message?.contains('quedan') == true,
       );
     }
@@ -60,39 +67,100 @@ class ProjectsScreen extends ConsumerWidget {
             const SideStoreReminderBanner(),
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.xl, AppSpacing.xl, AppSpacing.xl, AppSpacing.lg),
-              child: Row(children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('IRIS DP', style: AppTypography.displayMedium(palette)),
-                      Text('Proyectos', style: AppTypography.bodyMedium(palette)),
-                    ],
+                AppSpacing.xl,
+                AppSpacing.xl,
+                AppSpacing.xl,
+                AppSpacing.lg,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'IRIS DP',
+                          style: AppTypography.displayMedium(palette),
+                        ),
+                        Text(
+                          'Proyectos',
+                          style: AppTypography.bodyMedium(palette),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                IconButton(
-                  tooltip: 'Ajustes',
-                  icon: Icon(Icons.settings_outlined, color: palette.textSecondary),
-                  onPressed: () => SettingsSheet.show(context),
-                ),
-                SyncStatusIndicator(
-                  onLoginAction: () => openAuthScreen(context),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                AppButton(
-                  label: 'Nuevo grupo',
-                  icon: Icons.create_new_folder_outlined,
-                  variant: AppButtonVariant.secondary,
-                  onTap: () => _createGroup(context, ref),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                AppButton(
-                  label: 'Nuevo proyecto',
-                  icon: Icons.add,
-                  onTap: () => _showCreateProject(context, ref),
-                ),
-              ]),
+                  IconButton(
+                    tooltip: 'Ajustes',
+                    icon: Icon(
+                      Icons.settings_outlined,
+                      color: palette.textSecondary,
+                    ),
+                    onPressed: () => SettingsSheet.show(
+                      context,
+                      onLoginAction: () => openAuthScreen(context),
+                      onMigrationAction: () async {
+                        final done = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => Dialog(
+                            child: Padding(
+                              padding: const EdgeInsets.all(AppSpacing.lg),
+                              child: CloudMigrationWizard(
+                                onComplete: () => Navigator.pop(context, true),
+                                onSkip: () => Navigator.pop(context, false),
+                              ),
+                            ),
+                          ),
+                        );
+
+                        if (done == true && context.mounted) {
+                          AppSnackBar.show(
+                            context,
+                            'Proyectos locales subidos a la nube.',
+                          );
+                        }
+                      },
+                      onReplayTutorial: () async {
+                        Navigator.pop(context);
+                        await AppTutorialStore.resetAll();
+
+                        if (!context.mounted) return;
+
+                        await Navigator.of(context).push<void>(
+                          MaterialPageRoute(
+                            builder: (_) => const InitialTutorialFlow(
+                              replayFromStart: true,
+                            ),
+                          ),
+                        );
+                      },
+                      onInstallGuide: () {
+                        Navigator.pop(context);
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute(
+                            builder: (_) => const InstallUpdateGuideScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  SyncStatusIndicator(
+                    onLoginAction: () => openAuthScreen(context),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  AppButton(
+                    label: 'Nuevo grupo',
+                    icon: Icons.create_new_folder_outlined,
+                    variant: AppButtonVariant.secondary,
+                    onTap: () => _createGroup(context, ref),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  AppButton(
+                    label: 'Nuevo proyecto',
+                    icon: Icons.add,
+                    onTap: () => _showCreateProject(context, ref),
+                  ),
+                ],
+              ),
             ),
             Expanded(
               child: StreamBuilder<List<ProjectGroup>>(
@@ -123,8 +191,9 @@ class ProjectsScreen extends ConsumerWidget {
                         );
                       }
 
-                      final ungrouped =
-                          allProjects.where((p) => p.groupId == null).toList();
+                      final ungrouped = allProjects
+                          .where((p) => p.groupId == null)
+                          .toList();
 
                       return ListView(
                         padding: const EdgeInsets.all(AppSpacing.xl),
@@ -145,11 +214,17 @@ class ProjectsScreen extends ConsumerWidget {
                                 try {
                                   await db.duplicateProject(p.id);
                                   if (context.mounted) {
-                                    AppSnackBar.show(context, 'Proyecto duplicado.');
+                                    AppSnackBar.show(
+                                      context,
+                                      'Proyecto duplicado.',
+                                    );
                                   }
                                 } catch (e) {
                                   if (context.mounted) {
-                                    AppSnackBar.show(context, userFriendlyError(e));
+                                    AppSnackBar.show(
+                                      context,
+                                      userFriendlyError(e),
+                                    );
                                   }
                                 }
                               },
@@ -168,17 +243,22 @@ class ProjectsScreen extends ConsumerWidget {
                                 try {
                                   await db.duplicateProject(p.id);
                                   if (context.mounted) {
-                                    AppSnackBar.show(context, 'Proyecto duplicado.');
+                                    AppSnackBar.show(
+                                      context,
+                                      'Proyecto duplicado.',
+                                    );
                                   }
                                 } catch (e) {
                                   if (context.mounted) {
-                                    AppSnackBar.show(context, userFriendlyError(e));
+                                    AppSnackBar.show(
+                                      context,
+                                      userFriendlyError(e),
+                                    );
                                   }
                                 }
                               },
                               onDelete: (p) => _confirmDelete(context, ref, p),
-                              onDeleteGroup: () =>
-                                  db.deleteGroup(group.id),
+                              onDeleteGroup: () => db.deleteGroup(group.id),
                             );
                           }),
                         ],
@@ -195,8 +275,10 @@ class ProjectsScreen extends ConsumerWidget {
   }
 
   void _openProject(BuildContext context, Project p) {
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => ProjectHubScreen(project: p)));
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ProjectHubScreen(project: p)),
+    );
   }
 
   void _showCreateProject(BuildContext context, WidgetRef ref) {
@@ -233,13 +315,18 @@ class ProjectsScreen extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancelar', style: AppTypography.bodyMedium(palette))),
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar', style: AppTypography.bodyMedium(palette)),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-              child: Text('Crear',
-                  style: AppTypography.bodyMedium(palette)
-                      .copyWith(color: palette.accent))),
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: Text(
+              'Crear',
+              style: AppTypography.bodyMedium(
+                palette,
+              ).copyWith(color: palette.accent),
+            ),
+          ),
         ],
       ),
     );
@@ -251,25 +338,37 @@ class ProjectsScreen extends ConsumerWidget {
   }
 
   Future<void> _confirmDelete(
-      BuildContext context, WidgetRef ref, Project p) async {
+    BuildContext context,
+    WidgetRef ref,
+    Project p,
+  ) async {
     final palette = context.palette;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: palette.surfaceElevated,
-        title: Text('Eliminar proyecto', style: AppTypography.titleLarge(palette)),
+        title: Text(
+          'Eliminar proyecto',
+          style: AppTypography.titleLarge(palette),
+        ),
         content: Text(
-            '¿Eliminar "${p.name}"? Esta acción no se puede deshacer.',
-            style: AppTypography.bodyLarge(palette)),
+          '¿Eliminar "${p.name}"? Esta acción no se puede deshacer.',
+          style: AppTypography.bodyLarge(palette),
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('Cancelar', style: AppTypography.bodyMedium(palette))),
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancelar', style: AppTypography.bodyMedium(palette)),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text('Eliminar',
-                  style: AppTypography.bodyMedium(palette)
-                      .copyWith(color: palette.error))),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              'Eliminar',
+              style: AppTypography.bodyMedium(
+                palette,
+              ).copyWith(color: palette.error),
+            ),
+          ),
         ],
       ),
     );
@@ -312,24 +411,33 @@ class _GroupSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: AppSpacing.lg),
-        Row(children: [
-          Icon(Icons.folder_outlined,
-              color: palette.textTertiary, size: 16),
-          const SizedBox(width: 8),
-          Text(group.name,
-              style: AppTypography.label(palette)
-                  .copyWith(color: palette.textSecondary)),
-          const Spacer(),
-          GestureDetector(
-            onTap: onDeleteGroup,
-            child: Icon(Icons.delete_outline,
-                color: palette.textTertiary, size: 16),
-          ),
-        ]),
+        Row(
+          children: [
+            Icon(Icons.folder_outlined, color: palette.textTertiary, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              group.name,
+              style: AppTypography.label(
+                palette,
+              ).copyWith(color: palette.textSecondary),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: onDeleteGroup,
+              child: Icon(
+                Icons.delete_outline,
+                color: palette.textTertiary,
+                size: 16,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.md),
         if (projects.isEmpty)
-          Text('Sin proyectos en este grupo',
-              style: AppTypography.caption(palette))
+          Text(
+            'Sin proyectos en este grupo',
+            style: AppTypography.caption(palette),
+          )
         else
           _ProjectGrid(
             projects: projects,
@@ -429,7 +537,8 @@ class _ProjectCardState extends ConsumerState<_ProjectCard> {
     final project = widget.project;
     final icon = IconData(project.iconCode, fontFamily: 'MaterialIcons');
     final coverPath = project.coverImagePath;
-    final hasCover = coverPath != null &&
+    final hasCover =
+        coverPath != null &&
         coverPath.isNotEmpty &&
         File(coverPath).existsSync();
     final overview = _overview;
@@ -443,156 +552,196 @@ class _ProjectCardState extends ConsumerState<_ProjectCard> {
         children: [
           Expanded(
             flex: 5,
-            child: Stack(children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(16)),
-                child: hasCover
-                    ? Image.file(
-                        File(coverPath),
-                        width: double.infinity,
-                        height: double.infinity,
-                        fit: BoxFit.cover,
-                      )
-                    : Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: palette.surfaceOverlay,
-                          borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(16)),
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                  child: hasCover
+                      ? Image.file(
+                          File(coverPath),
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.cover,
+                        )
+                      : Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: palette.surfaceOverlay,
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(16),
+                            ),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              icon,
+                              color: palette.textTertiary,
+                              size: 48,
+                            ),
+                          ),
                         ),
-                        child: Center(
-                          child: Icon(icon,
-                              color: palette.textTertiary, size: 48),
+                ),
+                if (hasCover)
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(16),
                         ),
-                      ),
-              ),
-              if (hasCover)
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(16)),
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.35),
-                        ],
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.35),
+                          ],
+                        ),
                       ),
                     ),
                   ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: PopupMenuButton<String>(
+                    color: palette.surfaceElevated,
+                    icon: Icon(
+                      Icons.more_horiz,
+                      color: palette.textSecondary,
+                      size: 18,
+                    ),
+                    onSelected: (v) {
+                      if (v == 'edit') widget.onEdit();
+                      if (v == 'duplicate') widget.onDuplicate();
+                      if (v == 'delete') widget.onDelete();
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.edit_outlined,
+                              color: palette.textSecondary,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Editar',
+                              style: AppTypography.bodyMedium(palette),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'duplicate',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.copy_outlined,
+                              color: palette.textSecondary,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Duplicar',
+                              style: AppTypography.bodyMedium(palette),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline,
+                              color: palette.error,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Eliminar',
+                              style: AppTypography.bodyMedium(
+                                palette,
+                              ).copyWith(color: palette.error),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              Positioned(
-                top: 8, right: 8,
-                child: PopupMenuButton<String>(
-                  color: palette.surfaceElevated,
-                  icon: Icon(Icons.more_horiz,
-                      color: palette.textSecondary, size: 18),
-                  onSelected: (v) {
-                    if (v == 'edit') widget.onEdit();
-                    if (v == 'duplicate') widget.onDuplicate();
-                    if (v == 'delete') widget.onDelete();
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'edit',
-                      child: Row(children: [
-                        Icon(Icons.edit_outlined,
-                            color: palette.textSecondary, size: 16),
-                        const SizedBox(width: 8),
-                        Text('Editar', style: AppTypography.bodyMedium(palette)),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'duplicate',
-                      child: Row(children: [
-                        Icon(Icons.copy_outlined,
-                            color: palette.textSecondary, size: 16),
-                        const SizedBox(width: 8),
-                        Text('Duplicar', style: AppTypography.bodyMedium(palette)),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Row(children: [
-                        Icon(Icons.delete_outline,
-                            color: palette.error, size: 16),
-                        const SizedBox(width: 8),
-                        Text('Eliminar',
-                            style: AppTypography.bodyMedium(palette)
-                                .copyWith(color: palette.error)),
-                      ]),
-                    ),
-                  ],
-                ),
-              ),
-            ]),
+              ],
+            ),
           ),
           Expanded(
             flex: 6,
             child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(project.name,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    project.name,
                     style: AppTypography.titleMedium(palette),
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                if (project.director != null) ...[
-                  const SizedBox(height: 2),
-                  Text(project.director!,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (project.director != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      project.director!,
                       style: AppTypography.caption(palette),
                       maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                ],
-                if (directionText != null && directionText.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    directionText,
-                    style: AppTypography.caption(palette).copyWith(
-                      color: palette.textSecondary,
-                      height: 1.35,
-                      fontStyle: FontStyle.italic,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ] else if (overview != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Añade la intención en Biblia → Dirección',
-                    style: AppTypography.caption(palette).copyWith(
-                      color: palette.textTertiary,
-                      fontStyle: FontStyle.italic,
+                  ],
+                  if (directionText != null && directionText.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      directionText,
+                      style: AppTypography.caption(palette).copyWith(
+                        color: palette.textSecondary,
+                        height: 1.35,
+                        fontStyle: FontStyle.italic,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                const SizedBox(height: 8),
-                if (overview != null) ...[
-                  ProjectStateChip(
-                    overview: overview,
-                    status: project.status,
-                  ),
+                  ] else if (overview != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Añade la intención en Biblia → Dirección',
+                      style: AppTypography.caption(palette).copyWith(
+                        color: palette.textTertiary,
+                        fontStyle: FontStyle.italic,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                   const SizedBox(height: 8),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const NeverScrollableScrollPhysics(),
-                      child: ProjectOverviewMetrics(overview: overview),
+                  if (overview != null) ...[
+                    ProjectStateChip(
+                      overview: overview,
+                      status: project.status,
                     ),
-                  ),
-                ] else
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: LinearProgressIndicator(minHeight: 2),
-                  ),
-              ],
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: ProjectOverviewMetrics(overview: overview),
+                      ),
+                    ),
+                  ] else
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: LinearProgressIndicator(minHeight: 2),
+                    ),
+                ],
+              ),
             ),
-          ),
           ),
         ],
       ),
@@ -609,17 +758,25 @@ class _EmptyState extends StatelessWidget {
     final palette = context.palette;
 
     return Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.movie_creation_outlined,
-            color: palette.textTertiary, size: 64),
-        const SizedBox(height: 24),
-        Text('Sin proyectos', style: AppTypography.titleLarge(palette)),
-        const SizedBox(height: 8),
-        Text('Crea tu primer proyecto para empezar',
-            style: AppTypography.bodyMedium(palette)),
-        const SizedBox(height: 32),
-        AppButton(label: 'Crear proyecto', icon: Icons.add, onTap: onTap),
-      ]),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.movie_creation_outlined,
+            color: palette.textTertiary,
+            size: 64,
+          ),
+          const SizedBox(height: 24),
+          Text('Sin proyectos', style: AppTypography.titleLarge(palette)),
+          const SizedBox(height: 8),
+          Text(
+            'Crea tu primer proyecto para empezar',
+            style: AppTypography.bodyMedium(palette),
+          ),
+          const SizedBox(height: 32),
+          AppButton(label: 'Crear proyecto', icon: Icons.add, onTap: onTap),
+        ],
+      ),
     );
   }
 }

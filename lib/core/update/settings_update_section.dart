@@ -12,11 +12,12 @@ import '../widgets/app_button.dart';
 import 'app_update_checker.dart';
 import 'app_update_providers.dart';
 import 'update_actions_row.dart';
-import '../../features/auth/auth_screen.dart';
 
 /// Sección de Ajustes para comprobar actualizaciones manualmente.
 class SettingsUpdateSection extends ConsumerStatefulWidget {
-  const SettingsUpdateSection({super.key});
+  const SettingsUpdateSection({super.key, this.onLoginAction});
+
+  final VoidCallback? onLoginAction;
 
   @override
   ConsumerState<SettingsUpdateSection> createState() =>
@@ -79,9 +80,9 @@ class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
         Text(
           'La versión en ejecución es la del binario instalado (.app / .exe). '
           'Si compilaste código nuevo sin reinstalar, seguirá mostrando la anterior.',
-          style: AppTypography.caption(palette).copyWith(
-            color: palette.textSecondary,
-          ),
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textSecondary),
         ),
         const SizedBox(height: AppSpacing.md),
         if (user == null) ...[
@@ -91,18 +92,13 @@ class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
           ),
           const SizedBox(height: AppSpacing.sm),
           FilledButton.icon(
-            onPressed: () async {
-              Navigator.pop(context);
-              await openAuthScreen(context);
-            },
+            onPressed: widget.onLoginAction,
             icon: const Icon(Icons.login),
             label: const Text('Iniciar sesión'),
           ),
         ] else ...[
           AppButton(
-            label: update.checking
-                ? 'Comprobando…'
-                : 'Buscar actualizaciones',
+            label: update.checking ? 'Comprobando…' : 'Buscar actualizaciones',
             icon: Icons.system_update_alt,
             onTap: update.checking ? null : _checkUpdates,
             loading: update.checking,
@@ -118,9 +114,9 @@ class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
           const SizedBox(height: AppSpacing.sm),
           Text(
             'Carpeta actual: ${AppStorageConfig.current!.documentsPath}',
-            style: AppTypography.caption(palette).copyWith(
-              fontFamily: 'monospace',
-            ),
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(fontFamily: 'monospace'),
           ),
           const SizedBox(height: AppSpacing.sm),
           AppButton(
@@ -157,16 +153,10 @@ class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
           ),
           if (release.releaseNotes?.isNotEmpty == true) ...[
             const SizedBox(height: 4),
-            Text(
-              release.releaseNotes!,
-              style: AppTypography.caption(palette),
-            ),
+            Text(release.releaseNotes!, style: AppTypography.caption(palette)),
           ],
           const SizedBox(height: AppSpacing.sm),
-          UpdateActionsRow(
-            release: release,
-            showDismissLater: false,
-          ),
+          UpdateActionsRow(release: release, showDismissLater: false),
         ],
       );
     }
@@ -187,9 +177,9 @@ class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
           Text(
             'Tu app (${update.localVersionLabel}) es más reciente que la '
             'última publicada en nube (${update.remoteVersionLabel}).',
-            style: AppTypography.bodyMedium(palette).copyWith(
-              color: palette.warning,
-            ),
+            style: AppTypography.bodyMedium(
+              palette,
+            ).copyWith(color: palette.warning),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(

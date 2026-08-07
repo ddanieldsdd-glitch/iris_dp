@@ -7,12 +7,17 @@ import '../cloud/cloud_session.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
-import '../../features/auth/auth_screen.dart';
-import '../../features/migration/cloud_migration_wizard.dart';
 
 /// Vincular / desvincular la nube desde Ajustes (modo local-first).
 class SettingsCloudLinkSection extends ConsumerStatefulWidget {
-  const SettingsCloudLinkSection({super.key});
+  const SettingsCloudLinkSection({
+    super.key,
+    this.onLoginAction,
+    this.onMigrationAction,
+  });
+
+  final VoidCallback? onLoginAction;
+  final Future<void> Function()? onMigrationAction;
 
   @override
   ConsumerState<SettingsCloudLinkSection> createState() =>
@@ -44,9 +49,9 @@ class _SettingsCloudLinkSectionState
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo activar: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('No se pudo activar: $e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -68,9 +73,9 @@ class _SettingsCloudLinkSectionState
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -166,9 +171,7 @@ class _SettingsCloudLinkSectionState
           const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _keyCtrl,
-            decoration: const InputDecoration(
-              labelText: 'SUPABASE_ANON_KEY',
-            ),
+            decoration: const InputDecoration(labelText: 'SUPABASE_ANON_KEY'),
             obscureText: true,
             autocorrect: false,
           ),
@@ -185,12 +188,7 @@ class _SettingsCloudLinkSectionState
           ),
           const SizedBox(height: AppSpacing.sm),
           FilledButton.icon(
-            onPressed: _busy
-                ? null
-                : () async {
-                    Navigator.pop(context);
-                    await openAuthScreen(context);
-                  },
+            onPressed: _busy ? null : widget.onLoginAction,
             icon: const Icon(Icons.login),
             label: const Text('Iniciar sesión'),
           ),
@@ -207,29 +205,7 @@ class _SettingsCloudLinkSectionState
           ),
           const SizedBox(height: AppSpacing.sm),
           OutlinedButton.icon(
-            onPressed: _busy
-                ? null
-                : () async {
-                    final done = await showDialog<bool>(
-                      context: context,
-                      builder: (_) => Dialog(
-                        child: Padding(
-                          padding: const EdgeInsets.all(AppSpacing.lg),
-                          child: CloudMigrationWizard(
-                            onComplete: () => Navigator.pop(context, true),
-                            onSkip: () => Navigator.pop(context, false),
-                          ),
-                        ),
-                      ),
-                    );
-                    if (done == true && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Proyectos locales subidos a la nube.'),
-                        ),
-                      );
-                    }
-                  },
+            onPressed: _busy ? null : widget.onMigrationAction,
             icon: const Icon(Icons.upload),
             label: const Text('Subir proyectos locales a la nube'),
           ),

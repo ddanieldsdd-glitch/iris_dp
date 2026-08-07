@@ -13,20 +13,39 @@ import 'settings_cloud_link_section.dart';
 import 'settings_cloud_storage_section.dart';
 import 'settings_health_section.dart';
 import 'user_templates_settings_section.dart';
-import '../../features/onboarding/app_tutorial_store.dart';
-import '../../features/onboarding/initial_tutorial_flow.dart';
-import '../../features/onboarding/install_update_guide_screen.dart';
 
 /// Ajustes de la app.
 class SettingsSheet extends ConsumerStatefulWidget {
-  const SettingsSheet({super.key});
+  const SettingsSheet({
+    super.key,
+    this.onLoginAction,
+    this.onMigrationAction,
+    this.onReplayTutorial,
+    this.onInstallGuide,
+  });
 
-  static Future<void> show(BuildContext context) {
+  final VoidCallback? onLoginAction;
+  final Future<void> Function()? onMigrationAction;
+  final Future<void> Function()? onReplayTutorial;
+  final VoidCallback? onInstallGuide;
+
+  static Future<void> show(
+    BuildContext context, {
+    VoidCallback? onLoginAction,
+    Future<void> Function()? onMigrationAction,
+    Future<void> Function()? onReplayTutorial,
+    VoidCallback? onInstallGuide,
+  }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const SettingsSheet(),
+      builder: (_) => SettingsSheet(
+        onLoginAction: onLoginAction,
+        onMigrationAction: onMigrationAction,
+        onReplayTutorial: onReplayTutorial,
+        onInstallGuide: onInstallGuide,
+      ),
     );
   }
 
@@ -73,9 +92,7 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
     final palette = context.palette;
 
     return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.viewInsetsOf(context).bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: Container(
         decoration: BoxDecoration(
           color: palette.surfaceElevated,
@@ -115,14 +132,17 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
                   onPick: _pickDocuments,
                 ),
               const SizedBox(height: AppSpacing.lg),
-              const SettingsCloudLinkSection(),
+              SettingsCloudLinkSection(
+                onLoginAction: widget.onLoginAction,
+                onMigrationAction: widget.onMigrationAction,
+              ),
               if (CloudRuntimeConfig.isActive) ...[
                 const SizedBox(height: AppSpacing.lg),
                 const SettingsCloudStorageSection(),
                 const SizedBox(height: AppSpacing.lg),
                 const UserTemplatesSettingsSection(),
                 const SizedBox(height: AppSpacing.lg),
-                const SettingsUpdateSection(),
+                SettingsUpdateSection(onLoginAction: widget.onLoginAction),
                 const SizedBox(height: AppSpacing.lg),
                 const SettingsHealthSection(),
               ],
@@ -137,18 +157,7 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
                   'Configuración paso a paso desde el principio',
                   style: AppTypography.caption(palette),
                 ),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await AppTutorialStore.resetAll();
-                  if (!context.mounted) return;
-                  await Navigator.of(context).push<void>(
-                    MaterialPageRoute(
-                      builder: (_) => const InitialTutorialFlow(
-                        replayFromStart: true,
-                      ),
-                    ),
-                  );
-                },
+                onTap: widget.onReplayTutorial,
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -158,14 +167,7 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
                   'Cómo instalar y sincronizar tras actualizar la app',
                   style: AppTypography.caption(palette),
                 ),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.of(context).push<void>(
-                    MaterialPageRoute(
-                      builder: (_) => const InstallUpdateGuideScreen(),
-                    ),
-                  );
-                },
+                onTap: widget.onInstallGuide,
               ),
               const SizedBox(height: AppSpacing.lg),
               Align(
@@ -210,9 +212,9 @@ class _StorageRow extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             path,
-            style: AppTypography.caption(palette).copyWith(
-              fontFamily: 'monospace',
-            ),
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(fontFamily: 'monospace'),
           ),
           TextButton(onPressed: onPick, child: const Text('Cambiar carpeta…')),
         ],
