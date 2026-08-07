@@ -548,7 +548,7 @@ class _DocSettingsState extends State<_DocSettings> {
         ),
         const SizedBox(height: AppSpacing.md),
         DropdownButtonFormField<String>(
-          value: _layout,
+          initialValue: _layout,
           decoration: const InputDecoration(labelText: 'Layout de vista'),
           items: [
             for (final p in [

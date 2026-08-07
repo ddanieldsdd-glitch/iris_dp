@@ -28,7 +28,7 @@ abstract final class BibleLayoutGroup {
       BibleSectionId.texture,
     ],
     spatial: [BibleSectionId.location, BibleSectionId.cameraTests],
-    operational: [BibleSectionId.workflow, BibleSectionId.moodboard],
+    operational: [BibleSectionId.workflow, BibleSectionId.moodboard, BibleSectionId.settings],
   };
 }
 

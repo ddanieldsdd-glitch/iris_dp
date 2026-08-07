@@ -146,7 +146,7 @@ class EquipmentPicker extends ConsumerWidget {
             Expanded(
               child: DropdownButtonFormField<int>(
                 decoration: InputDecoration(labelText: label),
-                value: selectedId,
+                initialValue: selectedId,
                 items: items
                     .map((item) => DropdownMenuItem(
                           value: idOf(item),
@@ -183,7 +183,7 @@ class EquipmentPicker extends ConsumerWidget {
           _EquipmentActions(
             projectId: projectId,
             equipmentType: equipmentType,
-            equipmentId: selectedId!,
+            equipmentId: selectedId,
             chip: chip(items.firstWhere((i) => idOf(i) == selectedId)),
             subtitle: subtitle(items.firstWhere((i) => idOf(i) == selectedId)),
           ),

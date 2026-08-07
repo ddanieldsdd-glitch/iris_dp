@@ -94,7 +94,7 @@ class SyncEngine {
     if (remaining.isEmpty || _isSpuriousContentDrift(remaining)) {
       _ref.read(pendingSyncPlanProvider.notifier).state = null;
       final base = result ??
-          SyncResult(
+          const SyncResult(
             pushed: 0,
             pulled: 0,
             deleted: 0,

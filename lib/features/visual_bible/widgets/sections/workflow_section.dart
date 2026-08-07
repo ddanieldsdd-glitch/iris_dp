@@ -1,27 +1,48 @@
+// /Users/danieldiaz/Documents/IRIS DP/iris_dp/lib/features/visual_bible/widgets/sections/workflow_section.dart
 import 'dart:convert';
-
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/database/app_database.dart';
 import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../bible_section_fields.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
+import '../bible_section_shared_widgets.dart';
+import 'section_scaffold.dart';
+
+class _WorkflowStep {
+  final IconData icon;
+  final String name;
+  final String software;
+  final String format;
+  final String support;
+  const _WorkflowStep({required this.icon, required this.name, required this.software, required this.format, required this.support});
+}
+
+const _workflowSteps = [
+  _WorkflowStep(icon: Icons.videocam_outlined, name: 'CÁMARA', software: 'ARRI Alexa / RED', format: 'ARRIRAW / R3D', support: 'DIT'),
+  _WorkflowStep(icon: Icons.backup_outlined, name: 'BACKUP', software: 'YoYotta / Silverstack', format: 'Clone x3', support: 'DIT / Wrangler'),
+  _WorkflowStep(icon: Icons.play_circle_outline, name: 'DAILIES', software: 'DaVinci Resolve', format: 'ProRes 422 HQ', support: 'Colorista'),
+  _WorkflowStep(icon: Icons.palette_outlined, name: 'COLOR', software: 'DaVinci Resolve', format: 'EXR / DCP', support: 'Colorista'),
+  _WorkflowStep(icon: Icons.send_outlined, name: 'ENTREGA', software: 'Aspera / Signiant', format: 'IMF / DCP', support: 'Post'),
+];
 
 class WorkflowSection extends ConsumerStatefulWidget {
   final VisualBibleData data;
-  final int bibleId;
+  final int projectId;
+  final String? sectionContentJson;
   final BibleChanged onChanged;
 
   const WorkflowSection({
     super.key,
     required this.data,
-    required this.bibleId,
+    required this.projectId,
+    this.sectionContentJson,
     required this.onChanged,
   });
 
@@ -30,272 +51,175 @@ class WorkflowSection extends ConsumerStatefulWidget {
 }
 
 class _WorkflowSectionState extends ConsumerState<WorkflowSection> {
-  late List<WorkflowStepModel> _steps;
+  int _selectedStep = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    _steps = WorkflowStepModel.decode(widget.data.workflowPipeline);
+  Map<String, dynamic> _getCustomData() {
+    if (widget.sectionContentJson == null) return {};
+    try {
+      final decoded = jsonDecode(widget.sectionContentJson!);
+      if (decoded is Map<String, dynamic> && decoded.containsKey('_values')) {
+        final vals = decoded['_values'] as Map<String, dynamic>;
+        if (vals.containsKey('workflowData')) {
+          return jsonDecode(vals['workflowData'] as String);
+        }
+      }
+    } catch (_) {}
+    return {};
   }
 
-  void _persist() {
-    widget.data.workflowPipeline = WorkflowStepModel.encode(_steps);
-    widget.onChanged(widget.data);
-  }
-
-  Future<void> _saveVersion() async {
+  Future<void> _updateCustomData(Map<String, dynamic> update) async {
+    final current = _getCustomData();
+    final newData = { ...current, ...update };
     final db = ref.read(databaseProvider);
-    await db.insertBibleVersion(
-      VisualBibleVersionsCompanion.insert(
-        bibleId: widget.bibleId,
-        label: 'Versión ${DateTime.now().toIso8601String().substring(0, 16)}',
-        snapshotJson: jsonEncode(widget.data.toSnapshotJson()),
-        changeNote: const Value('Snapshot manual del look'),
-      ),
-    );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Versión del look guardada')),
-      );
+    final def = await (db.select(db.bibleSectionDefinitions)
+      ..where((d) => d.bibleId.equals(widget.data.id) & d.id.equals(BibleSectionId.workflow))).getSingleOrNull();
+    if (def != null) {
+      final fields = BibleSectionFieldsConfig.parse(def.contentJson, BibleSectionId.workflow);
+      final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
+      values['workflowData'] = jsonEncode(newData);
+      await db.upsertBibleSectionDefinition(def.copyWith(
+        contentJson: drift.Value(BibleSectionFieldsConfig.encode(fields, values: values)),
+      ));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
-    final db = ref.watch(databaseProvider);
+    final customData = _getCustomData();
+    final ditName = customData['ditName'] as String? ?? '';
+    final wranglerName = customData['wranglerName'] as String? ?? '';
+    final technicalNote = customData['technicalNote'] as String? ?? '';
 
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      children: [
-        Text(
-          'Pipeline técnico de imagen',
-          style: AppTypography.titleMedium(palette),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          'Cámara → tarjetas → dailies → color → entrega. '
-          'Quién es responsable de cada paso.',
-          style: AppTypography.caption(palette)
-              .copyWith(color: palette.textTertiary),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        ..._steps.asMap().entries.map((entry) {
-          final i = entry.key;
-          final step = entry.value;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: AppCard(
-              padding: const EdgeInsets.all(AppSpacing.md),
+    final step = _workflowSteps[_selectedStep];
+
+    return BibleSectionScaffold(
+      sectionId: BibleSectionId.workflow,
+      projectId: widget.projectId,
+      data: widget.data,
+      onChanged: widget.onChanged,
+      sectionContentJson: widget.sectionContentJson,
+      narrativeHint: 'Pipeline y equipo de DIT',
+      sectionNumber: '12',
+      sectionTitle: 'Workflow',
+      fieldWidgets: {
+        'workflowSettings': Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Stepper horizontal
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: List.generate(_workflowSteps.length, (i) {
+                  final s = _workflowSteps[i];
+                  final isActive = i == _selectedStep;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedStep = i),
+                    child: Row(
+                      children: [
+                        Column(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: isActive ? context.palette.accent : context.palette.surfaceElevated,
+                              child: Icon(s.icon, color: isActive ? context.palette.background : context.palette.textSecondary),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(s.name, style: AppTypography.caption(context.palette).copyWith(color: isActive ? context.palette.accent : context.palette.textSecondary)),
+                          ],
+                        ),
+                        if (i < _workflowSteps.length - 1)
+                          Container(
+                            width: 30,
+                            height: 2,
+                            color: context.palette.border,
+                            margin: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 20),
+                          ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+
+            // Panel de detalle
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: AppCard(
+                key: ValueKey(_selectedStep),
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(step.name, style: AppTypography.titleMedium(context.palette)),
+                    const SizedBox(height: AppSpacing.md),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(child: BibleTechCard(label: 'Software', value: step.software)),
+                        Expanded(child: BibleTechCard(label: 'Formato', value: step.format)),
+                        Expanded(child: BibleTechCard(label: 'Soporte', value: step.support)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+
+            // Responsabilidades
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Icon(
-                      _iconForStep(step.step),
-                      color: palette.accent,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Text('DIT', style: AppTypography.label(context.palette)),
+                        const SizedBox(height: AppSpacing.sm),
                         BibleTextField(
-                          label: 'Paso',
-                          initialValue: step.step,
-                          hint: '',
-                          onChanged: (v) {
-                            step.step = v;
-                            _persist();
-                          },
-                        ),
-                        BibleTextField(
-                          label: 'Responsable',
-                          hint: 'DIT, AC, colorista…',
-                          initialValue: step.responsible,
-                          onChanged: (v) {
-                            step.responsible = v.trim().isEmpty ? null : v.trim();
-                            _persist();
-                          },
-                        ),
-                        BibleTextField(
-                          label: 'Notas / LUT de referencia',
-                          hint: 'Metadata que viaja con el material',
-                          maxLines: 2,
-                          initialValue: step.notes,
-                          onChanged: (v) {
-                            step.notes = v.trim().isEmpty ? null : v.trim();
-                            _persist();
-                          },
+                          label: 'Nombre DIT',
+                          hint: 'Nombre...',
+                          initialValue: ditName,
+                          onChanged: (v) => _updateCustomData({'ditName': v}),
                         ),
                       ],
                     ),
                   ),
-                  if (i < _steps.length - 1)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 20, left: 4),
-                      child: Icon(Icons.arrow_downward,
-                          color: palette.textTertiary, size: 16),
+                  const SizedBox(width: AppSpacing.lg),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Data Wrangler', style: AppTypography.label(context.palette)),
+                        const SizedBox(height: AppSpacing.sm),
+                        BibleTextField(
+                          label: 'Nombre Wrangler',
+                          hint: 'Nombre...',
+                          initialValue: wranglerName,
+                          onChanged: (v) => _updateCustomData({'wranglerName': v}),
+                        ),
+                      ],
                     ),
+                  ),
                 ],
               ),
             ),
-          );
-        }),
-        const SizedBox(height: AppSpacing.lg),
-        Row(
-          children: [
-            OutlinedButton.icon(
-              onPressed: _saveVersion,
-              icon: const Icon(Icons.history, size: 18),
-              label: const Text('Guardar versión del look'),
+            const SizedBox(height: AppSpacing.lg),
+
+            // Technical Note
+            BibleTechNoteBox(text: technicalNote, title: 'Nota técnica de Workflow'),
+            const SizedBox(height: AppSpacing.sm),
+            BibleTextField(
+              label: 'Editar nota técnica',
+              maxLines: 3,
+              initialValue: technicalNote,
+              onChanged: (v) => _updateCustomData({'technicalNote': v}),
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.xl),
-        Text('Historial de versiones',
-            style: AppTypography.titleMedium(palette)),
-        const SizedBox(height: AppSpacing.sm),
-        StreamBuilder<List<VisualBibleVersion>>(
-          stream: db.watchBibleVersions(widget.bibleId),
-          builder: (context, snap) {
-            final versions = snap.data ?? [];
-            if (versions.isEmpty) {
-              return Text(
-                'Sin versiones guardadas.',
-                style: AppTypography.caption(palette),
-              );
-            }
-            return Column(
-              children: versions
-                  .map(
-                    (v) => ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.history, size: 18),
-                      title: Text(v.label),
-                      subtitle: v.changeNote != null ? Text(v.changeNote!) : null,
-                    ),
-                  )
-                  .toList(),
-            );
-          },
-        ),
-        const SizedBox(height: AppSpacing.xl),
-        _CommentsPanel(bibleId: widget.bibleId),
-      ],
-    );
-  }
-
-  IconData _iconForStep(String step) {
-    final lower = step.toLowerCase();
-    if (lower.contains('cámara') || lower.contains('sensor')) {
-      return Icons.videocam_outlined;
-    }
-    if (lower.contains('tarjeta') || lower.contains('backup')) {
-      return Icons.sd_storage_outlined;
-    }
-    if (lower.contains('dailies')) return Icons.play_circle_outline;
-    if (lower.contains('color') || lower.contains('grading')) {
-      return Icons.palette_outlined;
-    }
-    return Icons.check_circle_outline;
-  }
-}
-
-class _CommentsPanel extends ConsumerStatefulWidget {
-  final int bibleId;
-
-  const _CommentsPanel({required this.bibleId});
-
-  @override
-  ConsumerState<_CommentsPanel> createState() => _CommentsPanelState();
-}
-
-class _CommentsPanelState extends ConsumerState<_CommentsPanel> {
-  final _commentCtrl = TextEditingController();
-  String _role = 'dp';
-
-  @override
-  void dispose() {
-    _commentCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final db = ref.watch(databaseProvider);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Comentarios colaborativos',
-            style: AppTypography.titleMedium(palette)),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: BibleTextField(
-                label: 'Comentario',
-                hint: 'Nota para gaffer, colorista…',
-                maxLines: 2,
-                onChanged: (_) {},
-                controller: _commentCtrl,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: BibleDropdown(
-                label: 'Rol',
-                options: const ['dp', 'gaffer', 'colorist', 'ac'],
-                value: _role,
-                onChanged: (v) => setState(() => _role = v ?? 'dp'),
-              ),
-            ),
-          ],
-        ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () async {
-              final text = _commentCtrl.text.trim();
-              if (text.isEmpty) return;
-              await db.insertBibleComment(
-                BibleCommentsCompanion.insert(
-                  bibleId: widget.bibleId,
-                  authorRole: _role,
-                  targetType: 'section',
-                  comment: text,
-                ),
-              );
-              _commentCtrl.clear();
-            },
-            child: const Text('Añadir comentario'),
-          ),
-        ),
-        StreamBuilder<List<BibleComment>>(
-          stream: db.watchBibleComments(widget.bibleId),
-          builder: (context, snap) {
-            final comments = snap.data ?? [];
-            return Column(
-              children: comments
-                  .map(
-                    (c) => ListTile(
-                      dense: true,
-                      title: Text(c.comment),
-                      subtitle: Text('${c.authorRole} · ${c.targetType}'),
-                    ),
-                  )
-                  .toList(),
-            );
-          },
-        ),
-      ],
+      },
     );
   }
 }
-
-typedef BibleChanged = void Function(VisualBibleData data);

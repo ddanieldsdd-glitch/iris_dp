@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../cloud/cloud_providers.dart';
-import '../cloud/supabase_config.dart';
+import '../cloud/cloud_runtime_config.dart';
 import 'app_update_providers.dart';
 
 /// Dispara comprobación de actualizaciones al iniciar y al volver a primer plano.
@@ -38,7 +38,7 @@ class _AppUpdateGateState extends ConsumerState<AppUpdateGate>
   }
 
   void _checkIfReady() {
-    if (!SupabaseConfig.isConfigured) return;
+    if (!CloudRuntimeConfig.isActive) return;
     final user = ref.read(currentUserProvider);
     if (user == null) return;
     ref.read(appUpdateProvider.notifier).check();

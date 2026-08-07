@@ -245,7 +245,7 @@ class _ShootTemplateEditorScreenState
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 DropdownButtonFormField<String>(
-                  value: _layoutPreset,
+                  initialValue: _layoutPreset,
                   decoration: const InputDecoration(labelText: 'Layout'),
                   items: [
                     ShootLayoutPreset.freeform,

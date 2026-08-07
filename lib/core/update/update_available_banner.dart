@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../cloud/cloud_providers.dart';
-import '../cloud/supabase_config.dart';
+import '../cloud/cloud_runtime_config.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
@@ -15,7 +15,7 @@ class UpdateAvailableBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!SupabaseConfig.isConfigured) return const SizedBox.shrink();
+    if (!CloudRuntimeConfig.isActive) return const SizedBox.shrink();
 
     final user = ref.watch(currentUserProvider);
     if (user == null) return const SizedBox.shrink();

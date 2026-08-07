@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../cloud/cloudinary_config.dart';
-import '../cloud/supabase_config.dart';
+import '../cloud/cloud_runtime_config.dart';
 import '../sync/media_sync_providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -16,7 +16,7 @@ class SettingsCloudStorageSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
 
-    if (!SupabaseConfig.isConfigured) {
+    if (!CloudRuntimeConfig.isActive) {
       return const SizedBox.shrink();
     }
 

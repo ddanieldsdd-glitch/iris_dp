@@ -160,7 +160,7 @@ class FrameLineSettingsPanel extends StatelessWidget {
       children: [
         DropdownButtonFormField<String>(
           decoration: const InputDecoration(labelText: 'Aspect Ratio'),
-          value: presetId == 'custom' || kAspectRatioPresets.any((p) => p.id == presetId)
+          initialValue: presetId == 'custom' || kAspectRatioPresets.any((p) => p.id == presetId)
               ? presetId
               : 'custom',
           items: kAspectRatioPresets
@@ -282,7 +282,7 @@ class FrameLineSettingsPanel extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         DropdownButtonFormField<FrameLineShading>(
           decoration: const InputDecoration(labelText: 'Shading'),
-          value: cfg.shading,
+          initialValue: cfg.shading,
           items: const [
             DropdownMenuItem(value: FrameLineShading.none, child: Text('None')),
             DropdownMenuItem(
@@ -300,7 +300,7 @@ class FrameLineSettingsPanel extends StatelessWidget {
         ),
         DropdownButtonFormField<FrameLineCenterMark>(
           decoration: const InputDecoration(labelText: 'Center Mark'),
-          value: cfg.centerMark,
+          initialValue: cfg.centerMark,
           items: const [
             DropdownMenuItem(value: FrameLineCenterMark.none, child: Text('None')),
             DropdownMenuItem(value: FrameLineCenterMark.cross, child: Text('Cross')),
@@ -313,7 +313,7 @@ class FrameLineSettingsPanel extends StatelessWidget {
         ),
         DropdownButtonFormField<FrameLineAlignCenterTo>(
           decoration: const InputDecoration(labelText: 'Align Center to'),
-          value: cfg.alignCenterTo,
+          initialValue: cfg.alignCenterTo,
           items: [
             const DropdownMenuItem(value: FrameLineAlignCenterTo.none, child: Text('None')),
             if (cfg.id != 'A')
@@ -329,7 +329,7 @@ class FrameLineSettingsPanel extends StatelessWidget {
         ),
         DropdownButtonFormField<FrameLineStyle>(
           decoration: const InputDecoration(labelText: 'Style'),
-          value: cfg.style,
+          initialValue: cfg.style,
           items: const [
             DropdownMenuItem(value: FrameLineStyle.fullBox, child: Text('Full Box')),
             DropdownMenuItem(value: FrameLineStyle.corners, child: Text('Corners')),
@@ -342,7 +342,7 @@ class FrameLineSettingsPanel extends StatelessWidget {
         if (cfg.style == FrameLineStyle.corners)
           DropdownButtonFormField<FrameLineStyleLength>(
             decoration: const InputDecoration(labelText: 'Style Length'),
-            value: cfg.styleLength,
+            initialValue: cfg.styleLength,
             items: const [
               DropdownMenuItem(value: FrameLineStyleLength.regular, child: Text('Regular')),
               DropdownMenuItem(value: FrameLineStyleLength.short, child: Text('Short')),
@@ -353,7 +353,7 @@ class FrameLineSettingsPanel extends StatelessWidget {
           ),
         DropdownButtonFormField<double>(
           decoration: const InputDecoration(labelText: 'Line Width'),
-          value: cfg.lineWidth.clamp(1, 8),
+          initialValue: cfg.lineWidth.clamp(1, 8),
           items: List.generate(
             8,
             (i) => DropdownMenuItem(value: (i + 1).toDouble(), child: Text('${i + 1}')),

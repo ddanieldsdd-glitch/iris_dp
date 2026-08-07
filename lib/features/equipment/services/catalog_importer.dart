@@ -130,7 +130,7 @@ Future<void> importEmbeddedCatalog(
 
   await db.upsertCatalogSyncMeta(
     CatalogSyncMetaCompanion(
-      remoteVersion: Value('$kEmbeddedCatalogVersion'),
+      remoteVersion: const Value('$kEmbeddedCatalogVersion'),
       sourceUrl: const Value('embedded'),
       lastSyncAt: Value(DateTime.now()),
     ),

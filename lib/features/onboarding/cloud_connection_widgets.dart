@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/cloud/supabase_config.dart';
+import '../../core/cloud/cloud_runtime_config.dart';
 import '../../core/cloud/supabase_health_check.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -22,7 +23,7 @@ class _CloudConnectionStatusCardState extends State<CloudConnectionStatusCard> {
   @override
   void initState() {
     super.initState();
-    if (SupabaseConfig.isConfigured) _check();
+    if (CloudRuntimeConfig.isActive) _check();
   }
 
   Future<void> _check() async {
@@ -39,7 +40,7 @@ class _CloudConnectionStatusCardState extends State<CloudConnectionStatusCard> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final configured = SupabaseConfig.isConfigured;
+    final configured = CloudRuntimeConfig.isActive;
     final host = Uri.tryParse(SupabaseConfig.url)?.host ?? SupabaseConfig.url;
 
     if (!configured) {
@@ -47,9 +48,10 @@ class _CloudConnectionStatusCardState extends State<CloudConnectionStatusCard> {
         palette: palette,
         icon: Icons.cloud_off_outlined,
         color: palette.warning,
-        title: 'Modo local (sin nube)',
+        title: 'Modo local',
         body:
-            'Arranca la app con --dart-define=SUPABASE_URL y SUPABASE_ANON_KEY.',
+            'IRIS DP funciona al 100 % sin nube. Vincula Supabase en Ajustes '
+            'cuando quieras sincronizar entre dispositivos.',
       );
     }
 

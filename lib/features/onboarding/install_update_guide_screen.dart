@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/cloud/cloud_providers.dart';
-import '../../core/cloud/supabase_config.dart';
+import '../../core/cloud/cloud_runtime_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -21,7 +21,7 @@ class InstallUpdateGuideScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
-    final cloud = SupabaseConfig.isConfigured;
+    final cloud = CloudRuntimeConfig.isActive;
 
     return Scaffold(
       appBar: AppBar(
@@ -34,42 +34,42 @@ class InstallUpdateGuideScreen extends ConsumerWidget {
             title: 'Instalar IRIS DP',
             icon: Icons.download_outlined,
             children: [
-              _SubSection(
+              const _SubSection(
                 title: 'macOS / Windows — actualizar desde la app',
-                bullets: const [
+                bullets: [
                   'Con sesión iniciada verás un banner cuando haya versión nueva',
                   'Pulsa «Actualizar ahora» — descarga e instala sin abrir GitHub',
                   'En Mac: arrastra la app del .dmg a Aplicaciones',
                   'Pulsa «Ya actualicé» para sincronizar proyectos',
                 ],
               ),
-              _SubSection(
+              const _SubSection(
                 title: 'macOS — generar instalador manual',
-                bullets: const [
+                bullets: [
                   'En Terminal: cd iris_dp && ./scripts/build_release.sh',
                   'Abre build/dmg/IRIS-DP.dmg → arrastra a Aplicaciones',
                   'Para otro Mac: copia el .dmg (AirDrop, USB, Drive…)',
                   'El script usa .env con SUPABASE_URL y SUPABASE_ANON_KEY',
                 ],
               ),
-              _SubSection(
+              const _SubSection(
                 title: 'macOS — modo desarrollo (flutter run)',
-                bullets: const [
+                bullets: [
                   'flutter run NO instala en Aplicaciones; sirve para probar',
                   'Usa ./scripts/run_cloud.sh si tienes .env configurado',
                 ],
               ),
-              _SubSection(
+              const _SubSection(
                 title: 'Windows',
-                bullets: const [
+                bullets: [
                   'Ejecuta el instalador o descomprime la carpeta Release',
                   'Inicia iris_dp.exe',
                   'Windows Defender puede pedir permiso la primera vez',
                 ],
               ),
-              _SubSection(
+              const _SubSection(
                 title: 'iPad — SideStore (gratis, uso personal)',
-                bullets: const [
+                bullets: [
                   'Cada release incluye IRIS-DP.ipa en GitHub (generado por CI)',
                   'Descarga el IPA desde la app (banner o Ajustes → Estado del sistema)',
                   'Abre el archivo con SideStore — re-firma con tu Apple ID',
@@ -243,10 +243,10 @@ class InstallUpdateGuideScreen extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: AppSpacing.xl),
-          _Section(
+          const _Section(
             title: 'Problemas frecuentes',
             icon: Icons.help_outline,
-            children: const [
+            children: [
               _FaqTile(
                 q: 'Actualicé en el Mac pero el iPad no muestra cambios',
                 a: 'Abre IRIS DP en el iPad, inicia sesión y pulsa sync. '

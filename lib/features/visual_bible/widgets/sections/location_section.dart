@@ -14,6 +14,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/clipboard_image_reader.dart';
 import '../../../../core/utils/media_storage.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../bible_section_shared_widgets.dart';
 import '../../services/color_extraction_service.dart';
 import '../../bible_paste_helpers.dart';
 import '../../moodboard_helpers.dart';
@@ -75,6 +76,142 @@ class LocationSection extends ConsumerWidget {
                 return ListView(
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   children: [
+                    // ── Cabecera de sección ──────────────────────────────
+                    const BibleSectionHeader(
+                      number: '11',
+                      title: 'Localización',
+                    ),
+
+                    // ── Compás solar ─────────────────────────────────────
+                    AppCard(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.wb_sunny_outlined,
+                                  size: 16,
+                                  color: palette.warning),
+                              const SizedBox(width: 6),
+                              Text(
+                                'COMPÁS SOLAR',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: palette.warning,
+                                  letterSpacing: 1.1,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          const Row(
+                            children: [
+                              Expanded(
+                                child: BibleTechCard(
+                                  label: 'Azimuth amanecer',
+                                  value: '— °',
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: BibleTechCard(
+                                  label: 'Azimuth atardecer',
+                                  value: '— °',
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: BibleTechCard(
+                                  label: 'Ventana de luz útil',
+                                  value: '— h',
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          // Mini-arco solar decorativo
+                          Container(
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: palette.surfaceElevated,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                Text('Golden Hour',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        color: palette.warning)),
+                                Icon(Icons.sunny,
+                                    color: palette.warning
+                                        .withValues(alpha: 0.4),
+                                    size: 20),
+                                Icon(Icons.wb_sunny_outlined,
+                                    color: palette.warning, size: 28),
+                                Icon(Icons.wb_sunny_outlined,
+                                    color:
+                                        palette.warning.withValues(alpha: 0.4),
+                                    size: 20),
+                                Text('Blue Hour',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        color: palette.accent)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // ── Gaffer Intel ─────────────────────────────────────
+                    const AppCard(
+                      padding: EdgeInsets.all(AppSpacing.lg),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          BibleGafferDirectiveBox(
+                            title: 'Gaffer Intel',
+                            text:
+                                'Power Availability / Access & Staging / Permits & Restrictions — definir al hacer el tech scout.',
+                          ),
+                          SizedBox(height: AppSpacing.md),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: BibleTechCard(
+                                  label: 'Power Supply',
+                                  value: '—',
+                                  mono: false,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: BibleTechCard(
+                                  label: 'Crew Parking',
+                                  value: '—',
+                                  mono: false,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: BibleTechCard(
+                                  label: 'Sound Issues',
+                                  value: '—',
+                                  mono: false,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+
+                    // ── Localizaciones ────────────────────────────────────
                     for (final site in sites) ...[
                       _SiteFolderHeader(
                         siteName: site.name,

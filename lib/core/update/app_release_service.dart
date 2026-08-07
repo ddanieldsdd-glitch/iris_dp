@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../cloud/supabase_config.dart';
+import '../cloud/cloud_runtime_config.dart';
 import 'app_release.dart';
 import 'app_update_checker.dart';
 
@@ -9,7 +9,7 @@ Future<AppRelease?> fetchLatestReleaseForPlatform(
   String platform, {
   SupabaseClient? client,
 }) async {
-  if (!SupabaseConfig.isConfigured) return null;
+  if (!CloudRuntimeConfig.isActive) return null;
 
   final supabase = client ?? _tryClient();
   if (supabase == null) return null;

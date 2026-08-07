@@ -129,7 +129,7 @@ Karim espera.
       ];
 
       final ai = [
-        NormalizedScene(
+        const NormalizedScene(
           number: 1,
           intExt: 'INT',
           dayNight: 'DÍA',

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../cloud/connectivity_status_provider.dart';
 import '../cloud/cloud_providers.dart';
-import '../cloud/supabase_config.dart';
+import '../cloud/cloud_runtime_config.dart';
 import '../sync/sync_engine.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -40,7 +40,7 @@ class _ConnectivityGateState extends ConsumerState<ConnectivityGate> {
   }
 
   Future<void> _onReconnect() async {
-    if (!SupabaseConfig.isConfigured) return;
+    if (!CloudRuntimeConfig.isActive) return;
     final user = ref.read(currentUserProvider);
     if (user == null) return;
 
@@ -56,7 +56,7 @@ class OfflineStatusBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!SupabaseConfig.isConfigured) return const SizedBox.shrink();
+    if (!CloudRuntimeConfig.isActive) return const SizedBox.shrink();
 
     final online = ref.watch(isOnlineProvider);
     if (online) return const SizedBox.shrink();

@@ -1,27 +1,20 @@
-import 'dart:convert';
-
-import 'package:drift/drift.dart' show Value;
-import 'package:file_picker/file_picker.dart';
+// /Users/danieldiaz/Documents/IRIS DP/iris_dp/lib/features/visual_bible/widgets/sections/color_image_section.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import '../../../../core/database/app_database.dart';
 import '../../../../core/database/database_provider.dart';
+import '../../../../core/database/app_database.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/utils/media_storage.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../bible_section_fields.dart';
-import '../../services/color_extraction_service.dart';
-import '../../bible_paste_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
-import '../bible_paste_zone.dart';
-import '../color_palette_strip.dart';
-import 'section_scaffold.dart';
+import '../bible_section_shared_widgets.dart';
+import '../narrative_bridge_card.dart';
 
-class ColorImageSection extends ConsumerWidget {
+class ColorImageSection extends ConsumerStatefulWidget {
   final VisualBibleData data;
   final int projectId;
   final int bibleId;
@@ -37,202 +30,96 @@ class ColorImageSection extends ConsumerWidget {
     required this.onChanged,
   });
 
-  static const _colorSpaces = ['Rec.709', 'P3-D65', 'HDR10', 'HLG'];
+  @override
+  ConsumerState<ColorImageSection> createState() => _ColorImageSectionState();
+}
+
+class _ColorImageSectionState extends ConsumerState<ColorImageSection> {
+  BibleVisualMode _mode = BibleVisualMode.cinematic;
+
+  int _hexToInt(String hex) {
+    final clean = hex.replaceAll('#', '');
+    return int.parse('ff$clean', radix: 16);
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final palette = context.palette;
     final db = ref.watch(databaseProvider);
 
-    final lutLabel = BibleSectionFieldsConfig.labelFor(
-      sectionContentJson,
-      BibleSectionId.colorImage,
-      'lut',
-      'LUT y color science',
-    );
-    final blocksLabel = BibleSectionFieldsConfig.labelFor(
-      sectionContentJson,
-      BibleSectionId.colorImage,
-      'blocks',
-      'Paletas por bloque',
-    );
-
-    return BibleSectionScaffold(
-      sectionId: BibleSectionId.colorImage,
-      projectId: projectId,
-      data: data,
-      onChanged: onChanged,
-      sectionContentJson: sectionContentJson,
-      narrativeHint:
-          '¿Qué emoción transmite esta paleta y este LUT? '
-          'Cómo el color apoya la narrativa…',
-      fieldWidgets: {
-        'lut': AppCard(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(lutLabel, style: AppTypography.titleMedium(palette)),
-              const SizedBox(height: AppSpacing.md),
-              BibleTextField(
-                label: 'LUT de trabajo (rodaje / log)',
-                hint: 'S-Log3 → Rec.709',
-                initialValue: data.workingLutName,
-                onChanged: (v) {
-                  data.workingLutName = v.trim().isEmpty ? null : v.trim();
-                  onChanged(data);
-                },
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              BibleTextField(
-                label: 'LUT creativo',
-                hint: 'Look final de intención',
-                initialValue: data.creativeLutName,
-                onChanged: (v) {
-                  data.creativeLutName = v.trim().isEmpty ? null : v.trim();
-                  onChanged(data);
-                },
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              BibleTextField(
-                label: 'Descripción del LUT creativo',
-                hint: 'Qué hace al look final…',
-                maxLines: 3,
-                initialValue: data.creativeLutDescription,
-                onChanged: (v) {
-                  data.creativeLutDescription =
-                      v.trim().isEmpty ? null : v.trim();
-                  onChanged(data);
-                },
-              ),
-              const SizedBox(height: AppSpacing.md),
-              BibleDropdown(
-                label: 'Espacio de color de entrega',
-                options: _colorSpaces,
-                value: data.deliveryColorSpace,
-                onChanged: (v) {
-                  data.deliveryColorSpace = v;
-                  onChanged(data);
-                },
-              ),
-              const SizedBox(height: AppSpacing.md),
-              BibleTextField(
-                label: 'Color science de cámara',
-                hint: 'Cómo renderiza skin tones y highlights…',
-                maxLines: 3,
-                initialValue: data.colorScienceNotes,
-                onChanged: (v) {
-                  data.colorScienceNotes = v.trim().isEmpty ? null : v.trim();
-                  onChanged(data);
-                },
-              ),
-            ],
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      children: [
+        BibleSectionHeader(
+          number: '07',
+          title: 'Color e Imagen',
+          trailing: BibleSectionModeDropdown(
+            value: _mode,
+            onChanged: (m) => setState(() => _mode = m),
           ),
         ),
-        'blocks': Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-        Row(
-          children: [
-            Text(blocksLabel, style: AppTypography.titleMedium(palette)),
-            const Spacer(),
-            TextButton.icon(
-              onPressed: () => _addBlock(context, ref),
-              icon: Icon(Icons.add, color: palette.accent, size: 18),
-              label: Text('Añadir bloque',
-                  style: AppTypography.label(palette)
-                      .copyWith(color: palette.accent)),
-            ),
-          ],
+        NarrativeBridgeCard(
+          hint: '¿Qué emoción transmite esta paleta y este LUT? Cómo el color apoya la narrativa…',
+          value: widget.data.colorNarrativeIntent,
+          onChanged: (v) {
+            widget.data.colorNarrativeIntent = v;
+            widget.onChanged(widget.data);
+          },
         ),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.lg),
+        
         StreamBuilder<List<VisualBibleColorBlock>>(
-          stream: db.watchColorBlocksForBible(bibleId),
+          stream: db.watchColorBlocksForBible(widget.bibleId),
           builder: (context, snap) {
-            final blocks = snap.data ?? [];
+            final blocks = snap.data?.map((row) => ColorBlockModel.fromRow(row)).toList() ?? [];
+            if (blocks.isEmpty) return const SizedBox.shrink();
+            
             return Column(
-              children: blocks.map((row) {
-                final block = ColorBlockModel.fromRow(row);
+              children: blocks.map((block) {
+                final swatches = block.dominantColors.take(3).toList();
                 return Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.md),
                   child: AppCard(
-                    padding: const EdgeInsets.all(AppSpacing.md),
+                    padding: const EdgeInsets.all(AppSpacing.lg),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Text(block.blockName, style: AppTypography.titleMedium(palette)),
+                        const SizedBox(height: AppSpacing.md),
                         Row(
                           children: [
-                            Expanded(
-                              child: Text(block.blockName,
-                                  style: AppTypography.titleMedium(palette)),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.delete_outline,
-                                  color: palette.error, size: 20),
-                              onPressed: () => db.deleteColorBlock(block.id),
-                            ),
-                          ],
-                        ),
-                        if (block.emotionalIntent?.isNotEmpty == true)
-                          Text(block.emotionalIntent!),
-                        if (block.swatches.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          ColorPaletteStrip(colors: block.swatches, height: 22),
-                        ],
-                        if (block.colorTempKelvin != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text('${block.colorTempKelvin}K estimado'),
-                          ),
-                        if (block.referenceImages.isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.md),
-                          ...block.referenceImages.map(
-                            (path) => Padding(
-                              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                              child: ColorBlockReferenceCardAsync(
-                                imagePath: path,
-                                onRemove: () => _removeReference(
-                                  ref,
-                                  block,
-                                  path,
+                            for (var i = 0; i < swatches.length; i++)
+                              Padding(
+                                padding: const EdgeInsets.only(right: AppSpacing.sm),
+                                child: BibleColorSwatch(
+                                  color: Color(_hexToInt(swatches[i])),
+                                  name: 'Color ${i + 1}',
+                                  hex: swatches[i],
+                                  large: true,
                                 ),
                               ),
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: AppSpacing.sm),
-                        BibleTargetZone(
-                          hint:
-                              'Clic aquí → ⌘V para pegar ref en este bloque (paleta)',
-                          onPaste: (payload) async {
-                            final stored =
-                                await BiblePasteHelpers.savePayloadToProject(
-                              projectId: projectId,
-                              subfolder: 'bible_blocks',
-                              payload: payload,
-                              prefix: 'ref',
-                            );
-                            if (stored != null) {
-                              await _attachImagePathToBlock(
-                                ref,
-                                block,
-                                stored,
-                              );
-                            }
-                          },
-                          onMoodboardDropped: (payload) =>
-                              _attachMoodboardToBlock(
-                            ref,
-                            block,
-                            payload.imagePath,
-                          ),
+                          ],
                         ),
-                        const SizedBox(height: AppSpacing.sm),
-                        OutlinedButton.icon(
-                          onPressed: () => _addReference(context, ref, block),
-                          icon: const Icon(Icons.add_photo_alternate_outlined,
-                              size: 16),
-                          label: const Text('Asociar imagen'),
+                        const SizedBox(height: AppSpacing.md),
+                        BibleHeroValue(
+                          value: block.colorTempKelvin?.toString() ?? '5600',
+                          unit: 'K',
+                          label: 'TEMPERATURA BASE',
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        TextButton(
+                          onPressed: () {},
+                          child: Text('Editar paleta', style: TextStyle(color: palette.accent)),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        const Row(
+                          children: [
+                            Expanded(child: BibleTechCard(label: 'HIGHLIGHTS', value: '—')),
+                            SizedBox(width: AppSpacing.sm),
+                            Expanded(child: BibleTechCard(label: 'MIDTONES', value: '—')),
+                            SizedBox(width: AppSpacing.sm),
+                            Expanded(child: BibleTechCard(label: 'SHADOWS', value: '—')),
+                          ],
                         ),
                       ],
                     ),
@@ -242,199 +129,210 @@ class ColorImageSection extends ConsumerWidget {
             );
           },
         ),
-          ],
-        ),
-      },
-    );
-  }
 
-  Future<void> _addReference(
-    BuildContext context,
-    WidgetRef ref,
-    ColorBlockModel block,
-  ) async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
-    if (result == null || result.files.isEmpty) return;
-    final sourcePath = result.files.single.path;
-    if (sourcePath == null) return;
-
-    final ext = sourcePath.contains('.') ? '.${sourcePath.split('.').last}' : '.jpg';
-    final stored = await MediaStorage.copyFileIntoProject(
-      projectId: projectId,
-      sourcePath: sourcePath,
-      subfolder: 'bible_blocks',
-      fileName: 'ref_${DateTime.now().millisecondsSinceEpoch}$ext',
-    );
-    if (stored == null) return;
-
-    await _attachImagePathToBlock(ref, block, stored);
-  }
-
-  Future<void> _attachMoodboardToBlock(
-    WidgetRef ref,
-    ColorBlockModel block,
-    String sourcePath,
-  ) async {
-    final ext = sourcePath.contains('.') ? '.${sourcePath.split('.').last}' : '.jpg';
-    final stored = await MediaStorage.copyFileIntoProject(
-      projectId: projectId,
-      sourcePath: sourcePath,
-      subfolder: 'bible_blocks',
-      fileName: 'ref_${DateTime.now().millisecondsSinceEpoch}$ext',
-    );
-    if (stored == null) return;
-    await _attachImagePathToBlock(ref, block, stored);
-  }
-
-  Future<void> _attachImagePathToBlock(
-    WidgetRef ref,
-    ColorBlockModel block,
-    String storedPath,
-  ) async {
-    final extraction = await ColorExtractionService.extractFromFile(storedPath);
-    final db = ref.read(databaseProvider);
-    final rows = await db.watchColorBlocksForBible(bibleId).first;
-    final row = rows.where((r) => r.id == block.id).firstOrNull;
-    if (row == null) return;
-
-    final images = List<String>.from(block.referenceImages)..add(storedPath);
-    await db.updateColorBlock(
-      row.copyWith(
-        referenceImages: Value(jsonEncode(images)),
-        dominantColors:
-            jsonEncode(ColorExtractionService.paletteToHex(extraction.palette)),
-        colorTempKelvin: Value(extraction.estimatedKelvin),
-      ),
-    );
-  }
-
-  Future<void> _removeReference(
-    WidgetRef ref,
-    ColorBlockModel block,
-    String path,
-  ) async {
-    final db = ref.read(databaseProvider);
-    final rows = await db.watchColorBlocksForBible(bibleId).first;
-    final row = rows.where((r) => r.id == block.id).firstOrNull;
-    if (row == null) return;
-
-    final images = List<String>.from(block.referenceImages)..remove(path);
-    await db.updateColorBlock(
-      row.copyWith(
-        referenceImages: Value(
-          images.isEmpty ? null : jsonEncode(images),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _addBlock(BuildContext context, WidgetRef ref) async {
-    final palette = context.palette;
-    final nameCtrl = TextEditingController();
-    final intentCtrl = TextEditingController();
-    final tempCtrl = TextEditingController();
-    final colors = <Color>[const Color(0xFF1A1A2E)];
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: palette.surfaceElevated,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSt) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: AppSpacing.lg,
-                right: AppSpacing.lg,
-                top: AppSpacing.lg,
-                bottom: MediaQuery.paddingOf(ctx).bottom + AppSpacing.lg,
+        const SizedBox(height: AppSpacing.lg),
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('ACENTOS PRÁCTICOS', style: AppTypography.titleMedium(palette)),
+              const SizedBox(height: AppSpacing.md),
+              StreamBuilder<List<VisualBibleColorBlock>>(
+                stream: db.watchColorBlocksForBible(widget.bibleId),
+                builder: (context, snap) {
+                  final blocks = snap.data?.map((row) => ColorBlockModel.fromRow(row)).toList() ?? [];
+                  if (blocks.isEmpty || blocks.first.accentColors.isEmpty) return const Text('Sin acentos prácticos');
+                  final accentHex = blocks.first.accentColors;
+                  return Row(
+                    children: [
+                      for (var i = 0; i < accentHex.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(right: AppSpacing.sm),
+                          child: BibleColorSwatch(
+                            color: Color(_hexToInt(accentHex[i])),
+                            name: 'Acento ${i + 1}',
+                            hex: accentHex[i],
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text('Nuevo bloque de color',
-                        style: AppTypography.titleMedium(palette)),
-                    const SizedBox(height: AppSpacing.md),
-                    BibleTextField(
-                      label: 'Nombre',
-                      hint: 'Acto I',
-                      onChanged: (_) {},
-                      controller: nameCtrl,
-                    ),
-                    BibleTextField(
-                      label: 'Intención emocional',
-                      hint: 'Tensión, frío distante…',
-                      maxLines: 2,
-                      onChanged: (_) {},
-                      controller: intentCtrl,
-                    ),
-                    BibleTextField(
-                      label: 'Temperatura (K)',
-                      hint: '3200',
-                      onChanged: (_) {},
-                      controller: tempCtrl,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final result = await FilePicker.platform.pickFiles(
-                          type: FileType.image,
-                          allowMultiple: false,
-                        );
-                        final path = result?.files.single.path;
-                        if (path == null) return;
-                        final extraction =
-                            await ColorExtractionService.extractFromFile(path);
-                        setSt(() {
-                          colors
-                            ..clear()
-                            ..addAll(extraction.palette);
-                          if (extraction.estimatedKelvin != null) {
-                            tempCtrl.text =
-                                extraction.estimatedKelvin.toString();
-                          }
-                        });
-                      },
-                      icon: const Icon(Icons.colorize, size: 18),
-                      label: const Text('Extraer de imagen'),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    if (colors.isNotEmpty)
-                      ColorPaletteStrip(colors: colors),
-                    const SizedBox(height: AppSpacing.lg),
-                    FilledButton(
-                      onPressed: () async {
-                        final name = nameCtrl.text.trim();
-                        if (name.isEmpty) return;
-                        final hexes = ColorExtractionService.paletteToHex(colors);
-                        await ref.read(databaseProvider).insertColorBlock(
-                              VisualBibleColorBlocksCompanion.insert(
-                                bibleId: bibleId,
-                                blockName: name,
-                                emotionalIntent: Value(
-                                  intentCtrl.text.trim().isEmpty
-                                      ? null
-                                      : intentCtrl.text.trim(),
-                                ),
-                                dominantColors: jsonEncode(hexes),
-                                colorTempKelvin: Value(
-                                  int.tryParse(tempCtrl.text.trim()),
-                                ),
-                              ),
-                            );
-                        if (ctx.mounted) Navigator.pop(ctx);
-                      },
-                      child: const Text('Crear bloque'),
-                    ),
-                  ],
+            ],
+          ),
+        ),
+
+        const SizedBox(height: AppSpacing.lg),
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.block, color: palette.error),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text('COLORES PROHIBIDOS', style: AppTypography.titleMedium(palette).copyWith(color: palette.error)),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              StreamBuilder<List<VisualBibleColorBlock>>(
+                stream: db.watchColorBlocksForBible(widget.bibleId),
+                builder: (context, snap) {
+                  final blocks = snap.data?.map((row) => ColorBlockModel.fromRow(row)).toList() ?? [];
+                  if (blocks.isEmpty || blocks.first.prohibitedColors.isEmpty) return const Text('Ninguno');
+                  final prohibited = blocks.first.prohibitedColors;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: prohibited.map((p) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6.0),
+                      child: Row(
+                        children: [
+                          Icon(Icons.block, size: 14, color: palette.error),
+                          const SizedBox(width: AppSpacing.sm),
+                          Text(p, style: TextStyle(color: palette.textPrimary)),
+                        ],
+                      ),
+                    )).toList(),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: AppSpacing.lg),
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('GLOBAL ATTRIBUTES', style: AppTypography.titleMedium(palette)),
+              const SizedBox(height: AppSpacing.md),
+              _buildSliderRow(context, 'Contrast', widget.data.contrastStyle ?? '—', 0.6),
+              _buildSliderRow(context, 'Saturation', '—', 0.5),
+              _buildSliderRow(context, 'Grain', widget.data.grainLevel ?? '—', 0.4),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: AppSpacing.lg),
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: palette.border),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('MONITORING LUT', style: AppTypography.label(palette)),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(widget.data.workingLutName ?? '—', style: GoogleFonts.jetBrainsMono(color: palette.textPrimary, fontSize: 13)),
+                      const SizedBox(height: AppSpacing.sm),
+                      const BibleChipRow(chips: ['REC.709', 'DISPLAY']),
+                      const SizedBox(height: AppSpacing.md),
+                      BibleTextField(
+                        label: 'LUT Name',
+                        initialValue: widget.data.workingLutName,
+                        onChanged: (v) {
+                          widget.data.workingLutName = v;
+                          widget.onChanged(widget.data);
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            );
-          },
-        );
-      },
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: palette.border),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('CREATIVE LUT', style: AppTypography.label(palette)),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(widget.data.creativeLutName ?? '—', style: GoogleFonts.jetBrainsMono(color: palette.textPrimary, fontSize: 13)),
+                      const SizedBox(height: AppSpacing.sm),
+                      const BibleChipRow(chips: ['LOG', 'GRADE']),
+                      const SizedBox(height: AppSpacing.md),
+                      BibleTextField(
+                        label: 'LUT Name',
+                        initialValue: widget.data.creativeLutName,
+                        onChanged: (v) {
+                          widget.data.creativeLutName = v;
+                          widget.onChanged(widget.data);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: AppSpacing.lg),
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('SIMBOLOGÍA DE COLOR', style: AppTypography.titleMedium(palette)),
+              const SizedBox(height: AppSpacing.md),
+              if (widget.data.visualConcept?.isNotEmpty == true)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                  child: Text(
+                    widget.data.visualConcept!,
+                    style: TextStyle(fontStyle: FontStyle.italic, color: palette.textSecondary),
+                  ),
+                ),
+              BibleTextField(
+                label: 'Simbología y significado narrativo',
+                maxLines: 4,
+                initialValue: widget.data.visualConcept,
+                onChanged: (v) {
+                  widget.data.visualConcept = v;
+                  widget.onChanged(widget.data);
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSliderRow(BuildContext context, String title, String value, double sliderValue) {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        children: [
+          SizedBox(width: 80, child: Text(title, style: AppTypography.caption(palette))),
+          Expanded(
+            child: Slider(
+              value: sliderValue,
+              onChanged: null,
+              activeColor: palette.accent,
+            ),
+          ),
+          SizedBox(width: 80, child: Text(value, style: AppTypography.caption(palette), textAlign: TextAlign.right)),
+        ],
+      ),
     );
   }
 }
-

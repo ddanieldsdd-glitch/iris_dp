@@ -39,26 +39,24 @@ class MoodboardStrip extends ConsumerWidget {
   const MoodboardStrip.forSection({
     super.key,
     required this.projectId,
-    required String sectionId,
+    required String this.sectionId,
     this.title,
     this.showTitle = true,
     this.showCaptions = false,
     this.draggable = false,
-  })  : sectionId = sectionId,
-        locationName = null,
+  })  : locationName = null,
         locationBasePlanId = null;
 
   const MoodboardStrip.forLocation({
     super.key,
     required this.projectId,
-    required String locationName,
+    required String this.locationName,
     this.locationBasePlanId,
     this.title,
     this.showTitle = true,
     this.showCaptions = false,
     this.draggable = false,
-  })  : sectionId = null,
-        locationName = locationName;
+  })  : sectionId = null;
 
   static const _thumbW = 120.0;
   static const _thumbH = 80.0;

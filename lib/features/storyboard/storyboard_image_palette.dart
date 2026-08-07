@@ -102,7 +102,7 @@ void paintArtemisLensIndicator(
 
   final cx = topLeft.dx + width / 2;
   final cy = topLeft.dy + iconH * 0.55;
-  final radius = iconH * 0.42;
+  const radius = iconH * 0.42;
 
   canvas.drawArc(
     Rect.fromCircle(center: Offset(cx, cy), radius: radius),

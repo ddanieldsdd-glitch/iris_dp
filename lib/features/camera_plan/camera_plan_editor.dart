@@ -49,11 +49,10 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   const CameraPlanEditor.site({
     super.key,
     required this.projectId,
-    required int siteId,
+    required int this.siteId,
     required String siteName,
   })  : label = siteName,
         scope = FloorPlanScope.site,
-        siteId = siteId,
         setId = null,
         shotId = null;
 
@@ -61,25 +60,23 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   const CameraPlanEditor.set({
     super.key,
     required this.projectId,
-    required int setId,
+    required int this.setId,
     required String setName,
   })  : label = setName,
         scope = FloorPlanScope.set,
         siteId = null,
-        setId = setId,
         shotId = null;
 
   /// Planta de cámara de un plano concreto.
   const CameraPlanEditor.shot({
     super.key,
     required this.projectId,
-    required int shotId,
+    required int this.shotId,
     required String shotLabel,
   })  : label = shotLabel,
         scope = FloorPlanScope.shot,
         siteId = null,
-        setId = null,
-        shotId = shotId;
+        setId = null;
 
   @override
   ConsumerState<CameraPlanEditor> createState() => _CameraPlanEditorState();

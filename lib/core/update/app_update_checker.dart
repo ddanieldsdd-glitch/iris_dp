@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../cloud/supabase_config.dart';
+import '../cloud/cloud_runtime_config.dart';
 import 'app_release.dart';
 import 'app_update_store.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -92,7 +92,7 @@ Future<AppUpdateCheckResult> checkForAppUpdate({
   SupabaseClient? client,
   bool force = false,
 }) async {
-  if (!SupabaseConfig.isConfigured) {
+  if (!CloudRuntimeConfig.isActive) {
     return const AppUpdateCheckResult();
   }
 

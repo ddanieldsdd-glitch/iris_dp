@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/cloud/cloud_providers.dart';
 import '../../core/cloud/cloud_session.dart';
+import '../../core/cloud/cloud_runtime_config.dart';
 import '../../core/cloud/app_version_sync.dart';
-import '../../core/cloud/supabase_config.dart';
 import '../../core/update/app_update_providers.dart';
 import '../../core/storage/app_storage_config.dart';
 import '../../core/storage/storage_setup_screen.dart';
@@ -61,7 +61,7 @@ class _InitialTutorialFlowState extends ConsumerState<InitialTutorialFlow> {
   }
 
   Future<void> _bootstrap() async {
-    final cloud = SupabaseConfig.isConfigured;
+    final cloud = CloudRuntimeConfig.isActive;
     _needsMigration = cloud && !await CloudSessionStore.isMigrationComplete();
     _phases = _buildPhases(cloud: cloud, needsMigration: _needsMigration);
 
@@ -165,7 +165,7 @@ class _InitialTutorialFlowState extends ConsumerState<InitialTutorialFlow> {
   }
 
   Future<void> _runSync() async {
-    if (!SupabaseConfig.isConfigured) return;
+    if (!CloudRuntimeConfig.isActive) return;
     final user = ref.read(supabaseClientProvider)?.auth.currentUser;
     if (user == null) return;
     try {
@@ -176,14 +176,14 @@ class _InitialTutorialFlowState extends ConsumerState<InitialTutorialFlow> {
   Future<void> _onMigrationDone() async {
     _needsMigration = false;
     _phases = _buildPhases(
-      cloud: SupabaseConfig.isConfigured,
+      cloud: CloudRuntimeConfig.isActive,
       needsMigration: false,
     );
     _goNext();
   }
 
   TutorialInfoStep? _infoForPhase(_TutorialPhase phase) {
-    final cloud = SupabaseConfig.isConfigured;
+    final cloud = CloudRuntimeConfig.isActive;
     final steps = buildTutorialInfoSteps(cloudMode: cloud);
     return switch (phase) {
       _TutorialPhase.infoWelcome => steps[0],

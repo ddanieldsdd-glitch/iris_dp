@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'supabase_config.dart';
+import 'cloud_runtime_config.dart';
 
 /// Comprueba que la URL de Supabase responde (DNS + red).
 Future<SupabaseHealthResult> checkSupabaseReachability() async {
-  if (!SupabaseConfig.isConfigured) {
+  if (!CloudRuntimeConfig.isActive) {
     return const SupabaseHealthResult(
       ok: false,
       message: 'Supabase no configurado en esta compilación de la app.',
@@ -14,7 +15,7 @@ Future<SupabaseHealthResult> checkSupabaseReachability() async {
 
   final uri = Uri.tryParse(SupabaseConfig.url);
   if (uri == null || uri.host.isEmpty) {
-    return SupabaseHealthResult(
+    return const SupabaseHealthResult(
       ok: false,
       message: 'SUPABASE_URL no es válida: ${SupabaseConfig.url}',
     );

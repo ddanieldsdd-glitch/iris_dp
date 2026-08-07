@@ -318,7 +318,7 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
       bytes: bytes.buffer.asUint8List(),
       fileName: 'flt_${DateTime.now().millisecondsSinceEpoch}.png',
     );
-    if (!mounted || path == null) return;
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Captura guardada: $path')),
     );
@@ -518,7 +518,7 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
             return DropdownButtonFormField<int>(
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Cámara'),
-              value: _camera?.id,
+              initialValue: _camera?.id,
               items: cameras
                   .map((c) => DropdownMenuItem(
                         value: c.id,
@@ -542,7 +542,7 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
         DropdownButtonFormField<String>(
           isExpanded: true,
           decoration: const InputDecoration(labelText: 'Modo sensor'),
-          value: _mode.name,
+          initialValue: _mode.name,
           items: (_camera != null
                   ? _parseModes(_camera!.sensorModesJson)
                   : [_mode])
@@ -571,7 +571,7 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
         DropdownButtonFormField<String>(
           isExpanded: true,
           decoration: const InputDecoration(labelText: 'Recording Resolution'),
-          value: _recordingProfiles.any((p) => p.id == _recordingProfileId)
+          initialValue: _recordingProfiles.any((p) => p.id == _recordingProfileId)
               ? _recordingProfileId
               : _recordingProfiles.firstOrNull?.id,
           items: _recordingProfiles
@@ -590,7 +590,7 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
         DropdownButtonFormField<String>(
           isExpanded: true,
           decoration: const InputDecoration(labelText: 'Recording Codec'),
-          value: SensorModeContext.kRecordingCodecs.contains(_recordingCodec)
+          initialValue: SensorModeContext.kRecordingCodecs.contains(_recordingCodec)
               ? _recordingCodec
               : SensorModeContext.kRecordingCodecs.first,
           items: SensorModeContext.kRecordingCodecs
@@ -608,7 +608,7 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
             return DropdownButtonFormField<int>(
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Óptica'),
-              value: _lens?.id,
+              initialValue: _lens?.id,
               items: lenses
                   .map((l) => DropdownMenuItem(
                         value: l.id,
@@ -653,7 +653,7 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
         DropdownButtonFormField<double>(
           isExpanded: true,
           decoration: const InputDecoration(labelText: 'Lens Squeeze'),
-          value: _lensSqueeze,
+          initialValue: _lensSqueeze,
           items: const [
             DropdownMenuItem(value: 1.0, child: Text('1.0 (esférico)')),
             DropdownMenuItem(value: 1.3, child: Text('1.3x')),

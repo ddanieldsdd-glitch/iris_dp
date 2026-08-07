@@ -11,32 +11,47 @@ class BibleTextField extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final String? initialValue;
   final TextEditingController? controller;
+  /// Cuando es true, el texto se renderiza en cursiva (para Intención Narrativa).
+  final bool italic;
 
   const BibleTextField({
     super.key,
-    required this.label,
-    required this.hint,
+    this.label = '',
+    this.hint = '',
     this.maxLines = 1,
     required this.onChanged,
     this.initialValue,
     this.controller,
+    this.italic = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final baseStyle = AppTypography.bodyLarge(palette);
+    final style = italic
+        ? baseStyle.copyWith(fontStyle: FontStyle.italic)
+        : baseStyle;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: AppTypography.label(palette)),
-        const SizedBox(height: 6),
+        if (label.isNotEmpty) ...[
+          Text(label, style: AppTypography.label(palette)),
+          const SizedBox(height: 6),
+        ],
         TextFormField(
           controller: controller,
           initialValue: controller == null ? initialValue : null,
           maxLines: maxLines,
-          style: AppTypography.bodyLarge(palette),
+          style: style,
           onChanged: onChanged,
-          decoration: InputDecoration(hintText: hint),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: style.copyWith(
+              color: palette.textTertiary,
+            ),
+          ),
         ),
       ],
     );
@@ -62,12 +77,16 @@ class BibleDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: AppTypography.label(palette)),
-        const SizedBox(height: 6),
+        if (label.isNotEmpty) ...[
+          Text(label, style: AppTypography.label(palette)),
+          const SizedBox(height: 6),
+        ],
         DropdownButtonFormField<String>(
-          value: value != null && options.contains(value) ? value : null,
+          isExpanded: true,
+          initialValue: value != null && options.contains(value) ? value : null,
           dropdownColor: palette.surfaceElevated,
           style: AppTypography.bodyLarge(palette),
           decoration: const InputDecoration(),

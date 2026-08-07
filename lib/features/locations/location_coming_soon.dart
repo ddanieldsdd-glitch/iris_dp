@@ -49,7 +49,7 @@ class LocationAdvancedComingSoon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final siteCards = const [
+    const siteCards = [
       FeatureComingSoonCard(
         icon: Icons.map_outlined,
         title: 'Mapa y logística',
@@ -75,7 +75,7 @@ class LocationAdvancedComingSoon extends StatelessWidget {
       ),
     ];
 
-    final setCards = const [
+    const setCards = [
       FeatureComingSoonCard(
         icon: Icons.view_in_ar_outlined,
         title: 'Modelo 3D',

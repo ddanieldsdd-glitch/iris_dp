@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../cloud/cloud_providers.dart';
 import '../cloud/cloud_session.dart';
-import '../cloud/supabase_config.dart';
+import '../cloud/cloud_runtime_config.dart';
 import '../sync/pending_sync_queue_provider.dart';
 import '../sync/media_sync_providers.dart';
 import '../sync/sync_engine.dart';
@@ -44,7 +44,7 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
 
   @override
   Widget build(BuildContext context) {
-    if (!SupabaseConfig.isConfigured) {
+    if (!CloudRuntimeConfig.isActive) {
       return Tooltip(
         message: 'Modo local',
         child: Icon(Icons.storage_outlined,

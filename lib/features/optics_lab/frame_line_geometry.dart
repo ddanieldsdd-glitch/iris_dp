@@ -106,8 +106,8 @@ class FrameLineGeometry {
     final mode = context.mode;
     const pad = 0.08;
     final chipAspect = context.fullWidthMm / context.fullHeightMm;
-    final availW = 1.0 - pad * 2;
-    final availH = 1.0 - pad * 2;
+    const availW = 1.0 - pad * 2;
+    const availH = 1.0 - pad * 2;
 
     double chipW;
     double chipH;

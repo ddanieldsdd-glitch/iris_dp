@@ -5,7 +5,7 @@ import 'package:iris_dp/core/widgets/scene_meta_display.dart';
 void main() {
   testWidgets('SceneMetaDisplay muestra icono de día/noche', (tester) async {
     await tester.pumpWidget(
-      MaterialApp(
+      const MaterialApp(
         home: Scaffold(
           body: SceneMetaDisplay(
             intExt: 'EXT',

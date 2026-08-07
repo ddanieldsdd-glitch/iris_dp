@@ -307,7 +307,7 @@ class _TemplatePicker extends StatelessWidget {
         ];
 
         return DropdownButtonFormField<String?>(
-          value: selectedId != null &&
+          initialValue: selectedId != null &&
                   userTemplates.any((t) => t.id == selectedId)
               ? selectedId
               : null,
@@ -337,7 +337,7 @@ class _AutoApplyDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<TemplateAutoApplyMode>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         labelText: 'Aplicación automática',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),

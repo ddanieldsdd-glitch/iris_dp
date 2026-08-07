@@ -79,7 +79,7 @@ class LukaFixturePicker extends ConsumerWidget {
                 )
               else
                 DropdownButtonFormField<String>(
-                  value: validValue,
+                  initialValue: validValue,
                   decoration: const InputDecoration(isDense: true),
                   items: [
                     for (final o in options)

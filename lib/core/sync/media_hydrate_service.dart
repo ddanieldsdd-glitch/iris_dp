@@ -4,9 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 
 import '../database/app_database.dart';
-import '../utils/media_storage.dart';
 import 'cloud_media_service.dart';
-import 'media_entity_keys.dart';
 import 'media_entity_types.dart';
 
 /// Descarga imágenes remotas y actualiza rutas locales en Drift.
@@ -242,7 +240,7 @@ class MediaHydrateService {
   }
 
   int? _extractTrailingInt(String key, String segment) {
-    final idx = key.lastIndexOf('$segment');
+    final idx = key.lastIndexOf(segment);
     if (idx < 0) return null;
     return int.tryParse(key.substring(idx + segment.length));
   }

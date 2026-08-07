@@ -1,9 +1,16 @@
+// lib/features/visual_bible/widgets/sections/section_scaffold.dart
+//
+// Layout común para secciones técnicas de la Biblia de Fotografía.
+// Cuando se proporciona [fieldWidgets], los sub-apartados se renderizan
+// según el orden y nombres definidos en [sectionContentJson].
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 import '../../bible_section_fields.dart';
 import '../../visual_bible_model.dart';
 import '../bible_navigation_scope.dart';
+import '../bible_section_shared_widgets.dart';
 import '../bible_unified_references_panel.dart';
 import '../narrative_bridge_card.dart';
 
@@ -11,7 +18,7 @@ import '../narrative_bridge_card.dart';
 ///
 /// Cuando se proporciona [fieldWidgets], los sub-apartados se renderizan
 /// según el orden y nombres definidos en [sectionContentJson].
-class BibleSectionScaffold extends StatelessWidget {
+class BibleSectionScaffold extends StatefulWidget {
   final String sectionId;
   final int projectId;
   final VisualBibleData data;
@@ -19,6 +26,10 @@ class BibleSectionScaffold extends StatelessWidget {
   final String narrativeHint;
   final String? sectionContentJson;
   final Map<String, Widget> fieldWidgets;
+  /// Número de sección para la cabecera (ej. '01', '02'…).
+  final String? sectionNumber;
+  /// Título de la cabecera. Si no se proporciona, usa el label del sectionId.
+  final String? sectionTitle;
 
   const BibleSectionScaffold({
     super.key,
@@ -29,24 +40,43 @@ class BibleSectionScaffold extends StatelessWidget {
     required this.narrativeHint,
     this.sectionContentJson,
     required this.fieldWidgets,
+    this.sectionNumber,
+    this.sectionTitle,
   });
+
+  @override
+  State<BibleSectionScaffold> createState() => _BibleSectionScaffoldState();
+}
+
+class _BibleSectionScaffoldState extends State<BibleSectionScaffold> {
+  BibleVisualMode _mode = BibleVisualMode.cinematic;
 
   @override
   Widget build(BuildContext context) {
     final fields = BibleSectionFieldsConfig.parse(
-      sectionContentJson,
-      sectionId,
+      widget.sectionContentJson,
+      widget.sectionId,
     );
 
     final items = <Widget>[];
     for (final field in fields) {
-      final widget = _buildField(context, field);
-      if (widget != null) items.add(widget);
+      final w = _buildField(context, field);
+      if (w != null) items.add(w);
     }
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
+        // Cabecera con número + título + selector de modo visual
+        if (widget.sectionNumber != null)
+          BibleSectionHeader(
+            number: widget.sectionNumber!,
+            title: widget.sectionTitle ?? BibleSectionId.label(widget.sectionId),
+            trailing: BibleSectionModeDropdown(
+              value: _mode,
+              onChanged: (m) => setState(() => _mode = m),
+            ),
+          ),
         for (var i = 0; i < items.length; i++) ...[
           if (i > 0) const SizedBox(height: AppSpacing.lg),
           items[i],
@@ -59,37 +89,35 @@ class BibleSectionScaffold extends StatelessWidget {
     return switch (field.type) {
       BibleSectionFieldType.narrative => NarrativeBridgeCard(
           title: field.label,
-          hint: field.hint ?? narrativeHint,
+          hint: field.hint ?? widget.narrativeHint,
           subtitle: null,
-          value: data.narrativeIntentForSection(sectionId),
+          value: widget.data.narrativeIntentForSection(widget.sectionId),
           onChanged: (v) {
-            data.setNarrativeIntentForSection(
-              sectionId,
+            widget.data.setNarrativeIntentForSection(
+              widget.sectionId,
               v.trim().isEmpty ? null : v.trim(),
             );
-            onChanged(data);
+            widget.onChanged(widget.data);
           },
         ),
       BibleSectionFieldType.references ||
       BibleSectionFieldType.image =>
-        data.id > 0
+        widget.data.id > 0
             ? BibleReferencesPanel(
-                projectId: projectId,
-                sectionId: sectionId,
-                bibleId: data.id,
+                projectId: widget.projectId,
+                sectionId: widget.sectionId,
+                bibleId: widget.data.id,
                 title: field.label,
                 onOpenMoodboard: () =>
                     BibleNavigationScope.openMoodboardForSection(
                   context,
-                  sectionId,
+                  widget.sectionId,
                 ),
               )
             : null,
       BibleSectionFieldType.blocks ||
       BibleSectionFieldType.text =>
-        fieldWidgets[field.key],
+        widget.fieldWidgets[field.key],
     };
   }
 }
-
-typedef BibleChanged = void Function(VisualBibleData data);

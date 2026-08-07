@@ -2344,7 +2344,7 @@ class AppDatabase extends _$AppDatabase {
       VisualBiblesCompanion.insert(projectId: projectId),
     );
     await ensureBibleSectionLayout(id);
-    return (await (select(visualBibles)..where((v) => v.id.equals(id))).getSingle())!;
+    return (await (select(visualBibles)..where((v) => v.id.equals(id))).getSingle());
   }
 
   /// Aplica una plantilla de estructura de biblia (grupos + secciones).

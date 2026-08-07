@@ -365,7 +365,7 @@ class _LookBibleScreenState extends ConsumerState<LookBibleScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     DropdownButtonFormField<String?>(
-                      value: data.contrastStyle,
+                      initialValue: data.contrastStyle,
                       decoration: const InputDecoration(labelText: 'Contraste'),
                       items: [
                         const DropdownMenuItem(value: null, child: Text('—')),

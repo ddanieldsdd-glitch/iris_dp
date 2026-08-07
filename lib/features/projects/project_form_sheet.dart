@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/sync/project_cloud_actions.dart';
-import '../../core/cloud/supabase_config.dart';
+import '../../core/cloud/cloud_runtime_config.dart';
 import '../../core/database/app_database.dart';
 import '../auth/invite_director_sheet.dart';
 import '../../core/database/database_provider.dart';
@@ -256,7 +256,7 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
                 builder: (context, snap) {
                   final groups = snap.data ?? [];
                   return DropdownButtonFormField<int?>(
-                    value: _groupId,
+                    initialValue: _groupId,
                     dropdownColor: palette.surfaceElevated,
                     style: AppTypography.bodyMedium(palette),
                     decoration: const InputDecoration(hintText: 'Sin grupo'),
@@ -284,7 +284,7 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
               ),
               const SizedBox(height: AppSpacing.lg),
               if (_isEditing &&
-                  SupabaseConfig.isConfigured &&
+                  CloudRuntimeConfig.isActive &&
                   widget.project?.cloudId != null) ...[
                 OutlinedButton.icon(
                   onPressed: () => InviteDirectorSheet.show(

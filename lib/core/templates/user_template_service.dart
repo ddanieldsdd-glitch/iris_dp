@@ -4,7 +4,6 @@ import 'package:uuid/uuid.dart';
 import '../database/app_database.dart';
 import 'user_template_models.dart';
 import 'user_template_preferences.dart';
-import '../../features/shoot_documents/shoot_document_block_types.dart';
 import '../../features/shoot_documents/shoot_document_service.dart';
 
 /// CRUD y aplicación de plantillas de usuario.

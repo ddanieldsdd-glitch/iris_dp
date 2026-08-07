@@ -293,13 +293,13 @@ abstract final class BibleSectionFieldsConfig {
           maxLines: 4,
           type: BibleSectionFieldType.narrative,
         ),
-        BibleSectionField(
+        const BibleSectionField(
           key: 'body',
           label: 'Contenido',
           hint: 'Notas, criterios, referencias escritas…',
           maxLines: 12,
         ),
-        BibleSectionField(
+        const BibleSectionField(
           key: 'references',
           label: 'Referencias visuales',
           type: BibleSectionFieldType.references,

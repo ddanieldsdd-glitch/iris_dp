@@ -3,7 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import 'cloud_providers.dart';
 import 'cloud_session.dart';
-import 'supabase_config.dart';
+import 'cloud_runtime_config.dart';
 import '../sync/sync_engine.dart';
 
 /// Resultado de comprobar si la app se actualizó y necesita sync.
@@ -21,7 +21,7 @@ class AppVersionSyncResult {
 
 /// Tras actualizar la app, sincroniza automáticamente con Supabase.
 Future<AppVersionSyncResult> syncAfterAppUpdateIfNeeded(WidgetRef ref) async {
-  if (!SupabaseConfig.isConfigured) {
+  if (!CloudRuntimeConfig.isActive) {
     return const AppVersionSyncResult(
       versionChanged: false,
       syncRan: false,

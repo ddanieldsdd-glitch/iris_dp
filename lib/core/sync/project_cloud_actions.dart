@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../cloud/cloud_providers.dart';
 import '../cloud/cloud_session.dart';
-import '../cloud/supabase_config.dart';
+import '../cloud/cloud_runtime_config.dart';
 import '../database/app_database.dart';
 import '../database/database_provider.dart';
 import '../sync/project_sync_service.dart';
@@ -23,7 +23,7 @@ abstract final class ProjectCloudActions {
     final sync = _service(ref);
 
     if (sync != null &&
-        SupabaseConfig.isConfigured &&
+        CloudRuntimeConfig.isActive &&
         ref.read(supabaseClientProvider)?.auth.currentUser != null) {
       await sync.deleteProject(project);
       return;
@@ -50,7 +50,7 @@ abstract final class ProjectCloudActions {
         ref.read(supabaseClientProvider)?.auth.currentUser != null;
 
     if (sync != null &&
-        SupabaseConfig.isConfigured &&
+        CloudRuntimeConfig.isActive &&
         loggedIn &&
         workspaceId != null) {
       return sync.createProject(
@@ -79,7 +79,7 @@ abstract final class ProjectCloudActions {
 
     final sync = _service(ref);
     if (sync == null ||
-        !SupabaseConfig.isConfigured ||
+        !CloudRuntimeConfig.isActive ||
         ref.read(supabaseClientProvider)?.auth.currentUser == null) {
       return;
     }

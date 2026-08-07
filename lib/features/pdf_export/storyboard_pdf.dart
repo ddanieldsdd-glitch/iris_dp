@@ -925,9 +925,9 @@ class StoryboardPdfExporter {
 
   static pw.Widget _sunDiagram(String dayNight) {
     final angle = sunAngleFromDayNight(dayNight);
-    final cx = 40.0;
-    final cy = 40.0;
-    final r = 32.0;
+    const cx = 40.0;
+    const cy = 40.0;
+    const r = 32.0;
     final sunX = cx + r * 0.72 * math.cos(angle);
     final sunY = cy + r * 0.72 * math.sin(angle);
 

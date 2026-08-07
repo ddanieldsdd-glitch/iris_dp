@@ -8,7 +8,6 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'shoot_document_composer.dart';
-import 'shoot_template_editor_screen.dart';
 
 /// Resultado al elegir plantilla para crear un documento de rodaje.
 class ShootDocumentCreationChoice {

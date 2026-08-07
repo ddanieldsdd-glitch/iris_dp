@@ -215,7 +215,7 @@ class _StorageCalculatorScreenState
                       const SizedBox(height: 6),
                       DropdownButtonFormField<int>(
                         isExpanded: true,
-                        value: _selectedCamera != null &&
+                        initialValue: _selectedCamera != null &&
                                 cameras.any((c) => c.id == _selectedCamera!.id)
                             ? _selectedCamera!.id
                             : null,
@@ -263,7 +263,7 @@ class _StorageCalculatorScreenState
                                 const SizedBox(height: 6),
                                 DropdownButtonFormField<int>(
                                   isExpanded: true,
-                                  value: modeIndex.clamp(0, modes.length - 1),
+                                  initialValue: modeIndex.clamp(0, modes.length - 1),
                                   dropdownColor: palette.surfaceElevated,
                                   style: AppTypography.bodyLarge(palette),
                                   decoration: const InputDecoration(),

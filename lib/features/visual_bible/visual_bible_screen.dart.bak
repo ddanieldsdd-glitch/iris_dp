@@ -37,7 +37,6 @@ import 'widgets/sections/location_section.dart';
 import 'widgets/sections/optics_section.dart';
 import 'widgets/sections/texture_section.dart';
 import 'widgets/sections/workflow_section.dart';
-import 'widgets/sections/bible_settings_section.dart';
 
 class VisualBibleScreen extends ConsumerStatefulWidget {
   final int projectId;
@@ -57,6 +56,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
   Timer? _saveDebounce;
   String _activeSection = BibleSectionId.direction;
   String? _moodboardInitialFilter;
+  Map<String, BibleSectionDefinition> _sectionDefsById = {};
 
   @override
   void initState() {
@@ -277,39 +277,28 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
     );
   }
 
-  String? _sectionContentJson(
-    Map<String, BibleSectionDefinition> defsById,
-    String sectionId,
-  ) =>
-      defsById[sectionId]?.contentJson;
-
-  Future<void> _saveSectionContent(
-    Map<String, BibleSectionDefinition> defsById,
-    String sectionId,
-    String? contentJson,
-  ) async {
+  Future<void> _saveSectionContent(String sectionId, String? contentJson) async {
     final db = ref.read(databaseProvider);
-    final def = defsById[sectionId];
+    final def = _sectionDefsById[sectionId];
     if (def == null || _data == null) return;
     await db.upsertBibleSectionDefinition(
       def.copyWith(contentJson: Value(contentJson)),
     );
   }
 
-  Widget _buildSection(
-    int bibleId,
-    Map<String, BibleSectionDefinition> sectionDefsById,
-  ) {
+  String? _sectionContentJson(String sectionId) =>
+      _sectionDefsById[sectionId]?.contentJson;
+
+  Widget _buildSection(int bibleId) {
     final data = _data!;
-    final customDef = sectionDefsById[_activeSection];
+    final customDef = _sectionDefsById[_activeSection];
     if (customDef != null && customDef.template == 'freeform') {
       return CustomBibleSection(
         projectId: widget.projectId,
         sectionId: customDef.id,
         label: customDef.label,
         contentJson: customDef.contentJson,
-        onContentChanged: (json) =>
-            _saveSectionContent(sectionDefsById, customDef.id, json),
+        onContentChanged: (json) => _saveSectionContent(customDef.id, json),
       );
     }
 
@@ -317,71 +306,61 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
       BibleSectionId.direction => DirectionSection(
           data: data,
           projectId: widget.projectId,
-          sectionLabel: sectionDefsById[BibleSectionId.direction]?.label ??
+          sectionLabel: _sectionDefsById[BibleSectionId.direction]?.label ??
               'Dirección',
           contentJson:
-              sectionDefsById[BibleSectionId.direction]?.contentJson,
-          onContentJsonChanged: (json) => _saveSectionContent(
-              sectionDefsById, BibleSectionId.direction, json),
+              _sectionDefsById[BibleSectionId.direction]?.contentJson,
           onChanged: _onDataChanged,
         ),
       BibleSectionId.concept => ConceptSection(
           data: data,
           projectId: widget.projectId,
-          sectionContentJson:
-              _sectionContentJson(sectionDefsById, BibleSectionId.concept),
+          sectionContentJson: _sectionContentJson(BibleSectionId.concept),
           onChanged: _onDataChanged,
         ),
       BibleSectionId.camera => CameraSensorSection(
           data: data,
           projectId: widget.projectId,
-          sectionContentJson:
-              _sectionContentJson(sectionDefsById, BibleSectionId.camera),
+          sectionContentJson: _sectionContentJson(BibleSectionId.camera),
           onChanged: _onDataChanged,
         ),
       BibleSectionId.optics => OpticsSection(
           data: data,
           projectId: widget.projectId,
-          sectionContentJson:
-              _sectionContentJson(sectionDefsById, BibleSectionId.optics),
+          sectionContentJson: _sectionContentJson(BibleSectionId.optics),
           onChanged: _onDataChanged,
         ),
       BibleSectionId.exposure => ExposureSection(
           data: data,
           projectId: widget.projectId,
           bibleId: bibleId,
-          sectionContentJson:
-              _sectionContentJson(sectionDefsById, BibleSectionId.exposure),
+          sectionContentJson: _sectionContentJson(BibleSectionId.exposure),
           onChanged: _onDataChanged,
         ),
       BibleSectionId.lighting => LightingSection(
           data: data,
           projectId: widget.projectId,
           bibleId: bibleId,
-          sectionContentJson:
-              _sectionContentJson(sectionDefsById, BibleSectionId.lighting),
+          sectionContentJson: _sectionContentJson(BibleSectionId.lighting),
           onChanged: _onDataChanged,
         ),
       BibleSectionId.colorImage => ColorImageSection(
           data: data,
           projectId: widget.projectId,
           bibleId: bibleId,
-          sectionContentJson:
-              _sectionContentJson(sectionDefsById, BibleSectionId.colorImage),
+          sectionContentJson: _sectionContentJson(BibleSectionId.colorImage),
           onChanged: _onDataChanged,
         ),
       BibleSectionId.format => FormatSection(
           data: data,
           projectId: widget.projectId,
-          sectionContentJson:
-              _sectionContentJson(sectionDefsById, BibleSectionId.format),
+          sectionContentJson: _sectionContentJson(BibleSectionId.format),
           onChanged: _onDataChanged,
         ),
       BibleSectionId.texture => TextureSection(
           data: data,
           projectId: widget.projectId,
-          sectionContentJson:
-              _sectionContentJson(sectionDefsById, BibleSectionId.texture),
+          sectionContentJson: _sectionContentJson(BibleSectionId.texture),
           onChanged: _onDataChanged,
         ),
       BibleSectionId.location => LocationSection(
@@ -394,19 +373,13 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
         ),
       BibleSectionId.workflow => WorkflowSection(
           data: data,
-          projectId: widget.projectId,
-          sectionContentJson:
-              _sectionContentJson(sectionDefsById, BibleSectionId.workflow),
+          bibleId: bibleId,
           onChanged: _onDataChanged,
         ),
       BibleSectionId.moodboard => MoodboardSection(
           projectId: widget.projectId,
           bibleId: bibleId,
           initialFilter: _moodboardInitialFilter,
-        ),
-      BibleSectionId.settings => BibleSettingsSection(
-          bibleId: bibleId,
-          projectId: widget.projectId,
         ),
       _ => const SizedBox.shrink(),
     };
@@ -497,11 +470,23 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
           ),
         ],
       ),
-      body: _loading || _data == null
-          ? const Center(child: CircularProgressIndicator())
-          : StreamBuilder<VisualBible?>(
+      body: StreamBuilder<VisualBible?>(
         stream: db.watchVisualBibleForProject(widget.projectId),
         builder: (context, snap) {
+          if (_loading && snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (_data == null) {
+            final row = snap.data;
+            if (row != null) {
+              _data = VisualBibleData.fromRow(row);
+            } else {
+              _data = VisualBibleData(projectId: widget.projectId);
+            }
+            _loading = false;
+          }
+
           final bibleId = _data!.id > 0 ? _data!.id : snap.data?.id ?? 0;
 
           return BibleNavigationScope(
@@ -522,9 +507,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                       : Stream.value([]),
                   builder: (context, defSnap) {
                     final defs = defSnap.data ?? [];
-                    final sectionDefsById = {
-                      for (final d in defs) d.id: d,
-                    };
+                    _sectionDefsById = {for (final d in defs) d.id: d};
 
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -547,9 +530,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                                   )
                               : null,
                         ),
-                        Expanded(
-                          child: _buildSection(bibleId, sectionDefsById),
-                        ),
+                        Expanded(child: _buildSection(bibleId)),
                       ],
                     );
                   },

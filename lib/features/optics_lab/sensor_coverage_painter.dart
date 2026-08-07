@@ -23,7 +23,7 @@ class SensorCoveragePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final pad = 24.0;
+    const pad = 24.0;
     final area = Rect.fromLTWH(pad, pad, size.width - pad * 2, size.height - pad * 2);
 
     final fullW = context?.fullWidthMm ?? result.fullSensorWidthMm ?? result.sensorWidthMm;
@@ -198,10 +198,10 @@ class SensorCoveragePainter extends CustomPainter {
       labelStyle,
     );
     if (context != null) {
-      _drawLabel(canvas, context!.cropLabel, Offset(pad, pad - 4),
+      _drawLabel(canvas, context!.cropLabel, const Offset(pad, pad - 4),
           labelStyle.copyWith(fontWeight: FontWeight.w600));
     } else if (sensorModeName != null) {
-      _drawLabel(canvas, sensorModeName!, Offset(pad, pad - 4),
+      _drawLabel(canvas, sensorModeName!, const Offset(pad, pad - 4),
           labelStyle.copyWith(fontWeight: FontWeight.w600));
     }
     if (result.recordingResolutionLabel != null) {

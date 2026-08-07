@@ -2,22 +2,20 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../cloud/cloud_providers.dart';
-import '../cloud/cloud_session.dart';
-import '../cloud/supabase_config.dart';
+import '../cloud/cloud_runtime_config.dart';
 import '../storage/app_storage_config.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_theme_toggle.dart';
 import '../update/settings_update_section.dart';
+import 'settings_cloud_link_section.dart';
 import 'settings_cloud_storage_section.dart';
 import 'settings_health_section.dart';
 import 'user_templates_settings_section.dart';
 import '../../features/onboarding/app_tutorial_store.dart';
 import '../../features/onboarding/initial_tutorial_flow.dart';
 import '../../features/onboarding/install_update_guide_screen.dart';
-import '../../features/auth/auth_screen.dart';
 
 /// Ajustes de la app.
 class SettingsSheet extends ConsumerStatefulWidget {
@@ -116,65 +114,9 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
                   path: _documentsPath!,
                   onPick: _pickDocuments,
                 ),
-              if (SupabaseConfig.isConfigured) ...[
-                const SizedBox(height: AppSpacing.lg),
-                Text('Cuenta IRIS DP', style: AppTypography.titleMedium(palette)),
-                const SizedBox(height: AppSpacing.sm),
-                Consumer(
-                  builder: (context, ref, _) {
-                    final user = ref.watch(currentUserProvider);
-                    if (user == null) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            'No has iniciado sesión. Entra para sincronizar '
-                            'proyectos con otros dispositivos.',
-                            style: AppTypography.caption(palette),
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          FilledButton.icon(
-                            onPressed: () async {
-                              Navigator.pop(context);
-                              await openAuthScreen(context);
-                            },
-                            icon: const Icon(Icons.login),
-                            label: const Text('Iniciar sesión'),
-                          ),
-                        ],
-                      );
-                    }
-                    return FutureBuilder(
-                      future: CloudSessionStore.workspaceName(),
-                      builder: (context, snap) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              user.email ?? 'Sesión activa',
-                              style: AppTypography.bodyMedium(palette),
-                            ),
-                            if (snap.data != null)
-                              Text(
-                                'Workspace: ${snap.data}',
-                                style: AppTypography.caption(palette),
-                              ),
-                            TextButton.icon(
-                              onPressed: () async {
-                                final client = ref.read(supabaseClientProvider);
-                                await client?.auth.signOut();
-                                await CloudSessionStore.clear();
-                                if (context.mounted) Navigator.pop(context);
-                              },
-                              icon: const Icon(Icons.logout),
-                              label: const Text('Cerrar sesión'),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                ),
+              const SizedBox(height: AppSpacing.lg),
+              const SettingsCloudLinkSection(),
+              if (CloudRuntimeConfig.isActive) ...[
                 const SizedBox(height: AppSpacing.lg),
                 const SettingsCloudStorageSection(),
                 const SizedBox(height: AppSpacing.lg),

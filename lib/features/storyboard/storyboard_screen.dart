@@ -299,7 +299,7 @@ class _StoryboardToolbar extends StatelessWidget {
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: DropdownButtonFormField<_StoryboardFilter>(
-                value: filter,
+                initialValue: filter,
                 dropdownColor: palette.surfaceElevated,
                 style: AppTypography.bodyMedium(palette),
                 decoration: const InputDecoration(

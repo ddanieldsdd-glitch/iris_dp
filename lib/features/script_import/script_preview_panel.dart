@@ -387,7 +387,7 @@ class _PreviewToolbar extends StatelessWidget {
               ],
               selected: {mode},
               onSelectionChanged: (values) => onModeChanged(values.first),
-              style: ButtonStyle(
+              style: const ButtonStyle(
                 visualDensity: VisualDensity.compact,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),

@@ -118,7 +118,7 @@ class ScriptFileReader {
     final archive = ZipDecoder().decodeBytes(bytes);
     final entry = archive.findFile('word/document.xml');
     if (entry == null) {
-      throw FormatException('Archivo Word inválido: falta document.xml');
+      throw const FormatException('Archivo Word inválido: falta document.xml');
     }
 
     final doc = XmlDocument.parse(String.fromCharCodes(entry.content));

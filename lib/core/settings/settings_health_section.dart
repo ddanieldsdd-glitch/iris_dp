@@ -6,7 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../cloud/cloud_providers.dart';
 import '../cloud/connectivity_status_provider.dart';
-import '../cloud/supabase_config.dart';
+import '../cloud/cloud_runtime_config.dart';
 import '../cloud/supabase_health_check.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -57,7 +57,7 @@ class _SettingsHealthSectionState extends ConsumerState<SettingsHealthSection> {
 
   @override
   Widget build(BuildContext context) {
-    if (!SupabaseConfig.isConfigured) return const SizedBox.shrink();
+    if (!CloudRuntimeConfig.isActive) return const SizedBox.shrink();
 
     final palette = context.palette;
     final online = ref.watch(isOnlineProvider);

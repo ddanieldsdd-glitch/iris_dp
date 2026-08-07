@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/cloud/cloud_providers.dart';
 import '../../core/cloud/cloud_session.dart';
-import '../../core/cloud/supabase_config.dart';
+import '../../core/cloud/cloud_runtime_config.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/theme/app_colors.dart';
@@ -33,7 +32,7 @@ class _CloudMigrationWizardState extends ConsumerState<CloudMigrationWizard> {
   SyncResult? _result;
 
   Future<void> _migrate() async {
-    if (!SupabaseConfig.isConfigured) {
+    if (!CloudRuntimeConfig.isActive) {
       widget.onSkip();
       return;
     }

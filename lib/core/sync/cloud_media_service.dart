@@ -8,7 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../cloud/cloudinary_config.dart';
 import '../utils/media_storage.dart';
-import 'media_entity_types.dart';
 import 'media_optimizer.dart';
 
 class CloudUploadResult {

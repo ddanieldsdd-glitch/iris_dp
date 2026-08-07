@@ -73,7 +73,6 @@ class ProjectSyncService {
             DateTime.tryParse(row['updated_at'] as String? ?? '');
         final localUpdated = existing.syncUpdatedAt ?? existing.updatedAt;
         if (cloudUpdated != null &&
-            localUpdated != null &&
             localUpdated.isAfter(cloudUpdated)) {
           continue;
         }

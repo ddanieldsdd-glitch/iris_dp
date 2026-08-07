@@ -317,7 +317,7 @@ class _ImportSceneSheetState extends State<ImportSceneSheet> {
         Text(label, style: AppTypography.label(palette)),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
-          value: options.contains(value) ? value : options.first,
+          initialValue: options.contains(value) ? value : options.first,
           dropdownColor: palette.surfaceElevated,
           style: AppTypography.bodyLarge(palette),
           items: options

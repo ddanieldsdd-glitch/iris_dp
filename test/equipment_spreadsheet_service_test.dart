@@ -19,11 +19,11 @@ void main() {
     await db.close();
   });
 
-  Future<int> _seedProject() => db.insertProject(
+  Future<int> seedProject() => db.insertProject(
         ProjectsCompanion.insert(name: 'Proyecto test'),
       );
 
-  Future<int> _seedCamera({
+  Future<int> seedCamera({
     required String externalId,
     String brand = 'ARRI',
     String model = 'ALEXA 35',
@@ -42,8 +42,8 @@ void main() {
 
   group('EquipmentSpreadsheetService', () {
     test('export genera pestañas esperadas con datos del proyecto', () async {
-      final projectId = await _seedProject();
-      final cameraId = await _seedCamera(externalId: 'export_test_cam');
+      final projectId = await seedProject();
+      final cameraId = await seedCamera(externalId: 'export_test_cam');
       await db.assignEquipmentToProject(
         projectId: projectId,
         equipmentType: 'camera',
@@ -66,8 +66,8 @@ void main() {
     });
 
     test('export incluye catálogo completo de cámaras y ópticas', () async {
-      final projectId = await _seedProject();
-      await _seedCamera(externalId: 'extra_export_cam');
+      final projectId = await seedProject();
+      await seedCamera(externalId: 'extra_export_cam');
       await db.insertLens(
         LensesCompanion.insert(
           brand: 'Zeiss',
@@ -97,15 +97,15 @@ void main() {
     });
 
     test('import con external_id existente asigna correctamente', () async {
-      final projectId = await _seedProject();
-      await _seedCamera(
+      final projectId = await seedProject();
+      await seedCamera(
         externalId: 'test_camera_assign',
         brand: 'ARRI',
         model: 'ALEXA MINI LF',
       );
 
-      final data = EquipmentSpreadsheetData(
-        projectRows: const [
+      const data = EquipmentSpreadsheetData(
+        projectRows: [
           ProjectEquipmentRow(
             rowIndex: 2,
             sortOrder: 1,
@@ -137,10 +137,10 @@ void main() {
     });
 
     test('import crea custom y asigna cuando no existe en catálogo', () async {
-      final projectId = await _seedProject();
+      final projectId = await seedProject();
 
-      final data = EquipmentSpreadsheetData(
-        customCameras: const [
+      const data = EquipmentSpreadsheetData(
+        customCameras: [
           CustomCameraRow(
             rowIndex: 2,
             externalId: 'custom_red_komodo',
@@ -151,7 +151,7 @@ void main() {
             mountType: 'RF',
           ),
         ],
-        projectRows: const [
+        projectRows: [
           ProjectEquipmentRow(
             rowIndex: 2,
             sortOrder: 1,
@@ -183,16 +183,16 @@ void main() {
     });
 
     test('import no modifica entradas del catálogo embebido', () async {
-      final projectId = await _seedProject();
-      final cameraId = await _seedCamera(
+      final projectId = await seedProject();
+      final cameraId = await seedCamera(
         externalId: 'catalog_camera_protected',
         brand: 'ARRI',
         model: 'ALEXA 35 Protected',
         isCustom: false,
       );
 
-      final data = EquipmentSpreadsheetData(
-        customCameras: const [
+      const data = EquipmentSpreadsheetData(
+        customCameras: [
           CustomCameraRow(
             rowIndex: 2,
             externalId: 'catalog_camera_protected',
@@ -202,7 +202,7 @@ void main() {
             sensorHeightMm: 10,
           ),
         ],
-        projectRows: const [
+        projectRows: [
           ProjectEquipmentRow(
             rowIndex: 2,
             sortOrder: 1,
@@ -228,15 +228,15 @@ void main() {
     });
 
     test('errores de validación se reportan sin corromper DB', () async {
-      final projectId = await _seedProject();
+      final projectId = await seedProject();
       await db.assignEquipmentToProject(
         projectId: projectId,
         equipmentType: 'camera',
-        equipmentId: await _seedCamera(externalId: 'seed_cam'),
+        equipmentId: await seedCamera(externalId: 'seed_cam'),
       );
 
-      final data = EquipmentSpreadsheetData(
-        projectRows: const [
+      const data = EquipmentSpreadsheetData(
+        projectRows: [
           ProjectEquipmentRow(
             rowIndex: 2,
             sortOrder: 1,

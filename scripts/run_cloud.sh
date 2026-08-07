@@ -18,7 +18,8 @@ if [[ -z "${SUPABASE_URL:-}" || -z "${SUPABASE_ANON_KEY:-}" ]]; then
 fi
 
 echo "→ SUPABASE_URL=$SUPABASE_URL"
-echo "→ Arrancando IRIS DP (modo nube)…"
+echo "→ Credenciales embebidas en el build (opt-in en Ajustes → Activar nube)"
+echo "→ Arrancando IRIS DP (build con nube disponible)…"
 echo "   (Cierra la app anterior por completo antes de continuar)"
 
 # Rebuild limpio para que --dart-define se aplique (hot reload no basta).

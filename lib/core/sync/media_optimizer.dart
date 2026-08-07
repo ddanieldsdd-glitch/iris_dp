@@ -39,7 +39,7 @@ abstract final class MediaOptimizer {
       }
 
       var image = decoded;
-      final maxDim = CloudinaryConfig.maxDimension;
+      const maxDim = CloudinaryConfig.maxDimension;
       if (image.width > maxDim || image.height > maxDim) {
         if (image.width >= image.height) {
           image = img.copyResize(image, width: maxDim);

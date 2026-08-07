@@ -370,7 +370,7 @@ final kCatalogV2ExtraLenses = <CatalogLensEntry>[
     focals: [25, 32, 50, 75, 100],
     rentalTags: const ['AbelCine'],
   ),
-  CatalogLensEntry(
+  const CatalogLensEntry(
     externalId: 'dzofilm_pictor_20_55',
     brand: 'DZOFilm',
     model: 'Pictor 20-55 T2.8',
@@ -383,9 +383,9 @@ final kCatalogV2ExtraLenses = <CatalogLensEntry>[
     mountType: 'PL',
     imageCircleMm: 43.3,
     lensType: 'zoom',
-    rentalTags: const ['LensRentals', 'Keslow'],
+    rentalTags: ['LensRentals', 'Keslow'],
   ),
-  CatalogLensEntry(
+  const CatalogLensEntry(
     externalId: 'dzofilm_pictor_50_125',
     brand: 'DZOFilm',
     model: 'Pictor 50-125 T2.8',
@@ -398,7 +398,7 @@ final kCatalogV2ExtraLenses = <CatalogLensEntry>[
     mountType: 'PL',
     imageCircleMm: 43.3,
     lensType: 'zoom',
-    rentalTags: const ['LensRentals'],
+    rentalTags: ['LensRentals'],
   ),
   ..._vintageSet(
     id: 'tokina_vista',
@@ -477,7 +477,7 @@ final kCatalogV2ExtraLenses = <CatalogLensEntry>[
 ];
 
 final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'arri_435',
     brand: 'ARRI',
     model: '435',
@@ -486,14 +486,14 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     sensorHeightMm: 18.66,
     mountType: 'PL',
     vintage: true,
-    rentalTags: const ['AbelCine', 'Keslow'],
+    rentalTags: ['AbelCine', 'Keslow'],
     dynamicRangeStops: 10,
     nativeIso: 500,
     logFormats: 'Film',
     lukaCompatible: true,
     lukaProfile: {'lukaPreset': '435 Film', 'manualSetup': true},
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'panavision_millennium_xl2',
     brand: 'Panavision',
     model: 'Millennium XL2',
@@ -501,12 +501,12 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     sensorWidthMm: 24.89,
     sensorHeightMm: 18.66,
     mountType: 'PV',
-    rentalTags: const ['Panavision'],
+    rentalTags: ['Panavision'],
     dynamicRangeStops: 14,
     nativeIso: 800,
     lukaProfile: {'manualSetup': true, 'notes': 'Sensor S35 — configurar manualmente en LUKA'},
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'sony_f65',
     brand: 'Sony',
     model: 'F65',
@@ -514,12 +514,12 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     sensorWidthMm: 24.7,
     sensorHeightMm: 13.1,
     mountType: 'PL',
-    rentalTags: const ['AbelCine'],
+    rentalTags: ['AbelCine'],
     dynamicRangeStops: 14,
     nativeIso: 400,
     logFormats: 'S-Log3',
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'canon_1dc',
     brand: 'Canon',
     model: 'EOS-1D C',
@@ -532,7 +532,7 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     lukaCompatible: true,
     lukaProfile: {'lukaPreset': 'Full Frame 36x24'},
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'red_monstro',
     brand: 'RED',
     model: 'MONSTRO 8K VV',
@@ -546,7 +546,7 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     lukaCompatible: true,
     lukaProfile: {'lukaPreset': 'MONSTRO 8K VV'},
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'arri_265',
     brand: 'ARRI',
     model: '265',
@@ -555,11 +555,11 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     sensorHeightMm: 18.8,
     mountType: 'PL',
     vintage: true,
-    rentalTags: const ['AbelCine'],
+    rentalTags: ['AbelCine'],
     dynamicRangeStops: 13,
     nativeIso: 500,
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'imax_15perf',
     brand: 'IMAX',
     model: '15/70 Film',
@@ -567,10 +567,10 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     sensorWidthMm: 70.41,
     sensorHeightMm: 52.63,
     mountType: 'IMAX',
-    rentalTags: const ['IMAX'],
+    rentalTags: ['IMAX'],
     lukaProfile: {'manualSetup': true},
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'phase_one_xf',
     brand: 'Phase One',
     model: 'XF IQ4 150MP',
@@ -582,7 +582,7 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     nativeIso: 100,
     lukaProfile: {'manualSetup': true},
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'sony_a7siii',
     brand: 'Sony',
     model: 'A7S III',
@@ -594,7 +594,7 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     nativeIso: 640,
     logFormats: 'S-Log3',
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'canon_r5c',
     brand: 'Canon',
     model: 'EOS R5 C',
@@ -607,7 +607,7 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     logFormats: 'Canon Log 3',
     lukaCompatible: true,
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'blackmagic_ursa_17k',
     brand: 'Blackmagic',
     model: 'URSA Cine 17K',
@@ -619,7 +619,7 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     nativeIso: 800,
     logFormats: 'BRAW',
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'arri_alexa_xt_plus',
     brand: 'ARRI',
     model: 'ALEXA XT Plus',
@@ -627,13 +627,13 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     sensorWidthMm: 28.25,
     sensorHeightMm: 18.17,
     mountType: 'PL',
-    rentalTags: const ['AbelCine', 'Camtech'],
+    rentalTags: ['AbelCine', 'Camtech'],
     dynamicRangeStops: 14,
     nativeIso: 800,
     lukaCompatible: true,
     lukaProfile: {'lukaPreset': 'ALEXA XT'},
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'sony_f35',
     brand: 'Sony',
     model: 'F35',
@@ -641,11 +641,11 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     sensorWidthMm: 23.6,
     sensorHeightMm: 13.3,
     mountType: 'PL',
-    rentalTags: const ['Keslow'],
+    rentalTags: ['Keslow'],
     dynamicRangeStops: 14,
     nativeIso: 320,
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'red_scarlet_w',
     brand: 'RED',
     model: 'SCARLET-W 5K',
@@ -656,7 +656,7 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     dynamicRangeStops: 16,
     nativeIso: 800,
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'panasonic_varicam_hs',
     brand: 'Panasonic',
     model: 'VARICAM HS',
@@ -668,7 +668,7 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     nativeIso: 5000,
     logFormats: 'V-Log',
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'canon_c700',
     brand: 'Canon',
     model: 'C700 FF',
@@ -680,7 +680,7 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     nativeIso: 800,
     lukaCompatible: true,
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'sony_fr7_studio',
     brand: 'Sony',
     model: 'FR7 Studio Pack',
@@ -688,11 +688,11 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     sensorWidthMm: 35.6,
     sensorHeightMm: 23.8,
     mountType: 'E',
-    rentalTags: const ['LensRentals'],
+    rentalTags: ['LensRentals'],
     dynamicRangeStops: 15,
     nativeIso: 800,
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'arri_sr3',
     brand: 'ARRI',
     model: 'SR3',
@@ -701,11 +701,11 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     sensorHeightMm: 18.66,
     mountType: 'PL',
     vintage: true,
-    rentalTags: const ['AbelCine'],
+    rentalTags: ['AbelCine'],
     dynamicRangeStops: 10,
     nativeIso: 500,
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'red_ranger_monstro',
     brand: 'RED',
     model: 'RANGER MONSTRO',
@@ -717,7 +717,7 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     nativeIso: 800,
     lukaCompatible: true,
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'blackmagic_pocket_6k_g2',
     brand: 'Blackmagic',
     model: 'BMPCC 6K G2',
@@ -728,7 +728,7 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     dynamicRangeStops: 13,
     nativeIso: 400,
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'sony_venice_1_r',
     brand: 'Sony',
     model: 'VENICE Rialto',
@@ -736,13 +736,13 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     sensorWidthMm: 35.9,
     sensorHeightMm: 24.0,
     mountType: 'PL',
-    rentalTags: const ['AbelCine'],
+    rentalTags: ['AbelCine'],
     dynamicRangeStops: 15,
     nativeIso: 500,
     lukaCompatible: true,
     lukaProfile: {'lukaPreset': 'VENICE'},
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'arri_416_plus',
     brand: 'ARRI',
     model: '416 Plus',
@@ -751,11 +751,11 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     sensorHeightMm: 7.49,
     mountType: 'B4',
     vintage: true,
-    rentalTags: const ['AbelCine'],
+    rentalTags: ['AbelCine'],
     dynamicRangeStops: 13,
     nativeIso: 320,
   ),
-  CatalogCameraEntry(
+  const CatalogCameraEntry(
     externalId: 'phantom_t1340',
     brand: 'Vision Research',
     model: 'Phantom T1340',
@@ -765,12 +765,12 @@ final kCatalogV2ExtraCameras = <CatalogCameraEntry>[
     mountType: 'PL',
     dynamicRangeStops: 10,
     nativeIso: 1000,
-    rentalTags: const ['Keslow'],
+    rentalTags: ['Keslow'],
   ),
 ];
 
 final kCatalogV2ExtraLights = <CatalogLightEntry>[
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'aputure_ls600x',
     brand: 'Aputure',
     model: 'LS 600x Pro',
@@ -781,9 +781,9 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 6500,
     beamAngleDeg: 120,
     cri: 96,
-    rentalTags: const ['LensRentals'],
+    rentalTags: ['LensRentals'],
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'aputure_ls1200d',
     brand: 'Aputure',
     model: 'LS 1200d Pro',
@@ -794,7 +794,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 5600,
     cri: 96,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'nanlux_evoke_1200b',
     brand: 'Nanlux',
     model: 'Evoke 1200B',
@@ -805,7 +805,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 6500,
     cri: 96,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'cineo_matchstix',
     brand: 'Cineo',
     model: 'Matchstix',
@@ -815,9 +815,9 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMin: 2700,
     colorTempMax: 6500,
     cri: 95,
-    rentalTags: const ['AbelCine'],
+    rentalTags: ['AbelCine'],
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'mole_led_20k',
     brand: 'Mole-Richardson',
     model: 'LED 20K',
@@ -828,7 +828,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 5600,
     cri: 95,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'dedolight_dled12',
     brand: 'Dedolight',
     model: 'DLED12',
@@ -840,7 +840,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     beamAngleDeg: 4,
     cri: 95,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'litepanels_gemini_1x1_hard',
     brand: 'Litepanels',
     model: 'Gemini 1x1 Hard',
@@ -852,7 +852,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     cri: 95,
     tlci: 96,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'astera_nova',
     brand: 'Astera',
     model: 'Nova P60',
@@ -863,7 +863,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 20000,
     cri: 96,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'chroma_q_studio_force',
     brand: 'Chroma-Q',
     model: 'Studio Force 12',
@@ -874,7 +874,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 6500,
     cri: 95,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'elinchrom_elc_500',
     brand: 'Elinchrom',
     model: 'ELC 500',
@@ -884,7 +884,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMin: 5600,
     colorTempMax: 5600,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'arri_m12',
     brand: 'ARRI',
     model: 'M12',
@@ -896,7 +896,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     lukaCompatible: true,
     lukaFixtureId: 'm12',
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'arri_m8',
     brand: 'ARRI',
     model: 'M8',
@@ -907,7 +907,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 5600,
     lukaCompatible: true,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'kino_flo_select',
     brand: 'Kino Flo',
     model: 'Select 30',
@@ -918,7 +918,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 6500,
     cri: 95,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'quasar_science_double_rainbow',
     brand: 'Quasar Science',
     model: 'Double Rainbow 2',
@@ -929,7 +929,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 10000,
     cri: 95,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'nanlite_forza_720b',
     brand: 'Nanlite',
     model: 'Forza 720B',
@@ -940,7 +940,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 6500,
     cri: 96,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'mole_baby_solar',
     brand: 'Mole-Richardson',
     model: 'Baby Solar 750W',
@@ -952,7 +952,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     vintage: true,
     cri: 100,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'litegear_litemat',
     brand: 'LiteGear',
     model: 'LiteMat 4',
@@ -962,9 +962,9 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMin: 2700,
     colorTempMax: 6500,
     cri: 95,
-    rentalTags: const ['AbelCine'],
+    rentalTags: ['AbelCine'],
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'creamsource_doppio_plus',
     brand: 'Creamsource',
     model: 'Doppio+ RGB',
@@ -975,7 +975,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 6500,
     cri: 95,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'aputure_nova_p300c',
     brand: 'Aputure',
     model: 'Nova P300c',
@@ -986,7 +986,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 10000,
     cri: 95,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'nanlux_dyno_1200c',
     brand: 'Nanlux',
     model: 'Dyno 1200C',
@@ -997,7 +997,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 6500,
     cri: 96,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'litepanels_astrax',
     brand: 'Litepanels',
     model: 'Astra X8',
@@ -1008,7 +1008,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 5600,
     cri: 95,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'astera_titan_tube_x',
     brand: 'Astera',
     model: 'Titan Tube X',
@@ -1019,7 +1019,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 20000,
     cri: 96,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'mole_inkie',
     brand: 'Mole-Richardson',
     model: 'Inkie 650W',
@@ -1030,7 +1030,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 3200,
     vintage: true,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'arri_l5_c',
     brand: 'ARRI',
     model: 'L5-C',
@@ -1042,7 +1042,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     lukaCompatible: true,
     lukaFixtureId: 'l7c',
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'dedolight_tungsten_150',
     brand: 'Dedolight',
     model: 'Tungsten 150W',
@@ -1053,7 +1053,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 3200,
     vintage: true,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'elinchrom_elb_500',
     brand: 'Elinchrom',
     model: 'ELB 500 TTL',
@@ -1063,7 +1063,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMin: 5600,
     colorTempMax: 5600,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'aputure_mc_4light',
     brand: 'Aputure',
     model: 'MC 4-Light Kit',
@@ -1073,7 +1073,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMin: 2000,
     colorTempMax: 10000,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'nanlite_pavotube_6c',
     brand: 'Nanlite',
     model: 'PavoTube 6C II',
@@ -1083,7 +1083,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMin: 2700,
     colorTempMax: 6500,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'chroma_q_liteforce',
     brand: 'Chroma-Q',
     model: 'LiteForce 12',
@@ -1093,7 +1093,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMin: 5600,
     colorTempMax: 5600,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'creamsource_vortex4',
     brand: 'Creamsource',
     model: 'Vortex4',
@@ -1103,7 +1103,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMin: 2700,
     colorTempMax: 6500,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'aputure_storm_800',
     brand: 'Aputure',
     model: 'STORM 800',
@@ -1114,7 +1114,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 5600,
     cri: 96,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'litepanels_divac_2',
     brand: 'Litepanels',
     model: 'Diva/C 2',
@@ -1125,7 +1125,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     colorTempMax: 6500,
     cri: 95,
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'arri_s60_c_skypanel',
     brand: 'ARRI',
     model: 'SkyPanel S60-C (CW)',
@@ -1137,7 +1137,7 @@ final kCatalogV2ExtraLights = <CatalogLightEntry>[
     lukaCompatible: true,
     lukaFixtureId: 'skypanel_s60',
   ),
-  CatalogLightEntry(
+  const CatalogLightEntry(
     externalId: 'aputure_infinibar_x8',
     brand: 'Aputure',
     model: 'INFINIBAR X8',

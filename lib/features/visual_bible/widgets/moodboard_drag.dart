@@ -200,7 +200,7 @@ class _BibleImageDropZoneState extends State<BibleImageDropZone> {
 
 /// Compatibilidad: acepta `onImageDropped` como alias de `onBytesDropped`.
 class ImageDropZone extends BibleImageDropZone {
-  ImageDropZone({
+  const ImageDropZone({
     super.key,
     required super.child,
     required Future<void> Function(Uint8List bytes, String? name) onImageDropped,

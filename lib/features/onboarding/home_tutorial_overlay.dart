@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/cloud/supabase_config.dart';
+import '../../core/cloud/cloud_runtime_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -60,7 +60,7 @@ class _HomeTutorialOverlayState extends State<HomeTutorialOverlay> {
   ];
 
   List<_HomeTourStep> get _activeSteps {
-    final cloud = SupabaseConfig.isConfigured;
+    final cloud = CloudRuntimeConfig.isActive;
     return _steps.where((s) => !s.cloudOnly || cloud).toList();
   }
 

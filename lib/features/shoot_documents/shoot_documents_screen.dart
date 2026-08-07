@@ -12,7 +12,6 @@ import 'shoot_document_composer.dart';
 import 'shoot_document_editor_screen.dart';
 import 'shoot_document_service.dart';
 import 'shoot_document_template_picker.dart';
-import '../../core/settings/user_templates_settings_section.dart';
 import '../../core/templates/user_template_service.dart';
 import 'shoot_template_editor_screen.dart';
 
