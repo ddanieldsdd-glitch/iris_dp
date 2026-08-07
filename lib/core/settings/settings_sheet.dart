@@ -1,5 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
+import '../../features/shoot_documents/shoot_template_editor_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../cloud/cloud_runtime_config.dart';
@@ -140,7 +142,19 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
                 const SizedBox(height: AppSpacing.lg),
                 const SettingsCloudStorageSection(),
                 const SizedBox(height: AppSpacing.lg),
-                const UserTemplatesSettingsSection(),
+                UserTemplatesSettingsSection(
+                  onCreateTemplate: () async {
+                    final created = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ShootTemplateEditorScreen(),
+                      ),
+                    );
+                    if (created == true && context.mounted) {
+                      setState(() {});
+                    }
+                  },
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 SettingsUpdateSection(onLoginAction: widget.onLoginAction),
                 const SizedBox(height: AppSpacing.lg),
