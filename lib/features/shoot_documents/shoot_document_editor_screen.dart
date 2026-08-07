@@ -11,7 +11,7 @@ import '../../core/utils/scene_characters.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
-import '../pdf_export/shoot_document_pdf.dart';
+import '../../shared/pdf_export/shoot_document_pdf.dart';
 import '../../core/settings/user_templates_settings_section.dart';
 import '../../core/templates/user_template_service.dart';
 import 'shoot_document_block_resolver.dart';

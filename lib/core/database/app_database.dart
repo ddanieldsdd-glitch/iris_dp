@@ -7,13 +7,13 @@ import '../storage/app_storage_config.dart';
 import '../utils/media_storage.dart';
 import '../utils/scene_color.dart';
 import '../utils/scene_format.dart';
-import '../../features/visual_bible/bible_section_fields.dart';
-import '../../features/visual_bible/moodboard_association.dart';
-import '../../features/visual_bible/visual_bible_completion.dart' as bible_layout;
-import '../../features/visual_bible/visual_bible_model.dart';
+import '../../shared/visual_bible/bible_section_fields.dart';
+import '../../shared/visual_bible/moodboard_association.dart';
+import '../../shared/visual_bible/bible_layout.dart' as bible_layout;
+import '../../shared/visual_bible/bible_section_ids.dart';
 import '../templates/user_template_models.dart';
 import 'seed_data.dart';
-import '../../features/equipment/services/catalog_importer.dart';
+import '../../shared/equipment/catalog_importer.dart';
 import 'tables.dart';
 
 part 'app_database.g.dart';

@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart' hide BibleSectionGroup;
 import '../../core/database/app_database.dart' as app_db show BibleSectionGroup;
-import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -16,8 +15,9 @@ import '../look_bible/look_bible_model.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import 'moodboard_association.dart';
 import '../locations/locations_screen.dart';
-import '../../core/templates/user_template_service.dart';
 import 'bible_style_guide_sheet.dart';
+import 'data/visual_bible_repository.dart';
+import 'state/visual_bible_providers.dart';
 import 'visual_bible_model.dart';
 import 'visual_bible_pdf_service.dart';
 import 'widgets/bible_navigation_scope.dart';
@@ -65,21 +65,12 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
   }
 
   Future<void> _bootstrap() async {
-    final db = ref.read(databaseProvider);
-    final hadBible = await db.getVisualBibleForProject(widget.projectId) != null;
-    final bible = await db.ensureVisualBibleForProject(widget.projectId);
-    if (!hadBible) {
-      await UserTemplateService.maybeApplyBibleTemplateOnCreate(
-        db: db,
-        projectId: widget.projectId,
-        bibleId: bible.id,
-      );
-    }
-    final project = await db.getProject(widget.projectId);
+    final repo = ref.read(visualBibleRepositoryProvider);
+    final result = await repo.bootstrap(widget.projectId);
     if (mounted) {
       setState(() {
-        _project = project;
-        _data = VisualBibleData.fromRow(bible);
+        _project = result.project;
+        _data = result.data;
         _loading = false;
       });
     }
@@ -100,9 +91,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
   }
 
   Future<void> _persistNow(VisualBibleData data) async {
-    final db = ref.read(databaseProvider);
-    final id = await db.upsertVisualBible(data.toCompanion());
-    data.id = id;
+    await ref.read(visualBibleRepositoryProvider).save(data);
   }
 
   Future<void> _save(VisualBibleData data) async {
@@ -111,40 +100,18 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
       _saved = false;
     });
     try {
-      final db = ref.read(databaseProvider);
-      final id = await db.upsertVisualBible(data.toCompanion());
-      data.id = id;
+      await ref.read(visualBibleRepositoryProvider).save(data);
       if (mounted) setState(() => _saved = true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Future<
-      ({
-        VisualBibleData data,
-        List<ColorBlockModel> blocks,
-        List<ExposureBlockModel> exposureBlocks,
-        List<LightingSetupModel> lightingSetups,
-        List<CameraTestModel> cameraTests,
-        List<MoodboardImageModel> moodboard,
-      })> _loadExportBundle() async {
-    final db = ref.read(databaseProvider);
-    final bible = await db.ensureVisualBibleForProject(widget.projectId);
-    final data = _data ?? VisualBibleData.fromRow(bible);
-    final colorRows = await db.watchColorBlocksForBible(bible.id).first;
-    final exposureRows = await db.watchExposureBlocksForBible(bible.id).first;
-    final lightingRows = await db.watchLightingSetupsForBible(bible.id).first;
-    final testRows = await db.watchCameraTestsForBible(bible.id).first;
-    final moodRows = await db.watchMoodboardImages(widget.projectId).first;
-    return (
-      data: data,
-      blocks: colorRows.map(ColorBlockModel.fromRow).toList(),
-      exposureBlocks: exposureRows.map(ExposureBlockModel.fromRow).toList(),
-      lightingSetups: lightingRows.map(LightingSetupModel.fromRow).toList(),
-      cameraTests: testRows.map(CameraTestModel.fromRow).toList(),
-      moodboard: moodRows.map(MoodboardImageModel.fromRow).toList(),
-    );
+  Future<VisualBibleExportBundle> _loadExportBundle() async {
+    return ref.read(visualBibleRepositoryProvider).loadExportBundle(
+          projectId: widget.projectId,
+          cached: _data,
+        );
   }
 
   Future<void> _exportPdf({String mode = VisualBibleExportMode.full}) async {
@@ -288,10 +255,10 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
     String sectionId,
     String? contentJson,
   ) async {
-    final db = ref.read(databaseProvider);
+    final repo = ref.read(visualBibleRepositoryProvider);
     final def = defsById[sectionId];
     if (def == null || _data == null) return;
-    await db.upsertBibleSectionDefinition(
+    await repo.upsertSectionDefinition(
       def.copyWith(contentJson: Value(contentJson)),
     );
   }
@@ -415,7 +382,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final db = ref.watch(databaseProvider);
+    final repo = ref.watch(visualBibleRepositoryProvider);
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -500,7 +467,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
       body: _loading || _data == null
           ? const Center(child: CircularProgressIndicator())
           : StreamBuilder<VisualBible?>(
-        stream: db.watchVisualBibleForProject(widget.projectId),
+        stream: repo.watchBible(widget.projectId),
         builder: (context, snap) {
           final bibleId = _data!.id > 0 ? _data!.id : snap.data?.id ?? 0;
 
@@ -513,12 +480,12 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
             openLocations: _openLocations,
             child: StreamBuilder<List<app_db.BibleSectionGroup>>(
               stream: bibleId > 0
-                  ? db.watchBibleSectionGroups(bibleId)
+                  ? repo.watchSectionGroups(bibleId)
                   : Stream.value([]),
               builder: (context, groupSnap) {
                 return StreamBuilder<List<BibleSectionDefinition>>(
                   stream: bibleId > 0
-                      ? db.watchBibleSectionDefinitions(bibleId)
+                      ? repo.watchSectionDefinitions(bibleId)
                       : Stream.value([]),
                   builder: (context, defSnap) {
                     final defs = defSnap.data ?? [];

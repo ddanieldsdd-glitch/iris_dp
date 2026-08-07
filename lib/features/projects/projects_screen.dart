@@ -16,12 +16,14 @@ import 'create_project_sheet.dart';
 import '../auth/auth_screen.dart';
 import '../migration/cloud_migration_wizard.dart';
 import '../onboarding/app_tutorial_store.dart';
+import '../onboarding/auth_required_banner.dart';
 import '../onboarding/initial_tutorial_flow.dart';
 import '../onboarding/install_update_guide_screen.dart';
 import 'project_form_sheet.dart';
 import 'project_overview.dart';
 import 'project_overview_metrics.dart';
 import '../project_hub/project_hub_screen.dart';
+import '../shoot_documents/shoot_template_editor_screen.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../core/widgets/sync/sync_conflict_resolution_sheet.dart';
 import '../../core/widgets/sync/sync_flow_coordinator.dart';
@@ -129,8 +131,15 @@ class ProjectsScreen extends ConsumerWidget {
 
                         await Navigator.of(context).push<void>(
                           MaterialPageRoute(
-                            builder: (_) => const InitialTutorialFlow(
+                            builder: (_) => InitialTutorialFlow(
                               replayFromStart: true,
+                              homeContentBuilder: (_) => const Column(
+                                children: [
+                                  AuthRequiredBanner(),
+                                  UpdateAvailableBanner(),
+                                  Expanded(child: ProjectsScreen()),
+                                ],
+                              ),
                             ),
                           ),
                         );
@@ -143,6 +152,24 @@ class ProjectsScreen extends ConsumerWidget {
                           ),
                         );
                       },
+                      onCreateShootTemplate: () async =>
+                          await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ShootTemplateEditorScreen(),
+                            ),
+                          ) ??
+                          false,
+                      onEditShootTemplate: (templateId) async =>
+                          await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ShootTemplateEditorScreen(
+                                templateId: templateId,
+                              ),
+                            ),
+                          ) ??
+                          false,
                     ),
                   ),
                   SyncStatusIndicator(

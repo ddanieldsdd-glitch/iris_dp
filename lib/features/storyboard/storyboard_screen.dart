@@ -20,7 +20,7 @@ import '../../core/widgets/shot_reference_gallery.dart';
 import '../camera_plan/camera_plan_grouping.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
-import '../pdf_export/storyboard_pdf.dart';
+import '../../shared/pdf_export/storyboard_pdf.dart';
 import '../shoot_documents/shoot_document_import_actions.dart';
 import '../technical_script/technical_script_screen.dart';
 import 'storyboard_export_options_sheet.dart';

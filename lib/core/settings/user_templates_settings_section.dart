@@ -12,16 +12,17 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_snackbar.dart';
-import '../../features/shoot_documents/shoot_template_editor_screen.dart';
 
 /// Sección de ajustes para plantillas de biblia y documentos de rodaje.
 class UserTemplatesSettingsSection extends ConsumerStatefulWidget {
   const UserTemplatesSettingsSection({
     super.key,
     this.onCreateTemplate,
+    this.onEditShootTemplate,
   });
 
   final VoidCallback? onCreateTemplate;
+  final Future<bool> Function(String templateId)? onEditShootTemplate;
 
   @override
   ConsumerState<UserTemplatesSettingsSection> createState() =>
@@ -231,17 +232,14 @@ class _UserTemplatesSettingsSectionState
                         (t) => _TemplateRow(
                           palette: palette,
                           template: t,
-                          onEdit: () async {
-                            final ok = await Navigator.push<bool>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ShootTemplateEditorScreen(
-                                  templateId: t.id,
-                                ),
-                              ),
-                            );
-                            if (ok == true && mounted) setState(() {});
-                          },
+                          onEdit: widget.onEditShootTemplate == null
+                              ? null
+                              : () async {
+                                  final ok = await widget.onEditShootTemplate!(
+                                    t.id,
+                                  );
+                                  if (ok == true && mounted) setState(() {});
+                                },
                           onDelete: () async {
                             await UserTemplateService.deleteTemplate(db, t.id);
                             if (prefs.defaultShootDocTemplateId == t.id) {

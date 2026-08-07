@@ -12,7 +12,10 @@ import 'core/theme/theme_mode_provider.dart';
 import 'core/update/app_update_gate.dart';
 import 'core/widgets/app_background.dart';
 import 'core/widgets/app_splash_screen.dart';
+import 'features/onboarding/auth_required_banner.dart';
 import 'features/onboarding/onboarding_gate.dart';
+import 'features/projects/projects_screen.dart';
+import 'core/update/update_available_banner.dart';
 
 Future<void> _bootstrapApp() async {
   await AppStorageConfig.ensureLoaded();
@@ -40,13 +43,21 @@ class IrisDPApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       home: AppSplashScreen(
         bootstrap: _bootstrapApp(),
-        child: const AppLifecyclePersistence(
+        child: AppLifecyclePersistence(
           child: AppBackground(
             child: StorageRelocationGate(
               child: ConnectivityGate(
                 child: AppUpdateGate(
                   child: MediaSyncBinder(
-                    child: OnboardingGate(),
+                    child: OnboardingGate(
+                      homeContentBuilder: (_) => const Column(
+                        children: [
+                          AuthRequiredBanner(),
+                          UpdateAvailableBanner(),
+                          Expanded(child: ProjectsScreen()),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),

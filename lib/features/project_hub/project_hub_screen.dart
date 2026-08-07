@@ -10,19 +10,11 @@ import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_card.dart';
-import '../visual_bible/visual_bible_screen.dart';
-import '../luka_export/luka_bridge_screen.dart';
-import '../storyboard/storyboard_screen.dart';
-import '../camera_plan/camera_plan_screen.dart';
-import '../shoot_documents/shoot_documents_screen.dart';
-import '../equipment/equipment_screen.dart';
-import '../locations/locations_screen.dart';
-import '../script_import/script_import_screen.dart';
-import '../technical_script/technical_script_screen.dart';
 import '../shoot_documents/shoot_document_import_actions.dart';
-import '../shoot_documents/shoot_document_service.dart';
+import '../shoot_documents/state/shoot_document_providers.dart';
 import 'project_hub_destinations.dart';
 import 'project_hub_cover.dart';
+import 'project_hub_router.dart';
 import 'project_module_stub_screen.dart';
 
 class ProjectHubScreen extends ConsumerStatefulWidget {
@@ -87,10 +79,9 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
     if (!mounted || token != _statsToken) return;
     final plans = await db.countShotsWithCameraPlan(widget.project.id);
     if (!mounted || token != _statsToken) return;
-    final primaryDoc = await ShootDocumentService.primaryDocument(
-      db,
-      widget.project.id,
-    );
+    final primaryDoc = await ref
+        .read(shootDocumentRepositoryProvider)
+        .primaryDocument(widget.project.id);
     if (!mounted || token != _statsToken) return;
     setState(() {
       _sceneCount = scenes.length;
@@ -105,41 +96,14 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
       return;
     }
 
-    final projectId = widget.project.id;
-    final Widget screen = switch (destination.id) {
-      ProjectHubDestinationId.scriptImport =>
-        ScriptImportScreen(projectId: projectId),
-      ProjectHubDestinationId.locations =>
-        LocationsScreen(projectId: projectId),
-      ProjectHubDestinationId.cameraPlans =>
-        CameraPlanScreen(projectId: projectId),
-      ProjectHubDestinationId.technicalScript =>
-        TechnicalScriptScreen(projectId: projectId),
-      ProjectHubDestinationId.dailyOrder => ShootDocumentsScreen(
-          projectId: projectId,
-          projectName: widget.project.name,
-          projectStatus: widget.project.status,
-        ),
-      ProjectHubDestinationId.equipment =>
-        EquipmentScreen(projectId: projectId),
-      ProjectHubDestinationId.storyboard =>
-        StoryboardScreen(projectId: projectId),
-      ProjectHubDestinationId.lukaBridge => LukaBridgeScreen(
-          projectId: projectId,
-          projectName: widget.project.name,
-        ),
-      ProjectHubDestinationId.lookBible =>
-        VisualBibleScreen(projectId: projectId),
-    };
-
-    await Navigator.push<void>(
-      context,
-      MaterialPageRoute(builder: (_) => screen),
+    await ProjectHubRouter.open(
+      context: context,
+      destination: destination,
+      project: widget.project,
     );
 
     unawaited(_loadVisuals());
-    if (destination.id == ProjectHubDestinationId.scriptImport ||
-        destination.id == ProjectHubDestinationId.cameraPlans) {
+    if (ProjectHubRouter.reloadStatsAfterVisit(destination.id)) {
       _loadStats();
     }
   }

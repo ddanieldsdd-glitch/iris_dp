@@ -4,7 +4,6 @@ import 'package:uuid/uuid.dart';
 import '../database/app_database.dart';
 import 'user_template_models.dart';
 import 'user_template_preferences.dart';
-import '../../features/shoot_documents/shoot_document_service.dart';
 
 /// CRUD y aplicación de plantillas de usuario.
 abstract final class UserTemplateService {
@@ -218,20 +217,12 @@ abstract final class UserTemplateService {
     required String templateId,
   }) async {
     if (templateId == kBuiltinShootDocTemplateId) {
-      return ShootDocumentService.createDocument(
-        db: db,
-        projectId: projectId,
-        name: name,
-      );
+      return _createEmptyShootDocument(db: db, projectId: projectId, name: name);
     }
 
     final template = await getTemplate(db, templateId);
     if (template == null) {
-      return ShootDocumentService.createDocument(
-        db: db,
-        projectId: projectId,
-        name: name,
-      );
+      return _createEmptyShootDocument(db: db, projectId: projectId, name: name);
     }
 
     final payload = ShootDocumentTemplatePayload.decode(template.payloadJson);
@@ -281,4 +272,17 @@ abstract final class UserTemplateService {
       templateId: templateId,
     );
   }
+
+  static Future<int> _createEmptyShootDocument({
+    required AppDatabase db,
+    required int projectId,
+    required String name,
+  }) =>
+      db.insertShootDocument(
+        ShootDocumentsCompanion.insert(
+          projectId: projectId,
+          name: name,
+          layoutPreset: const Value('freeform'),
+        ),
+      );
 }

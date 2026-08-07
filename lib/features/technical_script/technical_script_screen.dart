@@ -24,7 +24,7 @@ import '../look_bible/look_bible_model.dart';
 import '../shoot_documents/shoot_document_composer.dart';
 import '../shoot_documents/shoot_document_import_actions.dart';
 import '../shoot_documents/shoot_document_service.dart';
-import '../pdf_export/technical_script_pdf.dart';
+import '../../shared/pdf_export/technical_script_pdf.dart';
 import 'scene_form_sheet.dart';
 import '../../core/utils/shot_technical_options.dart';
 import '../../core/widgets/inline_edit_field.dart';

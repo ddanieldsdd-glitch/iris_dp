@@ -10,7 +10,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_snackbar.dart';
-import '../onboarding/cloud_connection_widgets.dart';
+import '../../shared/auth/cloud_connection_widgets.dart';
 
 enum AuthMode { signIn, signUp }
 

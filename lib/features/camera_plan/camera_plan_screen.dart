@@ -15,7 +15,7 @@ import '../../core/widgets/app_card.dart';
 import '../../core/widgets/scene_meta_display.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
-import '../pdf_export/camera_plan_pdf.dart';
+import '../../shared/pdf_export/camera_plan_pdf.dart';
 import 'camera_plan_editor.dart';
 import 'camera_plan_grouping.dart';
 import 'camera_plan_scene_badge.dart';

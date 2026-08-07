@@ -15,10 +15,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../auth/auth_screen.dart';
 import '../migration/cloud_migration_wizard.dart';
-import '../projects/projects_screen.dart';
 import 'app_tutorial_store.dart';
-import 'auth_required_banner.dart';
-import '../../core/update/update_available_banner.dart';
 import 'cloud_tutorial_pages.dart';
 import 'home_tutorial_overlay.dart';
 import 'install_update_guide_screen.dart';
@@ -41,7 +38,14 @@ enum _TutorialPhase {
 class InitialTutorialFlow extends ConsumerStatefulWidget {
   final bool replayFromStart;
 
-  const InitialTutorialFlow({super.key, this.replayFromStart = false});
+  /// Contenido de la fase «home» (p. ej. listado de proyectos).
+  final WidgetBuilder homeContentBuilder;
+
+  const InitialTutorialFlow({
+    super.key,
+    this.replayFromStart = false,
+    required this.homeContentBuilder,
+  });
 
   @override
   ConsumerState<InitialTutorialFlow> createState() =>
@@ -209,13 +213,7 @@ class _InitialTutorialFlowState extends ConsumerState<InitialTutorialFlow> {
         onComplete: () async {
           await AppTutorialStore.setHomeTourComplete(true);
         },
-        child: const Column(
-          children: [
-            AuthRequiredBanner(),
-            UpdateAvailableBanner(),
-            Expanded(child: ProjectsScreen()),
-          ],
-        ),
+        child: widget.homeContentBuilder(context),
       );
     }
 

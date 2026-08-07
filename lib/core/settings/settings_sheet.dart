@@ -1,7 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../../features/shoot_documents/shoot_template_editor_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../cloud/cloud_runtime_config.dart';
@@ -24,12 +23,16 @@ class SettingsSheet extends ConsumerStatefulWidget {
     this.onMigrationAction,
     this.onReplayTutorial,
     this.onInstallGuide,
+    this.onCreateShootTemplate,
+    this.onEditShootTemplate,
   });
 
   final VoidCallback? onLoginAction;
   final Future<void> Function()? onMigrationAction;
   final Future<void> Function()? onReplayTutorial;
   final VoidCallback? onInstallGuide;
+  final Future<bool> Function()? onCreateShootTemplate;
+  final Future<bool> Function(String templateId)? onEditShootTemplate;
 
   static Future<void> show(
     BuildContext context, {
@@ -37,6 +40,8 @@ class SettingsSheet extends ConsumerStatefulWidget {
     Future<void> Function()? onMigrationAction,
     Future<void> Function()? onReplayTutorial,
     VoidCallback? onInstallGuide,
+    Future<bool> Function()? onCreateShootTemplate,
+    Future<bool> Function(String templateId)? onEditShootTemplate,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -47,6 +52,8 @@ class SettingsSheet extends ConsumerStatefulWidget {
         onMigrationAction: onMigrationAction,
         onReplayTutorial: onReplayTutorial,
         onInstallGuide: onInstallGuide,
+        onCreateShootTemplate: onCreateShootTemplate,
+        onEditShootTemplate: onEditShootTemplate,
       ),
     );
   }
@@ -143,17 +150,12 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
                 const SettingsCloudStorageSection(),
                 const SizedBox(height: AppSpacing.lg),
                 UserTemplatesSettingsSection(
-                  onCreateTemplate: () async {
-                    final created = await Navigator.push<bool>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ShootTemplateEditorScreen(),
-                      ),
-                    );
-                    if (created == true && context.mounted) {
-                      setState(() {});
-                    }
-                  },
+                  onCreateTemplate: widget.onCreateShootTemplate == null
+                      ? null
+                      : () async {
+                          await widget.onCreateShootTemplate!();
+                        },
+                  onEditShootTemplate: widget.onEditShootTemplate,
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 SettingsUpdateSection(onLoginAction: widget.onLoginAction),

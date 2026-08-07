@@ -4,7 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../look_bible/look_bible_model.dart';
+import '../../shared/look_bible/look_bible_model.dart';
 
 /// Prepara PDFs de IRIS DP para anotar en GoodNotes vía hoja de compartir.
 class GoodNotesExportService {
