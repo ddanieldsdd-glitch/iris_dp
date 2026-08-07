@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart' hide BibleSectionGroup;
 import '../../core/database/app_database.dart' as app_db show BibleSectionGroup;
+import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -15,13 +17,17 @@ import '../look_bible/look_bible_model.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import 'moodboard_association.dart';
 import '../locations/locations_screen.dart';
+import 'bible_edit_history.dart';
 import 'bible_style_guide_sheet.dart';
+import 'bible_tutorial.dart';
 import 'data/visual_bible_repository.dart';
 import 'state/visual_bible_providers.dart';
+import 'visual_bible_export_config.dart';
+import 'visual_bible_export_config_sheet.dart';
 import 'visual_bible_model.dart';
 import 'visual_bible_pdf_service.dart';
+import '../goodnotes/goodnotes_export_service.dart';
 import 'widgets/bible_navigation_scope.dart';
-import 'widgets/bible_structure_editor.dart';
 import 'widgets/bible_sidebar.dart';
 import 'widgets/moodboard_section.dart';
 import 'widgets/sections/custom_bible_section.dart';
@@ -37,6 +43,7 @@ import 'widgets/sections/location_section.dart';
 import 'widgets/sections/optics_section.dart';
 import 'widgets/sections/texture_section.dart';
 import 'widgets/sections/workflow_section.dart';
+import 'widgets/bible_settings_drawer.dart';
 import 'widgets/sections/bible_settings_section.dart';
 
 class VisualBibleScreen extends ConsumerStatefulWidget {
@@ -57,6 +64,10 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
   Timer? _saveDebounce;
   String _activeSection = BibleSectionId.direction;
   String? _moodboardInitialFilter;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  int _drawerBibleId = 0;
+  final _history = BibleEditHistory();
+  VisualBibleData? _historyBaseline;
 
   @override
   void initState() {
@@ -72,7 +83,9 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
         _project = result.project;
         _data = result.data;
         _loading = false;
+        _historyBaseline = result.data.copy();
       });
+      unawaited(BibleTutorial.maybeShow(context, widget.projectId));
     }
   }
 
@@ -101,7 +114,12 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
     });
     try {
       await ref.read(visualBibleRepositoryProvider).save(data);
-      if (mounted) setState(() => _saved = true);
+      if (mounted) {
+        setState(() {
+          _saved = true;
+          _historyBaseline = data.copy();
+        });
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -114,84 +132,85 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
         );
   }
 
-  Future<void> _exportPdf({String mode = VisualBibleExportMode.full}) async {
+  Future<void> _openExportConfig({
+    VisualBibleExportDestination? preferredDestination,
+  }) async {
     final project = _project;
     if (project == null || _data == null) return;
-    try {
-      final bundle = await _loadExportBundle();
-      final path = await VisualBiblePdfService.export(
-        mode: mode,
-        projectName: project.name,
-        director: project.director,
-        data: bundle.data,
-        colorBlocks: bundle.blocks,
-        exposureBlocks: bundle.exposureBlocks,
-        lightingSetups: bundle.lightingSetups,
-        cameraTests: bundle.cameraTests,
-        moodboard: bundle.moodboard,
-      );
-      if (!mounted || path == null) return;
-      AppSnackBar.show(context, 'Biblia de Fotografía exportada en $path');
-    } catch (e) {
-      if (!mounted) return;
-      AppSnackBar.showError(context, userFriendlyError(e));
-    }
+
+    final config = await showVisualBibleExportConfigSheet(
+      context,
+      projectId: widget.projectId,
+      preferredDestination: preferredDestination,
+    );
+    if (config == null || !mounted) return;
+    await _runExport(config);
   }
 
-  Future<void> _shareWithTeam() async {
+  Future<void> _runExport(VisualBibleExportConfig config) async {
     final project = _project;
     if (project == null || _data == null) return;
 
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: context.palette.surfaceElevated,
-      builder: (ctx) {
-        final palette = context.palette;
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Text('Exportar / Compartir',
-                    style: AppTypography.titleMedium(palette)),
-              ),
-              ListTile(
-                title: Text(VisualBibleExportMode.label(VisualBibleExportMode.pitch)),
-                subtitle: const Text('Para dirección y producción'),
-                onTap: () => Navigator.pop(ctx, VisualBibleExportMode.pitch),
-              ),
-              ListTile(
-                title: Text(
-                    VisualBibleExportMode.label(VisualBibleExportMode.techScout)),
-                subtitle: const Text('Para gaffer, AC y eléctricos'),
-                onTap: () => Navigator.pop(ctx, VisualBibleExportMode.techScout),
-              ),
-              ...VisualBibleDepartment.all.map(
-                (id) => ListTile(
-                  title: Text(VisualBibleDepartment.label(id)),
-                  onTap: () => Navigator.pop(ctx, id),
-                ),
-              ),
-              ListTile(
-                title: Text(VisualBibleExportMode.label(VisualBibleExportMode.full)),
-                onTap: () => Navigator.pop(ctx, VisualBibleExportMode.full),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (choice == null || !mounted) return;
     try {
       final bundle = await _loadExportBundle();
+      final safe = project.name.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
+      final baseName = safe.isEmpty ? 'proyecto' : safe;
+
+      if (config.destination == VisualBibleExportDestination.share) {
+        final bytes = config.isDepartment
+            ? await VisualBiblePdfService.buildDepartmentBytes(
+                department: config.department!,
+                projectName: project.name,
+                data: bundle.data,
+                colorBlocks: bundle.blocks,
+              )
+            : await VisualBiblePdfService.buildBytes(
+                mode: config.mode,
+                projectName: project.name,
+                director: project.director,
+                data: bundle.data,
+                colorBlocks: bundle.blocks,
+                exposureBlocks: bundle.exposureBlocks,
+                lightingSetups: bundle.lightingSetups,
+                cameraTests: bundle.cameraTests,
+                moodboard: bundle.moodboard,
+                includedSections: config.sections,
+              );
+
+        final suffix = config.isDepartment
+            ? VisualBibleDepartment.label(config.department!)
+                .toLowerCase()
+                .replaceAll(' ', '_')
+            : switch (config.mode) {
+                VisualBibleExportMode.pitch => 'pitch',
+                VisualBibleExportMode.techScout => 'tech_scout',
+                _ => 'biblia_fotografia',
+              };
+
+        await GoodNotesExportService.shareForAnnotation(
+          pdfBytes: bytes,
+          filename: '${baseName}_$suffix',
+          documentType: GoodNotesModuleType.visualBible,
+        );
+        if (!mounted) return;
+        final who = config.recipients.trim().isEmpty
+            ? config.summaryLabel
+            : '${config.summaryLabel} → ${config.recipients.trim()}';
+        AppSnackBar.show(context, 'PDF listo para compartir ($who)');
+        return;
+      }
+
       String? path;
-      if (choice == VisualBibleExportMode.pitch ||
-          choice == VisualBibleExportMode.techScout ||
-          choice == VisualBibleExportMode.full) {
+      if (config.isDepartment) {
+        path = await VisualBiblePdfService.exportDepartment(
+          department: config.department!,
+          projectName: project.name,
+          data: bundle.data,
+          colorBlocks: bundle.blocks,
+        );
+      } else {
         path = await VisualBiblePdfService.export(
-          mode: choice,
+          mode: config.mode,
           projectName: project.name,
           director: project.director,
           data: bundle.data,
@@ -200,13 +219,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
           lightingSetups: bundle.lightingSetups,
           cameraTests: bundle.cameraTests,
           moodboard: bundle.moodboard,
-        );
-      } else {
-        path = await VisualBiblePdfService.exportDepartment(
-          department: choice,
-          projectName: project.name,
-          data: bundle.data,
-          colorBlocks: bundle.blocks,
+          includedSections: config.sections,
         );
       }
       if (!mounted || path == null) return;
@@ -217,9 +230,57 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
     }
   }
 
+  Future<void> _exportPdf() => _openExportConfig(
+        preferredDestination: VisualBibleExportDestination.saveFile,
+      );
+
+  Future<void> _shareWithTeam() => _openExportConfig(
+        preferredDestination: VisualBibleExportDestination.share,
+      );
+
   void _onDataChanged(VisualBibleData data) {
-    setState(() => _saved = false);
+    final baseline = _historyBaseline;
+    if (baseline != null && !_history.isRestoring) {
+      _history.push(baseline);
+      _historyBaseline = null;
+    }
+    setState(() {
+      _data = data;
+      _saved = false;
+    });
     _scheduleSave(data);
+  }
+
+  void _undo() {
+    final current = _data;
+    if (current == null) return;
+    final prev = _history.undo(current);
+    if (prev == null) {
+      AppSnackBar.show(context, 'Nada que deshacer');
+      return;
+    }
+    setState(() {
+      _data = prev;
+      _historyBaseline = prev.copy();
+      _saved = false;
+    });
+    _scheduleSave(prev);
+  }
+
+  void _redo() {
+    final current = _data;
+    if (current == null) return;
+    final next = _history.redo(current);
+    if (next == null) {
+      AppSnackBar.show(context, 'Nada que rehacer');
+      return;
+    }
+    setState(() {
+      _data = next;
+      _historyBaseline = next.copy();
+      _saved = false;
+    });
+    _scheduleSave(next);
   }
 
   void _openMoodboard({String? sectionId, String? moodboardFilter}) {
@@ -230,6 +291,14 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
               ? MoodboardAssociation.categoryForSection(sectionId)
               : null);
     });
+  }
+
+  void _openSection(String sectionId, {int? planId, String? focus}) {
+    setState(() => _activeSection = sectionId);
+  }
+
+  void _openBibleLocation({int? planId}) {
+    setState(() => _activeSection = BibleSectionId.location);
   }
 
   void _openLocations({int? siteId, int? setId}) {
@@ -284,12 +353,8 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
       BibleSectionId.direction => DirectionSection(
           data: data,
           projectId: widget.projectId,
-          sectionLabel: sectionDefsById[BibleSectionId.direction]?.label ??
-              'Dirección',
-          contentJson:
-              sectionDefsById[BibleSectionId.direction]?.contentJson,
-          onContentJsonChanged: (json) => _saveSectionContent(
-              sectionDefsById, BibleSectionId.direction, json),
+          sectionContentJson:
+              _sectionContentJson(sectionDefsById, BibleSectionId.direction),
           onChanged: _onDataChanged,
         ),
       BibleSectionId.concept => ConceptSection(
@@ -354,6 +419,8 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
       BibleSectionId.location => LocationSection(
           projectId: widget.projectId,
           bibleId: bibleId,
+          sectionContentJson:
+              _sectionContentJson(sectionDefsById, BibleSectionId.location),
         ),
       BibleSectionId.cameraTests => CameraTestsSection(
           projectId: widget.projectId,
@@ -379,17 +446,156 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
     };
   }
 
+  void _openSettingsDrawer(int bibleId) {
+    if (bibleId <= 0) {
+      AppSnackBar.show(
+        context,
+        'La biblia se está inicializando. Espera un momento.',
+      );
+      return;
+    }
+    setState(() => _drawerBibleId = bibleId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scaffoldKey.currentState?.openEndDrawer();
+    });
+  }
+
+  void _openMasterConfig(int bibleId) {
+    if (bibleId <= 0) {
+      AppSnackBar.show(
+        context,
+        'La biblia se está inicializando. Espera un momento.',
+      );
+      return;
+    }
+    setState(() {
+      _drawerBibleId = bibleId;
+      _activeSection = BibleSectionId.settings;
+    });
+  }
+
+  Future<void> _removeSection(BibleSectionDefinition def) async {
+    if (def.id == BibleSectionId.settings) return;
+    final palette = context.palette;
+    final isCustom = !def.isBuiltIn;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isCustom ? 'Eliminar pantalla' : 'Quitar pantalla'),
+        content: Text(
+          isCustom
+              ? '¿Eliminar «${def.label}» de forma permanente?'
+              : '¿Ocultar «${def.label}» de esta biblia?\n'
+                  'Podrás volver a mostrarla desde Master Config.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: palette.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isCustom ? 'Eliminar' : 'Quitar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final db = ref.read(databaseProvider);
+    final bibleId = _data?.id ?? 0;
+    if (bibleId <= 0) return;
+    if (isCustom) {
+      await db.deleteCustomBibleSection(
+        bibleId: bibleId,
+        sectionId: def.id,
+      );
+    } else {
+      await db.setBibleSectionHidden(
+        bibleId: bibleId,
+        sectionId: def.id,
+        hidden: true,
+      );
+    }
+    if (!mounted) return;
+    if (_activeSection == def.id) {
+      setState(() => _activeSection = BibleSectionId.direction);
+    }
+    AppSnackBar.show(
+      context,
+      isCustom ? 'Pantalla eliminada' : 'Pantalla ocultada',
+    );
+  }
+
+  void _onSectionSelected(String id, int bibleId) {
+    setState(() => _activeSection = id);
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
     final repo = ref.watch(visualBibleRepositoryProvider);
 
-    return Scaffold(
+    return Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.keyZ, meta: true): _UndoIntent(),
+        SingleActivator(LogicalKeyboardKey.keyZ, control: true): _UndoIntent(),
+        SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
+            _RedoIntent(),
+        SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true):
+            _RedoIntent(),
+        SingleActivator(LogicalKeyboardKey.keyY, control: true): _RedoIntent(),
+      },
+      child: Actions(
+        actions: {
+          _UndoIntent: CallbackAction<_UndoIntent>(onInvoke: (_) {
+            _undo();
+            return null;
+          }),
+          _RedoIntent: CallbackAction<_RedoIntent>(onInvoke: (_) {
+            _redo();
+            return null;
+          }),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Scaffold(
+      key: _scaffoldKey,
       backgroundColor: palette.background,
+      endDrawer: _drawerBibleId > 0
+          ? BibleSettingsDrawer(
+              bibleId: _drawerBibleId,
+              projectId: widget.projectId,
+              sectionId: _activeSection,
+              onOpenMasterConfig: () => _openMasterConfig(_drawerBibleId),
+            )
+          : null,
       appBar: AppBar(
-        backgroundColor: palette.surface,
-        title: Text('Biblia de Fotografía',
-            style: AppTypography.titleMedium(palette)),
+        backgroundColor: palette.surface.withValues(alpha: 0.85),
+        title: Row(
+          children: [
+            Text(
+              'Biblia de Fotografía',
+              style: AppTypography.titleMedium(palette),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: palette.surfaceOverlay,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'V1.0',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontFamily: 'monospace',
+                  color: palette.textSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
@@ -441,6 +647,11 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
               },
             ),
           IconButton(
+            icon: Icon(Icons.cloud_done_outlined, color: palette.textSecondary),
+            tooltip: 'Estado de sincronización',
+            onPressed: () {},
+          ),
+          IconButton(
             icon: Icon(Icons.palette_outlined, color: palette.accent),
             tooltip: 'Guía visual del proyecto',
             onPressed: () {
@@ -453,14 +664,30 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
             },
           ),
           IconButton(
-            icon: Icon(Icons.picture_as_pdf_outlined, color: palette.textSecondary),
-            tooltip: 'Exportar PDF',
-            onPressed: () => _exportPdf(),
+            icon: Icon(Icons.tune, color: palette.textSecondary),
+            tooltip: 'Ajuste rápido',
+            onPressed: () {
+              final id = _data?.id ?? 0;
+              _openSettingsDrawer(id);
+            },
           ),
           IconButton(
             icon: Icon(Icons.ios_share_outlined, color: palette.textSecondary),
             tooltip: 'Compartir con equipo',
             onPressed: _shareWithTeam,
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12, left: 4),
+            child: FilledButton.icon(
+              onPressed: () => _exportPdf(),
+              icon: const Icon(Icons.picture_as_pdf, size: 18),
+              label: const Text('Exportar PDF'),
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.accent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              ),
+            ),
           ),
         ],
       ),
@@ -478,6 +705,8 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
               moodboardFilter: moodboardFilter,
             ),
             openLocations: _openLocations,
+            openSection: _openSection,
+            openBibleLocation: _openBibleLocation,
             child: StreamBuilder<List<app_db.BibleSectionGroup>>(
               stream: bibleId > 0
                   ? repo.watchSectionGroups(bibleId)
@@ -499,19 +728,17 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                         BibleSidebar(
                           activeSection: _activeSection,
                           data: _data,
+                          project: _project,
                           groups: groupSnap.data,
                           definitions: defs,
                           onSectionSelected: (id) =>
-                              setState(() => _activeSection = id),
+                              _onSectionSelected(id, bibleId),
+                          onOpenSettings: () => _openSettingsDrawer(bibleId),
+                          onRemoveSection: bibleId > 0
+                              ? (def) => _removeSection(def)
+                              : null,
                           onEditStructure: bibleId > 0
-                              ? () => showModalBottomSheet<void>(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    builder: (_) => BibleStructureEditor(
-                                      bibleId: bibleId,
-                                      projectId: widget.projectId,
-                                    ),
-                                  )
+                              ? () => _openMasterConfig(bibleId)
                               : null,
                         ),
                         Expanded(
@@ -526,6 +753,17 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
           );
         },
       ),
-    );
+          ), // Scaffold
+        ), // Focus
+      ), // Actions
+    ); // Shortcuts
   }
+}
+
+class _UndoIntent extends Intent {
+  const _UndoIntent();
+}
+
+class _RedoIntent extends Intent {
+  const _RedoIntent();
 }

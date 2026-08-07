@@ -12,14 +12,19 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/clipboard_image_reader.dart';
 import '../../../core/widgets/app_snackbar.dart';
+import '../moodboard_image_aspect.dart';
 import '../moodboard_association.dart';
 import '../moodboard_batch_actions.dart';
 import '../moodboard_helpers.dart';
+import '../moodboard_reference_meta.dart';
 import '../visual_bible_model.dart';
 import 'bible_form_widgets.dart';
 import 'moodboard_drag.dart';
 import 'moodboard_assign_fields.dart';
 import 'moodboard_batch_assign_sheet.dart';
+import 'moodboard_lightbox.dart';
+import 'moodboard_sources_sidebar.dart';
+import 'moodboard_stitch_shell.dart';
 
 class MoodboardSection extends ConsumerStatefulWidget {
   final int projectId;
@@ -39,30 +44,28 @@ class MoodboardSection extends ConsumerStatefulWidget {
 
 class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
   static const _unassignedFilter = '__unassigned__';
+  static const _catalogLocation = '__catalog_location__';
+  static const _catalogLighting = '__catalog_lighting__';
+  static const _catalogPalette = '__catalog_palette__';
+  static const _catalogPending = '__catalog_pending__';
 
   String? _activeCategory;
   final _focusNode = FocusNode();
+  final _searchController = TextEditingController();
   final Set<int> _selectedIds = {};
   bool _selectionMode = false;
-
-  static const _categories = [
-    ('Todas', null),
-    ('Técnica de imagen', MoodboardAssociation.technicalFilter),
-    ('Luz', MoodboardCategory.lighting),
-    ('Color', MoodboardCategory.color),
-    ('Encuadre', MoodboardCategory.framing),
-    ('Óptica', MoodboardCategory.optics),
-    ('Textura', MoodboardCategory.texture),
-    ('Localización', MoodboardCategory.location),
-    ('Prueba cámara', MoodboardCategory.cameraTest),
-    ('Referencia', MoodboardCategory.reference),
-    ('Sin clasificar', _unassignedFilter),
-  ];
+  MoodboardSortMode _sortMode = MoodboardSortMode.recent;
+  int _randomSeed = 0;
+  MoodboardFacet? _facet;
+  Map<int, MoodboardReferenceMeta> _metaById = {};
+  final Map<String, double> _aspectByPath = {};
+  int _metaCacheFingerprint = -1;
 
   @override
   void initState() {
     super.initState();
     _activeCategory = widget.initialFilter;
+    _searchController.addListener(() => setState(() {}));
   }
 
   @override
@@ -74,9 +77,127 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
     }
   }
 
+  Future<void> _refreshMetaCache(List<MoodboardImage> images) async {
+    final ids = images.map((i) => i.id);
+    final map = await MoodboardReferenceMetaStore.loadMany(ids);
+    if (!mounted) return;
+    setState(() => _metaById = map);
+    await _refreshAspectCache(images);
+  }
+
+  Future<void> _refreshAspectCache(List<MoodboardImage> images) async {
+    final missing = images
+        .map((i) => i.imagePath)
+        .where((p) => !_aspectByPath.containsKey(p))
+        .toList();
+    if (missing.isEmpty) return;
+    await MoodboardImageAspect.resolveMany(missing);
+    if (!mounted) return;
+    setState(() {
+      for (final path in missing) {
+        _aspectByPath[path] = MoodboardImageAspect.cached(path) ?? 1.0;
+      }
+    });
+  }
+
+  double _aspectFor(MoodboardImageModel image, {int index = 0}) {
+    return _aspectByPath[image.imagePath] ??
+        MoodboardImageAspect.cached(image.imagePath) ??
+        MoodboardMasonryGrid.fallbackAspectForIndex(index);
+  }
+
+  void _applyFacet(MoodboardFacet? facet) {
+    setState(() => _facet = facet);
+  }
+
+  bool _matchesCatalogFacet(MoodboardImage row, MoodboardReferenceMeta meta) {
+    final facet = _facet;
+    if (facet == null) return true;
+    final model = MoodboardImageModel.fromRow(row);
+    final loc = (meta.locationKind ?? model.linkedLocationName ?? '')
+        .toLowerCase();
+    final time = (meta.timeOfDay ?? '').toLowerCase();
+    final mood = (meta.colorMood ?? '').toLowerCase();
+    final blob = [
+      model.caption,
+      model.filmReference,
+      meta.technicalNotes,
+      meta.title,
+      meta.locationKind,
+      meta.timeOfDay,
+      meta.colorMood,
+      meta.lightingLook,
+    ].whereType<String>().join(' ').toLowerCase();
+
+    return switch (facet) {
+      MoodboardFacet.interior =>
+        loc.contains('interior') || blob.contains('int.'),
+      MoodboardFacet.exterior =>
+        loc.contains('exterior') || blob.contains('ext.'),
+      MoodboardFacet.day =>
+        time.contains('día') ||
+            time.contains('dia') ||
+            time == 'day' ||
+            blob.contains(' day') ||
+            blob.contains('día'),
+      MoodboardFacet.night =>
+        time.contains('noche') ||
+            time == 'night' ||
+            blob.contains('night') ||
+            blob.contains('noche'),
+      MoodboardFacet.cool =>
+        mood.contains('frí') ||
+            mood.contains('fri') ||
+            mood.contains('cool') ||
+            mood.contains('teal'),
+      MoodboardFacet.warm =>
+        mood.contains('cál') ||
+            mood.contains('cal') ||
+            mood.contains('warm') ||
+            mood.contains('ámbar') ||
+            mood.contains('ambar'),
+    };
+  }
+
   List<MoodboardImage> _filterImages(List<MoodboardImage> images) {
-    return switch (_activeCategory) {
+    var filtered = switch (_activeCategory) {
       null => images,
+      _catalogLocation => images.where((i) {
+          final model = MoodboardImageModel.fromRow(i);
+          final meta = _metaById[i.id];
+          return MoodboardAssociation.matchesLocationFilter(
+                category: model.category,
+                assignedSections: model.assignedSections,
+                linkedLocationBasePlanId: model.linkedLocationBasePlanId,
+                linkedLocationName: model.linkedLocationName,
+              ) ||
+              (meta?.locationKind?.trim().isNotEmpty == true) ||
+              (meta?.timeOfDay?.trim().isNotEmpty == true);
+        }).toList(),
+      _catalogLighting => images.where((i) {
+          final model = MoodboardImageModel.fromRow(i);
+          final meta = _metaById[i.id];
+          return MoodboardAssociation.matchesCategoryFilter(
+                filterCategory: MoodboardCategory.lighting,
+                category: model.category,
+                assignedSections: model.assignedSections,
+              ) ||
+              (meta?.lightingLook?.trim().isNotEmpty == true);
+        }).toList(),
+      _catalogPalette => images.where((i) {
+          final meta = _metaById[i.id];
+          return (meta?.paletteHex.isNotEmpty == true) ||
+              (meta?.colorMood?.trim().isNotEmpty == true) ||
+              MoodboardAssociation.matchesCategoryFilter(
+                filterCategory: MoodboardCategory.color,
+                category: MoodboardImageModel.fromRow(i).category,
+                assignedSections:
+                    MoodboardImageModel.fromRow(i).assignedSections,
+              );
+        }).toList(),
+      _catalogPending => images.where((i) {
+          return _metaById[i.id]?.pendingReview == true;
+        }).toList(),
       _unassignedFilter => images.where((i) {
           final model = MoodboardImageModel.fromRow(i);
           return MoodboardAssociation.isUnassigned(
@@ -110,6 +231,58 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
           );
         }).toList(),
     };
+
+    if (_facet != null) {
+      filtered = filtered
+          .where(
+            (i) => _matchesCatalogFacet(
+              i,
+              _metaById[i.id] ?? const MoodboardReferenceMeta(),
+            ),
+          )
+          .toList();
+    }
+
+    final q = _searchController.text.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      filtered = filtered.where((i) {
+        final model = MoodboardImageModel.fromRow(i);
+        final meta = _metaById[i.id] ?? const MoodboardReferenceMeta();
+        final hay = [
+          model.caption,
+          model.filmReference,
+          model.linkedLocationName,
+          model.category,
+          ...model.assignedSections,
+          meta.searchBlob,
+        ].whereType<String>().join(' ').toLowerCase();
+        return hay.contains(q);
+      }).toList();
+    }
+
+    return _sortImages(filtered);
+  }
+
+  List<MoodboardImage> _sortImages(List<MoodboardImage> images) {
+    final sorted = List<MoodboardImage>.from(images);
+    switch (_sortMode) {
+      case MoodboardSortMode.recent:
+        sorted.sort((a, b) => b.id.compareTo(a.id));
+      case MoodboardSortMode.caption:
+        sorted.sort((a, b) {
+          final ca = (a.caption ?? a.filmReference ?? '').toLowerCase();
+          final cb = (b.caption ?? b.filmReference ?? '').toLowerCase();
+          final cmp = ca.compareTo(cb);
+          return cmp != 0 ? cmp : b.id.compareTo(a.id);
+        });
+      case MoodboardSortMode.random:
+        sorted.sort((a, b) {
+          final ha = Object.hash(a.id, _randomSeed);
+          final hb = Object.hash(b.id, _randomSeed);
+          return ha.compareTo(hb);
+        });
+    }
+    return sorted;
   }
 
   bool get _showLocationGroupedView =>
@@ -118,6 +291,10 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
   bool get _showGroupedView =>
       _activeCategory != null &&
       _activeCategory != _unassignedFilter &&
+      _activeCategory != _catalogLocation &&
+      _activeCategory != _catalogLighting &&
+      _activeCategory != _catalogPalette &&
+      _activeCategory != _catalogPending &&
       _activeCategory != MoodboardAssociation.technicalFilter &&
       !_showLocationGroupedView;
 
@@ -168,15 +345,118 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
   }
 
   void _handleCardTap(MoodboardImageModel image) {
-    setState(() {
-      _selectionMode = true;
-      if (_selectedIds.contains(image.id)) {
-        _selectedIds.remove(image.id);
-      } else {
-        _selectedIds.add(image.id);
-      }
-      if (_selectedIds.isEmpty) _selectionMode = false;
-    });
+    if (_selectionMode) {
+      setState(() {
+        if (_selectedIds.contains(image.id)) {
+          _selectedIds.remove(image.id);
+        } else {
+          _selectedIds.add(image.id);
+        }
+        if (_selectedIds.isEmpty) _selectionMode = false;
+      });
+      return;
+    }
+    _openLightbox(image);
+  }
+
+  Future<void> _openLightbox(MoodboardImageModel image) async {
+    final db = ref.read(databaseProvider);
+    final all = await db.watchMoodboardImages(widget.projectId).first;
+    final filtered = _filterImages(all);
+    final models = filtered.map(MoodboardImageModel.fromRow).toList();
+    final idx = models.indexWhere((m) => m.id == image.id);
+    if (!mounted || models.isEmpty) return;
+
+    await MoodboardLightbox.show(
+      context: context,
+      images: models,
+      initialIndex: idx < 0 ? 0 : idx,
+      metaById: _metaById,
+      bibleId: widget.bibleId,
+      projectId: widget.projectId,
+      onAddToProject: (img) async {
+        await MoodboardBatchAssignSheet.showAssignSections(
+          context: context,
+          db: ref.read(databaseProvider),
+          images: [
+            MoodboardImage(
+              id: img.id,
+              projectId: img.projectId,
+              bibleId: img.bibleId,
+              imagePath: img.imagePath,
+              source: img.source,
+              category: img.category,
+              caption: img.caption,
+              filmReference: img.filmReference,
+              linkedSceneId: img.linkedSceneId,
+              linkedLocationName: img.linkedLocationName,
+              linkedLocationBasePlanId: img.linkedLocationBasePlanId,
+              groupId: img.groupId,
+              assignedSections: img.assignedSections.isEmpty
+                  ? null
+                  : jsonEncode(img.assignedSections),
+              sortOrder: img.sortOrder,
+            ),
+          ],
+        );
+      },
+      onMetaSaved: (id, meta) {
+        if (!mounted) return;
+        setState(() => _metaById = {..._metaById, id: meta});
+      },
+    );
+  }
+
+  Future<void> importFromSource(MoodboardSourceKind kind) async {
+    switch (kind) {
+      case MoodboardSourceKind.irisLibrary:
+      case MoodboardSourceKind.personalLibrary:
+      case MoodboardSourceKind.localFolder:
+        await _addManual(context);
+      case MoodboardSourceKind.shotDeck:
+      case MoodboardSourceKind.filmGrab:
+      case MoodboardSourceKind.tmdb:
+      case MoodboardSourceKind.imdb:
+        if (mounted) {
+          AppSnackBar.show(
+            context,
+            'Integración pendiente — por ahora importa stills a Biblioteca IRIS',
+          );
+        }
+    }
+  }
+
+  Future<void> _showAddMenu(BuildContext context) async {
+    final palette = context.palette;
+    final choice = await showModalBottomSheet<MoodboardSourceKind>(
+      context: context,
+      backgroundColor: palette.surfaceElevated,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Añadir referencias',
+                  style: AppTypography.titleMedium(palette),
+                ),
+              ),
+            ),
+            for (final item in kMoodboardSources.where((s) => s.enabled))
+              ListTile(
+                leading: Icon(item.icon, color: palette.accent),
+                title: Text(item.label),
+                onTap: () => Navigator.pop(ctx, item.kind),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (choice != null && mounted) await importFromSource(choice);
   }
 
   void _handleCardSecondaryTap(
@@ -330,9 +610,12 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
     List<MoodboardImage> filtered, {
     VoidCallback? onMoveEarlier,
     VoidCallback? onMoveLater,
+    int index = 0,
   }) {
     return _MoodboardImageCard(
       image: image,
+      meta: _metaById[image.id],
+      imageAspect: _aspectFor(image, index: index),
       isSelected: _selectedIds.contains(image.id),
       selectionMode: _selectionMode || _selectedIds.isNotEmpty,
       onTap: () => _handleCardTap(image),
@@ -376,13 +659,14 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
               _pasteFromClipboard(context);
               return KeyEventResult.handled;
             }
-            if (event.logicalKey == LogicalKeyboardKey.escape &&
-                _selectedIds.isNotEmpty) {
-              setState(() {
-                _selectedIds.clear();
-                _selectionMode = false;
-              });
-              return KeyEventResult.handled;
+            if (event.logicalKey == LogicalKeyboardKey.escape) {
+              if (_selectedIds.isNotEmpty) {
+                setState(() {
+                  _selectedIds.clear();
+                  _selectionMode = false;
+                });
+                return KeyEventResult.handled;
+              }
             }
             return KeyEventResult.ignored;
           },
@@ -397,232 +681,292 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
               bytes: bytes,
               category: _activeCategory,
             ),
-            child: Column(
+            child: Stack(
               children: [
-                SizedBox(
-                  height: 48,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                      vertical: 8,
-                    ),
-                    children: [
-                      ..._categories.map((cat) {
-                        final isActive = _activeCategory == cat.$2;
-                        return GestureDetector(
-                          onTap: () => setState(() => _activeCategory = cat.$2),
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: isActive
-                                  ? palette.accent
-                                  : palette.surfaceOverlay,
-                              borderRadius: BorderRadius.circular(20),
+                const Positioned.fill(child: MoodboardAmbientGlow()),
+                StreamBuilder<List<MoodboardImage>>(
+                  stream: db.watchMoodboardImages(widget.projectId),
+                  builder: (context, snap) {
+                    final images = snap.data ?? [];
+                    final fingerprint = Object.hashAll(images.map((i) => i.id));
+                    if (fingerprint != _metaCacheFingerprint) {
+                      _metaCacheFingerprint = fingerprint;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _refreshMetaCache(images);
+                      });
+                    }
+                    final filtered = _filterImages(images);
+
+                    Widget gridBody;
+                    if (filtered.isEmpty) {
+                      gridBody = _MoodboardEmptyState(
+                        onAddManual: () => _addManual(context),
+                        onAddFromScouting: () => _addScouting(context),
+                        onSyncScript: () => _syncScript(context),
+                        onPaste: () => _pasteFromClipboard(context),
+                      );
+                    } else if (_showLocationGroupedView) {
+                      gridBody = _LocationGroupedMoodboardGrid(
+                        db: db,
+                        projectId: widget.projectId,
+                        images: filtered,
+                        cardBuilder: (img) => _buildCard(img, filtered),
+                      );
+                    } else if (_showGroupedView) {
+                      gridBody = _GroupedMoodboardGrid(
+                        db: db,
+                        projectId: widget.projectId,
+                        category: _activeCategory!,
+                        images: filtered,
+                        onAddGroup: () => _createGroup(context),
+                        cardBuilder: (img) => _buildCard(img, filtered),
+                      );
+                    } else {
+                      gridBody = MoodboardMasonryGrid(
+                        itemCount: filtered.length,
+                        imageAspectOf: (i) => _aspectFor(
+                          MoodboardImageModel.fromRow(filtered[i]),
+                          index: i,
+                        ),
+                        itemBuilder: (context, i) {
+                          final image =
+                              MoodboardImageModel.fromRow(filtered[i]);
+                          return _buildCard(
+                            image,
+                            filtered,
+                            index: i,
+                            onMoveEarlier: i > 0
+                                ? () => _swapOrder(filtered, i, i - 1)
+                                : null,
+                            onMoveLater: i < filtered.length - 1
+                                ? () => _swapOrder(filtered, i, i + 1)
+                                : null,
+                          );
+                        },
+                        inserts: [
+                          StreamBuilder<List<VisualBibleColorBlock>>(
+                            stream: db.watchColorBlocksForBible(
+                              widget.bibleId,
                             ),
-                            child: Text(
-                              cat.$1,
-                              style: AppTypography.label(palette).copyWith(
-                                color: isActive
-                                    ? Colors.white
-                                    : palette.textSecondary,
-                              ),
-                            ),
+                            builder: (context, colorSnap) {
+                              final blocks = colorSnap.data
+                                      ?.map(ColorBlockModel.fromRow)
+                                      .toList() ??
+                                  [];
+                              final swatches = <(String, String)>[];
+                              for (final b in blocks) {
+                                for (final c in b.dominantColors) {
+                                  if (swatches.length >= 4) break;
+                                  swatches.add((b.blockName, c));
+                                }
+                                for (final c in b.accentColors) {
+                                  if (swatches.length >= 4) break;
+                                  swatches.add(('${b.blockName} accent', c));
+                                }
+                                if (swatches.length >= 4) break;
+                              }
+                              return MoodboardProjectPaletteCard(
+                                swatches: swatches,
+                                note: blocks.isNotEmpty
+                                    ? blocks.first.emotionalIntent
+                                    : null,
+                              );
+                            },
                           ),
-                        );
-                      }),
-                      GestureDetector(
-                        onTap: () => setState(() {
-                          _selectionMode = !_selectionMode;
-                          if (!_selectionMode) _selectedIds.clear();
-                        }),
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: _selectionMode
-                                ? palette.warning.withValues(alpha: 0.85)
-                                : palette.surfaceOverlay,
-                            borderRadius: BorderRadius.circular(20),
-                            border: _selectionMode
-                                ? null
-                                : Border.all(color: palette.border),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.check_box_outlined,
-                                size: 14,
-                                color: _selectionMode
-                                    ? Colors.white
-                                    : palette.textSecondary,
+                        ],
+                        trailing: _AddImageCard(
+                          onAddManual: () => _addManual(context),
+                        ),
+                      );
+                    }
+
+                    final mainColumn = Stack(
+                      children: [
+                        CustomScrollView(
+                          slivers: [
+                            SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(
+                                24,
+                                24,
+                                24,
+                                120,
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                _selectedIds.isEmpty
-                                    ? 'Seleccionar'
-                                    : '${_selectedIds.length}',
-                                style: AppTypography.label(palette).copyWith(
-                                  color: _selectionMode
-                                      ? Colors.white
-                                      : palette.textSecondary,
+                              sliver: SliverToBoxAdapter(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    StreamBuilder<VisualBible?>(
+                                      stream: db.watchVisualBibleForProject(
+                                        widget.projectId,
+                                      ),
+                                      builder: (context, bibleSnap) {
+                                        final bible = bibleSnap.data;
+                                        return MoodboardStitchHeader(
+                                          sectionNumber:
+                                              BibleSectionId.all.indexOf(
+                                                    BibleSectionId.moodboard,
+                                                  ) +
+                                                  1,
+                                          title: 'Moodboard',
+                                          narrative:
+                                              bible?.conceptNarrativeIntent ??
+                                                  bible?.colorNarrativeIntent ??
+                                                  bible?.lightingNarrativeIntent,
+                                          trailing: IconButton(
+                                            tooltip: _selectionMode
+                                                ? 'Cancelar selección'
+                                                : 'Seleccionar',
+                                            onPressed: () => setState(() {
+                                              _selectionMode =
+                                                  !_selectionMode;
+                                              if (!_selectionMode) {
+                                                _selectedIds.clear();
+                                              }
+                                            }),
+                                            icon: Icon(
+                                              Icons.check_box_outlined,
+                                              color: _selectionMode
+                                                  ? palette.warning
+                                                  : palette.textTertiary,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    MoodboardStitchGlassChips(
+                                      filters: kMoodboardPrimaryFilters,
+                                      activeCategory: _activeCategory,
+                                      onSelect: (v) => setState(() {
+                                        _activeCategory = v;
+                                        _facet = null;
+                                      }),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    MoodboardFacetChips(
+                                      active: _facet,
+                                      onSelect: _applyFacet,
+                                    ),
+                                    MoodboardStitchActionBar(
+                                      searchController: _searchController,
+                                      shownCount: filtered.length,
+                                      totalCount: images.length,
+                                      selectionMode: _selectionMode,
+                                      selectedCount: _selectedIds.length,
+                                      sortMode: _sortMode,
+                                      onSortMode: (m) => setState(() {
+                                        _sortMode = m;
+                                        if (m ==
+                                            MoodboardSortMode.random) {
+                                          _randomSeed = DateTime.now()
+                                              .microsecondsSinceEpoch;
+                                        }
+                                      }),
+                                      onToggleSelection: () =>
+                                          setState(() {
+                                        _selectionMode = !_selectionMode;
+                                        if (!_selectionMode) {
+                                          _selectedIds.clear();
+                                        }
+                                      }),
+                                      onAdd: () => _showAddMenu(context),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    if (filtered.isEmpty ||
+                                        _showLocationGroupedView ||
+                                        _showGroupedView)
+                                      SizedBox(
+                                        height: MediaQuery.sizeOf(context)
+                                                .height *
+                                            0.55,
+                                        child: gridBody,
+                                      )
+                                    else
+                                      gridBody,
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: StreamBuilder<List<MoodboardImage>>(
-                    stream: db.watchMoodboardImages(widget.projectId),
-                    builder: (context, snap) {
-                      final images = snap.data ?? [];
-                      final filtered = _filterImages(images);
-
-                      Widget content;
-                      if (filtered.isEmpty) {
-                        content = _MoodboardEmptyState(
-                          onAddManual: () => _addManual(context),
-                          onAddFromScouting: () => _addScouting(context),
-                          onSyncScript: () => _syncScript(context),
-                          onPaste: () => _pasteFromClipboard(context),
-                        );
-                      } else if (_showLocationGroupedView) {
-                        content = _LocationGroupedMoodboardGrid(
-                          db: db,
-                          projectId: widget.projectId,
-                          images: filtered,
-                          cardBuilder: (img) => _buildCard(img, filtered),
-                        );
-                      } else if (_showGroupedView) {
-                        content = _GroupedMoodboardGrid(
-                          db: db,
-                          projectId: widget.projectId,
-                          category: _activeCategory!,
-                          images: filtered,
-                          onAddGroup: () => _createGroup(context),
-                          cardBuilder: (img) => _buildCard(img, filtered),
-                        );
-                      } else {
-                        content = GridView.builder(
-                          padding: const EdgeInsets.all(AppSpacing.md),
-                          gridDelegate:
-                              const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 280,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
-                            childAspectRatio: 1.5,
-                          ),
-                          itemCount: filtered.length + 1,
-                          itemBuilder: (context, i) {
-                            if (i == filtered.length) {
-                              return _AddImageCard(
-                                onAddManual: () => _addManual(context),
-                              );
-                            }
-                            final image =
-                                MoodboardImageModel.fromRow(filtered[i]);
-                            return _buildCard(
-                              image,
-                              filtered,
-                              onMoveEarlier: i > 0
-                                  ? () => _swapOrder(filtered, i, i - 1)
-                                  : null,
-                              onMoveLater: i < filtered.length - 1
-                                  ? () => _swapOrder(filtered, i, i + 1)
-                                  : null,
-                            );
-                          },
-                        );
-                      }
-
-                      return Stack(
-                        children: [
-                          content,
-                          if (_selectedIds.isNotEmpty)
-                            Positioned(
-                              left: AppSpacing.md,
-                              right: AppSpacing.md,
-                              bottom: AppSpacing.md,
-                              child: _SelectionActionBar(
-                                count: _selectedIds.length,
-                                onAssignSections: () async {
-                                  final selected = _selectedRows(filtered);
-                                  await MoodboardBatchAssignSheet
-                                      .showAssignSections(
-                                    context: context,
-                                    db: ref.read(databaseProvider),
-                                    images: selected,
-                                  );
-                                  if (context.mounted) _clearSelection();
-                                },
-                                onAssignLocation: () async {
-                                  final selected = _selectedRows(filtered);
-                                  await MoodboardBatchAssignSheet
-                                      .showAssignLocation(
-                                    context: context,
-                                    db: ref.read(databaseProvider),
-                                    images: selected,
-                                    projectId: widget.projectId,
-                                  );
-                                  if (context.mounted) _clearSelection();
-                                },
-                                onAssignGroup: () async {
-                                  final selected = _selectedRows(filtered);
-                                  await MoodboardBatchAssignSheet
-                                      .showAssignGroup(
-                                    context: context,
-                                    db: ref.read(databaseProvider),
-                                    projectId: widget.projectId,
-                                    images: selected,
-                                    categoryHint: _activeCategory,
-                                  );
-                                  if (context.mounted) _clearSelection();
-                                },
-                                onSetCover: _selectedIds.length == 1
-                                    ? () async {
-                                        final selected =
-                                            _selectedRows(filtered);
-                                        final ok = await MoodboardBatchActions
-                                            .setProjectCover(
-                                          db: ref.read(databaseProvider),
-                                          projectId: widget.projectId,
-                                          sourceImagePath:
-                                              selected.first.imagePath,
-                                        );
-                                        if (context.mounted) {
-                                          AppSnackBar.show(
-                                            context,
-                                            ok
-                                                ? 'Portada actualizada'
-                                                : 'No se pudo guardar',
-                                            isError: !ok,
-                                          );
-                                          _clearSelection();
-                                        }
-                                      }
-                                    : null,
-                                onDelete: () async {
-                                  await _deleteBatch(
-                                    context,
-                                    _selectedRows(filtered),
-                                  );
-                                  if (context.mounted) _clearSelection();
-                                },
-                                onCancel: _clearSelection,
-                              ),
                             ),
-                        ],
-                      );
-                    },
-                  ),
+                          ],
+                        ),
+                        if (_selectedIds.isNotEmpty)
+                          Positioned(
+                            left: AppSpacing.md,
+                            right: AppSpacing.md,
+                            bottom: AppSpacing.md,
+                            child: _SelectionActionBar(
+                              count: _selectedIds.length,
+                              onAssignSections: () async {
+                                final selected = _selectedRows(filtered);
+                                await MoodboardBatchAssignSheet
+                                    .showAssignSections(
+                                  context: context,
+                                  db: ref.read(databaseProvider),
+                                  images: selected,
+                                );
+                                if (context.mounted) _clearSelection();
+                              },
+                              onAssignLocation: () async {
+                                final selected = _selectedRows(filtered);
+                                await MoodboardBatchAssignSheet
+                                    .showAssignLocation(
+                                  context: context,
+                                  db: ref.read(databaseProvider),
+                                  images: selected,
+                                  projectId: widget.projectId,
+                                );
+                                if (context.mounted) _clearSelection();
+                              },
+                              onAssignGroup: () async {
+                                final selected = _selectedRows(filtered);
+                                await MoodboardBatchAssignSheet
+                                    .showAssignGroup(
+                                  context: context,
+                                  db: ref.read(databaseProvider),
+                                  projectId: widget.projectId,
+                                  images: selected,
+                                  categoryHint: _activeCategory,
+                                );
+                                if (context.mounted) _clearSelection();
+                              },
+                              onSetCover: _selectedIds.length == 1
+                                  ? () async {
+                                      final selected =
+                                          _selectedRows(filtered);
+                                      final ok = await MoodboardBatchActions
+                                          .setProjectCover(
+                                        db: ref.read(databaseProvider),
+                                        projectId: widget.projectId,
+                                        sourceImagePath:
+                                            selected.first.imagePath,
+                                      );
+                                      if (context.mounted) {
+                                        AppSnackBar.show(
+                                          context,
+                                          ok
+                                              ? 'Portada actualizada'
+                                              : 'No se pudo guardar',
+                                          isError: !ok,
+                                        );
+                                        _clearSelection();
+                                      }
+                                    }
+                                  : null,
+                              onDelete: () async {
+                                await _deleteBatch(
+                                  context,
+                                  _selectedRows(filtered),
+                                );
+                                if (context.mounted) _clearSelection();
+                              },
+                              onCancel: _clearSelection,
+                            ),
+                          ),
+                      ],
+                    );
+
+                    return mainColumn;
+                  },
                 ),
               ],
             ),
@@ -635,6 +979,7 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     _focusNode.dispose();
     super.dispose();
   }
@@ -648,7 +993,8 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
     );
     if (!context.mounted) return;
     final message = switch (status) {
-      ClipboardImageReadStatus.success => 'Imagen pegada en el moodboard',
+      ClipboardImageReadStatus.success =>
+        'Imagen pegada · paleta de color extraída',
       ClipboardImageReadStatus.downloadFailed =>
         'No se pudo descargar la imagen. En ShotDeck usa clic derecho → Copiar imagen (no la URL).',
       ClipboardImageReadStatus.invalidUrl =>
@@ -955,8 +1301,10 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
   }
 }
 
-class _MoodboardImageCard extends StatelessWidget {
+class _MoodboardImageCard extends StatefulWidget {
   final MoodboardImageModel image;
+  final MoodboardReferenceMeta? meta;
+  final double imageAspect;
   final bool isSelected;
   final bool selectionMode;
   final VoidCallback onTap;
@@ -967,6 +1315,8 @@ class _MoodboardImageCard extends StatelessWidget {
 
   const _MoodboardImageCard({
     required this.image,
+    this.meta,
+    this.imageAspect = 1.0,
     this.isSelected = false,
     this.selectionMode = false,
     required this.onTap,
@@ -977,122 +1327,195 @@ class _MoodboardImageCard extends StatelessWidget {
   });
 
   @override
+  State<_MoodboardImageCard> createState() => _MoodboardImageCardState();
+}
+
+class _MoodboardImageCardState extends State<_MoodboardImageCard> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final badge = MoodboardSource.badge(image.source);
-    Color badgeColor = palette.accent;
-    if (image.source == MoodboardSource.scouting) badgeColor = palette.success;
-    if (image.source == MoodboardSource.unrealRender) badgeColor = palette.warning;
+    final image = widget.image;
+    final meta = widget.meta;
+    final title = meta?.title?.trim().isNotEmpty == true
+        ? meta!.title!
+        : (image.filmReference?.trim().isNotEmpty == true
+            ? image.filmReference!
+            : (image.caption?.trim().isNotEmpty == true
+                ? image.caption!
+                : 'Sin título'));
+    final note = meta?.primaryNote ??
+        (image.caption?.trim().isNotEmpty == true &&
+                image.caption!.trim() != title
+            ? image.caption!.trim()
+            : null);
+    final pending = meta?.pendingReview == true;
 
-    return GestureDetector(
-      onTap: onTap,
-      onSecondaryTapUp: onSecondaryTap == null
-          ? null
-          : (details) => onSecondaryTap!(details.globalPosition),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.file(
-              File(image.imagePath),
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: palette.surfaceElevated,
-                child: Icon(Icons.broken_image_outlined, color: palette.textTertiary),
-              ),
-            ),
-          ),
-          if (isSelected)
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: palette.accent, width: 3),
-                  color: palette.accent.withValues(alpha: 0.25),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onSecondaryTapUp: widget.onSecondaryTap == null
+            ? null
+            : (details) => widget.onSecondaryTap!(details.globalPosition),
+        child: AnimatedScale(
+          scale: _hovered ? 1.015 : 1.0,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          child: AspectRatio(
+            aspectRatio: widget.imageAspect.clamp(0.55, 2.8),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black,
+                border: Border.all(
+                  color: widget.isSelected
+                      ? palette.accent
+                      : Colors.white.withValues(alpha: 0.06),
+                  width: widget.isSelected ? 1.5 : 0.5,
                 ),
               ),
-            ),
-          if (isSelected)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: palette.accent,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check, color: Colors.white, size: 16),
-              ),
-            ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [Colors.black87, Colors.transparent],
-                ),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  if (image.caption != null)
-                    Text(
-                      image.caption!,
-                      style: AppTypography.caption(palette).copyWith(color: Colors.white),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  Image.file(
+                    File(image.imagePath),
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    errorBuilder: (_, __, ___) => ColoredBox(
+                      color: palette.surfaceElevated,
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: palette.textTertiary,
+                      ),
                     ),
-                  MoodboardAssignmentBadges(
-                    assignedSections: image.assignedSections,
-                    linkedLocationName: image.linkedLocationName,
                   ),
+                  // Gradient + title/note only on hover (ShotDeck).
+                  AnimatedOpacity(
+                    opacity: _hovered ? 1 : 0,
+                    duration: const Duration(milliseconds: 160),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.55),
+                            Colors.transparent,
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.72),
+                          ],
+                          stops: const [0, 0.28, 0.55, 1],
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                height: 1.2,
+                                shadows: [
+                                  Shadow(
+                                    blurRadius: 6,
+                                    color: Colors.black54,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Spacer(),
+                            if (note != null)
+                              Text(
+                                note,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.88),
+                                  fontSize: 12,
+                                  height: 1.35,
+                                  shadows: const [
+                                    Shadow(
+                                      blurRadius: 6,
+                                      color: Colors.black54,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (pending)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: palette.warning.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'PENDIENTE',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.4,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (widget.isSelected)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Icon(
+                        Icons.check_circle,
+                        color: palette.accent,
+                      ),
+                    ),
+                  if (_hovered && !widget.selectionMode)
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.onMoveEarlier != null)
+                            _IconBtn(
+                              icon: Icons.arrow_back,
+                              onTap: widget.onMoveEarlier!,
+                            ),
+                          if (widget.onMoveLater != null)
+                            _IconBtn(
+                              icon: Icons.arrow_forward,
+                              onTap: widget.onMoveLater!,
+                            ),
+                          _IconBtn(
+                            icon: Icons.close,
+                            onTap: widget.onDelete,
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
           ),
-          if (badge.isNotEmpty)
-            Positioned(
-              top: 8,
-              left: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  badge,
-                  style: AppTypography.caption(palette).copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          Positioned(
-            top: 4,
-            right: 4,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!selectionMode && onMoveEarlier != null)
-                  _IconBtn(icon: Icons.arrow_back, onTap: onMoveEarlier!),
-                if (!selectionMode && onMoveLater != null)
-                  _IconBtn(icon: Icons.arrow_forward, onTap: onMoveLater!),
-                if (!selectionMode)
-                  _IconBtn(icon: Icons.close, onTap: onDelete),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1128,19 +1551,25 @@ class _AddImageCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return Material(
-      color: palette.surfaceOverlay,
-      borderRadius: BorderRadius.circular(12),
+      color: const Color(0xB30D0D0D),
+      borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: onAddManual,
-        borderRadius: BorderRadius.circular(12),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.add_photo_alternate_outlined, color: palette.accent),
-              const SizedBox(height: 4),
-              Text('Añadir', style: AppTypography.label(palette)),
-            ],
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.add_photo_alternate_outlined, color: palette.accent),
+                const SizedBox(height: 4),
+                Text('Añadir', style: AppTypography.label(palette)),
+              ],
+            ),
           ),
         ),
       ),
@@ -1334,16 +1763,16 @@ class _LocationGroupedMoodboardGrid extends StatelessWidget {
   }
 
   Widget _locationImageGrid(BuildContext context, List<MoodboardImage> rows) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 280,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 1.5,
-      ),
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return MoodboardMasonryGrid(
+      minTileWidth: 240,
+      gap: 12,
       itemCount: rows.length,
+      imageAspectOf: (i) {
+        // Parent cardBuilder already embeds real aspect via _buildCard.
+        return MoodboardImageAspect.cached(rows[i].imagePath) ??
+            MoodboardMasonryGrid.fallbackAspectForIndex(i);
+      },
       itemBuilder: (context, i) {
         final image = MoodboardImageModel.fromRow(rows[i]);
         return cardBuilder(image);
@@ -1428,16 +1857,13 @@ class _GroupedMoodboardGrid extends StatelessWidget {
       );
     }
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 280,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 1.5,
-      ),
+    return MoodboardMasonryGrid(
+      minTileWidth: 240,
+      gap: 12,
       itemCount: rows.length,
+      imageAspectOf: (i) =>
+          MoodboardImageAspect.cached(rows[i].imagePath) ??
+          MoodboardMasonryGrid.fallbackAspectForIndex(i),
       itemBuilder: (context, i) {
         final image = MoodboardImageModel.fromRow(rows[i]);
         return cardBuilder(image);

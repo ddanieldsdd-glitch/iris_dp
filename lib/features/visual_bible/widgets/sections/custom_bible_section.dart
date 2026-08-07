@@ -7,6 +7,7 @@ import '../../bible_section_fields.dart';
 import '../bible_form_widgets.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_unified_references_panel.dart';
+import '../block_reference_images.dart';
 import '../narrative_bridge_card.dart';
 
 /// Sección personalizada con sub-apartados configurables (texto, imágenes…).
@@ -33,6 +34,8 @@ class CustomBibleSection extends StatefulWidget {
 class _CustomBibleSectionState extends State<CustomBibleSection> {
   late Map<String, String> _values;
   late List<BibleSectionField> _fields;
+
+  static String _imagesKey(String fieldKey) => '${fieldKey}__images';
 
   @override
   void initState() {
@@ -94,14 +97,37 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
     _persist();
   }
 
+  List<String> _imagesFor(String fieldKey) {
+    final raw = _values[_imagesKey(fieldKey)];
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded.whereType<String>().toList();
+      }
+    } catch (_) {}
+    return const [];
+  }
+
+  void _setImages(String fieldKey, List<String> paths) {
+    setState(() {
+      if (paths.isEmpty) {
+        _values.remove(_imagesKey(fieldKey));
+      } else {
+        _values[_imagesKey(fieldKey)] = jsonEncode(paths);
+      }
+    });
+    _persist();
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = <Widget>[];
     for (final field in _fields) {
-      final widget = _buildField(field);
-      if (widget != null) {
+      final built = _buildField(field);
+      if (built != null) {
         if (items.isNotEmpty) items.add(const SizedBox(height: AppSpacing.lg));
-        items.add(widget);
+        items.add(built);
       }
     }
 
@@ -113,11 +139,18 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
 
   Widget? _buildField(BibleSectionField field) {
     return switch (field.type) {
-      BibleSectionFieldType.narrative => NarrativeBridgeCard(
-          title: field.label,
-          hint: field.hint ?? 'Intención narrativa de «${widget.label}»…',
-          value: _values[field.key],
-          onChanged: (v) => _setValue(field.key, v),
+      BibleSectionFieldType.narrative => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            NarrativeBridgeCard(
+              title: field.label,
+              hint: field.hint ?? 'Intención narrativa de «${widget.label}»…',
+              value: _values[field.key],
+              onChanged: (v) => _setValue(field.key, v),
+            ),
+            const SizedBox(height: 8),
+            _imageAttachRow(field.key),
+          ],
         ),
       BibleSectionFieldType.references ||
       BibleSectionFieldType.image =>
@@ -131,13 +164,33 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
           ),
         ),
       BibleSectionFieldType.blocks => null,
-      BibleSectionFieldType.text => BibleTextField(
-          label: field.label,
-          hint: field.hint ?? '',
-          maxLines: field.maxLines,
-          initialValue: _values[field.key] ?? '',
-          onChanged: (v) => _setValue(field.key, v),
+      BibleSectionFieldType.text => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            BibleTextField(
+              label: field.label,
+              hint: field.hint ?? '',
+              maxLines: field.maxLines,
+              initialValue: _values[field.key] ?? '',
+              onChanged: (v) => _setValue(field.key, v),
+            ),
+            const SizedBox(height: 8),
+            _imageAttachRow(field.key),
+          ],
         ),
     };
+  }
+
+  Widget _imageAttachRow(String fieldKey) {
+    final paths = _imagesFor(fieldKey);
+    return blockReferenceImagesRow(
+      projectId: widget.projectId,
+      paths: paths,
+      onAdd: () => pickBlockReferenceImage(
+        projectId: widget.projectId,
+        onSaved: (path) => _setImages(fieldKey, [...paths, path]),
+      ),
+      onSaved: (path) async => _setImages(fieldKey, [...paths, path]),
+    );
   }
 }

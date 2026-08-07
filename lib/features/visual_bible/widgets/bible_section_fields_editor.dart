@@ -144,6 +144,56 @@ class _BibleSectionFieldsEditorState
     });
   }
 
+  Future<void> _applyStylePack() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.palette.surfaceElevated,
+      builder: (ctx) {
+        final palette = context.palette;
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Text(
+                  'Plantilla de sub-apartados',
+                  style: AppTypography.titleMedium(palette),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.movie_filter_outlined),
+                title: const Text('Cinematic'),
+                subtitle: const Text('Narrativa + atmósfera + refs moodboard'),
+                onTap: () => Navigator.pop(ctx, 'cinematic'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.settings_outlined),
+                title: const Text('Technical'),
+                subtitle: const Text('Specs + notas de rodaje + refs'),
+                onTap: () => Navigator.pop(ctx, 'technical'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.crop_square_outlined),
+                title: const Text('Minimalist'),
+                subtitle: const Text('Intención + notas + imagen'),
+                onTap: () => Navigator.pop(ctx, 'minimalist'),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == null) return;
+    setState(() {
+      _fields = BibleSectionFieldsConfig.packForStyle(
+        picked,
+        sectionLabel: widget.definition.label,
+      );
+    });
+  }
+
   void _removeField(int index) {
     setState(() => _fields.removeAt(index));
   }
@@ -222,6 +272,12 @@ class _BibleSectionFieldsEditorState
               },
             ),
           ),
+          OutlinedButton.icon(
+            onPressed: _applyStylePack,
+            icon: const Icon(Icons.auto_awesome_outlined),
+            label: const Text('Aplicar plantilla estándar'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           OutlinedButton.icon(
             onPressed: _addField,
             icon: const Icon(Icons.add),

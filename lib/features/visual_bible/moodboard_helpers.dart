@@ -11,12 +11,31 @@ import '../../core/sync/media_sync_bridge.dart';
 import '../../core/utils/clipboard_image_reader.dart';
 import '../../core/utils/media_storage.dart';
 import 'moodboard_association.dart';
+import 'moodboard_palette_extractor.dart';
+import 'moodboard_reference_meta.dart';
 import 'widgets/moodboard_drag.dart';
 import 'visual_bible_model.dart';
 
 /// Operaciones del moodboard (añadir, scouting, refs del guion).
 abstract final class MoodboardHelpers {
-  static Future<void> addImageFromBytes({
+  /// Extrae paleta dominante al añadir una still.
+  static Future<void> enrichImageMeta({
+    required int imageId,
+    required String imagePath,
+  }) async {
+    final colors = await MoodboardPaletteExtractor.fromFile(imagePath);
+    if (colors.isEmpty) return;
+    final existing = await MoodboardReferenceMetaStore.load(imageId);
+    if (existing.paletteHex.isNotEmpty) return;
+    await MoodboardReferenceMetaStore.save(
+      imageId,
+      existing.copyWith(
+        paletteHex: colors.map(MoodboardPaletteExtractor.toHex).toList(),
+      ),
+    );
+  }
+
+  static Future<int> addImageFromBytes({
     required AppDatabase db,
     required int projectId,
     int? bibleId,
@@ -44,9 +63,11 @@ abstract final class MoodboardHelpers {
       projectId: projectId,
       imageId: id,
     );
+    await enrichImageMeta(imageId: id, imagePath: copied);
+    return id;
   }
 
-  static Future<void> addImageFromBytesAssigned({
+  static Future<int> addImageFromBytesAssigned({
     required AppDatabase db,
     required int projectId,
     int? bibleId,
@@ -83,6 +104,8 @@ abstract final class MoodboardHelpers {
       projectId: projectId,
       imageId: id,
     );
+    await enrichImageMeta(imageId: id, imagePath: copied);
+    return id;
   }
 
   static Future<ClipboardImageReadStatus> addFromClipboard({
@@ -130,7 +153,7 @@ abstract final class MoodboardHelpers {
         fileName: 'mb_${DateTime.now().millisecondsSinceEpoch}$ext',
       );
       if (copied == null) continue;
-      await db.insertMoodboardImage(
+      final id = await db.insertMoodboardImage(
         MoodboardImagesCompanion.insert(
           projectId: projectId,
           bibleId: Value(bibleId),
@@ -139,6 +162,7 @@ abstract final class MoodboardHelpers {
           source: const Value(MoodboardSource.manual),
         ),
       );
+      await enrichImageMeta(imageId: id, imagePath: copied);
     }
   }
 

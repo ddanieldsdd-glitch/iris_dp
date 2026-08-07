@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show OrderingTerm, Value;
 import 'package:uuid/uuid.dart';
 
@@ -161,6 +163,24 @@ abstract final class UserTemplateService {
     return id;
   }
 
+  /// Upsert genérico (p. ej. BiblePresetBundle encode).
+  static Future<String> upsertRaw({
+    required AppDatabase db,
+    required UserTemplateType type,
+    required String name,
+    required String payloadJson,
+    String? description,
+    String? existingId,
+  }) =>
+      _upsert(
+        db: db,
+        type: type,
+        name: name,
+        payloadJson: payloadJson,
+        description: description,
+        existingId: existingId,
+      );
+
   static Future<void> deleteTemplate(AppDatabase db, String id) async {
     await (db.delete(db.userTemplates)..where((t) => t.id.equals(id))).go();
   }
@@ -206,6 +226,21 @@ abstract final class UserTemplateService {
 
     final template = await getTemplate(db, templateId);
     if (template == null) return;
+
+    // Bundle v1 anida el layout bajo "layout"; legacy es el payload directo.
+    try {
+      final decoded = jsonDecode(template.payloadJson);
+      if (decoded is Map && decoded['layout'] is Map) {
+        await db.applyBibleLayoutTemplate(
+          bibleId,
+          BibleLayoutTemplatePayload.fromJson(
+            Map<String, dynamic>.from(decoded['layout'] as Map),
+          ),
+        );
+        return;
+      }
+    } catch (_) {}
+
     final payload = BibleLayoutTemplatePayload.decode(template.payloadJson);
     await db.applyBibleLayoutTemplate(bibleId, payload);
   }

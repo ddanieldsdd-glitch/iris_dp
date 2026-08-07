@@ -2696,7 +2696,7 @@ class AppDatabase extends _$AppDatabase {
   Future<void> upsertBibleSectionDefinition(BibleSectionDefinition row) =>
       into(bibleSectionDefinitions).insertOnConflictUpdate(row);
 
-  Future<void> insertCustomBibleSection({
+  Future<String> insertCustomBibleSection({
     required int bibleId,
     required String groupId,
     required String label,
@@ -2727,6 +2727,7 @@ class AppDatabase extends _$AppDatabase {
         ),
       ),
     );
+    return id;
   }
 
   Future<void> _seedBibleSectionDefinitionsForExistingBibles() async {

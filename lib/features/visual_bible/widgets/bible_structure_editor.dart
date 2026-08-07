@@ -12,10 +12,15 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_snackbar.dart';
+import '../../../shared/visual_bible/bible_section_fields.dart';
+import '../../../shared/visual_bible/bible_section_ids.dart';
+import '../bible_blueprint.dart';
+import '../bible_section_style_store.dart';
 import 'bible_navigation_scope.dart';
 import 'bible_section_fields_editor.dart';
 
-/// Editor de estructura: renombrar, reordenar y configurar sub-apartados.
+/// Editor de estructura: renombrar, ocultar/eliminar y sub-apartados.
+/// El reordenamiento vive solo en Master Config.
 class BibleStructureEditor extends ConsumerStatefulWidget {
   final int bibleId;
   final int projectId;
@@ -57,8 +62,8 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      'Renombra secciones, reordénalas y edita los sub-apartados '
-                      'internos de cada pantalla.',
+                      'Renombra, oculta o elimina pantallas. Para cambiar el orden, '
+                      'usa Master Config (un solo drag & drop).',
                       style: AppTypography.caption(palette),
                     ),
                     const SizedBox(height: AppSpacing.lg),
@@ -75,19 +80,13 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
                               label: group.label,
                               onRename: () => _renameGroup(context, group),
                             ),
-                            _ReorderableSectionList(
+                            _SectionManageList(
                               defs: defs
                                   .where(
                                     (d) =>
                                         d.groupId == group.id && !d.isHidden,
                                   )
                                   .toList(),
-                              onReorder: (ordered) => db
-                                  .reorderBibleSectionsInGroup(
-                                widget.bibleId,
-                                group.id,
-                                ordered.map((d) => d.id).toList(),
-                              ),
                               onRename: (def) => _renameSection(context, def),
                               onEditFields: (def) =>
                                   BibleSectionFieldsEditor.show(
@@ -103,7 +102,7 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
                                     hidden: hidden,
                                   ),
                               onDelete: (def) {
-                                if (def.isBuiltIn) return;
+                                if (def.id == BibleSectionId.settings) return;
                                 _deleteSection(context, def);
                               },
                             ),
@@ -150,11 +149,48 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
   Future<void> _addCustomSection(BuildContext context, String groupId) async {
     final label = await _promptLabel(context, 'Nueva sección', '');
     if (label == null || label.isEmpty) return;
+    final style = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(title: Text('Plantilla de partida')),
+            ListTile(
+              title: const Text('Cinematic'),
+              onTap: () => Navigator.pop(ctx, 'cinematic'),
+            ),
+            ListTile(
+              title: const Text('Technical'),
+              onTap: () => Navigator.pop(ctx, 'technical'),
+            ),
+            ListTile(
+              title: const Text('Minimalist'),
+              onTap: () => Navigator.pop(ctx, 'minimalist'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final styleKey = style ?? 'cinematic';
+    final fields = BibleSectionFieldsConfig.packForStyle(
+      styleKey,
+      sectionLabel: label,
+    );
     final db = ref.read(databaseProvider);
-    await db.insertCustomBibleSection(
+    final sectionId = await db.insertCustomBibleSection(
       bibleId: widget.bibleId,
       groupId: groupId,
       label: label,
+      contentJson: BibleSectionFieldsConfig.encode(fields),
+    );
+    await BibleSectionStyleStore.save(
+      widget.projectId,
+      sectionId,
+      BibleSectionStyle.values.firstWhere(
+        (e) => e.name == styleKey,
+        orElse: () => BibleSectionStyle.cinematic,
+      ),
     );
     if (context.mounted) {
       AppSnackBar.show(context, 'Sección «$label» creada');
@@ -165,11 +201,16 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
     BuildContext context,
     BibleSectionDefinition def,
   ) async {
+    final isCustom = !def.isBuiltIn;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Eliminar sección'),
-        content: Text('¿Eliminar «${def.label}»?'),
+        title: Text(isCustom ? 'Eliminar sección' : 'Quitar sección'),
+        content: Text(
+          isCustom
+              ? '¿Eliminar «${def.label}»?'
+              : '¿Ocultar «${def.label}» de esta biblia?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -177,18 +218,30 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Eliminar'),
+            child: Text(isCustom ? 'Eliminar' : 'Quitar'),
           ),
         ],
       ),
     );
     if (confirm != true) return;
-    await ref.read(databaseProvider).deleteCustomBibleSection(
-          bibleId: widget.bibleId,
-          sectionId: def.id,
-        );
-    if (context.mounted) {
-      AppSnackBar.show(context, 'Sección eliminada');
+    final db = ref.read(databaseProvider);
+    if (isCustom) {
+      await db.deleteCustomBibleSection(
+        bibleId: widget.bibleId,
+        sectionId: def.id,
+      );
+      if (context.mounted) {
+        AppSnackBar.show(context, 'Sección eliminada');
+      }
+    } else {
+      await db.setBibleSectionHidden(
+        bibleId: widget.bibleId,
+        sectionId: def.id,
+        hidden: true,
+      );
+      if (context.mounted) {
+        AppSnackBar.show(context, 'Sección ocultada');
+      }
     }
   }
 
@@ -405,17 +458,15 @@ class _TemplateToolbar extends ConsumerWidget {
   }
 }
 
-class _ReorderableSectionList extends StatefulWidget {
+class _SectionManageList extends StatelessWidget {
   final List<BibleSectionDefinition> defs;
-  final Future<void> Function(List<BibleSectionDefinition> ordered) onReorder;
   final void Function(BibleSectionDefinition def) onRename;
   final void Function(BibleSectionDefinition def) onEditFields;
   final void Function(BibleSectionDefinition def, bool hidden)? onToggleHidden;
   final void Function(BibleSectionDefinition def)? onDelete;
 
-  const _ReorderableSectionList({
+  const _SectionManageList({
     required this.defs,
-    required this.onReorder,
     required this.onRename,
     required this.onEditFields,
     this.onToggleHidden,
@@ -423,98 +474,59 @@ class _ReorderableSectionList extends StatefulWidget {
   });
 
   @override
-  State<_ReorderableSectionList> createState() =>
-      _ReorderableSectionListState();
-}
-
-class _ReorderableSectionListState extends State<_ReorderableSectionList> {
-  late List<BibleSectionDefinition> _items;
-
-  @override
-  void initState() {
-    super.initState();
-    _items = List.from(widget.defs);
-  }
-
-  @override
-  void didUpdateWidget(_ReorderableSectionList oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.defs.length != oldWidget.defs.length ||
-        widget.defs.map((d) => d.id).join() !=
-            oldWidget.defs.map((d) => d.id).join()) {
-      _items = List.from(widget.defs);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return ReorderableListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _items.length,
-      onReorder: (oldIndex, newIndex) async {
-        setState(() {
-          if (newIndex > oldIndex) newIndex--;
-          final item = _items.removeAt(oldIndex);
-          _items.insert(newIndex, item);
-        });
-        await widget.onReorder(_items);
-      },
-      itemBuilder: (context, index) {
-        final def = _items[index];
-        return ListTile(
-          key: ValueKey(def.id),
-          leading: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.drag_handle, size: 18),
-              const SizedBox(width: 4),
-              Icon(bibleIconFromKey(def.iconKey), size: 20),
-            ],
-          ),
-          title: Text(def.label),
-          subtitle: def.isBuiltIn
-              ? null
-              : Text(
-                  'Personalizada',
-                  style: AppTypography.caption(palette),
-                ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.onToggleHidden != null)
-                IconButton(
-                  icon: Icon(
-                    def.isHidden
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    size: 18,
+    return Column(
+      children: [
+        for (final def in defs)
+          ListTile(
+            key: ValueKey(def.id),
+            leading: Icon(bibleIconFromKey(def.iconKey), size: 20),
+            title: Text(def.label),
+            subtitle: def.isBuiltIn
+                ? null
+                : Text(
+                    'Personalizada',
+                    style: AppTypography.caption(palette),
                   ),
-                  tooltip: def.isHidden ? 'Mostrar sección' : 'Ocultar sección',
-                  onPressed: () =>
-                      widget.onToggleHidden!(def, !def.isHidden),
-                ),
-              IconButton(
-                icon: const Icon(Icons.view_list_outlined, size: 18),
-                tooltip: 'Sub-apartados',
-                onPressed: () => widget.onEditFields(def),
-              ),
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                onPressed: () => widget.onRename(def),
-              ),
-              if (widget.onDelete != null && !def.isBuiltIn)
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onToggleHidden != null)
+                  IconButton(
+                    icon: Icon(
+                      def.isHidden
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      size: 18,
+                    ),
+                    tooltip:
+                        def.isHidden ? 'Mostrar sección' : 'Ocultar sección',
+                    onPressed: () => onToggleHidden!(def, !def.isHidden),
+                  ),
                 IconButton(
-                  icon: Icon(Icons.delete_outline,
-                      size: 18, color: palette.error),
-                  onPressed: () => widget.onDelete!(def),
+                  icon: const Icon(Icons.view_list_outlined, size: 18),
+                  tooltip: 'Sub-apartados',
+                  onPressed: () => onEditFields(def),
                 ),
-            ],
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  onPressed: () => onRename(def),
+                ),
+                if (onDelete != null && def.id != 'settings')
+                  IconButton(
+                    icon: Icon(Icons.delete_outline,
+                        size: 18, color: palette.error),
+                    tooltip: def.isBuiltIn
+                        ? 'Quitar de la biblia'
+                        : 'Eliminar pantalla',
+                    onPressed: () => onDelete!(def),
+                  ),
+              ],
+            ),
           ),
-        );
-      },
+      ],
     );
   }
 }

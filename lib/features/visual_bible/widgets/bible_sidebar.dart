@@ -1,8 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../visual_bible_completion.dart';
 import 'bible_navigation_scope.dart';
-import '../../../core/database/app_database.dart' hide BibleSectionGroup show BibleSectionDefinition;
+import '../../../core/database/app_database.dart' hide BibleSectionGroup;
 import '../../../core/database/app_database.dart' as app_db show BibleSectionGroup;
 import '../../../core/theme/app_colors.dart';
 import '../visual_bible_model.dart';
@@ -11,28 +13,40 @@ import '../visual_bible_model.dart';
 class BibleSidebar extends StatelessWidget {
   final String activeSection;
   final VisualBibleData? data;
+  final Project? project;
   final ValueChanged<String> onSectionSelected;
   final List<app_db.BibleSectionGroup>? groups;
   final List<BibleSectionDefinition>? definitions;
   final VoidCallback? onEditStructure;
+  final VoidCallback? onOpenSettings;
+  final Future<void> Function(BibleSectionDefinition def)? onRemoveSection;
 
   const BibleSidebar({
     super.key,
     required this.activeSection,
     required this.data,
+    this.project,
     required this.onSectionSelected,
     this.groups,
     this.definitions,
     this.onEditStructure,
+    this.onOpenSettings,
+    this.onRemoveSection,
   });
 
   Color _groupAccentColor(AppPalette palette, String groupLabel) {
     final l = groupLabel.toLowerCase();
-    if (l.contains('técnica') || l.contains('imagen') || l.contains('technical')) {
+    if (l.contains('técnica') ||
+        l.contains('imagen') ||
+        l.contains('technical')) {
       return palette.accent.withValues(alpha: 0.6);
-    } else if (l.contains('espacial') || l.contains('prueba') || l.contains('location')) {
+    } else if (l.contains('espacial') ||
+        l.contains('prueba') ||
+        l.contains('location')) {
       return palette.success.withValues(alpha: 0.6);
-    } else if (l.contains('operativa') || l.contains('referencia') || l.contains('workflow')) {
+    } else if (l.contains('operativa') ||
+        l.contains('referencia') ||
+        l.contains('workflow')) {
       return palette.warning.withValues(alpha: 0.6);
     }
     return palette.textTertiary;
@@ -45,29 +59,52 @@ class BibleSidebar extends StatelessWidget {
         definitions != null &&
         groups!.isNotEmpty &&
         definitions!.isNotEmpty;
+    final projectName = project?.name.trim().isNotEmpty == true
+        ? project!.name.trim()
+        : 'Proyecto';
+    final cover = project?.coverImagePath;
 
     return Container(
-      width: 240,
+      width: 280,
       decoration: BoxDecoration(
-        color: palette.background,
-        border: Border(right: BorderSide(color: palette.divider)),
+        color: const Color(0xFF0E0E10),
+        border: Border(right: BorderSide(color: palette.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 16, 12, 14),
             child: Row(
               children: [
+                _ProjectAvatar(coverPath: cover, palette: palette),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    'BIBLIA DE FOTOGRAFÍA',
-                    style: TextStyle(
-                      fontSize: 9,
-                      letterSpacing: 1.5,
-                      fontWeight: FontWeight.w700,
-                      color: palette.textTertiary,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        projectName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                          height: 1.2,
+                          color: palette.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Biblia visual',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                          color: palette.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 if (onEditStructure != null)
@@ -76,12 +113,17 @@ class BibleSidebar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
-                      child: Icon(Icons.tune, size: 14, color: palette.textSecondary),
+                      child: Icon(
+                        Icons.account_tree_outlined,
+                        size: 16,
+                        color: palette.textSecondary,
+                      ),
                     ),
                   ),
               ],
             ),
           ),
+          Divider(height: 1, color: palette.border),
           const SizedBox(height: 8),
           Expanded(
             child: ListView(
@@ -91,6 +133,59 @@ class BibleSidebar extends StatelessWidget {
                   : _fallbackItems(palette),
             ),
           ),
+          if (onOpenSettings != null) ...[
+            Divider(height: 1, color: palette.border),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: Material(
+                color: palette.surfaceOverlay,
+                borderRadius: BorderRadius.circular(10),
+                child: InkWell(
+                  onTap: onOpenSettings,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.tune, size: 18, color: palette.accent),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Ajuste rápido',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: palette.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                'Esta pantalla',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: palette.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right,
+                          size: 18,
+                          color: palette.textTertiary,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -130,7 +225,11 @@ class BibleSidebar extends StatelessWidget {
         ),
       );
       final sectionDefs = definitions!
-          .where((d) => d.groupId == group.id && !d.isHidden)
+          .where(
+            (d) =>
+                d.groupId == group.id &&
+                (!d.isHidden || d.id == BibleSectionId.settings),
+          )
           .toList()
         ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
       for (final def in sectionDefs) {
@@ -144,6 +243,11 @@ class BibleSidebar extends StatelessWidget {
                 ? 0
                 : bibleSectionCompletion(data!, def.id),
             onTap: () => onSectionSelected(def.id),
+            onRemove: onRemoveSection == null ||
+                    def.id == BibleSectionId.settings
+                ? null
+                : () => onRemoveSection!(def),
+            isBuiltIn: def.isBuiltIn,
           ),
         );
       }
@@ -202,6 +306,38 @@ class BibleSidebar extends StatelessWidget {
   }
 }
 
+class _ProjectAvatar extends StatelessWidget {
+  final String? coverPath;
+  final AppPalette palette;
+
+  const _ProjectAvatar({required this.coverPath, required this.palette});
+
+  @override
+  Widget build(BuildContext context) {
+    final path = coverPath;
+    final hasCover =
+        path != null && path.isNotEmpty && File(path).existsSync();
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: hasCover
+            ? Image.file(File(path), fit: BoxFit.cover)
+            : ColoredBox(
+                color: palette.surfaceOverlay,
+                child: Icon(
+                  Icons.movie_creation_outlined,
+                  color: palette.accent,
+                  size: 22,
+                ),
+              ),
+      ),
+    );
+  }
+}
+
 class _SidebarItem extends StatelessWidget {
   final String id;
   final String label;
@@ -209,6 +345,8 @@ class _SidebarItem extends StatelessWidget {
   final bool active;
   final double completion;
   final VoidCallback onTap;
+  final VoidCallback? onRemove;
+  final bool isBuiltIn;
 
   const _SidebarItem({
     required this.id,
@@ -217,80 +355,88 @@ class _SidebarItem extends StatelessWidget {
     required this.active,
     required this.completion,
     required this.onTap,
+    this.onRemove,
+    this.isBuiltIn = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final complete = completion >= 1.0;
-
     return Material(
       color: active
           ? palette.accent.withValues(alpha: 0.12)
           : Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        child: Stack(
-          children: [
-            if (active)
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                child: Container(
-                  width: 2,
-                  color: palette.accent,
+        onSecondaryTapDown: onRemove == null
+            ? null
+            : (details) => _showMenu(context, details.globalPosition),
+        onLongPress: onRemove == null
+            ? null
+            : () {
+                final box = context.findRenderObject() as RenderBox?;
+                final pos = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+                _showMenu(context, pos);
+              },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: active ? palette.accent : palette.textSecondary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                    color: active ? palette.textPrimary : palette.textSecondary,
+                  ),
                 ),
               ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Icon(
-                    icon,
-                    size: 18,
-                    color: active ? palette.accent : palette.textSecondary,
+              if (completion > 0)
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: completion >= 0.85
+                        ? palette.success
+                        : palette.accent.withValues(alpha: 0.7),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-                            color: active ? palette.accent : palette.textPrimary,
-                          ),
-                        ),
-                        if (!complete && completion > 0) ...[
-                          const SizedBox(height: 4),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(2),
-                            child: LinearProgressIndicator(
-                              value: completion,
-                              minHeight: 4,
-                              backgroundColor: palette.textTertiary.withValues(alpha: 0.2),
-                              valueColor: AlwaysStoppedAnimation<Color>(palette.accent),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  if (complete) ...[
-                    const SizedBox(width: 8),
-                    Icon(Icons.check_circle, size: 14, color: palette.success),
-                  ],
-                ],
-              ),
-            ),
-          ],
+                ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Future<void> _showMenu(BuildContext context, Offset globalPosition) async {
+    final palette = context.palette;
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        globalPosition.dx + 1,
+        globalPosition.dy + 1,
+      ),
+      color: palette.surfaceElevated,
+      items: [
+        PopupMenuItem(
+          value: 'remove',
+          child: Text(
+            isBuiltIn ? 'Quitar de la biblia' : 'Eliminar pantalla',
+            style: TextStyle(color: palette.error),
+          ),
+        ),
+      ],
+    );
+    if (action == 'remove') onRemove?.call();
   }
 }

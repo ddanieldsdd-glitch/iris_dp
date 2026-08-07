@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../bible_structure_editor.dart';
+import '../master_config/master_config_section.dart';
 
-/// Configuración de la biblia: estructura, plantillas y sub-apartados.
+/// Configuración de la biblia: Master Config (Stitch) + plantillas.
 class BibleSettingsSection extends StatelessWidget {
   final int bibleId;
   final int projectId;
@@ -33,7 +33,7 @@ class BibleSettingsSection extends StatelessWidget {
       );
     }
 
-    return BibleStructureEditor(
+    return MasterConfigSection(
       bibleId: bibleId,
       projectId: projectId,
     );

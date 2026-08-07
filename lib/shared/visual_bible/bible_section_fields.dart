@@ -306,6 +306,91 @@ abstract final class BibleSectionFieldsConfig {
         ),
       ];
 
+  /// Packs estándar al crear / aplicar plantilla por estilo visual.
+  static List<BibleSectionField> packForStyle(
+    String styleKey, {
+    String sectionLabel = 'Sección',
+  }) {
+    switch (styleKey) {
+      case 'technical':
+        return [
+          BibleSectionField(
+            key: 'narrative',
+            label: 'Intención técnica',
+            hint: 'Qué problema técnico resuelve «$sectionLabel»…',
+            maxLines: 3,
+            type: BibleSectionFieldType.narrative,
+          ),
+          const BibleSectionField(
+            key: 'specs',
+            label: 'Specs / métricas',
+            hint: 'Valores, ratios, equipos, límites…',
+            maxLines: 6,
+          ),
+          const BibleSectionField(
+            key: 'notes',
+            label: 'Notas de rodaje',
+            hint: 'Procedimiento, riesgos, checklist…',
+            maxLines: 5,
+          ),
+          const BibleSectionField(
+            key: 'references',
+            label: 'Referencias visuales',
+            type: BibleSectionFieldType.references,
+          ),
+        ];
+      case 'minimalist':
+        return [
+          BibleSectionField(
+            key: 'narrative',
+            label: 'Intención',
+            hint: 'Una idea clara para «$sectionLabel»…',
+            maxLines: 3,
+            type: BibleSectionFieldType.narrative,
+          ),
+          const BibleSectionField(
+            key: 'body',
+            label: 'Notas',
+            hint: 'Lo esencial…',
+            maxLines: 4,
+          ),
+          const BibleSectionField(
+            key: 'references',
+            label: 'Referencias',
+            type: BibleSectionFieldType.image,
+          ),
+        ];
+      case 'cinematic':
+      default:
+        return [
+          BibleSectionField(
+            key: 'narrative',
+            label: 'Intención narrativa',
+            hint: 'Atmósfera y emoción de «$sectionLabel»…',
+            maxLines: 4,
+            type: BibleSectionFieldType.narrative,
+          ),
+          const BibleSectionField(
+            key: 'atmosphere',
+            label: 'Atmósfera / look',
+            hint: 'Luz, color, textura, ritmo…',
+            maxLines: 5,
+          ),
+          const BibleSectionField(
+            key: 'body',
+            label: 'Desarrollo',
+            hint: 'Cómo se materializa en imagen…',
+            maxLines: 8,
+          ),
+          const BibleSectionField(
+            key: 'references',
+            label: 'Referencias moodboard',
+            type: BibleSectionFieldType.references,
+          ),
+        ];
+    }
+  }
+
   static String newFieldKey() =>
       'field_${DateTime.now().millisecondsSinceEpoch}';
 

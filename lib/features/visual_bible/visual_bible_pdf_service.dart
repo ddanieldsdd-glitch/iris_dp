@@ -22,6 +22,7 @@ class VisualBiblePdfService {
     required List<LightingSetupModel> lightingSetups,
     required List<CameraTestModel> cameraTests,
     required List<MoodboardImageModel> moodboard,
+    Set<String>? includedSections,
   }) async {
     final doc = await buildDocument(
       mode: mode,
@@ -33,6 +34,7 @@ class VisualBiblePdfService {
       lightingSetups: lightingSetups,
       cameraTests: cameraTests,
       moodboard: moodboard,
+      includedSections: includedSections,
     );
     return doc.save();
   }
@@ -56,6 +58,11 @@ class VisualBiblePdfService {
         moodboard: moodboard,
       );
 
+  static bool _sectionAllowed(Set<String>? included, String sectionId) {
+    if (included == null || included.isEmpty) return true;
+    return included.contains(sectionId);
+  }
+
   static Future<pw.Document> buildDocument({
     required String mode,
     required String projectName,
@@ -66,9 +73,11 @@ class VisualBiblePdfService {
     required List<LightingSetupModel> lightingSetups,
     required List<CameraTestModel> cameraTests,
     required List<MoodboardImageModel> moodboard,
+    Set<String>? includedSections,
   }) async {
     final isPitch = mode == VisualBibleExportMode.pitch;
     final isTech = mode == VisualBibleExportMode.techScout;
+    final sections = includedSections;
     final fonts = await PdfExportFonts.load();
     final theme = PdfExportFonts.theme(regular: fonts.regular, bold: fonts.bold);
     final doc = pw.Document();
@@ -133,7 +142,9 @@ class VisualBiblePdfService {
       ),
     );
 
-    if (!isTech && _hasDirectionContent(data)) {
+    if (!isTech &&
+        _sectionAllowed(sections, BibleSectionId.direction) &&
+        _hasDirectionContent(data)) {
       doc.addPage(
         pw.Page(
           theme: theme,
@@ -160,7 +171,9 @@ class VisualBiblePdfService {
       );
     }
 
-    if (!isTech && data.visualConcept?.trim().isNotEmpty == true) {
+    if (!isTech &&
+        _sectionAllowed(sections, BibleSectionId.concept) &&
+        data.visualConcept?.trim().isNotEmpty == true) {
       doc.addPage(
         pw.Page(
           theme: theme,
@@ -190,7 +203,9 @@ class VisualBiblePdfService {
       );
     }
 
-    if (!isTech && colorBlocks.isNotEmpty) {
+    if (!isTech &&
+        _sectionAllowed(sections, BibleSectionId.colorImage) &&
+        colorBlocks.isNotEmpty) {
       doc.addPage(
         pw.MultiPage(
           theme: theme,
@@ -252,7 +267,7 @@ class VisualBiblePdfService {
       );
     }
 
-    if (!isPitch) {
+    if (!isPitch && _sectionAllowed(sections, BibleSectionId.lighting)) {
       doc.addPage(
         pw.Page(
           theme: theme,
@@ -300,7 +315,9 @@ class VisualBiblePdfService {
       );
     }
 
-    if (!isPitch) {
+    if (!isPitch &&
+        (_sectionAllowed(sections, BibleSectionId.exposure) ||
+            _sectionAllowed(sections, BibleSectionId.camera))) {
       doc.addPage(
         pw.Page(
           theme: theme,
@@ -342,7 +359,9 @@ class VisualBiblePdfService {
       );
     }
 
-    if (!isTech && moodboard.isNotEmpty) {
+    if (!isTech &&
+        _sectionAllowed(sections, BibleSectionId.moodboard) &&
+        moodboard.isNotEmpty) {
       final images = <pw.MemoryImage>[];
       for (final img in moodboard.take(12)) {
         final bytes = await PdfSafeImage.loadFromPath(img.imagePath);
@@ -376,7 +395,9 @@ class VisualBiblePdfService {
       }
     }
 
-    if (!isPitch && cameraTests.isNotEmpty) {
+    if (!isPitch &&
+        _sectionAllowed(sections, BibleSectionId.cameraTests) &&
+        cameraTests.isNotEmpty) {
       doc.addPage(
         pw.Page(
           theme: theme,
@@ -403,10 +424,12 @@ class VisualBiblePdfService {
       );
     }
 
-    if ((isPitch || isTech) && moodboard.isNotEmpty) {
+    if ((isPitch || isTech) &&
+        _sectionAllowed(sections, BibleSectionId.moodboard) &&
+        moodboard.isNotEmpty) {
       final refsBySection = <String, List<({MoodboardImageModel img, pw.MemoryImage? image})>>{};
       for (final img in moodboard) {
-        final sections = img.assignedSections.isNotEmpty
+        final assigned = img.assignedSections.isNotEmpty
             ? img.assignedSections
             : [
                 for (final sid in BibleSectionId.all)
@@ -414,7 +437,12 @@ class VisualBiblePdfService {
               ];
         final bytes = await PdfSafeImage.loadFromPath(img.imagePath);
         final memory = bytes != null ? pw.MemoryImage(bytes) : null;
-        for (final sid in sections) {
+        for (final sid in assigned) {
+          if (!_sectionAllowed(sections, sid) &&
+              sections != null &&
+              sections.isNotEmpty) {
+            continue;
+          }
           refsBySection.putIfAbsent(sid, () => []).add((img: img, image: memory));
         }
       }
@@ -458,7 +486,9 @@ class VisualBiblePdfService {
       }
     }
 
-    if (isTech && data.opticsConfigJson?.isNotEmpty == true) {
+    if (isTech &&
+        _sectionAllowed(sections, BibleSectionId.optics) &&
+        data.opticsConfigJson?.isNotEmpty == true) {
       doc.addPage(
         pw.Page(
           theme: theme,
@@ -576,6 +606,7 @@ class VisualBiblePdfService {
     required List<LightingSetupModel> lightingSetups,
     required List<CameraTestModel> cameraTests,
     required List<MoodboardImageModel> moodboard,
+    Set<String>? includedSections,
   }) {
     final safe = projectName.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
     final suffix = switch (mode) {
@@ -597,6 +628,7 @@ class VisualBiblePdfService {
         lightingSetups: lightingSetups,
         cameraTests: cameraTests,
         moodboard: moodboard,
+        includedSections: includedSections,
       ),
     );
   }

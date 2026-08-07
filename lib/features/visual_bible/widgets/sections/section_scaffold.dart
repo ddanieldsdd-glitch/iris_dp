@@ -1,23 +1,23 @@
-// lib/features/visual_bible/widgets/sections/section_scaffold.dart
-//
-// Layout común para secciones técnicas de la Biblia de Fotografía.
-// Cuando se proporciona [fieldWidgets], los sub-apartados se renderizan
-// según el orden y nombres definidos en [sectionContentJson].
-
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../bible_section_fields.dart';
+import '../../../../core/theme/app_typography.dart';
+import '../../bible_blueprint.dart';
+import '../../bible_section_style_store.dart';
 import '../../visual_bible_model.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_section_shared_widgets.dart';
 import '../bible_unified_references_panel.dart';
 import '../narrative_bridge_card.dart';
+import '../../bible_section_fields.dart';
 
 /// Layout común para secciones técnicas de la biblia.
 ///
 /// Cuando se proporciona [fieldWidgets], los sub-apartados se renderizan
 /// según el orden y nombres definidos en [sectionContentJson].
+/// El estilo (Cinematic / Technical / Minimalist) se lee y persiste en
+/// [BibleSectionStyleStore].
 class BibleSectionScaffold extends StatefulWidget {
   final String sectionId;
   final int projectId;
@@ -26,9 +26,7 @@ class BibleSectionScaffold extends StatefulWidget {
   final String narrativeHint;
   final String? sectionContentJson;
   final Map<String, Widget> fieldWidgets;
-  /// Número de sección para la cabecera (ej. '01', '02'…).
   final String? sectionNumber;
-  /// Título de la cabecera. Si no se proporciona, usa el label del sectionId.
   final String? sectionTitle;
 
   const BibleSectionScaffold({
@@ -50,9 +48,78 @@ class BibleSectionScaffold extends StatefulWidget {
 
 class _BibleSectionScaffoldState extends State<BibleSectionScaffold> {
   BibleVisualMode _mode = BibleVisualMode.cinematic;
+  bool _styleLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    BibleSectionStyleStore.revision.addListener(_loadStyle);
+    _loadStyle();
+  }
+
+  @override
+  void dispose() {
+    BibleSectionStyleStore.revision.removeListener(_loadStyle);
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(BibleSectionScaffold oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sectionId != widget.sectionId ||
+        oldWidget.projectId != widget.projectId) {
+      _loadStyle();
+    }
+  }
+
+  Future<void> _loadStyle() async {
+    final style = await BibleSectionStyleStore.load(
+      widget.projectId,
+      widget.sectionId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _mode = _fromStyle(style);
+      _styleLoaded = true;
+    });
+  }
+
+  BibleVisualMode _fromStyle(BibleSectionStyle style) => switch (style) {
+        BibleSectionStyle.cinematic => BibleVisualMode.cinematic,
+        BibleSectionStyle.technical => BibleVisualMode.technical,
+        BibleSectionStyle.minimalist => BibleVisualMode.minimalist,
+      };
+
+  BibleSectionStyle _toStyle(BibleVisualMode mode) => switch (mode) {
+        BibleVisualMode.cinematic => BibleSectionStyle.cinematic,
+        BibleVisualMode.technical => BibleSectionStyle.technical,
+        BibleVisualMode.minimalist => BibleSectionStyle.minimalist,
+      };
+
+  Future<void> _onModeChanged(BibleVisualMode mode) async {
+    setState(() => _mode = mode);
+    await BibleSectionStyleStore.save(
+      widget.projectId,
+      widget.sectionId,
+      _toStyle(mode),
+    );
+  }
+
+  EdgeInsets get _contentPadding => switch (_mode) {
+        BibleVisualMode.minimalist => const EdgeInsets.all(AppSpacing.md),
+        BibleVisualMode.technical => const EdgeInsets.all(AppSpacing.lg),
+        BibleVisualMode.cinematic => const EdgeInsets.all(AppSpacing.lg),
+      };
+
+  double get _sectionGap => switch (_mode) {
+        BibleVisualMode.minimalist => AppSpacing.md,
+        BibleVisualMode.technical => AppSpacing.lg,
+        BibleVisualMode.cinematic => AppSpacing.xl,
+      };
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final fields = BibleSectionFieldsConfig.parse(
       widget.sectionContentJson,
       widget.sectionId,
@@ -64,28 +131,53 @@ class _BibleSectionScaffoldState extends State<BibleSectionScaffold> {
       if (w != null) items.add(w);
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      children: [
-        // Cabecera con número + título + selector de modo visual
-        if (widget.sectionNumber != null)
-          BibleSectionHeader(
-            number: widget.sectionNumber!,
-            title: widget.sectionTitle ?? BibleSectionId.label(widget.sectionId),
-            trailing: BibleSectionModeDropdown(
-              value: _mode,
-              onChanged: (m) => setState(() => _mode = m),
+    final density = switch (_mode) {
+      BibleVisualMode.technical => 0.92,
+      BibleVisualMode.minimalist => 0.88,
+      BibleVisualMode.cinematic => 1.0,
+    };
+
+    return AnimatedOpacity(
+      opacity: _styleLoaded ? 1 : 0.85,
+      duration: const Duration(milliseconds: 180),
+      child: ListView(
+        padding: _contentPadding,
+        children: [
+          if (widget.sectionNumber != null)
+            BibleSectionHeader(
+              number: widget.sectionNumber!,
+              title:
+                  widget.sectionTitle ?? BibleSectionId.label(widget.sectionId),
+              trailing: BibleSectionModeDropdown(
+                value: _mode,
+                onChanged: _onModeChanged,
+              ),
             ),
-          ),
-        for (var i = 0; i < items.length; i++) ...[
-          if (i > 0) const SizedBox(height: AppSpacing.lg),
-          items[i],
+          if (_mode == BibleVisualMode.technical)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Text(
+                'MODO TÉCNICO · valores mono · densidad alta',
+                style: AppTypography.mono(palette).copyWith(
+                      fontSize: 10,
+                      color: palette.accent,
+                      letterSpacing: 0.6,
+                    ),
+              ),
+            ),
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0) SizedBox(height: _sectionGap * density),
+            items[i],
+          ],
         ],
-      ],
+      ),
     );
   }
 
   Widget? _buildField(BuildContext context, BibleSectionField field) {
+    final override = widget.fieldWidgets[field.key];
+    if (override != null) return override;
+
     return switch (field.type) {
       BibleSectionFieldType.narrative => NarrativeBridgeCard(
           title: field.label,
@@ -117,7 +209,7 @@ class _BibleSectionScaffoldState extends State<BibleSectionScaffold> {
             : null,
       BibleSectionFieldType.blocks ||
       BibleSectionFieldType.text =>
-        widget.fieldWidgets[field.key],
+        null,
     };
   }
 }
