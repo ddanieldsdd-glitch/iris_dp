@@ -13,6 +13,7 @@ import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_card.dart';
 import 'create_project_sheet.dart';
+import '../auth/auth_screen.dart';
 import 'project_form_sheet.dart';
 import 'project_overview.dart';
 import 'project_overview_metrics.dart';
@@ -75,7 +76,9 @@ class ProjectsScreen extends ConsumerWidget {
                   icon: Icon(Icons.settings_outlined, color: palette.textSecondary),
                   onPressed: () => SettingsSheet.show(context),
                 ),
-                const SyncStatusIndicator(),
+                SyncStatusIndicator(
+                  onLoginAction: () => openAuthScreen(context),
+                ),
                 const SizedBox(width: AppSpacing.sm),
                 AppButton(
                   label: 'Nuevo grupo',

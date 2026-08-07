@@ -9,11 +9,11 @@ import '../sync/media_sync_providers.dart';
 import '../sync/sync_engine.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
-import '../../features/auth/auth_screen.dart';
 
 /// Indicador nube / sync en barra superior.
 class SyncStatusIndicator extends ConsumerStatefulWidget {
-  const SyncStatusIndicator({super.key});
+  const SyncStatusIndicator({super.key, this.onLoginAction});
+  final VoidCallback? onLoginAction;
 
   @override
   ConsumerState<SyncStatusIndicator> createState() =>
@@ -55,7 +55,7 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
     final user = ref.watch(currentUserProvider);
     if (user == null) {
       return TextButton.icon(
-        onPressed: () => openAuthScreen(context),
+        onPressed: widget.onLoginAction,
         icon: Icon(Icons.login, size: 18, color: context.palette.warning),
         label: Text(
           'Iniciar sesión',
