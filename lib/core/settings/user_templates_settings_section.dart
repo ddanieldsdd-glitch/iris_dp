@@ -8,15 +8,20 @@ import '../../core/templates/user_template_preferences.dart';
 import '../../core/templates/user_template_service.dart';
 import '../../core/cloud/cloud_providers.dart';
 import '../../core/templates/user_settings_sync_service.dart';
-import '../../features/shoot_documents/shoot_template_editor_screen.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_snackbar.dart';
+import '../../features/shoot_documents/shoot_template_editor_screen.dart';
 
 /// Sección de ajustes para plantillas de biblia y documentos de rodaje.
 class UserTemplatesSettingsSection extends ConsumerStatefulWidget {
-  const UserTemplatesSettingsSection({super.key});
+  const UserTemplatesSettingsSection({
+    super.key,
+    this.onCreateTemplate,
+  });
+
+  final VoidCallback? onCreateTemplate;
 
   @override
   ConsumerState<UserTemplatesSettingsSection> createState() =>
@@ -171,15 +176,7 @@ class _UserTemplatesSettingsSectionState
         ),
         const SizedBox(height: AppSpacing.sm),
         OutlinedButton.icon(
-          onPressed: () async {
-            final created = await Navigator.push<bool>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const ShootTemplateEditorScreen(),
-              ),
-            );
-            if (created == true && mounted) setState(() {});
-          },
+          onPressed: widget.onCreateTemplate,
           icon: const Icon(Icons.add, size: 18),
           label: const Text('Crear plantilla de documento de rodaje'),
         ),
