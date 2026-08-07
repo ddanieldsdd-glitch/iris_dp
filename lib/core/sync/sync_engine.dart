@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -10,7 +9,6 @@ import 'media_sync_providers.dart';
 import 'media_upload_queue.dart';
 import 'project_content_sync_service.dart';
 import 'project_sync_service.dart';
-import 'sync_conflict_resolution_sheet.dart';
 import 'sync_plan.dart';
 import 'sync_plan_applier.dart';
 import 'sync_plan_builder.dart';
@@ -46,16 +44,16 @@ class SyncEngine {
     return SyncPlanBuilder(db, client).build(workspaceId);
   }
 
-  /// Sync con confirmación del usuario si hay diferencias.
-  Future<SyncResult> syncWithConfirmation(BuildContext context) async {
+  /// Prepara sync manual: analiza diferencias sin UI.
+  Future<SyncManualStart> prepareManualSync() async {
     final client = _client;
     if (client == null) {
-      return SyncResult.skipped('Modo local');
+      return SyncManualStart.skipped('Modo local');
     }
 
     final workspaceId = await CloudSessionStore.workspaceId();
     if (workspaceId == null) {
-      return SyncResult.skipped('Sin workspace');
+      return SyncManualStart.skipped('Sin workspace');
     }
 
     final db = _ref.read(databaseProvider);
@@ -63,67 +61,71 @@ class SyncEngine {
 
     if (plan.isEmpty) {
       _ref.read(pendingSyncPlanProvider.notifier).state = null;
-      return _finishSync(workspaceId, pushed: 0, pulled: 0, deleted: 0);
+      final result =
+          await _finishSync(workspaceId, pushed: 0, pulled: 0, deleted: 0);
+      return SyncManualStart.complete(result);
     }
 
-    if (!context.mounted) {
-      return SyncResult.skipped('Cancelado');
-    }
+    return SyncManualStart.needsReview(plan, workspaceId);
+  }
 
-    SyncResult? result;
-    final applied = await SyncConflictResolutionSheet.show(
-      context,
-      plan: plan,
-      onApply: (confirmed) async {
-        final counts = await _applyPlan(confirmed, workspaceId);
-        result = await _finishSync(
-          workspaceId,
-          pushed: counts.pushed,
-          pulled: counts.pulled,
-          deleted: counts.deleted,
-        );
-      },
+  /// Aplica el plan confirmado por el usuario.
+  Future<SyncResult> applyConfirmedPlan(
+    SyncPlan plan,
+    String workspaceId,
+  ) async {
+    final counts = await _applyPlan(plan, workspaceId);
+    return _finishSync(
+      workspaceId,
+      pushed: counts.pushed,
+      pulled: counts.pulled,
+      deleted: counts.deleted,
     );
+  }
 
-    if (applied != true) {
-      _ref.read(pendingSyncPlanProvider.notifier).state = plan;
-      return SyncResult.skipped('Revisión pendiente');
-    }
+  /// Tras aplicar cambios, re-analiza y actualiza el estado pendiente.
+  Future<SyncResult> finalizeManualSync(
+    SyncResult baseResult,
+    String workspaceId,
+  ) async {
+    final client = _client;
+    if (client == null) return baseResult;
 
+    final db = _ref.read(databaseProvider);
     final remaining = await SyncPlanBuilder(db, client).build(workspaceId);
     if (remaining.isEmpty || _isSpuriousContentDrift(remaining)) {
       _ref.read(pendingSyncPlanProvider.notifier).state = null;
-      final base = result ??
-          const SyncResult(
-            pushed: 0,
-            pulled: 0,
-            deleted: 0,
-          );
       return SyncResult(
-        pushed: base.pushed,
-        pulled: base.pulled,
-        deleted: base.deleted,
-        invitationsAccepted: base.invitationsAccepted,
-            mediaUploaded: base.mediaUploaded,
-            mediaDownloaded: base.mediaDownloaded,
-            bytesSaved: base.bytesSaved,
-        message: _successMessage(base),
+        pushed: baseResult.pushed,
+        pulled: baseResult.pulled,
+        deleted: baseResult.deleted,
+        invitationsAccepted: baseResult.invitationsAccepted,
+        mediaUploaded: baseResult.mediaUploaded,
+        mediaDownloaded: baseResult.mediaDownloaded,
+        bytesSaved: baseResult.bytesSaved,
+        message: _successMessage(baseResult),
       );
     }
 
     _ref.read(pendingSyncPlanProvider.notifier).state = remaining;
     return SyncResult(
-      pushed: result?.pushed ?? 0,
-      pulled: result?.pulled ?? 0,
-      deleted: result?.deleted ?? 0,
-      invitationsAccepted: result?.invitationsAccepted ?? 0,
-      mediaUploaded: result?.mediaUploaded ?? 0,
-      mediaDownloaded: result?.mediaDownloaded ?? 0,
-      bytesSaved: result?.bytesSaved ?? 0,
+      pushed: baseResult.pushed,
+      pulled: baseResult.pulled,
+      deleted: baseResult.deleted,
+      invitationsAccepted: baseResult.invitationsAccepted,
+      mediaUploaded: baseResult.mediaUploaded,
+      mediaDownloaded: baseResult.mediaDownloaded,
+      bytesSaved: baseResult.bytesSaved,
       message:
           'Aplicado, pero quedan ${remaining.items.length} diferencias. Revisa de nuevo.',
       pendingReview: true,
     );
+  }
+
+  /// Usuario canceló la revisión: deja el plan pendiente.
+  SyncResult cancelManualSyncReview(SyncPlan plan) {
+    _ref.read(pendingSyncPlanProvider.notifier).state = plan;
+    return SyncResult.skipped('Revisión pendiente');
   }
 
   /// Solo quedan ítems de contenido con mismos conteos (hash distinto por rutas locales).
@@ -275,6 +277,34 @@ class SyncEngine {
 
   /// Alias de [syncApplyDefaults] para compatibilidad.
   Future<SyncResult> syncAll() => syncApplyDefaults();
+}
+
+/// Resultado de preparar un sync manual (sin UI).
+class SyncManualStart {
+  final SyncPlan? plan;
+  final String? workspaceId;
+  final SyncResult? result;
+  final String? skipReason;
+
+  const SyncManualStart._({
+    this.plan,
+    this.workspaceId,
+    this.result,
+    this.skipReason,
+  });
+
+  factory SyncManualStart.skipped(String reason) =>
+      SyncManualStart._(skipReason: reason);
+
+  factory SyncManualStart.complete(SyncResult result) =>
+      SyncManualStart._(result: result);
+
+  factory SyncManualStart.needsReview(SyncPlan plan, String workspaceId) =>
+      SyncManualStart._(plan: plan, workspaceId: workspaceId);
+
+  bool get isSkipped => skipReason != null;
+  bool get isComplete => result != null;
+  bool get needsReview => plan != null && workspaceId != null;
 }
 
 class SyncResult {

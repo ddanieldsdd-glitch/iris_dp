@@ -23,7 +23,8 @@ import 'project_overview.dart';
 import 'project_overview_metrics.dart';
 import '../project_hub/project_hub_screen.dart';
 import '../../core/widgets/app_snackbar.dart';
-import '../../core/sync/sync_conflict_resolution_sheet.dart';
+import '../../core/widgets/sync/sync_conflict_resolution_sheet.dart';
+import '../../core/widgets/sync/sync_flow_coordinator.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sync_status_indicator.dart';
 import '../../core/update/update_available_banner.dart';
@@ -40,9 +41,10 @@ class ProjectsScreen extends ConsumerWidget {
     final pendingPlan = ref.watch(pendingSyncPlanProvider);
 
     Future<void> reviewSync() async {
-      final syncResult = await ref
-          .read(syncEngineProvider)
-          .syncWithConfirmation(context);
+      final syncResult = await SyncFlowCoordinator.runWithConfirmation(
+        context,
+        ref,
+      );
       if (!context.mounted) return;
       final msg =
           syncResult.message ??

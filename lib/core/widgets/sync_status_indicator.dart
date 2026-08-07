@@ -6,7 +6,7 @@ import '../cloud/cloud_session.dart';
 import '../cloud/cloud_runtime_config.dart';
 import '../sync/pending_sync_queue_provider.dart';
 import '../sync/media_sync_providers.dart';
-import '../sync/sync_engine.dart';
+import 'sync/sync_flow_coordinator.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 
@@ -28,7 +28,7 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
     setState(() => _syncing = true);
     try {
       final result =
-          await ref.read(syncEngineProvider).syncWithConfirmation(context);
+          await SyncFlowCoordinator.runWithConfirmation(context, ref);
       if (mounted) {
         final msg = result.pendingReview
             ? result.message ?? 'Revisión pendiente'

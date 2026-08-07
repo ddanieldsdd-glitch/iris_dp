@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../theme/app_colors.dart';
-import '../theme/app_spacing.dart';
-import '../theme/app_typography.dart';
-import '../widgets/app_button.dart';
-import '../widgets/app_card.dart';
-import 'sync_plan.dart';
+import '../../sync/sync_plan.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_spacing.dart';
+import '../../theme/app_typography.dart';
+import '../app_button.dart';
+import '../app_card.dart';
 
 /// Pantalla modal para revisar y confirmar cambios de sincronización.
 class SyncConflictResolutionSheet extends StatefulWidget {
