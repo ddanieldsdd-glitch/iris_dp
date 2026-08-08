@@ -21,6 +21,13 @@ if [[ -n "$SUPABASE_URL" && -n "$SUPABASE_ANON_KEY" ]]; then
   )
   echo "→ Modo nube: credenciales desde .env"
 fi
+if [[ -n "${CLOUDINARY_CLOUD_NAME:-}" && -n "${CLOUDINARY_UPLOAD_PRESET:-}" ]]; then
+  ARGS+=(
+    --dart-define=CLOUDINARY_CLOUD_NAME="$CLOUDINARY_CLOUD_NAME"
+    --dart-define=CLOUDINARY_UPLOAD_PRESET="$CLOUDINARY_UPLOAD_PRESET"
+  )
+  echo "→ Cloudinary: credenciales desde .env"
+fi
 
 echo "=== Build iPad/iPhone (IPA sin firma) ==="
 flutter "${ARGS[@]}"
