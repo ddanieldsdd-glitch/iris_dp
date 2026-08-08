@@ -10,20 +10,27 @@ import '../../../../core/database/app_database.dart';
 import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/project/project_shoot_context.dart';
+import '../../../../shared/visual_bible/bible_lighting_data.dart';
 import '../../bible_section_fields.dart';
 import '../../moodboard_helpers.dart';
 import '../../services/mired_converter.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
+import '../bible_moodboard_image_target.dart';
 import '../bible_navigation_scope.dart';
+import '../../../camera_plan/camera_plan_screen.dart';
+import '../../bible_paste_helpers.dart';
 import '../lighting_diagram/lighting_diagram_editor.dart';
+import 'lighting_section_hub.dart';
 import 'section_scaffold.dart';
 
-/// Iluminación — layout Stitch (hero + intent + telemetry + setups).
-class LightingSection extends ConsumerWidget {
+/// Iluminación — Acto 1 narrativo global + Acto 2 por localización/set.
+class LightingSection extends ConsumerStatefulWidget {
   final VisualBibleData data;
   final int projectId;
   final int bibleId;
+  final int? initialPlanId;
   final String? sectionContentJson;
   final BibleChanged onChanged;
 
@@ -32,49 +39,70 @@ class LightingSection extends ConsumerWidget {
     required this.data,
     required this.projectId,
     required this.bibleId,
+    this.initialPlanId,
     this.sectionContentJson,
     required this.onChanged,
   });
 
+  @override
+  ConsumerState<LightingSection> createState() => _LightingSectionState();
+}
+
+class _LightingSectionState extends ConsumerState<LightingSection> {
+  int? _selectedPlanId;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedPlanId = widget.initialPlanId;
+  }
+
+  @override
+  void didUpdateWidget(covariant LightingSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialPlanId != null &&
+        widget.initialPlanId != oldWidget.initialPlanId) {
+      _selectedPlanId = widget.initialPlanId;
+    }
+  }
+
   Map<String, dynamic> _getCustom() {
-    if (sectionContentJson == null || sectionContentJson!.isEmpty) return {};
+    if (widget.sectionContentJson == null || widget.sectionContentJson!.isEmpty) {
+      return {};
+    }
     try {
-      final decoded = jsonDecode(sectionContentJson!);
+      final decoded = jsonDecode(widget.sectionContentJson!);
       if (decoded is! Map<String, dynamic>) return {};
       final valuesRaw = decoded['values'] ?? decoded['_values'];
       if (valuesRaw is Map) {
         final vals = Map<String, dynamic>.from(valuesRaw);
         if (vals['lightingData'] is String) {
-          final parsed = jsonDecode(vals['lightingData'] as String);
-          if (parsed is Map<String, dynamic>) return parsed;
+          return BibleLightingData.decode(vals['lightingData'] as String);
         }
-        return vals;
+        return BibleLightingData.migrate(vals);
       }
     } catch (_) {}
     return {};
   }
 
-  Future<void> _updateCustom(
-    WidgetRef ref,
-    Map<String, dynamic> update,
-  ) async {
+  Future<void> _updateCustom(Map<String, dynamic> update) async {
     final current = _getCustom();
-    final newData = {...current, ...update};
+    final newData = BibleLightingData.migrate({...current, ...update});
     final db = ref.read(databaseProvider);
-    final def = await (db.select(db.bibleSectionDefinitions)
-          ..where(
-            (d) =>
-                d.bibleId.equals(data.id) &
-                d.id.equals(BibleSectionId.lighting),
-          ))
-        .getSingleOrNull();
+    final def =
+        await (db.select(db.bibleSectionDefinitions)..where(
+              (d) =>
+                  d.bibleId.equals(widget.data.id) &
+                  d.id.equals(BibleSectionId.lighting),
+            ))
+            .getSingleOrNull();
     if (def == null) return;
     final fields = BibleSectionFieldsConfig.parse(
       def.contentJson,
       BibleSectionId.lighting,
     );
     final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
-    values['lightingData'] = jsonEncode(newData);
+    values['lightingData'] = BibleLightingData.encode(newData);
     await db.upsertBibleSectionDefinition(
       def.copyWith(
         contentJson: drift.Value(
@@ -82,6 +110,32 @@ class LightingSection extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _updatePlan(int planId, Map<String, dynamic> patch) async {
+    final merged = BibleLightingData.mergePlan(_getCustom(), planId, patch);
+    await _updateCustom(merged);
+  }
+
+  Future<void> _syncLightingNote(int planId, String note) async {
+    final db = ref.read(databaseProvider);
+    final refs = await db.watchLocationRefsForBible(widget.bibleId).first;
+    VisualBibleLocationRef? row;
+    for (final r in refs) {
+      if (r.locationBasePlanId == planId) {
+        row = r;
+        break;
+      }
+    }
+    if (row != null) {
+      await (db.update(db.visualBibleLocationRefs)
+            ..where((r) => r.id.equals(row!.id)))
+          .write(
+        VisualBibleLocationRefsCompanion(
+          lightingNote: drift.Value(note.isEmpty ? null : note),
+        ),
+      );
+    }
   }
 
   List<Map<String, dynamic>> _fixtureList(dynamic raw) {
@@ -120,38 +174,38 @@ class LightingSection extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final palette = context.palette;
     final db = ref.watch(databaseProvider);
     final custom = _getCustom();
 
-    final heroBadge = custom['heroBadge'] as String? ??
-        'SCENE • LIGHTING ANALYSIS';
-    final heroTitle = custom['heroTitle'] as String? ??
-        'Estrategia de Iluminación';
-    final heroSubtitle = custom['heroSubtitle'] as String? ??
-        data.contrastStyle ??
+    final heroBadge =
+        custom['heroBadge'] as String? ?? 'SCENE • LIGHTING ANALYSIS';
+    final heroTitle =
+        custom['heroTitle'] as String? ?? 'Estrategia de Iluminación';
+    final heroSubtitle =
+        custom['heroSubtitle'] as String? ??
+        widget.data.contrastStyle ??
         'El Dualismo de la Sombra';
 
-    final visualIntent = custom['visualIntent'] as String? ??
-        data.lightingPhilosophy ??
-        data.lightingNarrativeIntent ??
+    final visualIntent =
+        custom['visualIntent'] as String? ??
+        widget.data.lightingPhilosophy ??
+        widget.data.lightingNarrativeIntent ??
         '';
 
-    final colorTemp = (custom['colorTemp'] as num?)?.toInt() ??
+    final colorTemp =
+        (custom['colorTemp'] as num?)?.toInt() ??
         int.tryParse(
-          RegExp(r'(\d+)').firstMatch(data.lightSource ?? '')?.group(1) ?? '',
+          RegExp(r'(\d+)').firstMatch(widget.data.lightSource ?? '')?.group(1) ?? '',
         ) ??
         5600;
     final tintStr = custom['tint'] as String? ?? '+0.00 G';
-    final tintVal = (custom['tintValue'] as num?)?.toDouble() ??
-        _parseTint(tintStr);
-    final contrastRatio = custom['contrastRatio'] as String? ??
-        data.keyFillRatioNight ??
-        data.keyFillRatioDay ??
+    final contrastRatio =
+        custom['contrastRatio'] as String? ??
+        widget.data.keyFillRatioNight ??
+        widget.data.keyFillRatioDay ??
         '8:1';
-    final contrastNum = (custom['contrastNum'] as num?)?.toInt() ??
-        _parseContrast(contrastRatio);
     final blackIre = (custom['blackLevelIre'] as num?)?.toInt() ?? 0;
     final crushedBlacks = custom['crushedBlacks'] as bool? ?? true;
 
@@ -162,19 +216,13 @@ class LightingSection extends ConsumerWidget {
     if (fixtures.isEmpty) {
       fixtures = [
         {'id': 'L1', 'name': 'HMI Par', 'role': 'Key', 'intensity': 100},
-        {
-          'id': 'L2',
-          'name': 'LED Tube',
-          'role': 'Practical',
-          'intensity': 30,
-        },
+        {'id': 'L2', 'name': 'LED Tube', 'role': 'Practical', 'intensity': 30},
         {'id': 'L3', 'name': 'Fresnel', 'role': 'Edge', 'intensity': 85},
       ];
     }
 
-    final fixtureTypes = (custom['fixtureTypes'] as List?)
-            ?.map((e) => e.toString())
-            .toList() ??
+    final fixtureTypes =
+        (custom['fixtureTypes'] as List?)?.map((e) => e.toString()).toList() ??
         fixtures
             .map((f) => f['name']?.toString() ?? '')
             .where((s) => s.isNotEmpty)
@@ -187,7 +235,7 @@ class LightingSection extends ConsumerWidget {
         {
           'title': 'Fall-off Rápido',
           'meta': 'Ratio: $contrastRatio',
-          'tag': data.lightQuality ?? 'Hard Light',
+          'tag': widget.data.lightQuality ?? 'Hard Light',
           'note': '',
         },
         {
@@ -209,12 +257,61 @@ class LightingSection extends ConsumerWidget {
     final targetK = (custom['targetKelvin'] as num?)?.toInt() ?? colorTemp;
     final gafferDirectives = custom['gafferDirectives'] as String? ?? '';
 
+    final shootCtx = ref.watch(projectShootContextProvider(widget.projectId));
+    final selectedPlanId = _selectedPlanId ??
+        (custom['selectedPlanId'] as num?)?.toInt() ??
+        shootCtx.activeSetId;
+
+    final narrativeStory = (custom['narrativeStory'] as String?)?.isNotEmpty == true
+        ? custom['narrativeStory'] as String
+        : visualIntent;
+    final colorLanguage = custom['colorLanguage'] as String? ?? '';
+    final lightSourcesOverview = custom['lightSources'] as String? ?? '';
+
+    final planTelemetry =
+        BibleLightingData.telemetryForPlan(custom, selectedPlanId);
+    final planColorTemp =
+        (planTelemetry['colorTemp'] as num?)?.toInt() ?? colorTemp;
+    final planTintStr = planTelemetry['tint'] as String? ?? tintStr;
+    final planTintVal = (planTelemetry['tintValue'] as num?)?.toDouble() ??
+        _parseTint(planTintStr);
+    final planContrastRatio =
+        planTelemetry['contrastRatio'] as String? ?? contrastRatio;
+    final planContrastNum = (planTelemetry['contrastNum'] as num?)?.toInt() ??
+        _parseContrast(planContrastRatio);
+    final planBlackIre =
+        (planTelemetry['blackLevelIre'] as num?)?.toInt() ?? blackIre;
+    final planCrushedBlacks =
+        planTelemetry['crushedBlacks'] as bool? ?? crushedBlacks;
+
+    var planFixtures = _fixtureList(planTelemetry['activeFixtures']);
+    if (planFixtures.isEmpty) planFixtures = fixtures;
+    final planFixtureTypes = (planTelemetry['fixtureTypes'] as List?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        fixtureTypes;
+
+    var textureBehaviors = BibleLightingData.textureCards(custom);
+    if (textureBehaviors.isEmpty) textureBehaviors = behaviors;
+
+    final planData = BibleLightingData.planFor(custom, selectedPlanId);
+    final lightBehavior = planData['lightBehavior'] as String? ?? '';
+    final dayNightIntent = planData['dayNightIntent'] as String? ?? '';
+
+    Future<void> updateTelemetry(Map<String, dynamic> patch) async {
+      if (selectedPlanId != null) {
+        await _updatePlan(selectedPlanId, patch);
+      } else {
+        await _updateCustom(patch);
+      }
+    }
+
     return BibleSectionScaffold(
       sectionId: BibleSectionId.lighting,
-      projectId: projectId,
-      data: data,
-      onChanged: onChanged,
-      sectionContentJson: sectionContentJson,
+      projectId: widget.projectId,
+      data: widget.data,
+      onChanged: widget.onChanged,
+      sectionContentJson: widget.sectionContentJson,
       narrativeHint:
           '¿Por qué iluminamos así? Qué emoción transmite esta filosofía de luz…',
       sectionNumber: null,
@@ -224,391 +321,427 @@ class LightingSection extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             BibleCrossNavChips.techTriplet(current: BibleSectionId.lighting),
-            const SizedBox(height: 12),
-            _HeroBanner(
-          projectId: projectId,
-          bibleId: bibleId,
-          badge: heroBadge,
-          title: heroTitle,
-          subtitle: heroSubtitle,
-          palette: palette,
-          onEditBadge: () async {
-            final v = await _prompt(
-              context,
-              'Badge de escena',
-              TextEditingController(text: heroBadge),
-            );
-            if (v == null) return;
-            await _updateCustom(ref, {'heroBadge': v});
-          },
-          onEditTitle: () async {
-            final t = TextEditingController(text: heroTitle);
-            final s = TextEditingController(text: heroSubtitle);
-            final ok = await _promptPair(
-              context,
-              'Título hero',
-              t,
-              s,
-              aLabel: 'Título',
-              bLabel: 'Subtítulo',
-            );
-            if (ok != true) return;
-            await _updateCustom(ref, {
-              'heroTitle': t.text.trim(),
-              'heroSubtitle': s.text.trim(),
-            });
-            if (s.text.trim().isNotEmpty) {
-              data.contrastStyle = s.text.trim();
-              onChanged(data);
-            }
-          },
-        ),
-          ],
-        ),
-        'philosophy': LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 960;
-
-            final intentCol = Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                _SectionHead(
-                  icon: Icons.analytics_outlined,
-                  label: 'Visual Intent & Concept',
-                  palette: palette,
-                ),
-                const SizedBox(height: 16),
-                InkWell(
-                  onTap: () async {
-                    final v = await _prompt(
-                      context,
-                      'Intención visual',
-                      TextEditingController(text: visualIntent),
-                      maxLines: 8,
-                    );
-                    if (v == null) return;
-                    await _updateCustom(ref, {'visualIntent': v});
-                    data.lightingPhilosophy = v;
-                    data.lightingNarrativeIntent = v;
-                    onChanged(data);
-                  },
-                  child: Text(
-                    visualIntent.isEmpty
-                        ? 'Toca para definir la filosofía de luz…'
-                        : visualIntent,
-                    style: AppTypography.bodyMedium(palette).copyWith(
-                      fontSize: 16,
-                      height: 1.6,
-                      color: visualIntent.isEmpty
-                          ? palette.textTertiary
-                          : palette.textSecondary,
-                    ),
+                ActionChip(
+                  label: const Text('Color'),
+                  onPressed: () => BibleNavigationScope.goToSection(
+                    context,
+                    BibleSectionId.colorImage,
                   ),
                 ),
-                const SizedBox(height: 28),
-                _SectionHead(
-                  icon: Icons.grid_on_outlined,
-                  label: '// Atmospheric Texture Analysis',
-                  palette: palette,
-                  accent: true,
+                ActionChip(
+                  label: const Text('Textura'),
+                  onPressed: () => BibleNavigationScope.goToSection(
+                    context,
+                    BibleSectionId.texture,
+                  ),
                 ),
-                const SizedBox(height: 16),
-                _AtmosphericMosaic(
-                  projectId: projectId,
-                  bibleId: bibleId,
-                  behaviors: behaviors,
-                  contrastRatio: contrastRatio,
-                  colorTemp: colorTemp,
-                  tintStr: tintStr,
-                  palette: palette,
-                  onEditCard: (i) async {
-                    final card = behaviors[i];
-                    final title = TextEditingController(text: card['title']);
-                    final meta = TextEditingController(text: card['meta']);
-                    final tag = TextEditingController(text: card['tag']);
-                    final note = TextEditingController(text: card['note']);
-                    final ok = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: Text('Tarjeta ${i + 1}'),
-                        content: SingleChildScrollView(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              TextField(
-                                controller: title,
-                                decoration:
-                                    const InputDecoration(labelText: 'Título'),
-                              ),
-                              TextField(
-                                controller: meta,
-                                decoration:
-                                    const InputDecoration(labelText: 'Meta'),
-                              ),
-                              TextField(
-                                controller: tag,
-                                decoration:
-                                    const InputDecoration(labelText: 'Tag'),
-                              ),
-                              TextField(
-                                controller: note,
-                                maxLines: 3,
-                                decoration:
-                                    const InputDecoration(labelText: 'Nota'),
-                              ),
-                            ],
-                          ),
+                ActionChip(
+                  label: const Text('Localizaciones'),
+                  onPressed: () => BibleNavigationScope.goToSection(
+                    context,
+                    BibleSectionId.location,
+                    planId: selectedPlanId,
+                  ),
+                ),
+                ActionChip(
+                  label: const Text('Planta cámara'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => CameraPlanScreen(
+                          projectId: widget.projectId,
                         ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancelar'),
-                          ),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('Guardar'),
-                          ),
-                        ],
                       ),
                     );
-                    if (ok != true) return;
-                    final next = [...behaviors];
-                    next[i] = {
-                      'title': title.text.trim(),
-                      'meta': meta.text.trim(),
-                      'tag': tag.text.trim(),
-                      'note': note.text.trim(),
-                    };
-                    await _updateCustom(ref, {'behaviorCards': next});
                   },
-                ),
-                const SizedBox(height: 24),
-                _GlassPanel(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'GAFFER DIRECTIVES',
-                        style: AppTypography.mono(palette).copyWith(
-                          fontSize: 11,
-                          letterSpacing: 1.4,
-                          color: palette.accent,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      InkWell(
-                        onTap: () async {
-                          final v = await _prompt(
-                            context,
-                            'Directivas gaffer',
-                            TextEditingController(text: gafferDirectives),
-                            maxLines: 4,
-                          );
-                          if (v == null) return;
-                          await _updateCustom(
-                            ref,
-                            {'gafferDirectives': v},
-                          );
-                        },
-                        child: Text(
-                          gafferDirectives.isEmpty
-                              ? 'Toca para añadir notas al gaffer…'
-                              : gafferDirectives,
-                          style: AppTypography.bodyMedium(palette).copyWith(
-                            color: gafferDirectives.isEmpty
-                                ? palette.textTertiary
-                                : palette.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ],
-            );
-
-            final metricsCol = _TelemetryPanel(
-              colorTemp: colorTemp,
-              tintVal: tintVal,
-              tintStr: tintStr,
-              contrastNum: contrastNum,
-              contrastRatio: contrastRatio,
-              blackIre: blackIre,
-              crushedBlacks: crushedBlacks,
-              fixtures: fixtures,
-              fixtureTypes: fixtureTypes,
+            ),
+            const SizedBox(height: 12),
+            _HeroBanner(
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+              badge: heroBadge,
+              title: heroTitle,
+              subtitle: heroSubtitle,
               palette: palette,
-              onColorTemp: (v) async {
-                await _updateCustom(ref, {
-                  'colorTemp': v.round(),
-                  'contrastRatio': contrastRatio,
+              onEditBadge: () async {
+                final v = await _prompt(
+                  context,
+                  'Badge de escena',
+                  TextEditingController(text: heroBadge),
+                );
+                if (v == null) return;
+                await _updateCustom({'heroBadge': v});
+              },
+              onEditTitle: () async {
+                final t = TextEditingController(text: heroTitle);
+                final s = TextEditingController(text: heroSubtitle);
+                final ok = await _promptPair(
+                  context,
+                  'Título hero',
+                  t,
+                  s,
+                  aLabel: 'Título',
+                  bLabel: 'Subtítulo',
+                );
+                if (ok != true) return;
+                await _updateCustom({
+                  'heroTitle': t.text.trim(),
+                  'heroSubtitle': s.text.trim(),
                 });
-                data.lightSource = '${v.round()}K';
-                onChanged(data);
+                if (s.text.trim().isNotEmpty) {
+                  widget.data.contrastStyle = s.text.trim();
+                  widget.onChanged(widget.data);
+                }
               },
-              onTint: (v) async {
-                final sign = v >= 0 ? '+' : '';
-                final s = '$sign${v.toStringAsFixed(2)} G';
-                await _updateCustom(ref, {
-                  'tintValue': v,
-                  'tint': s,
-                });
-              },
-              onContrast: (v) async {
-                final r = '${v.round()}:1';
-                await _updateCustom(ref, {
-                  'contrastNum': v.round(),
-                  'contrastRatio': r,
-                });
-                data.keyFillRatioNight = r;
-                onChanged(data);
-              },
-              onBlackIre: (v) async {
-                await _updateCustom(ref, {'blackLevelIre': v.round()});
-              },
-              onToggleCrush: () async {
-                await _updateCustom(
-                  ref,
-                  {'crushedBlacks': !crushedBlacks},
-                );
-              },
-              onEditFixture: (i) async {
-                final f = fixtures[i];
-                final name = TextEditingController(
-                  text: f['name']?.toString() ?? '',
-                );
-                final role = TextEditingController(
-                  text: f['role']?.toString() ?? '',
-                );
-                final inten = TextEditingController(
-                  text: '${f['intensity'] ?? 100}',
-                );
+            ),
+          ],
+        ),
+        'narrativeStory': _EditableTextBlock(
+          icon: Icons.auto_stories_outlined,
+          label: 'Qué nos cuenta la luz',
+          text: narrativeStory,
+          emptyHint: 'Función dramática de la iluminación en la pieza…',
+          palette: palette,
+          maxLines: 8,
+          onEdit: () async {
+            final v = await _prompt(context, 'Qué nos cuenta la luz',
+                TextEditingController(text: narrativeStory),
+                maxLines: 8);
+            if (v == null) return;
+            await _updateCustom({'narrativeStory': v, 'visualIntent': v});
+            widget.data.lightingPhilosophy = v;
+            widget.data.lightingNarrativeIntent = v;
+            widget.onChanged(widget.data);
+          },
+        ),
+        'colorLanguage': _EditableTextBlock(
+          icon: Icons.palette_outlined,
+          label: 'Color y luz',
+          text: colorLanguage,
+          emptyHint: 'Temperatura emocional, paleta motivada por la luz…',
+          palette: palette,
+          maxLines: 5,
+          trailing: ActionChip(
+            label: const Text('Color'),
+            onPressed: () => BibleNavigationScope.goToSection(
+              context,
+              BibleSectionId.colorImage,
+            ),
+          ),
+          onEdit: () async {
+            final v = await _prompt(context, 'Color y luz',
+                TextEditingController(text: colorLanguage),
+                maxLines: 5);
+            if (v == null) return;
+            await _updateCustom({'colorLanguage': v});
+          },
+        ),
+        'textureLanguage': Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _SectionHead(
+              icon: Icons.grain,
+              label: 'Textura y atmósfera global',
+              palette: palette,
+              accent: true,
+            ),
+            const SizedBox(height: 12),
+            _AtmosphericMosaic(
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+              behaviors: textureBehaviors,
+              contrastRatio: contrastRatio,
+              colorTemp: colorTemp,
+              tintStr: tintStr,
+              palette: palette,
+              onEditCard: (i) async {
+                final card = textureBehaviors[i];
+                final title = TextEditingController(text: card['title']);
+                final meta = TextEditingController(text: card['meta']);
+                final tag = TextEditingController(text: card['tag']);
+                final note = TextEditingController(text: card['note']);
                 final ok = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    title: Text(f['id']?.toString() ?? 'Fixture'),
+                    title: Text('Tarjeta ${i + 1}'),
                     content: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        TextField(
-                          controller: name,
-                          decoration:
-                              const InputDecoration(labelText: 'Modelo'),
-                        ),
-                        TextField(
-                          controller: role,
-                          decoration: const InputDecoration(labelText: 'Rol'),
-                        ),
-                        TextField(
-                          controller: inten,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Intensidad %',
-                          ),
-                        ),
+                        TextField(controller: title, decoration: const InputDecoration(labelText: 'Título')),
+                        TextField(controller: meta, decoration: const InputDecoration(labelText: 'Meta')),
+                        TextField(controller: tag, decoration: const InputDecoration(labelText: 'Tag')),
+                        TextField(controller: note, maxLines: 3, decoration: const InputDecoration(labelText: 'Nota')),
                       ],
                     ),
                     actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('Cancelar'),
-                      ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('Guardar'),
-                      ),
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+                      FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
                     ],
                   ),
                 );
                 if (ok != true) return;
-                final next = [...fixtures];
+                final next = [...textureBehaviors];
                 next[i] = {
-                  ...f,
-                  'name': name.text.trim(),
-                  'role': role.text.trim(),
-                  'intensity': int.tryParse(inten.text.trim()) ?? 100,
+                  'title': title.text.trim(),
+                  'meta': meta.text.trim(),
+                  'tag': tag.text.trim(),
+                  'note': note.text.trim(),
                 };
-                await _updateCustom(ref, {'activeFixtures': next});
+                await _updateCustom({BibleLightingData.textureCardsKey: next});
               },
-              onAddFixture: () async {
-                final next = [
-                  ...fixtures,
-                  {
-                    'id': 'L${fixtures.length + 1}',
-                    'name': 'LED Panel',
-                    'role': 'Fill',
-                    'intensity': 50,
-                  },
-                ];
-                await _updateCustom(ref, {'activeFixtures': next});
-              },
-              onEditTypes: () async {
-                final c = TextEditingController(
-                  text: fixtureTypes.join(', '),
-                );
-                final v = await _prompt(
-                  context,
-                  'Tipos de fixture (coma)',
-                  c,
-                );
-                if (v == null) return;
-                await _updateCustom(ref, {
-                  'fixtureTypes': v
-                      .split(',')
-                      .map((e) => e.trim())
-                      .where((e) => e.isNotEmpty)
-                      .toList(),
-                });
-              },
-            );
-
-            if (wide) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(flex: 8, child: intentCol),
-                  const SizedBox(width: 24),
-                  Expanded(flex: 4, child: metricsCol),
-                ],
-              );
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                intentCol,
-                const SizedBox(height: 24),
-                metricsCol,
-              ],
-            );
+            ),
+            ActionChip(
+              label: const Text('Textura'),
+              onPressed: () => BibleNavigationScope.goToSection(context, BibleSectionId.texture),
+            ),
+          ],
+        ),
+        'lightSources': _EditableTextBlock(
+          icon: Icons.lightbulb_outline,
+          label: 'Fuentes de luz (filosofía global)',
+          text: lightSourcesOverview,
+          emptyHint: 'Motivación de prácticos, tipos de fuente…',
+          palette: palette,
+          maxLines: 6,
+          onEdit: () async {
+            final v = await _prompt(context, 'Fuentes de luz',
+                TextEditingController(text: lightSourcesOverview),
+                maxLines: 6);
+            if (v == null) return;
+            await _updateCustom({'lightSources': v});
           },
         ),
+        'gafferPhilosophy': _EditableTextBlock(
+          icon: Icons.engineering_outlined,
+          label: 'Directivas de gaffer',
+          text: gafferDirectives,
+          emptyHint: 'Notas generales al gaffer…',
+          palette: palette,
+          maxLines: 4,
+          onEdit: () async {
+            final v = await _prompt(context, 'Directivas gaffer',
+                TextEditingController(text: gafferDirectives),
+                maxLines: 4);
+            if (v == null) return;
+            await _updateCustom({'gafferDirectives': v});
+          },
+        ),
+        'locationContext': Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const LightingActDivider(label: 'Iluminación por localización'),
+            LightingLocationHub(
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+              selectedPlanId: selectedPlanId,
+              onSelectSet: (set) {
+                setState(() => _selectedPlanId = set.id);
+                _updateCustom({'selectedPlanId': set.id});
+              },
+              onClearSet: () {
+                setState(() => _selectedPlanId = null);
+                _updateCustom({'selectedPlanId': null});
+              },
+            ),
+          ],
+        ),
+        'lightBehavior': selectedPlanId == null
+            ? _GlassPanel(
+                child: Text(
+                  'Selecciona un set para definir cómo actúa la luz en esa localización.',
+                  style: AppTypography.bodyMedium(palette).copyWith(color: palette.textTertiary),
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _EditableTextBlock(
+                    icon: Icons.wb_incandescent_outlined,
+                    label: 'Comportamiento de luz en set',
+                    text: lightBehavior,
+                    emptyHint: 'Cómo entra la luz en este set…',
+                    palette: palette,
+                    maxLines: 6,
+                    onEdit: () async {
+                      final v = await _prompt(context, 'Comportamiento de luz',
+                          TextEditingController(text: lightBehavior),
+                          maxLines: 6);
+                      if (v == null) return;
+                      await _updatePlan(selectedPlanId, {'lightBehavior': v});
+                      await _syncLightingNote(selectedPlanId, v);
+                    },
+                  ),
+                  _EditableTextBlock(
+                    icon: Icons.nightlight_round,
+                    label: 'Intención día / noche',
+                    text: dayNightIntent,
+                    emptyHint: 'INT. NOCHE — prácticos ventana…',
+                    palette: palette,
+                    maxLines: 3,
+                    onEdit: () async {
+                      final v = await _prompt(context, 'Día / noche',
+                          TextEditingController(text: dayNightIntent),
+                          maxLines: 3);
+                      if (v == null) return;
+                      await _updatePlan(selectedPlanId, {'dayNightIntent': v});
+                    },
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      ActionChip(
+                        label: const Text('Localizaciones'),
+                        onPressed: () => BibleNavigationScope.goToSection(
+                          context,
+                          BibleSectionId.location,
+                          planId: selectedPlanId,
+                        ),
+                      ),
+                      ActionChip(
+                        label: const Text('Exposición'),
+                        onPressed: () => BibleNavigationScope.goToSection(
+                          context,
+                          BibleSectionId.exposure,
+                          planId: selectedPlanId,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+        'setTelemetry': selectedPlanId == null
+            ? const SizedBox.shrink()
+            : _TelemetryPanel(
+                colorTemp: planColorTemp,
+                tintVal: planTintVal,
+                tintStr: planTintStr,
+                contrastNum: planContrastNum,
+                contrastRatio: planContrastRatio,
+                blackIre: planBlackIre,
+                crushedBlacks: planCrushedBlacks,
+                fixtures: planFixtures,
+                fixtureTypes: planFixtureTypes,
+                palette: palette,
+                onColorTemp: (v) async {
+                  await updateTelemetry({'colorTemp': v.round(), 'contrastRatio': planContrastRatio});
+                  widget.data.lightSource = '${v.round()}K';
+                  widget.onChanged(widget.data);
+                },
+                onTint: (v) async {
+                  final sign = v >= 0 ? '+' : '';
+                  await updateTelemetry({'tintValue': v, 'tint': '$sign${v.toStringAsFixed(2)} G'});
+                },
+                onContrast: (v) async {
+                  final r = '${v.round()}:1';
+                  await updateTelemetry({'contrastNum': v.round(), 'contrastRatio': r});
+                  widget.data.keyFillRatioNight = r;
+                  widget.onChanged(widget.data);
+                },
+                onBlackIre: (v) async => updateTelemetry({'blackLevelIre': v.round()}),
+                onToggleCrush: () async => updateTelemetry({'crushedBlacks': !planCrushedBlacks}),
+                onEditFixture: (i) async {
+                  final f = planFixtures[i];
+                  final name = TextEditingController(text: f['name']?.toString() ?? '');
+                  final role = TextEditingController(text: f['role']?.toString() ?? '');
+                  final inten = TextEditingController(text: '${f['intensity'] ?? 100}');
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text(f['id']?.toString() ?? 'Fixture'),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextField(controller: name, decoration: const InputDecoration(labelText: 'Modelo')),
+                          TextField(controller: role, decoration: const InputDecoration(labelText: 'Rol')),
+                          TextField(controller: inten, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Intensidad %')),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+                        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
+                      ],
+                    ),
+                  );
+                  if (ok != true) return;
+                  final next = [...planFixtures];
+                  next[i] = {...f, 'name': name.text.trim(), 'role': role.text.trim(), 'intensity': int.tryParse(inten.text.trim()) ?? 100};
+                  await updateTelemetry({'activeFixtures': next});
+                },
+                onAddFixture: () async {
+                  await updateTelemetry({
+                    'activeFixtures': [
+                      ...planFixtures,
+                      {'id': 'L${planFixtures.length + 1}', 'name': 'LED Panel', 'role': 'Fill', 'intensity': 50},
+                    ],
+                  });
+                },
+                onEditTypes: () async {
+                  final c = TextEditingController(text: planFixtureTypes.join(', '));
+                  final v = await _prompt(context, 'Tipos de fixture (coma)', c);
+                  if (v == null) return;
+                  await updateTelemetry({
+                    'fixtureTypes': v.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+                  });
+                },
+              ),
         'miredConverter': _MiredPanel(
           sourceK: sourceK,
           targetK: targetK,
           palette: palette,
-          onSource: (v) => _updateCustom(ref, {'sourceKelvin': v.round()}),
+          onSource: (v) => _updateCustom({'sourceKelvin': v.round()}),
           onTarget: (v) async {
-            await _updateCustom(ref, {
+            await _updateCustom({
               'targetKelvin': v.round(),
               'colorTemp': v.round(),
             });
           },
         ),
         'diagrams': _SetupsBlock(
-          bibleId: bibleId,
+          projectId: widget.projectId,
+          bibleId: widget.bibleId,
           db: db,
           palette: palette,
-          onAdd: () => _addSetup(context, ref),
+          filterPlanId: selectedPlanId,
+          onAdd: () => _addSetup(context, selectedPlanId),
+        ),
+        'references': _LightingReferencesBlock(
+          projectId: widget.projectId,
+          bibleId: widget.bibleId,
+          palette: palette,
+          selectedPlanId: selectedPlanId,
+          planRefs: (planData['referenceImages'] as List?)
+                  ?.map((e) => e.toString())
+                  .toList() ??
+              const [],
+          onPlanRefsChanged: (paths) async {
+            if (selectedPlanId == null) return;
+            await _updatePlan(selectedPlanId, {'referenceImages': paths});
+          },
         ),
       },
     );
   }
 
-  Future<void> _addSetup(BuildContext context, WidgetRef ref) async {
+  Future<void> _addSetup(BuildContext context, int? planId) async {
     final palette = context.palette;
     final nameCtrl = TextEditingController();
     final narrativeCtrl = TextEditingController();
     final practicalCtrl = TextEditingController();
+    final gelCtrl = TextEditingController();
+
+    int? siteId;
+    if (planId != null) {
+      final db = ref.read(databaseProvider);
+      final plan = await db.getLocationById(planId);
+      siteId = plan?.siteId;
+    }
 
     await showModalBottomSheet<void>(
       context: context,
@@ -651,14 +784,23 @@ class LightingSection extends ConsumerWidget {
                   onChanged: (_) {},
                   controller: practicalCtrl,
                 ),
+                BibleTextField(
+                  label: 'Notas de gel',
+                  hint: 'CTB, Plus Green…',
+                  maxLines: 2,
+                  onChanged: (_) {},
+                  controller: gelCtrl,
+                ),
                 const SizedBox(height: 20),
                 FilledButton(
                   onPressed: () async {
                     final name = nameCtrl.text.trim();
                     if (name.isEmpty) return;
-                    await ref.read(databaseProvider).insertLightingSetup(
+                    await ref
+                        .read(databaseProvider)
+                        .insertLightingSetup(
                           LightingSetupsCompanion.insert(
-                            bibleId: bibleId,
+                            bibleId: widget.bibleId,
                             setupName: name,
                             narrativeNote: drift.Value(
                               narrativeCtrl.text.trim().isEmpty
@@ -670,6 +812,13 @@ class LightingSection extends ConsumerWidget {
                                   ? null
                                   : practicalCtrl.text.trim(),
                             ),
+                            gelNotes: drift.Value(
+                              gelCtrl.text.trim().isEmpty
+                                  ? null
+                                  : gelCtrl.text.trim(),
+                            ),
+                            locationBasePlanId: drift.Value(planId),
+                            locationSiteId: drift.Value(siteId),
                             diagramJson: '[]',
                           ),
                         );
@@ -695,11 +844,7 @@ class LightingSection extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
-        content: TextField(
-          controller: c,
-          autofocus: true,
-          maxLines: maxLines,
-        ),
+        content: TextField(controller: c, autofocus: true, maxLines: maxLines),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -754,6 +899,62 @@ class LightingSection extends ConsumerWidget {
   }
 }
 
+// ─── Editable text slot ───────────────────────────────────────────────────────
+
+class _EditableTextBlock extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String text;
+  final String emptyHint;
+  final AppPalette palette;
+  final int maxLines;
+  final VoidCallback onEdit;
+  final Widget? trailing;
+
+  const _EditableTextBlock({
+    required this.icon,
+    required this.label,
+    required this.text,
+    required this.emptyHint,
+    required this.palette,
+    required this.maxLines,
+    required this.onEdit,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _SectionHead(icon: icon, label: label, palette: palette),
+              if (trailing != null) ...[
+                const Spacer(),
+                trailing!,
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: onEdit,
+            child: Text(
+              text.isEmpty ? emptyHint : text,
+              style: AppTypography.bodyMedium(palette).copyWith(
+                fontSize: 15,
+                height: 1.55,
+                color: text.isEmpty ? palette.textTertiary : palette.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Hero ────────────────────────────────────────────────────────────────────
 
 class _HeroBanner extends ConsumerWidget {
@@ -782,12 +983,17 @@ class _HeroBanner extends ConsumerWidget {
     final db = ref.watch(databaseProvider);
     return ClipRRect(
       borderRadius: BorderRadius.circular(4),
-      child: SizedBox(
-        height: 280,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            StreamBuilder<List<MoodboardImage>>(
+      child: BibleMoodboardImageTarget(
+        projectId: projectId,
+        sectionId: BibleSectionId.lighting,
+        bibleId: bibleId,
+        hint: 'Clic aquí → ⌘V para pegar hero de iluminación',
+        child: SizedBox(
+          height: 280,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              StreamBuilder<List<MoodboardImage>>(
               stream: db.watchMoodboardImagesForSection(
                 projectId,
                 BibleSectionId.lighting,
@@ -813,6 +1019,7 @@ class _HeroBanner extends ConsumerWidget {
                         projectId: projectId,
                         bibleId: bibleId,
                         category: MoodboardCategory.lighting,
+                        assignedSections: [BibleSectionId.lighting],
                       ),
                       icon: Icon(
                         Icons.add_photo_alternate_outlined,
@@ -906,23 +1113,25 @@ class _HeroBanner extends ConsumerWidget {
                         children: [
                           TextSpan(
                             text: '$title\n',
-                            style: AppTypography.displayMedium(palette).copyWith(
-                              fontSize: 36,
-                              height: 1.15,
-                              letterSpacing: -0.8,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: AppTypography.displayMedium(palette)
+                                .copyWith(
+                                  fontSize: 36,
+                                  height: 1.15,
+                                  letterSpacing: -0.8,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
                           ),
                           TextSpan(
                             text: subtitle,
-                            style: AppTypography.displayMedium(palette).copyWith(
-                              fontSize: 32,
-                              height: 1.2,
-                              letterSpacing: -0.6,
-                              color: palette.textTertiary,
-                              fontWeight: FontWeight.w400,
-                            ),
+                            style: AppTypography.displayMedium(palette)
+                                .copyWith(
+                                  fontSize: 32,
+                                  height: 1.2,
+                                  letterSpacing: -0.6,
+                                  color: palette.textTertiary,
+                                  fontWeight: FontWeight.w400,
+                                ),
                           ),
                         ],
                       ),
@@ -933,6 +1142,7 @@ class _HeroBanner extends ConsumerWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -995,6 +1205,7 @@ class _AtmosphericMosaic extends ConsumerWidget {
                         projectId: projectId,
                         bibleId: bibleId,
                         category: MoodboardCategory.lighting,
+                        assignedSections: [BibleSectionId.lighting],
                       ),
                     ),
                   ],
@@ -1024,6 +1235,7 @@ class _AtmosphericMosaic extends ConsumerWidget {
                         projectId: projectId,
                         bibleId: bibleId,
                         category: MoodboardCategory.lighting,
+                        assignedSections: [BibleSectionId.lighting],
                       ),
                     ),
                   ),
@@ -1044,20 +1256,21 @@ class _AtmosphericMosaic extends ConsumerWidget {
                                 ? (behaviors[1]['tag'] ?? '')
                                 : 'Metal',
                             note: '',
-                            imagePath:
-                                imgs.length > 1 ? imgs[1].imagePath : null,
+                            imagePath: imgs.length > 1
+                                ? imgs[1].imagePath
+                                : null,
                             tall: false,
                             showTech: false,
                             contrastRatio: contrastRatio,
                             palette: palette,
-                            onTap: () => onEditCard(
-                              behaviors.length > 1 ? 1 : 0,
-                            ),
+                            onTap: () =>
+                                onEditCard(behaviors.length > 1 ? 1 : 0),
                             onAddImage: () => MoodboardHelpers.addManualImages(
                               db: db,
                               projectId: projectId,
                               bibleId: bibleId,
                               category: MoodboardCategory.lighting,
+                        assignedSections: [BibleSectionId.lighting],
                             ),
                           ),
                         ),
@@ -1074,20 +1287,21 @@ class _AtmosphericMosaic extends ConsumerWidget {
                                 ? (behaviors[2]['tag'] ?? tintStr)
                                 : tintStr,
                             note: '',
-                            imagePath:
-                                imgs.length > 2 ? imgs[2].imagePath : null,
+                            imagePath: imgs.length > 2
+                                ? imgs[2].imagePath
+                                : null,
                             tall: false,
                             showTech: false,
                             contrastRatio: contrastRatio,
                             palette: palette,
-                            onTap: () => onEditCard(
-                              behaviors.length > 2 ? 2 : 0,
-                            ),
+                            onTap: () =>
+                                onEditCard(behaviors.length > 2 ? 2 : 0),
                             onAddImage: () => MoodboardHelpers.addManualImages(
                               db: db,
                               projectId: projectId,
                               bibleId: bibleId,
                               category: MoodboardCategory.lighting,
+                        assignedSections: [BibleSectionId.lighting],
                             ),
                           ),
                         ),
@@ -1133,8 +1347,7 @@ class _BehaviorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImg =
-        imagePath != null && File(imagePath!).existsSync();
+    final hasImg = imagePath != null && File(imagePath!).existsSync();
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -1171,10 +1384,7 @@ class _BehaviorCard extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Color(0xE60D0D0D),
-                  ],
+                  colors: [Colors.transparent, Color(0xE60D0D0D)],
                 ),
               ),
             ),
@@ -1265,10 +1475,9 @@ class _TechChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: AppTypography.mono(palette).copyWith(
-          fontSize: 10,
-          color: palette.accent.withValues(alpha: 0.85),
-        ),
+        style: AppTypography.mono(
+          palette,
+        ).copyWith(fontSize: 10, color: palette.accent.withValues(alpha: 0.85)),
       ),
     );
   }
@@ -1499,10 +1708,9 @@ class _TelemetryPanelState extends State<_TelemetryPanel> {
                 widget.crushedBlacks
                     ? 'Crushed Blacks Allowed'
                     : 'Preserve Shadow Detail',
-                style: AppTypography.mono(palette).copyWith(
-                  fontSize: 10,
-                  color: palette.textTertiary,
-                ),
+                style: AppTypography.mono(
+                  palette,
+                ).copyWith(fontSize: 10, color: palette.textTertiary),
               ),
             ),
           ),
@@ -1511,11 +1719,9 @@ class _TelemetryPanelState extends State<_TelemetryPanel> {
           const SizedBox(height: 16),
           Text(
             'ACTIVE FIXTURES',
-            style: AppTypography.mono(palette).copyWith(
-              fontSize: 10,
-              letterSpacing: 1.4,
-              color: palette.accent,
-            ),
+            style: AppTypography.mono(
+              palette,
+            ).copyWith(fontSize: 10, letterSpacing: 1.4, color: palette.accent),
           ),
           const SizedBox(height: 10),
           for (var i = 0; i < widget.fixtures.length; i++)
@@ -1549,10 +1755,9 @@ class _TelemetryPanelState extends State<_TelemetryPanel> {
                       ),
                       Text(
                         '${widget.fixtures[i]['intensity'] ?? 0}%',
-                        style: AppTypography.mono(palette).copyWith(
-                          fontSize: 11,
-                          color: Colors.white,
-                        ),
+                        style: AppTypography.mono(
+                          palette,
+                        ).copyWith(fontSize: 11, color: Colors.white),
                       ),
                     ],
                   ),
@@ -1627,10 +1832,9 @@ class _MetricLabel extends StatelessWidget {
         ),
         Text(
           value,
-          style: AppTypography.mono(palette).copyWith(
-            fontSize: 12,
-            color: Colors.white,
-          ),
+          style: AppTypography.mono(
+            palette,
+          ).copyWith(fontSize: 12, color: Colors.white),
         ),
       ],
     );
@@ -1698,9 +1902,7 @@ class _MiredPanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            gel == null
-                ? 'Sin corrección de gel recomendada'
-                : gel.description,
+            gel == null ? 'Sin corrección de gel recomendada' : gel.description,
             style: AppTypography.mono(palette).copyWith(
               fontSize: 12,
               color: gel == null ? palette.textTertiary : palette.accent,
@@ -1710,9 +1912,365 @@ class _MiredPanel extends StatelessWidget {
           Text(
             'ΔMired '
             '${(MiredConverter.kelvinToMired(sourceK) - MiredConverter.kelvinToMired(targetK)).toStringAsFixed(1)}',
-            style: AppTypography.mono(palette).copyWith(
-              fontSize: 11,
-              color: palette.textTertiary,
+            style: AppTypography.mono(
+              palette,
+            ).copyWith(fontSize: 11, color: palette.textTertiary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Referencias ─────────────────────────────────────────────────────────────
+
+class _LightingReferencesBlock extends ConsumerWidget {
+  final int projectId;
+  final int bibleId;
+  final AppPalette palette;
+  final int? selectedPlanId;
+  final List<String> planRefs;
+  final Future<void> Function(List<String> paths) onPlanRefsChanged;
+
+  const _LightingReferencesBlock({
+    required this.projectId,
+    required this.bibleId,
+    required this.palette,
+    required this.selectedPlanId,
+    required this.planRefs,
+    required this.onPlanRefsChanged,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(databaseProvider);
+
+    Future<void> pasteToPlan() async {
+      if (selectedPlanId == null) return;
+      await BiblePasteHelpers.pasteFromClipboard(
+        onPayload: (payload) async {
+          final path = await BiblePasteHelpers.savePayloadToProject(
+            projectId: projectId,
+            subfolder: 'lighting_refs',
+            payload: payload,
+          );
+          if (path != null) {
+            await onPlanRefsChanged([...planRefs, path]);
+          }
+        },
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionHead(
+          icon: Icons.photo_library_outlined,
+          label: selectedPlanId == null
+              ? 'Referencias globales'
+              : 'Referencias del set',
+          palette: palette,
+        ),
+        const SizedBox(height: 12),
+        if (selectedPlanId == null)
+          StreamBuilder<List<MoodboardImage>>(
+            stream: db.watchMoodboardImagesForSection(
+              projectId,
+              BibleSectionId.lighting,
+            ),
+            builder: (context, snap) {
+              final imgs = snap.data ?? [];
+              if (imgs.isEmpty) {
+                return _GlassPanel(
+                  child: Text(
+                    'Pega imágenes en el hero o selecciona un set para refs por localización.',
+                    style: AppTypography.bodyMedium(palette)
+                        .copyWith(color: palette.textTertiary),
+                  ),
+                );
+              }
+              return SizedBox(
+                height: 120,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: imgs.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) {
+                    final file = File(imgs[i].imagePath);
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: file.existsSync()
+                          ? Image.file(file, width: 160, height: 120, fit: BoxFit.cover)
+                          : const SizedBox(width: 160, height: 120),
+                    );
+                  },
+                ),
+              );
+            },
+          )
+        else ...[
+          SizedBox(
+            height: 120,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: planRefs.length + 1,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (_, i) {
+                if (i == planRefs.length) {
+                  return BibleMoodboardImageTarget(
+                    projectId: projectId,
+                    sectionId: BibleSectionId.lighting,
+                    bibleId: bibleId,
+                    hint: '⌘V — ref del set',
+                    child: InkWell(
+                      onTap: pasteToPlan,
+                      child: Container(
+                        width: 160,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: palette.border,
+                            style: BorderStyle.solid,
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.add_photo_alternate_outlined,
+                                color: palette.accent),
+                            const SizedBox(height: 4),
+                            Text('Pegar ref',
+                                style: TextStyle(
+                                    color: palette.accent, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                final file = File(planRefs[i]);
+                return Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: file.existsSync()
+                          ? Image.file(file,
+                              width: 160, height: 120, fit: BoxFit.cover)
+                          : const SizedBox(width: 160, height: 120),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: IconButton(
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.black54,
+                          minimumSize: const Size(28, 28),
+                          padding: EdgeInsets.zero,
+                        ),
+                        icon: const Icon(Icons.close, size: 16, color: Colors.white),
+                        onPressed: () {
+                          final next = [...planRefs]..removeAt(i);
+                          onPlanRefsChanged(next);
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: () => MoodboardHelpers.addManualImages(
+              db: db,
+              projectId: projectId,
+              bibleId: bibleId,
+              category: MoodboardCategory.lighting,
+              assignedSections: [BibleSectionId.lighting],
+            ),
+            icon: Icon(Icons.folder_open, size: 16, color: palette.accent),
+            label: Text('Elegir desde Finder',
+                style: TextStyle(color: palette.accent, fontSize: 12)),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ─── Setup card ──────────────────────────────────────────────────────────────
+
+class _SetupCard extends ConsumerStatefulWidget {
+  final LightingSetupModel setup;
+  final LightingSetup row;
+  final int projectId;
+  final int bibleId;
+  final AppDatabase db;
+  final AppPalette palette;
+
+  const _SetupCard({
+    required this.setup,
+    required this.row,
+    required this.projectId,
+    required this.bibleId,
+    required this.db,
+    required this.palette,
+  });
+
+  @override
+  ConsumerState<_SetupCard> createState() => _SetupCardState();
+}
+
+class _SetupCardState extends ConsumerState<_SetupCard> {
+  String? _setName;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSetName();
+  }
+
+  Future<void> _loadSetName() async {
+    final planId = widget.setup.locationBasePlanId;
+    if (planId == null) return;
+    final plan = await widget.db.getLocationById(planId);
+    if (mounted && plan != null) {
+      setState(() => _setName = plan.locationName);
+    }
+  }
+
+  Future<void> _saveRefPath(String? path) async {
+    await widget.db.updateLightingSetup(
+      widget.row.copyWith(referenceImagePath: drift.Value(path)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final setup = widget.setup;
+    final palette = widget.palette;
+    final db = widget.db;
+
+    return _GlassPanel(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_setName != null) ...[
+                        Text(
+                          _setName!.toUpperCase(),
+                          style: AppTypography.mono(palette).copyWith(
+                            fontSize: 10,
+                            letterSpacing: 1.2,
+                            color: palette.accent,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      Text(
+                        setup.setupName,
+                        style: AppTypography.titleMedium(palette)
+                            .copyWith(fontSize: 18),
+                      ),
+                      if (setup.narrativeNote?.isNotEmpty == true) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          setup.narrativeNote!,
+                          style: AppTypography.bodyMedium(palette).copyWith(
+                            color: palette.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                      if (setup.practicalMotivation?.isNotEmpty == true) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'MOTIVACIÓN: ${setup.practicalMotivation}',
+                          style: AppTypography.mono(palette).copyWith(
+                            fontSize: 11,
+                            color: palette.accent,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: palette.error, size: 20),
+                  onPressed: () => db.deleteLightingSetup(setup.id),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: BibleMoodboardImageTarget(
+                projectId: widget.projectId,
+                sectionId: BibleSectionId.lighting,
+                bibleId: widget.bibleId,
+                hint: '⌘V — ref del setup',
+                child: AspectRatio(
+                  aspectRatio: 16 / 5,
+                  child: InkWell(
+                    onTap: () async {
+                      await BiblePasteHelpers.pasteFromClipboard(
+                        onPayload: (payload) async {
+                          final path =
+                              await BiblePasteHelpers.savePayloadToProject(
+                            projectId: widget.projectId,
+                            subfolder: 'lighting_setups',
+                            payload: payload,
+                          );
+                          if (path != null) await _saveRefPath(path);
+                        },
+                      );
+                    },
+                    child: setup.referenceImagePath != null &&
+                            File(setup.referenceImagePath!).existsSync()
+                        ? Image.file(
+                            File(setup.referenceImagePath!),
+                            fit: BoxFit.cover,
+                          )
+                        : ColoredBox(
+                            color: palette.surfaceOverlay,
+                            child: Center(
+                              child: Text(
+                                'Pegar referencia del setup',
+                                style: TextStyle(
+                                  color: palette.textTertiary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          SizedBox(
+            height: 280,
+            child: LightingDiagramEditor(
+              key: ValueKey('lighting-diagram-${setup.id}'),
+              database: db,
+              projectId: widget.projectId,
+              setupId: setup.id,
+              setName: _setName,
+              locationBasePlanId: setup.locationBasePlanId,
+              initialJson: setup.diagramJson,
+              onChanged: (json) async {
+                await db.updateLightingSetup(
+                  widget.row.copyWith(diagramJson: json),
+                );
+              },
             ),
           ),
         ],
@@ -1723,21 +2281,25 @@ class _MiredPanel extends StatelessWidget {
 
 // ─── Setups ──────────────────────────────────────────────────────────────────
 
-class _SetupsBlock extends StatelessWidget {
+class _SetupsBlock extends ConsumerWidget {
+  final int projectId;
   final int bibleId;
   final AppDatabase db;
   final AppPalette palette;
+  final int? filterPlanId;
   final VoidCallback onAdd;
 
   const _SetupsBlock({
+    required this.projectId,
     required this.bibleId,
     required this.db,
     required this.palette,
+    this.filterPlanId,
     required this.onAdd,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1766,14 +2328,23 @@ class _SetupsBlock extends StatelessWidget {
         StreamBuilder<List<LightingSetup>>(
           stream: db.watchLightingSetupsForBible(bibleId),
           builder: (context, snap) {
-            final setups = snap.data ?? [];
+            var setups = snap.data ?? [];
+            if (filterPlanId != null) {
+              setups = setups
+                  .where(
+                    (s) =>
+                        s.locationBasePlanId == filterPlanId ||
+                        s.locationBasePlanId == null,
+                  )
+                  .toList();
+            }
             if (setups.isEmpty) {
               return _GlassPanel(
                 child: Text(
                   'Sin setups. Crea uno para diagramar key/fill y motivación práctica.',
-                  style: AppTypography.bodyMedium(palette).copyWith(
-                    color: palette.textTertiary,
-                  ),
+                  style: AppTypography.bodyMedium(
+                    palette,
+                  ).copyWith(color: palette.textTertiary),
                 ),
               );
             }
@@ -1782,77 +2353,13 @@ class _SetupsBlock extends StatelessWidget {
                 final setup = LightingSetupModel.fromRow(row);
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16),
-                  child: _GlassPanel(
-                    padding: EdgeInsets.zero,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      setup.setupName,
-                                      style: AppTypography.titleMedium(palette)
-                                          .copyWith(fontSize: 18),
-                                    ),
-                                    if (setup.narrativeNote?.isNotEmpty ==
-                                        true) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        setup.narrativeNote!,
-                                        style: AppTypography.bodyMedium(palette)
-                                            .copyWith(
-                                          color: palette.textSecondary,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ],
-                                    if (setup.practicalMotivation
-                                            ?.isNotEmpty ==
-                                        true) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'MOTIVACIÓN: ${setup.practicalMotivation}',
-                                        style: AppTypography.mono(palette)
-                                            .copyWith(
-                                          fontSize: 11,
-                                          color: palette.accent,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                              IconButton(
-                                icon: Icon(
-                                  Icons.delete_outline,
-                                  color: palette.error,
-                                  size: 20,
-                                ),
-                                onPressed: () =>
-                                    db.deleteLightingSetup(setup.id),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(
-                          height: 280,
-                          child: LightingDiagramEditor(
-                            initialJson: setup.diagramJson,
-                            onChanged: (json) async {
-                              await db.updateLightingSetup(
-                                row.copyWith(diagramJson: json),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: _SetupCard(
+                    setup: setup,
+                    row: row,
+                    projectId: projectId,
+                    bibleId: bibleId,
+                    db: db,
+                    palette: palette,
                   ),
                 );
               }).toList(),

@@ -92,7 +92,7 @@ abstract final class CloudRuntimeConfig {
     if (_isSupabaseInitialized()) return;
     await Supabase.initialize(
       url: url,
-      anonKey: anonKey,
+      publishableKey: anonKey,
       debug: kDebugMode,
     );
   }

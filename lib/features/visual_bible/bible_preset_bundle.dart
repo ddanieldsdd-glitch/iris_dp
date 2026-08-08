@@ -22,12 +22,12 @@ class BiblePresetSampleSeed {
   });
 
   Map<String, dynamic> toJson() => {
-        'visualBibleFields': visualBibleFields,
-        'colorBlocks': colorBlocks,
-        'lightingSetups': lightingSetups,
-        'sectionValues': sectionValues,
-        'sectionNarratives': sectionNarratives,
-      };
+    'visualBibleFields': visualBibleFields,
+    'colorBlocks': colorBlocks,
+    'lightingSetups': lightingSetups,
+    'sectionValues': sectionValues,
+    'sectionNarratives': sectionNarratives,
+  };
 
   factory BiblePresetSampleSeed.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const BiblePresetSampleSeed();
@@ -46,8 +46,9 @@ class BiblePresetSampleSeed {
       sectionValues: Map<String, dynamic>.from(
         json['sectionValues'] as Map? ?? {},
       ),
-      sectionNarratives: (json['sectionNarratives'] as Map? ?? {})
-          .map((k, v) => MapEntry(k.toString(), v.toString())),
+      sectionNarratives: (json['sectionNarratives'] as Map? ?? {}).map(
+        (k, v) => MapEntry(k.toString(), v.toString()),
+      ),
     );
   }
 }
@@ -77,18 +78,17 @@ class BiblePresetBundle {
   });
 
   Map<String, dynamic> toJson() => {
-        'version': 1,
-        'id': id,
-        'name': name,
-        'description': description,
-        'blueprint': blueprint.storageKey,
-        if (layout != null) 'layout': layout!.toJson(),
-        'sectionStyles':
-            sectionStyles.map((k, v) => MapEntry(k, v.storageKey)),
-        if (exportDefaults != null) 'exportDefaults': exportDefaults!.toJson(),
-        if (sampleSeed != null) 'sampleSeed': sampleSeed!.toJson(),
-        'includes': includes,
-      };
+    'version': 1,
+    'id': id,
+    'name': name,
+    'description': description,
+    'blueprint': blueprint.storageKey,
+    if (layout != null) 'layout': layout!.toJson(),
+    'sectionStyles': sectionStyles.map((k, v) => MapEntry(k, v.storageKey)),
+    if (exportDefaults != null) 'exportDefaults': exportDefaults!.toJson(),
+    if (sampleSeed != null) 'sampleSeed': sampleSeed!.toJson(),
+    'includes': includes,
+  };
 
   String encode() => jsonEncode(toJson());
 
@@ -133,7 +133,8 @@ class BiblePresetBundle {
             ? Map<String, dynamic>.from(json['sampleSeed'] as Map)
             : null,
       ),
-      includes: (json['includes'] as List?)?.map((e) => e.toString()).toList() ??
+      includes:
+          (json['includes'] as List?)?.map((e) => e.toString()).toList() ??
           const [],
     );
   }
@@ -173,10 +174,10 @@ abstract final class BibleBuiltinPresets {
   static const documentaryObsId = 'builtin_documentary_obs';
 
   static List<BiblePresetBundle> get all => [
-        fictionNoir,
-        commercialClean,
-        documentaryObs,
-      ];
+    fictionNoir,
+    commercialClean,
+    documentaryObs,
+  ];
 
   static BiblePresetBundle? byId(String id) {
     for (final p in all) {
@@ -229,7 +230,7 @@ abstract final class BibleBuiltinPresets {
       'Exposición T2.8 / ISO 800',
       'Textura grain 500T + difusión suave',
     ],
-    sampleSeed: BiblePresetSampleSeed(
+    sampleSeed: const BiblePresetSampleSeed(
       visualBibleFields: {
         'visualConcept':
             'Alto contraste, prácticos fríos contra una base de sombra profunda '
@@ -339,7 +340,7 @@ abstract final class BibleBuiltinPresets {
       'LUT Rec.709 limpio',
       'Sin camera tests / workflow',
     ],
-    sampleSeed: BiblePresetSampleSeed(
+    sampleSeed: const BiblePresetSampleSeed(
       visualBibleFields: {
         'visualConcept':
             'Producto heroico, fondos limpios, contraste controlado. '
@@ -406,7 +407,7 @@ abstract final class BibleBuiltinPresets {
       'Color documental (skin-first)',
       'Sin camera tests',
     ],
-    sampleSeed: BiblePresetSampleSeed(
+    sampleSeed: const BiblePresetSampleSeed(
       visualBibleFields: {
         'visualConcept':
             'Observación respetuosa. La luz del lugar manda; intervenimos poco.',

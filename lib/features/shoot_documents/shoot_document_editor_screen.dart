@@ -50,7 +50,9 @@ class _ShootDocumentEditorScreenState
     final db = ref.watch(databaseProvider);
 
     return StreamBuilder<ShootDocument?>(
-      stream: db.watchShootDocumentsForProject(widget.projectId).map(
+      stream: db
+          .watchShootDocumentsForProject(widget.projectId)
+          .map(
             (list) => list.where((d) => d.id == widget.documentId).firstOrNull,
           ),
       builder: (context, docSnap) {
@@ -69,8 +71,9 @@ class _ShootDocumentEditorScreenState
             return FutureBuilder<void>(
               future: _ensureLookups(db, blocks),
               builder: (context, _) {
-                final docVis =
-                    decodeDocumentVisibility(doc.defaultVisibilityJson);
+                final docVis = decodeDocumentVisibility(
+                  doc.defaultVisibilityJson,
+                );
                 final resolved = blocks
                     .map(
                       (b) => ResolvedShootBlock(
@@ -78,7 +81,9 @@ class _ShootDocumentEditorScreenState
                         scene: b.sceneId != null ? _scenes[b.sceneId] : null,
                         shot: b.shotId != null ? _shots[b.shotId] : null,
                         visibility: mergeVisibility(docVis, b),
-                        overrides: decodeContentOverrides(b.contentOverridesJson),
+                        overrides: decodeContentOverrides(
+                          b.contentOverridesJson,
+                        ),
                       ),
                     )
                     .toList();
@@ -86,11 +91,17 @@ class _ShootDocumentEditorScreenState
                 return Scaffold(
                   appBar: AppBar(
                     backgroundColor: palette.surface,
-                    title: Text(doc.name, style: AppTypography.titleMedium(palette)),
+                    title: Text(
+                      doc.name,
+                      style: AppTypography.titleMedium(palette),
+                    ),
                     actions: [
                       IconButton(
                         tooltip: 'Guardar como plantilla',
-                        icon: Icon(Icons.bookmark_add_outlined, color: palette.accent),
+                        icon: Icon(
+                          Icons.bookmark_add_outlined,
+                          color: palette.accent,
+                        ),
                         onPressed: () async {
                           final name = await promptSaveUserTemplate(
                             context,
@@ -114,16 +125,23 @@ class _ShootDocumentEditorScreenState
                       GoodNotesPdfActions(
                         projectId: widget.projectId,
                         moduleType: GoodNotesModuleType.shootDocument,
-                        filenameBase: doc.name.replaceAll(RegExp(r'[^\w\s-]'), ''),
-                        buildPdfBytes: () => ShootDocumentPdfExporter.buildBytes(
-                          document: doc,
-                          blocks: resolved,
-                          projectName: '',
+                        filenameBase: doc.name.replaceAll(
+                          RegExp(r'[^\w\s-]'),
+                          '',
                         ),
+                        buildPdfBytes: () =>
+                            ShootDocumentPdfExporter.buildBytes(
+                              document: doc,
+                              blocks: resolved,
+                              projectName: '',
+                            ),
                       ),
                       IconButton(
                         tooltip: 'Exportar PDF',
-                        icon: Icon(Icons.picture_as_pdf_outlined, color: palette.accent),
+                        icon: Icon(
+                          Icons.picture_as_pdf_outlined,
+                          color: palette.accent,
+                        ),
                         onPressed: () => _exportPdf(doc, resolved),
                       ),
                       if (!doc.isPrimaryOnSet)
@@ -149,46 +167,49 @@ class _ShootDocumentEditorScreenState
                       Expanded(
                         child: switch (_mode) {
                           _EditorMode.blocks => _BlocksEditor(
-                              blocks: blocks,
-                              resolved: resolved,
-                              palette: palette,
-                              onReorder: (ids) => db.reorderShootDocumentBlocks(
-                                widget.documentId,
-                                ids,
-                              ),
-                              onAdd: () => _addBlock(context, db, blocks.length),
-                              onEdit: (b) => _editBlock(context, db, b),
-                              onDelete: (b) => db.deleteShootDocumentBlock(b.id),
-                              onDuplicate: (b) => _duplicateBlock(db, b, blocks.length),
+                            blocks: blocks,
+                            resolved: resolved,
+                            palette: palette,
+                            onReorder: (ids) => db.reorderShootDocumentBlocks(
+                              widget.documentId,
+                              ids,
                             ),
+                            onAdd: () => _addBlock(context, db, blocks.length),
+                            onEdit: (b) => _editBlock(context, db, b),
+                            onDelete: (b) => db.deleteShootDocumentBlock(b.id),
+                            onDuplicate: (b) =>
+                                _duplicateBlock(db, b, blocks.length),
+                          ),
                           _EditorMode.preview => ListView(
-                              padding: const EdgeInsets.all(AppSpacing.lg),
-                              children: [
-                                for (final r in resolved)
-                                  ShootDocumentBlockTile(
-                                    resolved: r,
-                                    palette: palette,
-                                    editing: false,
-                                  ),
-                              ],
-                            ),
+                            padding: const EdgeInsets.all(AppSpacing.lg),
+                            children: [
+                              for (final r in resolved)
+                                ShootDocumentBlockTile(
+                                  resolved: r,
+                                  palette: palette,
+                                  editing: false,
+                                ),
+                            ],
+                          ),
                           _EditorMode.onSet => ShootDocumentOnSetView(
-                              document: doc,
-                              blocks: resolved,
-                              palette: palette,
-                            ),
+                            document: doc,
+                            blocks: resolved,
+                            palette: palette,
+                          ),
                           _EditorMode.settings => _DocSettings(
-                              doc: doc,
-                              palette: palette,
-                              onSave: (updated) => db.updateShootDocument(updated),
-                            ),
+                            doc: doc,
+                            palette: palette,
+                            onSave: (updated) =>
+                                db.updateShootDocument(updated),
+                          ),
                         },
                       ),
                     ],
                   ),
                   floatingActionButton: _mode == _EditorMode.blocks
                       ? FloatingActionButton.extended(
-                          onPressed: () => _addBlock(context, db, blocks.length),
+                          onPressed: () =>
+                              _addBlock(context, db, blocks.length),
                           icon: const Icon(Icons.add),
                           label: const Text('Bloque'),
                         )
@@ -208,15 +229,15 @@ class _ShootDocumentEditorScreenState
   ) async {
     for (final b in blocks) {
       if (b.sceneId != null && !_scenes.containsKey(b.sceneId)) {
-        final s = await (db.select(db.scenes)
-              ..where((sc) => sc.id.equals(b.sceneId!)))
-            .getSingleOrNull();
+        final s = await (db.select(
+          db.scenes,
+        )..where((sc) => sc.id.equals(b.sceneId!))).getSingleOrNull();
         if (s != null) _scenes[b.sceneId!] = s;
       }
       if (b.shotId != null && !_shots.containsKey(b.shotId)) {
-        final sh = await (db.select(db.shots)
-              ..where((s) => s.id.equals(b.shotId!)))
-            .getSingleOrNull();
+        final sh = await (db.select(
+          db.shots,
+        )..where((s) => s.id.equals(b.shotId!))).getSingleOrNull();
         if (sh != null) _shots[b.shotId!] = sh;
       }
     }
@@ -316,7 +337,9 @@ class _ShootDocumentEditorScreenState
                 TextField(
                   controller: scriptCtrl,
                   maxLines: 6,
-                  decoration: const InputDecoration(labelText: 'Texto de guion'),
+                  decoration: const InputDecoration(
+                    labelText: 'Texto de guion',
+                  ),
                 ),
               if (block.blockType == ShootBlockType.shot ||
                   block.blockType == ShootBlockType.characterList) ...[
@@ -344,8 +367,12 @@ class _ShootDocumentEditorScreenState
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Guardar', style: AppTypography.bodyMedium(palette)
-                .copyWith(color: palette.accent)),
+            child: Text(
+              'Guardar',
+              style: AppTypography.bodyMedium(
+                palette,
+              ).copyWith(color: palette.accent),
+            ),
           ),
         ],
       ),
@@ -408,7 +435,10 @@ class _ModeBar extends StatelessWidget {
         child: SegmentedButton<_EditorMode>(
           segments: const [
             ButtonSegment(value: _EditorMode.blocks, label: Text('Bloques')),
-            ButtonSegment(value: _EditorMode.preview, label: Text('Vista previa')),
+            ButtonSegment(
+              value: _EditorMode.preview,
+              label: Text('Vista previa'),
+            ),
             ButtonSegment(value: _EditorMode.onSet, label: Text('Modo set')),
             ButtonSegment(value: _EditorMode.settings, label: Text('Ajustes')),
           ],
@@ -455,8 +485,7 @@ class _BlocksEditor extends StatelessWidget {
     return ReorderableListView.builder(
       padding: const EdgeInsets.all(AppSpacing.lg),
       itemCount: blocks.length,
-      onReorder: (oldIndex, newIndex) {
-        if (newIndex > oldIndex) newIndex -= 1;
+      onReorderItem: (oldIndex, newIndex) {
         final ids = blocks.map((b) => b.id).toList();
         final id = ids.removeAt(oldIndex);
         ids.insert(newIndex, id);
@@ -517,21 +546,27 @@ class _DocSettingsState extends State<_DocSettings> {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        Text('Visibilidad global', style: AppTypography.titleMedium(widget.palette)),
+        Text(
+          'Visibilidad global',
+          style: AppTypography.titleMedium(widget.palette),
+        ),
         SwitchListTile(
           title: const Text('Referencias visuales'),
           value: _vis.showThumbnail,
-          onChanged: (v) => setState(() => _vis = _vis.copyWith(showThumbnail: v)),
+          onChanged: (v) =>
+              setState(() => _vis = _vis.copyWith(showThumbnail: v)),
         ),
         SwitchListTile(
           title: const Text('Personajes'),
           value: _vis.showCharacters,
-          onChanged: (v) => setState(() => _vis = _vis.copyWith(showCharacters: v)),
+          onChanged: (v) =>
+              setState(() => _vis = _vis.copyWith(showCharacters: v)),
         ),
         SwitchListTile(
           title: const Text('Duración'),
           value: _vis.showDuration,
-          onChanged: (v) => setState(() => _vis = _vis.copyWith(showDuration: v)),
+          onChanged: (v) =>
+              setState(() => _vis = _vis.copyWith(showDuration: v)),
         ),
         SwitchListTile(
           title: const Text('Datos de cámara'),
@@ -579,7 +614,7 @@ class _DocSettingsState extends State<_DocSettings> {
                 updatedAt: DateTime.now(),
               ),
             );
-            if (mounted) {
+            if (context.mounted) {
               AppSnackBar.show(context, 'Ajustes guardados');
             }
           },

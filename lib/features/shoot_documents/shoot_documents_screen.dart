@@ -64,12 +64,13 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           final allDocs = snap.data!;
-          final dates = allDocs
-              .map((d) => d.shootDate)
-              .whereType<String>()
-              .toSet()
-              .toList()
-            ..sort();
+          final dates =
+              allDocs
+                  .map((d) => d.shootDate)
+                  .whereType<String>()
+                  .toSet()
+                  .toList()
+                ..sort();
           final docs = _dateFilter == null
               ? allDocs
               : allDocs.where((d) => d.shootDate == _dateFilter).toList();
@@ -176,9 +177,7 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
     if (choice.createTemplate) {
       await Navigator.push<bool>(
         context,
-        MaterialPageRoute(
-          builder: (_) => const ShootTemplateEditorScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const ShootTemplateEditorScreen()),
       );
       return;
     }
@@ -186,8 +185,8 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
     final defaultName = choice.isUserTemplate
         ? 'Documento — ${widget.projectName}'
         : choice.builtinTemplate == ShootDocumentTemplate.empty
-            ? 'Plani — ${widget.projectName}'
-            : '${choice.builtinTemplate!.label} — ${widget.projectName}';
+        ? 'Plani — ${widget.projectName}'
+        : '${choice.builtinTemplate!.label} — ${widget.projectName}';
 
     final nameCtrl = TextEditingController(text: defaultName);
     final name = await showDialog<String>(
@@ -196,11 +195,11 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
         final palette = context.palette;
         return AlertDialog(
           backgroundColor: palette.surfaceElevated,
-          title: Text('Nombre del documento', style: AppTypography.titleLarge(palette)),
-          content: TextField(
-            controller: nameCtrl,
-            autofocus: true,
+          title: Text(
+            'Nombre del documento',
+            style: AppTypography.titleLarge(palette),
           ),
+          content: TextField(controller: nameCtrl, autofocus: true),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -208,8 +207,12 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, nameCtrl.text.trim()),
-              child: Text('Crear', style: AppTypography.bodyMedium(palette)
-                  .copyWith(color: palette.accent)),
+              child: Text(
+                'Crear',
+                style: AppTypography.bodyMedium(
+                  palette,
+                ).copyWith(color: palette.accent),
+              ),
             ),
           ],
         );
@@ -236,6 +239,7 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
 
     if (!context.mounted) return;
     final doc = await db.getShootDocument(docId);
+    if (!context.mounted) return;
     if (doc != null) _openEditor(context, doc);
   }
 
@@ -257,8 +261,14 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: palette.surfaceElevated,
-        title: Text('Eliminar documento', style: AppTypography.titleLarge(palette)),
-        content: Text('¿Eliminar «$name»?', style: AppTypography.bodyLarge(palette)),
+        title: Text(
+          'Eliminar documento',
+          style: AppTypography.titleLarge(palette),
+        ),
+        content: Text(
+          '¿Eliminar «$name»?',
+          style: AppTypography.bodyLarge(palette),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -266,8 +276,12 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Eliminar', style: AppTypography.bodyMedium(palette)
-                .copyWith(color: palette.error)),
+            child: Text(
+              'Eliminar',
+              style: AppTypography.bodyMedium(
+                palette,
+              ).copyWith(color: palette.error),
+            ),
           ),
         ],
       ),
@@ -293,7 +307,11 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.description_outlined, size: 56, color: palette.textTertiary),
+          Icon(
+            Icons.description_outlined,
+            size: 56,
+            color: palette.textTertiary,
+          ),
           const SizedBox(height: AppSpacing.lg),
           Text(
             isShooting
@@ -359,8 +377,9 @@ class _DocumentTile extends StatelessWidget {
                 if (doc.isPrimaryOnSet)
                   Text(
                     'Activo hoy en set',
-                    style: AppTypography.caption(palette)
-                        .copyWith(color: palette.accent),
+                    style: AppTypography.caption(
+                      palette,
+                    ).copyWith(color: palette.accent),
                   ),
               ],
             ),
@@ -413,8 +432,10 @@ class _CreateDocumentSheet extends StatelessWidget {
             for (final t in ShootDocumentTemplate.values)
               ListTile(
                 title: Text(t.label, style: AppTypography.bodyMedium(palette)),
-                subtitle: Text(t.description,
-                    style: AppTypography.caption(palette)),
+                subtitle: Text(
+                  t.description,
+                  style: AppTypography.caption(palette),
+                ),
                 onTap: () => Navigator.pop(context, t),
               ),
           ],

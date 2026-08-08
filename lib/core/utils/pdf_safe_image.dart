@@ -17,7 +17,8 @@ abstract final class PdfSafeImage {
       bytes[1] == 0xD8 &&
       bytes[2] == 0xFF;
 
-  static bool isPdfCompatible(Uint8List bytes) => _isPng(bytes) || _isJpeg(bytes);
+  static bool isPdfCompatible(Uint8List bytes) =>
+      _isPng(bytes) || _isJpeg(bytes);
 
   /// Lee y normaliza a PNG/JPEG. Convierte HEIC/WebP vía decodificador Flutter.
   static Future<Uint8List?> loadFromPath(String? path) async {
@@ -27,6 +28,49 @@ abstract final class PdfSafeImage {
     try {
       final bytes = await file.readAsBytes();
       return await ensurePdfCompatible(bytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Carga una imagen limitando su lado mayor para reducir memoria y tamaño
+  /// del PDF. Conserva el original cuando ya es compatible y suficientemente
+  /// pequeño.
+  static Future<Uint8List?> loadFromPathMaxEdge(
+    String? path, {
+    int maxEdge = 2048,
+  }) async {
+    if (path == null || maxEdge <= 0) return null;
+    final file = File(path);
+    if (!file.existsSync()) return null;
+    try {
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return null;
+      final probe = await ui.instantiateImageCodec(bytes);
+      final frame = await probe.getNextFrame();
+      final width = frame.image.width;
+      final height = frame.image.height;
+      frame.image.dispose();
+      probe.dispose();
+      if (width <= maxEdge && height <= maxEdge && isPdfCompatible(bytes)) {
+        return bytes;
+      }
+
+      final scale = maxEdge / (width > height ? width : height);
+      final targetWidth = (width * scale).round().clamp(1, maxEdge);
+      final targetHeight = (height * scale).round().clamp(1, maxEdge);
+      final codec = await ui.instantiateImageCodec(
+        bytes,
+        targetWidth: targetWidth,
+        targetHeight: targetHeight,
+      );
+      final resizedFrame = await codec.getNextFrame();
+      final data = await resizedFrame.image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      resizedFrame.image.dispose();
+      codec.dispose();
+      return data?.buffer.asUint8List();
     } catch (_) {
       return null;
     }

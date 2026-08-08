@@ -15,6 +15,8 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/media_storage.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../bible_moodboard_image_target.dart';
+import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
 import '../bible_section_shared_widgets.dart';
@@ -71,6 +73,36 @@ class _CameraTestsSectionState extends ConsumerState<CameraTestsSection> {
           'Decisiones validadas con pruebas reales — cámara, lente, LUT y luz.',
           style: AppTypography.caption(palette)
               .copyWith(color: palette.textTertiary),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        BibleMoodboardImageTarget(
+          projectId: widget.projectId,
+          sectionId: BibleSectionId.cameraTests,
+          bibleId: widget.bibleId,
+          hint: 'Clic aquí → ⌘V para pegar frame de prueba',
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: ColoredBox(
+              color: palette.surfaceOverlay,
+              child: Center(
+                child: TextButton.icon(
+                  onPressed: () => MoodboardHelpers.addManualImages(
+                    db: db,
+                    projectId: widget.projectId,
+                    bibleId: widget.bibleId,
+                    category: MoodboardCategory.cameraTest,
+                    assignedSections: [BibleSectionId.cameraTests],
+                  ),
+                  icon: Icon(Icons.add_photo_alternate_outlined,
+                      color: palette.accent),
+                  label: Text(
+                    'Añadir frame hero',
+                    style: TextStyle(color: palette.accent),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
         const SizedBox(height: AppSpacing.lg),
         if (_compareA != null && _compareB != null)

@@ -9,9 +9,11 @@ import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../equipment/widgets/equipment_picker.dart';
+import '../../../../shared/visual_bible/bible_optics_context.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
+import '../bible_moodboard_image_target.dart';
 import 'section_scaffold.dart';
 
 /// Óptica — layout Stitch (hero lente + filtración + specs + mantenimiento).
@@ -132,6 +134,7 @@ class _OpticsSectionState extends ConsumerState<OpticsSection> {
     }
 
     final maintenance = _list('maintenanceLog');
+    final lensSets = BibleOpticsContext.lensSetsFromJson(data.opticsConfigJson);
 
     return BibleSectionScaffold(
       sectionId: BibleSectionId.optics,
@@ -163,6 +166,20 @@ class _OpticsSectionState extends ConsumerState<OpticsSection> {
           builder: (context, constraints) {
             final wide = constraints.maxWidth >= 1000;
             final mid = constraints.maxWidth >= 700;
+            final db = ref.read(databaseProvider);
+
+            return FutureBuilder<Lense?>(
+              future: data.primaryLensId != null
+                  ? db.getLensById(data.primaryLensId!)
+                  : Future.value(null),
+              builder: (context, lensSnap) {
+                final opticsCtx = BibleOpticsContext.resolve(
+                  primaryLens: lensSnap.data,
+                  opticType: data.opticType,
+                  aspectRatio: data.aspectRatio,
+                  opticsConfig: config,
+                );
+                final showAnamorphic = opticsCtx.isAnamorphic;
 
             final hero = _PrimaryLensHero(
               projectId: widget.projectId,
@@ -547,6 +564,12 @@ class _OpticsSectionState extends ConsumerState<OpticsSection> {
               ),
             );
 
+            final lensSetsPanel = _LensSetsPanel(
+              lensSets: lensSets,
+              palette: palette,
+              onChanged: (sets) => _updateConfig({'lensSets': sets}),
+            );
+
             if (wide) {
               return Column(
                 children: [
@@ -559,14 +582,19 @@ class _OpticsSectionState extends ConsumerState<OpticsSection> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: specsCard),
-                      const SizedBox(width: 16),
-                      Expanded(child: maintenanceCard),
-                    ],
-                  ),
+                  if (showAnamorphic)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: specsCard),
+                        const SizedBox(width: 16),
+                        Expanded(child: maintenanceCard),
+                      ],
+                    )
+                  else
+                    maintenanceCard,
+                  const SizedBox(height: 16),
+                  lensSetsPanel,
                 ],
               );
             }
@@ -580,12 +608,16 @@ class _OpticsSectionState extends ConsumerState<OpticsSection> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(child: filtrationCard),
-                      const SizedBox(width: 16),
-                      Expanded(child: specsCard),
+                      if (showAnamorphic) ...[
+                        const SizedBox(width: 16),
+                        Expanded(child: specsCard),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 16),
                   maintenanceCard,
+                  const SizedBox(height: 16),
+                  lensSetsPanel,
                 ],
               );
             }
@@ -595,11 +627,17 @@ class _OpticsSectionState extends ConsumerState<OpticsSection> {
                 hero,
                 const SizedBox(height: 16),
                 filtrationCard,
-                const SizedBox(height: 16),
-                specsCard,
+                if (showAnamorphic) ...[
+                  const SizedBox(height: 16),
+                  specsCard,
+                ],
                 const SizedBox(height: 16),
                 maintenanceCard,
+                const SizedBox(height: 16),
+                lensSetsPanel,
               ],
+            );
+              },
             );
           },
         ),
@@ -940,12 +978,17 @@ class _PrimaryLensHero extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: 240,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                StreamBuilder<List<Lense>>(
+          BibleMoodboardImageTarget(
+            projectId: projectId,
+            sectionId: BibleSectionId.optics,
+            bibleId: data.id,
+            hint: 'Clic aquí → ⌘V para pegar hero de óptica',
+            child: SizedBox(
+              height: 240,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  StreamBuilder<List<Lense>>(
                   stream: db.watchAllLenses(),
                   builder: (context, snap) {
                     final lenses = snap.data ?? [];
@@ -1086,6 +1129,7 @@ class _PrimaryLensHero extends ConsumerWidget {
               ],
             ),
           ),
+          ),
           Padding(
             padding: const EdgeInsets.all(20),
             child: LayoutBuilder(
@@ -1138,6 +1182,7 @@ class _PrimaryLensHero extends ConsumerWidget {
                       projectId: projectId,
                       bibleId: data.id,
                       category: MoodboardCategory.reference,
+                      assignedSections: [BibleSectionId.optics],
                     );
                   },
                   icon: Icon(Icons.add_photo_alternate_outlined,
@@ -1383,6 +1428,130 @@ class _MaintenanceEntry extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LensSetsPanel extends StatelessWidget {
+  final List<Map<String, dynamic>> lensSets;
+  final AppPalette palette;
+  final ValueChanged<List<Map<String, dynamic>>> onChanged;
+
+  const _LensSetsPanel({
+    required this.lensSets,
+    required this.palette,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.videocam_outlined, color: palette.accent, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Lens sets (A-Cam / B-Cam)',
+                style: AppTypography.titleMedium(palette).copyWith(fontSize: 16),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () async {
+                  final name = TextEditingController(text: 'A-Cam');
+                  final squeeze = TextEditingController(text: '2.0');
+                  final ratio = TextEditingController(text: '2.39:1');
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Nuevo lens set'),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextField(
+                            controller: name,
+                            decoration: const InputDecoration(labelText: 'Nombre'),
+                          ),
+                          TextField(
+                            controller: squeeze,
+                            decoration: const InputDecoration(
+                              labelText: 'Squeeze (1.0 esférica)',
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                          TextField(
+                            controller: ratio,
+                            decoration: const InputDecoration(
+                              labelText: 'Aspect ratio',
+                            ),
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancelar'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Añadir'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (ok != true) return;
+                  final sq = double.tryParse(squeeze.text.trim()) ?? 1.0;
+                  onChanged([
+                    ...lensSets,
+                    {
+                      'name': name.text.trim(),
+                      'isAnamorphic': sq > 1.05,
+                      'squeezeRatio': sq,
+                      'aspectRatio': ratio.text.trim(),
+                    },
+                  ]);
+                },
+                child: Text('Añadir', style: TextStyle(color: palette.accent)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (lensSets.isEmpty)
+            Text(
+              'Define sets mixtos (esférica + anamórfica) por cámara.',
+              style: AppTypography.bodyMedium(palette)
+                  .copyWith(color: palette.textTertiary),
+            )
+          else
+            for (var i = 0; i < lensSets.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${lensSets[i]['name'] ?? 'Set'} · '
+                        '${lensSets[i]['isAnamorphic'] == true ? 'Anam' : 'Sph'} · '
+                        '${lensSets[i]['squeezeRatio'] ?? 1.0}x · '
+                        '${lensSets[i]['aspectRatio'] ?? '—'}',
+                        style: AppTypography.bodyMedium(palette),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.delete_outline,
+                          color: palette.error, size: 18),
+                      onPressed: () {
+                        final next = [...lensSets]..removeAt(i);
+                        onChanged(next);
+                      },
+                    ),
+                  ],
+                ),
+              ),
         ],
       ),
     );

@@ -164,7 +164,101 @@ class ColorImageSection extends ConsumerWidget {
             ),
           ],
         ),
-        'lut': const SizedBox.shrink(),
+        'lut': _LutsCard(
+          workingLut: data.workingLutName ?? '',
+          creativeLut: data.creativeLutName ?? '',
+          workingTags: workingTags,
+          creativeTags: creativeTags,
+          palette: palette,
+          onEditWorking: () async {
+            final c = TextEditingController(text: data.workingLutName ?? '');
+            final v = await _prompt(
+              context,
+              title: 'Monitoring / Working LUT',
+              controller: c,
+            );
+            if (v == null) return;
+            data.workingLutName = v;
+            onChanged(data);
+          },
+          onEditCreative: () async {
+            final c = TextEditingController(text: data.creativeLutName ?? '');
+            final v = await _prompt(
+              context,
+              title: 'Creative LUT (Show LUT)',
+              controller: c,
+            );
+            if (v == null) return;
+            data.creativeLutName = v;
+            onChanged(data);
+          },
+          onEditWorkingTags: () async {
+            final c = TextEditingController(text: workingTags.join(', '));
+            final v = await _prompt(
+              context,
+              title: 'Tags Working LUT (coma)',
+              controller: c,
+            );
+            if (v == null) return;
+            await _updateCustomData(ref, {
+              'workingLutTags': v
+                  .split(',')
+                  .map((e) => e.trim())
+                  .where((e) => e.isNotEmpty)
+                  .toList(),
+            });
+          },
+          onEditCreativeTags: () async {
+            final c = TextEditingController(text: creativeTags.join(', '));
+            final v = await _prompt(
+              context,
+              title: 'Tags Creative LUT (coma)',
+              controller: c,
+            );
+            if (v == null) return;
+            await _updateCustomData(ref, {
+              'creativeLutTags': v
+                  .split(',')
+                  .map((e) => e.trim())
+                  .where((e) => e.isNotEmpty)
+                  .toList(),
+            });
+          },
+        ),
+        'baseTemp': StreamBuilder<List<VisualBibleColorBlock>>(
+          stream: db.watchColorBlocksForBible(bibleId),
+          builder: (context, snap) {
+            final blocks = snap.data ?? const [];
+            final primary = blocks.isNotEmpty ? blocks.first : null;
+            final kelvin = primary?.colorTempKelvin ??
+                (custom['kelvin'] as num?)?.toInt() ??
+                5600;
+            return _KelvinCard(
+              kelvin: kelvin,
+              label: kelvinLabel,
+              palette: palette,
+              onChanged: (v) async {
+                await _updateCustomData(ref, {'kelvin': v});
+                if (primary != null) {
+                  await db.updateColorBlock(
+                    primary.copyWith(colorTempKelvin: drift.Value(v)),
+                  );
+                }
+              },
+              onEditLabel: () async {
+                final c = TextEditingController(text: kelvinLabel);
+                final v = await _prompt(
+                  context,
+                  title: 'Etiqueta Kelvin',
+                  controller: c,
+                );
+                if (v != null) {
+                  await _updateCustomData(ref, {'kelvinLabel': v});
+                }
+              },
+            );
+          },
+        ),
         'blocks': StreamBuilder<List<VisualBibleColorBlock>>(
           stream: db.watchColorBlocksForBible(bibleId),
           builder: (context, snap) {
@@ -223,100 +317,97 @@ class ColorImageSection extends ConsumerWidget {
               }
             }
 
-            final kelvin = primary?.colorTempKelvin ??
-                (custom['kelvin'] as num?)?.toInt() ??
-                5600;
-
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 900;
-                final left = Column(
-                  children: [
-                    _GlassCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _SectionLabel(
-                            icon: Icons.water_drop_outlined,
-                            label: 'Paleta Dominante',
-                            palette: palette,
-                          ),
-                          const SizedBox(height: 16),
-                          if (dominant.isEmpty)
-                            _EmptyHint(
-                              text:
-                                  'Añade colores dominantes al bloque de paleta.',
-                              palette: palette,
-                              onAdd: () => _ensureBlockAndEdit(
-                                context,
-                                ref,
-                                blocks,
-                                kind: _SwatchKind.dominant,
-                              ),
-                            )
-                          else
-                            LayoutBuilder(
-                              builder: (context, c) {
-                                final cols = c.maxWidth >= 520
-                                    ? dominant.length.clamp(1, 4)
-                                    : 2;
-                                return Wrap(
-                                  spacing: 12,
-                                  runSpacing: 14,
-                                  children: [
-                                    for (var i = 0; i < dominant.length; i++)
-                                      SizedBox(
-                                        width: (c.maxWidth - (cols - 1) * 12) /
-                                            cols,
-                                        child: _DominantSwatch(
-                                          name: dominant[i].$1,
-                                          hex: dominant[i].$2,
-                                          palette: palette,
-                                          parseHex: _parseHex,
-                                          onEdit: () => _editSwatch(
-                                            context,
-                                            ref,
-                                            blocks,
-                                            kind: _SwatchKind.dominant,
-                                            index: i,
-                                            name: dominant[i].$1,
-                                            hex: dominant[i].$2,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                );
-                              },
-                            ),
-                          const SizedBox(height: 12),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton.icon(
-                              onPressed: () => _ensureBlockAndEdit(
-                                context,
-                                ref,
-                                blocks,
-                                kind: _SwatchKind.dominant,
-                              ),
-                              icon: Icon(
-                                Icons.add,
-                                size: 16,
-                                color: palette.accent,
-                              ),
-                              label: Text(
-                                'Añadir color',
-                                style: TextStyle(color: palette.accent),
-                              ),
-                            ),
-                          ),
-                        ],
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _GlassCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _SectionLabel(
+                        icon: Icons.water_drop_outlined,
+                        label: 'Paleta Dominante',
+                        palette: palette,
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    LayoutBuilder(
-                      builder: (context, c) {
-                        final sideBySide = c.maxWidth >= 480;
-                        final accentsCard = _GlassCard(
+                      const SizedBox(height: 16),
+                      if (dominant.isEmpty)
+                        _EmptyHint(
+                          text: 'Añade colores dominantes al bloque de paleta.',
+                          palette: palette,
+                          onAdd: () => _ensureBlockAndEdit(
+                            context,
+                            ref,
+                            blocks,
+                            kind: _SwatchKind.dominant,
+                          ),
+                        )
+                      else
+                        LayoutBuilder(
+                          builder: (context, c) {
+                            final w = c.maxWidth.isFinite
+                                ? c.maxWidth
+                                : MediaQuery.sizeOf(context).width;
+                            final cols =
+                                w >= 520 ? dominant.length.clamp(1, 4) : 2;
+                            return Wrap(
+                              spacing: 12,
+                              runSpacing: 14,
+                              children: [
+                                for (var i = 0; i < dominant.length; i++)
+                                  SizedBox(
+                                    width: (w - (cols - 1) * 12) / cols,
+                                    child: _DominantSwatch(
+                                      name: dominant[i].$1,
+                                      hex: dominant[i].$2,
+                                      palette: palette,
+                                      parseHex: _parseHex,
+                                      onEdit: () => _editSwatch(
+                                        context,
+                                        ref,
+                                        blocks,
+                                        kind: _SwatchKind.dominant,
+                                        index: i,
+                                        name: dominant[i].$1,
+                                        hex: dominant[i].$2,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () => _ensureBlockAndEdit(
+                            context,
+                            ref,
+                            blocks,
+                            kind: _SwatchKind.dominant,
+                          ),
+                          icon: Icon(
+                            Icons.add,
+                            size: 16,
+                            color: palette.accent,
+                          ),
+                          label: Text(
+                            'Añadir color',
+                            style: TextStyle(color: palette.accent),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                LayoutBuilder(
+                  builder: (context, c) {
+                    final w = c.maxWidth.isFinite
+                        ? c.maxWidth
+                        : MediaQuery.sizeOf(context).width;
+                    final sideBySide = w >= 480;
+                    final accentsCard = _GlassCard(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -476,144 +567,13 @@ class ColorImageSection extends ConsumerWidget {
                         );
                       },
                     ),
-                  ],
-                );
-
-                final right = Column(
-                  children: [
-                    _KelvinCard(
-                      kelvin: kelvin,
-                      label: kelvinLabel,
-                      palette: palette,
-                      onChanged: (v) async {
-                        await _updateCustomData(ref, {'kelvin': v});
-                        if (primary != null) {
-                          await db.updateColorBlock(
-                            (await (db.select(db.visualBibleColorBlocks)
-                                      ..where((t) => t.id.equals(primary.id)))
-                                    .getSingle())
-                                .copyWith(colorTempKelvin: drift.Value(v)),
-                          );
-                        }
-                      },
-                      onEditLabel: () async {
-                        final c = TextEditingController(text: kelvinLabel);
-                        final v = await _prompt(
-                          context,
-                          title: 'Etiqueta Kelvin',
-                          controller: c,
-                        );
-                        if (v != null) {
-                          await _updateCustomData(ref, {'kelvinLabel': v});
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _LutsCard(
-                      workingLut: data.workingLutName ?? '',
-                      creativeLut: data.creativeLutName ?? '',
-                      workingTags: workingTags,
-                      creativeTags: creativeTags,
-                      palette: palette,
-                      onEditWorking: () async {
-                        final c = TextEditingController(
-                          text: data.workingLutName ?? '',
-                        );
-                        final v = await _prompt(
-                          context,
-                          title: 'Monitoring / Working LUT',
-                          controller: c,
-                        );
-                        if (v == null) return;
-                        data.workingLutName = v;
-                        onChanged(data);
-                      },
-                      onEditCreative: () async {
-                        final c = TextEditingController(
-                          text: data.creativeLutName ?? '',
-                        );
-                        final v = await _prompt(
-                          context,
-                          title: 'Creative LUT (Show LUT)',
-                          controller: c,
-                        );
-                        if (v == null) return;
-                        data.creativeLutName = v;
-                        onChanged(data);
-                      },
-                      onEditWorkingTags: () async {
-                        final c = TextEditingController(
-                          text: workingTags.join(', '),
-                        );
-                        final v = await _prompt(
-                          context,
-                          title: 'Tags Working LUT (coma)',
-                          controller: c,
-                        );
-                        if (v == null) return;
-                        await _updateCustomData(ref, {
-                          'workingLutTags': v
-                              .split(',')
-                              .map((e) => e.trim())
-                              .where((e) => e.isNotEmpty)
-                              .toList(),
-                        });
-                      },
-                      onEditCreativeTags: () async {
-                        final c = TextEditingController(
-                          text: creativeTags.join(', '),
-                        );
-                        final v = await _prompt(
-                          context,
-                          title: 'Tags Creative LUT (coma)',
-                          controller: c,
-                        );
-                        if (v == null) return;
-                        await _updateCustomData(ref, {
-                          'creativeLutTags': v
-                              .split(',')
-                              .map((e) => e.trim())
-                              .where((e) => e.isNotEmpty)
-                              .toList(),
-                        });
-                      },
-                    ),
-                  ],
-                );
-
-                Widget main;
-                if (wide) {
-                  main = Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 8, child: left),
-                      const SizedBox(width: 20),
-                      Expanded(flex: 4, child: right),
-                    ],
-                  );
-                } else {
-                  main = Column(
-                    children: [
-                      left,
-                      const SizedBox(height: 16),
-                      right,
-                    ],
-                  );
-                }
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    main,
-                    const SizedBox(height: 28),
-                    ColorScenePalettesPanel(
-                      projectId: projectId,
-                      bibleId: bibleId,
-                      blocks: blocks,
-                    ),
-                  ],
-                );
-              },
+                const SizedBox(height: 28),
+                ColorScenePalettesPanel(
+                  projectId: projectId,
+                  bibleId: bibleId,
+                  blocks: blocks,
+                ),
+              ],
             );
           },
         ),

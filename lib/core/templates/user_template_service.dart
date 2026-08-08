@@ -301,6 +301,9 @@ abstract final class UserTemplateService {
     final templateId = prefs.bibleTemplateForProject(projectId);
     if (templateId == null || templateId.isEmpty) return;
 
+    final bible = await db.getVisualBibleForProject(projectId);
+    if (bible?.engineVersion == 'v2') return;
+
     await applyBibleLayoutTemplate(
       db: db,
       bibleId: bibleId,

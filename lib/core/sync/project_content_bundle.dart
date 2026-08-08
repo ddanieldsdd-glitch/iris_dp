@@ -60,13 +60,13 @@ class ContentSyncSummary {
 
   @override
   int get hashCode => Object.hash(
-        sceneCount,
-        shotCount,
-        locationSiteCount,
-        locationSetCount,
-        shootDocumentCount,
-        equipmentCount,
-      );
+    sceneCount,
+    shotCount,
+    locationSiteCount,
+    locationSetCount,
+    shootDocumentCount,
+    equipmentCount,
+  );
 
   String get label =>
       '$sceneCount escenas · $shotCount planos · $locationSetCount sets · $shootDocumentCount docs';
@@ -84,38 +84,42 @@ class ContentSyncSummary {
   }
 
   Map<String, dynamic> toJson() => {
-        'sceneCount': sceneCount,
-        'shotCount': shotCount,
-        'locationSiteCount': locationSiteCount,
-        'locationSetCount': locationSetCount,
-        'shootDocumentCount': shootDocumentCount,
-        'equipmentCount': equipmentCount,
-      };
+    'sceneCount': sceneCount,
+    'shotCount': shotCount,
+    'locationSiteCount': locationSiteCount,
+    'locationSetCount': locationSetCount,
+    'shootDocumentCount': shootDocumentCount,
+    'equipmentCount': equipmentCount,
+  };
 }
 
 /// Exporta e importa el contenido completo de un proyecto como JSON.
 class ProjectContentBundle {
-  static const bundleVersion = 2;
+  static const bundleVersion = 4;
 
-  static Future<Map<String, dynamic>> export(AppDatabase db, int projectId) async {
+  static Future<Map<String, dynamic>> export(
+    AppDatabase db,
+    int projectId,
+  ) async {
     final project = await db.getProject(projectId);
     if (project == null) {
       throw StateError('Proyecto $projectId no encontrado');
     }
 
-    final sites = await (db.select(db.locationSites)
-          ..where((s) => s.projectId.equals(projectId))
-          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
-        .get();
+    final sites =
+        await (db.select(db.locationSites)
+              ..where((s) => s.projectId.equals(projectId))
+              ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            .get();
     final siteKeyById = <int, String>{
       for (final s in sites) s.id: 'site:${s.sortOrder}:${s.name}',
     };
 
     final siteImages = <Map<String, dynamic>>[];
     for (final site in sites) {
-      final imgs = await (db.select(db.siteImages)
-            ..where((i) => i.siteId.equals(site.id)))
-          .get();
+      final imgs = await (db.select(
+        db.siteImages,
+      )..where((i) => i.siteId.equals(site.id))).get();
       for (final img in imgs) {
         siteImages.add({
           'siteKey': siteKeyById[site.id],
@@ -132,19 +136,20 @@ class ProjectContentBundle {
       }
     }
 
-    final sets = await (db.select(db.locationBasePlans)
-          ..where((l) => l.projectId.equals(projectId))
-          ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
-        .get();
+    final sets =
+        await (db.select(db.locationBasePlans)
+              ..where((l) => l.projectId.equals(projectId))
+              ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
+            .get();
     final setKeyById = <int, String>{
       for (final s in sets) s.id: 'set:${s.sortOrder}:${s.locationName}',
     };
 
     final locationImages = <Map<String, dynamic>>[];
     for (final set in sets) {
-      final imgs = await (db.select(db.locationImages)
-            ..where((i) => i.locationId.equals(set.id)))
-          .get();
+      final imgs = await (db.select(
+        db.locationImages,
+      )..where((i) => i.locationId.equals(set.id))).get();
       for (final img in imgs) {
         locationImages.add({
           'setKey': setKeyById[set.id],
@@ -161,18 +166,20 @@ class ProjectContentBundle {
       }
     }
 
-    final scenes = await (db.select(db.scenes)
-          ..where((s) => s.projectId.equals(projectId))
-          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
-        .get();
+    final scenes =
+        await (db.select(db.scenes)
+              ..where((s) => s.projectId.equals(projectId))
+              ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            .get();
     final sceneKeyById = <int, String>{
       for (final s in scenes) s.id: 'scene:${s.number}',
     };
 
-    final shots = await (db.select(db.shots)
-          ..where((s) => s.projectId.equals(projectId))
-          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
-        .get();
+    final shots =
+        await (db.select(db.shots)
+              ..where((s) => s.projectId.equals(projectId))
+              ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            .get();
     final shotKeyById = <int, String>{};
 
     for (final shot in shots) {
@@ -182,9 +189,9 @@ class ProjectContentBundle {
 
     final shotReferences = <Map<String, dynamic>>[];
     for (final shot in shots) {
-      final refs = await (db.select(db.shotReferences)
-            ..where((r) => r.shotId.equals(shot.id)))
-          .get();
+      final refs = await (db.select(
+        db.shotReferences,
+      )..where((r) => r.shotId.equals(shot.id))).get();
       for (final ref in refs) {
         shotReferences.add({
           'shotKey': shotKeyById[shot.id],
@@ -237,26 +244,26 @@ class ProjectContentBundle {
       }
     }
 
-    final shootDocs = await (db.select(db.shootDocuments)
-          ..where((d) => d.projectId.equals(projectId)))
-        .get();
+    final shootDocs = await (db.select(
+      db.shootDocuments,
+    )..where((d) => d.projectId.equals(projectId))).get();
     final docKeyById = <int, String>{
       for (final d in shootDocs) d.id: 'doc:${d.id}:${d.name}',
     };
 
     final shootBlocks = <Map<String, dynamic>>[];
     for (final doc in shootDocs) {
-      final blocks = await (db.select(db.shootDocumentBlocks)
-            ..where((b) => b.documentId.equals(doc.id))
-            ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)]))
-          .get();
+      final blocks =
+          await (db.select(db.shootDocumentBlocks)
+                ..where((b) => b.documentId.equals(doc.id))
+                ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)]))
+              .get();
       for (final b in blocks) {
         shootBlocks.add({
           'documentKey': docKeyById[doc.id],
           'blockType': b.blockType,
           'sortOrder': b.sortOrder,
-          'sceneKey':
-              b.sceneId != null ? sceneKeyById[b.sceneId!] : null,
+          'sceneKey': b.sceneId != null ? sceneKeyById[b.sceneId!] : null,
           'shotKey': b.shotId != null ? shotKeyById[b.shotId!] : null,
           'scriptExcerpt': b.scriptExcerpt,
           'customLabel': b.customLabel,
@@ -270,28 +277,35 @@ class ProjectContentBundle {
       }
     }
 
-    final equipment = await (db.select(db.projectEquipment)
-          ..where((e) => e.projectId.equals(projectId)))
-        .get();
+    final equipment = await (db.select(
+      db.projectEquipment,
+    )..where((e) => e.projectId.equals(projectId))).get();
 
-    final moodGroups = await (db.select(db.moodboardGroups)
-          ..where((g) => g.projectId.equals(projectId)))
-        .get();
+    final moodGroups = await (db.select(
+      db.moodboardGroups,
+    )..where((g) => g.projectId.equals(projectId))).get();
     final groupKeyById = <int, String>{
       for (final g in moodGroups) g.id: 'mbg:${g.sortOrder}:${g.name}',
     };
 
-    final moodImages = await (db.select(db.moodboardImages)
-          ..where((m) => m.projectId.equals(projectId)))
-        .get();
+    final moodImages = await (db.select(
+      db.moodboardImages,
+    )..where((m) => m.projectId.equals(projectId))).get();
+    final moodboardKeyById = <int, String>{
+      for (final m in moodImages)
+        m.id: MediaEntityKeys.moodboard(
+          groupKey: m.groupId != null ? groupKeyById[m.groupId!] : null,
+          sortOrder: m.sortOrder,
+        ),
+    };
 
-    final lookBibles = await (db.select(db.lookBibles)
-          ..where((l) => l.projectId.equals(projectId)))
-        .get();
+    final lookBibles = await (db.select(
+      db.lookBibles,
+    )..where((l) => l.projectId.equals(projectId))).get();
 
-    final visualBibles = await (db.select(db.visualBibles)
-          ..where((v) => v.projectId.equals(projectId)))
-        .get();
+    final visualBibles = await (db.select(
+      db.visualBibles,
+    )..where((v) => v.projectId.equals(projectId))).get();
     final vbKeyById = <int, String>{
       for (final v in visualBibles) v.id: 'vb:${v.id}',
     };
@@ -302,29 +316,27 @@ class ProjectContentBundle {
     final bibleSectionGroups = <Map<String, dynamic>>[];
     final bibleSectionDefinitions = <Map<String, dynamic>>[];
     final bibleComments = <Map<String, dynamic>>[];
+    final exposureBlocks = <Map<String, dynamic>>[];
+    final lightingSetups = <Map<String, dynamic>>[];
+    final cameraTests = <Map<String, dynamic>>[];
+    final visualBibleDocuments = <Map<String, dynamic>>[];
     for (final vb in visualBibles) {
       final vbKey = vbKeyById[vb.id]!;
-      final versions = await (db.select(db.visualBibleVersions)
-            ..where((v) => v.bibleId.equals(vb.id)))
-          .get();
+      final versions = await (db.select(
+        db.visualBibleVersions,
+      )..where((v) => v.bibleId.equals(vb.id))).get();
       for (final ver in versions) {
-        vbVersions.add({
-          'bibleKey': vbKey,
-          ...ver.toJson(),
-        });
+        vbVersions.add({'bibleKey': vbKey, ...ver.toJson()});
       }
-      final blocks = await (db.select(db.visualBibleColorBlocks)
-            ..where((b) => b.bibleId.equals(vb.id)))
-          .get();
+      final blocks = await (db.select(
+        db.visualBibleColorBlocks,
+      )..where((b) => b.bibleId.equals(vb.id))).get();
       for (final b in blocks) {
-        vbColorBlocks.add({
-          'bibleKey': vbKey,
-          ...b.toJson(),
-        });
+        vbColorBlocks.add({'bibleKey': vbKey, ...b.toJson()});
       }
-      final locRefs = await (db.select(db.visualBibleLocationRefs)
-            ..where((r) => r.bibleId.equals(vb.id)))
-          .get();
+      final locRefs = await (db.select(
+        db.visualBibleLocationRefs,
+      )..where((r) => r.bibleId.equals(vb.id))).get();
       for (final r in locRefs) {
         vbLocationRefs.add({
           'bibleKey': vbKey,
@@ -337,33 +349,94 @@ class ProjectContentBundle {
           ...r.toJson(),
         });
       }
-      final groups = await (db.select(db.bibleSectionGroups)
-            ..where((g) => g.bibleId.equals(vb.id)))
-          .get();
+      final groups = await (db.select(
+        db.bibleSectionGroups,
+      )..where((g) => g.bibleId.equals(vb.id))).get();
       for (final g in groups) {
         bibleSectionGroups.add({'bibleKey': vbKey, ...g.toJson()});
       }
-      final sections = await (db.select(db.bibleSectionDefinitions)
-            ..where((s) => s.bibleId.equals(vb.id)))
-          .get();
+      final sections = await (db.select(
+        db.bibleSectionDefinitions,
+      )..where((s) => s.bibleId.equals(vb.id))).get();
       for (final s in sections) {
         bibleSectionDefinitions.add({'bibleKey': vbKey, ...s.toJson()});
       }
-      final comments = await (db.select(db.bibleComments)
-            ..where((c) => c.bibleId.equals(vb.id)))
-          .get();
+      final comments = await (db.select(
+        db.bibleComments,
+      )..where((c) => c.bibleId.equals(vb.id))).get();
       for (final c in comments) {
         bibleComments.add({'bibleKey': vbKey, ...c.toJson()});
       }
+      final exposures = await (db.select(
+        db.exposureBlocks,
+      )..where((e) => e.bibleId.equals(vb.id))).get();
+      for (final exposure in exposures) {
+        exposureBlocks.add({
+          'bibleKey': vbKey,
+          'blockName': exposure.blockName,
+          'highlightStrategy': exposure.highlightStrategy,
+          'shadowStrategy': exposure.shadowStrategy,
+          'keyFillRatio': exposure.keyFillRatio,
+          'narrativeIntent': exposure.narrativeIntent,
+          'referenceImages': exposure.referenceImages,
+          'sortOrder': exposure.sortOrder,
+        });
+      }
+      final setups = await (db.select(
+        db.lightingSetups,
+      )..where((s) => s.bibleId.equals(vb.id))).get();
+      for (final setup in setups) {
+        lightingSetups.add({
+          'bibleKey': vbKey,
+          'setupName': setup.setupName,
+          'narrativeNote': setup.narrativeNote,
+          'diagramJson': setup.diagramJson,
+          'gelNotes': setup.gelNotes,
+          'practicalMotivation': setup.practicalMotivation,
+          'referenceImagePath': setup.referenceImagePath,
+          'sortOrder': setup.sortOrder,
+        });
+      }
+      final tests = await (db.select(
+        db.cameraTests,
+      )..where((t) => t.bibleId.equals(vb.id))).get();
+      for (final test in tests) {
+        cameraTests.add({
+          'bibleKey': vbKey,
+          'testName': test.testName,
+          'cameraId': test.cameraId,
+          'lensId': test.lensId,
+          'lutName': test.lutName,
+          'lightCondition': test.lightCondition,
+          'notes': test.notes,
+          'imagePaths': test.imagePaths,
+          'testedAt': test.testedAt?.toIso8601String(),
+          'sortOrder': test.sortOrder,
+        });
+      }
+      final documents = await (db.select(
+        db.visualBibleDocuments,
+      )..where((d) => d.bibleId.equals(vb.id))).get();
+      for (final document in documents) {
+        visualBibleDocuments.add({
+          'bibleKey': vbKey,
+          'documentJson': document.documentJson,
+          'documentSchemaVersion': document.documentSchemaVersion,
+          'updatedAt': document.updatedAt.toIso8601String(),
+        });
+      }
     }
 
-    final annotatedPdfs = await (db.select(db.projectAnnotatedPdfs)
-          ..where((p) => p.projectId.equals(projectId)))
-        .get();
+    final annotatedPdfs = await (db.select(
+      db.projectAnnotatedPdfs,
+    )..where((p) => p.projectId.equals(projectId))).get();
+    final annotationDocuments = await (db.select(
+      db.projectAnnotationDocuments,
+    )..where((a) => a.projectId.equals(projectId))).get();
 
-    final opticsSamples = await (db.select(db.opticsLabSamples)
-          ..where((o) => o.projectId.equals(projectId)))
-        .get();
+    final opticsSamples = await (db.select(
+      db.opticsLabSamples,
+    )..where((o) => o.projectId.equals(projectId))).get();
 
     return {
       'version': bundleVersion,
@@ -383,60 +456,65 @@ class ProjectContentBundle {
         'scriptFileName': project.scriptFileName,
       },
       'locationSites': sites
-          .map((s) => {
-                'siteKey': siteKeyById[s.id],
-                'name': s.name,
-                'description': s.description,
-                'notes': s.notes,
-                'floorPlanJson': s.floorPlanJson,
-                'scanPath': s.scanPath,
-                'scanSource': s.scanSource,
-                'scanMetadataJson': s.scanMetadataJson,
-                'sortOrder': s.sortOrder,
-              })
+          .map(
+            (s) => {
+              'siteKey': siteKeyById[s.id],
+              'name': s.name,
+              'description': s.description,
+              'notes': s.notes,
+              'floorPlanJson': s.floorPlanJson,
+              'scanPath': s.scanPath,
+              'scanSource': s.scanSource,
+              'scanMetadataJson': s.scanMetadataJson,
+              'sortOrder': s.sortOrder,
+            },
+          )
           .toList(),
       'siteImages': siteImages,
       'locationBasePlans': sets
-          .map((s) => {
-                'setKey': setKeyById[s.id],
-                'siteKey': s.siteId != null ? siteKeyById[s.siteId!] : null,
-                'locationName': s.locationName,
-                'description': s.description,
-                'imagePath': s.imagePath,
-                'color': s.color,
-                'notes': s.notes,
-                'model3dPath': s.model3dPath,
-                'floorPlanJson': s.floorPlanJson,
-                'scanPath': s.scanPath,
-                'scanSource': s.scanSource,
-                'scanMetadataJson': s.scanMetadataJson,
-                'sortOrder': s.sortOrder,
-              })
+          .map(
+            (s) => {
+              'setKey': setKeyById[s.id],
+              'siteKey': s.siteId != null ? siteKeyById[s.siteId!] : null,
+              'locationName': s.locationName,
+              'description': s.description,
+              'imagePath': s.imagePath,
+              'color': s.color,
+              'notes': s.notes,
+              'model3dPath': s.model3dPath,
+              'floorPlanJson': s.floorPlanJson,
+              'scanPath': s.scanPath,
+              'scanSource': s.scanSource,
+              'scanMetadataJson': s.scanMetadataJson,
+              'sortOrder': s.sortOrder,
+            },
+          )
           .toList(),
       'locationImages': locationImages,
       'scenes': scenes
-          .map((s) => {
-                'sceneKey': sceneKeyById[s.id],
-                'number': s.number,
-                'name': s.name,
-                'locationCanonical': s.locationCanonical,
-                'locationPureName': s.locationPureName,
-                'siteKey': s.locationSiteId != null
-                    ? siteKeyById[s.locationSiteId!]
-                    : null,
-                'setKey':
-                    s.locationId != null ? setKeyById[s.locationId!] : null,
-                'intExt': s.intExt,
-                'dayNight': s.dayNight,
-                'locationColor': s.locationColor,
-                'charactersJson': s.charactersJson,
-                'description': s.description,
-                'actionText': s.actionText,
-                'sourceStartIndex': s.sourceStartIndex,
-                'durationMinutes': s.durationMinutes,
-                'autoNumbering': s.autoNumbering,
-                'sortOrder': s.sortOrder,
-              })
+          .map(
+            (s) => {
+              'sceneKey': sceneKeyById[s.id],
+              'number': s.number,
+              'name': s.name,
+              'locationCanonical': s.locationCanonical,
+              'locationPureName': s.locationPureName,
+              'siteKey': s.locationSiteId != null
+                  ? siteKeyById[s.locationSiteId!]
+                  : null,
+              'setKey': s.locationId != null ? setKeyById[s.locationId!] : null,
+              'intExt': s.intExt,
+              'dayNight': s.dayNight,
+              'locationColor': s.locationColor,
+              'charactersJson': s.charactersJson,
+              'description': s.description,
+              'actionText': s.actionText,
+              'sourceStartIndex': s.sourceStartIndex,
+              'durationMinutes': s.durationMinutes,
+              'autoNumbering': s.autoNumbering,
+              'sortOrder': s.sortOrder,
+            },
+          )
           .toList(),
       'shots': shots.map((shot) {
         final scene = scenes.firstWhere((s) => s.id == shot.sceneId);
@@ -463,58 +541,65 @@ class ProjectContentBundle {
       'cameraPlanElements': cameraElements,
       'cameraPathPoints': cameraPathPoints,
       'shootDocuments': shootDocs
-          .map((d) => {
-                'documentKey': docKeyById[d.id],
-                'name': d.name,
-                'description': d.description,
-                'defaultVisibilityJson': d.defaultVisibilityJson,
-                'layoutPreset': d.layoutPreset,
-                'shootDate': d.shootDate,
-                'isPrimaryOnSet': d.isPrimaryOnSet,
-                'includeCoverInPdf': d.includeCoverInPdf,
-              })
+          .map(
+            (d) => {
+              'documentKey': docKeyById[d.id],
+              'name': d.name,
+              'description': d.description,
+              'defaultVisibilityJson': d.defaultVisibilityJson,
+              'layoutPreset': d.layoutPreset,
+              'shootDate': d.shootDate,
+              'isPrimaryOnSet': d.isPrimaryOnSet,
+              'includeCoverInPdf': d.includeCoverInPdf,
+            },
+          )
           .toList(),
       'shootDocumentBlocks': shootBlocks,
       'projectEquipment': equipment
-          .map((e) => {
-                'equipmentType': e.equipmentType,
-                'equipmentId': e.equipmentId,
-                'source': e.source,
-                'status': e.status,
-                'notes': e.notes,
-                'sortOrder': e.sortOrder,
-              })
+          .map(
+            (e) => {
+              'equipmentType': e.equipmentType,
+              'equipmentId': e.equipmentId,
+              'source': e.source,
+              'status': e.status,
+              'notes': e.notes,
+              'sortOrder': e.sortOrder,
+            },
+          )
           .toList(),
       'moodboardGroups': moodGroups
-          .map((g) => {
-                'groupKey': groupKeyById[g.id],
-                'category': g.category,
-                'name': g.name,
-                'sortOrder': g.sortOrder,
-              })
+          .map(
+            (g) => {
+              'groupKey': groupKeyById[g.id],
+              'category': g.category,
+              'name': g.name,
+              'sortOrder': g.sortOrder,
+            },
+          )
           .toList(),
       'moodboardImages': moodImages
-          .map((m) => {
-                'groupKey': m.groupId != null ? groupKeyById[m.groupId!] : null,
-                'bibleId': m.bibleId,
-                'imagePath': m.imagePath,
-                'mediaKey': MediaEntityKeys.moodboard(
-                  groupKey:
-                      m.groupId != null ? groupKeyById[m.groupId!] : null,
-                  sortOrder: m.sortOrder,
-                ),
-                'source': m.source,
-                'category': m.category,
-                'caption': m.caption,
-                'filmReference': m.filmReference,
-                'linkedSceneId': m.linkedSceneId,
-                'linkedLocationName': m.linkedLocationName,
-                'setKey': m.linkedLocationBasePlanId != null
-                    ? setKeyById[m.linkedLocationBasePlanId!]
-                    : null,
-                'assignedSections': m.assignedSections,
-                'sortOrder': m.sortOrder,
-              })
+          .map(
+            (m) => {
+              'groupKey': m.groupId != null ? groupKeyById[m.groupId!] : null,
+              'bibleId': m.bibleId,
+              'imagePath': m.imagePath,
+              'mediaKey': MediaEntityKeys.moodboard(
+                groupKey: m.groupId != null ? groupKeyById[m.groupId!] : null,
+                sortOrder: m.sortOrder,
+              ),
+              'source': m.source,
+              'category': m.category,
+              'caption': m.caption,
+              'filmReference': m.filmReference,
+              'linkedSceneId': m.linkedSceneId,
+              'linkedLocationName': m.linkedLocationName,
+              'setKey': m.linkedLocationBasePlanId != null
+                  ? setKeyById[m.linkedLocationBasePlanId!]
+                  : null,
+              'assignedSections': m.assignedSections,
+              'sortOrder': m.sortOrder,
+            },
+          )
           .toList(),
       'lookBibles': lookBibles.map((l) => l.toJson()).toList(),
       'visualBibles': visualBibles.map((v) => v.toJson()).toList(),
@@ -524,7 +609,34 @@ class ProjectContentBundle {
       'bibleSectionGroups': bibleSectionGroups,
       'bibleSectionDefinitions': bibleSectionDefinitions,
       'bibleComments': bibleComments,
+      'exposureBlocks': exposureBlocks,
+      'lightingSetups': lightingSetups,
+      'cameraTests': cameraTests,
+      'visualBibleDocuments': visualBibleDocuments,
       'projectAnnotatedPdfs': annotatedPdfs.map((p) => p.toJson()).toList(),
+      'projectAnnotationDocuments': annotationDocuments.map((document) {
+        final numericTargetId = int.tryParse(document.targetId);
+        final targetKey = switch (document.targetType) {
+          'camera_plan_site' =>
+            numericTargetId != null ? siteKeyById[numericTargetId] : null,
+          'camera_plan_set' =>
+            numericTargetId != null ? setKeyById[numericTargetId] : null,
+          'camera_plan_shot' =>
+            numericTargetId != null ? shotKeyById[numericTargetId] : null,
+          'moodboard_image' =>
+            numericTargetId != null ? moodboardKeyById[numericTargetId] : null,
+          _ => null,
+        };
+        return {
+          'targetType': document.targetType,
+          'targetId': document.targetId,
+          'targetKey': targetKey,
+          'documentJson': document.documentJson,
+          'documentSchemaVersion': document.documentSchemaVersion,
+          'createdAt': document.createdAt.toIso8601String(),
+          'updatedAt': document.updatedAt.toIso8601String(),
+        };
+      }).toList(),
       'opticsLabSamples': opticsSamples.map((o) => o.toJson()).toList(),
     };
   }
@@ -536,43 +648,40 @@ class ProjectContentBundle {
     required int locationSetCount,
     required int shootDocumentCount,
     required int equipmentCount,
-  }) =>
-      ContentSyncSummary(
-        sceneCount: sceneCount,
-        shotCount: shotCount,
-        locationSiteCount: locationSiteCount,
-        locationSetCount: locationSetCount,
-        shootDocumentCount: shootDocumentCount,
-        equipmentCount: equipmentCount,
-      );
+  }) => ContentSyncSummary(
+    sceneCount: sceneCount,
+    shotCount: shotCount,
+    locationSiteCount: locationSiteCount,
+    locationSetCount: locationSetCount,
+    shootDocumentCount: shootDocumentCount,
+    equipmentCount: equipmentCount,
+  );
 
   static ContentSyncSummary summarize(Map<String, dynamic> bundle) =>
-      ContentSyncSummary.fromJson(
-        bundle['summary'] as Map<String, dynamic>?,
-      );
+      ContentSyncSummary.fromJson(bundle['summary'] as Map<String, dynamic>?);
 
   static Future<ContentSyncSummary> summarizeLocal(
     AppDatabase db,
     int projectId,
   ) async {
-    final scenes = await (db.select(db.scenes)
-          ..where((s) => s.projectId.equals(projectId)))
-        .get();
-    final shots = await (db.select(db.shots)
-          ..where((s) => s.projectId.equals(projectId)))
-        .get();
-    final sites = await (db.select(db.locationSites)
-          ..where((s) => s.projectId.equals(projectId)))
-        .get();
-    final sets = await (db.select(db.locationBasePlans)
-          ..where((l) => l.projectId.equals(projectId)))
-        .get();
-    final docs = await (db.select(db.shootDocuments)
-          ..where((d) => d.projectId.equals(projectId)))
-        .get();
-    final equip = await (db.select(db.projectEquipment)
-          ..where((e) => e.projectId.equals(projectId)))
-        .get();
+    final scenes = await (db.select(
+      db.scenes,
+    )..where((s) => s.projectId.equals(projectId))).get();
+    final shots = await (db.select(
+      db.shots,
+    )..where((s) => s.projectId.equals(projectId))).get();
+    final sites = await (db.select(
+      db.locationSites,
+    )..where((s) => s.projectId.equals(projectId))).get();
+    final sets = await (db.select(
+      db.locationBasePlans,
+    )..where((l) => l.projectId.equals(projectId))).get();
+    final docs = await (db.select(
+      db.shootDocuments,
+    )..where((d) => d.projectId.equals(projectId))).get();
+    final equip = await (db.select(
+      db.projectEquipment,
+    )..where((e) => e.projectId.equals(projectId))).get();
     return summarizeFromCounts(
       sceneCount: scenes.length,
       shotCount: shots.length,
@@ -635,9 +744,7 @@ class ProjectContentBundle {
     }
     if (value is Map) {
       final keys = value.keys.map((k) => k.toString()).toList()..sort();
-      return {
-        for (final k in keys) k: _canonicalize(value[k]),
-      };
+      return {for (final k in keys) k: _canonicalize(value[k])};
     }
     if (value is List) {
       return value.map(_canonicalize).toList();
@@ -657,7 +764,8 @@ class ProjectContentBundle {
         hasRows('locationBasePlans') ||
         hasRows('shootDocuments') ||
         hasRows('visualBibles') ||
-        hasRows('lookBibles');
+        hasRows('lookBibles') ||
+        hasRows('projectAnnotationDocuments');
   }
 
   /// Reemplaza todo el contenido del proyecto (mantiene la fila Projects).
@@ -674,32 +782,36 @@ class ProjectContentBundle {
         bundle['projectFields'] as Map<String, dynamic>? ?? {};
     final existing = await db.getProject(projectId);
     if (existing != null) {
-      await db.updateProject(existing.copyWith(
-        characterColorsJson: Value(
-          projectFields['characterColorsJson'] as String?,
+      await db.updateProject(
+        existing.copyWith(
+          characterColorsJson: Value(
+            projectFields['characterColorsJson'] as String?,
+          ),
+          shootingStartDate: Value(
+            projectFields['shootingStartDate'] as String?,
+          ),
+          shootingEndDate: Value(projectFields['shootingEndDate'] as String?),
+          scriptFileName: Value(projectFields['scriptFileName'] as String?),
         ),
-        shootingStartDate: Value(
-          projectFields['shootingStartDate'] as String?,
-        ),
-        shootingEndDate: Value(projectFields['shootingEndDate'] as String?),
-        scriptFileName: Value(projectFields['scriptFileName'] as String?),
-      ));
+      );
     }
 
     final siteKeyToId = <String, int>{};
     for (final row in bundle['locationSites'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
-      final id = await db.insertSite(LocationSitesCompanion.insert(
-        projectId: projectId,
-        name: m['name'] as String,
-        description: Value(m['description'] as String?),
-        notes: Value(m['notes'] as String?),
-        floorPlanJson: Value(m['floorPlanJson'] as String?),
-        scanPath: Value(m['scanPath'] as String?),
-        scanSource: Value(m['scanSource'] as String?),
-        scanMetadataJson: Value(m['scanMetadataJson'] as String?),
-        sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-      ));
+      final id = await db.insertSite(
+        LocationSitesCompanion.insert(
+          projectId: projectId,
+          name: m['name'] as String,
+          description: Value(m['description'] as String?),
+          notes: Value(m['notes'] as String?),
+          floorPlanJson: Value(m['floorPlanJson'] as String?),
+          scanPath: Value(m['scanPath'] as String?),
+          scanSource: Value(m['scanSource'] as String?),
+          scanMetadataJson: Value(m['scanMetadataJson'] as String?),
+          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+        ),
+      );
       siteKeyToId[m['siteKey'] as String] = id;
     }
 
@@ -707,35 +819,39 @@ class ProjectContentBundle {
       final m = Map<String, dynamic>.from(row as Map);
       final siteId = siteKeyToId[m['siteKey'] as String];
       if (siteId == null) continue;
-      await db.insertSiteImage(SiteImagesCompanion.insert(
-        siteId: siteId,
-        imagePath: m['imagePath'] as String,
-        caption: Value(m['caption'] as String?),
-        kind: Value(m['kind'] as String? ?? 'reference'),
-        timeOfDay: Value(m['timeOfDay'] as String?),
-        sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-      ));
+      await db.insertSiteImage(
+        SiteImagesCompanion.insert(
+          siteId: siteId,
+          imagePath: m['imagePath'] as String,
+          caption: Value(m['caption'] as String?),
+          kind: Value(m['kind'] as String? ?? 'reference'),
+          timeOfDay: Value(m['timeOfDay'] as String?),
+          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+        ),
+      );
     }
 
     final setKeyToId = <String, int>{};
     for (final row in bundle['locationBasePlans'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final siteKey = m['siteKey'] as String?;
-      final id = await db.insertLocation(LocationBasePlansCompanion.insert(
-        projectId: projectId,
-        siteId: Value(siteKey != null ? siteKeyToId[siteKey] : null),
-        locationName: m['locationName'] as String,
-        description: Value(m['description'] as String?),
-        imagePath: Value(m['imagePath'] as String?),
-        color: Value(m['color'] as String? ?? '#94A3B8'),
-        notes: Value(m['notes'] as String?),
-        model3dPath: Value(m['model3dPath'] as String?),
-        floorPlanJson: Value(m['floorPlanJson'] as String?),
-        scanPath: Value(m['scanPath'] as String?),
-        scanSource: Value(m['scanSource'] as String?),
-        scanMetadataJson: Value(m['scanMetadataJson'] as String?),
-        sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-      ));
+      final id = await db.insertLocation(
+        LocationBasePlansCompanion.insert(
+          projectId: projectId,
+          siteId: Value(siteKey != null ? siteKeyToId[siteKey] : null),
+          locationName: m['locationName'] as String,
+          description: Value(m['description'] as String?),
+          imagePath: Value(m['imagePath'] as String?),
+          color: Value(m['color'] as String? ?? '#94A3B8'),
+          notes: Value(m['notes'] as String?),
+          model3dPath: Value(m['model3dPath'] as String?),
+          floorPlanJson: Value(m['floorPlanJson'] as String?),
+          scanPath: Value(m['scanPath'] as String?),
+          scanSource: Value(m['scanSource'] as String?),
+          scanMetadataJson: Value(m['scanMetadataJson'] as String?),
+          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+        ),
+      );
       setKeyToId[m['setKey'] as String] = id;
     }
 
@@ -743,14 +859,16 @@ class ProjectContentBundle {
       final m = Map<String, dynamic>.from(row as Map);
       final setId = setKeyToId[m['setKey'] as String];
       if (setId == null) continue;
-      await db.insertLocationImage(LocationImagesCompanion.insert(
-        locationId: setId,
-        imagePath: m['imagePath'] as String,
-        caption: Value(m['caption'] as String?),
-        kind: Value(m['kind'] as String? ?? 'reference'),
-        timeOfDay: Value(m['timeOfDay'] as String?),
-        sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-      ));
+      await db.insertLocationImage(
+        LocationImagesCompanion.insert(
+          locationId: setId,
+          imagePath: m['imagePath'] as String,
+          caption: Value(m['caption'] as String?),
+          kind: Value(m['kind'] as String? ?? 'reference'),
+          timeOfDay: Value(m['timeOfDay'] as String?),
+          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+        ),
+      );
     }
 
     final sceneKeyToId = <String, int>{};
@@ -758,27 +876,31 @@ class ProjectContentBundle {
       final m = Map<String, dynamic>.from(row as Map);
       final siteKey = m['siteKey'] as String?;
       final setKey = m['setKey'] as String?;
-      final id = await db.into(db.scenes).insert(ScenesCompanion.insert(
-            projectId: projectId,
-            number: bundleIntOr(m['number'], 0),
-            name: m['name'] as String,
-            locationCanonical: m['locationCanonical'] as String,
-            locationPureName: m['locationPureName'] as String,
-            intExt: Value(m['intExt'] as String? ?? 'EXT'),
-            dayNight: Value(m['dayNight'] as String? ?? 'DÍA'),
-            locationColor: Value(m['locationColor'] as String?),
-            charactersJson: Value(m['charactersJson'] as String?),
-            description: Value(m['description'] as String?),
-            actionText: Value(m['actionText'] as String?),
-            sourceStartIndex: Value(bundleInt(m['sourceStartIndex'])),
-            durationMinutes: Value(bundleIntOr(m['durationMinutes'], 0)),
-            autoNumbering: Value(m['autoNumbering'] as bool? ?? true),
-            locationSiteId: Value(
-              siteKey != null ? siteKeyToId[siteKey] : null,
+      final id = await db
+          .into(db.scenes)
+          .insert(
+            ScenesCompanion.insert(
+              projectId: projectId,
+              number: bundleIntOr(m['number'], 0),
+              name: m['name'] as String,
+              locationCanonical: m['locationCanonical'] as String,
+              locationPureName: m['locationPureName'] as String,
+              intExt: Value(m['intExt'] as String? ?? 'EXT'),
+              dayNight: Value(m['dayNight'] as String? ?? 'DÍA'),
+              locationColor: Value(m['locationColor'] as String?),
+              charactersJson: Value(m['charactersJson'] as String?),
+              description: Value(m['description'] as String?),
+              actionText: Value(m['actionText'] as String?),
+              sourceStartIndex: Value(bundleInt(m['sourceStartIndex'])),
+              durationMinutes: Value(bundleIntOr(m['durationMinutes'], 0)),
+              autoNumbering: Value(m['autoNumbering'] as bool? ?? true),
+              locationSiteId: Value(
+                siteKey != null ? siteKeyToId[siteKey] : null,
+              ),
+              locationId: Value(setKey != null ? setKeyToId[setKey] : null),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
             ),
-            locationId: Value(setKey != null ? setKeyToId[setKey] : null),
-            sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-          ));
+          );
       sceneKeyToId[m['sceneKey'] as String] = id;
     }
 
@@ -787,24 +909,28 @@ class ProjectContentBundle {
       final m = Map<String, dynamic>.from(row as Map);
       final sceneId = sceneKeyToId[m['sceneKey'] as String];
       if (sceneId == null) continue;
-      final id = await db.into(db.shots).insert(ShotsCompanion.insert(
-            sceneId: sceneId,
-            projectId: projectId,
-            number: bundleIntOr(m['number'], 0),
-            framing: Value(m['framing'] as String?),
-            lens: Value(m['lens'] as String?),
-            angle: Value(m['angle'] as String?),
-            movement: Value(m['movement'] as String?),
-            fStop: Value(m['fStop'] as String?),
-            action: Value(m['action'] as String?),
-            notes: Value(m['notes'] as String?),
-            notesHighlight: Value(m['notesHighlight'] as String?),
-            referenceImagePath: Value(m['referenceImagePath'] as String?),
-            charactersJson: Value(m['charactersJson'] as String?),
-            durationSeconds: Value(bundleInt(m['durationSeconds'])),
-            scriptAnchorIndex: Value(bundleInt(m['scriptAnchorIndex'])),
-            sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-          ));
+      final id = await db
+          .into(db.shots)
+          .insert(
+            ShotsCompanion.insert(
+              sceneId: sceneId,
+              projectId: projectId,
+              number: bundleIntOr(m['number'], 0),
+              framing: Value(m['framing'] as String?),
+              lens: Value(m['lens'] as String?),
+              angle: Value(m['angle'] as String?),
+              movement: Value(m['movement'] as String?),
+              fStop: Value(m['fStop'] as String?),
+              action: Value(m['action'] as String?),
+              notes: Value(m['notes'] as String?),
+              notesHighlight: Value(m['notesHighlight'] as String?),
+              referenceImagePath: Value(m['referenceImagePath'] as String?),
+              charactersJson: Value(m['charactersJson'] as String?),
+              durationSeconds: Value(bundleInt(m['durationSeconds'])),
+              scriptAnchorIndex: Value(bundleInt(m['scriptAnchorIndex'])),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+            ),
+          );
       shotKeyToId[m['shotKey'] as String] = id;
     }
 
@@ -812,12 +938,14 @@ class ProjectContentBundle {
       final m = Map<String, dynamic>.from(row as Map);
       final shotId = shotKeyToId[m['shotKey'] as String];
       if (shotId == null) continue;
-      await db.insertShotReference(ShotReferencesCompanion.insert(
-        shotId: shotId,
-        imagePath: m['imagePath'] as String,
-        source: Value(m['source'] as String? ?? 'manual'),
-        sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-      ));
+      await db.insertShotReference(
+        ShotReferencesCompanion.insert(
+          shotId: shotId,
+          imagePath: m['imagePath'] as String,
+          source: Value(m['source'] as String? ?? 'manual'),
+          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+        ),
+      );
     }
 
     final elementKeyToId = <String, int>{};
@@ -853,15 +981,14 @@ class ProjectContentBundle {
       final m = Map<String, dynamic>.from(row as Map);
       final elId = elementKeyToId[m['elementKey'] as String];
       if (elId == null) continue;
-      await db.into(db.cameraPathPoints).insert(
+      await db
+          .into(db.cameraPathPoints)
+          .insert(
             CameraPathPointsCompanion.insert(
               elementId: elId,
               x: (m['x'] as num).toDouble(),
               y: (m['y'] as num).toDouble(),
-              pointNumber: bundleIntOr(
-                m['pointNumber'] ?? m['sortOrder'],
-                0,
-              ),
+              pointNumber: bundleIntOr(m['pointNumber'] ?? m['sortOrder'], 0),
             ),
           );
     }
@@ -869,16 +996,18 @@ class ProjectContentBundle {
     final docKeyToId = <String, int>{};
     for (final row in bundle['shootDocuments'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
-      final id = await db.insertShootDocument(ShootDocumentsCompanion.insert(
-        projectId: projectId,
-        name: m['name'] as String,
-        description: Value(m['description'] as String?),
-        defaultVisibilityJson: Value(m['defaultVisibilityJson'] as String?),
-        layoutPreset: Value(m['layoutPreset'] as String? ?? 'freeform'),
-        shootDate: Value(m['shootDate'] as String?),
-        isPrimaryOnSet: Value(m['isPrimaryOnSet'] as bool? ?? false),
-        includeCoverInPdf: Value(m['includeCoverInPdf'] as bool? ?? true),
-      ));
+      final id = await db.insertShootDocument(
+        ShootDocumentsCompanion.insert(
+          projectId: projectId,
+          name: m['name'] as String,
+          description: Value(m['description'] as String?),
+          defaultVisibilityJson: Value(m['defaultVisibilityJson'] as String?),
+          layoutPreset: Value(m['layoutPreset'] as String? ?? 'freeform'),
+          shootDate: Value(m['shootDate'] as String?),
+          isPrimaryOnSet: Value(m['isPrimaryOnSet'] as bool? ?? false),
+          includeCoverInPdf: Value(m['includeCoverInPdf'] as bool? ?? true),
+        ),
+      );
       docKeyToId[m['documentKey'] as String] = id;
     }
 
@@ -886,48 +1015,56 @@ class ProjectContentBundle {
       final m = Map<String, dynamic>.from(row as Map);
       final docId = docKeyToId[m['documentKey'] as String];
       if (docId == null) continue;
-      await db.insertShootDocumentBlock(ShootDocumentBlocksCompanion.insert(
-        documentId: docId,
-        blockType: m['blockType'] as String,
-        sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-        sceneId: Value(
-          m['sceneKey'] != null
-              ? sceneKeyToId[m['sceneKey'] as String]
-              : null,
+      await db.insertShootDocumentBlock(
+        ShootDocumentBlocksCompanion.insert(
+          documentId: docId,
+          blockType: m['blockType'] as String,
+          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+          sceneId: Value(
+            m['sceneKey'] != null
+                ? sceneKeyToId[m['sceneKey'] as String]
+                : null,
+          ),
+          shotId: Value(
+            m['shotKey'] != null ? shotKeyToId[m['shotKey'] as String] : null,
+          ),
+          scriptExcerpt: Value(m['scriptExcerpt'] as String?),
+          customLabel: Value(m['customLabel'] as String?),
+          noteBody: Value(m['noteBody'] as String?),
+          imagePath: Value(m['imagePath'] as String?),
+          charactersJson: Value(m['charactersJson'] as String?),
+          durationSeconds: Value(m['durationSeconds'] as int?),
+          visibilityJson: Value(m['visibilityJson'] as String?),
+          contentOverridesJson: Value(m['contentOverridesJson'] as String?),
         ),
-        shotId: Value(
-          m['shotKey'] != null ? shotKeyToId[m['shotKey'] as String] : null,
-        ),
-        scriptExcerpt: Value(m['scriptExcerpt'] as String?),
-        customLabel: Value(m['customLabel'] as String?),
-        noteBody: Value(m['noteBody'] as String?),
-        imagePath: Value(m['imagePath'] as String?),
-        charactersJson: Value(m['charactersJson'] as String?),
-        durationSeconds: Value(m['durationSeconds'] as int?),
-        visibilityJson: Value(m['visibilityJson'] as String?),
-        contentOverridesJson: Value(m['contentOverridesJson'] as String?),
-      ));
+      );
     }
 
     for (final row in bundle['projectEquipment'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final equipmentId = bundleInt(m['equipmentId']);
       if (equipmentId == null) continue;
-      await db.into(db.projectEquipment).insert(ProjectEquipmentCompanion.insert(
-            projectId: projectId,
-            equipmentType: m['equipmentType'] as String? ?? 'unknown',
-            equipmentId: equipmentId,
-            source: Value(m['source'] as String? ?? 'rental'),
-            status: Value(m['status'] as String? ?? 'available'),
-            notes: Value(m['notes'] as String?),
-            sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-          ));
+      await db
+          .into(db.projectEquipment)
+          .insert(
+            ProjectEquipmentCompanion.insert(
+              projectId: projectId,
+              equipmentType: m['equipmentType'] as String? ?? 'unknown',
+              equipmentId: equipmentId,
+              source: Value(m['source'] as String? ?? 'rental'),
+              status: Value(m['status'] as String? ?? 'available'),
+              notes: Value(m['notes'] as String?),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+            ),
+          );
     }
 
     final groupKeyToId = <String, int>{};
     for (final row in bundle['moodboardGroups'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
-      final id = await db.into(db.moodboardGroups).insert(
+      final id = await db
+          .into(db.moodboardGroups)
+          .insert(
             MoodboardGroupsCompanion.insert(
               projectId: projectId,
               category: m['category'] as String,
@@ -938,20 +1075,21 @@ class ProjectContentBundle {
       groupKeyToId[m['groupKey'] as String] = id;
     }
 
+    final moodboardKeyToId = <String, int>{};
     for (final row in bundle['moodboardImages'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final groupKey = m['groupKey'] as String?;
       final setKey = m['setKey'] as String?;
-      await db.into(db.moodboardImages).insert(
+      final id = await db
+          .into(db.moodboardImages)
+          .insert(
             MoodboardImagesCompanion.insert(
               projectId: projectId,
               imagePath: m['imagePath'] as String,
               bibleId: Value(bundleInt(m['bibleId'])),
               source: Value(m['source'] as String? ?? 'manual'),
               category: Value(m['category'] as String?),
-              groupId: Value(
-                groupKey != null ? groupKeyToId[groupKey] : null,
-              ),
+              groupId: Value(groupKey != null ? groupKeyToId[groupKey] : null),
               caption: Value(m['caption'] as String?),
               filmReference: Value(m['filmReference'] as String?),
               linkedSceneId: Value(bundleInt(m['linkedSceneId'])),
@@ -963,13 +1101,17 @@ class ProjectContentBundle {
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
             ),
           );
+      final mediaKey = m['mediaKey'] as String?;
+      if (mediaKey != null) moodboardKeyToId[mediaKey] = id;
     }
 
     for (final row in bundle['lookBibles'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       m.remove('id');
       m.remove('projectId');
-      await db.into(db.lookBibles).insert(
+      await db
+          .into(db.lookBibles)
+          .insert(
             LookBiblesCompanion.insert(
               projectId: projectId,
               visualConcept: Value(m['visualConcept'] as String?),
@@ -999,9 +1141,9 @@ class ProjectContentBundle {
         'updatedAt': (bundleDateTime(m['updatedAt']) ?? DateTime.now())
             .toIso8601String(),
       });
-      final id = await db.into(db.visualBibles).insert(
-            vb.toCompanion(true).copyWith(id: const Value.absent()),
-          );
+      final id = await db
+          .into(db.visualBibles)
+          .insert(vb.toCompanion(true).copyWith(id: const Value.absent()));
       if (oldId != null) vbKeyToId['vb:$oldId'] = id;
       vbKeyToId['vb:$id'] = id;
     }
@@ -1013,7 +1155,9 @@ class ProjectContentBundle {
       m.remove('bibleKey');
       m.remove('id');
       m.remove('bibleId');
-      await db.into(db.visualBibleVersions).insert(
+      await db
+          .into(db.visualBibleVersions)
+          .insert(
             VisualBibleVersionsCompanion.insert(
               bibleId: bibleId,
               label: m['label'] as String,
@@ -1030,7 +1174,9 @@ class ProjectContentBundle {
       m.remove('bibleKey');
       m.remove('id');
       m.remove('bibleId');
-      await db.into(db.visualBibleColorBlocks).insert(
+      await db
+          .into(db.visualBibleColorBlocks)
+          .insert(
             VisualBibleColorBlocksCompanion.insert(
               bibleId: bibleId,
               blockName: m['blockName'] as String,
@@ -1058,7 +1204,9 @@ class ProjectContentBundle {
       m.remove('bibleId');
       m.remove('locationSiteId');
       m.remove('locationBasePlanId');
-      await db.into(db.visualBibleLocationRefs).insert(
+      await db
+          .into(db.visualBibleLocationRefs)
+          .insert(
             VisualBibleLocationRefsCompanion.insert(
               bibleId: bibleId,
               locationName: m['locationName'] as String,
@@ -1076,8 +1224,9 @@ class ProjectContentBundle {
               solarOrientation: Value(m['solarOrientation'] as String?),
               availableLightHours: Value(m['availableLightHours'] as String?),
               existingPracticals: Value(m['existingPracticals'] as String?),
-              estimatedColorTempKelvin:
-                  Value(bundleInt(m['estimatedColorTempKelvin'])),
+              estimatedColorTempKelvin: Value(
+                bundleInt(m['estimatedColorTempKelvin']),
+              ),
             ),
           );
     }
@@ -1088,7 +1237,9 @@ class ProjectContentBundle {
       if (bibleId == null) continue;
       m.remove('bibleKey');
       m.remove('bibleId');
-      await db.into(db.bibleSectionGroups).insert(
+      await db
+          .into(db.bibleSectionGroups)
+          .insert(
             BibleSectionGroupsCompanion.insert(
               id: m['id'] as String,
               bibleId: bibleId,
@@ -1105,7 +1256,9 @@ class ProjectContentBundle {
       if (bibleId == null) continue;
       m.remove('bibleKey');
       m.remove('bibleId');
-      await db.into(db.bibleSectionDefinitions).insert(
+      await db
+          .into(db.bibleSectionDefinitions)
+          .insert(
             BibleSectionDefinitionsCompanion.insert(
               id: m['id'] as String,
               bibleId: bibleId,
@@ -1128,7 +1281,9 @@ class ProjectContentBundle {
       m.remove('bibleKey');
       m.remove('id');
       m.remove('bibleId');
-      await db.into(db.bibleComments).insert(
+      await db
+          .into(db.bibleComments)
+          .insert(
             BibleCommentsCompanion.insert(
               bibleId: bibleId,
               authorRole: m['authorRole'] as String,
@@ -1139,9 +1294,94 @@ class ProjectContentBundle {
           );
     }
 
+    for (final row in bundle['exposureBlocks'] as List? ?? []) {
+      final m = Map<String, dynamic>.from(row as Map);
+      final bibleId = vbKeyToId[m['bibleKey'] as String];
+      if (bibleId == null) continue;
+      await db
+          .into(db.exposureBlocks)
+          .insert(
+            ExposureBlocksCompanion.insert(
+              bibleId: bibleId,
+              blockName: m['blockName'] as String,
+              highlightStrategy: Value(m['highlightStrategy'] as String?),
+              shadowStrategy: Value(m['shadowStrategy'] as String?),
+              keyFillRatio: Value(m['keyFillRatio'] as String?),
+              narrativeIntent: Value(m['narrativeIntent'] as String?),
+              referenceImages: Value(m['referenceImages'] as String?),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+            ),
+          );
+    }
+
+    for (final row in bundle['lightingSetups'] as List? ?? []) {
+      final m = Map<String, dynamic>.from(row as Map);
+      final bibleId = vbKeyToId[m['bibleKey'] as String];
+      if (bibleId == null) continue;
+      await db
+          .into(db.lightingSetups)
+          .insert(
+            LightingSetupsCompanion.insert(
+              bibleId: bibleId,
+              setupName: m['setupName'] as String,
+              narrativeNote: Value(m['narrativeNote'] as String?),
+              diagramJson: m['diagramJson'] as String,
+              gelNotes: Value(m['gelNotes'] as String?),
+              practicalMotivation: Value(m['practicalMotivation'] as String?),
+              referenceImagePath: Value(m['referenceImagePath'] as String?),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+            ),
+          );
+    }
+
+    for (final row in bundle['cameraTests'] as List? ?? []) {
+      final m = Map<String, dynamic>.from(row as Map);
+      final bibleId = vbKeyToId[m['bibleKey'] as String];
+      if (bibleId == null) continue;
+      await db
+          .into(db.cameraTests)
+          .insert(
+            CameraTestsCompanion.insert(
+              bibleId: bibleId,
+              testName: m['testName'] as String,
+              cameraId: Value(bundleInt(m['cameraId'])),
+              lensId: Value(bundleInt(m['lensId'])),
+              lutName: Value(m['lutName'] as String?),
+              lightCondition: Value(m['lightCondition'] as String?),
+              notes: Value(m['notes'] as String?),
+              imagePaths: m['imagePaths'] as String,
+              testedAt: Value(bundleDateTime(m['testedAt'])),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+            ),
+          );
+    }
+
+    for (final row in bundle['visualBibleDocuments'] as List? ?? []) {
+      final m = Map<String, dynamic>.from(row as Map);
+      final bibleId = vbKeyToId[m['bibleKey'] as String];
+      if (bibleId == null) continue;
+      await db
+          .into(db.visualBibleDocuments)
+          .insert(
+            VisualBibleDocumentsCompanion.insert(
+              bibleId: bibleId,
+              projectId: projectId,
+              documentJson: m['documentJson'] as String,
+              documentSchemaVersion: Value(
+                bundleIntOr(m['documentSchemaVersion'], 1),
+              ),
+              updatedAt: Value(
+                bundleDateTime(m['updatedAt']) ?? DateTime.now(),
+              ),
+            ),
+          );
+    }
+
     for (final row in bundle['projectAnnotatedPdfs'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
-      await db.into(db.projectAnnotatedPdfs).insert(
+      await db
+          .into(db.projectAnnotatedPdfs)
+          .insert(
             ProjectAnnotatedPdfsCompanion.insert(
               projectId: projectId,
               moduleType: m['moduleType'] as String,
@@ -1150,9 +1390,51 @@ class ProjectContentBundle {
           );
     }
 
+    for (final row in bundle['projectAnnotationDocuments'] as List? ?? []) {
+      final m = Map<String, dynamic>.from(row as Map);
+      final targetType = m['targetType'] as String? ?? 'unknown';
+      final targetKey = m['targetKey'] as String?;
+      final remappedTargetId = switch (targetType) {
+        'camera_plan_site' =>
+          targetKey != null ? siteKeyToId[targetKey]?.toString() : null,
+        'camera_plan_set' =>
+          targetKey != null ? setKeyToId[targetKey]?.toString() : null,
+        'camera_plan_shot' =>
+          targetKey != null ? shotKeyToId[targetKey]?.toString() : null,
+        'moodboard_image' =>
+          targetKey != null ? moodboardKeyToId[targetKey]?.toString() : null,
+        _ => null,
+      };
+      final targetId = remappedTargetId ?? m['targetId']?.toString();
+      if (targetId == null) continue;
+      await db
+          .into(db.projectAnnotationDocuments)
+          .insert(
+            ProjectAnnotationDocumentsCompanion.insert(
+              projectId: projectId,
+              targetType: targetType,
+              targetId: targetId,
+              documentJson: m['documentJson'] as String? ?? '{}',
+              documentSchemaVersion: Value(
+                bundleIntOr(m['documentSchemaVersion'], 1),
+              ),
+              createdAt: Value(
+                DateTime.tryParse(m['createdAt'] as String? ?? '') ??
+                    DateTime.now(),
+              ),
+              updatedAt: Value(
+                DateTime.tryParse(m['updatedAt'] as String? ?? '') ??
+                    DateTime.now(),
+              ),
+            ),
+          );
+    }
+
     for (final row in bundle['opticsLabSamples'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
-      await db.into(db.opticsLabSamples).insert(
+      await db
+          .into(db.opticsLabSamples)
+          .insert(
             OpticsLabSamplesCompanion.insert(
               projectId: projectId,
               imagePath: m['imagePath'] as String,

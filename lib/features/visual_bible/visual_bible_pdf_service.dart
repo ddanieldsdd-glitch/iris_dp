@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
@@ -45,18 +46,17 @@ class VisualBiblePdfService {
     required VisualBibleData data,
     required List<ColorBlockModel> colorBlocks,
     required List<MoodboardImageModel> moodboard,
-  }) =>
-      buildBytes(
-        mode: VisualBibleExportMode.full,
-        projectName: projectName,
-        director: director,
-        data: data,
-        colorBlocks: colorBlocks,
-        exposureBlocks: const [],
-        lightingSetups: const [],
-        cameraTests: const [],
-        moodboard: moodboard,
-      );
+  }) => buildBytes(
+    mode: VisualBibleExportMode.full,
+    projectName: projectName,
+    director: director,
+    data: data,
+    colorBlocks: colorBlocks,
+    exposureBlocks: const [],
+    lightingSetups: const [],
+    cameraTests: const [],
+    moodboard: moodboard,
+  );
 
   static bool _sectionAllowed(Set<String>? included, String sectionId) {
     if (included == null || included.isEmpty) return true;
@@ -79,14 +79,17 @@ class VisualBiblePdfService {
     final isTech = mode == VisualBibleExportMode.techScout;
     final sections = includedSections;
     final fonts = await PdfExportFonts.load();
-    final theme = PdfExportFonts.theme(regular: fonts.regular, bold: fonts.bold);
+    final theme = PdfExportFonts.theme(
+      regular: fonts.regular,
+      bold: fonts.bold,
+    );
     final doc = pw.Document();
 
     final coverLabel = isPitch
         ? 'PITCH DECK — BIBLIA DE FOTOGRAFÍA'
         : isTech
-            ? 'TECH SCOUT — BIBLIA DE FOTOGRAFÍA'
-            : 'BIBLIA DE FOTOGRAFÍA';
+        ? 'TECH SCOUT — BIBLIA DE FOTOGRAFÍA'
+        : 'BIBLIA DE FOTOGRAFÍA';
 
     doc.addPage(
       pw.Page(
@@ -161,7 +164,10 @@ class VisualBiblePdfService {
                   pw.SizedBox(height: 12),
                   pw.Text(
                     data.directionNarrativeIntent!,
-                    style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
+                    style: const pw.TextStyle(
+                      fontSize: 11,
+                      color: PdfColors.grey700,
+                    ),
                   ),
                 ],
               ],
@@ -187,13 +193,20 @@ class VisualBiblePdfService {
               children: [
                 pw.Text(
                   data.visualConcept!,
-                  style: pw.TextStyle(font: fonts.regular, fontSize: 13, lineSpacing: 7),
+                  style: pw.TextStyle(
+                    font: fonts.regular,
+                    fontSize: 13,
+                    lineSpacing: 7,
+                  ),
                 ),
                 if (data.conceptNarrativeIntent?.isNotEmpty == true) ...[
                   pw.SizedBox(height: 12),
                   pw.Text(
                     data.conceptNarrativeIntent!,
-                    style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
+                    style: const pw.TextStyle(
+                      fontSize: 11,
+                      color: PdfColors.grey700,
+                    ),
                   ),
                 ],
               ],
@@ -249,7 +262,10 @@ class VisualBiblePdfService {
                             padding: const pw.EdgeInsets.only(left: 12),
                             child: pw.Text(
                               '${block.colorTempKelvin}K',
-                              style: pw.TextStyle(font: fonts.bold, fontSize: 18),
+                              style: pw.TextStyle(
+                                font: fonts.bold,
+                                fontSize: 18,
+                              ),
                             ),
                           ),
                       ],
@@ -282,7 +298,11 @@ class VisualBiblePdfService {
                 if (data.lightingPhilosophy?.isNotEmpty == true)
                   pw.Text(
                     data.lightingPhilosophy!,
-                    style: pw.TextStyle(font: fonts.regular, fontSize: 12, lineSpacing: 6),
+                    style: pw.TextStyle(
+                      font: fonts.regular,
+                      fontSize: 12,
+                      lineSpacing: 6,
+                    ),
                   ),
                 pw.SizedBox(height: 16),
                 pw.Wrap(
@@ -292,19 +312,40 @@ class VisualBiblePdfService {
                     _techChip('Calidad', data.lightQuality ?? '—', fonts),
                     _techChip('Contraste', data.contrastStyle ?? '—', fonts),
                     _techChip('K:F día', data.keyFillRatioDay ?? '—', fonts),
-                    _techChip('K:F noche', data.keyFillRatioNight ?? '—', fonts),
+                    _techChip(
+                      'K:F noche',
+                      data.keyFillRatioNight ?? '—',
+                      fonts,
+                    ),
                     if (data.defaultTStop != null)
                       _techChip('T-stop', data.defaultTStop!, fonts),
-                    if (data.ndNotes != null) _techChip('ND', data.ndNotes!, fonts),
+                    if (data.ndNotes != null)
+                      _techChip('ND', data.ndNotes!, fonts),
                   ],
                 ),
                 if (lightingSetups.isNotEmpty) ...[
                   pw.SizedBox(height: 16),
-                  pw.Text('SETUPS', style: pw.TextStyle(font: fonts.bold, fontSize: 10)),
+                  pw.Text(
+                    'SETUPS',
+                    style: pw.TextStyle(font: fonts.bold, fontSize: 10),
+                  ),
                   ...lightingSetups.map(
                     (s) => pw.Padding(
-                      padding: const pw.EdgeInsets.only(top: 6),
-                      child: pw.Text('• ${s.setupName}: ${s.narrativeNote ?? ''}'),
+                      padding: const pw.EdgeInsets.only(top: 8),
+                      child: pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Expanded(
+                            child: pw.Text(
+                              '• ${s.setupName}: ${s.narrativeNote ?? ''}',
+                            ),
+                          ),
+                          if (s.diagramJson != '[]') ...[
+                            pw.SizedBox(width: 8),
+                            _lightingDiagram(s.diagramJson),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -349,7 +390,8 @@ class VisualBiblePdfService {
                 if (exposureBlocks.isNotEmpty) ...[
                   pw.SizedBox(height: 12),
                   ...exposureBlocks.map(
-                    (b) => pw.Text('${b.blockName}: K:F ${b.keyFillRatio ?? "—"}'),
+                    (b) =>
+                        pw.Text('${b.blockName}: K:F ${b.keyFillRatio ?? "—"}'),
                   ),
                 ],
               ],
@@ -359,12 +401,102 @@ class VisualBiblePdfService {
       );
     }
 
-    if (!isTech &&
+    if (!isPitch &&
+        _sectionAllowed(sections, BibleSectionId.format) &&
+        _hasAny([
+          data.aspectRatio,
+          data.aspectRatioJustification,
+          data.formatNarrativeIntent,
+          data.recordingFormat,
+          data.captureResolution,
+          data.deliveryResolution,
+        ])) {
+      doc.addPage(
+        pw.Page(
+          theme: theme,
+          pageFormat: PdfPageFormat.a4,
+          build: (_) => _sectionPage(
+            title: 'FORMATO',
+            fontBold: fonts.bold,
+            font: fonts.regular,
+            content: _textFieldsContent([
+              ('Relación de aspecto', data.aspectRatio),
+              ('Justificación', data.aspectRatioJustification),
+              ('Intención narrativa', data.formatNarrativeIntent),
+              ('Formato de grabación', data.recordingFormat),
+              ('Resolución de captura', data.captureResolution),
+              ('Resolución de entrega', data.deliveryResolution),
+            ], fonts),
+          ),
+        ),
+      );
+    }
+
+    if (!isPitch &&
+        _sectionAllowed(sections, BibleSectionId.texture) &&
+        _hasAny([
+          data.imageTexture,
+          data.grainLevel,
+          data.diffusionNotes,
+          data.textureNarrativeIntent,
+          data.filtrationNotes,
+        ])) {
+      doc.addPage(
+        pw.Page(
+          theme: theme,
+          pageFormat: PdfPageFormat.a4,
+          build: (_) => _sectionPage(
+            title: 'TEXTURA',
+            fontBold: fonts.bold,
+            font: fonts.regular,
+            content: _textFieldsContent([
+              ('Textura de imagen', data.imageTexture),
+              ('Grano', data.grainLevel),
+              ('Difusión', data.diffusionNotes),
+              ('Filtración', data.filtrationNotes),
+              ('Intención narrativa', data.textureNarrativeIntent),
+            ], fonts),
+          ),
+        ),
+      );
+    }
+
+    if (!isPitch &&
+        _sectionAllowed(sections, BibleSectionId.workflow) &&
+        _hasAny([
+          data.workflowPipeline,
+          data.codec,
+          data.deliveryColorSpace,
+          data.resolutionNotes,
+          data.frameRateNotes,
+        ])) {
+      doc.addPage(
+        pw.Page(
+          theme: theme,
+          pageFormat: PdfPageFormat.a4,
+          build: (_) => _sectionPage(
+            title: 'WORKFLOW',
+            fontBold: fonts.bold,
+            font: fonts.regular,
+            content: _textFieldsContent([
+              ('Pipeline', data.workflowPipeline),
+              ('Códec', data.codec),
+              ('Espacio de color de entrega', data.deliveryColorSpace),
+              ('Resolución', data.resolutionNotes),
+              ('Frame rate', data.frameRateNotes),
+            ], fonts),
+          ),
+        ),
+      );
+    }
+
+    if (!isPitch &&
+        !isTech &&
         _sectionAllowed(sections, BibleSectionId.moodboard) &&
         moodboard.isNotEmpty) {
       final images = <pw.MemoryImage>[];
       for (final img in moodboard.take(12)) {
-        final bytes = await PdfSafeImage.loadFromPath(img.imagePath);
+        final bytes = await PdfSafeImage.loadFromPathMaxEdge(img.imagePath);
         if (bytes != null) images.add(pw.MemoryImage(bytes));
       }
       if (images.isNotEmpty) {
@@ -427,13 +559,15 @@ class VisualBiblePdfService {
     if ((isPitch || isTech) &&
         _sectionAllowed(sections, BibleSectionId.moodboard) &&
         moodboard.isNotEmpty) {
-      final refsBySection = <String, List<({MoodboardImageModel img, pw.MemoryImage? image})>>{};
+      final refsBySection =
+          <String, List<({MoodboardImageModel img, pw.MemoryImage? image})>>{};
       for (final img in moodboard) {
         final assigned = img.assignedSections.isNotEmpty
             ? img.assignedSections
             : [
                 for (final sid in BibleSectionId.all)
-                  if (BibleSectionId.moodboardCategory(sid) == img.category) sid,
+                  if (BibleSectionId.moodboardCategory(sid) == img.category)
+                    sid,
               ];
         final bytes = await PdfSafeImage.loadFromPath(img.imagePath);
         final memory = bytes != null ? pw.MemoryImage(bytes) : null;
@@ -443,7 +577,10 @@ class VisualBiblePdfService {
               sections.isNotEmpty) {
             continue;
           }
-          refsBySection.putIfAbsent(sid, () => []).add((img: img, image: memory));
+          refsBySection.putIfAbsent(sid, () => []).add((
+            img: img,
+            image: memory,
+          ));
         }
       }
       if (refsBySection.isNotEmpty) {
@@ -468,11 +605,18 @@ class VisualBiblePdfService {
                         pw.Column(
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
                           children: [
-                            pw.Image(item.image!, height: 80, fit: pw.BoxFit.contain),
+                            pw.Image(
+                              item.image!,
+                              height: 80,
+                              fit: pw.BoxFit.contain,
+                            ),
                             if (item.img.caption?.isNotEmpty == true)
                               pw.Text(
                                 item.img.caption!,
-                                style: pw.TextStyle(font: fonts.regular, fontSize: 8),
+                                style: pw.TextStyle(
+                                  font: fonts.regular,
+                                  fontSize: 8,
+                                ),
                               ),
                           ],
                         ),
@@ -486,7 +630,7 @@ class VisualBiblePdfService {
       }
     }
 
-    if (isTech &&
+    if (!isPitch &&
         _sectionAllowed(sections, BibleSectionId.optics) &&
         data.opticsConfigJson?.isNotEmpty == true) {
       doc.addPage(
@@ -515,18 +659,17 @@ class VisualBiblePdfService {
     required VisualBibleData data,
     required List<ColorBlockModel> colorBlocks,
     required List<MoodboardImageModel> moodboard,
-  }) =>
-      buildDocument(
-        mode: VisualBibleExportMode.full,
-        projectName: projectName,
-        director: director,
-        data: data,
-        colorBlocks: colorBlocks,
-        exposureBlocks: const [],
-        lightingSetups: const [],
-        cameraTests: const [],
-        moodboard: moodboard,
-      );
+  }) => buildDocument(
+    mode: VisualBibleExportMode.full,
+    projectName: projectName,
+    director: director,
+    data: data,
+    colorBlocks: colorBlocks,
+    exposureBlocks: const [],
+    lightingSetups: const [],
+    cameraTests: const [],
+    moodboard: moodboard,
+  );
 
   static Future<Uint8List> buildDepartmentBytes({
     required String department,
@@ -550,7 +693,10 @@ class VisualBiblePdfService {
     required List<ColorBlockModel> colorBlocks,
   }) async {
     final fonts = await PdfExportFonts.load();
-    final theme = PdfExportFonts.theme(regular: fonts.regular, bold: fonts.bold);
+    final theme = PdfExportFonts.theme(
+      regular: fonts.regular,
+      bold: fonts.bold,
+    );
     final doc = pw.Document();
 
     final title = switch (department) {
@@ -565,8 +711,11 @@ class VisualBiblePdfService {
       VisualBibleDepartment.gaffer => _gafferContent(data, fonts),
       VisualBibleDepartment.colorist => _coloristContent(data, fonts),
       VisualBibleDepartment.cameraOp => _cameraOpContent(data, fonts),
-      VisualBibleDepartment.productionDesign =>
-        _artDeptContent(data, colorBlocks, fonts),
+      VisualBibleDepartment.productionDesign => _artDeptContent(
+        data,
+        colorBlocks,
+        fonts,
+      ),
       _ => pw.SizedBox(),
     };
 
@@ -579,7 +728,11 @@ class VisualBiblePdfService {
           children: [
             pw.Text(
               projectName,
-              style: pw.TextStyle(font: fonts.regular, fontSize: 10, color: PdfColors.grey600),
+              style: pw.TextStyle(
+                font: fonts.regular,
+                fontSize: 10,
+                color: PdfColors.grey600,
+              ),
             ),
             pw.SizedBox(height: 8),
             _sectionPage(
@@ -639,18 +792,17 @@ class VisualBiblePdfService {
     required VisualBibleData data,
     required List<ColorBlockModel> colorBlocks,
     required List<MoodboardImageModel> moodboard,
-  }) =>
-      export(
-        mode: VisualBibleExportMode.full,
-        projectName: projectName,
-        director: director,
-        data: data,
-        colorBlocks: colorBlocks,
-        exposureBlocks: const [],
-        lightingSetups: const [],
-        cameraTests: const [],
-        moodboard: moodboard,
-      );
+  }) => export(
+    mode: VisualBibleExportMode.full,
+    projectName: projectName,
+    director: director,
+    data: data,
+    colorBlocks: colorBlocks,
+    exposureBlocks: const [],
+    lightingSetups: const [],
+    cameraTests: const [],
+    moodboard: moodboard,
+  );
 
   static Future<String?> exportDepartment({
     required String department,
@@ -659,11 +811,12 @@ class VisualBiblePdfService {
     required List<ColorBlockModel> colorBlocks,
   }) {
     final safe = projectName.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
-    final dept = VisualBibleDepartment.label(department)
-        .toLowerCase()
-        .replaceAll(' ', '_');
+    final dept = VisualBibleDepartment.label(
+      department,
+    ).toLowerCase().replaceAll(' ', '_');
     return ExportFileSaver.saveGenerated(
-      dialogTitle: 'Exportar ficha — ${VisualBibleDepartment.label(department)}',
+      dialogTitle:
+          'Exportar ficha — ${VisualBibleDepartment.label(department)}',
       fileName: '${safe.isEmpty ? 'proyecto' : safe}_$dept.pdf',
       extension: 'pdf',
       build: () => buildDepartmentBytes(
@@ -683,7 +836,10 @@ class VisualBiblePdfService {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         if (d.lightingPhilosophy?.isNotEmpty == true)
-          pw.Text(d.lightingPhilosophy!, style: pw.TextStyle(font: fonts.regular, fontSize: 12)),
+          pw.Text(
+            d.lightingPhilosophy!,
+            style: pw.TextStyle(font: fonts.regular, fontSize: 12),
+          ),
         pw.SizedBox(height: 16),
         pw.Wrap(
           spacing: 8,
@@ -718,10 +874,14 @@ class VisualBiblePdfService {
         ],
         if (d.creativeLutDescription?.isNotEmpty == true) ...[
           pw.SizedBox(height: 12),
-          pw.Text(d.creativeLutDescription!, style: pw.TextStyle(font: fonts.regular, fontSize: 12)),
+          pw.Text(
+            d.creativeLutDescription!,
+            style: pw.TextStyle(font: fonts.regular, fontSize: 12),
+          ),
         ],
         pw.SizedBox(height: 16),
-        if (d.imageTexture != null) _techChip('Textura', d.imageTexture!, fonts),
+        if (d.imageTexture != null)
+          _techChip('Textura', d.imageTexture!, fonts),
       ],
     );
   }
@@ -734,7 +894,10 @@ class VisualBiblePdfService {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         if (d.cameraPhilosophy?.isNotEmpty == true)
-          pw.Text(d.cameraPhilosophy!, style: pw.TextStyle(font: fonts.regular, fontSize: 12)),
+          pw.Text(
+            d.cameraPhilosophy!,
+            style: pw.TextStyle(font: fonts.regular, fontSize: 12),
+          ),
         pw.SizedBox(height: 16),
         pw.Wrap(
           spacing: 8,
@@ -747,8 +910,10 @@ class VisualBiblePdfService {
                 d.primaryFocalLengths.map((f) => '${f}mm').join(', '),
                 fonts,
               ),
-            if (d.aspectRatio != null) _techChip('Ratio', d.aspectRatio!, fonts),
-            if (d.movementStyle != null) _techChip('Movimiento', d.movementStyle!, fonts),
+            if (d.aspectRatio != null)
+              _techChip('Ratio', d.aspectRatio!, fonts),
+            if (d.movementStyle != null)
+              _techChip('Movimiento', d.movementStyle!, fonts),
           ],
         ),
       ],
@@ -764,9 +929,15 @@ class VisualBiblePdfService {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         if (d.visualConcept?.isNotEmpty == true)
-          pw.Text(d.visualConcept!, style: pw.TextStyle(font: fonts.regular, fontSize: 12)),
+          pw.Text(
+            d.visualConcept!,
+            style: pw.TextStyle(font: fonts.regular, fontSize: 12),
+          ),
         pw.SizedBox(height: 16),
-        pw.Text('PALETAS', style: pw.TextStyle(font: fonts.bold, fontSize: 10, letterSpacing: 2)),
+        pw.Text(
+          'PALETAS',
+          style: pw.TextStyle(font: fonts.bold, fontSize: 10, letterSpacing: 2),
+        ),
         pw.SizedBox(height: 8),
         ...blocks.map(
           (b) => pw.Padding(
@@ -785,6 +956,42 @@ class VisualBiblePdfService {
       data.pointOfView?.trim().isNotEmpty == true ||
       data.directionNarrativeIntent?.trim().isNotEmpty == true;
 
+  static bool _hasAny(Iterable<String?> values) =>
+      values.any((value) => value?.trim().isNotEmpty == true);
+
+  static pw.Widget _textFieldsContent(
+    List<(String, String?)> fields,
+    ({pw.Font regular, pw.Font bold}) fonts,
+  ) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        for (final (label, value) in fields)
+          if (value?.trim().isNotEmpty == true) ...[
+            pw.Text(
+              label.toUpperCase(),
+              style: pw.TextStyle(
+                font: fonts.bold,
+                fontSize: 8,
+                color: PdfColors.grey600,
+                letterSpacing: 1,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              value!,
+              style: pw.TextStyle(
+                font: fonts.regular,
+                fontSize: 11,
+                lineSpacing: 4,
+              ),
+            ),
+            pw.SizedBox(height: 14),
+          ],
+      ],
+    );
+  }
+
   static List<pw.Widget> _directionPdfFields(
     VisualBibleData data,
     pw.Font font,
@@ -800,7 +1007,11 @@ class VisualBiblePdfService {
         if (value?.trim().isNotEmpty == true) ...[
           pw.Text(
             label.toUpperCase(),
-            style: pw.TextStyle(font: font, fontSize: 8, color: PdfColors.grey600),
+            style: pw.TextStyle(
+              font: font,
+              fontSize: 8,
+              color: PdfColors.grey600,
+            ),
           ),
           pw.SizedBox(height: 4),
           pw.Text(
@@ -810,6 +1021,57 @@ class VisualBiblePdfService {
           pw.SizedBox(height: 12),
         ],
     ];
+  }
+
+  static pw.Widget _lightingDiagram(String rawJson) {
+    List<Map<String, dynamic>> elements;
+    try {
+      elements = (jsonDecode(rawJson) as List)
+          .whereType<Map>()
+          .map((value) => Map<String, dynamic>.from(value))
+          .toList();
+    } catch (_) {
+      elements = const [];
+    }
+    return pw.Container(
+      width: 150,
+      height: 96,
+      decoration: pw.BoxDecoration(
+        color: PdfColors.grey100,
+        border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+      ),
+      child: pw.CustomPaint(
+        size: const PdfPoint(150, 96),
+        painter: (canvas, size) {
+          for (final element in elements) {
+            final x = ((element['x'] as num?)?.toDouble() ?? 150) / 600;
+            final y = ((element['y'] as num?)?.toDouble() ?? 150) / 400;
+            final type = element['type']?.toString() ?? 'light';
+            final color = switch (type) {
+              'camera' => const PdfColor.fromInt(0xFF0A84FF),
+              'subject' => const PdfColor.fromInt(0xFF1C1C1E),
+              'key' => const PdfColor.fromInt(0xFFFFCC00),
+              'fill' => const PdfColor.fromInt(0xFF64D2FF),
+              'rim' => const PdfColor.fromInt(0xFFFF9F0A),
+              _ => const PdfColor.fromInt(0xFF8E8E93),
+            };
+            final px = x.clamp(0.04, 0.96) * size.x;
+            final py = (1 - y.clamp(0.04, 0.96)) * size.y;
+            canvas
+              ..setFillColor(color)
+              ..drawEllipse(px, py, 4, 4)
+              ..fillPath();
+            if (type == 'camera') {
+              canvas
+                ..setStrokeColor(color)
+                ..setLineWidth(1)
+                ..drawLine(px, py, px, py + 10)
+                ..strokePath();
+            }
+          }
+        },
+      ),
+    );
   }
 
   static pw.Widget _techChip(
@@ -828,7 +1090,11 @@ class VisualBiblePdfService {
         children: [
           pw.Text(
             label.toUpperCase(),
-            style: pw.TextStyle(font: fonts.regular, fontSize: 7, color: PdfColors.grey600),
+            style: pw.TextStyle(
+              font: fonts.regular,
+              fontSize: 7,
+              color: PdfColors.grey600,
+            ),
           ),
           pw.Text(value, style: pw.TextStyle(font: fonts.bold, fontSize: 11)),
         ],

@@ -53,6 +53,7 @@ Future<ShootDocumentCreationChoice?> resolveShootDocumentCreationTemplate({
     db,
     UserTemplateType.shootDocument,
   );
+  if (!context.mounted) return null;
 
   return showModalBottomSheet<ShootDocumentCreationChoice>(
     context: context,
@@ -101,9 +102,18 @@ class _ShootTemplatePickerSheet extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             for (final template in ShootDocumentTemplate.values)
               ListTile(
-                leading: Icon(Icons.description_outlined, color: palette.accent),
-                title: Text(template.label, style: AppTypography.bodyMedium(palette)),
-                subtitle: Text(template.description, style: AppTypography.caption(palette)),
+                leading: Icon(
+                  Icons.description_outlined,
+                  color: palette.accent,
+                ),
+                title: Text(
+                  template.label,
+                  style: AppTypography.bodyMedium(palette),
+                ),
+                subtitle: Text(
+                  template.description,
+                  style: AppTypography.caption(palette),
+                ),
                 onTap: () => Navigator.pop(
                   context,
                   ShootDocumentCreationChoice(builtinTemplate: template),
@@ -118,7 +128,10 @@ class _ShootTemplatePickerSheet extends StatelessWidget {
                   leading: Icon(Icons.bookmark_outline, color: palette.accent),
                   title: Text(t.name, style: AppTypography.bodyMedium(palette)),
                   subtitle: t.description != null
-                      ? Text(t.description!, style: AppTypography.caption(palette))
+                      ? Text(
+                          t.description!,
+                          style: AppTypography.caption(palette),
+                        )
                       : null,
                   onTap: () => Navigator.pop(
                     context,
@@ -130,16 +143,19 @@ class _ShootTemplatePickerSheet extends StatelessWidget {
               leading: Icon(Icons.add_circle_outline, color: palette.accent),
               title: Text(
                 'Crear nueva plantilla visual…',
-                style: AppTypography.bodyMedium(palette)
-                    .copyWith(color: palette.accent),
+                style: AppTypography.bodyMedium(
+                  palette,
+                ).copyWith(color: palette.accent),
               ),
               onTap: () {
-                Navigator.pop(context, const ShootDocumentCreationChoice(
-                  createTemplate: true,
-                ));
+                Navigator.pop(
+                  context,
+                  const ShootDocumentCreationChoice(createTemplate: true),
+                );
               },
             ),
-            if (prefs.shootDocAutoApply == TemplateAutoApplyMode.perProject) ...[
+            if (prefs.shootDocAutoApply ==
+                TemplateAutoApplyMode.perProject) ...[
               const Divider(height: 16),
               Text(
                 'Modo «por proyecto»: puedes fijar una plantilla distinta '

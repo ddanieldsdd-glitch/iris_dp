@@ -17,6 +17,7 @@ Future<String?> pickAndStoreOpticsLabSample({
 }) async {
   final count = await db.countOpticsLabSamples(projectId);
   if (count >= kOpticsLabMaxSamples) {
+    if (!context.mounted) return null;
     final removed = await _promptRemoveSample(context, db, projectId);
     if (!removed || !context.mounted) return null;
   }
@@ -30,15 +31,13 @@ Future<String?> pickAndStoreOpticsLabSample({
     projectId: projectId,
     sourcePath: sourcePath,
     subfolder: 'optics_lab/samples',
-    fileName: 'sample_${DateTime.now().millisecondsSinceEpoch}${ext.isEmpty ? '.jpg' : ext}',
+    fileName:
+        'sample_${DateTime.now().millisecondsSinceEpoch}${ext.isEmpty ? '.jpg' : ext}',
   );
   if (stored == null) return null;
 
   await db.insertOpticsLabSample(
-    OpticsLabSamplesCompanion.insert(
-      projectId: projectId,
-      imagePath: stored,
-    ),
+    OpticsLabSamplesCompanion.insert(projectId: projectId, imagePath: stored),
   );
   return stored;
 }
@@ -61,9 +60,7 @@ Future<bool> _promptRemoveSample(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Elimina una imagen de muestra para poder añadir otra.',
-            ),
+            const Text('Elimina una imagen de muestra para poder añadir otra.'),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
@@ -113,10 +110,7 @@ class _SampleDeleteTile extends StatelessWidget {
   final OpticsLabSample sample;
   final VoidCallback onDelete;
 
-  const _SampleDeleteTile({
-    required this.sample,
-    required this.onDelete,
-  });
+  const _SampleDeleteTile({required this.sample, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {

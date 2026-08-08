@@ -1,6 +1,14 @@
 import 'dart:convert';
 
 import 'bible_section_ids.dart';
+import 'bible_stitch_module_registry.dart';
+
+int _parseMaxLines(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value.trim()) ?? 3;
+  return 3;
+}
 
 /// Tipo de sub-apartado dentro de una sección de la biblia.
 enum BibleSectionFieldType {
@@ -40,7 +48,7 @@ class BibleSectionField {
       key: json['key'] as String,
       label: json['label'] as String,
       hint: json['hint'] as String?,
-      maxLines: json['maxLines'] as int? ?? 3,
+      maxLines: _parseMaxLines(json['maxLines']),
       type: BibleSectionFieldType.values.firstWhere(
         (t) => t.name == json['type'],
         orElse: () => BibleSectionFieldType.text,
@@ -70,172 +78,7 @@ abstract final class BibleSectionFieldsConfig {
   static const _valuesKey = 'values';
 
   static List<BibleSectionField> defaultsFor(String sectionId) =>
-      switch (sectionId) {
-        BibleSectionId.direction => const [
-            BibleSectionField(
-              key: 'narrative',
-              label: 'Intención narrativa',
-              hint:
-                  '¿Cuál es la intención global de la fotografía respecto a la historia?',
-              maxLines: 4,
-              type: BibleSectionFieldType.narrative,
-            ),
-            BibleSectionField(
-              key: 'tone',
-              label: 'Tono',
-              hint: 'Melancólico, tenso, íntimo, épico…',
-              maxLines: 3,
-            ),
-            BibleSectionField(
-              key: 'creativeIntention',
-              label: 'Intención',
-              hint: 'Qué queremos transmitir emocionalmente con la imagen…',
-              maxLines: 4,
-            ),
-            BibleSectionField(
-              key: 'stagingApproach',
-              label: 'Puesta en escena',
-              hint:
-                  'Cómo se organizan los personajes y el espacio en el encuadre…',
-              maxLines: 4,
-            ),
-            BibleSectionField(
-              key: 'pointOfView',
-              label: 'Punto de vista',
-              hint: 'Observador distante, POV subjetivo, cámara onírica…',
-              maxLines: 3,
-            ),
-            BibleSectionField(
-              key: 'references',
-              label: 'Referencias visuales',
-              type: BibleSectionFieldType.references,
-            ),
-          ],
-        BibleSectionId.optics => const [
-            BibleSectionField(
-              key: 'narrative',
-              label: 'Intención narrativa',
-              type: BibleSectionFieldType.narrative,
-              maxLines: 4,
-            ),
-            BibleSectionField(key: 'opticSettings', label: 'Filosofía y kit de lentes'),
-            BibleSectionField(
-              key: 'references',
-              label: 'Referencias visuales',
-              type: BibleSectionFieldType.references,
-            ),
-          ],
-        BibleSectionId.format => const [
-            BibleSectionField(
-              key: 'narrative',
-              label: 'Intención narrativa',
-              type: BibleSectionFieldType.narrative,
-              maxLines: 4,
-            ),
-            BibleSectionField(key: 'formatSettings', label: 'Aspect ratio y entrega'),
-            BibleSectionField(
-              key: 'references',
-              label: 'Referencias visuales',
-              type: BibleSectionFieldType.references,
-            ),
-          ],
-        BibleSectionId.texture => const [
-            BibleSectionField(
-              key: 'narrative',
-              label: 'Intención narrativa',
-              type: BibleSectionFieldType.narrative,
-              maxLines: 4,
-            ),
-            BibleSectionField(key: 'textureSettings', label: 'Estilo de textura'),
-            BibleSectionField(
-              key: 'references',
-              label: 'Referencias visuales',
-              type: BibleSectionFieldType.references,
-            ),
-          ],
-        BibleSectionId.concept => const [
-            BibleSectionField(
-              key: 'narrative',
-              label: 'Intención narrativa',
-              type: BibleSectionFieldType.narrative,
-              maxLines: 4,
-            ),
-            BibleSectionField(
-              key: 'visualConcept',
-              label: 'Concepto de imagen',
-              maxLines: 4,
-            ),
-            BibleSectionField(
-              key: 'filmReferences',
-              label: 'Referencias cinematográficas',
-              maxLines: 2,
-            ),
-            BibleSectionField(
-              key: 'actNotes',
-              label: 'Intención visual por acto',
-            ),
-            BibleSectionField(
-              key: 'references',
-              label: 'Referencias visuales',
-              type: BibleSectionFieldType.references,
-            ),
-          ],
-        BibleSectionId.camera => const [
-            BibleSectionField(
-              key: 'narrative',
-              label: 'Intención narrativa',
-              type: BibleSectionFieldType.narrative,
-              maxLines: 4,
-            ),
-            BibleSectionField(key: 'cameraBody', label: 'Cámara y formato'),
-            BibleSectionField(key: 'philosophy', label: 'Filosofía de cámara'),
-            BibleSectionField(
-              key: 'movements',
-              label: 'Movimientos de cámara',
-            ),
-            BibleSectionField(
-              key: 'specsReference',
-              label: 'Fichas técnicas de referencia',
-            ),
-            BibleSectionField(
-              key: 'references',
-              label: 'Referencias visuales',
-              type: BibleSectionFieldType.references,
-            ),
-          ],
-        BibleSectionId.exposure => const [
-            BibleSectionField(key: 'narrative', label: 'Intención narrativa', type: BibleSectionFieldType.narrative),
-            BibleSectionField(key: 'globalExposure', label: 'Exposición global'),
-            BibleSectionField(key: 'blocks', label: 'Bloques de exposición', type: BibleSectionFieldType.blocks),
-            BibleSectionField(key: 'references', label: 'Referencias visuales', type: BibleSectionFieldType.references),
-          ],
-        BibleSectionId.lighting => const [
-            BibleSectionField(key: 'narrative', label: 'Intención narrativa', type: BibleSectionFieldType.narrative),
-            BibleSectionField(key: 'philosophy', label: 'Filosofía de iluminación'),
-            BibleSectionField(key: 'miredConverter', label: 'Conversor Mired / Kelvin / Gel'),
-            BibleSectionField(key: 'diagrams', label: 'Diagramas de iluminación', type: BibleSectionFieldType.blocks),
-            BibleSectionField(key: 'references', label: 'Referencias visuales', type: BibleSectionFieldType.references),
-          ],
-        BibleSectionId.colorImage => const [
-            BibleSectionField(key: 'narrative', label: 'Intención narrativa', type: BibleSectionFieldType.narrative),
-            BibleSectionField(key: 'lut', label: 'LUT y color science'),
-            BibleSectionField(key: 'blocks', label: 'Paletas por bloque', type: BibleSectionFieldType.blocks),
-            BibleSectionField(key: 'references', label: 'Referencias visuales', type: BibleSectionFieldType.references),
-          ],
-        _ => const [
-            BibleSectionField(
-              key: 'narrative',
-              label: 'Intención narrativa',
-              type: BibleSectionFieldType.narrative,
-              maxLines: 4,
-            ),
-            BibleSectionField(
-              key: 'references',
-              label: 'Referencias visuales',
-              type: BibleSectionFieldType.references,
-            ),
-          ],
-      };
+      BibleStitchModuleRegistry.defaultFieldsFor(sectionId);
 
   static List<BibleSectionField> parse(String? contentJson, String sectionId) {
     if (contentJson == null || contentJson.isEmpty) {
@@ -253,10 +96,11 @@ abstract final class BibleSectionFieldsConfig {
         }
         return defaultsFor(sectionId);
       }
-      return raw
+      final parsed = raw
           .whereType<Map<String, dynamic>>()
           .map(BibleSectionField.fromJson)
           .toList();
+      return BibleStitchModuleRegistry.normalizeFields(sectionId, parsed);
     } catch (_) {
       return defaultsFor(sectionId);
     }
@@ -289,25 +133,42 @@ abstract final class BibleSectionFieldsConfig {
         BibleSectionField(
           key: 'narrative',
           label: 'Intención narrativa',
-          hint: 'Intención narrativa de «$sectionLabel»…',
+          hint: 'Orientativo: intención de «$sectionLabel» (ej. luz lateral suave, 5600K…)…',
           maxLines: 4,
           type: BibleSectionFieldType.narrative,
         ),
         const BibleSectionField(
           key: 'body',
           label: 'Contenido',
-          hint: 'Notas, criterios, referencias escritas…',
+          hint: 'Orientativo: notas y criterios (no bloquean export si están vacíos)…',
           maxLines: 12,
         ),
         const BibleSectionField(
           key: 'references',
           label: 'Referencias visuales',
+          hint: 'Stills orientativas que ilustran el texto…',
           type: BibleSectionFieldType.references,
         ),
       ];
 
   /// Packs estándar al crear / aplicar plantilla por estilo visual.
   static List<BibleSectionField> packForStyle(
+    String styleKey, {
+    String sectionLabel = 'Sección',
+    String? sectionId,
+  }) {
+    if (sectionId != null && sectionId.isNotEmpty) {
+      return BibleStitchModuleRegistry.packForStyle(
+        styleKey,
+        sectionId: sectionId,
+        sectionLabel: sectionLabel,
+      );
+    }
+    return packForStyleGeneric(styleKey, sectionLabel: sectionLabel);
+  }
+
+  /// Pack genérico (secciones custom / fallback sin registry Stitch).
+  static List<BibleSectionField> packForStyleGeneric(
     String styleKey, {
     String sectionLabel = 'Sección',
   }) {

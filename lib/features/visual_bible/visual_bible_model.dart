@@ -17,10 +17,10 @@ abstract final class VisualBibleModuleType {
   static const lookBible = 'look_bible';
 
   static String label(String type) => switch (type) {
-        visualBible => 'Biblia de Fotografía',
-        lookBible => 'Look Bible',
-        _ => 'Documento',
-      };
+    visualBible => 'Biblia de Fotografía',
+    lookBible => 'Look Bible',
+    _ => 'Documento',
+  };
 }
 
 /// Modos de export PDF.
@@ -30,11 +30,11 @@ abstract final class VisualBibleExportMode {
   static const full = 'full';
 
   static String label(String id) => switch (id) {
-        pitch => 'Pitch deck',
-        techScout => 'Tech scout',
-        full => 'Documento completo',
-        _ => id,
-      };
+    pitch => 'Pitch deck',
+    techScout => 'Tech scout',
+    full => 'Documento completo',
+    _ => id,
+  };
 }
 
 /// Departamentos para PDF de una página.
@@ -45,12 +45,12 @@ abstract final class VisualBibleDepartment {
   static const productionDesign = 'production_design';
 
   static String label(String id) => switch (id) {
-        gaffer => 'Gaffer',
-        colorist => 'Colorista',
-        cameraOp => 'Operador de cámara',
-        productionDesign => 'Dirección de arte',
-        _ => id,
-      };
+    gaffer => 'Gaffer',
+    colorist => 'Colorista',
+    cameraOp => 'Operador de cámara',
+    productionDesign => 'Dirección de arte',
+    _ => id,
+  };
 
   static const all = [gaffer, colorist, cameraOp, productionDesign];
 }
@@ -119,6 +119,8 @@ class VisualBibleData {
   String? formatNarrativeIntent;
   String? textureNarrativeIntent;
   String? opticsConfigJson;
+  bool structureInitialized;
+  String engineVersion;
 
   VisualBibleData({
     this.id = 0,
@@ -182,16 +184,20 @@ class VisualBibleData {
     this.formatNarrativeIntent,
     this.textureNarrativeIntent,
     this.opticsConfigJson,
-  })  : narrativeReferences = narrativeReferences ?? [],
-        preferredMovements = preferredMovements ?? [],
-        primaryFocalLengths = primaryFocalLengths ?? [],
-        cameraMovements = cameraMovements ?? [],
-        actVisualNotes = actVisualNotes ?? [];
+    this.structureInitialized = true,
+    this.engineVersion = 'legacy',
+  }) : narrativeReferences = narrativeReferences ?? [],
+       preferredMovements = preferredMovements ?? [],
+       primaryFocalLengths = primaryFocalLengths ?? [],
+       cameraMovements = cameraMovements ?? [],
+       actVisualNotes = actVisualNotes ?? [];
 
   factory VisualBibleData.fromRow(VisualBible row) {
     return VisualBibleData(
       id: row.id,
       projectId: row.projectId,
+      structureInitialized: row.structureInitialized,
+      engineVersion: row.engineVersion,
       visualConcept: row.visualConcept,
       tone: row.tone,
       creativeIntention: row.creativeIntention,
@@ -258,6 +264,8 @@ class VisualBibleData {
     return VisualBiblesCompanion(
       id: id > 0 ? Value(id) : const Value.absent(),
       projectId: Value(projectId),
+      structureInitialized: Value(structureInitialized),
+      engineVersion: Value(engineVersion),
       visualConcept: Value(visualConcept),
       tone: Value(tone),
       creativeIntention: Value(creativeIntention),
@@ -323,84 +331,86 @@ class VisualBibleData {
 
   /// Copia profunda para undo/redo.
   VisualBibleData copy() => VisualBibleData.fromRow(
-        VisualBible(
-          id: id,
-          projectId: projectId,
-          visualConcept: visualConcept,
-          tone: tone,
-          creativeIntention: creativeIntention,
-          stagingApproach: stagingApproach,
-          pointOfView: pointOfView,
-          narrativeReferences: _encodeRefList(narrativeReferences),
-          lightingPhilosophy: lightingPhilosophy,
-          lightQuality: lightQuality,
-          contrastStyle: contrastStyle,
-          keyFillRatioDay: keyFillRatioDay,
-          keyFillRatioNight: keyFillRatioNight,
-          lightSource: lightSource,
-          cameraPhilosophy: cameraPhilosophy,
-          movementStyle: movementStyle,
-          preferredMovements: _encodeStringList(preferredMovements),
-          lensPhilosophy: lensPhilosophy,
-          opticType: opticType,
-          primaryFocalLengths: _encodeIntList(primaryFocalLengths),
-          primaryLensId: primaryLensId,
-          aspectRatio: aspectRatio,
-          aspectRatioJustification: aspectRatioJustification,
-          imageTexture: imageTexture,
-          grainLevel: grainLevel,
-          highlightBehavior: highlightBehavior,
-          shadowBehavior: shadowBehavior,
-          workingLutName: workingLutName,
-          creativeLutName: creativeLutName,
-          creativeLutDescription: creativeLutDescription,
-          primaryCameraId: primaryCameraId,
-          recordingFormat: recordingFormat,
-          codec: codec,
-          resolutionNotes: resolutionNotes,
-          frameRateNotes: frameRateNotes,
-          nativeIso: nativeIso,
-          defaultTStop: defaultTStop,
-          ndNotes: ndNotes,
-          deliveryColorSpace: deliveryColorSpace,
-          captureResolution: captureResolution,
-          deliveryResolution: deliveryResolution,
-          workflowPipeline: workflowPipeline,
-          diffusionNotes: diffusionNotes,
-          sensorShadowBehavior: sensorShadowBehavior,
-          colorScienceNotes: colorScienceNotes,
-          lowLightNotes: lowLightNotes,
-          opticCharacterNotes: opticCharacterNotes,
-          filtrationNotes: filtrationNotes,
-          depthOfFieldNotes: depthOfFieldNotes,
-          cameraMovementsJson: _encodeRefList(cameraMovements),
-          actVisualNotes: _encodeRefList(actVisualNotes),
-          conceptNarrativeIntent: conceptNarrativeIntent,
-          directionNarrativeIntent: directionNarrativeIntent,
-          cameraNarrativeIntent: cameraNarrativeIntent,
-          opticsNarrativeIntent: opticsNarrativeIntent,
-          exposureNarrativeIntent: exposureNarrativeIntent,
-          lightingNarrativeIntent: lightingNarrativeIntent,
-          colorNarrativeIntent: colorNarrativeIntent,
-          formatNarrativeIntent: formatNarrativeIntent,
-          textureNarrativeIntent: textureNarrativeIntent,
-          opticsConfigJson: opticsConfigJson,
-          updatedAt: DateTime.now(),
-        ),
-      );
+    VisualBible(
+      id: id,
+      projectId: projectId,
+      structureInitialized: structureInitialized,
+      engineVersion: engineVersion,
+      visualConcept: visualConcept,
+      tone: tone,
+      creativeIntention: creativeIntention,
+      stagingApproach: stagingApproach,
+      pointOfView: pointOfView,
+      narrativeReferences: _encodeRefList(narrativeReferences),
+      lightingPhilosophy: lightingPhilosophy,
+      lightQuality: lightQuality,
+      contrastStyle: contrastStyle,
+      keyFillRatioDay: keyFillRatioDay,
+      keyFillRatioNight: keyFillRatioNight,
+      lightSource: lightSource,
+      cameraPhilosophy: cameraPhilosophy,
+      movementStyle: movementStyle,
+      preferredMovements: _encodeStringList(preferredMovements),
+      lensPhilosophy: lensPhilosophy,
+      opticType: opticType,
+      primaryFocalLengths: _encodeIntList(primaryFocalLengths),
+      primaryLensId: primaryLensId,
+      aspectRatio: aspectRatio,
+      aspectRatioJustification: aspectRatioJustification,
+      imageTexture: imageTexture,
+      grainLevel: grainLevel,
+      highlightBehavior: highlightBehavior,
+      shadowBehavior: shadowBehavior,
+      workingLutName: workingLutName,
+      creativeLutName: creativeLutName,
+      creativeLutDescription: creativeLutDescription,
+      primaryCameraId: primaryCameraId,
+      recordingFormat: recordingFormat,
+      codec: codec,
+      resolutionNotes: resolutionNotes,
+      frameRateNotes: frameRateNotes,
+      nativeIso: nativeIso,
+      defaultTStop: defaultTStop,
+      ndNotes: ndNotes,
+      deliveryColorSpace: deliveryColorSpace,
+      captureResolution: captureResolution,
+      deliveryResolution: deliveryResolution,
+      workflowPipeline: workflowPipeline,
+      diffusionNotes: diffusionNotes,
+      sensorShadowBehavior: sensorShadowBehavior,
+      colorScienceNotes: colorScienceNotes,
+      lowLightNotes: lowLightNotes,
+      opticCharacterNotes: opticCharacterNotes,
+      filtrationNotes: filtrationNotes,
+      depthOfFieldNotes: depthOfFieldNotes,
+      cameraMovementsJson: _encodeRefList(cameraMovements),
+      actVisualNotes: _encodeRefList(actVisualNotes),
+      conceptNarrativeIntent: conceptNarrativeIntent,
+      directionNarrativeIntent: directionNarrativeIntent,
+      cameraNarrativeIntent: cameraNarrativeIntent,
+      opticsNarrativeIntent: opticsNarrativeIntent,
+      exposureNarrativeIntent: exposureNarrativeIntent,
+      lightingNarrativeIntent: lightingNarrativeIntent,
+      colorNarrativeIntent: colorNarrativeIntent,
+      formatNarrativeIntent: formatNarrativeIntent,
+      textureNarrativeIntent: textureNarrativeIntent,
+      opticsConfigJson: opticsConfigJson,
+      updatedAt: DateTime.now(),
+    ),
+  );
 
   String? narrativeIntentForSection(String sectionId) => switch (sectionId) {
-        BibleSectionId.direction => directionNarrativeIntent,
-        BibleSectionId.concept => conceptNarrativeIntent,
-        BibleSectionId.camera => cameraNarrativeIntent,
-        BibleSectionId.optics => opticsNarrativeIntent,
-        BibleSectionId.exposure => exposureNarrativeIntent,
-        BibleSectionId.lighting => lightingNarrativeIntent,
-        BibleSectionId.colorImage => colorNarrativeIntent,
-        BibleSectionId.format => formatNarrativeIntent,
-        BibleSectionId.texture => textureNarrativeIntent,
-        _ => null,
-      };
+    BibleSectionId.direction => directionNarrativeIntent,
+    BibleSectionId.concept => conceptNarrativeIntent,
+    BibleSectionId.camera => cameraNarrativeIntent,
+    BibleSectionId.optics => opticsNarrativeIntent,
+    BibleSectionId.exposure => exposureNarrativeIntent,
+    BibleSectionId.lighting => lightingNarrativeIntent,
+    BibleSectionId.colorImage => colorNarrativeIntent,
+    BibleSectionId.format => formatNarrativeIntent,
+    BibleSectionId.texture => textureNarrativeIntent,
+    _ => null,
+  };
 
   void setNarrativeIntentForSection(String sectionId, String? value) {
     switch (sectionId) {
@@ -428,7 +438,9 @@ class VisualBibleData {
   static List<String> _decodeStringList(String? json) {
     if (json == null || json.trim().isEmpty) return [];
     try {
-      return (jsonDecode(json) as List<dynamic>).map((e) => e.toString()).toList();
+      return (jsonDecode(json) as List<dynamic>)
+          .map((e) => e.toString())
+          .toList();
     } catch (_) {
       return [];
     }
@@ -473,16 +485,16 @@ class VisualBibleData {
   }
 
   Map<String, dynamic> toSnapshotJson() => {
-        'visualConcept': visualConcept,
-        'narrativeReferences': narrativeReferences,
-        'workingLutName': workingLutName,
-        'creativeLutName': creativeLutName,
-        'aspectRatio': aspectRatio,
-        'primaryCameraId': primaryCameraId,
-        'primaryLensId': primaryLensId,
-        'defaultTStop': defaultTStop,
-        'deliveryColorSpace': deliveryColorSpace,
-      };
+    'visualConcept': visualConcept,
+    'narrativeReferences': narrativeReferences,
+    'workingLutName': workingLutName,
+    'creativeLutName': creativeLutName,
+    'aspectRatio': aspectRatio,
+    'primaryCameraId': primaryCameraId,
+    'primaryLensId': primaryLensId,
+    'defaultTStop': defaultTStop,
+    'deliveryColorSpace': deliveryColorSpace,
+  };
 }
 
 class ColorBlockModel {
@@ -508,10 +520,10 @@ class ColorBlockModel {
     List<String>? referenceImages,
     this.colorTempKelvin,
     this.sortOrder = 0,
-  })  : dominantColors = dominantColors ?? [],
-        accentColors = accentColors ?? [],
-        prohibitedColors = prohibitedColors ?? [],
-        referenceImages = referenceImages ?? [];
+  }) : dominantColors = dominantColors ?? [],
+       accentColors = accentColors ?? [],
+       prohibitedColors = prohibitedColors ?? [],
+       referenceImages = referenceImages ?? [];
 
   factory ColorBlockModel.fromRow(VisualBibleColorBlock row) {
     return ColorBlockModel(
@@ -623,6 +635,8 @@ class LightingSetupModel {
   String? gelNotes;
   String? practicalMotivation;
   String? referenceImagePath;
+  int? locationBasePlanId;
+  int? locationSiteId;
   int sortOrder;
 
   LightingSetupModel({
@@ -634,6 +648,8 @@ class LightingSetupModel {
     this.gelNotes,
     this.practicalMotivation,
     this.referenceImagePath,
+    this.locationBasePlanId,
+    this.locationSiteId,
     this.sortOrder = 0,
   });
 
@@ -647,6 +663,8 @@ class LightingSetupModel {
       gelNotes: row.gelNotes,
       practicalMotivation: row.practicalMotivation,
       referenceImagePath: row.referenceImagePath,
+      locationBasePlanId: row.locationBasePlanId,
+      locationSiteId: row.locationSiteId,
       sortOrder: row.sortOrder,
     );
   }
@@ -661,6 +679,8 @@ class LightingSetupModel {
       gelNotes: Value(gelNotes),
       practicalMotivation: Value(practicalMotivation),
       referenceImagePath: Value(referenceImagePath),
+      locationBasePlanId: Value(locationBasePlanId),
+      locationSiteId: Value(locationSiteId),
       sortOrder: Value(sortOrder),
     );
   }
@@ -749,11 +769,11 @@ class WorkflowStepModel {
   }
 
   Map<String, String> toJson() => {
-        'step': step,
-        if (responsible != null) 'responsible': responsible!,
-        if (notes != null) 'notes': notes!,
-        if (lutReference != null) 'lutReference': lutReference!,
-      };
+    'step': step,
+    if (responsible != null) 'responsible': responsible!,
+    if (notes != null) 'notes': notes!,
+    if (lutReference != null) 'lutReference': lutReference!,
+  };
 
   static List<WorkflowStepModel> decode(String? json) {
     if (json == null || json.trim().isEmpty) return defaultPipeline();
@@ -767,17 +787,16 @@ class WorkflowStepModel {
     }
   }
 
-  static String encode(List<WorkflowStepModel> steps) => jsonEncode(
-        steps.map((s) => s.toJson()).toList(),
-      );
+  static String encode(List<WorkflowStepModel> steps) =>
+      jsonEncode(steps.map((s) => s.toJson()).toList());
 
   static List<WorkflowStepModel> defaultPipeline() => [
-        WorkflowStepModel(step: 'Cámara / Sensor'),
-        WorkflowStepModel(step: 'Tarjetas / Backup'),
-        WorkflowStepModel(step: 'Dailies'),
-        WorkflowStepModel(step: 'Color / Grading'),
-        WorkflowStepModel(step: 'Entrega'),
-      ];
+    WorkflowStepModel(step: 'Cámara / Sensor'),
+    WorkflowStepModel(step: 'Tarjetas / Backup'),
+    WorkflowStepModel(step: 'Dailies'),
+    WorkflowStepModel(step: 'Color / Grading'),
+    WorkflowStepModel(step: 'Entrega'),
+  ];
 }
 
 class LocationRefModel {
@@ -811,8 +830,8 @@ class LocationRefModel {
     this.availableLightHours,
     this.existingPracticals,
     this.estimatedColorTempKelvin,
-  })  : referenceImages = referenceImages ?? [],
-        linkedShotIds = linkedShotIds ?? [];
+  }) : referenceImages = referenceImages ?? [],
+       linkedShotIds = linkedShotIds ?? [];
 
   factory LocationRefModel.fromRow(VisualBibleLocationRef row) {
     return LocationRefModel(

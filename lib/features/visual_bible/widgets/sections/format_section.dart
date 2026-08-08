@@ -10,9 +10,11 @@ import '../../../../core/database/app_database.dart';
 import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../shared/visual_bible/bible_optics_context.dart';
 import '../../bible_section_fields.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
+import '../bible_moodboard_image_target.dart';
 import 'section_scaffold.dart';
 
 /// Aspect Ratio — layout Stitch (logic HUD + frame preview + intent).
@@ -138,12 +140,27 @@ class FormatSection extends ConsumerWidget {
     final ratioName =
         custom['ratioName'] as String? ?? _ratioLabel(data.aspectRatio ?? '');
 
+    Map<String, dynamic> opticsConfig = {};
+    if (data.opticsConfigJson != null && data.opticsConfigJson!.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(data.opticsConfigJson!);
+        if (decoded is Map<String, dynamic>) opticsConfig = decoded;
+      } catch (_) {}
+    }
+
     final sensorR = _parseRatio(sensorMode) ?? 4 / 3;
-    final squeeze = _parseSqueeze(squeezeFactor) ?? 2.0;
-    final calculated = sensorR * squeeze;
+
+    final opticsCtxSync = BibleOpticsContext.resolve(
+      opticType: data.opticType,
+      aspectRatio: data.aspectRatio,
+      opticsConfig: opticsConfig,
+      formatData: custom,
+    );
+    final squeezeForRatio =
+        opticsCtxSync.isAnamorphic ? opticsCtxSync.squeezeRatio : 1.0;
     final activeRatio = custom['activeRatio'] as String? ??
         data.aspectRatio ??
-        _formatRatio(calculated);
+        _formatRatio(sensorR * squeezeForRatio);
 
     final intentNarrative = custom['intentNarrative'] as String? ??
         data.formatNarrativeIntent ??
@@ -170,7 +187,7 @@ class FormatSection extends ConsumerWidget {
       sectionNumber: null,
       sectionTitle: 'Aspect Ratio',
       fieldWidgets: {
-        'narrative': Text(
+        'header': Text(
           'Cámara, Sensor & Aspect Ratio',
           style: AppTypography.displayMedium(palette).copyWith(
             fontSize: 32,
@@ -217,7 +234,10 @@ class FormatSection extends ConsumerWidget {
 
             return LayoutBuilder(
               builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 1000;
+                final layoutWidth = constraints.maxWidth.isFinite
+                    ? constraints.maxWidth
+                    : MediaQuery.sizeOf(context).width;
+                final wide = layoutWidth >= 1000;
 
                 final logicCard = _GlassPanel(
                   child: Column(
@@ -259,76 +279,94 @@ class FormatSection extends ConsumerWidget {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _LogicTile(
-                              eyebrow: 'SENSOR MODE',
-                              title: sensorMode,
-                              detail: sensorDetail,
-                              palette: palette,
-                              onTap: () async {
-                                final t =
-                                    TextEditingController(text: sensorMode);
-                                final d =
-                                    TextEditingController(text: sensorDetail);
-                                final ok = await _promptPair(
-                                  context,
-                                  'Sensor Mode',
-                                  t,
-                                  d,
-                                  aLabel: 'Ratio (4:3)',
-                                  bLabel: 'Detalle',
-                                );
-                                if (ok != true) return;
-                                await _updateCustomData(ref, {
-                                  'sensorMode': t.text.trim(),
-                                  'sensorDetail': d.text.trim(),
-                                });
-                                _syncCalculatedRatio(
-                                  ref,
-                                  t.text.trim(),
-                                  squeezeFactor,
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _LogicTile(
-                              eyebrow: 'LENS SQUEEZE',
-                              title: squeezeFactor,
-                              detail: squeezeDetail,
-                              palette: palette,
-                              onTap: () async {
-                                final t = TextEditingController(
-                                  text: squeezeFactor,
-                                );
-                                final d = TextEditingController(
-                                  text: squeezeDetail,
-                                );
-                                final ok = await _promptPair(
-                                  context,
-                                  'Lens Squeeze',
-                                  t,
-                                  d,
-                                  aLabel: 'Factor (2.0x)',
-                                  bLabel: 'Detalle',
-                                );
-                                if (ok != true) return;
-                                await _updateCustomData(ref, {
-                                  'squeezeFactor': t.text.trim(),
-                                  'squeezeDetail': d.text.trim(),
-                                });
-                                _syncCalculatedRatio(
-                                  ref,
-                                  sensorMode,
-                                  t.text.trim(),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
+                      FutureBuilder<Lense?>(
+                        future: data.primaryLensId != null
+                            ? db.getLensById(data.primaryLensId!)
+                            : Future.value(null),
+                        builder: (context, lensSnap) {
+                          final opticsCtx = BibleOpticsContext.resolve(
+                            primaryLens: lensSnap.data,
+                            opticType: data.opticType,
+                            aspectRatio: data.aspectRatio,
+                            opticsConfig: opticsConfig,
+                            formatData: custom,
+                          );
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: _LogicTile(
+                                  eyebrow: 'SENSOR MODE',
+                                  title: sensorMode,
+                                  detail: sensorDetail,
+                                  palette: palette,
+                                  onTap: () async {
+                                    final t =
+                                        TextEditingController(text: sensorMode);
+                                    final d =
+                                        TextEditingController(text: sensorDetail);
+                                    final ok = await _promptPair(
+                                      context,
+                                      'Sensor Mode',
+                                      t,
+                                      d,
+                                      aLabel: 'Ratio (4:3)',
+                                      bLabel: 'Detalle',
+                                    );
+                                    if (ok != true) return;
+                                    await _updateCustomData(ref, {
+                                      'sensorMode': t.text.trim(),
+                                      'sensorDetail': d.text.trim(),
+                                    });
+                                    _syncCalculatedRatio(
+                                      ref,
+                                      t.text.trim(),
+                                      opticsCtx.isAnamorphic
+                                          ? squeezeFactor
+                                          : '1.0x',
+                                    );
+                                  },
+                                ),
+                              ),
+                              if (opticsCtx.isAnamorphic) ...[
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _LogicTile(
+                                    eyebrow: 'LENS SQUEEZE',
+                                    title: squeezeFactor,
+                                    detail: squeezeDetail,
+                                    palette: palette,
+                                    onTap: () async {
+                                      final t = TextEditingController(
+                                        text: squeezeFactor,
+                                      );
+                                      final d = TextEditingController(
+                                        text: squeezeDetail,
+                                      );
+                                      final ok = await _promptPair(
+                                        context,
+                                        'Lens Squeeze',
+                                        t,
+                                        d,
+                                        aLabel: 'Factor (2.0x)',
+                                        bLabel: 'Detalle',
+                                      );
+                                      if (ok != true) return;
+                                      await _updateCustomData(ref, {
+                                        'squeezeFactor': t.text.trim(),
+                                        'squeezeDetail': d.text.trim(),
+                                      });
+                                      _syncCalculatedRatio(
+                                        ref,
+                                        sensorMode,
+                                        t.text.trim(),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 12),
                       Center(
@@ -577,7 +615,10 @@ class FormatSection extends ConsumerWidget {
                       const SizedBox(height: 20),
                       LayoutBuilder(
                         builder: (context, c) {
-                          final cols = c.maxWidth >= 560 ? 3 : 1;
+                          final w = c.maxWidth.isFinite
+                              ? c.maxWidth
+                              : MediaQuery.sizeOf(context).width;
+                          final cols = w >= 560 ? 3 : 1;
                           final items = [
                             (
                               'Narrativa',
@@ -1060,9 +1101,14 @@ class _FramePreview extends ConsumerWidget {
             child: ColoredBox(
               color: Colors.black,
               child: Center(
-                child: AspectRatio(
-                  aspectRatio: ar,
-                  child: StreamBuilder<List<MoodboardImage>>(
+                child: BibleMoodboardImageTarget(
+                  projectId: projectId,
+                  sectionId: BibleSectionId.format,
+                  bibleId: bibleId,
+                  hint: 'Clic aquí → ⌘V para pegar frame preview',
+                  child: AspectRatio(
+                    aspectRatio: ar,
+                    child: StreamBuilder<List<MoodboardImage>>(
                     stream: db.watchMoodboardImagesForSection(
                       projectId,
                       BibleSectionId.format,
@@ -1097,6 +1143,7 @@ class _FramePreview extends ConsumerWidget {
                                     projectId: projectId,
                                     bibleId: bibleId,
                                     category: MoodboardCategory.reference,
+                                    assignedSections: [BibleSectionId.format],
                                   ),
                                   icon: Icon(
                                     Icons.add_photo_alternate_outlined,
@@ -1169,6 +1216,7 @@ class _FramePreview extends ConsumerWidget {
                     },
                   ),
                 ),
+              ),
               ),
             ),
           ),

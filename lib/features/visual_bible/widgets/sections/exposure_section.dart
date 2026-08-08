@@ -14,6 +14,7 @@ import '../../bible_section_fields.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
+import '../bible_moodboard_image_target.dart';
 import '../bible_navigation_scope.dart';
 import '../block_reference_images.dart';
 import 'section_scaffold.dart';
@@ -1161,8 +1162,8 @@ class _LocationExposureSlots extends ConsumerWidget {
                                 locationSiteId: plan.siteId,
                               );
                         final slot = slotFor(plan.id);
-                        final lightingHint = _lightingHintFor(
-                          plan.locationName,
+                        final lightingHint = _lightingHintForPlan(
+                          plan.id,
                           setups,
                           data,
                         );
@@ -1210,24 +1211,16 @@ class _LocationExposureSlots extends ConsumerWidget {
     );
   }
 
-  static String? _lightingHintFor(
-    String locationName,
+  static String? _lightingHintForPlan(
+    int planId,
     List<LightingSetup> setups,
     VisualBibleData data,
   ) {
-    final lower = locationName.toLowerCase();
     for (final s in setups) {
-      if (s.setupName.toLowerCase().contains(lower) ||
-          lower.contains(s.setupName.toLowerCase())) {
+      if (s.locationBasePlanId == planId) {
         final note = s.narrativeNote?.trim();
         if (note != null && note.isNotEmpty) return note;
         return 'Setup: ${s.setupName}';
-      }
-    }
-    for (final s in setups) {
-      final note = s.narrativeNote?.trim();
-      if (note != null && note.isNotEmpty) {
-        return '${s.setupName}: $note';
       }
     }
     return data.lightingPhilosophy ?? data.lightingNarrativeIntent;
@@ -1582,7 +1575,12 @@ class _ExposureFramePreview extends ConsumerWidget {
           ),
           AspectRatio(
             aspectRatio: 16 / 9,
-            child: ColoredBox(
+            child: BibleMoodboardImageTarget(
+              projectId: projectId,
+              sectionId: BibleSectionId.exposure,
+              bibleId: bibleId,
+              hint: 'Clic aquí → ⌘V para pegar frame de exposición',
+              child: ColoredBox(
               color: Colors.black,
               child: StreamBuilder<List<MoodboardImage>>(
                 stream: db.watchMoodboardImagesForSection(
@@ -1610,6 +1608,7 @@ class _ExposureFramePreview extends ConsumerWidget {
                                 projectId: projectId,
                                 bibleId: bibleId,
                                 category: MoodboardCategory.lighting,
+                                assignedSections: [BibleSectionId.exposure],
                               ),
                               icon: Icon(
                                 Icons.add_photo_alternate_outlined,
@@ -1681,6 +1680,7 @@ class _ExposureFramePreview extends ConsumerWidget {
                   );
                 },
               ),
+            ),
             ),
           ),
         ],

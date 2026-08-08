@@ -13,7 +13,7 @@ import '../../bible_section_fields.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
-import '../bible_navigation_scope.dart';
+import '../bible_moodboard_image_target.dart';
 import 'section_scaffold.dart';
 
 /// Dirección — layout Stitch Visual Bible (glass bento).
@@ -159,7 +159,6 @@ class DirectionSection extends ConsumerWidget {
     final tonePoints = _tonePoints(custom);
     final transitions = _transitions(custom);
     final extras = _extraStrategies(custom);
-    final refsMeta = _refsMeta(custom);
 
     final act1Phase = custom['act1Phase'] as String? ?? 'ESTABLECIMIENTO';
     final act2Phase = custom['act2Phase'] as String? ?? 'DESESTABILIZACIÓN';
@@ -183,21 +182,8 @@ class DirectionSection extends ConsumerWidget {
         };
     final keyFrameIntent = custom['keyFrameIntent'] as String? ?? '';
 
-    return BibleSectionScaffold(
-      sectionId: BibleSectionId.direction,
-      projectId: projectId,
-      data: data,
-      onChanged: onChanged,
-      sectionContentJson: sectionContentJson,
-      narrativeHint:
-          '¿Cuál es la intención global de la fotografía respecto a la historia?',
-      sectionNumber: null,
-      sectionTitle: 'Dirección',
-      fieldWidgets: {
-        'narrative': LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 900;
-
+    return Builder(
+      builder: (context) {
             final header = _DirectionHeader(
               sceneTag: sceneTag,
               palette: palette,
@@ -457,9 +443,10 @@ class DirectionSection extends ConsumerWidget {
                   const SizedBox(height: 20),
                   LayoutBuilder(
                     builder: (context, c) {
-                      final cols = c.maxWidth >= 720
+                      final w = c.maxWidth.isFinite ? c.maxWidth : MediaQuery.sizeOf(context).width;
+                      final cols = w >= 720
                           ? 4
-                          : (c.maxWidth >= 480 ? 2 : 1);
+                          : (w >= 480 ? 2 : 1);
                       final items = <Widget>[
                         _StrategyPillar(
                           icon: Icons.videocam_outlined,
@@ -609,7 +596,8 @@ class DirectionSection extends ConsumerWidget {
                   const SizedBox(height: 20),
                   LayoutBuilder(
                     builder: (context, c) {
-                      final cols = c.maxWidth >= 700 ? 3 : 1;
+                      final w = c.maxWidth.isFinite ? c.maxWidth : MediaQuery.sizeOf(context).width;
+                      final cols = w >= 700 ? 3 : 1;
                       final acts = [
                         (act1Phase, act1Title, act1Desc, '1'),
                         (act2Phase, act2Title, act2Desc, '2'),
@@ -796,51 +784,6 @@ class DirectionSection extends ConsumerWidget {
               },
             );
 
-            final refsSection = Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _TechLabel(
-                  icon: Icons.collections_outlined,
-                  label: 'Referencias de Dirección',
-                  palette: palette,
-                ),
-                const SizedBox(height: 16),
-                _DirectionRefsGrid(
-                  projectId: projectId,
-                  bibleId: data.id,
-                  palette: palette,
-                  meta: refsMeta,
-                  onAddImage: () async {
-                    await MoodboardHelpers.addManualImages(
-                      db: db,
-                      projectId: projectId,
-                      bibleId: data.id,
-                      category: MoodboardCategory.reference,
-                    );
-                  },
-                  onAddMeta: () async {
-                    final edited = await _editRefMeta(context, {});
-                    if (edited == null) return;
-                    await _updateCustomData(ref, {
-                      'refsMetadata': [...refsMeta, edited],
-                    });
-                  },
-                  onEditMeta: (i) async {
-                    final edited = await _editRefMeta(context, refsMeta[i]);
-                    if (edited == null) return;
-                    final next = List<Map<String, dynamic>>.from(refsMeta);
-                    next[i] = edited;
-                    await _updateCustomData(ref, {'refsMetadata': next});
-                  },
-                  onOpenMoodboard: () =>
-                      BibleNavigationScope.openMoodboardForSection(
-                    context,
-                    BibleSectionId.direction,
-                  ),
-                ),
-              ],
-            );
-
             final transitionsCard = _GlassPanel(
               padding: const EdgeInsets.all(28),
               child: Column(
@@ -950,39 +893,32 @@ class DirectionSection extends ConsumerWidget {
               ),
             );
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                header,
-                const SizedBox(height: 28),
-                if (wide)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 8, child: intentCard),
-                      const SizedBox(width: 16),
-                      Expanded(flex: 4, child: toneCard),
-                    ],
-                  )
-                else ...[
-                  intentCard,
-                  const SizedBox(height: 16),
-                  toneCard,
-                ],
-                const SizedBox(height: 16),
-                strategyCard,
-                const SizedBox(height: 16),
-                actsCard,
-                const SizedBox(height: 16),
-                keyFrameCard,
-                const SizedBox(height: 24),
-                refsSection,
-                const SizedBox(height: 16),
-                transitionsCard,
-              ],
-            );
-          },
+        return BibleSectionScaffold(
+      sectionId: BibleSectionId.direction,
+      projectId: projectId,
+      data: data,
+      onChanged: onChanged,
+      sectionContentJson: sectionContentJson,
+      narrativeHint:
+          '¿Cuál es la intención global de la fotografía respecto a la historia?',
+      sectionNumber: null,
+      sectionTitle: 'Dirección',
+      fieldWidgets: {
+        'header': header,
+        'narrative': intentCard,
+        'toneStrategies': Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            toneCard,
+            const SizedBox(height: 16),
+            strategyCard,
+          ],
         ),
+        'acts': actsCard,
+        'keyFrame': keyFrameCard,
+        'transitions': transitionsCard,
+      },
+    );
       },
     );
   }
@@ -1540,12 +1476,16 @@ class _KeyFrameAnalysisCard extends ConsumerWidget {
             builder: (context, snap) {
               final images = snap.data ?? [];
               final hero = images.isNotEmpty ? images.first : null;
-              return AspectRatio(
-                aspectRatio: 21 / 9,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (hero != null)
+              return BibleMoodboardImageTarget(
+                projectId: projectId,
+                sectionId: BibleSectionId.direction,
+                hint: 'Clic aquí → ⌘V para pegar key frame',
+                child: AspectRatio(
+                  aspectRatio: 21 / 9,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (hero != null)
                       Builder(
                         builder: (_) {
                           final model = MoodboardImageModel.fromRow(hero);
@@ -1556,7 +1496,25 @@ class _KeyFrameAnalysisCard extends ConsumerWidget {
                         },
                       )
                     else
-                      ColoredBox(color: palette.surfaceOverlay),
+                      ColoredBox(
+                        color: palette.surfaceOverlay,
+                        child: Center(
+                          child: TextButton.icon(
+                            onPressed: () => MoodboardHelpers.addManualImages(
+                              db: db,
+                              projectId: projectId,
+                              category: MoodboardCategory.framing,
+                              assignedSections: [BibleSectionId.direction],
+                            ),
+                            icon: Icon(Icons.add_photo_alternate_outlined,
+                                color: palette.accent),
+                            label: Text(
+                              'Añadir key frame',
+                              style: TextStyle(color: palette.accent),
+                            ),
+                          ),
+                        ),
+                      ),
                     Container(
                       margin: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -1599,6 +1557,7 @@ class _KeyFrameAnalysisCard extends ConsumerWidget {
                     ),
                   ],
                 ),
+              ),
               );
             },
           ),

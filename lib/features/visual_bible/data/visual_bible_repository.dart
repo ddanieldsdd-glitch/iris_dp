@@ -21,27 +21,39 @@ class VisualBibleRepository {
 
   AppDatabase get db => _dao.database;
 
-  Future<({
-    VisualBibleData data,
-    Project? project,
-    bool created,
-  })> bootstrap(int projectId) async {
+  Future<
+    ({
+      VisualBibleData data,
+      Project? project,
+      bool created,
+      bool needsOnboarding,
+    })
+  >
+  bootstrap(int projectId) async {
     final hadBible = await _dao.getForProject(projectId) != null;
-    final bible = await _dao.ensureForProject(projectId);
+    var bible = await _dao.ensureForProject(projectId);
     if (!hadBible) {
       await UserTemplateService.maybeApplyBibleTemplateOnCreate(
         db: _dao.database,
         projectId: projectId,
         bibleId: bible.id,
       );
+      bible = (await _dao.getForProject(projectId)) ?? bible;
     }
     final project = await _dao.getProject(projectId);
     return (
       data: VisualBibleData.fromRow(bible),
       project: project,
       created: !hadBible,
+      needsOnboarding: !bible.structureInitialized,
     );
   }
+
+  Future<void> initializeEmpty(int bibleId) =>
+      _dao.database.initializeEmptyBible(bibleId);
+
+  Future<void> resetStructureToEmpty(int bibleId) =>
+      _dao.database.resetBibleStructureToEmpty(bibleId);
 
   Future<int> save(VisualBibleData data) async {
     final id = await _dao.upsert(data.toCompanion());

@@ -48,16 +48,9 @@ class _SceneListItem {
   NormalizedScene data;
   final int? sourceStartIndex;
 
-  _SceneListItem({
-    required this.id,
-    required this.data,
-    this.sourceStartIndex,
-  });
+  _SceneListItem({required this.id, required this.data, this.sourceStartIndex});
 
-  factory _SceneListItem.from(
-    NormalizedScene scene, {
-    int? sourceStartIndex,
-  }) =>
+  factory _SceneListItem.from(NormalizedScene scene, {int? sourceStartIndex}) =>
       _SceneListItem(
         id: const Uuid().v4(),
         data: scene,
@@ -134,10 +127,12 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
             final siteName = scene.locationSiteId != null
                 ? siteNameById[scene.locationSiteId] ?? scene.locationPureName
                 : scene.locationPureName;
-            _scenes.add(_SceneListItem.from(
-              normalizedSceneFromDb(scene, locationSiteName: siteName),
-              sourceStartIndex: scene.sourceStartIndex,
-            ));
+            _scenes.add(
+              _SceneListItem.from(
+                normalizedSceneFromDb(scene, locationSiteName: siteName),
+                sourceStartIndex: scene.sourceStartIndex,
+              ),
+            );
           }
           _status = dbScenes.isEmpty
               ? 'Guion cargado. Consulta el PDF o el texto escaneado y añade escenas.'
@@ -174,11 +169,13 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     final db = ref.read(databaseProvider);
     final project = await db.getProject(widget.projectId);
     if (project != null) {
-      await db.updateProject(project.copyWith(
-        scriptFilePath: Value(storedPath),
-        scriptFileName: Value(loaded.fileName),
-        updatedAt: DateTime.now(),
-      ));
+      await db.updateProject(
+        project.copyWith(
+          scriptFilePath: Value(storedPath),
+          scriptFileName: Value(loaded.fileName),
+          updatedAt: DateTime.now(),
+        ),
+      );
     }
 
     setState(() {
@@ -197,8 +194,9 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
   }) {
     _scenes.clear();
     for (var i = 0; i < scenes.length; i++) {
-      final startIndex =
-          sluglines != null && i < sluglines.length ? sluglines[i].startIndex : null;
+      final startIndex = sluglines != null && i < sluglines.length
+          ? sluglines[i].startIndex
+          : null;
       _scenes.add(_SceneListItem.from(scenes[i], sourceStartIndex: startIndex));
     }
     _renumberScenes();
@@ -208,19 +206,22 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
   void _syncPendingColorsFromScenes() {
     _pendingSetColors
       ..clear()
-      ..addAll(buildPendingSetColorsFromScenes(
-        _scenes.map(
-          (item) => (
-            locationSite: item.data.locationSite,
-            shootSet: item.data.shootSet,
+      ..addAll(
+        buildPendingSetColorsFromScenes(
+          _scenes.map(
+            (item) => (
+              locationSite: item.data.locationSite,
+              shootSet: item.data.shootSet,
+            ),
           ),
         ),
-      ));
+      );
   }
 
   void _syncCharacterColorsFromScript(String scriptText) {
-    final fromScript =
-        ScriptCharacterExtractor.extractAllCharacterNames(scriptText);
+    final fromScript = ScriptCharacterExtractor.extractAllCharacterNames(
+      scriptText,
+    );
     final fromScenes = _scenes
         .expand((item) => item.data.characters)
         .map(characterColorKey);
@@ -231,22 +232,26 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
   }
 
   Map<String, Color> get _characterColorMap => {
-        for (final entry in _characterColors.entries)
-          entry.key: characterDisplayColor(entry.value),
-      };
+    for (final entry in _characterColors.entries)
+      entry.key: characterDisplayColor(entry.value),
+  };
 
   Future<void> _persistCharacterColors() async {
     final db = ref.read(databaseProvider);
     final project = await db.getProject(widget.projectId);
     if (project == null) return;
-    await db.updateProject(project.copyWith(
-      characterColorsJson: Value(encodeCharacterColors(
-        _characterColors,
-        manualCharacterLines: _manualCharacterLines,
-        lineTextOverrides: _lineTextOverrides,
-      )),
-      updatedAt: DateTime.now(),
-    ));
+    await db.updateProject(
+      project.copyWith(
+        characterColorsJson: Value(
+          encodeCharacterColors(
+            _characterColors,
+            manualCharacterLines: _manualCharacterLines,
+            lineTextOverrides: _lineTextOverrides,
+          ),
+        ),
+        updatedAt: DateTime.now(),
+      ),
+    );
   }
 
   Future<void> _onLineContextAction(
@@ -261,8 +266,12 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
           AppSnackBar.show(context, 'Texto copiado');
         }
       case ScriptContextAction.markAsCharacter:
-        if (line.characterName != null && line.characterName!.trim().isNotEmpty) {
-          await _assignExistingCharacterToLine(line.lineText, line.characterName!);
+        if (line.characterName != null &&
+            line.characterName!.trim().isNotEmpty) {
+          await _assignExistingCharacterToLine(
+            line.lineText,
+            line.characterName!,
+          );
         } else {
           await _markLineAsCharacter(line.lineText);
         }
@@ -294,7 +303,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
 
     final suggested =
         ScreenplayLineClassifier.parseCharacterName(trimmed) ??
-            trimmed.toUpperCase();
+        trimmed.toUpperCase();
     final name = await _promptCharacterName(suggested);
     if (name == null || name.trim().isEmpty) return;
 
@@ -326,7 +335,10 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: palette.surfaceElevated,
-        title: Text('Nombre del personaje', style: AppTypography.titleLarge(palette)),
+        title: Text(
+          'Nombre del personaje',
+          style: AppTypography.titleLarge(palette),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -340,8 +352,12 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text('Guardar', style: AppTypography.bodyMedium(palette)
-                .copyWith(color: palette.accent)),
+            child: Text(
+              'Guardar',
+              style: AppTypography.bodyMedium(
+                palette,
+              ).copyWith(color: palette.accent),
+            ),
           ),
         ],
       ),
@@ -372,8 +388,12 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text('Guardar', style: AppTypography.bodyMedium(palette)
-                .copyWith(color: palette.accent)),
+            child: Text(
+              'Guardar',
+              style: AppTypography.bodyMedium(
+                palette,
+              ).copyWith(color: palette.accent),
+            ),
           ),
         ],
       ),
@@ -413,7 +433,9 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     }
   }
 
-  List<ScriptSceneIndexEntry> _buildSceneIndexEntries(ProjectSceneColors colorCtx) {
+  List<ScriptSceneIndexEntry> _buildSceneIndexEntries(
+    ProjectSceneColors colorCtx,
+  ) {
     return [
       for (var i = 0; i < _scenes.length; i++)
         ScriptSceneIndexEntry(
@@ -488,7 +510,8 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
   }
 
   Future<void> _addCharacterToNearestScene(ScriptLineContext line) async {
-    final name = line.characterName ??
+    final name =
+        line.characterName ??
         ScreenplayLineClassifier.parseCharacterName(line.lineText) ??
         line.lineText.trim().toUpperCase();
     if (name.isEmpty) return;
@@ -496,14 +519,18 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     final sceneIndex = _sceneIndexForCharIndex(line.charStartIndex);
     if (sceneIndex == null) {
       if (mounted) {
-        AppSnackBar.show(context, 'Añade una escena antes de asignar personajes.');
+        AppSnackBar.show(
+          context,
+          'Añade una escena antes de asignar personajes.',
+        );
       }
       return;
     }
 
     final scene = _scenes[sceneIndex].data;
     if (scene.characters.any((c) => c.toUpperCase() == name.toUpperCase())) {
-      if (mounted) AppSnackBar.show(context, '$name ya está en escena ${scene.number}.');
+      if (mounted)
+        AppSnackBar.show(context, '$name ya está en escena ${scene.number}.');
       return;
     }
 
@@ -541,14 +568,15 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: palette.surfaceElevated,
-        title: Text('Marcar como escena', style: AppTypography.titleLarge(palette)),
+        title: Text(
+          'Marcar como escena',
+          style: AppTypography.titleLarge(palette),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
           maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: 'INT. LUGAR - DÍA',
-          ),
+          decoration: const InputDecoration(hintText: 'INT. LUGAR - DÍA'),
         ),
         actions: [
           TextButton(
@@ -557,8 +585,12 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text('Continuar', style: AppTypography.bodyMedium(palette)
-                .copyWith(color: palette.accent)),
+            child: Text(
+              'Continuar',
+              style: AppTypography.bodyMedium(
+                palette,
+              ).copyWith(color: palette.accent),
+            ),
           ),
         ],
       ),
@@ -595,9 +627,9 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
   }
 
   Set<int> get _includedStartIndices => {
-        for (final item in _scenes)
-          if (item.sourceStartIndex != null) item.sourceStartIndex!,
-      };
+    for (final item in _scenes)
+      if (item.sourceStartIndex != null) item.sourceStartIndex!,
+  };
 
   ProjectSceneColors _colorContext(
     List<LocationBasePlan> locations,
@@ -695,8 +727,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     }
 
     if (replaceIndex != null) {
-      _scenes[replaceIndex].data =
-          sceneData.copyWith(number: replaceIndex + 1);
+      _scenes[replaceIndex].data = sceneData.copyWith(number: replaceIndex + 1);
       _renumberScenes();
     } else {
       _insertScene(sceneData, sourceStartIndex: sourceStartIndex);
@@ -729,8 +760,10 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
         context: context,
         builder: (_) => AlertDialog(
           backgroundColor: palette.surfaceElevated,
-          title: Text('Detectar escenas de nuevo',
-              style: AppTypography.titleLarge(palette)),
+          title: Text(
+            'Detectar escenas de nuevo',
+            style: AppTypography.titleLarge(palette),
+          ),
           content: Text(
             'La detección automática sustituirá la lista actual de escenas. '
             'El guion de referencia no cambia; puedes seguir editando escenas '
@@ -740,14 +773,16 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child:
-                  Text('Cancelar', style: AppTypography.bodyMedium(palette)),
+              child: Text('Cancelar', style: AppTypography.bodyMedium(palette)),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: Text('Detectar',
-                  style: AppTypography.bodyMedium(palette)
-                      .copyWith(color: palette.accent)),
+              child: Text(
+                'Detectar',
+                style: AppTypography.bodyMedium(
+                  palette,
+                ).copyWith(color: palette.accent),
+              ),
             ),
           ],
         ),
@@ -794,13 +829,13 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
         return;
       }
 
-      setState(() =>
-          _status = 'Detectando escenas (${sluglines.length})...');
+      setState(() => _status = 'Detectando escenas (${sluglines.length})...');
 
-      final charactersByStart = ScriptCharacterExtractor.extractBySlugStartIndex(
-        loaded.parseText,
-        sluglines,
-      );
+      final charactersByStart =
+          ScriptCharacterExtractor.extractBySlugStartIndex(
+            loaded.parseText,
+            sluglines,
+          );
 
       final scenes = sluglines.map(NormalizedScene.fromRaw).toList();
       final scenesWithCharacters = ScriptCharacterExtractor.attachToScenes(
@@ -830,9 +865,8 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     }
   }
 
-  void _onReorder(int oldIndex, int newIndex) {
+  void _onReorderItem(int oldIndex, int newIndex) {
     setState(() {
-      if (newIndex > oldIndex) newIndex -= 1;
       final item = _scenes.removeAt(oldIndex);
       _scenes.insert(newIndex, item);
       _renumberScenes();
@@ -861,23 +895,22 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     RawSlugline slug,
     ProjectSceneColors colorCtx,
   ) async {
-    final existingIndex =
-        _scenes.indexWhere((s) => s.sourceStartIndex == slug.startIndex);
+    final existingIndex = _scenes.indexWhere(
+      (s) => s.sourceStartIndex == slug.startIndex,
+    );
     if (existingIndex >= 0) {
       await _editScene(existingIndex, colorCtx);
       return;
     }
 
     final nextNumber = slug.scriptNumber ?? _scenes.length + 1;
-    var prefilled = NormalizedScene.fromRaw(
-      slug.copyWith(number: nextNumber),
-    );
+    var prefilled = NormalizedScene.fromRaw(slug.copyWith(number: nextNumber));
     if (_loadedScript != null) {
       final charactersByStart =
           ScriptCharacterExtractor.extractBySlugStartIndex(
-        _loadedScript!.parseText,
-        [slug],
-      );
+            _loadedScript!.parseText,
+            [slug],
+          );
       prefilled = prefilled.copyWith(
         characters: charactersByStart[slug.startIndex] ?? const [],
       );
@@ -893,10 +926,9 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     );
     if (result == null) return;
 
-    setState(() => _handleSceneEditResult(
-          result,
-          sourceStartIndex: slug.startIndex,
-        ));
+    setState(
+      () => _handleSceneEditResult(result, sourceStartIndex: slug.startIndex),
+    );
   }
 
   void _insertScene(NormalizedScene scene, {int? sourceStartIndex}) {
@@ -942,7 +974,10 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: palette.surfaceElevated,
-        title: Text('Eliminar escena', style: AppTypography.titleLarge(palette)),
+        title: Text(
+          'Eliminar escena',
+          style: AppTypography.titleLarge(palette),
+        ),
         content: Text(
           '¿Quitar esta escena de la lista de importación?',
           style: AppTypography.bodyLarge(palette),
@@ -954,9 +989,12 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Eliminar',
-                style: AppTypography.bodyMedium(palette)
-                    .copyWith(color: palette.error)),
+            child: Text(
+              'Eliminar',
+              style: AppTypography.bodyMedium(
+                palette,
+              ).copyWith(color: palette.error),
+            ),
           ),
         ],
       ),
@@ -972,8 +1010,9 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     if (_scenes.isEmpty) return;
 
     final db = ref.read(databaseProvider);
-    final sourceIndices =
-        _scenes.map((item) => item.sourceStartIndex).toList(growable: false);
+    final sourceIndices = _scenes
+        .map((item) => item.sourceStartIndex)
+        .toList(growable: false);
 
     final scenesWithShots = await db.findScenesWithShotsToRemoveOnSync(
       widget.projectId,
@@ -987,7 +1026,10 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
         context: context,
         builder: (_) => AlertDialog(
           backgroundColor: palette.surfaceElevated,
-          title: Text('Escenas con planos', style: AppTypography.titleLarge(palette)),
+          title: Text(
+            'Escenas con planos',
+            style: AppTypography.titleLarge(palette),
+          ),
           content: Text(
             '${scenesWithShots.length} escena(s) dejarán de existir y se '
             'eliminarán sus planos del guion técnico. ¿Continuar?',
@@ -1000,9 +1042,12 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: Text('Sincronizar',
-                  style: AppTypography.bodyMedium(palette)
-                      .copyWith(color: palette.accent)),
+              child: Text(
+                'Sincronizar',
+                style: AppTypography.bodyMedium(
+                  palette,
+                ).copyWith(color: palette.accent),
+              ),
             ),
           ],
         ),
@@ -1014,7 +1059,10 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
         context: context,
         builder: (_) => AlertDialog(
           backgroundColor: palette.surfaceElevated,
-          title: Text('Sincronizar escenas', style: AppTypography.titleLarge(palette)),
+          title: Text(
+            'Sincronizar escenas',
+            style: AppTypography.titleLarge(palette),
+          ),
           content: Text(
             'Se actualizará el guion técnico con el orden y los datos actuales '
             'de esta lista. Los planos de escenas que sigan presentes se conservan.',
@@ -1027,9 +1075,12 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: Text('Sincronizar',
-                  style: AppTypography.bodyMedium(palette)
-                      .copyWith(color: palette.accent)),
+              child: Text(
+                'Sincronizar',
+                style: AppTypography.bodyMedium(
+                  palette,
+                ).copyWith(color: palette.accent),
+              ),
             ),
           ],
         ),
@@ -1061,8 +1112,10 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
       _syncPendingColorsFromScenes();
       final siteBySetKey = {
         for (final item in _scenes)
-          setColorKey(item.data.locationSite, item.data.shootSet):
-              item.data.locationSite.trim(),
+          setColorKey(item.data.locationSite, item.data.shootSet): item
+              .data
+              .locationSite
+              .trim(),
       };
       await db.syncSetColorsFromWorkspace(
         widget.projectId,
@@ -1075,7 +1128,8 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
       setState(() {
         _loading = false;
         _projectHasSyncedScenes = true;
-        _status = '${_scenes.length} escenas sincronizadas con el guion técnico.';
+        _status =
+            '${_scenes.length} escenas sincronizadas con el guion técnico.';
       });
 
       AppSnackBar.show(context, 'Guion técnico actualizado.');
@@ -1093,9 +1147,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     final db = ref.watch(databaseProvider);
 
     if (_initializing) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return StreamBuilder<List<LocationSite>>(
@@ -1111,126 +1163,142 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
             final slugColors = _sluglineColors(colorCtx);
 
             return Scaffold(
-          appBar: AppBar(
-            backgroundColor: palette.surface,
-            title:
-                Text('Guion literario', style: AppTypography.titleLarge(palette)),
-            actions: [
-              if (_projectHasSyncedScenes)
-                TextButton.icon(
-                  onPressed: () async {
-                    final db = ref.read(databaseProvider);
-                    final doc = await ShootDocumentImportActions.pickDocument(
-                      context,
-                      db,
-                      widget.projectId,
-                      title: 'Añadir escenas al documento',
-                    );
-                    if (doc == null || !context.mounted) return;
-                    final companions = await ShootDocumentComposer.compose(
-                      db: db,
-                      projectId: widget.projectId,
-                      template: ShootDocumentTemplate.narrativeScenes,
-                    );
-                    var order =
-                        await ShootDocumentService.nextSortOrder(db, doc.id);
-                    for (final c in companions) {
-                      await db.insertShootDocumentBlock(
-                        c.copyWith(
-                          documentId: Value(doc.id),
-                          sortOrder: Value(order++),
-                        ),
-                      );
-                    }
-                    if (!context.mounted) return;
-                    AppSnackBar.show(
-                      context,
-                      'Escenas añadidas a «${doc.name}»',
-                    );
-                  },
-                  icon: Icon(Icons.description_outlined,
-                      color: palette.accent, size: 18),
-                  label: Text(
-                    'Al documento',
-                    style: AppTypography.caption(palette)
-                        .copyWith(color: palette.accent),
-                  ),
+              appBar: AppBar(
+                backgroundColor: palette.surface,
+                title: Text(
+                  'Guion literario',
+                  style: AppTypography.titleLarge(palette),
                 ),
-              if (_projectHasSyncedScenes)
-                TextButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          TechnicalScriptScreen(projectId: widget.projectId),
-                    ),
-                  ),
-                  icon: Icon(Icons.table_rows, color: palette.accent, size: 18),
-                  label: Text(
-                    'Guion técnico',
-                    style: AppTypography.caption(palette)
-                        .copyWith(color: palette.accent),
-                  ),
-                ),
-            ],
-          ),
-          body: LayoutBuilder(
-            builder: (context, constraints) {
-              final wide = constraints.maxWidth >= AppLayout.wideBreakpoint;
-
-              if (!hasScript) {
-                return _buildPickerState(palette, colorCtx, slugColors);
-              }
-
-              if (wide) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      flex: 11,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          border:
-                              Border(right: BorderSide(color: palette.divider)),
-                        ),
-                        child: _buildPreviewPanel(colorCtx, slugColors),
+                actions: [
+                  if (_projectHasSyncedScenes)
+                    TextButton.icon(
+                      onPressed: () async {
+                        final db = ref.read(databaseProvider);
+                        final doc =
+                            await ShootDocumentImportActions.pickDocument(
+                              context,
+                              db,
+                              widget.projectId,
+                              title: 'Añadir escenas al documento',
+                            );
+                        if (doc == null || !context.mounted) return;
+                        final companions = await ShootDocumentComposer.compose(
+                          db: db,
+                          projectId: widget.projectId,
+                          template: ShootDocumentTemplate.narrativeScenes,
+                        );
+                        var order = await ShootDocumentService.nextSortOrder(
+                          db,
+                          doc.id,
+                        );
+                        for (final c in companions) {
+                          await db.insertShootDocumentBlock(
+                            c.copyWith(
+                              documentId: Value(doc.id),
+                              sortOrder: Value(order++),
+                            ),
+                          );
+                        }
+                        if (!context.mounted) return;
+                        AppSnackBar.show(
+                          context,
+                          'Escenas añadidas a «${doc.name}»',
+                        );
+                      },
+                      icon: Icon(
+                        Icons.description_outlined,
+                        color: palette.accent,
+                        size: 18,
+                      ),
+                      label: Text(
+                        'Al documento',
+                        style: AppTypography.caption(
+                          palette,
+                        ).copyWith(color: palette.accent),
                       ),
                     ),
-                    Expanded(
-                      flex: 9,
-                      child: _buildScenesPanel(palette, colorCtx),
+                  if (_projectHasSyncedScenes)
+                    TextButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => TechnicalScriptScreen(
+                            projectId: widget.projectId,
+                          ),
+                        ),
+                      ),
+                      icon: Icon(
+                        Icons.table_rows,
+                        color: palette.accent,
+                        size: 18,
+                      ),
+                      label: Text(
+                        'Guion técnico',
+                        style: AppTypography.caption(
+                          palette,
+                        ).copyWith(color: palette.accent),
+                      ),
                     ),
-                  ],
-                );
-              }
+                ],
+              ),
+              body: LayoutBuilder(
+                builder: (context, constraints) {
+                  final wide = constraints.maxWidth >= AppLayout.wideBreakpoint;
 
-              return DefaultTabController(
-                length: 2,
-                child: Column(
-                  children: [
-                    TabBar(
-                      labelColor: palette.accent,
-                      unselectedLabelColor: palette.textSecondary,
-                      indicatorColor: palette.accent,
-                      tabs: const [
-                        Tab(text: 'Guion de referencia'),
-                        Tab(text: 'Escenas del proyecto'),
+                  if (!hasScript) {
+                    return _buildPickerState(palette, colorCtx, slugColors);
+                  }
+
+                  if (wide) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          flex: 11,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                right: BorderSide(color: palette.divider),
+                              ),
+                            ),
+                            child: _buildPreviewPanel(colorCtx, slugColors),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 9,
+                          child: _buildScenesPanel(palette, colorCtx),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return DefaultTabController(
+                    length: 2,
+                    child: Column(
+                      children: [
+                        TabBar(
+                          labelColor: palette.accent,
+                          unselectedLabelColor: palette.textSecondary,
+                          indicatorColor: palette.accent,
+                          tabs: const [
+                            Tab(text: 'Guion de referencia'),
+                            Tab(text: 'Escenas del proyecto'),
+                          ],
+                        ),
+                        Expanded(
+                          child: TabBarView(
+                            children: [
+                              _buildPreviewPanel(colorCtx, slugColors),
+                              _buildScenesPanel(palette, colorCtx),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
-                    Expanded(
-                      child: TabBarView(
-                        children: [
-                          _buildPreviewPanel(colorCtx, slugColors),
-                          _buildScenesPanel(palette, colorCtx),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
+                  );
+                },
+              ),
+            );
           },
         );
       },
@@ -1247,9 +1315,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: _buildPreviewPanel(colorCtx, slugColors),
-          ),
+          Expanded(child: _buildPreviewPanel(colorCtx, slugColors)),
           const SizedBox(height: AppSpacing.lg),
           AppButton(
             label: 'Seleccionar guion (PDF, Word, TXT, Fountain)',
@@ -1335,18 +1401,19 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
             children: [
               Expanded(
                 child: Text(
-                  _scenes.isEmpty
-                      ? 'Sin escenas'
-                      : '${_scenes.length} escenas',
+                  _scenes.isEmpty ? 'Sin escenas' : '${_scenes.length} escenas',
                   style: AppTypography.titleMedium(palette),
                 ),
               ),
               TextButton.icon(
                 onPressed: _loading ? null : () => _addScene(colorCtx),
                 icon: Icon(Icons.add, color: palette.accent, size: 18),
-                label: Text('Añadir escena',
-                    style: AppTypography.label(palette)
-                        .copyWith(color: palette.accent)),
+                label: Text(
+                  'Añadir escena',
+                  style: AppTypography.label(
+                    palette,
+                  ).copyWith(color: palette.accent),
+                ),
               ),
             ],
           ),
@@ -1372,13 +1439,13 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
                 : ReorderableListView.builder(
                     buildDefaultDragHandles: false,
                     itemCount: _scenes.length,
-                    onReorder: _onReorder,
+                    onReorderItem: _onReorderItem,
                     itemBuilder: (context, i) => _sceneCard(
-                          palette,
-                          colorCtx,
-                          i,
-                          key: ValueKey(_scenes[i].id),
-                        ),
+                      palette,
+                      colorCtx,
+                      i,
+                      key: ValueKey(_scenes[i].id),
+                    ),
                   ),
           ),
           if (_scenes.isNotEmpty) ...[
@@ -1423,8 +1490,11 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
               index: i,
               child: Padding(
                 padding: const EdgeInsets.only(right: 8, top: 2),
-                child: Icon(Icons.drag_handle,
-                    color: palette.textTertiary, size: 22),
+                child: Icon(
+                  Icons.drag_handle,
+                  color: palette.textTertiary,
+                  size: 22,
+                ),
               ),
             ),
             Container(
@@ -1436,9 +1506,12 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            Text('${s.number}.',
-                style: AppTypography.mono(palette)
-                    .copyWith(color: palette.accent)),
+            Text(
+              '${s.number}.',
+              style: AppTypography.mono(
+                palette,
+              ).copyWith(color: palette.accent),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -1452,10 +1525,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
                         dayNight: s.dayNight,
                         location: s.location,
                       )) ...[
-                    Text(
-                      s.name!,
-                      style: AppTypography.label(palette),
-                    ),
+                    Text(s.name!, style: AppTypography.label(palette)),
                     const SizedBox(height: 2),
                   ],
                   SceneMetaDisplay(
@@ -1467,8 +1537,9 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
                   if (s.shootSet != s.location || s.locationSite != s.shootSet)
                     Text(
                       '${s.locationSite} › ${s.shootSet}',
-                      style: AppTypography.caption(palette)
-                          .copyWith(color: palette.accent),
+                      style: AppTypography.caption(
+                        palette,
+                      ).copyWith(color: palette.accent),
                     ),
                   if (s.characters.isNotEmpty) ...[
                     const SizedBox(height: 4),
@@ -1494,14 +1565,20 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
             if (_scenes[i].sourceStartIndex != null)
               IconButton(
                 tooltip: 'Ir al guion',
-                icon: Icon(Icons.my_location_outlined,
-                    color: palette.accent, size: 18),
+                icon: Icon(
+                  Icons.my_location_outlined,
+                  color: palette.accent,
+                  size: 18,
+                ),
                 onPressed: () => _scrollToScene(i),
               ),
             IconButton(
               tooltip: 'Editar',
-              icon: Icon(Icons.edit_outlined,
-                  color: palette.textSecondary, size: 18),
+              icon: Icon(
+                Icons.edit_outlined,
+                color: palette.textSecondary,
+                size: 18,
+              ),
               onPressed: () => _editScene(i, colorCtx),
             ),
             IconButton(

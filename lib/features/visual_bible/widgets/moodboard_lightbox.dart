@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
@@ -10,13 +11,17 @@ import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../shared/annotations/annotation_canvas.dart';
+import '../../../shared/annotations/annotation_document.dart';
+import '../../../shared/visual_bible/bible_section_ids.dart';
 import '../moodboard_annotation_store.dart';
+import '../moodboard_catalog_service.dart';
 import '../moodboard_palette_extractor.dart';
 import '../moodboard_reference_meta.dart';
 import '../visual_bible_model.dart';
-import 'moodboard_annotation_painter.dart';
+import 'moodboard_assign_fields.dart';
 
-enum _LightboxTool { none, draw, arrow, text }
+enum _LightboxTool { draw, arrow, text, select, eraser }
 
 /// Lightbox unificado: frame + meta + comentarios + anotación in-place.
 class MoodboardLightbox extends ConsumerStatefulWidget {
@@ -63,8 +68,8 @@ class MoodboardLightbox extends ConsumerStatefulWidget {
           initialIndex: initialIndex,
           metaById: metaById,
           bibleId: bibleId,
-          projectId: projectId ??
-              (images.isNotEmpty ? images.first.projectId : null),
+          projectId:
+              projectId ?? (images.isNotEmpty ? images.first.projectId : null),
           onClose: () => Navigator.of(ctx).pop(),
           onAddToProject: onAddToProject,
           onMetaSaved: onMetaSaved,
@@ -89,10 +94,8 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
   bool _annotateMode = false;
   _LightboxTool _tool = _LightboxTool.draw;
   Color _drawColor = const Color(0xFF2997FF);
-  final List<MoodboardStroke> _strokes = [];
-  List<Offset> _livePoints = [];
-  Offset? _arrowStart;
-  Offset? _arrowEnd;
+  String? _selectedNoteId;
+  late final AnnotationCanvasController _annotationController;
   bool _strokesLoading = false;
 
   final _commentCtrl = TextEditingController();
@@ -115,10 +118,16 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
   String? _timeOfDay;
   String? _colorMood;
   bool _pendingReview = false;
+  List<String> _assignedSections = const [];
 
   List<LocationBasePlan> _projectLocations = const [];
   List<String> _intExtOptions = List.of(kMoodboardIntExt);
   List<String> _timeOptions = List.of(kMoodboardTimesOfDay);
+  List<String> _lightingLookOptions = List.of(kMoodboardLightingLooks);
+  List<String> _lightSourceOptions = List.of(kMoodboardLightSources);
+  List<String> _lightTextureOptions = List.of(kMoodboardLightTextures);
+  List<String> _compositionOptions = List.of(kMoodboardCompositions);
+  List<String> _colorMoodOptions = List.of(kMoodboardColorMoods);
 
   @override
   void initState() {
@@ -126,6 +135,7 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
     _index = widget.initialIndex.clamp(0, widget.images.length - 1);
     _metaById = Map.of(widget.metaById);
     _focus = FocusNode();
+    _annotationController = AnnotationCanvasController();
     _bindMetaControllers();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
@@ -138,6 +148,7 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
   @override
   void dispose() {
     _focus.dispose();
+    _annotationController.dispose();
     _commentCtrl.dispose();
     _titleCtrl.dispose();
     _yearCtrl.dispose();
@@ -176,6 +187,7 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
     _timeOfDay = _normalizeTimeOfDay(m.timeOfDay);
     _colorMood = m.colorMood;
     _pendingReview = m.pendingReview;
+    _assignedSections = List<String>.from(_image.assignedSections);
     _palette = m.paletteHex
         .map(MoodboardPaletteExtractor.fromHex)
         .whereType<Color>()
@@ -209,10 +221,21 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
     final db = ref.read(databaseProvider);
     final locs = await db.watchLocationsForProject(projectId).first;
     final scenes = await db.watchScenesForProject(projectId).first;
+    final catalog = await MoodboardCatalogService.loadForProject(projectId);
     if (!mounted) return;
 
-    final intExt = <String>{...kMoodboardIntExt};
-    final times = <String>{...kMoodboardTimesOfDay};
+    final intExt = <String>{
+      ...MoodboardCatalogService.options(
+        MoodboardCatalogKey.intExt,
+        catalog,
+      ),
+    };
+    final times = <String>{
+      ...MoodboardCatalogService.options(
+        MoodboardCatalogKey.timeOfDay,
+        catalog,
+      ),
+    };
     for (final s in scenes) {
       final ie = _normalizeIntExt(s.intExt);
       if (ie != null) intExt.add(ie);
@@ -224,26 +247,52 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
       _projectLocations = locs;
       _intExtOptions = intExt.toList();
       _timeOptions = times.toList();
+      _lightingLookOptions = MoodboardCatalogService.options(
+        MoodboardCatalogKey.lightingLook,
+        catalog,
+      );
+      _lightSourceOptions = MoodboardCatalogService.options(
+        MoodboardCatalogKey.lightSource,
+        catalog,
+      );
+      _lightTextureOptions = MoodboardCatalogService.options(
+        MoodboardCatalogKey.lightTexture,
+        catalog,
+      );
+      _compositionOptions = MoodboardCatalogService.options(
+        MoodboardCatalogKey.composition,
+        catalog,
+      );
+      _colorMoodOptions = MoodboardCatalogService.options(
+        MoodboardCatalogKey.colorMood,
+        catalog,
+      );
     });
   }
 
   Future<void> _loadStrokes() async {
     setState(() => _strokesLoading = true);
-    final strokes = await MoodboardAnnotationStore.loadStrokes(_image.id);
+    final imageId = _image.id;
+    final document = await MoodboardAnnotationStore.loadDocument(
+      db: ref.read(databaseProvider),
+      projectId: widget.projectId ?? _image.projectId,
+      imageId: imageId,
+    );
     if (!mounted) return;
+    if (_image.id != imageId) return;
     setState(() {
-      _strokes
-        ..clear()
-        ..addAll(strokes);
-      _livePoints = [];
-      _arrowStart = null;
-      _arrowEnd = null;
+      _annotationController.replaceDocument(document);
       _strokesLoading = false;
     });
   }
 
   Future<void> _persistStrokes() async {
-    await MoodboardAnnotationStore.saveStrokes(_image.id, _strokes);
+    await MoodboardAnnotationStore.saveDocument(
+      db: ref.read(databaseProvider),
+      projectId: widget.projectId ?? _image.projectId,
+      imageId: _image.id,
+      document: _annotationController.document,
+    );
   }
 
   Future<void> _ensurePalette({bool force = false}) async {
@@ -302,6 +351,7 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
       _index = nextIndex;
       _annotateMode = false;
       _tool = _LightboxTool.draw;
+      _selectedNoteId = null;
       _bindMetaControllers();
     });
     _ensurePalette();
@@ -327,15 +377,18 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
     final next = MoodboardReferenceMeta(
       title: _titleCtrl.text.trim().isEmpty ? null : _titleCtrl.text.trim(),
       year: _yearCtrl.text.trim().isEmpty ? null : _yearCtrl.text.trim(),
-      director:
-          _directorCtrl.text.trim().isEmpty ? null : _directorCtrl.text.trim(),
+      director: _directorCtrl.text.trim().isEmpty
+          ? null
+          : _directorCtrl.text.trim(),
       dop: _dopCtrl.text.trim().isEmpty ? null : _dopCtrl.text.trim(),
-      technicalNotes:
-          _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      technicalNotes: _notesCtrl.text.trim().isEmpty
+          ? null
+          : _notesCtrl.text.trim(),
       camera: _cameraCtrl.text.trim().isEmpty ? null : _cameraCtrl.text.trim(),
       lenses: _lensesCtrl.text.trim().isEmpty ? null : _lensesCtrl.text.trim(),
-      aspectRatio:
-          _aspectCtrl.text.trim().isEmpty ? null : _aspectCtrl.text.trim(),
+      aspectRatio: _aspectCtrl.text.trim().isEmpty
+          ? null
+          : _aspectCtrl.text.trim(),
       tags: tags,
       paletteHex: _palette.map(MoodboardPaletteExtractor.toHex).toList(),
       lightingLook: _lightingLook,
@@ -351,6 +404,94 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
     await MoodboardReferenceMetaStore.save(_image.id, next);
     _metaById[_image.id] = next;
     widget.onMetaSaved?.call(_image.id, next);
+    await _persistPlacement();
+  }
+
+  Future<void> _persistPlacement() async {
+    await MoodboardCatalogService.updateImagePlacement(
+      db: ref.read(databaseProvider),
+      image: _image,
+      assignedSections: _assignedSections,
+      linkedLocationName: _locationName,
+      linkedLocationBasePlanId: _image.linkedLocationBasePlanId,
+    );
+  }
+
+  Future<void> _applySuggestedSections() async {
+    await _saveMetaSilent();
+    final suggested = MoodboardCatalogService.suggestSections(
+      meta: _metaById[_image.id] ?? const MoodboardReferenceMeta(),
+      linkedLocationName: _locationName ?? _image.linkedLocationName,
+      linkedLocationBasePlanId: _image.linkedLocationBasePlanId,
+    );
+    if (suggested.isEmpty) return;
+    setState(() {
+      _assignedSections = {..._assignedSections, ...suggested}.toList();
+    });
+    await _persistPlacement();
+  }
+
+  Future<void> _addCatalogOption(MoodboardCatalogKey key) async {
+    final projectId = widget.projectId ?? _image.projectId;
+    final label = switch (key) {
+      MoodboardCatalogKey.intExt => 'INT / EXT',
+      MoodboardCatalogKey.timeOfDay => 'Hora del día',
+      MoodboardCatalogKey.lightingLook => 'Calidad de luz',
+      MoodboardCatalogKey.lightSource => 'Tipo / fuente de luz',
+      MoodboardCatalogKey.lightTexture => 'Textura de la luz',
+      MoodboardCatalogKey.composition => 'Composición',
+      MoodboardCatalogKey.colorMood => 'Look color',
+    };
+    final ctrl = TextEditingController();
+    final value = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Añadir a $label'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: InputDecoration(hintText: 'Nueva opción…'),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Añadir'),
+          ),
+        ],
+      ),
+    );
+    if (value == null || value.isEmpty || !mounted) return;
+    await MoodboardCatalogService.addCustomOption(
+      projectId: projectId,
+      key: key,
+      value: value,
+    );
+    await _loadCatalogContext();
+    if (!mounted) return;
+    setState(() {
+      switch (key) {
+        case MoodboardCatalogKey.intExt:
+          _locationKind = value;
+        case MoodboardCatalogKey.timeOfDay:
+          _timeOfDay = value;
+        case MoodboardCatalogKey.lightingLook:
+          _lightingLook = value;
+        case MoodboardCatalogKey.lightSource:
+          _lightSource = value;
+        case MoodboardCatalogKey.lightTexture:
+          _lightTexture = value;
+        case MoodboardCatalogKey.composition:
+          _composition = value;
+        case MoodboardCatalogKey.colorMood:
+          _colorMood = value;
+      }
+    });
+    await _saveMetaSilent();
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
@@ -365,7 +506,14 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
       widget.onClose();
       return KeyEventResult.handled;
     }
-    if (_annotateMode) return KeyEventResult.ignored;
+    if (_annotateMode) {
+      if (event.logicalKey == LogicalKeyboardKey.backspace ||
+          event.logicalKey == LogicalKeyboardKey.delete) {
+        _deleteSelectedNote();
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
     if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
       _prev();
       return KeyEventResult.handled;
@@ -403,80 +551,52 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
   }
 
   void _undoStroke() {
-    if (_strokes.isEmpty) return;
-    setState(() => _strokes.removeLast());
-    _persistStrokes();
+    _annotationController.undo();
   }
 
-  void _onPanStart(Offset local, Size size) {
-    if (!_annotateMode ||
-        _tool == _LightboxTool.none ||
-        _tool == _LightboxTool.text) {
-      return;
-    }
-    final n = Offset(local.dx / size.width, local.dy / size.height);
-    setState(() {
-      if (_tool == _LightboxTool.draw) {
-        _livePoints = [n];
-      } else if (_tool == _LightboxTool.arrow) {
-        _arrowStart = n;
-        _arrowEnd = n;
-      }
-    });
-  }
-
-  void _onPanUpdate(Offset local, Size size) {
-    final n = Offset(
-      (local.dx / size.width).clamp(0.0, 1.0),
-      (local.dy / size.height).clamp(0.0, 1.0),
+  Future<void> _editNote(String noteId, {String? initialText}) async {
+    final note = _annotationController.document.notes
+        .where((n) => n.id == noteId)
+        .firstOrNull;
+    if (note == null) return;
+    final ctrl = TextEditingController(text: initialText ?? note.text);
+    final text = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Editar post-it'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Texto…'),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
     );
-    setState(() {
-      if (_tool == _LightboxTool.draw) {
-        _livePoints = [..._livePoints, n];
-      } else if (_tool == _LightboxTool.arrow) {
-        _arrowEnd = n;
-      }
-    });
-  }
-
-  void _onPanEnd() {
-    if (_tool == _LightboxTool.draw && _livePoints.length >= 2) {
-      _strokes.add(
-        MoodboardStroke(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          color: _drawColor,
-          width: 3,
-          points: List.of(_livePoints),
-        ),
-      );
-      _livePoints = [];
-      _persistStrokes();
-    } else if (_tool == _LightboxTool.arrow &&
-        _arrowStart != null &&
-        _arrowEnd != null) {
-      _strokes.add(
-        MoodboardStroke(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          color: _drawColor,
-          width: 4,
-          points: [_arrowStart!, _arrowEnd!],
-          label: 'ARROW',
-        ),
-      );
-      _arrowStart = null;
-      _arrowEnd = null;
-      _persistStrokes();
-    } else {
-      setState(() {
-        _livePoints = [];
-        _arrowStart = null;
-        _arrowEnd = null;
-      });
-    }
-    setState(() {});
+    if (text == null || text.isEmpty) return;
+    _annotationController.updateNote(noteId, text: text);
+    await _persistStrokes();
   }
 
   Future<void> _addTextLabel(Size size, Offset local) async {
+    final nx = (local.dx / size.width).clamp(0.0, 1.0);
+    final ny = (local.dy / size.height).clamp(0.0, 1.0);
+    final hit = _annotationController.hitTestNote(nx, ny);
+    if (hit != null) {
+      setState(() => _selectedNoteId = hit);
+      await _editNote(hit);
+      return;
+    }
+
     final text = await showDialog<String>(
       context: context,
       builder: (ctx) {
@@ -502,41 +622,47 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
       },
     );
     if (text == null || text.isEmpty) return;
-    final n = Offset(local.dx / size.width, local.dy / size.height);
-    setState(() {
-      _strokes.add(
-        MoodboardStroke(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          color: _drawColor,
-          width: 2,
-          points: [n],
-          label: text,
-        ),
-      );
-    });
+    final x = (local.dx / size.width).clamp(0.0, 1.0);
+    final y = (local.dy / size.height).clamp(0.0, 1.0);
+    _annotationController.addNote(
+      AnnotationNote(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        text: text,
+        x: x,
+        y: y,
+        width: 0.24,
+        height: 0.12,
+        colorArgb: _drawColor.toARGB32(),
+      ),
+    );
     await _persistStrokes();
   }
 
-  Future<void> _linkLocation({
-    String? name,
-    int? planId,
-  }) async {
+  void _deleteSelectedNote() {
+    final id = _selectedNoteId;
+    if (id == null) return;
+    _annotationController.removeNote(id);
+    setState(() => _selectedNoteId = null);
+    unawaited(_persistStrokes());
+  }
+
+  Future<void> _linkLocation({String? name, int? planId}) async {
     setState(() {
       _locationName = name;
+      if (name != null &&
+          name.isNotEmpty &&
+          !_assignedSections.contains(BibleSectionId.location)) {
+        _assignedSections = [..._assignedSections, BibleSectionId.location];
+      }
     });
     await _saveMetaSilent();
-    final db = ref.read(databaseProvider);
-    final row = await (db.select(db.moodboardImages)
-          ..where((t) => t.id.equals(_image.id)))
-        .getSingle();
-    await db.updateMoodboardImage(
-      row.copyWith(
-        linkedLocationName: Value(name),
-        linkedLocationBasePlanId: Value(planId),
-      ),
+    await MoodboardCatalogService.updateImagePlacement(
+      db: ref.read(databaseProvider),
+      image: _image,
+      assignedSections: _assignedSections,
+      linkedLocationName: name,
+      linkedLocationBasePlanId: planId,
     );
-    _image.linkedLocationName = name;
-    _image.linkedLocationBasePlanId = planId;
   }
 
   Future<void> _addProjectLocation() async {
@@ -548,9 +674,7 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Nombre del set / lugar',
-          ),
+          decoration: const InputDecoration(hintText: 'Nombre del set / lugar'),
           onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [
@@ -588,38 +712,27 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
       onReextract: () => _ensurePalette(force: true),
       annotateMode: _annotateMode,
       strokesLoading: _strokesLoading,
-      strokes: [
-        ..._strokes,
-        if (_livePoints.length >= 2)
-          MoodboardStroke(
-            id: 'live',
-            color: _drawColor,
-            width: 3,
-            points: _livePoints,
-          ),
-        if (_arrowStart != null && _arrowEnd != null)
-          MoodboardStroke(
-            id: 'live-arrow',
-            color: _drawColor,
-            width: 4,
-            points: [_arrowStart!, _arrowEnd!],
-            label: 'ARROW',
-          ),
-      ],
+      annotationController: _annotationController,
       tool: _tool,
       drawColor: _drawColor,
       onTool: (t) => setState(() {
         _tool = t;
-        _drawColor = t == _LightboxTool.text
-            ? const Color(0xFFFF3B30)
-            : const Color(0xFF2997FF);
+        if (t != _LightboxTool.select) {
+          _selectedNoteId = null;
+        }
       }),
+      onColor: (c) => setState(() => _drawColor = c),
       onUndo: _undoStroke,
-      onExitAnnotate: () => setState(() => _annotateMode = false),
-      onPanStart: _onPanStart,
-      onPanUpdate: _onPanUpdate,
-      onPanEnd: _onPanEnd,
+      onExitAnnotate: () => setState(() {
+        _annotateMode = false;
+        _selectedNoteId = null;
+      }),
+      onAnnotationChanged: _persistStrokes,
       onTapForText: _addTextLabel,
+      selectedNoteId: _selectedNoteId,
+      onNoteSelected: (id) => setState(() => _selectedNoteId = id),
+      onNoteEdit: (note) => _editNote(note.id),
+      onDeleteNote: _deleteSelectedNote,
     );
 
     final side = _SidePanel(
@@ -643,8 +756,14 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
       timeOfDay: _timeOfDay,
       colorMood: _colorMood,
       pendingReview: _pendingReview,
+      assignedSections: _assignedSections,
       intExtOptions: _intExtOptions,
       timeOptions: _timeOptions,
+      lightingLookOptions: _lightingLookOptions,
+      lightSourceOptions: _lightSourceOptions,
+      lightTextureOptions: _lightTextureOptions,
+      compositionOptions: _compositionOptions,
+      colorMoodOptions: _colorMoodOptions,
       projectLocations: _projectLocations,
       onLightingLook: (v) {
         setState(() => _lightingLook = v);
@@ -686,6 +805,12 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
         setState(() => _pendingReview = v);
         _saveMetaSilent();
       },
+      onAssignedSectionsChanged: (next) async {
+        setState(() => _assignedSections = next);
+        await _persistPlacement();
+      },
+      onSuggestSections: _applySuggestedSections,
+      onAddCatalogOption: _addCatalogOption,
       bibleId: widget.bibleId,
       annotateMode: _annotateMode,
       onClose: () async {
@@ -737,16 +862,19 @@ class _Stage extends StatefulWidget {
   final VoidCallback onReextract;
   final bool annotateMode;
   final bool strokesLoading;
-  final List<MoodboardStroke> strokes;
+  final AnnotationCanvasController annotationController;
   final _LightboxTool tool;
   final Color drawColor;
   final ValueChanged<_LightboxTool> onTool;
+  final ValueChanged<Color> onColor;
   final VoidCallback onUndo;
   final VoidCallback onExitAnnotate;
-  final void Function(Offset local, Size size) onPanStart;
-  final void Function(Offset local, Size size) onPanUpdate;
-  final VoidCallback onPanEnd;
+  final VoidCallback onAnnotationChanged;
   final Future<void> Function(Size size, Offset local) onTapForText;
+  final String? selectedNoteId;
+  final ValueChanged<String?> onNoteSelected;
+  final Future<void> Function(AnnotationNote note) onNoteEdit;
+  final VoidCallback onDeleteNote;
 
   const _Stage({
     required this.image,
@@ -759,16 +887,19 @@ class _Stage extends StatefulWidget {
     required this.onReextract,
     required this.annotateMode,
     required this.strokesLoading,
-    required this.strokes,
+    required this.annotationController,
     required this.tool,
     required this.drawColor,
     required this.onTool,
+    required this.onColor,
     required this.onUndo,
     required this.onExitAnnotate,
-    required this.onPanStart,
-    required this.onPanUpdate,
-    required this.onPanEnd,
+    required this.onAnnotationChanged,
     required this.onTapForText,
+    required this.selectedNoteId,
+    required this.onNoteSelected,
+    required this.onNoteEdit,
+    required this.onDeleteNote,
   });
 
   @override
@@ -809,65 +940,56 @@ class _StageState extends State<_Stage> {
                           );
                           return ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                Image.file(
-                                  File(widget.image.imagePath),
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (_, __, ___) => ColoredBox(
-                                    color: palette.surfaceElevated,
-                                    child: Icon(
-                                      Icons.broken_image_outlined,
-                                      color: palette.textTertiary,
-                                      size: 48,
+                            child: AnnotationCanvas(
+                              controller: widget.annotationController,
+                              enabled: widget.annotateMode &&
+                                  widget.tool != _LightboxTool.text &&
+                                  widget.tool != _LightboxTool.select,
+                              tool: widget.tool == _LightboxTool.arrow
+                                  ? AnnotationToolType.arrow
+                                  : widget.tool == _LightboxTool.eraser
+                                      ? AnnotationToolType.eraser
+                                      : AnnotationToolType.pen,
+                              color: widget.drawColor,
+                              width: widget.tool == _LightboxTool.arrow ? 4 : 3,
+                              acceptTouch: true,
+                              onChanged: (_) => widget.onAnnotationChanged(),
+                              interactiveNotes: widget.annotateMode &&
+                                  (widget.tool == _LightboxTool.select ||
+                                      widget.tool == _LightboxTool.text),
+                              selectedNoteId: widget.selectedNoteId,
+                              onNoteSelected: widget.onNoteSelected,
+                              onNoteEditRequested: widget.onNoteEdit,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.file(
+                                    File(widget.image.imagePath),
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => ColoredBox(
+                                      color: palette.surfaceElevated,
+                                      child: Icon(
+                                        Icons.broken_image_outlined,
+                                        color: palette.textTertiary,
+                                        size: 48,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                if (!widget.strokesLoading)
-                                  CustomPaint(
-                                    painter: MoodboardAnnotationPainter(
-                                      strokes: widget.strokes,
+                                  if (widget.strokesLoading)
+                                    const Center(
+                                      child: CircularProgressIndicator(),
                                     ),
-                                  ),
-                                if (widget.annotateMode)
-                                  Positioned.fill(
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      onTapUp: widget.tool ==
-                                              _LightboxTool.text
-                                          ? (d) => widget.onTapForText(
-                                                size,
-                                                d.localPosition,
-                                              )
-                                          : null,
-                                      onPanStart: widget.tool ==
-                                                  _LightboxTool.draw ||
-                                              widget.tool ==
-                                                  _LightboxTool.arrow
-                                          ? (d) => widget.onPanStart(
-                                                d.localPosition,
-                                                size,
-                                              )
-                                          : null,
-                                      onPanUpdate: widget.tool ==
-                                                  _LightboxTool.draw ||
-                                              widget.tool ==
-                                                  _LightboxTool.arrow
-                                          ? (d) => widget.onPanUpdate(
-                                                d.localPosition,
-                                                size,
-                                              )
-                                          : null,
-                                      onPanEnd: widget.tool ==
-                                                  _LightboxTool.draw ||
-                                              widget.tool ==
-                                                  _LightboxTool.arrow
-                                          ? (_) => widget.onPanEnd()
-                                          : null,
+                                  if (widget.annotateMode &&
+                                      widget.tool == _LightboxTool.text)
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.translucent,
+                                      onTapUp: (details) => widget.onTapForText(
+                                        size,
+                                        details.localPosition,
+                                      ),
                                     ),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
                           );
                         },
@@ -882,9 +1004,13 @@ class _StageState extends State<_Stage> {
                       child: Center(
                         child: _AnnotateToolbar(
                           tool: widget.tool,
+                          drawColor: widget.drawColor,
                           onTool: widget.onTool,
+                          onColor: widget.onColor,
                           onUndo: widget.onUndo,
                           onDone: widget.onExitAnnotate,
+                          onDeleteNote: widget.onDeleteNote,
+                          canDeleteNote: widget.selectedNoteId != null,
                           palette: palette,
                         ),
                       ),
@@ -936,10 +1062,10 @@ class _StageState extends State<_Stage> {
                       Text(
                         'PALETA DEL PLANO',
                         style: AppTypography.mono(palette).copyWith(
-                              fontSize: 10,
-                              letterSpacing: 1.2,
-                              color: palette.textSecondary,
-                            ),
+                          fontSize: 10,
+                          letterSpacing: 1.2,
+                          color: palette.textSecondary,
+                        ),
                       ),
                       const Spacer(),
                       if (widget.extracting)
@@ -972,9 +1098,9 @@ class _StageState extends State<_Stage> {
                               widget.extracting
                                   ? 'Extrayendo paleta…'
                                   : 'Sin paleta · pulsa Re-extraer',
-                              style: AppTypography.caption(palette).copyWith(
-                                    color: palette.textSecondary,
-                                  ),
+                              style: AppTypography.caption(
+                                palette,
+                              ).copyWith(color: palette.textSecondary),
                             ),
                           )
                         : DecoratedBox(
@@ -988,9 +1114,11 @@ class _StageState extends State<_Stage> {
                               borderRadius: BorderRadius.circular(5),
                               child: Row(
                                 children: [
-                                  for (var i = 0;
-                                      i < widget.palette.length;
-                                      i++)
+                                  for (
+                                    var i = 0;
+                                    i < widget.palette.length;
+                                    i++
+                                  )
                                     Expanded(
                                       child: ColoredBox(
                                         color: widget.palette[i],
@@ -1024,16 +1152,32 @@ class _StageState extends State<_Stage> {
 
 class _AnnotateToolbar extends StatelessWidget {
   final _LightboxTool tool;
+  final Color drawColor;
   final ValueChanged<_LightboxTool> onTool;
+  final ValueChanged<Color> onColor;
   final VoidCallback onUndo;
   final VoidCallback onDone;
+  final VoidCallback onDeleteNote;
+  final bool canDeleteNote;
   final AppPalette palette;
+
+  static const _swatches = [
+    Color(0xFF2997FF),
+    Color(0xFFFF3B30),
+    Color(0xFFFFCC00),
+    Color(0xFF34C759),
+    Color(0xFFFFFFFF),
+  ];
 
   const _AnnotateToolbar({
     required this.tool,
+    required this.drawColor,
     required this.onTool,
+    required this.onColor,
     required this.onUndo,
     required this.onDone,
+    required this.onDeleteNote,
+    required this.canDeleteNote,
     required this.palette,
   });
 
@@ -1067,6 +1211,18 @@ class _AnnotateToolbar extends StatelessWidget {
             onTap: () => onTool(_LightboxTool.text),
             palette: palette,
           ),
+          _ToolBtn(
+            icon: Icons.pan_tool_alt_outlined,
+            selected: tool == _LightboxTool.select,
+            onTap: () => onTool(_LightboxTool.select),
+            palette: palette,
+          ),
+          _ToolBtn(
+            icon: Icons.auto_fix_off,
+            selected: tool == _LightboxTool.eraser,
+            onTap: () => onTool(_LightboxTool.eraser),
+            palette: palette,
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Container(
@@ -1074,6 +1230,41 @@ class _AnnotateToolbar extends StatelessWidget {
               width: 28,
               color: Colors.white.withValues(alpha: 0.1),
             ),
+          ),
+          for (final swatch in _swatches)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: GestureDetector(
+                onTap: () => onColor(swatch),
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: swatch,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: drawColor == swatch
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.25),
+                      width: drawColor == swatch ? 2 : 1,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Container(
+              height: 1,
+              width: 28,
+              color: Colors.white.withValues(alpha: 0.1),
+            ),
+          ),
+          _ToolBtn(
+            icon: Icons.delete_outline,
+            selected: false,
+            onTap: canDeleteNote ? onDeleteNote : () {},
+            palette: palette,
           ),
           _ToolBtn(
             icon: Icons.undo,
@@ -1153,8 +1344,14 @@ class _SidePanel extends ConsumerWidget {
   final String? timeOfDay;
   final String? colorMood;
   final bool pendingReview;
+  final List<String> assignedSections;
   final List<String> intExtOptions;
   final List<String> timeOptions;
+  final List<String> lightingLookOptions;
+  final List<String> lightSourceOptions;
+  final List<String> lightTextureOptions;
+  final List<String> compositionOptions;
+  final List<String> colorMoodOptions;
   final List<LocationBasePlan> projectLocations;
   final ValueChanged<String?> onLightingLook;
   final ValueChanged<String?> onLightSource;
@@ -1166,6 +1363,9 @@ class _SidePanel extends ConsumerWidget {
   final ValueChanged<String?> onTimeOfDay;
   final ValueChanged<String?> onColorMood;
   final ValueChanged<bool> onPendingReview;
+  final ValueChanged<List<String>> onAssignedSectionsChanged;
+  final Future<void> Function() onSuggestSections;
+  final Future<void> Function(MoodboardCatalogKey key) onAddCatalogOption;
   final int? bibleId;
   final bool annotateMode;
   final VoidCallback onClose;
@@ -1196,8 +1396,14 @@ class _SidePanel extends ConsumerWidget {
     required this.timeOfDay,
     required this.colorMood,
     required this.pendingReview,
+    required this.assignedSections,
     required this.intExtOptions,
     required this.timeOptions,
+    required this.lightingLookOptions,
+    required this.lightSourceOptions,
+    required this.lightTextureOptions,
+    required this.compositionOptions,
+    required this.colorMoodOptions,
     required this.projectLocations,
     required this.onLightingLook,
     required this.onLightSource,
@@ -1209,6 +1415,9 @@ class _SidePanel extends ConsumerWidget {
     required this.onTimeOfDay,
     required this.onColorMood,
     required this.onPendingReview,
+    required this.onAssignedSectionsChanged,
+    required this.onSuggestSections,
+    required this.onAddCatalogOption,
     required this.bibleId,
     required this.annotateMode,
     required this.onClose,
@@ -1243,12 +1452,12 @@ class _SidePanel extends ConsumerWidget {
                   child: Text(
                     annotateMode ? 'ANOTAR' : 'DETALLE DEL PLANO',
                     style: AppTypography.mono(palette).copyWith(
-                          fontSize: 11,
-                          letterSpacing: 1.3,
-                          color: annotateMode
-                              ? const Color(0xFFFFB4AB)
-                              : palette.accent,
-                        ),
+                      fontSize: 11,
+                      letterSpacing: 1.3,
+                      color: annotateMode
+                          ? const Color(0xFFFFB4AB)
+                          : palette.accent,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -1260,7 +1469,9 @@ class _SidePanel extends ConsumerWidget {
                     pendingReview
                         ? Icons.mark_email_unread
                         : Icons.mark_email_read_outlined,
-                    color: pendingReview ? palette.warning : palette.textTertiary,
+                    color: pendingReview
+                        ? palette.warning
+                        : palette.textTertiary,
                     size: 20,
                   ),
                 ),
@@ -1275,8 +1486,10 @@ class _SidePanel extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: palette.warning.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
@@ -1287,9 +1500,9 @@ class _SidePanel extends ConsumerWidget {
                 child: Text(
                   'Pendiente de revisar',
                   style: AppTypography.caption(palette).copyWith(
-                        color: palette.warning,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: palette.warning,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
@@ -1299,10 +1512,9 @@ class _SidePanel extends ConsumerWidget {
               children: [
                 TextField(
                   controller: titleCtrl,
-                  style: AppTypography.titleMedium(palette).copyWith(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: AppTypography.titleMedium(
+                    palette,
+                  ).copyWith(fontSize: 18, fontWeight: FontWeight.w700),
                   decoration: const InputDecoration(
                     hintText: 'Título del plano / referencia',
                     border: InputBorder.none,
@@ -1315,24 +1527,23 @@ class _SidePanel extends ConsumerWidget {
                     child: Text(
                       locLabel.toUpperCase(),
                       style: AppTypography.mono(palette).copyWith(
-                            fontSize: 10,
-                            letterSpacing: 0.8,
-                            color: palette.textTertiary,
-                          ),
+                        fontSize: 10,
+                        letterSpacing: 0.8,
+                        color: palette.textTertiary,
+                      ),
                     ),
                   ),
                 TextField(
                   controller: notesCtrl,
                   maxLines: 4,
-                  style: AppTypography.bodyMedium(palette).copyWith(
-                        height: 1.45,
-                        color: palette.textSecondary,
-                      ),
+                  style: AppTypography.bodyMedium(
+                    palette,
+                  ).copyWith(height: 1.45, color: palette.textSecondary),
                   decoration: InputDecoration(
                     hintText: 'Apunte principal del plano…',
-                    hintStyle: AppTypography.bodyMedium(palette).copyWith(
-                          color: palette.textTertiary,
-                        ),
+                    hintStyle: AppTypography.bodyMedium(
+                      palette,
+                    ).copyWith(color: palette.textTertiary),
                     filled: true,
                     fillColor: Colors.white.withValues(alpha: 0.03),
                     border: OutlineInputBorder(
@@ -1364,14 +1575,16 @@ class _SidePanel extends ConsumerWidget {
                   value: locationKind,
                   onChanged: onLocationKind,
                   palette: palette,
+                  onAddCustom: () =>
+                      onAddCatalogOption(MoodboardCatalogKey.intExt),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   'Localización',
                   style: AppTypography.caption(palette).copyWith(
-                        color: palette.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: palette.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Wrap(
@@ -1421,9 +1634,9 @@ class _SidePanel extends ConsumerWidget {
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
                       'Sin sets aún. Añade uno o crea localizaciones desde el guion.',
-                      style: AppTypography.caption(palette).copyWith(
-                            color: palette.textTertiary,
-                          ),
+                      style: AppTypography.caption(
+                        palette,
+                      ).copyWith(color: palette.textTertiary),
                     ),
                   ),
                 const SizedBox(height: 10),
@@ -1433,59 +1646,97 @@ class _SidePanel extends ConsumerWidget {
                   value: timeOfDay,
                   onChanged: onTimeOfDay,
                   palette: palette,
+                  onAddCustom: () =>
+                      onAddCatalogOption(MoodboardCatalogKey.timeOfDay),
                 ),
                 const SizedBox(height: 10),
                 _ChipRow(
                   label: 'Calidad de luz',
-                  options: kMoodboardLightingLooks,
+                  options: lightingLookOptions,
                   value: lightingLook,
                   onChanged: onLightingLook,
                   palette: palette,
+                  onAddCustom: () =>
+                      onAddCatalogOption(MoodboardCatalogKey.lightingLook),
                 ),
                 const SizedBox(height: 10),
                 _ChipRow(
                   label: 'Tipo / fuente de luz',
-                  options: kMoodboardLightSources,
+                  options: lightSourceOptions,
                   value: lightSource,
                   onChanged: onLightSource,
                   palette: palette,
+                  onAddCustom: () =>
+                      onAddCatalogOption(MoodboardCatalogKey.lightSource),
                 ),
                 const SizedBox(height: 10),
                 _ChipRow(
                   label: 'Textura de la luz',
-                  options: kMoodboardLightTextures,
+                  options: lightTextureOptions,
                   value: lightTexture,
                   onChanged: onLightTexture,
                   palette: palette,
+                  onAddCustom: () =>
+                      onAddCatalogOption(MoodboardCatalogKey.lightTexture),
                 ),
                 const SizedBox(height: 10),
                 _ChipRow(
                   label: 'Composición',
-                  options: kMoodboardCompositions,
+                  options: compositionOptions,
                   value: composition,
                   onChanged: onComposition,
                   palette: palette,
+                  onAddCustom: () =>
+                      onAddCatalogOption(MoodboardCatalogKey.composition),
                 ),
                 const SizedBox(height: 10),
                 _ChipRow(
                   label: 'Look color',
-                  options: kMoodboardColorMoods,
+                  options: colorMoodOptions,
                   value: colorMood,
                   onChanged: onColorMood,
                   palette: palette,
+                  onAddCustom: () =>
+                      onAddCatalogOption(MoodboardCatalogKey.colorMood),
+                ),
+                const SizedBox(height: 16),
+                _CatalogSectionLabel(
+                  text: 'Aparece en la biblia',
+                  palette: palette,
+                ),
+                const SizedBox(height: 8),
+                MoodboardAssignmentBadges(
+                  assignedSections: assignedSections,
+                  linkedLocationName: locationName ?? image.linkedLocationName,
+                ),
+                const SizedBox(height: 10),
+                MoodboardSectionAssignField(
+                  selected: assignedSections,
+                  onChanged: onAssignedSectionsChanged,
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: onSuggestSections,
+                    icon: const Icon(Icons.auto_awesome_outlined, size: 16),
+                    label: const Text('Sugerir pantallas desde catálogo'),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                  data: Theme.of(
+                    context,
+                  ).copyWith(dividerColor: Colors.transparent),
                   child: ExpansionTile(
                     tilePadding: EdgeInsets.zero,
                     childrenPadding: EdgeInsets.zero,
                     title: Text(
                       'Créditos y técnico',
                       style: AppTypography.caption(palette).copyWith(
-                            color: palette.textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: palette.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     children: [
                       TextField(
@@ -1581,9 +1832,9 @@ class _SidePanel extends ConsumerWidget {
                       if (comments.isEmpty) {
                         return Text(
                           'Sin notas aún.',
-                          style: AppTypography.caption(palette).copyWith(
-                                color: palette.textTertiary,
-                              ),
+                          style: AppTypography.caption(
+                            palette,
+                          ).copyWith(color: palette.textTertiary),
                         );
                       }
                       return Column(
@@ -1605,8 +1856,9 @@ class _SidePanel extends ConsumerWidget {
                                 children: [
                                   Text(
                                     c.comment,
-                                    style: AppTypography.bodyMedium(palette)
-                                        .copyWith(fontSize: 13, height: 1.4),
+                                    style: AppTypography.bodyMedium(
+                                      palette,
+                                    ).copyWith(fontSize: 13, height: 1.4),
                                   ),
                                   const SizedBox(height: 4),
                                   Row(
@@ -1700,11 +1952,9 @@ class _CatalogSectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
-      style: AppTypography.mono(palette).copyWith(
-            fontSize: 10,
-            letterSpacing: 1.1,
-            color: palette.textTertiary,
-          ),
+      style: AppTypography.mono(
+        palette,
+      ).copyWith(fontSize: 10, letterSpacing: 1.1, color: palette.textTertiary),
     );
   }
 }
@@ -1715,6 +1965,7 @@ class _ChipRow extends StatelessWidget {
   final String? value;
   final ValueChanged<String?> onChanged;
   final AppPalette palette;
+  final VoidCallback? onAddCustom;
 
   const _ChipRow({
     required this.label,
@@ -1722,6 +1973,7 @@ class _ChipRow extends StatelessWidget {
     required this.value,
     required this.onChanged,
     required this.palette,
+    this.onAddCustom,
   });
 
   @override
@@ -1731,10 +1983,9 @@ class _ChipRow extends StatelessWidget {
       children: [
         Text(
           label,
-          style: AppTypography.caption(palette).copyWith(
-                color: palette.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textSecondary, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 6),
         Wrap(
@@ -1760,6 +2011,22 @@ class _ChipRow extends StatelessWidget {
                   color: value == opt
                       ? palette.accent.withValues(alpha: 0.5)
                       : Colors.white.withValues(alpha: 0.08),
+                ),
+              ),
+            if (onAddCustom != null)
+              ActionChip(
+                avatar: Icon(Icons.add, size: 14, color: palette.accent),
+                label: const Text('Añadir'),
+                onPressed: onAddCustom,
+                visualDensity: VisualDensity.compact,
+                labelStyle: TextStyle(
+                  fontSize: 11,
+                  color: palette.accent,
+                  fontWeight: FontWeight.w600,
+                ),
+                backgroundColor: Colors.white.withValues(alpha: 0.03),
+                side: BorderSide(
+                  color: palette.accent.withValues(alpha: 0.35),
                 ),
               ),
           ],

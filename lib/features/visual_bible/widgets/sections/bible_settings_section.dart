@@ -9,11 +9,13 @@ import '../master_config/master_config_section.dart';
 class BibleSettingsSection extends StatelessWidget {
   final int bibleId;
   final int projectId;
+  final VoidCallback? onStructureReset;
 
   const BibleSettingsSection({
     super.key,
     required this.bibleId,
     required this.projectId,
+    this.onStructureReset,
   });
 
   @override
@@ -36,6 +38,7 @@ class BibleSettingsSection extends StatelessWidget {
     return MasterConfigSection(
       bibleId: bibleId,
       projectId: projectId,
+      onStructureReset: onStructureReset,
     );
   }
 }

@@ -5,6 +5,11 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 
+/// Acciones enlazadas desde la pantalla principal al tutorial.
+abstract final class BibleTutorialActions {
+  static void Function(int step)? goToStep;
+}
+
 /// Tutorial de la Biblia Visual (primera apertura por proyecto).
 abstract final class BibleTutorial {
   static String _key(int projectId) => 'iris_bible_tutorial_done_$projectId';
@@ -60,21 +65,20 @@ class _BibleTutorialDialogState extends State<_BibleTutorialDialog> {
     ),
     (
       'Estilos Cinematic / Technical / Minimalist',
-      'Cada pantalla puede cambiar de densidad y look. Usa Ajuste rápido '
-          '(icono tune) para cambiar el estilo de la sección actual sin salir.',
+      'Cada pantalla puede cambiar de densidad y look. Abre Ajustes de pantalla '
+          '(icono tune o panel derecho) y elige el estilo sin salir de la sección.',
       Icons.tune,
     ),
     (
-      'Blueprints y plantillas',
-      'En Master Config eliges Ficción / Comercial / Documental, aplicas '
-          'presets de ejemplo y guardas tu propia plantilla para reutilizarla.',
+      'Estructuras y plantillas',
+      'En el panel derecho → pestaña Estructura reordenas pantallas en vivo. '
+          'Para plantillas completas usa Estructura y plantillas (modo avanzado).',
       Icons.dashboard_customize_outlined,
     ),
     (
       'Moodboard y Visual Sources',
-      'Las imágenes ocupan todo el canvas. Importa stills desde el botón + '
-          'o desde Ajuste rápido → Visual Sources. Abre un frame para meta, '
-          'comentarios y anotación en el mismo lightbox.',
+      'Las imágenes ocupan todo el canvas del moodboard. Importa stills con + '
+          'o desde Ajustes de pantalla → Fuentes visuales cuando estés en Moodboard.',
       Icons.collections_outlined,
     ),
     (
@@ -103,10 +107,7 @@ class _BibleTutorialDialogState extends State<_BibleTutorialDialog> {
           Icon(step.$3, color: palette.accent),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              step.$1,
-              style: AppTypography.titleMedium(palette),
-            ),
+            child: Text(step.$1, style: AppTypography.titleMedium(palette)),
           ),
         ],
       ),
@@ -118,9 +119,9 @@ class _BibleTutorialDialogState extends State<_BibleTutorialDialog> {
           children: [
             Text(
               'Paso ${_step + 1} de ${_steps.length}',
-              style: AppTypography.caption(palette).copyWith(
-                    color: palette.textTertiary,
-                  ),
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: palette.textTertiary),
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
@@ -138,9 +139,7 @@ class _BibleTutorialDialogState extends State<_BibleTutorialDialog> {
                         right: i < _steps.length - 1 ? 4 : 0,
                       ),
                       decoration: BoxDecoration(
-                        color: i <= _step
-                            ? palette.accent
-                            : palette.border,
+                        color: i <= _step ? palette.accent : palette.border,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -151,14 +150,19 @@ class _BibleTutorialDialogState extends State<_BibleTutorialDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: _finish,
-          child: const Text('Saltar'),
-        ),
+        TextButton(onPressed: _finish, child: const Text('Saltar')),
         if (_step > 0)
           TextButton(
             onPressed: () => setState(() => _step--),
             child: const Text('Atrás'),
+          ),
+        if (!isLast && _step >= 1 && _step <= 3)
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              BibleTutorialActions.goToStep?.call(_step);
+            },
+            child: const Text('Ir ahora'),
           ),
         FilledButton(
           onPressed: () {

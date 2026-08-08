@@ -14,6 +14,7 @@ import '../../bible_section_fields.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
+import '../bible_moodboard_image_target.dart';
 import '../bible_visual_color_sheet.dart';
 import '../moodboard_strip.dart';
 import 'section_scaffold.dart';
@@ -93,61 +94,6 @@ class ConceptSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final db = ref.watch(databaseProvider);
-    final custom = _getCustomData();
-
-    final sceneTag = custom['sceneTag'] as String? ?? '';
-    final colorSymbols = (custom['colorSymbols'] as List<dynamic>? ?? [])
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
-    final act1 = custom['act1Intent'] as String? ?? '';
-    final act2 = custom['act2Intent'] as String? ?? '';
-    final act3 = custom['act3Intent'] as String? ?? '';
-    final actTitles = (custom['actTitles'] as Map?)?.cast<String, String>() ??
-        {
-          '1': 'El Orden Frágil',
-          '2': 'El Descenso',
-          '3': 'La Resolución',
-        };
-    final actComp =
-        (custom['actComposition'] as Map?)?.cast<String, String>() ??
-            {
-              '1': 'Symmetrical, Locked Off, Wide',
-              '2': 'Handheld, Asymmetrical, Medium',
-              '3': 'Chaotic, Extreme Close-ups, Dutch',
-            };
-    final metrics =
-        (custom['lightingMetrics'] as Map?)?.cast<String, String>() ??
-            {
-              'contrast': data.contrastStyle ?? 'ALTO (4:1)',
-              'motivation': 'PRÁCTICOS VISIBLES',
-              'fill': 'NEGATIVO (CLOTH)',
-              'eyeLight': 'PUNTUAL / CATCHLIGHT',
-            };
-    final filmEmu =
-        custom['filmEmulation'] as String? ?? data.creativeLutName ?? '500T Push 1';
-    final grainLabel =
-        custom['grainLabel'] as String? ?? data.grainLevel ?? '35mm Coarse';
-    final contrastRatio =
-        custom['globalContrastRatio'] as String? ?? metrics['contrast'] ?? '64:1';
-    final sharpness =
-        custom['sharpnessHalation'] as String? ?? 'Soft/High';
-    final textureProminence =
-        (custom['textureProminence'] as num?)?.toInt().clamp(0, 4) ?? 3;
-    final atmosphereText = custom['atmosphereText'] as String? ?? '';
-    final atmosphereTags = (custom['atmosphereTags'] as List<dynamic>? ?? [])
-        .map((e) => e.toString())
-        .where((e) => e.isNotEmpty)
-        .toList();
-    final shadowTreatment = custom['shadowTreatment'] as String? ?? '';
-    final keyFrameTitle =
-        custom['keyFrameTitle'] as String? ?? 'Key Frame Analysis';
-    final keyFrameTech = custom['keyFrameTech'] as String? ??
-        'Aspect Ratio: ${data.aspectRatio ?? '2.39:1'} / Focal: 21mm / T2.8';
-    final refsMetadata = (custom['refsMetadata'] as List<dynamic>? ?? [])
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
 
     return BibleSectionScaffold(
       sectionId: BibleSectionId.concept,
@@ -159,804 +105,82 @@ class ConceptSection extends ConsumerWidget {
       sectionNumber: null,
       sectionTitle: 'Concepto de Imagen',
       fieldWidgets: {
-        'visualConcept': LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 900;
-
-            final paletteCard = _GlassCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'Paleta de Color',
-                        style: AppTypography.titleMedium(palette)
-                            .copyWith(fontSize: 20),
-                      ),
-                      const Spacer(),
-                      Text(
-                        'MASTER COLORS',
-                        style: AppTypography.label(palette).copyWith(
-                          color: palette.textTertiary,
-                          letterSpacing: 1.2,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  StreamBuilder<List<VisualBibleColorBlock>>(
-                    stream: db.watchColorBlocksForBible(data.id),
-                    builder: (context, snap) {
-                      final blocks = snap.data
-                              ?.map(ColorBlockModel.fromRow)
-                              .toList() ??
-                          [];
-                      final swatches = <(String, String)>[];
-                      for (final b in blocks) {
-                        for (final c in b.dominantColors) {
-                          if (swatches.length >= 7) break;
-                          swatches.add((b.blockName, c));
-                        }
-                        for (final c in b.accentColors) {
-                          if (swatches.length >= 7) break;
-                          swatches.add(('${b.blockName} · acento', c));
-                        }
-                        if (swatches.length >= 7) break;
-                      }
-                      if (swatches.isEmpty) {
-                        return Text(
-                          'Define colores en Color e imagen.',
-                          style: AppTypography.bodyMedium(palette),
-                        );
-                      }
-                      return LayoutBuilder(
-                        builder: (context, c) {
-                          final cols = c.maxWidth >= 700
-                              ? swatches.length.clamp(1, 7)
-                              : (c.maxWidth >= 420 ? 4 : 2);
-                          return Wrap(
-                            spacing: 10,
-                            runSpacing: 14,
-                            children: [
-                              for (final s in swatches)
-                                SizedBox(
-                                  width: (c.maxWidth - (cols - 1) * 10) / cols,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Container(
-                                        height: 88,
-                                        decoration: BoxDecoration(
-                                          color: _parseHex(s.$2) ??
-                                              palette.surfaceOverlay,
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                          border: Border.all(
-                                            color: Colors.white
-                                                .withValues(alpha: 0.12),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      GestureDetector(
-                                        onTap: () {
-                                          Clipboard.setData(
-                                            ClipboardData(text: s.$2),
-                                          );
-                                        },
-                                        child: Text(
-                                          s.$2.toUpperCase(),
-                                          style: AppTypography.mono(palette)
-                                              .copyWith(
-                                            fontSize: 12,
-                                            color: palette.textSecondary,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        s.$1.toUpperCase(),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: AppTypography.label(palette)
-                                            .copyWith(
-                                          fontSize: 10,
-                                          color: palette.textTertiary,
-                                          letterSpacing: 0.6,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ],
-              ),
-            );
-
-            final contrastCard = _GlassCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Contraste y Textura',
-                    style: AppTypography.titleMedium(palette)
-                        .copyWith(fontSize: 20),
-                  ),
-                  const SizedBox(height: 16),
-                  _TechScrubRow(
-                    label: 'Global Contrast Ratio',
-                    value: contrastRatio,
-                    palette: palette,
-                    accent: true,
-                    onEdit: (v) {
-                      _updateCustomData(ref, {'globalContrastRatio': v});
-                      data.contrastStyle = v;
-                      onChanged(data);
-                    },
-                  ),
-                  _TechScrubRow(
-                    label: 'Film Grain (Emulation)',
-                    value: filmEmu,
-                    palette: palette,
-                    onEdit: (v) {
-                      _updateCustomData(ref, {'filmEmulation': v});
-                      data.creativeLutName = v;
-                      onChanged(data);
-                    },
-                  ),
-                  _TechScrubRow(
-                    label: 'Sharpness / Halation',
-                    value: sharpness,
-                    palette: palette,
-                    warn: true,
-                    onEdit: (v) =>
-                        _updateCustomData(ref, {'sharpnessHalation': v}),
-                  ),
-                  _TechScrubRow(
-                    label: 'Grano Base',
-                    value: grainLabel,
-                    palette: palette,
-                    onEdit: (v) {
-                      _updateCustomData(ref, {'grainLabel': v});
-                      data.grainLevel = v;
-                      onChanged(data);
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Texture Prominence',
-                          style: AppTypography.bodyMedium(palette).copyWith(
-                            color: palette.textSecondary,
-                          ),
-                        ),
-                      ),
-                      _TextureBars(
-                        level: textureProminence,
-                        palette: palette,
-                        onChanged: (v) =>
-                            _updateCustomData(ref, {'textureProminence': v}),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'DIFUSIÓN EN ÓPTICA',
-                    style: AppTypography.label(palette).copyWith(
-                      color: palette.textTertiary,
-                      fontSize: 10,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  BibleTextField(
-                    label: '',
-                    hint: 'Glimmerglass 1/4…',
-                    initialValue: data.diffusionNotes ?? '',
-                    onChanged: (v) {
-                      data.diffusionNotes = v;
-                      onChanged(data);
-                    },
-                  ),
-                ],
-              ),
-            );
-
-            final atmosphereCard = _GlassCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Atmósfera Visual',
-                    style: AppTypography.titleMedium(palette)
-                        .copyWith(fontSize: 20),
-                  ),
-                  const SizedBox(height: 12),
-                  BibleTextField(
-                    label: '',
-                    hint:
-                        'Desaturada, calor monocromático, polvo en suspensión…',
-                    maxLines: 4,
-                    initialValue: atmosphereText,
-                    onChanged: (v) =>
-                        _updateCustomData(ref, {'atmosphereText': v}),
-                  ),
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (var i = 0; i < atmosphereTags.length; i++)
-                        InputChip(
-                          label: Text(
-                            atmosphereTags[i].toUpperCase(),
-                            style: AppTypography.label(palette).copyWith(
-                              fontSize: 10,
-                              color: const Color(0xFFADB9D1),
-                            ),
-                          ),
-                          onDeleted: () {
-                            final next = List<String>.from(atmosphereTags)
-                              ..removeAt(i);
-                            _updateCustomData(ref, {'atmosphereTags': next});
-                          },
-                          backgroundColor: palette.surfaceElevated,
-                          side: BorderSide.none,
-                          deleteIconColor: palette.textTertiary,
-                        ),
-                      ActionChip(
-                        avatar: Icon(Icons.add, size: 14, color: palette.accent),
-                        label: Text(
-                          'TAG',
-                          style: AppTypography.label(palette).copyWith(
-                            fontSize: 10,
-                            color: palette.accent,
-                          ),
-                        ),
-                        onPressed: () async {
-                          final c = TextEditingController();
-                          final v = await showDialog<String>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Tag de atmósfera'),
-                              content: TextField(
-                                controller: c,
-                                autofocus: true,
-                                textCapitalization:
-                                    TextCapitalization.characters,
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx),
-                                  child: const Text('Cancelar'),
-                                ),
-                                FilledButton(
-                                  onPressed: () =>
-                                      Navigator.pop(ctx, c.text.trim()),
-                                  child: const Text('Añadir'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (v == null || v.isEmpty) return;
-                          await _updateCustomData(ref, {
-                            'atmosphereTags': [...atmosphereTags, v],
-                          });
-                        },
-                        backgroundColor: Colors.transparent,
-                        side: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-
-            final symbolismCard = _GlassCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _CardHeader(
-                    icon: Icons.psychology_outlined,
-                    title: 'Simbología de Color',
-                    palette: palette,
-                  ),
-                  const SizedBox(height: 16),
-                  for (var i = 0; i < colorSymbols.length; i++) ...[
-                    _SymbolCard(
-                      hex: colorSymbols[i]['hex']?.toString() ?? '#FFFFFF',
-                      name: colorSymbols[i]['poeticName']?.toString() ??
-                          'Nombre',
-                      meaning: colorSymbols[i]['narrativeMeaning']
-                              ?.toString() ??
-                          '',
-                      palette: palette,
-                      parseHex: _parseHex,
-                      onEdit: () async {
-                        final result = await _editSymbolDialog(
-                          context,
-                          name: colorSymbols[i]['poeticName']?.toString() ?? '',
-                          meaning: colorSymbols[i]['narrativeMeaning']
-                                  ?.toString() ??
-                              '',
-                          hex: colorSymbols[i]['hex']?.toString() ?? '#FFFFFF',
-                        );
-                        if (result == null) return;
-                        final updated =
-                            List<Map<String, dynamic>>.from(colorSymbols);
-                        updated[i] = result;
-                        await _updateCustomData(
-                          ref,
-                          {'colorSymbols': updated},
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final result = await _editSymbolDialog(
-                        context,
-                        name: '',
-                        meaning: '',
-                        hex: '#1B3A4B',
-                      );
-                      if (result == null) return;
-                      final updated =
-                          List<Map<String, dynamic>>.from(colorSymbols)
-                            ..add(result);
-                      await _updateCustomData(
-                        ref,
-                        {'colorSymbols': updated},
-                      );
-                    },
-                    icon: Icon(Icons.add, size: 16, color: palette.accent),
-                    label: Text(
-                      'AÑADIR SIMBOLOGÍA',
-                      style: AppTypography.label(palette).copyWith(
-                        color: palette.accent,
-                        fontSize: 10,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.12),
-                      ),
-                      minimumSize: const Size.fromHeight(40),
-                    ),
-                  ),
-                ],
-              ),
-            );
-
-            final lightingCard = _GlassCard(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _CardHeader(
-                    icon: Icons.lightbulb_outline,
-                    title: 'Filosofía de Luz',
-                    palette: palette,
-                  ),
-                  const SizedBox(height: 12),
-                  BibleTextField(
-                    label: '',
-                    hint: 'Noir moderno, far-side key…',
-                    maxLines: 4,
-                    initialValue: data.lightingPhilosophy ?? '',
-                    onChanged: (v) {
-                      data.lightingPhilosophy = v;
-                      onChanged(data);
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  LayoutBuilder(
-                    builder: (context, c) {
-                      final cols = c.maxWidth > 520 ? 4 : 2;
-                      return GridView.count(
-                        crossAxisCount: cols,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                        childAspectRatio: 1.5,
-                        children: [
-                          _MetricTile(
-                            label: 'Contraste',
-                            value: metrics['contrast'] ?? '—',
-                            palette: palette,
-                            onEdit: (v) => _updateCustomData(ref, {
-                              'lightingMetrics': {
-                                ...metrics,
-                                'contrast': v,
-                              },
-                            }),
-                          ),
-                          _MetricTile(
-                            label: 'Motivación',
-                            value: metrics['motivation'] ?? '—',
-                            palette: palette,
-                            onEdit: (v) => _updateCustomData(ref, {
-                              'lightingMetrics': {
-                                ...metrics,
-                                'motivation': v,
-                              },
-                            }),
-                          ),
-                          _MetricTile(
-                            label: 'Fill Light',
-                            value: metrics['fill'] ?? '—',
-                            palette: palette,
-                            onEdit: (v) => _updateCustomData(ref, {
-                              'lightingMetrics': {...metrics, 'fill': v},
-                            }),
-                          ),
-                          _MetricTile(
-                            label: 'Eye Light',
-                            value: metrics['eyeLight'] ?? '—',
-                            palette: palette,
-                            onEdit: (v) => _updateCustomData(ref, {
-                              'lightingMetrics': {
-                                ...metrics,
-                                'eyeLight': v,
-                              },
-                            }),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
-              ),
-            );
-
-            final refsGallery = _GlassCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'Cinematic References',
-                        style: AppTypography.titleMedium(palette)
-                            .copyWith(fontSize: 20),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () async {
-                          await MoodboardHelpers.addManualImages(
-                            db: db,
-                            projectId: projectId,
-                            bibleId: data.id,
-                            category: MoodboardCategory.reference,
-                          );
-                        },
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'AÑADIR FRAME',
-                              style: AppTypography.label(palette).copyWith(
-                                color: palette.accent,
-                                fontSize: 10,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.arrow_forward,
-                              size: 14,
-                              color: palette.accent,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _CinematicRefsGrid(
-                    projectId: projectId,
-                    palette: palette,
-                    keyFrameTitle: keyFrameTitle,
-                    keyFrameTech: keyFrameTech,
-                    onEditKeyFrame: () async {
-                      final t = TextEditingController(text: keyFrameTitle);
-                      final tech = TextEditingController(text: keyFrameTech);
-                      final ok = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Key Frame Analysis'),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              TextField(
-                                controller: t,
-                                decoration:
-                                    const InputDecoration(labelText: 'Título'),
-                              ),
-                              TextField(
-                                controller: tech,
-                                decoration: const InputDecoration(
-                                  labelText: 'Tech line',
-                                ),
-                              ),
-                            ],
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text('Cancelar'),
-                            ),
-                            FilledButton(
-                              onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text('Guardar'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (ok == true) {
-                        await _updateCustomData(ref, {
-                          'keyFrameTitle': t.text.trim(),
-                          'keyFrameTech': tech.text.trim(),
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  MoodboardStrip.forSection(
-                    projectId: projectId,
-                    sectionId: BibleSectionId.concept,
-                    showTitle: false,
-                    showCaptions: true,
-                  ),
-                ],
-              ),
-            );
-
-            final shadowsCard = _GlassCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Tratamiento de Sombras',
-                    style: AppTypography.titleMedium(palette)
-                        .copyWith(fontSize: 20),
-                  ),
-                  const SizedBox(height: 12),
-                  BibleTextField(
-                    label: '',
-                    hint:
-                        'Negros densos (#0a0a0c), fill mínimo, sombras como elemento compositivo…',
-                    maxLines: 5,
-                    initialValue: shadowTreatment,
-                    onChanged: (v) =>
-                        _updateCustomData(ref, {'shadowTreatment': v}),
-                  ),
-                ],
-              ),
-            );
-
-            final compositionCard = _GlassCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Composición por Actos',
-                    style: AppTypography.titleMedium(palette)
-                        .copyWith(fontSize: 20),
-                  ),
-                  const SizedBox(height: 14),
-                  for (final n in ['1', '2', '3']) ...[
-                    _CompositionActRow(
-                      actLabel: 'Act ${['I', 'II', 'III'][int.parse(n) - 1]}:',
-                      value: actComp[n] ?? '—',
-                      palette: palette,
-                      onEdit: (v) => _updateCustomData(ref, {
-                        'actComposition': {...actComp, n: v},
-                      }),
-                    ),
-                    if (n != '3') const SizedBox(height: 10),
-                  ],
-                ],
-              ),
-            );
-
-            final actsTimeline = _GlassCard(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _CardHeader(
-                    icon: Icons.timeline,
-                    title: 'Intención Visual por Acto',
-                    palette: palette,
-                  ),
-                  const SizedBox(height: 20),
-                  _ActTimelineItem(
-                    roman: 'I',
-                    title: actTitles['1'] ?? 'Acto I',
-                    body: act1,
-                    showLine: true,
-                    palette: palette,
-                    onEdit: (title, body) async {
-                      await _updateCustomData(ref, {
-                        'act1Intent': body,
-                        'actTitles': {...actTitles, '1': title},
-                      });
-                    },
-                  ),
-                  _ActTimelineItem(
-                    roman: 'II',
-                    title: actTitles['2'] ?? 'Acto II',
-                    body: act2,
-                    showLine: true,
-                    palette: palette,
-                    onEdit: (title, body) async {
-                      await _updateCustomData(ref, {
-                        'act2Intent': body,
-                        'actTitles': {...actTitles, '2': title},
-                      });
-                    },
-                  ),
-                  _ActTimelineItem(
-                    roman: 'III',
-                    title: actTitles['3'] ?? 'Acto III',
-                    body: act3,
-                    showLine: false,
-                    palette: palette,
-                    onEdit: (title, body) async {
-                      await _updateCustomData(ref, {
-                        'act3Intent': body,
-                        'actTitles': {...actTitles, '3': title},
-                      });
-                    },
-                  ),
-                ],
-              ),
-            );
-
-            final refsMeta = Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.movie_outlined, color: palette.accent, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Fichas de Referencia',
-                      style: AppTypography.titleMedium(palette)
-                          .copyWith(fontSize: 18),
-                    ),
-                    const Spacer(),
-                    TextButton.icon(
-                      onPressed: () async {
-                        final edited = await _editRefDialog(context, {
-                          'film': '',
-                          'dp': '',
-                          'director': '',
-                          'tone': '',
-                          'intent': '',
-                        });
-                        if (edited == null) return;
-                        final updated =
-                            List<Map<String, dynamic>>.from(refsMetadata)
-                              ..add(edited);
-                        await _updateCustomData(
-                          ref,
-                          {'refsMetadata': updated},
-                        );
-                      },
-                      icon: Icon(Icons.add, color: palette.accent, size: 16),
-                      label: Text(
-                        'Añadir ficha',
-                        style: TextStyle(color: palette.accent),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ...refsMetadata.map((refData) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _ReferenceMetaCard(
-                      data: refData,
-                      palette: palette,
-                      onEdit: () async {
-                        final edited = await _editRefDialog(context, refData);
-                        if (edited == null) return;
-                        final idx = refsMetadata.indexOf(refData);
-                        final updated =
-                            List<Map<String, dynamic>>.from(refsMetadata);
-                        updated[idx] = edited;
-                        await _updateCustomData(
-                          ref,
-                          {'refsMetadata': updated},
-                        );
-                      },
-                    ),
-                  );
-                }),
-              ],
-            );
-
-            final leftCol = Column(
-              children: [
-                contrastCard,
-                const SizedBox(height: 16),
-                atmosphereCard,
-                const SizedBox(height: 16),
-                symbolismCard,
-              ],
-            );
-
-            final rightCol = Column(
-              children: [
-                lightingCard,
-                const SizedBox(height: 16),
-                refsGallery,
-                const SizedBox(height: 16),
-                if (wide)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: shadowsCard),
-                      const SizedBox(width: 16),
-                      Expanded(child: compositionCard),
-                    ],
-                  )
-                else ...[
-                  shadowsCard,
-                  const SizedBox(height: 16),
-                  compositionCard,
-                ],
-                const SizedBox(height: 16),
-                actsTimeline,
-                const SizedBox(height: 16),
-                refsMeta,
-              ],
-            );
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _ConceptIntro(
-                  data: data,
-                  onChanged: onChanged,
-                  sceneTag: sceneTag,
-                  onSceneTagEdit: (v) =>
-                      _updateCustomData(ref, {'sceneTag': v}),
-                ),
-                const SizedBox(height: 28),
-                paletteCard,
-                const SizedBox(height: 20),
-                if (wide)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 4, child: leftCol),
-                      const SizedBox(width: 20),
-                      Expanded(flex: 8, child: rightCol),
-                    ],
-                  )
-                else ...[
-                  leftCol,
-                  const SizedBox(height: 20),
-                  rightCol,
-                ],
-              ],
-            );
-          },
+        'colorPalette': _ConceptStitchModule(
+          slot: 'colorPalette',
+          data: data,
+          projectId: projectId,
+          palette: palette,
+          db: db,
+          onChanged: onChanged,
+          sectionContentJson: sectionContentJson,
+          parseHex: _parseHex,
+          updateCustomData: _updateCustomData,
+        ),
+        'colorSymbolism': _ConceptStitchModule(
+          slot: 'colorSymbolism',
+          data: data,
+          projectId: projectId,
+          palette: palette,
+          db: db,
+          onChanged: onChanged,
+          sectionContentJson: sectionContentJson,
+          parseHex: _parseHex,
+          updateCustomData: _updateCustomData,
+        ),
+        'lightPhilosophy': _ConceptStitchModule(
+          slot: 'lightPhilosophy',
+          data: data,
+          projectId: projectId,
+          palette: palette,
+          db: db,
+          onChanged: onChanged,
+          sectionContentJson: sectionContentJson,
+          parseHex: _parseHex,
+          updateCustomData: _updateCustomData,
+        ),
+        'keyFrame': _ConceptStitchModule(
+          slot: 'keyFrame',
+          data: data,
+          projectId: projectId,
+          palette: palette,
+          db: db,
+          onChanged: onChanged,
+          sectionContentJson: sectionContentJson,
+          parseHex: _parseHex,
+          updateCustomData: _updateCustomData,
+        ),
+        'shadowTreatment': _ConceptStitchModule(
+          slot: 'shadowTreatment',
+          data: data,
+          projectId: projectId,
+          palette: palette,
+          db: db,
+          onChanged: onChanged,
+          sectionContentJson: sectionContentJson,
+          parseHex: _parseHex,
+          updateCustomData: _updateCustomData,
+        ),
+        'actComposition': _ConceptStitchModule(
+          slot: 'actComposition',
+          data: data,
+          projectId: projectId,
+          palette: palette,
+          db: db,
+          onChanged: onChanged,
+          sectionContentJson: sectionContentJson,
+          parseHex: _parseHex,
+          updateCustomData: _updateCustomData,
+        ),
+        'actNotes': _ConceptStitchModule(
+          slot: 'actNotes',
+          data: data,
+          projectId: projectId,
+          palette: palette,
+          db: db,
+          onChanged: onChanged,
+          sectionContentJson: sectionContentJson,
+          parseHex: _parseHex,
+          updateCustomData: _updateCustomData,
         ),
       },
     );
@@ -1362,7 +586,10 @@ class _CinematicRefsGrid extends ConsumerWidget {
           children: [
             LayoutBuilder(
               builder: (context, c) {
-                final cols = c.maxWidth >= 520 ? 3 : 2;
+                final w = c.maxWidth.isFinite
+                    ? c.maxWidth
+                    : MediaQuery.sizeOf(context).width;
+                final cols = w >= 520 ? 3 : 2;
                 return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -1427,20 +654,48 @@ class _CinematicRefsGrid extends ConsumerWidget {
               child: InkWell(
                 onTap: onEditKeyFrame,
                 borderRadius: BorderRadius.circular(6),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: AspectRatio(
-                    aspectRatio: 21 / 9,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Builder(
+                child: BibleMoodboardImageTarget(
+                  projectId: projectId,
+                  sectionId: BibleSectionId.concept,
+                  hint: 'Clic aquí → ⌘V para pegar key frame',
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: AspectRatio(
+                      aspectRatio: 21 / 9,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Builder(
                           builder: (_) {
                             final model = MoodboardImageModel.fromRow(hero);
                             final file = File(model.imagePath);
                             return file.existsSync()
                                 ? Image.file(file, fit: BoxFit.cover)
-                                : ColoredBox(color: palette.surfaceOverlay);
+                                : ColoredBox(
+                                    color: palette.surfaceOverlay,
+                                    child: Center(
+                                      child: TextButton.icon(
+                                        onPressed: () =>
+                                            MoodboardHelpers.addManualImages(
+                                          db: db,
+                                          projectId: projectId,
+                                          category: MoodboardCategory.framing,
+                                          assignedSections: [
+                                            BibleSectionId.concept,
+                                          ],
+                                        ),
+                                        icon: Icon(
+                                          Icons.add_photo_alternate_outlined,
+                                          color: palette.accent,
+                                        ),
+                                        label: Text(
+                                          'Añadir key frame',
+                                          style:
+                                              TextStyle(color: palette.accent),
+                                        ),
+                                      ),
+                                    ),
+                                  );
                           },
                         ),
                         const DecoratedBox(
@@ -1486,6 +741,7 @@ class _CinematicRefsGrid extends ConsumerWidget {
                     ),
                   ),
                 ),
+              ),
               ),
             ),
           ],
@@ -1899,5 +1155,282 @@ class _ReferenceMetaCard extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// Módulos Stitch descompuestos para el panel Widgets ↔ pantalla.
+class _ConceptStitchModule extends ConsumerWidget {
+  final String slot;
+  final VisualBibleData data;
+  final int projectId;
+  final AppPalette palette;
+  final AppDatabase db;
+  final String? sectionContentJson;
+  final BibleChanged onChanged;
+  final Color? Function(String?) parseHex;
+  final Future<void> Function(WidgetRef ref, Map<String, dynamic> update)
+      updateCustomData;
+
+  const _ConceptStitchModule({
+    required this.slot,
+    required this.data,
+    required this.projectId,
+    required this.palette,
+    required this.db,
+    required this.onChanged,
+    required this.sectionContentJson,
+    required this.parseHex,
+    required this.updateCustomData,
+  });
+
+  Map<String, dynamic> _custom() {
+    if (sectionContentJson == null) return {};
+    try {
+      final decoded = jsonDecode(sectionContentJson!);
+      if (decoded is Map<String, dynamic> && decoded.containsKey('_values')) {
+        final vals = decoded['_values'] as Map<String, dynamic>;
+        if (vals.containsKey('conceptData')) {
+          return jsonDecode(vals['conceptData'] as String)
+              as Map<String, dynamic>;
+        }
+      }
+    } catch (_) {}
+    return {};
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final custom = _custom();
+    final colorSymbols = (custom['colorSymbols'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    final actTitles = (custom['actTitles'] as Map?)?.cast<String, String>() ??
+        {'1': 'El Orden Frágil', '2': 'El Descenso', '3': 'La Resolución'};
+    final actComp =
+        (custom['actComposition'] as Map?)?.cast<String, String>() ??
+            {
+              '1': 'Symmetrical, Locked Off, Wide',
+              '2': 'Handheld, Asymmetrical, Medium',
+              '3': 'Chaotic, Extreme Close-ups, Dutch',
+            };
+    final metrics =
+        (custom['lightingMetrics'] as Map?)?.cast<String, String>() ??
+            {
+              'contrast': data.contrastStyle ?? 'ALTO (4:1)',
+              'motivation': 'PRÁCTICOS VISIBLES',
+            };
+    final shadowTreatment = custom['shadowTreatment'] as String? ?? '';
+    final keyFrameTitle =
+        custom['keyFrameTitle'] as String? ?? 'Key Frame Analysis';
+    final keyFrameTech = custom['keyFrameTech'] as String? ??
+        'Aspect Ratio: ${data.aspectRatio ?? '2.39:1'} / Focal: 21mm / T2.8';
+    final act1 = custom['act1Intent'] as String? ?? '';
+    final act2 = custom['act2Intent'] as String? ?? '';
+    final act3 = custom['act3Intent'] as String? ?? '';
+
+    return switch (slot) {
+      'colorPalette' => _GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Paleta de Color',
+                style: AppTypography.titleMedium(palette).copyWith(fontSize: 20),
+              ),
+              const SizedBox(height: 20),
+              StreamBuilder<List<VisualBibleColorBlock>>(
+                stream: db.watchColorBlocksForBible(data.id),
+                builder: (context, snap) {
+                  final blocks =
+                      snap.data?.map(ColorBlockModel.fromRow).toList() ?? [];
+                  if (blocks.isEmpty) {
+                    return Text(
+                      'Define colores en Color e imagen.',
+                      style: AppTypography.bodyMedium(palette),
+                    );
+                  }
+                  return Wrap(
+                    spacing: 10,
+                    runSpacing: 14,
+                    children: [
+                      for (final b in blocks)
+                        for (final c in b.dominantColors.take(3))
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              color: parseHex(c) ?? palette.surfaceOverlay,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      'colorSymbolism' => _GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CardHeader(
+                icon: Icons.psychology_outlined,
+                title: 'Simbología de Color',
+                palette: palette,
+              ),
+              const SizedBox(height: 16),
+              for (final sym in colorSymbols)
+                Text(
+                  '${sym['poeticName'] ?? 'Color'} · ${sym['narrativeMeaning'] ?? ''}',
+                  style: AppTypography.bodyMedium(palette),
+                ),
+            ],
+          ),
+        ),
+      'lightPhilosophy' => _GlassCard(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CardHeader(
+                icon: Icons.lightbulb_outline,
+                title: 'Filosofía de Luz',
+                palette: palette,
+              ),
+              const SizedBox(height: 12),
+              BibleTextField(
+                label: '',
+                hint: 'Noir moderno, far-side key…',
+                maxLines: 4,
+                initialValue: data.lightingPhilosophy ?? '',
+                onChanged: (v) {
+                  data.lightingPhilosophy = v;
+                  onChanged(data);
+                },
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Contraste: ${metrics['contrast'] ?? '—'}',
+                style: AppTypography.caption(palette),
+              ),
+            ],
+          ),
+        ),
+      'keyFrame' => _GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(keyFrameTitle,
+                  style:
+                      AppTypography.titleMedium(palette).copyWith(fontSize: 20)),
+              const SizedBox(height: 8),
+              Text(keyFrameTech, style: AppTypography.mono(palette)),
+              const SizedBox(height: 12),
+              MoodboardStrip.forSection(
+                projectId: projectId,
+                sectionId: BibleSectionId.concept,
+                showTitle: false,
+                showCaptions: true,
+              ),
+            ],
+          ),
+        ),
+      'shadowTreatment' => _GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Tratamiento de Sombras',
+                style: AppTypography.titleMedium(palette).copyWith(fontSize: 20),
+              ),
+              const SizedBox(height: 12),
+              BibleTextField(
+                label: '',
+                maxLines: 5,
+                initialValue: shadowTreatment,
+                onChanged: (v) =>
+                    updateCustomData(ref, {'shadowTreatment': v}),
+              ),
+            ],
+          ),
+        ),
+      'actComposition' => _GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Composición por Actos',
+                style: AppTypography.titleMedium(palette).copyWith(fontSize: 20),
+              ),
+              const SizedBox(height: 14),
+              for (final n in ['1', '2', '3'])
+                _CompositionActRow(
+                  actLabel: 'Act ${['I', 'II', 'III'][int.parse(n) - 1]}:',
+                  value: actComp[n] ?? '—',
+                  palette: palette,
+                  onEdit: (v) => updateCustomData(ref, {
+                    'actComposition': {...actComp, n: v},
+                  }),
+                ),
+            ],
+          ),
+        ),
+      'actNotes' => _GlassCard(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CardHeader(
+                icon: Icons.timeline,
+                title: 'Intención Visual por Acto',
+                palette: palette,
+              ),
+              const SizedBox(height: 20),
+              _ActTimelineItem(
+                roman: 'I',
+                title: actTitles['1'] ?? 'Acto I',
+                body: act1,
+                showLine: true,
+                palette: palette,
+                onEdit: (title, body) async {
+                  await updateCustomData(ref, {
+                    'act1Intent': body,
+                    'actTitles': {...actTitles, '1': title},
+                  });
+                },
+              ),
+              _ActTimelineItem(
+                roman: 'II',
+                title: actTitles['2'] ?? 'Acto II',
+                body: act2,
+                showLine: true,
+                palette: palette,
+                onEdit: (title, body) async {
+                  await updateCustomData(ref, {
+                    'act2Intent': body,
+                    'actTitles': {...actTitles, '2': title},
+                  });
+                },
+              ),
+              _ActTimelineItem(
+                roman: 'III',
+                title: actTitles['3'] ?? 'Acto III',
+                body: act3,
+                showLine: false,
+                palette: palette,
+                onEdit: (title, body) async {
+                  await updateCustomData(ref, {
+                    'act3Intent': body,
+                    'actTitles': {...actTitles, '3': title},
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+      _ => const SizedBox.shrink(),
+    };
   }
 }

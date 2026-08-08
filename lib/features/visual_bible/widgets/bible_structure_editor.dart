@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/app_database.dart' hide BibleSectionGroup;
-import '../../../core/database/app_database.dart' as app_db show BibleSectionGroup;
+import '../../../core/database/app_database.dart'
+    as app_db
+    show BibleSectionGroup;
 import '../../../core/database/database_provider.dart';
 import '../../../core/settings/user_templates_settings_section.dart';
 import '../../../core/templates/user_template_models.dart';
@@ -20,15 +22,19 @@ import 'bible_navigation_scope.dart';
 import 'bible_section_fields_editor.dart';
 
 /// Editor de estructura: renombrar, ocultar/eliminar y sub-apartados.
-/// El reordenamiento vive solo en Master Config.
+/// El reordenamiento vive en el área central de Personalizar Biblia.
 class BibleStructureEditor extends ConsumerStatefulWidget {
   final int bibleId;
   final int projectId;
+  final VoidCallback? onStructureReset;
+  final bool compact;
 
   const BibleStructureEditor({
     super.key,
     required this.bibleId,
     required this.projectId,
+    this.onStructureReset,
+    this.compact = false,
   });
 
   @override
@@ -50,6 +56,38 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
           stream: db.watchBibleSectionDefinitions(widget.bibleId),
           builder: (context, defSnap) {
             final defs = defSnap.data ?? [];
+            if (widget.compact) {
+              return ListView(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                children: [
+                  for (final group in groups) ...[
+                    Text(
+                      group.label.toUpperCase(),
+                      style: AppTypography.mono(palette).copyWith(
+                        fontSize: 10,
+                        letterSpacing: 1,
+                        color: palette.textTertiary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _CompactReorderList(
+                      defs: defs
+                          .where((d) => d.groupId == group.id && !d.isHidden)
+                          .toList()
+                        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)),
+                      onReorder: (ids) => ref
+                          .read(databaseProvider)
+                          .reorderBibleSectionsInGroup(
+                            widget.bibleId,
+                            group.id,
+                            ids,
+                          ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ],
+              );
+            }
             return SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.lg),
@@ -63,13 +101,14 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       'Renombra, oculta o elimina pantallas. Para cambiar el orden, '
-                      'usa Master Config (un solo drag & drop).',
+                      'abre Personalizar Biblia (un solo drag & drop).',
                       style: AppTypography.caption(palette),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     _TemplateToolbar(
                       bibleId: widget.bibleId,
                       projectId: widget.projectId,
+                      onStructureReset: widget.onStructureReset,
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Expanded(
@@ -83,17 +122,16 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
                             _SectionManageList(
                               defs: defs
                                   .where(
-                                    (d) =>
-                                        d.groupId == group.id && !d.isHidden,
+                                    (d) => d.groupId == group.id && !d.isHidden,
                                   )
                                   .toList(),
                               onRename: (def) => _renameSection(context, def),
                               onEditFields: (def) =>
                                   BibleSectionFieldsEditor.show(
-                                context,
-                                bibleId: widget.bibleId,
-                                definition: def,
-                              ),
+                                    context,
+                                    bibleId: widget.bibleId,
+                                    definition: def,
+                                  ),
                               onToggleHidden: (def, hidden) => ref
                                   .read(databaseProvider)
                                   .setBibleSectionHidden(
@@ -149,6 +187,7 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
   Future<void> _addCustomSection(BuildContext context, String groupId) async {
     final label = await _promptLabel(context, 'Nueva sección', '');
     if (label == null || label.isEmpty) return;
+    if (!context.mounted) return;
     final style = await showModalBottomSheet<String>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -278,15 +317,16 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
 class _TemplateToolbar extends ConsumerWidget {
   final int bibleId;
   final int projectId;
+  final VoidCallback? onStructureReset;
 
   const _TemplateToolbar({
     required this.bibleId,
     required this.projectId,
+    this.onStructureReset,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final palette = context.palette;
     final db = ref.read(databaseProvider);
 
     return Wrap(
@@ -309,6 +349,7 @@ class _TemplateToolbar extends ConsumerWidget {
               bibleId: bibleId,
             );
             final prefs = await UserTemplatePreferences.load();
+            if (!context.mounted) return;
             final setDefault = await showDialog<bool>(
               context: context,
               builder: (ctx) => AlertDialog(
@@ -348,6 +389,40 @@ class _TemplateToolbar extends ConsumerWidget {
           icon: const Icon(Icons.file_open_outlined, size: 18),
           label: const Text('Aplicar plantilla'),
           onPressed: () => _applyTemplate(context, ref),
+        ),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+          label: const Text('Resetear estructura'),
+          onPressed: () async {
+            final ok = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Resetear estructura'),
+                content: const Text(
+                  'Se eliminarán todas las pantallas y grupos de la biblia. '
+                  'El contenido técnico (moodboard, bloques de color, specs) '
+                  'se conservará. Volverás a elegir cómo empezar.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancelar'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Resetear'),
+                  ),
+                ],
+              ),
+            );
+            if (ok != true) return;
+            await db.resetBibleStructureToEmpty(bibleId);
+            if (context.mounted) {
+              Navigator.pop(context);
+              onStructureReset?.call();
+              AppSnackBar.show(context, 'Estructura reseteada');
+            }
+          },
         ),
         OutlinedButton.icon(
           icon: const Icon(Icons.restore_outlined, size: 18),
@@ -402,8 +477,7 @@ class _TemplateToolbar extends ConsumerWidget {
             ListTile(
               leading: const Icon(Icons.auto_stories_outlined),
               title: const Text('Plantilla IRIS (base de fotografía)'),
-              onTap: () =>
-                  Navigator.pop(ctx, kBuiltinBibleLayoutTemplateId),
+              onTap: () => Navigator.pop(ctx, kBuiltinBibleLayoutTemplateId),
             ),
             for (final t in templates)
               ListTile(
@@ -417,6 +491,7 @@ class _TemplateToolbar extends ConsumerWidget {
       ),
     );
     if (picked == null) return;
+    if (!context.mounted) return;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -486,11 +561,10 @@ class _SectionManageList extends StatelessWidget {
             title: Text(def.label),
             subtitle: def.isBuiltIn
                 ? null
-                : Text(
-                    'Personalizada',
-                    style: AppTypography.caption(palette),
-                  ),
-            trailing: Row(
+                : Text('Personalizada', style: AppTypography.caption(palette)),
+            trailing: SizedBox(
+              width: onDelete != null && onToggleHidden != null ? 192 : 144,
+              child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (onToggleHidden != null)
@@ -501,8 +575,9 @@ class _SectionManageList extends StatelessWidget {
                           : Icons.visibility_outlined,
                       size: 18,
                     ),
-                    tooltip:
-                        def.isHidden ? 'Mostrar sección' : 'Ocultar sección',
+                    tooltip: def.isHidden
+                        ? 'Mostrar sección'
+                        : 'Ocultar sección',
                     onPressed: () => onToggleHidden!(def, !def.isHidden),
                   ),
                 IconButton(
@@ -516,8 +591,11 @@ class _SectionManageList extends StatelessWidget {
                 ),
                 if (onDelete != null && def.id != 'settings')
                   IconButton(
-                    icon: Icon(Icons.delete_outline,
-                        size: 18, color: palette.error),
+                    icon: Icon(
+                      Icons.delete_outline,
+                      size: 18,
+                      color: palette.error,
+                    ),
                     tooltip: def.isBuiltIn
                         ? 'Quitar de la biblia'
                         : 'Eliminar pantalla',
@@ -525,6 +603,7 @@ class _SectionManageList extends StatelessWidget {
                   ),
               ],
             ),
+          ),
           ),
       ],
     );
@@ -547,10 +626,9 @@ class _GroupHeader extends StatelessWidget {
           Expanded(
             child: Text(
               label.toUpperCase(),
-              style: AppTypography.caption(palette).copyWith(
-                letterSpacing: 1.1,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(letterSpacing: 1.1, fontWeight: FontWeight.w600),
             ),
           ),
           IconButton(
@@ -560,6 +638,53 @@ class _GroupHeader extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CompactReorderList extends StatelessWidget {
+  final List<BibleSectionDefinition> defs;
+  final ValueChanged<List<String>> onReorder;
+
+  const _CompactReorderList({
+    required this.defs,
+    required this.onReorder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: defs.length,
+      onReorder: (oldIndex, newIndex) {
+        if (newIndex > oldIndex) newIndex--;
+        final next = List<BibleSectionDefinition>.from(defs);
+        final item = next.removeAt(oldIndex);
+        next.insert(newIndex, item);
+        onReorder(next.map((d) => d.id).toList());
+      },
+      itemBuilder: (context, index) {
+        final def = defs[index];
+        return Material(
+          key: ValueKey(def.id),
+          color: palette.surfaceOverlay,
+          borderRadius: BorderRadius.circular(8),
+          child: ListTile(
+            dense: true,
+            leading: ReorderableDragStartListener(
+              index: index,
+              child: Icon(Icons.drag_handle, color: palette.textTertiary, size: 18),
+            ),
+            title: Text(
+              def.label,
+              style: AppTypography.bodyMedium(palette).copyWith(fontSize: 13),
+            ),
+            trailing: Icon(bibleIconFromKey(def.iconKey), size: 16, color: palette.accent),
+          ),
+        );
+      },
     );
   }
 }

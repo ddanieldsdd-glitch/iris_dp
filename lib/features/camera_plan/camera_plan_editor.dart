@@ -13,6 +13,8 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_color.dart';
+import '../../shared/annotations/annotation_canvas.dart';
+import '../../shared/annotations/annotation_document.dart';
 import 'camera_plan_grouping.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
@@ -51,10 +53,10 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required this.projectId,
     required int this.siteId,
     required String siteName,
-  })  : label = siteName,
-        scope = FloorPlanScope.site,
-        setId = null,
-        shotId = null;
+  }) : label = siteName,
+       scope = FloorPlanScope.site,
+       setId = null,
+       shotId = null;
 
   /// Plano base del set de rodaje.
   const CameraPlanEditor.set({
@@ -62,10 +64,10 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required this.projectId,
     required int this.setId,
     required String setName,
-  })  : label = setName,
-        scope = FloorPlanScope.set,
-        siteId = null,
-        shotId = null;
+  }) : label = setName,
+       scope = FloorPlanScope.set,
+       siteId = null,
+       shotId = null;
 
   /// Planta de cámara de un plano concreto.
   const CameraPlanEditor.shot({
@@ -73,17 +75,21 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required this.projectId,
     required int this.shotId,
     required String shotLabel,
-  })  : label = shotLabel,
-        scope = FloorPlanScope.shot,
-        siteId = null,
-        setId = null;
+  }) : label = shotLabel,
+       scope = FloorPlanScope.shot,
+       siteId = null,
+       setId = null;
 
   @override
   ConsumerState<CameraPlanEditor> createState() => _CameraPlanEditorState();
 }
 
 class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
+  static const _annotationDocumentSize = Size(1600, 1200);
+
   final List<PlanElement> _elements = [];
+  final AnnotationCanvasController _annotationController =
+      AnnotationCanvasController();
   PlanElement? _selected;
   Offset _canvasOffset = Offset.zero;
   double _scale = 1.0;
@@ -101,15 +107,34 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   ui.Image? _backgroundImage;
   Rect? _backgroundRect;
   double _backgroundOpacity = 0.85;
+  bool _annotationMode = false;
+  AnnotationToolType _annotationTool = AnnotationToolType.pen;
+  Color _annotationColor = const Color(0xFF007AFF);
+  double _annotationWidth = 6;
   late FloorPlanRepository _repo;
 
   bool get _isShotMode => widget.scope == FloorPlanScope.shot;
+  String get _annotationTargetType => switch (widget.scope) {
+    FloorPlanScope.site => 'camera_plan_site',
+    FloorPlanScope.set => 'camera_plan_set',
+    FloorPlanScope.shot => 'camera_plan_shot',
+  };
+  String get _annotationTargetId {
+    final id = widget.siteId ?? widget.setId ?? widget.shotId;
+    return id?.toString() ?? '${widget.scope.name}:${widget.label}';
+  }
 
   @override
   void initState() {
     super.initState();
     _repo = FloorPlanRepository(ref.read(databaseProvider));
     _load();
+  }
+
+  @override
+  void dispose() {
+    _annotationController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -119,6 +144,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       siteId: widget.siteId,
       setId: widget.setId,
       shotId: widget.shotId,
+    );
+    final annotationRow = await db.getProjectAnnotationDocument(
+      projectId: widget.projectId,
+      targetType: _annotationTargetType,
+      targetId: _annotationTargetId,
     );
 
     Shot? shot;
@@ -138,14 +168,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     );
 
     if (_isShotMode && widget.shotId != null) {
-      shot = await (db.select(db.shots)
-            ..where((s) => s.id.equals(widget.shotId!)))
-          .getSingleOrNull();
+      shot = await (db.select(
+        db.shots,
+      )..where((s) => s.id.equals(widget.shotId!))).getSingleOrNull();
 
       if (shot != null) {
-        scene = await (db.select(db.scenes)
-              ..where((s) => s.id.equals(shot!.sceneId)))
-            .getSingleOrNull();
+        scene = await (db.select(
+          db.scenes,
+        )..where((s) => s.id.equals(shot!.sceneId))).getSingleOrNull();
         if (scene != null) {
           if (scene.locationId != null) {
             linkedSet = await db.getLocationById(scene.locationId!);
@@ -157,8 +187,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           }
           sceneColor = colors.sceneColor(scene);
           if (elements.isEmpty) {
-            canInherit =
-                await _repo.resolveTemplateJsonForScene(scene) != null;
+            canInherit = await _repo.resolveTemplateJsonForScene(scene) != null;
           }
         }
       }
@@ -173,8 +202,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       sceneColor = colors.siteColor(widget.siteId);
     }
 
-    final navTargets =
-        _isShotMode ? await _loadNavTargets(db) : <CameraPlanNavTarget>[];
+    final navTargets = _isShotMode
+        ? await _loadNavTargets(db)
+        : <CameraPlanNavTarget>[];
 
     ui.Image? bgImage;
     Rect? bgRect;
@@ -208,6 +238,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     }
 
     if (!mounted) return;
+    _annotationController.replaceDocument(
+      AnnotationDocument.decode(annotationRow?.documentJson),
+    );
     setState(() {
       _elements
         ..clear()
@@ -232,6 +265,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     }
   }
 
+  Future<void> _saveAnnotations(AnnotationDocument document) => ref
+      .read(databaseProvider)
+      .saveProjectAnnotationDocument(
+        projectId: widget.projectId,
+        targetType: _annotationTargetType,
+        targetId: _annotationTargetId,
+        documentJson: document.encode(),
+        documentSchemaVersion: document.schemaVersion,
+      );
+
   Future<void> _offerInheritTemplate() async {
     if (!_canInheritTemplate || _elements.isNotEmpty || !_isShotMode) return;
     final palette = context.palette;
@@ -239,7 +282,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: palette.surfaceElevated,
-        title: Text('Heredar planta', style: AppTypography.titleMedium(palette)),
+        title: Text(
+          'Heredar planta',
+          style: AppTypography.titleMedium(palette),
+        ),
         content: Text(
           'Este plano está vacío. ¿Quieres copiar la planta del set o '
           'localización vinculada como punto de partida?',
@@ -248,14 +294,18 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Empezar vacío', style: AppTypography.bodyMedium(palette)),
+            child: Text(
+              'Empezar vacío',
+              style: AppTypography.bodyMedium(palette),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
               'Heredar',
-              style: AppTypography.bodyMedium(palette)
-                  .copyWith(color: palette.accent),
+              style: AppTypography.bodyMedium(
+                palette,
+              ).copyWith(color: palette.accent),
             ),
           ),
         ],
@@ -267,10 +317,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   Future<List<CameraPlanNavTarget>> _loadNavTargets(AppDatabase db) async {
-    final scenes = await (db.select(db.scenes)
-          ..where((s) => s.projectId.equals(widget.projectId))
-          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
-        .get();
+    final scenes =
+        await (db.select(db.scenes)
+              ..where((s) => s.projectId.equals(widget.projectId))
+              ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            .get();
     final sets = await db.getLocationsMapForProject(widget.projectId);
     final sites = await db.watchSitesForProject(widget.projectId).first;
     final allSets = sets.values.toList();
@@ -287,21 +338,24 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       final site = scene.locationSiteId != null
           ? sitesById[scene.locationSiteId]
           : null;
-      final siteName = site?.name ??
+      final siteName =
+          site?.name ??
           (scene.locationPureName.trim().isNotEmpty
               ? scene.locationPureName.trim()
               : 'Sin localización');
       final shots = await db.getShotsForScene(scene.id);
       for (final shot in shots) {
-        targets.add(CameraPlanNavTarget(
-          shotId: shot.id,
-          sceneId: scene.id,
-          sceneNumber: scene.number,
-          shotNumber: shot.number,
-          sceneName: scene.name,
-          sceneColor: color,
-          siteName: siteName,
-        ));
+        targets.add(
+          CameraPlanNavTarget(
+            shotId: shot.id,
+            sceneId: scene.id,
+            sceneNumber: scene.number,
+            shotNumber: shot.number,
+            sceneName: scene.name,
+            sceneColor: color,
+            siteName: siteName,
+          ),
+        );
       }
     }
     return targets;
@@ -396,7 +450,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
                 child: Row(
                   children: [
-                    Text('Escenas y planos', style: AppTypography.titleMedium(palette)),
+                    Text(
+                      'Escenas y planos',
+                      style: AppTypography.titleMedium(palette),
+                    ),
                     const Spacer(),
                     IconButton(
                       icon: Icon(Icons.close, color: palette.textSecondary),
@@ -424,13 +481,19 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                           decoration: BoxDecoration(
                             color: group.accentColor.withValues(alpha: 0.12),
                             border: Border(
-                              left: BorderSide(color: group.accentColor, width: 4),
+                              left: BorderSide(
+                                color: group.accentColor,
+                                width: 4,
+                              ),
                             ),
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.location_city_outlined,
-                                  size: 16, color: palette.textSecondary),
+                              Icon(
+                                Icons.location_city_outlined,
+                                size: 16,
+                                color: palette.textSecondary,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -455,17 +518,23 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 color: selected
                                     ? palette.accent
                                     : palette.textPrimary,
-                                fontWeight:
-                                    selected ? FontWeight.w600 : FontWeight.w400,
+                                fontWeight: selected
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
                               ),
                             ),
                             subtitle: t.sceneName.isNotEmpty
-                                ? Text(t.sceneName,
-                                    style: AppTypography.caption(palette))
+                                ? Text(
+                                    t.sceneName,
+                                    style: AppTypography.caption(palette),
+                                  )
                                 : null,
                             trailing: selected
-                                ? Icon(Icons.check_circle,
-                                    color: palette.accent, size: 20)
+                                ? Icon(
+                                    Icons.check_circle,
+                                    color: palette.accent,
+                                    size: 20,
+                                  )
                                 : null,
                             onTap: () {
                               Navigator.pop(ctx);
@@ -501,12 +570,18 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           children: [
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Text('Guardar planta', style: AppTypography.titleMedium(palette)),
+              child: Text(
+                'Guardar planta',
+                style: AppTypography.titleMedium(palette),
+              ),
             ),
             if (_linkedSet != null)
               ListTile(
                 leading: Icon(Icons.layers_outlined, color: palette.accent),
-                title: Text('Planta de set', style: AppTypography.bodyLarge(palette)),
+                title: Text(
+                  'Planta de set',
+                  style: AppTypography.bodyLarge(palette),
+                ),
                 subtitle: Text(
                   _linkedSet!.locationName,
                   style: AppTypography.caption(palette),
@@ -518,8 +593,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               ),
             if (_linkedSite != null)
               ListTile(
-                leading: Icon(Icons.location_city_outlined, color: palette.accent),
-                title: Text('Planta de localización', style: AppTypography.bodyLarge(palette)),
+                leading: Icon(
+                  Icons.location_city_outlined,
+                  color: palette.accent,
+                ),
+                title: Text(
+                  'Planta de localización',
+                  style: AppTypography.bodyLarge(palette),
+                ),
                 subtitle: Text(
                   _linkedSite!.name,
                   style: AppTypography.caption(palette),
@@ -578,7 +659,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           y: el.position.dy,
           rotation: el.rotation,
           label: el.label,
-          color: el.type == ElementType.actor ? hexFromColor(el.actorColor) : null,
+          color: el.type == ElementType.actor
+              ? hexFromColor(el.actorColor)
+              : null,
           cameraStabilization: el.stabilization,
           cameraLens: el.lens,
           cameraLetter: el.cameraLetter,
@@ -599,13 +682,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     }
 
     if (el.type == ElementType.camera && _shot != null) {
-      await db.updateShot(_shot!.copyWith(
-        lens: Value(el.lens ?? _shot!.lens),
-        movement: Value(el.stabilization ?? _shot!.movement),
-      ));
-      _shot = (await (db.select(db.shots)
-            ..where((s) => s.id.equals(widget.shotId!)))
-          .getSingleOrNull());
+      await db.updateShot(
+        _shot!.copyWith(
+          lens: Value(el.lens ?? _shot!.lens),
+          movement: Value(el.stabilization ?? _shot!.movement),
+        ),
+      );
+      _shot = (await (db.select(
+        db.shots,
+      )..where((s) => s.id.equals(widget.shotId!))).getSingleOrNull());
     }
   }
 
@@ -635,26 +720,32 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Future<void> _addCamera() async {
     final cameras = _elements.where((e) => e.type == ElementType.camera).length;
     final letter = String.fromCharCode(65 + cameras);
-    await _addElement(PlanElement(
-      id: 0,
-      type: ElementType.camera,
-      position: const Offset(200, 200),
-      cameraLetter: letter,
-      cameraNumber: cameras + 1,
-      stabilization: _shot?.movement ?? 'STEADY',
-      lens: _shot?.lens ?? '50mm',
-    ));
+    await _addElement(
+      PlanElement(
+        id: 0,
+        type: ElementType.camera,
+        position: const Offset(200, 200),
+        cameraLetter: letter,
+        cameraNumber: cameras + 1,
+        stabilization: _shot?.movement ?? 'STEADY',
+        lens: _shot?.lens ?? '50mm',
+      ),
+    );
   }
 
   Future<void> _addActor(Color color) async {
-    final actorCount = _elements.where((e) => e.type == ElementType.actor).length;
-    await _addElement(PlanElement(
-      id: 0,
-      type: ElementType.actor,
-      position: Offset(150 + actorCount * 60.0, 150),
-      label: 'Actor ${actorCount + 1}',
-      actorColor: color,
-    ));
+    final actorCount = _elements
+        .where((e) => e.type == ElementType.actor)
+        .length;
+    await _addElement(
+      PlanElement(
+        id: 0,
+        type: ElementType.actor,
+        position: Offset(150 + actorCount * 60.0, 150),
+        label: 'Actor ${actorCount + 1}',
+        actorColor: color,
+      ),
+    );
   }
 
   Future<void> _addLight(LightType type) async {
@@ -876,11 +967,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (_selected?.type != ElementType.camera) return;
     final canvasPos = _toCanvasCoords(d.localPosition);
     if (_elementAt(canvasPos) != null) return;
-    if (CameraPlanPainter.pathPointAt(
-          _selected!,
-          canvasPos,
-          scale: _scale,
-        ) !=
+    if (CameraPlanPainter.pathPointAt(_selected!, canvasPos, scale: _scale) !=
         null) {
       return;
     }
@@ -968,17 +1055,28 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 children: [
                   Text(
                     widget.scope.title,
-                    style: AppTypography.caption(palette).copyWith(
-                      color: palette.accent,
-                    ),
+                    style: AppTypography.caption(
+                      palette,
+                    ).copyWith(color: palette.accent),
                   ),
-                  Text(
-                    widget.label,
-                    style: AppTypography.titleMedium(palette),
-                  ),
+                  Text(widget.label, style: AppTypography.titleMedium(palette)),
                 ],
               ),
         actions: [
+          IconButton(
+            tooltip: _annotationMode
+                ? 'Volver a editar elementos'
+                : 'Anotar con Apple Pencil',
+            icon: Icon(
+              _annotationMode ? Icons.edit_off_outlined : Icons.draw_outlined,
+              color: _annotationMode ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: () => setState(() {
+              _annotationMode = !_annotationMode;
+              _selected = null;
+              _selectedPathIndex = null;
+            }),
+          ),
           IconButton(
             tooltip: 'Alejar',
             icon: Icon(Icons.remove, color: palette.textSecondary),
@@ -986,8 +1084,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 14),
-            child: Text('${(_scale * 100).round()}%',
-                style: AppTypography.caption(palette)),
+            child: Text(
+              '${(_scale * 100).round()}%',
+              style: AppTypography.caption(palette),
+            ),
           ),
           IconButton(
             tooltip: 'Acercar',
@@ -1010,8 +1110,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.layers_outlined,
-                              color: palette.accent, size: 20),
+                          Icon(
+                            Icons.layers_outlined,
+                            color: palette.accent,
+                            size: 20,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -1023,8 +1126,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                             onPressed: _inheritFromTemplate,
                             child: Text(
                               'Heredar',
-                              style: AppTypography.label(palette)
-                                  .copyWith(color: palette.accent),
+                              style: AppTypography.label(
+                                palette,
+                              ).copyWith(color: palette.accent),
                             ),
                           ),
                         ],
@@ -1037,30 +1141,56 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                       Expanded(
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            return GestureDetector(
-                              onPanStart: _onPanStart,
-                              onPanUpdate: _onPanUpdate,
-                              onPanEnd: _onPanEnd,
-                              onTapDown: _onTapCanvas,
-                              onDoubleTapDown: _onDoubleTapCanvas,
-                              child: CustomPaint(
-                                size: Size(
-                                  constraints.maxWidth,
-                                  constraints.maxHeight,
+                            return Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                IgnorePointer(
+                                  ignoring: _annotationMode,
+                                  child: GestureDetector(
+                                    onPanStart: _onPanStart,
+                                    onPanUpdate: _onPanUpdate,
+                                    onPanEnd: _onPanEnd,
+                                    onTapDown: _onTapCanvas,
+                                    onDoubleTapDown: _onDoubleTapCanvas,
+                                    child: CustomPaint(
+                                      size: Size(
+                                        constraints.maxWidth,
+                                        constraints.maxHeight,
+                                      ),
+                                      painter: CameraPlanPainter(
+                                        elements: _elements,
+                                        selectedElement: _selected,
+                                        selectedPathIndex: _selectedPathIndex,
+                                        scale: _scale,
+                                        offset: _canvasOffset,
+                                        palette: palette,
+                                        backgroundImage: _backgroundImage,
+                                        backgroundRect: _backgroundRect,
+                                        backgroundOpacity: _backgroundOpacity,
+                                      ),
+                                      child: Container(
+                                        color: Colors.transparent,
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                                painter: CameraPlanPainter(
-                                  elements: _elements,
-                                  selectedElement: _selected,
-                                  selectedPathIndex: _selectedPathIndex,
-                                  scale: _scale,
-                                  offset: _canvasOffset,
-                                  palette: palette,
-                                  backgroundImage: _backgroundImage,
-                                  backgroundRect: _backgroundRect,
-                                  backgroundOpacity: _backgroundOpacity,
+                                IgnorePointer(
+                                  ignoring: !_annotationMode,
+                                  child: AnnotationCanvas(
+                                    controller: _annotationController,
+                                    enabled: _annotationMode,
+                                    tool: _annotationTool,
+                                    color: _annotationColor,
+                                    width: _annotationWidth,
+                                    viewport: AnnotationViewport(
+                                      documentSize: _annotationDocumentSize,
+                                      offset: _canvasOffset,
+                                      scale: _scale,
+                                    ),
+                                    onChanged: _saveAnnotations,
+                                  ),
                                 ),
-                                child: Container(color: Colors.transparent),
-                              ),
+                              ],
                             );
                           },
                         ),
@@ -1082,6 +1212,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     ],
                   ),
                 ),
+                if (_annotationMode)
+                  _PlanAnnotationToolbar(
+                    palette: palette,
+                    controller: _annotationController,
+                    tool: _annotationTool,
+                    color: _annotationColor,
+                    width: _annotationWidth,
+                    onToolChanged: (tool) =>
+                        setState(() => _annotationTool = tool),
+                    onColorChanged: (color) =>
+                        setState(() => _annotationColor = color),
+                    onWidthChanged: (width) =>
+                        setState(() => _annotationWidth = width),
+                  ),
                 _BottomToolbar(
                   palette: palette,
                   onAdd: _showAddMenu,
@@ -1093,6 +1237,172 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             ),
     );
   }
+}
+
+class _PlanAnnotationToolbar extends StatelessWidget {
+  static const _colors = [
+    Color(0xFF007AFF),
+    Color(0xFFFF3B30),
+    Color(0xFFFFCC00),
+    Color(0xFF34C759),
+    Color(0xFFAF52DE),
+    Color(0xFF111111),
+  ];
+
+  final AppPalette palette;
+  final AnnotationCanvasController controller;
+  final AnnotationToolType tool;
+  final Color color;
+  final double width;
+  final ValueChanged<AnnotationToolType> onToolChanged;
+  final ValueChanged<Color> onColorChanged;
+  final ValueChanged<double> onWidthChanged;
+
+  const _PlanAnnotationToolbar({
+    required this.palette,
+    required this.controller,
+    required this.tool,
+    required this.color,
+    required this.width,
+    required this.onToolChanged,
+    required this.onColorChanged,
+    required this.onWidthChanged,
+  });
+
+  Future<void> _addNote(BuildContext context) async {
+    final textController = TextEditingController();
+    final text = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Añadir post-it'),
+        content: TextField(
+          controller: textController,
+          autofocus: true,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: 'Escribe una aclaración…',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, textController.text.trim()),
+            child: const Text('Añadir'),
+          ),
+        ],
+      ),
+    );
+    textController.dispose();
+    if (text == null || text.isEmpty) return;
+    controller.addNote(
+      AnnotationNote(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        text: text,
+        x: 0.36,
+        y: 0.34,
+        width: 0.28,
+        height: 0.18,
+        colorArgb: const Color(0xFFFFE082).toARGB32(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: palette.surfaceElevated,
+      child: SizedBox(
+        height: 64,
+        child: ListenableBuilder(
+          listenable: controller,
+          builder: (context, _) => ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            children: [
+              _annotationToolButton(
+                icon: Icons.edit_outlined,
+                tooltip: 'Lápiz',
+                value: AnnotationToolType.pen,
+              ),
+              _annotationToolButton(
+                icon: Icons.border_color_outlined,
+                tooltip: 'Subrayador',
+                value: AnnotationToolType.highlighter,
+              ),
+              _annotationToolButton(
+                icon: Icons.north_east,
+                tooltip: 'Flecha',
+                value: AnnotationToolType.arrow,
+              ),
+              const VerticalDivider(indent: 12, endIndent: 12),
+              for (final choice in _colors)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => onColorChanged(choice),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      margin: const EdgeInsets.symmetric(vertical: 18),
+                      decoration: BoxDecoration(
+                        color: choice,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: choice == color
+                              ? palette.textPrimary
+                              : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 140,
+                child: Slider(
+                  value: width,
+                  min: 2,
+                  max: 24,
+                  onChanged: onWidthChanged,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Añadir post-it',
+                onPressed: () => _addNote(context),
+                icon: const Icon(Icons.note_add_outlined),
+              ),
+              IconButton(
+                tooltip: 'Deshacer',
+                onPressed: controller.canUndo ? controller.undo : null,
+                icon: const Icon(Icons.undo),
+              ),
+              IconButton(
+                tooltip: 'Rehacer',
+                onPressed: controller.canRedo ? controller.redo : null,
+                icon: const Icon(Icons.redo),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _annotationToolButton({
+    required IconData icon,
+    required String tooltip,
+    required AnnotationToolType value,
+  }) => IconButton(
+    tooltip: tooltip,
+    onPressed: () => onToolChanged(value),
+    color: tool == value ? palette.accent : palette.textSecondary,
+    icon: Icon(icon),
+  );
 }
 
 class _BottomToolbar extends StatelessWidget {
@@ -1166,9 +1476,7 @@ class _ToolbarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = highlighted
-        ? palette.accent
-        : palette.textSecondary;
+    final color = highlighted ? palette.accent : palette.textSecondary;
 
     return GestureDetector(
       onTap: onTap,
@@ -1181,10 +1489,9 @@ class _ToolbarButton extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               label,
-              style: AppTypography.caption(palette).copyWith(
-                color: color,
-                fontSize: 10,
-              ),
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: color, fontSize: 10),
             ),
           ],
         ),
@@ -1246,8 +1553,10 @@ class _AddElementSheetState extends State<_AddElementSheet>
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Row(
                 children: [
-                  Text('Añadir elemento',
-                      style: AppTypography.titleMedium(palette)),
+                  Text(
+                    'Añadir elemento',
+                    style: AppTypography.titleMedium(palette),
+                  ),
                   const Spacer(),
                   IconButton(
                     icon: Icon(Icons.close, color: palette.textSecondary),
@@ -1408,8 +1717,8 @@ class _LightTab extends StatelessWidget {
         final columns = constraints.maxWidth >= 520
             ? 8
             : constraints.maxWidth >= 360
-                ? 6
-                : 4;
+            ? 6
+            : 4;
 
         return GridView.builder(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -1422,10 +1731,7 @@ class _LightTab extends StatelessWidget {
           itemCount: kShotDesignerLightGrid.length,
           itemBuilder: (context, i) {
             final type = kShotDesignerLightGrid[i];
-            return LightGridTile(
-              type: type,
-              onTap: () => onAdd(type),
-            );
+            return LightGridTile(type: type, onTap: () => onAdd(type));
           },
         );
       },
@@ -1565,8 +1871,10 @@ class _ElementPanelState extends State<_ElementPanel> {
                 children: [
                   Text('Propiedades', style: AppTypography.label(palette)),
                   const SizedBox(height: AppSpacing.md),
-                  Text(element.displayLabel,
-                      style: AppTypography.titleMedium(palette)),
+                  Text(
+                    element.displayLabel,
+                    style: AppTypography.titleMedium(palette),
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   Text('Rotación', style: AppTypography.caption(palette)),
                   Row(
@@ -1595,10 +1903,9 @@ class _ElementPanelState extends State<_ElementPanel> {
                   ),
                   Text(
                     'Arrastra el asa azul en el canvas para rotar',
-                    style: AppTypography.caption(palette).copyWith(
-                      color: palette.textTertiary,
-                      fontSize: 10,
-                    ),
+                    style: AppTypography.caption(
+                      palette,
+                    ).copyWith(color: palette.textTertiary, fontSize: 10),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   if (element.type == ElementType.camera) ...[
@@ -1616,20 +1923,18 @@ class _ElementPanelState extends State<_ElementPanel> {
                     Text(
                       '${element.pathPoints.length} punto(s) · '
                       '${element.pathPoints.length + 1} posiciones',
-                      style: AppTypography.caption(palette).copyWith(
-                        color: palette.textSecondary,
-                        fontSize: 10,
-                      ),
+                      style: AppTypography.caption(
+                        palette,
+                      ).copyWith(color: palette.textSecondary, fontSize: 10),
                     ),
                     if (widget.selectedPathIndex != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
                           'Punto ${widget.selectedPathIndex! + 2} seleccionado',
-                          style: AppTypography.caption(palette).copyWith(
-                            color: palette.accent,
-                            fontSize: 10,
-                          ),
+                          style: AppTypography.caption(
+                            palette,
+                          ).copyWith(color: palette.accent, fontSize: 10),
                         ),
                       ),
                     const SizedBox(height: 6),
@@ -1651,7 +1956,11 @@ class _ElementPanelState extends State<_ElementPanel> {
                             onPressed: widget.selectedPathIndex != null
                                 ? widget.onDeletePathPoint
                                 : null,
-                            icon: Icon(Icons.remove, size: 16, color: palette.error),
+                            icon: Icon(
+                              Icons.remove,
+                              size: 16,
+                              color: palette.error,
+                            ),
                             label: Text(
                               'Quitar',
                               style: TextStyle(color: palette.error),
@@ -1668,18 +1977,17 @@ class _ElementPanelState extends State<_ElementPanel> {
                         onPressed: widget.onClearPath,
                         child: Text(
                           'Limpiar trayectoria',
-                          style: AppTypography.caption(palette).copyWith(
-                            color: palette.textSecondary,
-                          ),
+                          style: AppTypography.caption(
+                            palette,
+                          ).copyWith(color: palette.textSecondary),
                         ),
                       ),
                     Text(
                       'Doble toque en el canvas para añadir un punto. '
                       'Arrastra los círculos numerados para mover la ruta.',
-                      style: AppTypography.caption(palette).copyWith(
-                        color: palette.textTertiary,
-                        fontSize: 10,
-                      ),
+                      style: AppTypography.caption(
+                        palette,
+                      ).copyWith(color: palette.textTertiary, fontSize: 10),
                     ),
                   ],
                   if (element.type == ElementType.camera ||
@@ -1688,7 +1996,10 @@ class _ElementPanelState extends State<_ElementPanel> {
                       element.type == ElementType.wall ||
                       element.type == ElementType.actor) ...[
                     const SizedBox(height: AppSpacing.sm),
-                    Text('Compatibilidad 3D', style: AppTypography.caption(palette)),
+                    Text(
+                      'Compatibilidad 3D',
+                      style: AppTypography.caption(palette),
+                    ),
                     const SizedBox(height: 6),
                     PlanElementCompatPanel(
                       element: element,
@@ -1716,7 +2027,9 @@ class _ElementPanelState extends State<_ElementPanel> {
                                   shape: BoxShape.circle,
                                   border: element.actorColor == c
                                       ? Border.all(
-                                          color: palette.textPrimary, width: 2)
+                                          color: palette.textPrimary,
+                                          width: 2,
+                                        )
                                       : null,
                                 ),
                               ),
@@ -1735,9 +2048,12 @@ class _ElementPanelState extends State<_ElementPanel> {
               children: [
                 Icon(Icons.delete_outline, color: palette.error, size: 16),
                 const SizedBox(width: 8),
-                Text('Eliminar',
-                    style: AppTypography.bodyMedium(palette)
-                        .copyWith(color: palette.error)),
+                Text(
+                  'Eliminar',
+                  style: AppTypography.bodyMedium(
+                    palette,
+                  ).copyWith(color: palette.error),
+                ),
               ],
             ),
           ),

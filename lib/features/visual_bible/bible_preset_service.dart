@@ -27,12 +27,12 @@ abstract final class BiblePresetService {
     String? description,
     String? existingId,
   }) async {
-    final groups = await (db.select(db.bibleSectionGroups)
-          ..where((g) => g.bibleId.equals(bibleId)))
-        .get();
-    final sections = await (db.select(db.bibleSectionDefinitions)
-          ..where((d) => d.bibleId.equals(bibleId)))
-        .get();
+    final groups = await (db.select(
+      db.bibleSectionGroups,
+    )..where((g) => g.bibleId.equals(bibleId))).get();
+    final sections = await (db.select(
+      db.bibleSectionDefinitions,
+    )..where((d) => d.bibleId.equals(bibleId))).get();
     final blueprint = await BibleConfigStore.loadBlueprint(projectId);
     final styles = await BibleSectionStyleStore.loadAll(projectId);
     final export = await VisualBibleExportConfigStore.loadLast(projectId);
@@ -93,6 +93,13 @@ abstract final class BiblePresetService {
     required BiblePresetBundle bundle,
     bool applySampleSeed = true,
   }) async {
+    // Los presets built-in no duplican el layout en su payload. En una Biblia
+    // nueva, la estructura base se crea únicamente después de elegirlos.
+    if (bundle.layout == null ||
+        (bundle.layout!.groups.isEmpty && bundle.layout!.sections.isEmpty)) {
+      await db.ensureBibleSectionLayout(bibleId);
+    }
+
     // Blueprint (visibilidad + estilos default).
     await BibleBlueprintService.apply(
       db: db,
@@ -181,9 +188,9 @@ abstract final class BiblePresetService {
     required int bibleId,
     required BiblePresetSampleSeed seed,
   }) async {
-    final row = await (db.select(db.visualBibles)
-          ..where((v) => v.id.equals(bibleId)))
-        .getSingleOrNull();
+    final row = await (db.select(
+      db.visualBibles,
+    )..where((v) => v.id.equals(bibleId))).getSingleOrNull();
     if (row == null) return;
 
     final data = VisualBibleData.fromRow(row);
@@ -212,7 +219,10 @@ abstract final class BiblePresetService {
     setStr('workingLutName', (v) => data.workingLutName = v);
     setStr('creativeLutName', (v) => data.creativeLutName = v);
     setStr('aspectRatio', (v) => data.aspectRatio = v);
-    setStr('directionNarrativeIntent', (v) => data.directionNarrativeIntent = v);
+    setStr(
+      'directionNarrativeIntent',
+      (v) => data.directionNarrativeIntent = v,
+    );
     setStr('conceptNarrativeIntent', (v) => data.conceptNarrativeIntent = v);
     setStr('lightingNarrativeIntent', (v) => data.lightingNarrativeIntent = v);
     setStr('exposureNarrativeIntent', (v) => data.exposureNarrativeIntent = v);
@@ -234,9 +244,7 @@ abstract final class BiblePresetService {
             blockName: b['blockName'] as String? ?? 'Paleta ${i + 1}',
             dominantColors: jsonEncode(b['dominantColors'] ?? []),
             accentColors: Value(
-              b['accentColors'] != null
-                  ? jsonEncode(b['accentColors'])
-                  : null,
+              b['accentColors'] != null ? jsonEncode(b['accentColors']) : null,
             ),
             prohibitedColors: Value(
               b['prohibitedColors'] != null
@@ -269,12 +277,11 @@ abstract final class BiblePresetService {
     for (final entry in seed.sectionValues.entries) {
       final sectionId = entry.key;
       final valuesUpdate = Map<String, dynamic>.from(entry.value as Map);
-      final def = await (db.select(db.bibleSectionDefinitions)
-            ..where(
-              (d) =>
-                  d.bibleId.equals(bibleId) & d.id.equals(sectionId),
-            ))
-          .getSingleOrNull();
+      final def =
+          await (db.select(db.bibleSectionDefinitions)..where(
+                (d) => d.bibleId.equals(bibleId) & d.id.equals(sectionId),
+              ))
+              .getSingleOrNull();
       if (def == null) continue;
 
       final fields = BibleSectionFieldsConfig.parse(def.contentJson, sectionId);

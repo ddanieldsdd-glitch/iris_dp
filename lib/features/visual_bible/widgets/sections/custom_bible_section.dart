@@ -2,8 +2,13 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_typography.dart';
 import '../../bible_section_fields.dart';
+import '../../v2/migration/freeform_v2_blocks_codec.dart';
+import '../../v2/theme/bible_theme.dart';
+import '../../v2/widgets/bible_block_compositor.dart';
 import '../bible_form_widgets.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_unified_references_panel.dart';
@@ -11,6 +16,7 @@ import '../block_reference_images.dart';
 import '../narrative_bridge_card.dart';
 
 /// Sección personalizada con sub-apartados configurables (texto, imágenes…).
+/// Si `contentJson` contiene `v2Blocks`, usa el compositor modular.
 class CustomBibleSection extends StatefulWidget {
   final int projectId;
   final String sectionId;
@@ -122,6 +128,57 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
 
   @override
   Widget build(BuildContext context) {
+    final v2Blocks = FreeformV2BlocksCodec.parseBlocks(widget.contentJson);
+    if (v2Blocks.isNotEmpty) {
+      final palette = context.palette;
+      return ListView(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        children: [
+          Text(
+            'PANTALLA PERSONALIZADA',
+            style: AppTypography.mono(palette).copyWith(
+              fontSize: 11,
+              letterSpacing: 1.2,
+              color: palette.textTertiary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            widget.label,
+            style: AppTypography.titleLarge(palette).copyWith(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Layout modular con hero, referencias e intención narrativa.',
+            style: AppTypography.bodyMedium(palette).copyWith(
+              color: palette.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          BibleBlockCompositor(
+            blocks: v2Blocks,
+            theme: BibleThemePresets.cinematic,
+            projectId: widget.projectId,
+            editing: true,
+            onBlockChanged: (block) {
+              final next = [
+                for (final b in v2Blocks) b.id == block.id ? block : b,
+              ];
+              widget.onContentChanged(
+                FreeformV2BlocksCodec.mergeBlocksIntoContentJson(
+                  widget.contentJson,
+                  next,
+                ),
+              );
+            },
+          ),
+        ],
+      );
+    }
+
     final items = <Widget>[];
     for (final field in _fields) {
       final built = _buildField(field);
@@ -140,44 +197,43 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
   Widget? _buildField(BibleSectionField field) {
     return switch (field.type) {
       BibleSectionFieldType.narrative => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            NarrativeBridgeCard(
-              title: field.label,
-              hint: field.hint ?? 'Intención narrativa de «${widget.label}»…',
-              value: _values[field.key],
-              onChanged: (v) => _setValue(field.key, v),
-            ),
-            const SizedBox(height: 8),
-            _imageAttachRow(field.key),
-          ],
-        ),
-      BibleSectionFieldType.references ||
-      BibleSectionFieldType.image =>
-        BibleReferencesPanel(
-          projectId: widget.projectId,
-          sectionId: widget.sectionId,
-          title: field.label,
-          onOpenMoodboard: () => BibleNavigationScope.openMoodboardForSection(
-            context,
-            widget.sectionId,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          NarrativeBridgeCard(
+            title: field.label,
+            hint: field.hint ?? 'Intención narrativa de «${widget.label}»…',
+            value: _values[field.key],
+            onChanged: (v) => _setValue(field.key, v),
           ),
+          const SizedBox(height: 8),
+          _imageAttachRow(field.key),
+        ],
+      ),
+      BibleSectionFieldType.references ||
+      BibleSectionFieldType.image => BibleReferencesPanel(
+        projectId: widget.projectId,
+        sectionId: widget.sectionId,
+        title: field.label,
+        onOpenMoodboard: () => BibleNavigationScope.openMoodboardForSection(
+          context,
+          widget.sectionId,
         ),
+      ),
       BibleSectionFieldType.blocks => null,
       BibleSectionFieldType.text => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            BibleTextField(
-              label: field.label,
-              hint: field.hint ?? '',
-              maxLines: field.maxLines,
-              initialValue: _values[field.key] ?? '',
-              onChanged: (v) => _setValue(field.key, v),
-            ),
-            const SizedBox(height: 8),
-            _imageAttachRow(field.key),
-          ],
-        ),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          BibleTextField(
+            label: field.label,
+            hint: field.hint ?? '',
+            maxLines: field.maxLines,
+            initialValue: _values[field.key] ?? '',
+            onChanged: (v) => _setValue(field.key, v),
+          ),
+          const SizedBox(height: 8),
+          _imageAttachRow(field.key),
+        ],
+      ),
     };
   }
 

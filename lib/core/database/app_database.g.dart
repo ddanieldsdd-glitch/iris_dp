@@ -15145,6 +15145,534 @@ class ProjectAnnotatedPdfsCompanion
   }
 }
 
+class $ProjectAnnotationDocumentsTable extends ProjectAnnotationDocuments
+    with
+        TableInfo<$ProjectAnnotationDocumentsTable, ProjectAnnotationDocument> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProjectAnnotationDocumentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _targetTypeMeta = const VerificationMeta(
+    'targetType',
+  );
+  @override
+  late final GeneratedColumn<String> targetType = GeneratedColumn<String>(
+    'target_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetIdMeta = const VerificationMeta(
+    'targetId',
+  );
+  @override
+  late final GeneratedColumn<String> targetId = GeneratedColumn<String>(
+    'target_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _documentJsonMeta = const VerificationMeta(
+    'documentJson',
+  );
+  @override
+  late final GeneratedColumn<String> documentJson = GeneratedColumn<String>(
+    'document_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _documentSchemaVersionMeta =
+      const VerificationMeta('documentSchemaVersion');
+  @override
+  late final GeneratedColumn<int> documentSchemaVersion = GeneratedColumn<int>(
+    'document_schema_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    projectId,
+    targetType,
+    targetId,
+    documentJson,
+    documentSchemaVersion,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'project_annotation_documents';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ProjectAnnotationDocument> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('target_type')) {
+      context.handle(
+        _targetTypeMeta,
+        targetType.isAcceptableOrUnknown(data['target_type']!, _targetTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetTypeMeta);
+    }
+    if (data.containsKey('target_id')) {
+      context.handle(
+        _targetIdMeta,
+        targetId.isAcceptableOrUnknown(data['target_id']!, _targetIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetIdMeta);
+    }
+    if (data.containsKey('document_json')) {
+      context.handle(
+        _documentJsonMeta,
+        documentJson.isAcceptableOrUnknown(
+          data['document_json']!,
+          _documentJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_documentJsonMeta);
+    }
+    if (data.containsKey('document_schema_version')) {
+      context.handle(
+        _documentSchemaVersionMeta,
+        documentSchemaVersion.isAcceptableOrUnknown(
+          data['document_schema_version']!,
+          _documentSchemaVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {projectId, targetType, targetId},
+  ];
+  @override
+  ProjectAnnotationDocument map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ProjectAnnotationDocument(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      targetType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_type'],
+      )!,
+      targetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_id'],
+      )!,
+      documentJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}document_json'],
+      )!,
+      documentSchemaVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}document_schema_version'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ProjectAnnotationDocumentsTable createAlias(String alias) {
+    return $ProjectAnnotationDocumentsTable(attachedDatabase, alias);
+  }
+}
+
+class ProjectAnnotationDocument extends DataClass
+    implements Insertable<ProjectAnnotationDocument> {
+  final int id;
+  final int projectId;
+  final String targetType;
+  final String targetId;
+  final String documentJson;
+  final int documentSchemaVersion;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const ProjectAnnotationDocument({
+    required this.id,
+    required this.projectId,
+    required this.targetType,
+    required this.targetId,
+    required this.documentJson,
+    required this.documentSchemaVersion,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['project_id'] = Variable<int>(projectId);
+    map['target_type'] = Variable<String>(targetType);
+    map['target_id'] = Variable<String>(targetId);
+    map['document_json'] = Variable<String>(documentJson);
+    map['document_schema_version'] = Variable<int>(documentSchemaVersion);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  ProjectAnnotationDocumentsCompanion toCompanion(bool nullToAbsent) {
+    return ProjectAnnotationDocumentsCompanion(
+      id: Value(id),
+      projectId: Value(projectId),
+      targetType: Value(targetType),
+      targetId: Value(targetId),
+      documentJson: Value(documentJson),
+      documentSchemaVersion: Value(documentSchemaVersion),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory ProjectAnnotationDocument.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ProjectAnnotationDocument(
+      id: serializer.fromJson<int>(json['id']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      targetType: serializer.fromJson<String>(json['targetType']),
+      targetId: serializer.fromJson<String>(json['targetId']),
+      documentJson: serializer.fromJson<String>(json['documentJson']),
+      documentSchemaVersion: serializer.fromJson<int>(
+        json['documentSchemaVersion'],
+      ),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'projectId': serializer.toJson<int>(projectId),
+      'targetType': serializer.toJson<String>(targetType),
+      'targetId': serializer.toJson<String>(targetId),
+      'documentJson': serializer.toJson<String>(documentJson),
+      'documentSchemaVersion': serializer.toJson<int>(documentSchemaVersion),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  ProjectAnnotationDocument copyWith({
+    int? id,
+    int? projectId,
+    String? targetType,
+    String? targetId,
+    String? documentJson,
+    int? documentSchemaVersion,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => ProjectAnnotationDocument(
+    id: id ?? this.id,
+    projectId: projectId ?? this.projectId,
+    targetType: targetType ?? this.targetType,
+    targetId: targetId ?? this.targetId,
+    documentJson: documentJson ?? this.documentJson,
+    documentSchemaVersion: documentSchemaVersion ?? this.documentSchemaVersion,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  ProjectAnnotationDocument copyWithCompanion(
+    ProjectAnnotationDocumentsCompanion data,
+  ) {
+    return ProjectAnnotationDocument(
+      id: data.id.present ? data.id.value : this.id,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      targetType: data.targetType.present
+          ? data.targetType.value
+          : this.targetType,
+      targetId: data.targetId.present ? data.targetId.value : this.targetId,
+      documentJson: data.documentJson.present
+          ? data.documentJson.value
+          : this.documentJson,
+      documentSchemaVersion: data.documentSchemaVersion.present
+          ? data.documentSchemaVersion.value
+          : this.documentSchemaVersion,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProjectAnnotationDocument(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('targetType: $targetType, ')
+          ..write('targetId: $targetId, ')
+          ..write('documentJson: $documentJson, ')
+          ..write('documentSchemaVersion: $documentSchemaVersion, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    projectId,
+    targetType,
+    targetId,
+    documentJson,
+    documentSchemaVersion,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ProjectAnnotationDocument &&
+          other.id == this.id &&
+          other.projectId == this.projectId &&
+          other.targetType == this.targetType &&
+          other.targetId == this.targetId &&
+          other.documentJson == this.documentJson &&
+          other.documentSchemaVersion == this.documentSchemaVersion &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class ProjectAnnotationDocumentsCompanion
+    extends UpdateCompanion<ProjectAnnotationDocument> {
+  final Value<int> id;
+  final Value<int> projectId;
+  final Value<String> targetType;
+  final Value<String> targetId;
+  final Value<String> documentJson;
+  final Value<int> documentSchemaVersion;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  const ProjectAnnotationDocumentsCompanion({
+    this.id = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.targetType = const Value.absent(),
+    this.targetId = const Value.absent(),
+    this.documentJson = const Value.absent(),
+    this.documentSchemaVersion = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  ProjectAnnotationDocumentsCompanion.insert({
+    this.id = const Value.absent(),
+    required int projectId,
+    required String targetType,
+    required String targetId,
+    required String documentJson,
+    this.documentSchemaVersion = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  }) : projectId = Value(projectId),
+       targetType = Value(targetType),
+       targetId = Value(targetId),
+       documentJson = Value(documentJson);
+  static Insertable<ProjectAnnotationDocument> custom({
+    Expression<int>? id,
+    Expression<int>? projectId,
+    Expression<String>? targetType,
+    Expression<String>? targetId,
+    Expression<String>? documentJson,
+    Expression<int>? documentSchemaVersion,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (projectId != null) 'project_id': projectId,
+      if (targetType != null) 'target_type': targetType,
+      if (targetId != null) 'target_id': targetId,
+      if (documentJson != null) 'document_json': documentJson,
+      if (documentSchemaVersion != null)
+        'document_schema_version': documentSchemaVersion,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  ProjectAnnotationDocumentsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? projectId,
+    Value<String>? targetType,
+    Value<String>? targetId,
+    Value<String>? documentJson,
+    Value<int>? documentSchemaVersion,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+  }) {
+    return ProjectAnnotationDocumentsCompanion(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      targetType: targetType ?? this.targetType,
+      targetId: targetId ?? this.targetId,
+      documentJson: documentJson ?? this.documentJson,
+      documentSchemaVersion:
+          documentSchemaVersion ?? this.documentSchemaVersion,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (targetType.present) {
+      map['target_type'] = Variable<String>(targetType.value);
+    }
+    if (targetId.present) {
+      map['target_id'] = Variable<String>(targetId.value);
+    }
+    if (documentJson.present) {
+      map['document_json'] = Variable<String>(documentJson.value);
+    }
+    if (documentSchemaVersion.present) {
+      map['document_schema_version'] = Variable<int>(
+        documentSchemaVersion.value,
+      );
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProjectAnnotationDocumentsCompanion(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('targetType: $targetType, ')
+          ..write('targetId: $targetId, ')
+          ..write('documentJson: $documentJson, ')
+          ..write('documentSchemaVersion: $documentSchemaVersion, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $VisualBiblesTable extends VisualBibles
     with TableInfo<$VisualBiblesTable, VisualBible> {
   @override
@@ -15835,6 +16363,32 @@ class $VisualBiblesTable extends VisualBibles
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _structureInitializedMeta =
+      const VerificationMeta('structureInitialized');
+  @override
+  late final GeneratedColumn<bool> structureInitialized = GeneratedColumn<bool>(
+    'structure_initialized',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("structure_initialized" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _engineVersionMeta = const VerificationMeta(
+    'engineVersion',
+  );
+  @override
+  late final GeneratedColumn<String> engineVersion = GeneratedColumn<String>(
+    'engine_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('legacy'),
+  );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -15910,6 +16464,8 @@ class $VisualBiblesTable extends VisualBibles
     textureNarrativeIntent,
     conceptNarrativeIntent,
     opticsConfigJson,
+    structureInitialized,
+    engineVersion,
     updatedAt,
   ];
   @override
@@ -16448,6 +17004,24 @@ class $VisualBiblesTable extends VisualBibles
         ),
       );
     }
+    if (data.containsKey('structure_initialized')) {
+      context.handle(
+        _structureInitializedMeta,
+        structureInitialized.isAcceptableOrUnknown(
+          data['structure_initialized']!,
+          _structureInitializedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('engine_version')) {
+      context.handle(
+        _engineVersionMeta,
+        engineVersion.isAcceptableOrUnknown(
+          data['engine_version']!,
+          _engineVersionMeta,
+        ),
+      );
+    }
     if (data.containsKey('updated_at')) {
       context.handle(
         _updatedAtMeta,
@@ -16707,6 +17281,14 @@ class $VisualBiblesTable extends VisualBibles
         DriftSqlType.string,
         data['${effectivePrefix}optics_config_json'],
       ),
+      structureInitialized: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}structure_initialized'],
+      )!,
+      engineVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}engine_version'],
+      )!,
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -16782,6 +17364,13 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
   final String? textureNarrativeIntent;
   final String? conceptNarrativeIntent;
   final String? opticsConfigJson;
+
+  /// `false` solo en Biblias nuevas que aún no han elegido cómo comenzar.
+  /// Las filas existentes migran como inicializadas para conservar su layout.
+  final bool structureInitialized;
+
+  /// `legacy` = motor Group→Section; `v2` = BibleDocument modular.
+  final String engineVersion;
   final DateTime updatedAt;
   const VisualBible({
     required this.id,
@@ -16845,6 +17434,8 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
     this.textureNarrativeIntent,
     this.conceptNarrativeIntent,
     this.opticsConfigJson,
+    required this.structureInitialized,
+    required this.engineVersion,
     required this.updatedAt,
   });
   @override
@@ -17043,6 +17634,8 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
     if (!nullToAbsent || opticsConfigJson != null) {
       map['optics_config_json'] = Variable<String>(opticsConfigJson);
     }
+    map['structure_initialized'] = Variable<bool>(structureInitialized);
+    map['engine_version'] = Variable<String>(engineVersion);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
   }
@@ -17226,6 +17819,8 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
       opticsConfigJson: opticsConfigJson == null && nullToAbsent
           ? const Value.absent()
           : Value(opticsConfigJson),
+      structureInitialized: Value(structureInitialized),
+      engineVersion: Value(engineVersion),
       updatedAt: Value(updatedAt),
     );
   }
@@ -17349,6 +17944,10 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
         json['conceptNarrativeIntent'],
       ),
       opticsConfigJson: serializer.fromJson<String?>(json['opticsConfigJson']),
+      structureInitialized: serializer.fromJson<bool>(
+        json['structureInitialized'],
+      ),
+      engineVersion: serializer.fromJson<String>(json['engineVersion']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
   }
@@ -17437,6 +18036,8 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
         conceptNarrativeIntent,
       ),
       'opticsConfigJson': serializer.toJson<String?>(opticsConfigJson),
+      'structureInitialized': serializer.toJson<bool>(structureInitialized),
+      'engineVersion': serializer.toJson<String>(engineVersion),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
   }
@@ -17503,6 +18104,8 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
     Value<String?> textureNarrativeIntent = const Value.absent(),
     Value<String?> conceptNarrativeIntent = const Value.absent(),
     Value<String?> opticsConfigJson = const Value.absent(),
+    bool? structureInitialized,
+    String? engineVersion,
     DateTime? updatedAt,
   }) => VisualBible(
     id: id ?? this.id,
@@ -17660,6 +18263,8 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
     opticsConfigJson: opticsConfigJson.present
         ? opticsConfigJson.value
         : this.opticsConfigJson,
+    structureInitialized: structureInitialized ?? this.structureInitialized,
+    engineVersion: engineVersion ?? this.engineVersion,
     updatedAt: updatedAt ?? this.updatedAt,
   );
   VisualBible copyWithCompanion(VisualBiblesCompanion data) {
@@ -17833,6 +18438,12 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
       opticsConfigJson: data.opticsConfigJson.present
           ? data.opticsConfigJson.value
           : this.opticsConfigJson,
+      structureInitialized: data.structureInitialized.present
+          ? data.structureInitialized.value
+          : this.structureInitialized,
+      engineVersion: data.engineVersion.present
+          ? data.engineVersion.value
+          : this.engineVersion,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
@@ -17901,6 +18512,8 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
           ..write('textureNarrativeIntent: $textureNarrativeIntent, ')
           ..write('conceptNarrativeIntent: $conceptNarrativeIntent, ')
           ..write('opticsConfigJson: $opticsConfigJson, ')
+          ..write('structureInitialized: $structureInitialized, ')
+          ..write('engineVersion: $engineVersion, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
@@ -17969,6 +18582,8 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
     textureNarrativeIntent,
     conceptNarrativeIntent,
     opticsConfigJson,
+    structureInitialized,
+    engineVersion,
     updatedAt,
   ]);
   @override
@@ -18036,6 +18651,8 @@ class VisualBible extends DataClass implements Insertable<VisualBible> {
           other.textureNarrativeIntent == this.textureNarrativeIntent &&
           other.conceptNarrativeIntent == this.conceptNarrativeIntent &&
           other.opticsConfigJson == this.opticsConfigJson &&
+          other.structureInitialized == this.structureInitialized &&
+          other.engineVersion == this.engineVersion &&
           other.updatedAt == this.updatedAt);
 }
 
@@ -18101,6 +18718,8 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
   final Value<String?> textureNarrativeIntent;
   final Value<String?> conceptNarrativeIntent;
   final Value<String?> opticsConfigJson;
+  final Value<bool> structureInitialized;
+  final Value<String> engineVersion;
   final Value<DateTime> updatedAt;
   const VisualBiblesCompanion({
     this.id = const Value.absent(),
@@ -18164,6 +18783,8 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
     this.textureNarrativeIntent = const Value.absent(),
     this.conceptNarrativeIntent = const Value.absent(),
     this.opticsConfigJson = const Value.absent(),
+    this.structureInitialized = const Value.absent(),
+    this.engineVersion = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
   VisualBiblesCompanion.insert({
@@ -18228,6 +18849,8 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
     this.textureNarrativeIntent = const Value.absent(),
     this.conceptNarrativeIntent = const Value.absent(),
     this.opticsConfigJson = const Value.absent(),
+    this.structureInitialized = const Value.absent(),
+    this.engineVersion = const Value.absent(),
     this.updatedAt = const Value.absent(),
   }) : projectId = Value(projectId);
   static Insertable<VisualBible> custom({
@@ -18292,6 +18915,8 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
     Expression<String>? textureNarrativeIntent,
     Expression<String>? conceptNarrativeIntent,
     Expression<String>? opticsConfigJson,
+    Expression<bool>? structureInitialized,
+    Expression<String>? engineVersion,
     Expression<DateTime>? updatedAt,
   }) {
     return RawValuesInsertable({
@@ -18373,6 +18998,9 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
       if (conceptNarrativeIntent != null)
         'concept_narrative_intent': conceptNarrativeIntent,
       if (opticsConfigJson != null) 'optics_config_json': opticsConfigJson,
+      if (structureInitialized != null)
+        'structure_initialized': structureInitialized,
+      if (engineVersion != null) 'engine_version': engineVersion,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
   }
@@ -18439,6 +19067,8 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
     Value<String?>? textureNarrativeIntent,
     Value<String?>? conceptNarrativeIntent,
     Value<String?>? opticsConfigJson,
+    Value<bool>? structureInitialized,
+    Value<String>? engineVersion,
     Value<DateTime>? updatedAt,
   }) {
     return VisualBiblesCompanion(
@@ -18513,6 +19143,8 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
       conceptNarrativeIntent:
           conceptNarrativeIntent ?? this.conceptNarrativeIntent,
       opticsConfigJson: opticsConfigJson ?? this.opticsConfigJson,
+      structureInitialized: structureInitialized ?? this.structureInitialized,
+      engineVersion: engineVersion ?? this.engineVersion,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
@@ -18733,6 +19365,12 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
     if (opticsConfigJson.present) {
       map['optics_config_json'] = Variable<String>(opticsConfigJson.value);
     }
+    if (structureInitialized.present) {
+      map['structure_initialized'] = Variable<bool>(structureInitialized.value);
+    }
+    if (engineVersion.present) {
+      map['engine_version'] = Variable<String>(engineVersion.value);
+    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
@@ -18803,6 +19441,8 @@ class VisualBiblesCompanion extends UpdateCompanion<VisualBible> {
           ..write('textureNarrativeIntent: $textureNarrativeIntent, ')
           ..write('conceptNarrativeIntent: $conceptNarrativeIntent, ')
           ..write('opticsConfigJson: $opticsConfigJson, ')
+          ..write('structureInitialized: $structureInitialized, ')
+          ..write('engineVersion: $engineVersion, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
@@ -23750,6 +24390,33 @@ class $LightingSetupsTable extends LightingSetups
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _locationBasePlanIdMeta =
+      const VerificationMeta('locationBasePlanId');
+  @override
+  late final GeneratedColumn<int> locationBasePlanId = GeneratedColumn<int>(
+    'location_base_plan_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES location_base_plans (id)',
+    ),
+  );
+  static const VerificationMeta _locationSiteIdMeta = const VerificationMeta(
+    'locationSiteId',
+  );
+  @override
+  late final GeneratedColumn<int> locationSiteId = GeneratedColumn<int>(
+    'location_site_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES location_sites (id)',
+    ),
+  );
   static const VerificationMeta _sortOrderMeta = const VerificationMeta(
     'sortOrder',
   );
@@ -23772,6 +24439,8 @@ class $LightingSetupsTable extends LightingSetups
     gelNotes,
     practicalMotivation,
     referenceImagePath,
+    locationBasePlanId,
+    locationSiteId,
     sortOrder,
   ];
   @override
@@ -23849,6 +24518,24 @@ class $LightingSetupsTable extends LightingSetups
         ),
       );
     }
+    if (data.containsKey('location_base_plan_id')) {
+      context.handle(
+        _locationBasePlanIdMeta,
+        locationBasePlanId.isAcceptableOrUnknown(
+          data['location_base_plan_id']!,
+          _locationBasePlanIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_site_id')) {
+      context.handle(
+        _locationSiteIdMeta,
+        locationSiteId.isAcceptableOrUnknown(
+          data['location_site_id']!,
+          _locationSiteIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('sort_order')) {
       context.handle(
         _sortOrderMeta,
@@ -23896,6 +24583,14 @@ class $LightingSetupsTable extends LightingSetups
         DriftSqlType.string,
         data['${effectivePrefix}reference_image_path'],
       ),
+      locationBasePlanId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}location_base_plan_id'],
+      ),
+      locationSiteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}location_site_id'],
+      ),
       sortOrder: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
@@ -23918,6 +24613,8 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
   final String? gelNotes;
   final String? practicalMotivation;
   final String? referenceImagePath;
+  final int? locationBasePlanId;
+  final int? locationSiteId;
   final int sortOrder;
   const LightingSetup({
     required this.id,
@@ -23928,6 +24625,8 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
     this.gelNotes,
     this.practicalMotivation,
     this.referenceImagePath,
+    this.locationBasePlanId,
+    this.locationSiteId,
     required this.sortOrder,
   });
   @override
@@ -23948,6 +24647,12 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
     }
     if (!nullToAbsent || referenceImagePath != null) {
       map['reference_image_path'] = Variable<String>(referenceImagePath);
+    }
+    if (!nullToAbsent || locationBasePlanId != null) {
+      map['location_base_plan_id'] = Variable<int>(locationBasePlanId);
+    }
+    if (!nullToAbsent || locationSiteId != null) {
+      map['location_site_id'] = Variable<int>(locationSiteId);
     }
     map['sort_order'] = Variable<int>(sortOrder);
     return map;
@@ -23971,6 +24676,12 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
       referenceImagePath: referenceImagePath == null && nullToAbsent
           ? const Value.absent()
           : Value(referenceImagePath),
+      locationBasePlanId: locationBasePlanId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationBasePlanId),
+      locationSiteId: locationSiteId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSiteId),
       sortOrder: Value(sortOrder),
     );
   }
@@ -23993,6 +24704,8 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
       referenceImagePath: serializer.fromJson<String?>(
         json['referenceImagePath'],
       ),
+      locationBasePlanId: serializer.fromJson<int?>(json['locationBasePlanId']),
+      locationSiteId: serializer.fromJson<int?>(json['locationSiteId']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
     );
   }
@@ -24008,6 +24721,8 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
       'gelNotes': serializer.toJson<String?>(gelNotes),
       'practicalMotivation': serializer.toJson<String?>(practicalMotivation),
       'referenceImagePath': serializer.toJson<String?>(referenceImagePath),
+      'locationBasePlanId': serializer.toJson<int?>(locationBasePlanId),
+      'locationSiteId': serializer.toJson<int?>(locationSiteId),
       'sortOrder': serializer.toJson<int>(sortOrder),
     };
   }
@@ -24021,6 +24736,8 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
     Value<String?> gelNotes = const Value.absent(),
     Value<String?> practicalMotivation = const Value.absent(),
     Value<String?> referenceImagePath = const Value.absent(),
+    Value<int?> locationBasePlanId = const Value.absent(),
+    Value<int?> locationSiteId = const Value.absent(),
     int? sortOrder,
   }) => LightingSetup(
     id: id ?? this.id,
@@ -24037,6 +24754,12 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
     referenceImagePath: referenceImagePath.present
         ? referenceImagePath.value
         : this.referenceImagePath,
+    locationBasePlanId: locationBasePlanId.present
+        ? locationBasePlanId.value
+        : this.locationBasePlanId,
+    locationSiteId: locationSiteId.present
+        ? locationSiteId.value
+        : this.locationSiteId,
     sortOrder: sortOrder ?? this.sortOrder,
   );
   LightingSetup copyWithCompanion(LightingSetupsCompanion data) {
@@ -24057,6 +24780,12 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
       referenceImagePath: data.referenceImagePath.present
           ? data.referenceImagePath.value
           : this.referenceImagePath,
+      locationBasePlanId: data.locationBasePlanId.present
+          ? data.locationBasePlanId.value
+          : this.locationBasePlanId,
+      locationSiteId: data.locationSiteId.present
+          ? data.locationSiteId.value
+          : this.locationSiteId,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
     );
   }
@@ -24072,6 +24801,8 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
           ..write('gelNotes: $gelNotes, ')
           ..write('practicalMotivation: $practicalMotivation, ')
           ..write('referenceImagePath: $referenceImagePath, ')
+          ..write('locationBasePlanId: $locationBasePlanId, ')
+          ..write('locationSiteId: $locationSiteId, ')
           ..write('sortOrder: $sortOrder')
           ..write(')'))
         .toString();
@@ -24087,6 +24818,8 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
     gelNotes,
     practicalMotivation,
     referenceImagePath,
+    locationBasePlanId,
+    locationSiteId,
     sortOrder,
   );
   @override
@@ -24101,6 +24834,8 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
           other.gelNotes == this.gelNotes &&
           other.practicalMotivation == this.practicalMotivation &&
           other.referenceImagePath == this.referenceImagePath &&
+          other.locationBasePlanId == this.locationBasePlanId &&
+          other.locationSiteId == this.locationSiteId &&
           other.sortOrder == this.sortOrder);
 }
 
@@ -24113,6 +24848,8 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
   final Value<String?> gelNotes;
   final Value<String?> practicalMotivation;
   final Value<String?> referenceImagePath;
+  final Value<int?> locationBasePlanId;
+  final Value<int?> locationSiteId;
   final Value<int> sortOrder;
   const LightingSetupsCompanion({
     this.id = const Value.absent(),
@@ -24123,6 +24860,8 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
     this.gelNotes = const Value.absent(),
     this.practicalMotivation = const Value.absent(),
     this.referenceImagePath = const Value.absent(),
+    this.locationBasePlanId = const Value.absent(),
+    this.locationSiteId = const Value.absent(),
     this.sortOrder = const Value.absent(),
   });
   LightingSetupsCompanion.insert({
@@ -24134,6 +24873,8 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
     this.gelNotes = const Value.absent(),
     this.practicalMotivation = const Value.absent(),
     this.referenceImagePath = const Value.absent(),
+    this.locationBasePlanId = const Value.absent(),
+    this.locationSiteId = const Value.absent(),
     this.sortOrder = const Value.absent(),
   }) : bibleId = Value(bibleId),
        setupName = Value(setupName),
@@ -24147,6 +24888,8 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
     Expression<String>? gelNotes,
     Expression<String>? practicalMotivation,
     Expression<String>? referenceImagePath,
+    Expression<int>? locationBasePlanId,
+    Expression<int>? locationSiteId,
     Expression<int>? sortOrder,
   }) {
     return RawValuesInsertable({
@@ -24160,6 +24903,9 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
         'practical_motivation': practicalMotivation,
       if (referenceImagePath != null)
         'reference_image_path': referenceImagePath,
+      if (locationBasePlanId != null)
+        'location_base_plan_id': locationBasePlanId,
+      if (locationSiteId != null) 'location_site_id': locationSiteId,
       if (sortOrder != null) 'sort_order': sortOrder,
     });
   }
@@ -24173,6 +24919,8 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
     Value<String?>? gelNotes,
     Value<String?>? practicalMotivation,
     Value<String?>? referenceImagePath,
+    Value<int?>? locationBasePlanId,
+    Value<int?>? locationSiteId,
     Value<int>? sortOrder,
   }) {
     return LightingSetupsCompanion(
@@ -24184,6 +24932,8 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
       gelNotes: gelNotes ?? this.gelNotes,
       practicalMotivation: practicalMotivation ?? this.practicalMotivation,
       referenceImagePath: referenceImagePath ?? this.referenceImagePath,
+      locationBasePlanId: locationBasePlanId ?? this.locationBasePlanId,
+      locationSiteId: locationSiteId ?? this.locationSiteId,
       sortOrder: sortOrder ?? this.sortOrder,
     );
   }
@@ -24215,6 +24965,12 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
     if (referenceImagePath.present) {
       map['reference_image_path'] = Variable<String>(referenceImagePath.value);
     }
+    if (locationBasePlanId.present) {
+      map['location_base_plan_id'] = Variable<int>(locationBasePlanId.value);
+    }
+    if (locationSiteId.present) {
+      map['location_site_id'] = Variable<int>(locationSiteId.value);
+    }
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
@@ -24232,6 +24988,8 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
           ..write('gelNotes: $gelNotes, ')
           ..write('practicalMotivation: $practicalMotivation, ')
           ..write('referenceImagePath: $referenceImagePath, ')
+          ..write('locationBasePlanId: $locationBasePlanId, ')
+          ..write('locationSiteId: $locationSiteId, ')
           ..write('sortOrder: $sortOrder')
           ..write(')'))
         .toString();
@@ -28594,6 +29352,431 @@ class PendingMediaUploadsCompanion extends UpdateCompanion<PendingMediaUpload> {
   }
 }
 
+class $VisualBibleDocumentsTable extends VisualBibleDocuments
+    with TableInfo<$VisualBibleDocumentsTable, VisualBibleDocument> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $VisualBibleDocumentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _bibleIdMeta = const VerificationMeta(
+    'bibleId',
+  );
+  @override
+  late final GeneratedColumn<int> bibleId = GeneratedColumn<int>(
+    'bible_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES visual_bibles (id)',
+    ),
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _documentJsonMeta = const VerificationMeta(
+    'documentJson',
+  );
+  @override
+  late final GeneratedColumn<String> documentJson = GeneratedColumn<String>(
+    'document_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _documentSchemaVersionMeta =
+      const VerificationMeta('documentSchemaVersion');
+  @override
+  late final GeneratedColumn<int> documentSchemaVersion = GeneratedColumn<int>(
+    'document_schema_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bibleId,
+    projectId,
+    documentJson,
+    documentSchemaVersion,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'visual_bible_documents';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<VisualBibleDocument> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('bible_id')) {
+      context.handle(
+        _bibleIdMeta,
+        bibleId.isAcceptableOrUnknown(data['bible_id']!, _bibleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bibleIdMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('document_json')) {
+      context.handle(
+        _documentJsonMeta,
+        documentJson.isAcceptableOrUnknown(
+          data['document_json']!,
+          _documentJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_documentJsonMeta);
+    }
+    if (data.containsKey('document_schema_version')) {
+      context.handle(
+        _documentSchemaVersionMeta,
+        documentSchemaVersion.isAcceptableOrUnknown(
+          data['document_schema_version']!,
+          _documentSchemaVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  VisualBibleDocument map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return VisualBibleDocument(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      bibleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bible_id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      documentJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}document_json'],
+      )!,
+      documentSchemaVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}document_schema_version'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $VisualBibleDocumentsTable createAlias(String alias) {
+    return $VisualBibleDocumentsTable(attachedDatabase, alias);
+  }
+}
+
+class VisualBibleDocument extends DataClass
+    implements Insertable<VisualBibleDocument> {
+  final int id;
+  final int bibleId;
+  final int projectId;
+  final String documentJson;
+  final int documentSchemaVersion;
+  final DateTime updatedAt;
+  const VisualBibleDocument({
+    required this.id,
+    required this.bibleId,
+    required this.projectId,
+    required this.documentJson,
+    required this.documentSchemaVersion,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['bible_id'] = Variable<int>(bibleId);
+    map['project_id'] = Variable<int>(projectId);
+    map['document_json'] = Variable<String>(documentJson);
+    map['document_schema_version'] = Variable<int>(documentSchemaVersion);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  VisualBibleDocumentsCompanion toCompanion(bool nullToAbsent) {
+    return VisualBibleDocumentsCompanion(
+      id: Value(id),
+      bibleId: Value(bibleId),
+      projectId: Value(projectId),
+      documentJson: Value(documentJson),
+      documentSchemaVersion: Value(documentSchemaVersion),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory VisualBibleDocument.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return VisualBibleDocument(
+      id: serializer.fromJson<int>(json['id']),
+      bibleId: serializer.fromJson<int>(json['bibleId']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      documentJson: serializer.fromJson<String>(json['documentJson']),
+      documentSchemaVersion: serializer.fromJson<int>(
+        json['documentSchemaVersion'],
+      ),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'bibleId': serializer.toJson<int>(bibleId),
+      'projectId': serializer.toJson<int>(projectId),
+      'documentJson': serializer.toJson<String>(documentJson),
+      'documentSchemaVersion': serializer.toJson<int>(documentSchemaVersion),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  VisualBibleDocument copyWith({
+    int? id,
+    int? bibleId,
+    int? projectId,
+    String? documentJson,
+    int? documentSchemaVersion,
+    DateTime? updatedAt,
+  }) => VisualBibleDocument(
+    id: id ?? this.id,
+    bibleId: bibleId ?? this.bibleId,
+    projectId: projectId ?? this.projectId,
+    documentJson: documentJson ?? this.documentJson,
+    documentSchemaVersion: documentSchemaVersion ?? this.documentSchemaVersion,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  VisualBibleDocument copyWithCompanion(VisualBibleDocumentsCompanion data) {
+    return VisualBibleDocument(
+      id: data.id.present ? data.id.value : this.id,
+      bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      documentJson: data.documentJson.present
+          ? data.documentJson.value
+          : this.documentJson,
+      documentSchemaVersion: data.documentSchemaVersion.present
+          ? data.documentSchemaVersion.value
+          : this.documentSchemaVersion,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VisualBibleDocument(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('projectId: $projectId, ')
+          ..write('documentJson: $documentJson, ')
+          ..write('documentSchemaVersion: $documentSchemaVersion, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    bibleId,
+    projectId,
+    documentJson,
+    documentSchemaVersion,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is VisualBibleDocument &&
+          other.id == this.id &&
+          other.bibleId == this.bibleId &&
+          other.projectId == this.projectId &&
+          other.documentJson == this.documentJson &&
+          other.documentSchemaVersion == this.documentSchemaVersion &&
+          other.updatedAt == this.updatedAt);
+}
+
+class VisualBibleDocumentsCompanion
+    extends UpdateCompanion<VisualBibleDocument> {
+  final Value<int> id;
+  final Value<int> bibleId;
+  final Value<int> projectId;
+  final Value<String> documentJson;
+  final Value<int> documentSchemaVersion;
+  final Value<DateTime> updatedAt;
+  const VisualBibleDocumentsCompanion({
+    this.id = const Value.absent(),
+    this.bibleId = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.documentJson = const Value.absent(),
+    this.documentSchemaVersion = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  VisualBibleDocumentsCompanion.insert({
+    this.id = const Value.absent(),
+    required int bibleId,
+    required int projectId,
+    required String documentJson,
+    this.documentSchemaVersion = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  }) : bibleId = Value(bibleId),
+       projectId = Value(projectId),
+       documentJson = Value(documentJson);
+  static Insertable<VisualBibleDocument> custom({
+    Expression<int>? id,
+    Expression<int>? bibleId,
+    Expression<int>? projectId,
+    Expression<String>? documentJson,
+    Expression<int>? documentSchemaVersion,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bibleId != null) 'bible_id': bibleId,
+      if (projectId != null) 'project_id': projectId,
+      if (documentJson != null) 'document_json': documentJson,
+      if (documentSchemaVersion != null)
+        'document_schema_version': documentSchemaVersion,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  VisualBibleDocumentsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? bibleId,
+    Value<int>? projectId,
+    Value<String>? documentJson,
+    Value<int>? documentSchemaVersion,
+    Value<DateTime>? updatedAt,
+  }) {
+    return VisualBibleDocumentsCompanion(
+      id: id ?? this.id,
+      bibleId: bibleId ?? this.bibleId,
+      projectId: projectId ?? this.projectId,
+      documentJson: documentJson ?? this.documentJson,
+      documentSchemaVersion:
+          documentSchemaVersion ?? this.documentSchemaVersion,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (bibleId.present) {
+      map['bible_id'] = Variable<int>(bibleId.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (documentJson.present) {
+      map['document_json'] = Variable<String>(documentJson.value);
+    }
+    if (documentSchemaVersion.present) {
+      map['document_schema_version'] = Variable<int>(
+        documentSchemaVersion.value,
+      );
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VisualBibleDocumentsCompanion(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('projectId: $projectId, ')
+          ..write('documentJson: $documentJson, ')
+          ..write('documentSchemaVersion: $documentSchemaVersion, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -28624,6 +29807,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $LookBiblesTable lookBibles = $LookBiblesTable(this);
   late final $ProjectAnnotatedPdfsTable projectAnnotatedPdfs =
       $ProjectAnnotatedPdfsTable(this);
+  late final $ProjectAnnotationDocumentsTable projectAnnotationDocuments =
+      $ProjectAnnotationDocumentsTable(this);
   late final $VisualBiblesTable visualBibles = $VisualBiblesTable(this);
   late final $VisualBibleColorBlocksTable visualBibleColorBlocks =
       $VisualBibleColorBlocksTable(this);
@@ -28658,6 +29843,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CloudSyncQueueTable cloudSyncQueue = $CloudSyncQueueTable(this);
   late final $PendingMediaUploadsTable pendingMediaUploads =
       $PendingMediaUploadsTable(this);
+  late final $VisualBibleDocumentsTable visualBibleDocuments =
+      $VisualBibleDocumentsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -28682,6 +29869,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     projectEquipment,
     lookBibles,
     projectAnnotatedPdfs,
+    projectAnnotationDocuments,
     visualBibles,
     visualBibleColorBlocks,
     visualBibleLocationRefs,
@@ -28701,6 +29889,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     opticsLabSamples,
     cloudSyncQueue,
     pendingMediaUploads,
+    visualBibleDocuments,
   ];
 }
 
@@ -29208,6 +30397,34 @@ final class $$ProjectsTableReferences
     );
   }
 
+  static MultiTypedResultKey<
+    $ProjectAnnotationDocumentsTable,
+    List<ProjectAnnotationDocument>
+  >
+  _projectAnnotationDocumentsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.projectAnnotationDocuments,
+        aliasName: $_aliasNameGenerator(
+          db.projects.id,
+          db.projectAnnotationDocuments.projectId,
+        ),
+      );
+
+  $$ProjectAnnotationDocumentsTableProcessedTableManager
+  get projectAnnotationDocumentsRefs {
+    final manager = $$ProjectAnnotationDocumentsTableTableManager(
+      $_db,
+      $_db.projectAnnotationDocuments,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _projectAnnotationDocumentsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$VisualBiblesTable, List<VisualBible>>
   _visualBiblesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.visualBibles,
@@ -29316,6 +30533,34 @@ final class $$ProjectsTableReferences
 
     final cache = $_typedResult.readTableOrNull(
       _pendingMediaUploadsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $VisualBibleDocumentsTable,
+    List<VisualBibleDocument>
+  >
+  _visualBibleDocumentsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.visualBibleDocuments,
+        aliasName: $_aliasNameGenerator(
+          db.projects.id,
+          db.visualBibleDocuments.projectId,
+        ),
+      );
+
+  $$VisualBibleDocumentsTableProcessedTableManager
+  get visualBibleDocumentsRefs {
+    final manager = $$VisualBibleDocumentsTableTableManager(
+      $_db,
+      $_db.visualBibleDocuments,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _visualBibleDocumentsRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -29655,6 +30900,33 @@ class $$ProjectsTableFilterComposer
     return f(composer);
   }
 
+  Expression<bool> projectAnnotationDocumentsRefs(
+    Expression<bool> Function($$ProjectAnnotationDocumentsTableFilterComposer f)
+    f,
+  ) {
+    final $$ProjectAnnotationDocumentsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.projectAnnotationDocuments,
+          getReferencedColumn: (t) => t.projectId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ProjectAnnotationDocumentsTableFilterComposer(
+                $db: $db,
+                $table: $db.projectAnnotationDocuments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
   Expression<bool> visualBiblesRefs(
     Expression<bool> Function($$VisualBiblesTableFilterComposer f) f,
   ) {
@@ -29771,6 +31043,31 @@ class $$ProjectsTableFilterComposer
           }) => $$PendingMediaUploadsTableFilterComposer(
             $db: $db,
             $table: $db.pendingMediaUploads,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> visualBibleDocumentsRefs(
+    Expression<bool> Function($$VisualBibleDocumentsTableFilterComposer f) f,
+  ) {
+    final $$VisualBibleDocumentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.visualBibleDocuments,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBibleDocumentsTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibleDocuments,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -30230,6 +31527,35 @@ class $$ProjectsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> projectAnnotationDocumentsRefs<T extends Object>(
+    Expression<T> Function(
+      $$ProjectAnnotationDocumentsTableAnnotationComposer a,
+    )
+    f,
+  ) {
+    final $$ProjectAnnotationDocumentsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.projectAnnotationDocuments,
+          getReferencedColumn: (t) => t.projectId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ProjectAnnotationDocumentsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.projectAnnotationDocuments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
   Expression<T> visualBiblesRefs<T extends Object>(
     Expression<T> Function($$VisualBiblesTableAnnotationComposer a) f,
   ) {
@@ -30355,6 +31681,32 @@ class $$ProjectsTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> visualBibleDocumentsRefs<T extends Object>(
+    Expression<T> Function($$VisualBibleDocumentsTableAnnotationComposer a) f,
+  ) {
+    final $$VisualBibleDocumentsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.visualBibleDocuments,
+          getReferencedColumn: (t) => t.projectId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VisualBibleDocumentsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.visualBibleDocuments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$ProjectsTableTableManager
@@ -30380,11 +31732,13 @@ class $$ProjectsTableTableManager
             bool projectEquipmentRefs,
             bool lookBiblesRefs,
             bool projectAnnotatedPdfsRefs,
+            bool projectAnnotationDocumentsRefs,
             bool visualBiblesRefs,
             bool moodboardGroupsRefs,
             bool moodboardImagesRefs,
             bool opticsLabSamplesRefs,
             bool pendingMediaUploadsRefs,
+            bool visualBibleDocumentsRefs,
           })
         > {
   $$ProjectsTableTableManager(_$AppDatabase db, $ProjectsTable table)
@@ -30509,11 +31863,13 @@ class $$ProjectsTableTableManager
                 projectEquipmentRefs = false,
                 lookBiblesRefs = false,
                 projectAnnotatedPdfsRefs = false,
+                projectAnnotationDocumentsRefs = false,
                 visualBiblesRefs = false,
                 moodboardGroupsRefs = false,
                 moodboardImagesRefs = false,
                 opticsLabSamplesRefs = false,
                 pendingMediaUploadsRefs = false,
+                visualBibleDocumentsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -30526,11 +31882,14 @@ class $$ProjectsTableTableManager
                     if (projectEquipmentRefs) db.projectEquipment,
                     if (lookBiblesRefs) db.lookBibles,
                     if (projectAnnotatedPdfsRefs) db.projectAnnotatedPdfs,
+                    if (projectAnnotationDocumentsRefs)
+                      db.projectAnnotationDocuments,
                     if (visualBiblesRefs) db.visualBibles,
                     if (moodboardGroupsRefs) db.moodboardGroups,
                     if (moodboardImagesRefs) db.moodboardImages,
                     if (opticsLabSamplesRefs) db.opticsLabSamples,
                     if (pendingMediaUploadsRefs) db.pendingMediaUploads,
+                    if (visualBibleDocumentsRefs) db.visualBibleDocuments,
                   ],
                   addJoins:
                       <
@@ -30734,6 +32093,27 @@ class $$ProjectsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (projectAnnotationDocumentsRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          ProjectAnnotationDocument
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._projectAnnotationDocumentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).projectAnnotationDocumentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (visualBiblesRefs)
                         await $_getPrefetchedData<
                           Project,
@@ -30839,6 +32219,27 @@ class $$ProjectsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (visualBibleDocumentsRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          VisualBibleDocument
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._visualBibleDocumentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).visualBibleDocumentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -30869,11 +32270,13 @@ typedef $$ProjectsTableProcessedTableManager =
         bool projectEquipmentRefs,
         bool lookBiblesRefs,
         bool projectAnnotatedPdfsRefs,
+        bool projectAnnotationDocumentsRefs,
         bool visualBiblesRefs,
         bool moodboardGroupsRefs,
         bool moodboardImagesRefs,
         bool opticsLabSamplesRefs,
         bool pendingMediaUploadsRefs,
+        bool visualBibleDocumentsRefs,
       })
     >;
 typedef $$LocationSitesTableCreateCompanionBuilder =
@@ -31017,6 +32420,27 @@ final class $$LocationSitesTableReferences
     final cache = $_typedResult.readTableOrNull(
       _visualBibleLocationRefsRefsTable($_db),
     );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$LightingSetupsTable, List<LightingSetup>>
+  _lightingSetupsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.lightingSetups,
+    aliasName: $_aliasNameGenerator(
+      db.locationSites.id,
+      db.lightingSetups.locationSiteId,
+    ),
+  );
+
+  $$LightingSetupsTableProcessedTableManager get lightingSetupsRefs {
+    final manager = $$LightingSetupsTableTableManager(
+      $_db,
+      $_db.lightingSetups,
+    ).filter((f) => f.locationSiteId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_lightingSetupsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -31198,6 +32622,31 @@ class $$LocationSitesTableFilterComposer
                     $removeJoinBuilderFromRootComposer,
               ),
         );
+    return f(composer);
+  }
+
+  Expression<bool> lightingSetupsRefs(
+    Expression<bool> Function($$LightingSetupsTableFilterComposer f) f,
+  ) {
+    final $$LightingSetupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lightingSetups,
+      getReferencedColumn: (t) => t.locationSiteId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LightingSetupsTableFilterComposer(
+            $db: $db,
+            $table: $db.lightingSetups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
     return f(composer);
   }
 }
@@ -31449,6 +32898,31 @@ class $$LocationSitesTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> lightingSetupsRefs<T extends Object>(
+    Expression<T> Function($$LightingSetupsTableAnnotationComposer a) f,
+  ) {
+    final $$LightingSetupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lightingSetups,
+      getReferencedColumn: (t) => t.locationSiteId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LightingSetupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.lightingSetups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$LocationSitesTableTableManager
@@ -31470,6 +32944,7 @@ class $$LocationSitesTableTableManager
             bool scenesRefs,
             bool siteImagesRefs,
             bool visualBibleLocationRefsRefs,
+            bool lightingSetupsRefs,
           })
         > {
   $$LocationSitesTableTableManager(_$AppDatabase db, $LocationSitesTable table)
@@ -31546,6 +33021,7 @@ class $$LocationSitesTableTableManager
                 scenesRefs = false,
                 siteImagesRefs = false,
                 visualBibleLocationRefsRefs = false,
+                lightingSetupsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -31554,6 +33030,7 @@ class $$LocationSitesTableTableManager
                     if (scenesRefs) db.scenes,
                     if (siteImagesRefs) db.siteImages,
                     if (visualBibleLocationRefsRefs) db.visualBibleLocationRefs,
+                    if (lightingSetupsRefs) db.lightingSetups,
                   ],
                   addJoins:
                       <
@@ -31675,6 +33152,27 @@ class $$LocationSitesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (lightingSetupsRefs)
+                        await $_getPrefetchedData<
+                          LocationSite,
+                          $LocationSitesTable,
+                          LightingSetup
+                        >(
+                          currentTable: table,
+                          referencedTable: $$LocationSitesTableReferences
+                              ._lightingSetupsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$LocationSitesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).lightingSetupsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.locationSiteId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -31701,6 +33199,7 @@ typedef $$LocationSitesTableProcessedTableManager =
         bool scenesRefs,
         bool siteImagesRefs,
         bool visualBibleLocationRefsRefs,
+        bool lightingSetupsRefs,
       })
     >;
 typedef $$LocationBasePlansTableCreateCompanionBuilder =
@@ -31882,6 +33381,27 @@ final class $$LocationBasePlansTableReferences
     final cache = $_typedResult.readTableOrNull(
       _moodboardImagesRefsTable($_db),
     );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$LightingSetupsTable, List<LightingSetup>>
+  _lightingSetupsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.lightingSetups,
+    aliasName: $_aliasNameGenerator(
+      db.locationBasePlans.id,
+      db.lightingSetups.locationBasePlanId,
+    ),
+  );
+
+  $$LightingSetupsTableProcessedTableManager get lightingSetupsRefs {
+    final manager = $$LightingSetupsTableTableManager($_db, $_db.lightingSetups)
+        .filter(
+          (f) => f.locationBasePlanId.id.sqlEquals($_itemColumn<int>('id')!),
+        );
+
+    final cache = $_typedResult.readTableOrNull(_lightingSetupsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -32095,6 +33615,31 @@ class $$LocationBasePlansTableFilterComposer
           }) => $$MoodboardImagesTableFilterComposer(
             $db: $db,
             $table: $db.moodboardImages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> lightingSetupsRefs(
+    Expression<bool> Function($$LightingSetupsTableFilterComposer f) f,
+  ) {
+    final $$LightingSetupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lightingSetups,
+      getReferencedColumn: (t) => t.locationBasePlanId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LightingSetupsTableFilterComposer(
+            $db: $db,
+            $table: $db.lightingSetups,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -32425,6 +33970,31 @@ class $$LocationBasePlansTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> lightingSetupsRefs<T extends Object>(
+    Expression<T> Function($$LightingSetupsTableAnnotationComposer a) f,
+  ) {
+    final $$LightingSetupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lightingSetups,
+      getReferencedColumn: (t) => t.locationBasePlanId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LightingSetupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.lightingSetups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$LocationBasePlansTableTableManager
@@ -32447,6 +34017,7 @@ class $$LocationBasePlansTableTableManager
             bool locationImagesRefs,
             bool visualBibleLocationRefsRefs,
             bool moodboardImagesRefs,
+            bool lightingSetupsRefs,
           })
         > {
   $$LocationBasePlansTableTableManager(
@@ -32545,6 +34116,7 @@ class $$LocationBasePlansTableTableManager
                 locationImagesRefs = false,
                 visualBibleLocationRefsRefs = false,
                 moodboardImagesRefs = false,
+                lightingSetupsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -32553,6 +34125,7 @@ class $$LocationBasePlansTableTableManager
                     if (locationImagesRefs) db.locationImages,
                     if (visualBibleLocationRefsRefs) db.visualBibleLocationRefs,
                     if (moodboardImagesRefs) db.moodboardImages,
+                    if (lightingSetupsRefs) db.lightingSetups,
                   ],
                   addJoins:
                       <
@@ -32689,6 +34262,27 @@ class $$LocationBasePlansTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (lightingSetupsRefs)
+                        await $_getPrefetchedData<
+                          LocationBasePlan,
+                          $LocationBasePlansTable,
+                          LightingSetup
+                        >(
+                          currentTable: table,
+                          referencedTable: $$LocationBasePlansTableReferences
+                              ._lightingSetupsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$LocationBasePlansTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).lightingSetupsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.locationBasePlanId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -32716,6 +34310,7 @@ typedef $$LocationBasePlansTableProcessedTableManager =
         bool locationImagesRefs,
         bool visualBibleLocationRefsRefs,
         bool moodboardImagesRefs,
+        bool lightingSetupsRefs,
       })
     >;
 typedef $$ScenesTableCreateCompanionBuilder =
@@ -41371,6 +42966,410 @@ typedef $$ProjectAnnotatedPdfsTableProcessedTableManager =
       ProjectAnnotatedPdf,
       PrefetchHooks Function({bool projectId})
     >;
+typedef $$ProjectAnnotationDocumentsTableCreateCompanionBuilder =
+    ProjectAnnotationDocumentsCompanion Function({
+      Value<int> id,
+      required int projectId,
+      required String targetType,
+      required String targetId,
+      required String documentJson,
+      Value<int> documentSchemaVersion,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+typedef $$ProjectAnnotationDocumentsTableUpdateCompanionBuilder =
+    ProjectAnnotationDocumentsCompanion Function({
+      Value<int> id,
+      Value<int> projectId,
+      Value<String> targetType,
+      Value<String> targetId,
+      Value<String> documentJson,
+      Value<int> documentSchemaVersion,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+
+final class $$ProjectAnnotationDocumentsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $ProjectAnnotationDocumentsTable,
+          ProjectAnnotationDocument
+        > {
+  $$ProjectAnnotationDocumentsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(
+          db.projectAnnotationDocuments.projectId,
+          db.projects.id,
+        ),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ProjectAnnotationDocumentsTableFilterComposer
+    extends Composer<_$AppDatabase, $ProjectAnnotationDocumentsTable> {
+  $$ProjectAnnotationDocumentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get documentJson => $composableBuilder(
+    column: $table.documentJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get documentSchemaVersion => $composableBuilder(
+    column: $table.documentSchemaVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProjectAnnotationDocumentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ProjectAnnotationDocumentsTable> {
+  $$ProjectAnnotationDocumentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get documentJson => $composableBuilder(
+    column: $table.documentJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get documentSchemaVersion => $composableBuilder(
+    column: $table.documentSchemaVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProjectAnnotationDocumentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ProjectAnnotationDocumentsTable> {
+  $$ProjectAnnotationDocumentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get targetId =>
+      $composableBuilder(column: $table.targetId, builder: (column) => column);
+
+  GeneratedColumn<String> get documentJson => $composableBuilder(
+    column: $table.documentJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get documentSchemaVersion => $composableBuilder(
+    column: $table.documentSchemaVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProjectAnnotationDocumentsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ProjectAnnotationDocumentsTable,
+          ProjectAnnotationDocument,
+          $$ProjectAnnotationDocumentsTableFilterComposer,
+          $$ProjectAnnotationDocumentsTableOrderingComposer,
+          $$ProjectAnnotationDocumentsTableAnnotationComposer,
+          $$ProjectAnnotationDocumentsTableCreateCompanionBuilder,
+          $$ProjectAnnotationDocumentsTableUpdateCompanionBuilder,
+          (
+            ProjectAnnotationDocument,
+            $$ProjectAnnotationDocumentsTableReferences,
+          ),
+          ProjectAnnotationDocument,
+          PrefetchHooks Function({bool projectId})
+        > {
+  $$ProjectAnnotationDocumentsTableTableManager(
+    _$AppDatabase db,
+    $ProjectAnnotationDocumentsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProjectAnnotationDocumentsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ProjectAnnotationDocumentsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ProjectAnnotationDocumentsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<String> targetType = const Value.absent(),
+                Value<String> targetId = const Value.absent(),
+                Value<String> documentJson = const Value.absent(),
+                Value<int> documentSchemaVersion = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => ProjectAnnotationDocumentsCompanion(
+                id: id,
+                projectId: projectId,
+                targetType: targetType,
+                targetId: targetId,
+                documentJson: documentJson,
+                documentSchemaVersion: documentSchemaVersion,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int projectId,
+                required String targetType,
+                required String targetId,
+                required String documentJson,
+                Value<int> documentSchemaVersion = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => ProjectAnnotationDocumentsCompanion.insert(
+                id: id,
+                projectId: projectId,
+                targetType: targetType,
+                targetId: targetId,
+                documentJson: documentJson,
+                documentSchemaVersion: documentSchemaVersion,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ProjectAnnotationDocumentsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({projectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (projectId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.projectId,
+                                referencedTable:
+                                    $$ProjectAnnotationDocumentsTableReferences
+                                        ._projectIdTable(db),
+                                referencedColumn:
+                                    $$ProjectAnnotationDocumentsTableReferences
+                                        ._projectIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ProjectAnnotationDocumentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ProjectAnnotationDocumentsTable,
+      ProjectAnnotationDocument,
+      $$ProjectAnnotationDocumentsTableFilterComposer,
+      $$ProjectAnnotationDocumentsTableOrderingComposer,
+      $$ProjectAnnotationDocumentsTableAnnotationComposer,
+      $$ProjectAnnotationDocumentsTableCreateCompanionBuilder,
+      $$ProjectAnnotationDocumentsTableUpdateCompanionBuilder,
+      (ProjectAnnotationDocument, $$ProjectAnnotationDocumentsTableReferences),
+      ProjectAnnotationDocument,
+      PrefetchHooks Function({bool projectId})
+    >;
 typedef $$VisualBiblesTableCreateCompanionBuilder =
     VisualBiblesCompanion Function({
       Value<int> id,
@@ -41434,6 +43433,8 @@ typedef $$VisualBiblesTableCreateCompanionBuilder =
       Value<String?> textureNarrativeIntent,
       Value<String?> conceptNarrativeIntent,
       Value<String?> opticsConfigJson,
+      Value<bool> structureInitialized,
+      Value<String> engineVersion,
       Value<DateTime> updatedAt,
     });
 typedef $$VisualBiblesTableUpdateCompanionBuilder =
@@ -41499,6 +43500,8 @@ typedef $$VisualBiblesTableUpdateCompanionBuilder =
       Value<String?> textureNarrativeIntent,
       Value<String?> conceptNarrativeIntent,
       Value<String?> opticsConfigJson,
+      Value<bool> structureInitialized,
+      Value<String> engineVersion,
       Value<DateTime> updatedAt,
     });
 
@@ -41829,6 +43832,34 @@ final class $$VisualBiblesTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<
+    $VisualBibleDocumentsTable,
+    List<VisualBibleDocument>
+  >
+  _visualBibleDocumentsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.visualBibleDocuments,
+        aliasName: $_aliasNameGenerator(
+          db.visualBibles.id,
+          db.visualBibleDocuments.bibleId,
+        ),
+      );
+
+  $$VisualBibleDocumentsTableProcessedTableManager
+  get visualBibleDocumentsRefs {
+    final manager = $$VisualBibleDocumentsTableTableManager(
+      $_db,
+      $_db.visualBibleDocuments,
+    ).filter((f) => f.bibleId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _visualBibleDocumentsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$VisualBiblesTableFilterComposer
@@ -42127,6 +44158,16 @@ class $$VisualBiblesTableFilterComposer
 
   ColumnFilters<String> get opticsConfigJson => $composableBuilder(
     column: $table.opticsConfigJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get structureInitialized => $composableBuilder(
+    column: $table.structureInitialized,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get engineVersion => $composableBuilder(
+    column: $table.engineVersion,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -42481,6 +44522,31 @@ class $$VisualBiblesTableFilterComposer
     );
     return f(composer);
   }
+
+  Expression<bool> visualBibleDocumentsRefs(
+    Expression<bool> Function($$VisualBibleDocumentsTableFilterComposer f) f,
+  ) {
+    final $$VisualBibleDocumentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.visualBibleDocuments,
+      getReferencedColumn: (t) => t.bibleId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBibleDocumentsTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibleDocuments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$VisualBiblesTableOrderingComposer
@@ -42779,6 +44845,16 @@ class $$VisualBiblesTableOrderingComposer
 
   ColumnOrderings<String> get opticsConfigJson => $composableBuilder(
     column: $table.opticsConfigJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get structureInitialized => $composableBuilder(
+    column: $table.structureInitialized,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get engineVersion => $composableBuilder(
+    column: $table.engineVersion,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -43144,6 +45220,16 @@ class $$VisualBiblesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<bool> get structureInitialized => $composableBuilder(
+    column: $table.structureInitialized,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get engineVersion => $composableBuilder(
+    column: $table.engineVersion,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
@@ -43498,6 +45584,32 @@ class $$VisualBiblesTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> visualBibleDocumentsRefs<T extends Object>(
+    Expression<T> Function($$VisualBibleDocumentsTableAnnotationComposer a) f,
+  ) {
+    final $$VisualBibleDocumentsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.visualBibleDocuments,
+          getReferencedColumn: (t) => t.bibleId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VisualBibleDocumentsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.visualBibleDocuments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$VisualBiblesTableTableManager
@@ -43528,6 +45640,7 @@ class $$VisualBiblesTableTableManager
             bool visualBibleVersionsRefs,
             bool bibleCommentsRefs,
             bool bibleSectionEvidenceRefs,
+            bool visualBibleDocumentsRefs,
           })
         > {
   $$VisualBiblesTableTableManager(_$AppDatabase db, $VisualBiblesTable table)
@@ -43604,6 +45717,8 @@ class $$VisualBiblesTableTableManager
                 Value<String?> textureNarrativeIntent = const Value.absent(),
                 Value<String?> conceptNarrativeIntent = const Value.absent(),
                 Value<String?> opticsConfigJson = const Value.absent(),
+                Value<bool> structureInitialized = const Value.absent(),
+                Value<String> engineVersion = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => VisualBiblesCompanion(
                 id: id,
@@ -43667,6 +45782,8 @@ class $$VisualBiblesTableTableManager
                 textureNarrativeIntent: textureNarrativeIntent,
                 conceptNarrativeIntent: conceptNarrativeIntent,
                 opticsConfigJson: opticsConfigJson,
+                structureInitialized: structureInitialized,
+                engineVersion: engineVersion,
                 updatedAt: updatedAt,
               ),
           createCompanionCallback:
@@ -43732,6 +45849,8 @@ class $$VisualBiblesTableTableManager
                 Value<String?> textureNarrativeIntent = const Value.absent(),
                 Value<String?> conceptNarrativeIntent = const Value.absent(),
                 Value<String?> opticsConfigJson = const Value.absent(),
+                Value<bool> structureInitialized = const Value.absent(),
+                Value<String> engineVersion = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => VisualBiblesCompanion.insert(
                 id: id,
@@ -43795,6 +45914,8 @@ class $$VisualBiblesTableTableManager
                 textureNarrativeIntent: textureNarrativeIntent,
                 conceptNarrativeIntent: conceptNarrativeIntent,
                 opticsConfigJson: opticsConfigJson,
+                structureInitialized: structureInitialized,
+                engineVersion: engineVersion,
                 updatedAt: updatedAt,
               ),
           withReferenceMapper: (p0) => p0
@@ -43821,6 +45942,7 @@ class $$VisualBiblesTableTableManager
                 visualBibleVersionsRefs = false,
                 bibleCommentsRefs = false,
                 bibleSectionEvidenceRefs = false,
+                visualBibleDocumentsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -43836,6 +45958,7 @@ class $$VisualBiblesTableTableManager
                     if (visualBibleVersionsRefs) db.visualBibleVersions,
                     if (bibleCommentsRefs) db.bibleComments,
                     if (bibleSectionEvidenceRefs) db.bibleSectionEvidence,
+                    if (visualBibleDocumentsRefs) db.visualBibleDocuments,
                   ],
                   addJoins:
                       <
@@ -44134,6 +46257,27 @@ class $$VisualBiblesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (visualBibleDocumentsRefs)
+                        await $_getPrefetchedData<
+                          VisualBible,
+                          $VisualBiblesTable,
+                          VisualBibleDocument
+                        >(
+                          currentTable: table,
+                          referencedTable: $$VisualBiblesTableReferences
+                              ._visualBibleDocumentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$VisualBiblesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).visualBibleDocumentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.bibleId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -44169,6 +46313,7 @@ typedef $$VisualBiblesTableProcessedTableManager =
         bool visualBibleVersionsRefs,
         bool bibleCommentsRefs,
         bool bibleSectionEvidenceRefs,
+        bool visualBibleDocumentsRefs,
       })
     >;
 typedef $$VisualBibleColorBlocksTableCreateCompanionBuilder =
@@ -48011,6 +50156,8 @@ typedef $$LightingSetupsTableCreateCompanionBuilder =
       Value<String?> gelNotes,
       Value<String?> practicalMotivation,
       Value<String?> referenceImagePath,
+      Value<int?> locationBasePlanId,
+      Value<int?> locationSiteId,
       Value<int> sortOrder,
     });
 typedef $$LightingSetupsTableUpdateCompanionBuilder =
@@ -48023,6 +50170,8 @@ typedef $$LightingSetupsTableUpdateCompanionBuilder =
       Value<String?> gelNotes,
       Value<String?> practicalMotivation,
       Value<String?> referenceImagePath,
+      Value<int?> locationBasePlanId,
+      Value<int?> locationSiteId,
       Value<int> sortOrder,
     });
 
@@ -48047,6 +50196,50 @@ final class $$LightingSetupsTableReferences
       $_db.visualBibles,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_bibleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $LocationBasePlansTable _locationBasePlanIdTable(_$AppDatabase db) =>
+      db.locationBasePlans.createAlias(
+        $_aliasNameGenerator(
+          db.lightingSetups.locationBasePlanId,
+          db.locationBasePlans.id,
+        ),
+      );
+
+  $$LocationBasePlansTableProcessedTableManager? get locationBasePlanId {
+    final $_column = $_itemColumn<int>('location_base_plan_id');
+    if ($_column == null) return null;
+    final manager = $$LocationBasePlansTableTableManager(
+      $_db,
+      $_db.locationBasePlans,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_locationBasePlanIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $LocationSitesTable _locationSiteIdTable(_$AppDatabase db) =>
+      db.locationSites.createAlias(
+        $_aliasNameGenerator(
+          db.lightingSetups.locationSiteId,
+          db.locationSites.id,
+        ),
+      );
+
+  $$LocationSitesTableProcessedTableManager? get locationSiteId {
+    final $_column = $_itemColumn<int>('location_site_id');
+    if ($_column == null) return null;
+    final manager = $$LocationSitesTableTableManager(
+      $_db,
+      $_db.locationSites,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_locationSiteIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -48117,6 +50310,52 @@ class $$LightingSetupsTableFilterComposer
           }) => $$VisualBiblesTableFilterComposer(
             $db: $db,
             $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationBasePlansTableFilterComposer get locationBasePlanId {
+    final $$LocationBasePlansTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationBasePlanId,
+      referencedTable: $db.locationBasePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationBasePlansTableFilterComposer(
+            $db: $db,
+            $table: $db.locationBasePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationSitesTableFilterComposer get locationSiteId {
+    final $$LocationSitesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationSiteId,
+      referencedTable: $db.locationSites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationSitesTableFilterComposer(
+            $db: $db,
+            $table: $db.locationSites,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -48198,6 +50437,52 @@ class $$LightingSetupsTableOrderingComposer
     );
     return composer;
   }
+
+  $$LocationBasePlansTableOrderingComposer get locationBasePlanId {
+    final $$LocationBasePlansTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationBasePlanId,
+      referencedTable: $db.locationBasePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationBasePlansTableOrderingComposer(
+            $db: $db,
+            $table: $db.locationBasePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationSitesTableOrderingComposer get locationSiteId {
+    final $$LocationSitesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationSiteId,
+      referencedTable: $db.locationSites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationSitesTableOrderingComposer(
+            $db: $db,
+            $table: $db.locationSites,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$LightingSetupsTableAnnotationComposer
@@ -48263,6 +50548,53 @@ class $$LightingSetupsTableAnnotationComposer
     );
     return composer;
   }
+
+  $$LocationBasePlansTableAnnotationComposer get locationBasePlanId {
+    final $$LocationBasePlansTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.locationBasePlanId,
+          referencedTable: $db.locationBasePlans,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$LocationBasePlansTableAnnotationComposer(
+                $db: $db,
+                $table: $db.locationBasePlans,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+
+  $$LocationSitesTableAnnotationComposer get locationSiteId {
+    final $$LocationSitesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationSiteId,
+      referencedTable: $db.locationSites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationSitesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.locationSites,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$LightingSetupsTableTableManager
@@ -48278,7 +50610,11 @@ class $$LightingSetupsTableTableManager
           $$LightingSetupsTableUpdateCompanionBuilder,
           (LightingSetup, $$LightingSetupsTableReferences),
           LightingSetup,
-          PrefetchHooks Function({bool bibleId})
+          PrefetchHooks Function({
+            bool bibleId,
+            bool locationBasePlanId,
+            bool locationSiteId,
+          })
         > {
   $$LightingSetupsTableTableManager(
     _$AppDatabase db,
@@ -48303,6 +50639,8 @@ class $$LightingSetupsTableTableManager
                 Value<String?> gelNotes = const Value.absent(),
                 Value<String?> practicalMotivation = const Value.absent(),
                 Value<String?> referenceImagePath = const Value.absent(),
+                Value<int?> locationBasePlanId = const Value.absent(),
+                Value<int?> locationSiteId = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
               }) => LightingSetupsCompanion(
                 id: id,
@@ -48313,6 +50651,8 @@ class $$LightingSetupsTableTableManager
                 gelNotes: gelNotes,
                 practicalMotivation: practicalMotivation,
                 referenceImagePath: referenceImagePath,
+                locationBasePlanId: locationBasePlanId,
+                locationSiteId: locationSiteId,
                 sortOrder: sortOrder,
               ),
           createCompanionCallback:
@@ -48325,6 +50665,8 @@ class $$LightingSetupsTableTableManager
                 Value<String?> gelNotes = const Value.absent(),
                 Value<String?> practicalMotivation = const Value.absent(),
                 Value<String?> referenceImagePath = const Value.absent(),
+                Value<int?> locationBasePlanId = const Value.absent(),
+                Value<int?> locationSiteId = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
               }) => LightingSetupsCompanion.insert(
                 id: id,
@@ -48335,6 +50677,8 @@ class $$LightingSetupsTableTableManager
                 gelNotes: gelNotes,
                 practicalMotivation: practicalMotivation,
                 referenceImagePath: referenceImagePath,
+                locationBasePlanId: locationBasePlanId,
+                locationSiteId: locationSiteId,
                 sortOrder: sortOrder,
               ),
           withReferenceMapper: (p0) => p0
@@ -48345,48 +50689,84 @@ class $$LightingSetupsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({bibleId = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [],
-              addJoins:
-                  <
-                    T extends TableManagerState<
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic
-                    >
-                  >(state) {
-                    if (bibleId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.bibleId,
-                                referencedTable: $$LightingSetupsTableReferences
-                                    ._bibleIdTable(db),
-                                referencedColumn:
-                                    $$LightingSetupsTableReferences
-                                        ._bibleIdTable(db)
-                                        .id,
-                              )
-                              as T;
-                    }
+          prefetchHooksCallback:
+              ({
+                bibleId = false,
+                locationBasePlanId = false,
+                locationSiteId = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (bibleId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.bibleId,
+                                    referencedTable:
+                                        $$LightingSetupsTableReferences
+                                            ._bibleIdTable(db),
+                                    referencedColumn:
+                                        $$LightingSetupsTableReferences
+                                            ._bibleIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (locationBasePlanId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.locationBasePlanId,
+                                    referencedTable:
+                                        $$LightingSetupsTableReferences
+                                            ._locationBasePlanIdTable(db),
+                                    referencedColumn:
+                                        $$LightingSetupsTableReferences
+                                            ._locationBasePlanIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (locationSiteId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.locationSiteId,
+                                    referencedTable:
+                                        $$LightingSetupsTableReferences
+                                            ._locationSiteIdTable(db),
+                                    referencedColumn:
+                                        $$LightingSetupsTableReferences
+                                            ._locationSiteIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
 
-                    return state;
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
                   },
-              getPrefetchedDataCallback: (items) async {
-                return [];
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -48403,7 +50783,11 @@ typedef $$LightingSetupsTableProcessedTableManager =
       $$LightingSetupsTableUpdateCompanionBuilder,
       (LightingSetup, $$LightingSetupsTableReferences),
       LightingSetup,
-      PrefetchHooks Function({bool bibleId})
+      PrefetchHooks Function({
+        bool bibleId,
+        bool locationBasePlanId,
+        bool locationSiteId,
+      })
     >;
 typedef $$CameraTestsTableCreateCompanionBuilder =
     CameraTestsCompanion Function({
@@ -51591,6 +53975,454 @@ typedef $$PendingMediaUploadsTableProcessedTableManager =
       PendingMediaUpload,
       PrefetchHooks Function({bool projectId})
     >;
+typedef $$VisualBibleDocumentsTableCreateCompanionBuilder =
+    VisualBibleDocumentsCompanion Function({
+      Value<int> id,
+      required int bibleId,
+      required int projectId,
+      required String documentJson,
+      Value<int> documentSchemaVersion,
+      Value<DateTime> updatedAt,
+    });
+typedef $$VisualBibleDocumentsTableUpdateCompanionBuilder =
+    VisualBibleDocumentsCompanion Function({
+      Value<int> id,
+      Value<int> bibleId,
+      Value<int> projectId,
+      Value<String> documentJson,
+      Value<int> documentSchemaVersion,
+      Value<DateTime> updatedAt,
+    });
+
+final class $$VisualBibleDocumentsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $VisualBibleDocumentsTable,
+          VisualBibleDocument
+        > {
+  $$VisualBibleDocumentsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $VisualBiblesTable _bibleIdTable(_$AppDatabase db) =>
+      db.visualBibles.createAlias(
+        $_aliasNameGenerator(
+          db.visualBibleDocuments.bibleId,
+          db.visualBibles.id,
+        ),
+      );
+
+  $$VisualBiblesTableProcessedTableManager get bibleId {
+    final $_column = $_itemColumn<int>('bible_id')!;
+
+    final manager = $$VisualBiblesTableTableManager(
+      $_db,
+      $_db.visualBibles,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_bibleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.visualBibleDocuments.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$VisualBibleDocumentsTableFilterComposer
+    extends Composer<_$AppDatabase, $VisualBibleDocumentsTable> {
+  $$VisualBibleDocumentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get documentJson => $composableBuilder(
+    column: $table.documentJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get documentSchemaVersion => $composableBuilder(
+    column: $table.documentSchemaVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$VisualBiblesTableFilterComposer get bibleId {
+    final $$VisualBiblesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$VisualBibleDocumentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $VisualBibleDocumentsTable> {
+  $$VisualBibleDocumentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get documentJson => $composableBuilder(
+    column: $table.documentJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get documentSchemaVersion => $composableBuilder(
+    column: $table.documentSchemaVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$VisualBiblesTableOrderingComposer get bibleId {
+    final $$VisualBiblesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableOrderingComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$VisualBibleDocumentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $VisualBibleDocumentsTable> {
+  $$VisualBibleDocumentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get documentJson => $composableBuilder(
+    column: $table.documentJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get documentSchemaVersion => $composableBuilder(
+    column: $table.documentSchemaVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$VisualBiblesTableAnnotationComposer get bibleId {
+    final $$VisualBiblesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$VisualBibleDocumentsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $VisualBibleDocumentsTable,
+          VisualBibleDocument,
+          $$VisualBibleDocumentsTableFilterComposer,
+          $$VisualBibleDocumentsTableOrderingComposer,
+          $$VisualBibleDocumentsTableAnnotationComposer,
+          $$VisualBibleDocumentsTableCreateCompanionBuilder,
+          $$VisualBibleDocumentsTableUpdateCompanionBuilder,
+          (VisualBibleDocument, $$VisualBibleDocumentsTableReferences),
+          VisualBibleDocument,
+          PrefetchHooks Function({bool bibleId, bool projectId})
+        > {
+  $$VisualBibleDocumentsTableTableManager(
+    _$AppDatabase db,
+    $VisualBibleDocumentsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$VisualBibleDocumentsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$VisualBibleDocumentsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$VisualBibleDocumentsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> bibleId = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<String> documentJson = const Value.absent(),
+                Value<int> documentSchemaVersion = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => VisualBibleDocumentsCompanion(
+                id: id,
+                bibleId: bibleId,
+                projectId: projectId,
+                documentJson: documentJson,
+                documentSchemaVersion: documentSchemaVersion,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int bibleId,
+                required int projectId,
+                required String documentJson,
+                Value<int> documentSchemaVersion = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => VisualBibleDocumentsCompanion.insert(
+                id: id,
+                bibleId: bibleId,
+                projectId: projectId,
+                documentJson: documentJson,
+                documentSchemaVersion: documentSchemaVersion,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$VisualBibleDocumentsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({bibleId = false, projectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (bibleId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.bibleId,
+                                referencedTable:
+                                    $$VisualBibleDocumentsTableReferences
+                                        ._bibleIdTable(db),
+                                referencedColumn:
+                                    $$VisualBibleDocumentsTableReferences
+                                        ._bibleIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+                    if (projectId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.projectId,
+                                referencedTable:
+                                    $$VisualBibleDocumentsTableReferences
+                                        ._projectIdTable(db),
+                                referencedColumn:
+                                    $$VisualBibleDocumentsTableReferences
+                                        ._projectIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$VisualBibleDocumentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $VisualBibleDocumentsTable,
+      VisualBibleDocument,
+      $$VisualBibleDocumentsTableFilterComposer,
+      $$VisualBibleDocumentsTableOrderingComposer,
+      $$VisualBibleDocumentsTableAnnotationComposer,
+      $$VisualBibleDocumentsTableCreateCompanionBuilder,
+      $$VisualBibleDocumentsTableUpdateCompanionBuilder,
+      (VisualBibleDocument, $$VisualBibleDocumentsTableReferences),
+      VisualBibleDocument,
+      PrefetchHooks Function({bool bibleId, bool projectId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -51633,6 +54465,12 @@ class $AppDatabaseManager {
       $$LookBiblesTableTableManager(_db, _db.lookBibles);
   $$ProjectAnnotatedPdfsTableTableManager get projectAnnotatedPdfs =>
       $$ProjectAnnotatedPdfsTableTableManager(_db, _db.projectAnnotatedPdfs);
+  $$ProjectAnnotationDocumentsTableTableManager
+  get projectAnnotationDocuments =>
+      $$ProjectAnnotationDocumentsTableTableManager(
+        _db,
+        _db.projectAnnotationDocuments,
+      );
   $$VisualBiblesTableTableManager get visualBibles =>
       $$VisualBiblesTableTableManager(_db, _db.visualBibles);
   $$VisualBibleColorBlocksTableTableManager get visualBibleColorBlocks =>
@@ -51680,4 +54518,6 @@ class $AppDatabaseManager {
       $$CloudSyncQueueTableTableManager(_db, _db.cloudSyncQueue);
   $$PendingMediaUploadsTableTableManager get pendingMediaUploads =>
       $$PendingMediaUploadsTableTableManager(_db, _db.pendingMediaUploads);
+  $$VisualBibleDocumentsTableTableManager get visualBibleDocuments =>
+      $$VisualBibleDocumentsTableTableManager(_db, _db.visualBibleDocuments);
 }

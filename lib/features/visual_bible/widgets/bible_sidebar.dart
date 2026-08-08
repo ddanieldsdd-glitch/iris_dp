@@ -4,13 +4,18 @@ import 'package:flutter/material.dart';
 
 import '../visual_bible_completion.dart';
 import 'bible_navigation_scope.dart';
+import 'bible_overview_section.dart';
 import '../../../core/database/app_database.dart' hide BibleSectionGroup;
-import '../../../core/database/app_database.dart' as app_db show BibleSectionGroup;
+import '../../../core/database/app_database.dart'
+    as app_db
+    show BibleSectionGroup;
 import '../../../core/theme/app_colors.dart';
 import '../visual_bible_model.dart';
 
 /// Navegación lateral de la Biblia de Fotografía.
 class BibleSidebar extends StatelessWidget {
+  static const overviewSectionId = '__overview__';
+
   final String activeSection;
   final VisualBibleData? data;
   final Project? project;
@@ -18,8 +23,11 @@ class BibleSidebar extends StatelessWidget {
   final List<app_db.BibleSectionGroup>? groups;
   final List<BibleSectionDefinition>? definitions;
   final VoidCallback? onEditStructure;
+  final VoidCallback? onAddSection;
   final VoidCallback? onOpenSettings;
   final Future<void> Function(BibleSectionDefinition def)? onRemoveSection;
+  final BibleContentSnapshot contentSnapshot;
+  final double width;
 
   const BibleSidebar({
     super.key,
@@ -30,8 +38,11 @@ class BibleSidebar extends StatelessWidget {
     this.groups,
     this.definitions,
     this.onEditStructure,
+    this.onAddSection,
     this.onOpenSettings,
     this.onRemoveSection,
+    this.contentSnapshot = const BibleContentSnapshot(),
+    this.width = 280,
   });
 
   Color _groupAccentColor(AppPalette palette, String groupLabel) {
@@ -55,7 +66,8 @@ class BibleSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final useDynamic = groups != null &&
+    final useDynamic =
+        groups != null &&
         definitions != null &&
         groups!.isNotEmpty &&
         definitions!.isNotEmpty;
@@ -65,7 +77,7 @@ class BibleSidebar extends StatelessWidget {
     final cover = project?.coverImagePath;
 
     return Container(
-      width: 280,
+      width: width,
       decoration: BoxDecoration(
         color: const Color(0xFF0E0E10),
         border: Border(right: BorderSide(color: palette.border)),
@@ -113,10 +125,13 @@ class BibleSidebar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
-                      child: Icon(
-                        Icons.account_tree_outlined,
-                        size: 16,
-                        color: palette.textSecondary,
+                      child: Tooltip(
+                        message: 'Estructura y plantillas',
+                        child: Icon(
+                          Icons.account_tree_outlined,
+                          size: 16,
+                          color: palette.textSecondary,
+                        ),
                       ),
                     ),
                   ),
@@ -133,56 +148,73 @@ class BibleSidebar extends StatelessWidget {
                   : _fallbackItems(palette),
             ),
           ),
-          if (onOpenSettings != null) ...[
+          if (onAddSection != null || onOpenSettings != null) ...[
             Divider(height: 1, color: palette.border),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Material(
-                color: palette.surfaceOverlay,
-                borderRadius: BorderRadius.circular(10),
-                child: InkWell(
-                  onTap: onOpenSettings,
-                  borderRadius: BorderRadius.circular(10),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (onAddSection != null)
+                    TextButton.icon(
+                      onPressed: onAddSection,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Añadir pantalla'),
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.tune, size: 18, color: palette.accent),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                  if (onOpenSettings != null) ...[
+                    const SizedBox(height: 4),
+                    Material(
+                      color: palette.surfaceOverlay,
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        onTap: onOpenSettings,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          child: Row(
                             children: [
-                              Text(
-                                'Ajuste rápido',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: palette.textPrimary,
+                              Icon(Icons.tune, size: 18, color: palette.accent),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Ajustes de pantalla',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: palette.textPrimary,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Widgets, refs y estilo en vivo',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: palette.textSecondary,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              Text(
-                                'Esta pantalla',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: palette.textSecondary,
-                                ),
+                              Icon(
+                                Icons.chevron_right,
+                                size: 18,
+                                color: palette.textTertiary,
                               ),
                             ],
                           ),
                         ),
-                        Icon(
-                          Icons.chevron_right,
-                          size: 18,
-                          color: palette.textTertiary,
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
+                  ],
+                ],
               ),
             ),
           ],
@@ -192,7 +224,7 @@ class BibleSidebar extends StatelessWidget {
   }
 
   List<Widget> _dynamicItems(AppPalette palette) {
-    final items = <Widget>[];
+    final items = <Widget>[_overviewItem(palette)];
     for (final group in groups!) {
       final color = _groupAccentColor(palette, group.label);
       items.add(
@@ -224,14 +256,15 @@ class BibleSidebar extends StatelessWidget {
           ),
         ),
       );
-      final sectionDefs = definitions!
-          .where(
-            (d) =>
-                d.groupId == group.id &&
-                (!d.isHidden || d.id == BibleSectionId.settings),
-          )
-          .toList()
-        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+      final sectionDefs =
+          definitions!
+              .where(
+                (d) =>
+                    d.groupId == group.id &&
+                    (!d.isHidden || d.id == BibleSectionId.settings),
+              )
+              .toList()
+            ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
       for (final def in sectionDefs) {
         items.add(
           _SidebarItem(
@@ -241,10 +274,10 @@ class BibleSidebar extends StatelessWidget {
             active: def.id == activeSection,
             completion: data == null
                 ? 0
-                : bibleSectionCompletion(data!, def.id),
+                : contentSnapshot.sectionCompletion(data!, def.id),
             onTap: () => onSectionSelected(def.id),
-            onRemove: onRemoveSection == null ||
-                    def.id == BibleSectionId.settings
+            onRemove:
+                onRemoveSection == null || def.id == BibleSectionId.settings
                 ? null
                 : () => onRemoveSection!(def),
             isBuiltIn: def.isBuiltIn,
@@ -256,7 +289,7 @@ class BibleSidebar extends StatelessWidget {
   }
 
   List<Widget> _fallbackItems(AppPalette palette) {
-    final items = <Widget>[];
+    final items = <Widget>[_overviewItem(palette)];
     for (final group in BibleLayoutGroup.orderedGroups) {
       final label = BibleLayoutGroup.label(group);
       final color = _groupAccentColor(palette, label);
@@ -296,13 +329,29 @@ class BibleSidebar extends StatelessWidget {
             label: BibleSectionId.label(id),
             icon: BibleSectionId.icon(id),
             active: id == activeSection,
-            completion: data == null ? 0 : bibleSectionCompletion(data!, id),
+            completion: data == null
+                ? 0
+                : contentSnapshot.sectionCompletion(data!, id),
             onTap: () => onSectionSelected(id),
           ),
         );
       }
     }
     return items;
+  }
+
+  Widget _overviewItem(AppPalette palette) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: _SidebarItem(
+        id: overviewSectionId,
+        label: 'Resumen',
+        icon: Icons.dashboard_outlined,
+        active: activeSection == overviewSectionId,
+        completion: 0,
+        onTap: () => onSectionSelected(overviewSectionId),
+      ),
+    );
   }
 }
 
@@ -315,8 +364,7 @@ class _ProjectAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final path = coverPath;
-    final hasCover =
-        path != null && path.isNotEmpty && File(path).existsSync();
+    final hasCover = path != null && path.isNotEmpty && File(path).existsSync();
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),

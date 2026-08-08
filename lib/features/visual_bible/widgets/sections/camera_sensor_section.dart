@@ -14,6 +14,7 @@ import '../../bible_section_fields.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
+import '../bible_moodboard_image_target.dart';
 import 'section_scaffold.dart';
 
 /// Cámara y sensor — layout Stitch (A-Cam + ISO + codec + DIT + refs).
@@ -1683,43 +1684,49 @@ class _EditorialRef extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AspectRatio(
-              aspectRatio: 3 / 4,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (imgs.isNotEmpty &&
-                        File(imgs.first.imagePath).existsSync())
-                      Image.file(
-                        File(imgs.first.imagePath),
-                        fit: BoxFit.cover,
-                      )
-                    else
-                      ColoredBox(
-                        color: palette.surfaceOverlay,
-                        child: Icon(
-                          Icons.image_outlined,
-                          size: 48,
-                          color: palette.textTertiary,
+            BibleMoodboardImageTarget(
+              projectId: projectId,
+              sectionId: BibleSectionId.camera,
+              bibleId: bibleId,
+              hint: 'Clic aquí → ⌘V para pegar hero de cámara',
+              child: AspectRatio(
+                aspectRatio: 3 / 4,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (imgs.isNotEmpty &&
+                          File(imgs.first.imagePath).existsSync())
+                        Image.file(
+                          File(imgs.first.imagePath),
+                          fit: BoxFit.cover,
+                        )
+                      else
+                        ColoredBox(
+                          color: palette.surfaceOverlay,
+                          child: Icon(
+                            Icons.image_outlined,
+                            size: 48,
+                            color: palette.textTertiary,
+                          ),
                         ),
-                      ),
-                    Positioned(
-                      left: 12,
-                      bottom: 12,
-                      child: InkWell(
-                        onTap: onEditCaption,
-                        child: Text(
-                          '— ${caption.toUpperCase()}',
-                          style: AppTypography.mono(palette).copyWith(
-                            fontSize: 11,
-                            color: Colors.white70,
+                      Positioned(
+                        left: 12,
+                        bottom: 12,
+                        child: InkWell(
+                          onTap: onEditCaption,
+                          child: Text(
+                            '— ${caption.toUpperCase()}',
+                            style: AppTypography.mono(palette).copyWith(
+                              fontSize: 11,
+                              color: Colors.white70,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1730,6 +1737,7 @@ class _EditorialRef extends ConsumerWidget {
                   projectId: projectId,
                   bibleId: bibleId,
                   category: MoodboardCategory.reference,
+                  assignedSections: [BibleSectionId.camera],
                 );
               },
               icon: Icon(Icons.add_photo_alternate_outlined,
@@ -1801,6 +1809,7 @@ class _TechRefs extends ConsumerWidget {
                     projectId: projectId,
                     bibleId: bibleId,
                     category: MoodboardCategory.reference,
+                  assignedSections: [BibleSectionId.camera],
                   ),
                 );
                 final b = _refSlot(
@@ -1813,6 +1822,7 @@ class _TechRefs extends ConsumerWidget {
                     projectId: projectId,
                     bibleId: bibleId,
                     category: MoodboardCategory.reference,
+                  assignedSections: [BibleSectionId.camera],
                   ),
                 );
                 if (wide) {

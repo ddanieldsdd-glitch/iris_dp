@@ -15,6 +15,8 @@ import '../../core/widgets/app_card.dart';
 import '../../core/widgets/scene_meta_display.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
+import '../visual_bible/visual_bible_model.dart';
+import '../visual_bible/visual_bible_screen.dart';
 import '../../shared/pdf_export/camera_plan_pdf.dart';
 import 'camera_plan_editor.dart';
 import 'camera_plan_grouping.dart';
@@ -1132,7 +1134,7 @@ class _LocationHierarchySection extends ConsumerWidget {
   }
 }
 
-class _SetSection extends StatelessWidget {
+class _SetSection extends ConsumerWidget {
   final SetPlanNode setNode;
   final int projectId;
   final Color locationBase;
@@ -1154,8 +1156,9 @@ class _SetSection extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
+    final db = ref.watch(databaseProvider);
     final planElementCount = setNode.hasPlan
         ? FloorPlanJson.decode(setNode.floorPlanJson).length
         : 0;
@@ -1203,6 +1206,46 @@ class _SetSection extends StatelessWidget {
                 Text(
                   '${setNode.scenes.length} esc.',
                   style: AppTypography.caption(palette),
+                ),
+                StreamBuilder<VisualBible?>(
+                  stream: db.watchVisualBibleForProject(projectId),
+                  builder: (context, bibleSnap) {
+                    final bibleId = bibleSnap.data?.id;
+                    if (bibleId == null) return const SizedBox.shrink();
+                    return StreamBuilder<List<LightingSetup>>(
+                      stream: db.watchLightingSetupsForBible(bibleId),
+                      builder: (context, setupSnap) {
+                        final count = (setupSnap.data ?? [])
+                            .where(
+                              (s) =>
+                                  s.locationBasePlanId == setNode.set.id,
+                            )
+                            .length;
+                        if (count == 0) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(left: AppSpacing.sm),
+                          child: ActionChip(
+                            visualDensity: VisualDensity.compact,
+                            label: Text(
+                              '$count setup${count == 1 ? '' : 's'} luz',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => VisualBibleScreen(
+                                    projectId: projectId,
+                                    initialSectionId: BibleSectionId.lighting,
+                                    initialPlanId: setNode.set.id,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    );
+                  },
                 ),
               ],
             ),

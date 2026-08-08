@@ -19,8 +19,12 @@ import '../../bible_paste_helpers.dart';
 import '../../bible_section_fields.dart';
 import '../../services/color_extraction_service.dart';
 import '../../visual_bible_model.dart';
+import '../../../../core/project/project_shoot_context.dart';
+import '../../../locations/location_form_sheet.dart';
+import '../../../locations/location_site_form_sheet.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_paste_zone.dart';
+import '../moodboard_drag.dart';
 import '../bible_visual_color_sheet.dart';
 import '../moodboard_strip.dart';
 
@@ -67,13 +71,13 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
     final current = _getCustom();
     final newData = {...current, ...update};
     final db = ref.read(databaseProvider);
-    final def = await (db.select(db.bibleSectionDefinitions)
-          ..where(
-            (d) =>
-                d.bibleId.equals(widget.bibleId) &
-                d.id.equals(BibleSectionId.location),
-          ))
-        .getSingleOrNull();
+    final def =
+        await (db.select(db.bibleSectionDefinitions)..where(
+              (d) =>
+                  d.bibleId.equals(widget.bibleId) &
+                  d.id.equals(BibleSectionId.location),
+            ))
+            .getSingleOrNull();
     if (def == null) return;
     final fields = BibleSectionFieldsConfig.parse(
       def.contentJson,
@@ -100,10 +104,7 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
     return {};
   }
 
-  Future<void> _updatePlanExtras(
-    int planId,
-    Map<String, dynamic> patch,
-  ) async {
+  Future<void> _updatePlanExtras(int planId, Map<String, dynamic> patch) async {
     final custom = _getCustom();
     final byPlan = Map<String, dynamic>.from(
       (custom['byPlan'] as Map?)?.map((k, v) => MapEntry('$k', v)) ?? {},
@@ -132,8 +133,9 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
               return Center(
                 child: Text(
                   'Las localizaciones se generan al importar el guion.',
-                  style: AppTypography.bodyMedium(palette)
-                      .copyWith(color: palette.textTertiary),
+                  style: AppTypography.bodyMedium(
+                    palette,
+                  ).copyWith(color: palette.textTertiary),
                 ),
               );
             }
@@ -150,7 +152,8 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
                 };
 
                 final custom = _getCustom();
-                final preferred = _selectedPlanId ??
+                final preferred =
+                    _selectedPlanId ??
                     (custom['selectedPlanId'] as num?)?.toInt() ??
                     (allSets.isNotEmpty ? allSets.first.id : null);
                 LocationBasePlan? active;
@@ -176,49 +179,41 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
                   padding: const EdgeInsets.all(24),
                   children: [
                     _SectionTitle(palette: palette),
-                    const SizedBox(height: 20),
-                    if (allSets.isNotEmpty) ...[
-                      SizedBox(
-                        height: 36,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: allSets.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(width: 8),
-                          itemBuilder: (_, i) {
-                            final loc = allSets[i];
-                            final selectedChip = active?.id == loc.id;
-                            return ChoiceChip(
-                              label: Text(loc.locationName),
-                              selected: selectedChip,
-                              onSelected: (_) {
-                                setState(() => _selectedPlanId = loc.id);
-                                _updateCustom({'selectedPlanId': loc.id});
-                              },
-                              selectedColor:
-                                  palette.accent.withValues(alpha: 0.2),
-                              labelStyle: AppTypography.mono(palette).copyWith(
-                                fontSize: 11,
-                                color: selectedChip
-                                    ? palette.accent
-                                    : palette.textSecondary,
-                              ),
-                              backgroundColor: palette.surfaceElevated,
-                              side: BorderSide(
-                                color: selectedChip
-                                    ? palette.accent
-                                    : Colors.white.withValues(alpha: 0.08),
-                              ),
+                    const SizedBox(height: 12),
+                    _LocationHubHeader(
+                      palette: palette,
+                      projectId: widget.projectId,
+                      sites: sites,
+                      allSets: allSets,
+                      activeSet: active,
+                      onSelectSet: (set) {
+                        setState(() => _selectedPlanId = set.id);
+                        _updateCustom({'selectedPlanId': set.id});
+                        ref.read(projectShootContextProvider(widget.projectId).notifier).setActive(
+                              siteId: set.siteId,
+                              setId: set.id,
                             );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
+                      },
+                      onCreateSite: () async {
+                        await showLocationSiteFormSheet(
+                          context,
+                          projectId: widget.projectId,
+                        );
+                      },
+                      onCreateSet: (siteId) async {
+                        await showLocationFormSheet(
+                          context,
+                          projectId: widget.projectId,
+                          siteId: siteId,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 20),
                     if (active != null) ...[
                       Builder(
                         builder: (_) {
-                          final refRow = refsByPlanId[active!.id] ??
+                          final refRow =
+                              refsByPlanId[active!.id] ??
                               refsByName[active.locationName];
                           final model = refRow != null
                               ? LocationRefModel.fromRow(refRow)
@@ -253,9 +248,9 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
                         siteName: site.name,
                         onOpenLocations: () =>
                             BibleNavigationScope.openLocationSet(
-                          context,
-                          siteId: site.id,
-                        ),
+                              context,
+                              siteId: site.id,
+                            ),
                       ),
                       const SizedBox(height: 8),
                     ],
@@ -263,8 +258,11 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
                       TextButton.icon(
                         onPressed: () =>
                             BibleNavigationScope.openLocationSet(context),
-                        icon: Icon(Icons.open_in_new,
-                            size: 16, color: palette.accent),
+                        icon: Icon(
+                          Icons.open_in_new,
+                          size: 16,
+                          color: palette.accent,
+                        ),
                         label: Text(
                           'Abrir pantalla Localizaciones',
                           style: TextStyle(color: palette.accent),
@@ -375,8 +373,8 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
 
   String _s(String key, [String fallback = '']) =>
       (x[key] as String?)?.trim().isNotEmpty == true
-          ? x[key] as String
-          : fallback;
+      ? x[key] as String
+      : fallback;
 
   List<String> _list(String key, List<String> fallback) {
     final raw = x[key];
@@ -396,13 +394,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
         .map((m) => '#${m.group(1)!.toUpperCase()}')
         .toList();
     if (fromNote.isNotEmpty) return fromNote;
-    return const [
-      '#1A1C1E',
-      '#3B4045',
-      '#6C7075',
-      '#A58D70',
-      '#CC9B52',
-    ];
+    return const ['#1A1C1E', '#3B4045', '#6C7075', '#A58D70', '#CC9B52'];
   }
 
   Future<void> _edit(
@@ -472,9 +464,9 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
   Future<void> _saveModel() async {
     await widget.onSaveRef(_model);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Localización guardada')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Localización guardada')));
   }
 
   Future<void> _addPhoto() async {
@@ -523,18 +515,25 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     await widget.onSaveRef(_model);
   }
 
+  Future<void> _dropMoodboardPhoto(MoodboardDragPayload drag) async {
+    if (!File(drag.imagePath).existsSync()) return;
+    _model.referenceImages.add(drag.imagePath);
+    setState(() {});
+    await widget.onSaveRef(_model);
+  }
+
   Future<void> _openMaps() async {
     final url = _s('mapsUrl');
     final coords = _s('coords');
     final uri = url.isNotEmpty
         ? Uri.tryParse(url)
         : coords.isNotEmpty
-            ? Uri.parse(
-                'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(coords)}',
-              )
-            : Uri.parse(
-                'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(widget.plan.locationName)}',
-              );
+        ? Uri.parse(
+            'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(coords)}',
+          )
+        : Uri.parse(
+            'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(widget.plan.locationName)}',
+          );
     if (uri == null) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
@@ -545,12 +544,12 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     final uri = url.isNotEmpty
         ? Uri.tryParse(url)
         : coords.isNotEmpty
-            ? Uri.parse(
-                'https://earth.google.com/web/search/${Uri.encodeComponent(coords)}',
-              )
-            : Uri.parse(
-                'https://earth.google.com/web/search/${Uri.encodeComponent(widget.plan.locationName)}',
-              );
+        ? Uri.parse(
+            'https://earth.google.com/web/search/${Uri.encodeComponent(coords)}',
+          )
+        : Uri.parse(
+            'https://earth.google.com/web/search/${Uri.encodeComponent(widget.plan.locationName)}',
+          );
     if (uri == null) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
@@ -617,45 +616,77 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
           padding: const EdgeInsets.all(4),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: SizedBox(
-              height: 320,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (heroPath != null &&
-                      heroPath.isNotEmpty &&
-                      File(heroPath).existsSync())
-                    Image.file(File(heroPath), fit: BoxFit.cover)
-                  else
-                    StreamBuilder<List<MoodboardImage>>(
-                      stream: ref
-                          .watch(databaseProvider)
-                          .watchMoodboardImagesForSection(
-                            widget.projectId,
-                            BibleSectionId.location,
-                          ),
-                      builder: (context, snap) {
-                        final imgs = snap.data ?? [];
-                        if (imgs.isNotEmpty &&
-                            File(imgs.first.imagePath).existsSync()) {
-                          return Image.file(
-                            File(imgs.first.imagePath),
-                            fit: BoxFit.cover,
+            child: BibleTargetZone(
+              hint: 'Clic aquí → ⌘V para pegar foto de hero',
+              minHeight: 0,
+              onPaste: _pastePhoto,
+              onMoodboardDropped: _dropMoodboardPhoto,
+              child: SizedBox(
+                height: 320,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (heroPath != null &&
+                        heroPath.isNotEmpty &&
+                        File(heroPath).existsSync())
+                      Image.file(File(heroPath), fit: BoxFit.cover)
+                    else
+                      StreamBuilder<List<MoodboardImage>>(
+                        stream: ref
+                            .watch(databaseProvider)
+                            .watchMoodboardImagesForSection(
+                              widget.projectId,
+                              BibleSectionId.location,
+                            ),
+                        builder: (context, snap) {
+                          final imgs = snap.data ?? [];
+                          if (imgs.isNotEmpty &&
+                              File(imgs.first.imagePath).existsSync()) {
+                            return Image.file(
+                              File(imgs.first.imagePath),
+                              fit: BoxFit.cover,
+                            );
+                          }
+                          return ColoredBox(
+                            color: palette.surfaceOverlay,
+                            child: Center(
+                              child: TextButton.icon(
+                                onPressed: _addPhoto,
+                                icon: Icon(
+                                  Icons.add_photo_alternate_outlined,
+                                  color: palette.accent,
+                                ),
+                                label: Text(
+                                  'Añadir hero',
+                                  style: TextStyle(color: palette.accent),
+                                ),
+                              ),
+                            ),
                           );
-                        }
-                        return ColoredBox(
-                          color: palette.surfaceOverlay,
-                          child: Center(
-                            child: TextButton.icon(
-                              onPressed: _addPhoto,
-                              icon: Icon(Icons.add_photo_alternate_outlined,
-                                  color: palette.accent),
-                              label: Text('Añadir hero',
-                                  style: TextStyle(color: palette.accent)),
+                        },
+                      ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: IgnorePointer(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '⌘V',
+                            style: AppTypography.mono(palette).copyWith(
+                              fontSize: 10,
+                              color: Colors.white70,
                             ),
                           ),
-                        );
-                      },
+                        ),
+                      ),
                     ),
                   Positioned(
                     top: 14,
@@ -675,10 +706,9 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                           children: [
                             Text(
                               coords.isEmpty ? 'Toca para coords' : coords,
-                              style: AppTypography.mono(palette).copyWith(
-                                fontSize: 11,
-                                color: Colors.white,
-                              ),
+                              style: AppTypography.mono(
+                                palette,
+                              ).copyWith(fontSize: 11, color: Colors.white),
                             ),
                             if (elevation.isNotEmpty)
                               Text(
@@ -708,13 +738,13 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                         _Pill(
                           label: 'LOC: $locLabel',
                           palette: palette,
-                          onTap: () =>
-                              _edit('Label LOC', 'locLabel', locLabel),
+                          onTap: () => _edit('Label LOC', 'locLabel', locLabel),
                         ),
                       ],
                     ),
                   ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -736,23 +766,24 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                       ),
                       const SizedBox(height: 14),
                       _Kv(
-                          label: 'Contrast Ratio',
-                          value: contrast,
-                          onTap: () => _edit(
-                              'Contrast Ratio', 'contrastRatio', contrast),
-                          palette: palette),
+                        label: 'Contrast Ratio',
+                        value: contrast,
+                        onTap: () =>
+                            _edit('Contrast Ratio', 'contrastRatio', contrast),
+                        palette: palette,
+                      ),
                       _Kv(
-                          label: 'Quality of Light',
-                          value: quality,
-                          onTap: () =>
-                              _edit('Quality', 'lightQuality', quality),
-                          palette: palette),
+                        label: 'Quality of Light',
+                        value: quality,
+                        onTap: () => _edit('Quality', 'lightQuality', quality),
+                        palette: palette,
+                      ),
                       _Kv(
-                          label: 'Bounce Potential',
-                          value: bounce,
-                          onTap: () =>
-                              _edit('Bounce', 'bouncePotential', bounce),
-                          palette: palette),
+                        label: 'Bounce Potential',
+                        value: bounce,
+                        onTap: () => _edit('Bounce', 'bouncePotential', bounce),
+                        palette: palette,
+                      ),
                       const SizedBox(height: 10),
                       InkWell(
                         onTap: () => _edit(
@@ -864,27 +895,30 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                       ),
                       const SizedBox(height: 12),
                       _Kv(
-                          label: 'Weather',
-                          value: weather,
-                          onTap: () => _edit('Weather', 'weather', weather),
-                          palette: palette),
+                        label: 'Weather',
+                        value: weather,
+                        onTap: () => _edit('Weather', 'weather', weather),
+                        palette: palette,
+                      ),
                       _Kv(
-                          label: 'Humidity / Haze',
-                          value: humidity,
-                          onTap: () =>
-                              _edit('Humidity', 'humidity', humidity),
-                          palette: palette),
+                        label: 'Humidity / Haze',
+                        value: humidity,
+                        onTap: () => _edit('Humidity', 'humidity', humidity),
+                        palette: palette,
+                      ),
                       _Kv(
-                          label: 'Sky Quality',
-                          value: sky,
-                          onTap: () => _edit('Sky', 'skyQuality', sky),
-                          palette: palette,
-                          accent: true),
+                        label: 'Sky Quality',
+                        value: sky,
+                        onTap: () => _edit('Sky', 'skyQuality', sky),
+                        palette: palette,
+                        accent: true,
+                      ),
                       _Kv(
-                          label: 'Wind',
-                          value: wind,
-                          onTap: () => _edit('Wind', 'wind', wind),
-                          palette: palette),
+                        label: 'Wind',
+                        value: wind,
+                        onTap: () => _edit('Wind', 'wind', wind),
+                        palette: palette,
+                      ),
                     ],
                   ),
                 ),
@@ -926,8 +960,12 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                     textureMat,
                     lines: 4,
                   ),
-                  onEditSound: () =>
-                      _edit('Paisaje sonoro', 'soundscape', soundscape, lines: 3),
+                  onEditSound: () => _edit(
+                    'Paisaje sonoro',
+                    'soundscape',
+                    soundscape,
+                    lines: 3,
+                  ),
                   onEditGear: () =>
                       _editList('Equipo extra', 'extraGear', gear),
                   onEditCritical: () =>
@@ -990,8 +1028,9 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                     setState(() {});
                   },
                   onEditNote: () async {
-                    final ctrl =
-                        TextEditingController(text: _model.colorNote ?? '');
+                    final ctrl = TextEditingController(
+                      text: _model.colorNote ?? '',
+                    );
                     final v = await showDialog<String>(
                       context: context,
                       builder: (ctx) => AlertDialog(
@@ -1023,8 +1062,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                   onMaps: _openMaps,
                   onEditLinks: () async {
                     await _edit('URL Google Maps', 'mapsUrl', _s('mapsUrl'));
-                    await _edit(
-                        'URL Google Earth', 'earthUrl', _s('earthUrl'));
+                    await _edit('URL Google Earth', 'earthUrl', _s('earthUrl'));
                   },
                 ),
                 const SizedBox(height: 16),
@@ -1152,10 +1190,9 @@ class _SolarCard extends StatelessWidget {
                         ),
                         Text(
                           'AZIMUTH',
-                          style: AppTypography.mono(palette).copyWith(
-                            fontSize: 10,
-                            color: palette.textTertiary,
-                          ),
+                          style: AppTypography.mono(
+                            palette,
+                          ).copyWith(fontSize: 10, color: palette.textTertiary),
                         ),
                       ],
                     ),
@@ -1206,27 +1243,29 @@ class _SolarCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _Kv(
-              label: 'Blue Hour',
-              value: blueHour,
-              onTap: () => onEditField('blueHour', 'Blue Hour', blueHour),
-              palette: palette),
+            label: 'Blue Hour',
+            value: blueHour,
+            onTap: () => onEditField('blueHour', 'Blue Hour', blueHour),
+            palette: palette,
+          ),
           _Kv(
-              label: 'Golden Hour',
-              value: goldenHour,
-              onTap: () =>
-                  onEditField('goldenHour', 'Golden Hour', goldenHour),
-              palette: palette),
+            label: 'Golden Hour',
+            value: goldenHour,
+            onTap: () => onEditField('goldenHour', 'Golden Hour', goldenHour),
+            palette: palette,
+          ),
           _Kv(
-              label: 'Max Elevation',
-              value: maxElev,
-              onTap: () =>
-                  onEditField('maxElevation', 'Max Elevation', maxElev),
-              palette: palette),
+            label: 'Max Elevation',
+            value: maxElev,
+            onTap: () => onEditField('maxElevation', 'Max Elevation', maxElev),
+            palette: palette,
+          ),
           _Kv(
-              label: 'Shadow Ratio (Noon)',
-              value: shadow,
-              onTap: () => onEditField('shadowRatio', 'Shadow Ratio', shadow),
-              palette: palette),
+            label: 'Shadow Ratio (Noon)',
+            value: shadow,
+            onTap: () => onEditField('shadowRatio', 'Shadow Ratio', shadow),
+            palette: palette,
+          ),
         ],
       ),
     );
@@ -1366,9 +1405,12 @@ class _NarrativeStagingCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         for (final g in gear)
-                          Text('• $g',
-                              style: AppTypography.mono(palette)
-                                  .copyWith(fontSize: 11)),
+                          Text(
+                            '• $g',
+                            style: AppTypography.mono(
+                              palette,
+                            ).copyWith(fontSize: 11),
+                          ),
                       ],
                     ),
                   ),
@@ -1401,9 +1443,12 @@ class _NarrativeStagingCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         for (final g in critical)
-                          Text('• $g',
-                              style: AppTypography.mono(palette)
-                                  .copyWith(fontSize: 11)),
+                          Text(
+                            '• $g',
+                            style: AppTypography.mono(
+                              palette,
+                            ).copyWith(fontSize: 11),
+                          ),
                       ],
                     ),
                   ),
@@ -1509,10 +1554,9 @@ class _PaletteCard extends StatelessWidget {
             onTap: onEditNote,
             child: Text(
               colorNote.isEmpty ? 'Nota de paleta…' : colorNote,
-              style: AppTypography.mono(palette).copyWith(
-                fontSize: 11,
-                color: palette.textTertiary,
-              ),
+              style: AppTypography.mono(
+                palette,
+              ).copyWith(fontSize: 11, color: palette.textTertiary),
             ),
           ),
         ],
@@ -1554,8 +1598,7 @@ class _MapsCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.black,
                 borderRadius: BorderRadius.circular(8),
-                border:
-                    Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1581,16 +1624,19 @@ class _MapsCard extends StatelessWidget {
             children: [
               OutlinedButton.icon(
                 onPressed: onEarth,
-                icon:
-                    Icon(Icons.open_in_new, size: 14, color: palette.accent),
-                label: Text('Google Earth',
-                    style: TextStyle(color: palette.accent, fontSize: 11)),
+                icon: Icon(Icons.open_in_new, size: 14, color: palette.accent),
+                label: Text(
+                  'Google Earth',
+                  style: TextStyle(color: palette.accent, fontSize: 11),
+                ),
               ),
               OutlinedButton.icon(
                 onPressed: onMaps,
                 icon: Icon(Icons.map, size: 14, color: palette.accent),
-                label: Text('Google Maps',
-                    style: TextStyle(color: palette.accent, fontSize: 11)),
+                label: Text(
+                  'Google Maps',
+                  style: TextStyle(color: palette.accent, fontSize: 11),
+                ),
               ),
             ],
           ),
@@ -1636,8 +1682,11 @@ class _RefsGallery extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onAdd,
-                icon: Icon(Icons.add_photo_alternate_outlined,
-                    color: palette.accent, size: 20),
+                icon: Icon(
+                  Icons.add_photo_alternate_outlined,
+                  color: palette.accent,
+                  size: 20,
+                ),
               ),
             ],
           ),
@@ -1660,8 +1709,12 @@ class _RefsGallery extends StatelessWidget {
                         return ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: f.existsSync()
-                              ? Image.file(f,
-                                  width: 160, height: 120, fit: BoxFit.cover)
+                              ? Image.file(
+                                  f,
+                                  width: 160,
+                                  height: 120,
+                                  fit: BoxFit.cover,
+                                )
                               : const SizedBox(width: 160, height: 120),
                         );
                       },
@@ -1669,8 +1722,10 @@ class _RefsGallery extends StatelessWidget {
                   ),
           ),
           const SizedBox(height: 12),
-          Text('Moodboard · $locationName',
-              style: AppTypography.label(palette)),
+          Text(
+            'Moodboard · $locationName',
+            style: AppTypography.label(palette),
+          ),
           const SizedBox(height: 8),
           MoodboardStrip.forLocation(
             projectId: projectId,
@@ -1724,7 +1779,6 @@ class _Glass extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
       padding: padding ?? const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: const Color(0xB31A1A1C),
@@ -1755,10 +1809,9 @@ class _CardHead extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           label.toUpperCase(),
-          style: AppTypography.label(palette).copyWith(
-            fontSize: 11,
-            letterSpacing: 1.4,
-          ),
+          style: AppTypography.label(
+            palette,
+          ).copyWith(fontSize: 11, letterSpacing: 1.4),
         ),
       ],
     );
@@ -1791,10 +1844,9 @@ class _Kv extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: AppTypography.mono(palette).copyWith(
-                  fontSize: 12,
-                  color: palette.textTertiary,
-                ),
+                style: AppTypography.mono(
+                  palette,
+                ).copyWith(fontSize: 12, color: palette.textTertiary),
               ),
             ),
             Flexible(
@@ -1849,10 +1901,9 @@ class _MiniStat extends StatelessWidget {
           children: [
             Text(
               label.toUpperCase(),
-              style: AppTypography.label(palette).copyWith(
-                fontSize: 10,
-                color: palette.textTertiary,
-              ),
+              style: AppTypography.label(
+                palette,
+              ).copyWith(fontSize: 10, color: palette.textTertiary),
             ),
             const SizedBox(height: 4),
             Text(
@@ -1913,8 +1964,9 @@ class _NarrativeBlock extends StatelessWidget {
             style: AppTypography.bodyMedium(palette).copyWith(
               fontSize: 15,
               height: 1.55,
-              color:
-                  body.isEmpty ? palette.textTertiary : palette.textSecondary,
+              color: body.isEmpty
+                  ? palette.textTertiary
+                  : palette.textSecondary,
             ),
           ),
         ],
@@ -1990,10 +2042,7 @@ class _AzimuthDialPainter extends CustomPainter {
         c.dx + math.cos(a) * (r - 8),
         c.dy + math.sin(a) * (r - 8),
       );
-      final p2 = Offset(
-        c.dx + math.cos(a) * r,
-        c.dy + math.sin(a) * r,
-      );
+      final p2 = Offset(c.dx + math.cos(a) * r, c.dy + math.sin(a) * r);
       canvas.drawLine(p1, p2, tick);
     }
 
@@ -2012,4 +2061,117 @@ class _AzimuthDialPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _AzimuthDialPainter oldDelegate) =>
       oldDelegate.azimuth != azimuth || oldDelegate.accent != accent;
+}
+
+class _LocationHubHeader extends StatelessWidget {
+  final AppPalette palette;
+  final int projectId;
+  final List<LocationSite> sites;
+  final List<LocationBasePlan> allSets;
+  final LocationBasePlan? activeSet;
+  final ValueChanged<LocationBasePlan> onSelectSet;
+  final VoidCallback onCreateSite;
+  final void Function(int siteId) onCreateSet;
+
+  const _LocationHubHeader({
+    required this.palette,
+    required this.projectId,
+    required this.sites,
+    required this.allSets,
+    required this.activeSet,
+    required this.onSelectSet,
+    required this.onCreateSite,
+    required this.onCreateSet,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final orphanSets = allSets.where((s) => s.siteId == null).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: palette.surfaceElevated,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: palette.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'LOCALIZACIONES DEL PROYECTO',
+                  style: AppTypography.mono(palette).copyWith(
+                    fontSize: 10,
+                    letterSpacing: 1.2,
+                    color: palette.textSecondary,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onCreateSite,
+                icon: const Icon(Icons.add_location_alt_outlined, size: 16),
+                label: const Text('Nueva localización'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (sites.isEmpty && allSets.isEmpty)
+            Text(
+              'Crea una localización (site) y añade sets de rodaje dentro.',
+              style: AppTypography.caption(palette),
+            ),
+          for (final site in sites) ...[
+            Text(
+              site.name.toUpperCase(),
+              style: AppTypography.label(palette).copyWith(
+                fontSize: 11,
+                color: palette.success,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final set in allSets.where((s) => s.siteId == site.id))
+                  ChoiceChip(
+                    label: Text(set.locationName),
+                    selected: activeSet?.id == set.id,
+                    onSelected: (_) => onSelectSet(set),
+                    selectedColor: palette.accent.withValues(alpha: 0.2),
+                  ),
+                ActionChip(
+                  avatar: Icon(Icons.add, size: 16, color: palette.accent),
+                  label: const Text('Añadir set'),
+                  onPressed: () => onCreateSet(site.id),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (orphanSets.isNotEmpty) ...[
+            Text(
+              'SETS SIN LOCALIZACIÓN',
+              style: AppTypography.label(palette).copyWith(fontSize: 11),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final set in orphanSets)
+                  ChoiceChip(
+                    label: Text(set.locationName),
+                    selected: activeSet?.id == set.id,
+                    onSelected: (_) => onSelectSet(set),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }

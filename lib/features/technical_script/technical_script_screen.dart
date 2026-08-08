@@ -47,8 +47,7 @@ class TechnicalScriptScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: palette.surface,
-        title:
-            Text('Guion técnico', style: AppTypography.titleLarge(palette)),
+        title: Text('Guion técnico', style: AppTypography.titleLarge(palette)),
         actions: [
           GoodNotesPdfActions(
             projectId: projectId,
@@ -61,8 +60,9 @@ class TechnicalScriptScreen extends ConsumerWidget {
               final scenes = await db.watchScenesForProject(projectId).first;
               final shotsByScene = <int, List<Shot>>{};
               for (final scene in scenes) {
-                shotsByScene[scene.id] =
-                    await db.watchShotsForScene(scene.id).first;
+                shotsByScene[scene.id] = await db
+                    .watchShotsForScene(scene.id)
+                    .first;
               }
               return TechnicalScriptPdfExporter.buildBytes(
                 project: project,
@@ -99,8 +99,10 @@ class TechnicalScriptScreen extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Sin escenas. Importa el guion o añade una manualmente.',
-                      style: AppTypography.bodyMedium(palette)),
+                  Text(
+                    'Sin escenas. Importa el guion o añade una manualmente.',
+                    style: AppTypography.bodyMedium(palette),
+                  ),
                   const SizedBox(height: AppSpacing.lg),
                   AppButton(
                     label: 'Añadir escena',
@@ -125,10 +127,8 @@ class TechnicalScriptScreen extends ConsumerWidget {
                   );
                   return ListView.builder(
                     itemCount: scenes.length,
-                    itemBuilder: (context, i) => _SceneSection(
-                      scene: scenes[i],
-                      colors: colors,
-                    ),
+                    itemBuilder: (context, i) =>
+                        _SceneSection(scene: scenes[i], colors: colors),
                   );
                 },
               );
@@ -139,11 +139,14 @@ class TechnicalScriptScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _addAllShotsToDocument(BuildContext context, WidgetRef ref) async {
+  Future<void> _addAllShotsToDocument(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final db = ref.read(databaseProvider);
     final scenes = await db.watchScenesForProject(projectId).first;
+    if (!context.mounted) return;
     if (scenes.isEmpty) {
-      if (!context.mounted) return;
       AppSnackBar.show(context, 'No hay escenas.');
       return;
     }
@@ -171,7 +174,6 @@ class TechnicalScriptScreen extends ConsumerWidget {
   }
 
   Future<void> _exportPdf(BuildContext context, WidgetRef ref) async {
-    final palette = context.palette;
     final db = ref.read(databaseProvider);
     try {
       final project = await db.getProject(projectId);
@@ -186,8 +188,7 @@ class TechnicalScriptScreen extends ConsumerWidget {
 
       final shotsByScene = <int, List<Shot>>{};
       for (final scene in scenes) {
-        shotsByScene[scene.id] =
-            await db.watchShotsForScene(scene.id).first;
+        shotsByScene[scene.id] = await db.watchShotsForScene(scene.id).first;
       }
 
       final path = await TechnicalScriptPdfExporter.exportAndSave(
@@ -268,9 +269,9 @@ class _SceneSection extends ConsumerWidget {
                       const SizedBox(height: 6),
                       Text(
                         scene.description!,
-                        style: AppTypography.bodyMedium(palette).copyWith(
-                          color: palette.textSecondary,
-                        ),
+                        style: AppTypography.bodyMedium(
+                          palette,
+                        ).copyWith(color: palette.textSecondary),
                       ),
                     ],
                   ],
@@ -278,8 +279,11 @@ class _SceneSection extends ConsumerWidget {
               ),
               IconButton(
                 tooltip: 'Añadir escena al documento de rodaje',
-                icon: Icon(Icons.description_outlined,
-                    color: palette.textSecondary, size: 18),
+                icon: Icon(
+                  Icons.description_outlined,
+                  color: palette.textSecondary,
+                  size: 18,
+                ),
                 onPressed: () => ShootDocumentImportActions.addSceneBlocks(
                   context: context,
                   db: ref.read(databaseProvider),
@@ -289,8 +293,11 @@ class _SceneSection extends ConsumerWidget {
               ),
               IconButton(
                 tooltip: 'Editar escena',
-                icon: Icon(Icons.edit_outlined,
-                    color: palette.textSecondary, size: 18),
+                icon: Icon(
+                  Icons.edit_outlined,
+                  color: palette.textSecondary,
+                  size: 18,
+                ),
                 onPressed: () => showSceneFormSheet(
                   context,
                   projectId: scene.projectId,
@@ -316,17 +323,22 @@ class _SceneSection extends ConsumerWidget {
                 ),
                 TextButton.icon(
                   onPressed: () async {
-                    await db.insertShot(ShotsCompanion.insert(
-                      sceneId: scene.id,
-                      projectId: scene.projectId,
-                      number: shots.length + 1,
-                      sortOrder: Value(shots.length),
-                    ));
+                    await db.insertShot(
+                      ShotsCompanion.insert(
+                        sceneId: scene.id,
+                        projectId: scene.projectId,
+                        number: shots.length + 1,
+                        sortOrder: Value(shots.length),
+                      ),
+                    );
                   },
                   icon: Icon(Icons.add, color: palette.accent, size: 16),
-                  label: Text('Añadir plano',
-                      style: AppTypography.label(palette)
-                          .copyWith(color: palette.accent)),
+                  label: Text(
+                    'Añadir plano',
+                    style: AppTypography.label(
+                      palette,
+                    ).copyWith(color: palette.accent),
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
               ],
@@ -368,26 +380,42 @@ class _TableHeader extends StatelessWidget {
         width: AppLayout.technicalScriptTableWidth,
         child: Container(
           padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
           decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: palette.divider)),
           ),
-          child: Row(children: [
-            _HeaderCell('ESC', _TechnicalScriptColumns.esc, palette),
-            _HeaderCell('PLANO', _TechnicalScriptColumns.plano, palette),
-            _HeaderCell('Encuadre', _TechnicalScriptColumns.encuadre, palette),
-            _HeaderCell('LENTE / MOV / ANG', _TechnicalScriptColumns.lens, palette),
-            _HeaderCell('F', _TechnicalScriptColumns.fStop, palette),
-            _HeaderCell('PERS.', _TechnicalScriptColumns.personajes, palette),
-            _HeaderCell('DUR.', _TechnicalScriptColumns.duracion, palette),
-            SizedBox(
-              width: _TechnicalScriptColumns.action,
-              child: Text('ACCIÓN', style: AppTypography.caption(palette)),
-            ),
-            _HeaderCell('REFERENCIA', _TechnicalScriptColumns.referencia, palette),
-            _HeaderCell('PLANTA', _TechnicalScriptColumns.planta, palette),
-            _HeaderCell('APUNTES', _TechnicalScriptColumns.apuntes, palette),
-          ]),
+          child: Row(
+            children: [
+              _HeaderCell('ESC', _TechnicalScriptColumns.esc, palette),
+              _HeaderCell('PLANO', _TechnicalScriptColumns.plano, palette),
+              _HeaderCell(
+                'Encuadre',
+                _TechnicalScriptColumns.encuadre,
+                palette,
+              ),
+              _HeaderCell(
+                'LENTE / MOV / ANG',
+                _TechnicalScriptColumns.lens,
+                palette,
+              ),
+              _HeaderCell('F', _TechnicalScriptColumns.fStop, palette),
+              _HeaderCell('PERS.', _TechnicalScriptColumns.personajes, palette),
+              _HeaderCell('DUR.', _TechnicalScriptColumns.duracion, palette),
+              SizedBox(
+                width: _TechnicalScriptColumns.action,
+                child: Text('ACCIÓN', style: AppTypography.caption(palette)),
+              ),
+              _HeaderCell(
+                'REFERENCIA',
+                _TechnicalScriptColumns.referencia,
+                palette,
+              ),
+              _HeaderCell('PLANTA', _TechnicalScriptColumns.planta, palette),
+              _HeaderCell('APUNTES', _TechnicalScriptColumns.apuntes, palette),
+            ],
+          ),
         ),
       ),
     );
@@ -440,23 +468,29 @@ class _ShotRow extends ConsumerWidget {
         child: Container(
           decoration: BoxDecoration(
             color: highlightColor,
-            border:
-                Border(bottom: BorderSide(color: palette.divider, width: 0.3)),
+            border: Border(
+              bottom: BorderSide(color: palette.divider, width: 0.3),
+            ),
           ),
           padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
-                  width: _TechnicalScriptColumns.esc,
-                  child:
-                      Text('$sceneNumber', style: AppTypography.mono(palette))),
+                width: _TechnicalScriptColumns.esc,
+                child: Text('$sceneNumber', style: AppTypography.mono(palette)),
+              ),
               SizedBox(
                 width: _TechnicalScriptColumns.plano,
-                child: Text('${shot.number}',
-                    style: AppTypography.mono(palette)
-                        .copyWith(color: palette.accent)),
+                child: Text(
+                  '${shot.number}',
+                  style: AppTypography.mono(
+                    palette,
+                  ).copyWith(color: palette.accent),
+                ),
               ),
               SizedBox(
                 width: _TechnicalScriptColumns.encuadre,
@@ -533,7 +567,9 @@ class _ShotRow extends ConsumerWidget {
                   hint: 'seg',
                   palette: palette,
                   onChanged: (v) => db.updateShot(
-                    shot.copyWith(durationSeconds: Value(int.tryParse(v.trim()))),
+                    shot.copyWith(
+                      durationSeconds: Value(int.tryParse(v.trim())),
+                    ),
                   ),
                 ),
               ),
@@ -565,10 +601,16 @@ class _ShotRow extends ConsumerWidget {
                 height: 72,
                 child: Row(
                   children: [
-                    Expanded(child: _NotesCell(shot: shot, palette: palette)),
+                    Expanded(
+                      child: _NotesCell(shot: shot, palette: palette),
+                    ),
                     IconButton(
                       tooltip: 'Añadir plano al documento',
-                      icon: Icon(Icons.add_link, color: palette.accent, size: 18),
+                      icon: Icon(
+                        Icons.add_link,
+                        color: palette.accent,
+                        size: 18,
+                      ),
                       onPressed: () => ShootDocumentImportActions.addShotBlock(
                         context: context,
                         db: db,
@@ -676,7 +718,9 @@ class _HighlightDot extends StatelessWidget {
         width: size + 6,
         height: size + 6,
         decoration: BoxDecoration(
-          color: icon != null ? null : color.withValues(alpha: selected ? 1 : 0.35),
+          color: icon != null
+              ? null
+              : color.withValues(alpha: selected ? 1 : 0.35),
           shape: BoxShape.circle,
           border: Border.all(
             color: selected ? Colors.white : color,
@@ -733,21 +777,36 @@ class _ReferenceCell extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.md),
               ListTile(
-                leading: Icon(Icons.photo_camera_outlined, color: palette.accent),
-                title: Text('Captura Artemis', style: AppTypography.bodyLarge(palette)),
+                leading: Icon(
+                  Icons.photo_camera_outlined,
+                  color: palette.accent,
+                ),
+                title: Text(
+                  'Captura Artemis',
+                  style: AppTypography.bodyLarge(palette),
+                ),
                 subtitle: Text(
                   'Exportada desde la app Artemis',
                   style: AppTypography.caption(palette),
                 ),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _import(context, ref, source: ShotReferenceSource.artemisCapture);
+                  _import(
+                    context,
+                    ref,
+                    source: ShotReferenceSource.artemisCapture,
+                  );
                 },
               ),
               ListTile(
-                leading: Icon(Icons.add_photo_alternate_outlined,
-                    color: palette.textSecondary),
-                title: Text('Imagen manual', style: AppTypography.bodyLarge(palette)),
+                leading: Icon(
+                  Icons.add_photo_alternate_outlined,
+                  color: palette.textSecondary,
+                ),
+                title: Text(
+                  'Imagen manual',
+                  style: AppTypography.bodyLarge(palette),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _import(context, ref, source: ShotReferenceSource.manual);
@@ -755,14 +814,21 @@ class _ReferenceCell extends ConsumerWidget {
               ),
               ListTile(
                 leading: Icon(Icons.view_in_ar_outlined, color: palette.accent),
-                title: Text('Render Unreal', style: AppTypography.bodyLarge(palette)),
+                title: Text(
+                  'Render Unreal',
+                  style: AppTypography.bodyLarge(palette),
+                ),
                 subtitle: Text(
                   'Frame PNG del Movie Render Queue',
                   style: AppTypography.caption(palette),
                 ),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _import(context, ref, source: ShotReferenceSource.unrealRender);
+                  _import(
+                    context,
+                    ref,
+                    source: ShotReferenceSource.unrealRender,
+                  );
                 },
               ),
             ],
@@ -773,7 +839,6 @@ class _ReferenceCell extends ConsumerWidget {
   }
 
   Future<void> _removeImage(BuildContext context, WidgetRef ref) async {
-    final palette = context.palette;
     final db = ref.read(databaseProvider);
     final path = shot.referenceImagePath;
     if (path == null) return;
@@ -790,13 +855,11 @@ class _ReferenceCell extends ConsumerWidget {
     try {
       if (match != null) {
         final current = await db.getShotById(shot.id) ?? shot;
-        await deleteShotReferenceEntry(
-          db: db,
-          shot: current,
-          reference: match,
-        );
+        await deleteShotReferenceEntry(db: db, shot: current, reference: match);
       } else {
-        await db.updateShot(shot.copyWith(referenceImagePath: const Value(null)));
+        await db.updateShot(
+          shot.copyWith(referenceImagePath: const Value(null)),
+        );
       }
     } catch (e) {
       if (!context.mounted) return;
@@ -829,20 +892,28 @@ class _ReferenceCell extends ConsumerWidget {
                   Positioned(
                     right: 4,
                     bottom: 4,
-                    child: Icon(Icons.photo_camera_outlined,
-                        size: 14, color: Colors.white.withValues(alpha: 0.9)),
+                    child: Icon(
+                      Icons.photo_camera_outlined,
+                      size: 14,
+                      color: Colors.white.withValues(alpha: 0.9),
+                    ),
                   ),
                 ],
               )
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.photo_camera_outlined,
-                      color: palette.textTertiary, size: 20),
+                  Icon(
+                    Icons.photo_camera_outlined,
+                    color: palette.textTertiary,
+                    size: 20,
+                  ),
                   const SizedBox(height: 2),
-                  Text('Ref.',
-                      style: AppTypography.caption(palette),
-                      textAlign: TextAlign.center),
+                  Text(
+                    'Ref.',
+                    style: AppTypography.caption(palette),
+                    textAlign: TextAlign.center,
+                  ),
                 ],
               ),
       ),

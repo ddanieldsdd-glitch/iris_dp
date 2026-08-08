@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/database/app_database.dart' hide BibleSectionGroup;
-import '../../../../core/database/app_database.dart' as app_db show BibleSectionGroup;
+import '../../../../core/database/app_database.dart'
+    as app_db
+    show BibleSectionGroup;
 import '../../../../core/database/database_provider.dart';
 import '../../../../core/settings/user_templates_settings_section.dart';
 import '../../../../core/templates/user_template_models.dart';
@@ -28,11 +30,13 @@ import '../bible_structure_editor.dart';
 class MasterConfigSection extends ConsumerStatefulWidget {
   final int bibleId;
   final int projectId;
+  final VoidCallback? onStructureReset;
 
   const MasterConfigSection({
     super.key,
     required this.bibleId,
     required this.projectId,
+    this.onStructureReset,
   });
 
   @override
@@ -96,8 +100,8 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
     AppSnackBar.show(
       context,
       hiddenCount == 0
-          ? 'Blueprint «${type.label}»: todas las secciones visibles'
-          : 'Blueprint «${type.label}»: $hiddenCount secciones ocultas',
+          ? 'Base «${type.label}»: todas las pantallas visibles'
+          : 'Base «${type.label}»: $hiddenCount pantallas ocultas',
     );
   }
 
@@ -135,8 +139,9 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
                   compact: compact,
                   onBlueprint: _applyBlueprint,
                   onExpandSection: (id) => setState(
-                    () => _expandedSectionId =
-                        _expandedSectionId == id ? null : id,
+                    () => _expandedSectionId = _expandedSectionId == id
+                        ? null
+                        : id,
                   ),
                   onToggleHidden: (def, hidden) => db.setBibleSectionHidden(
                     bibleId: widget.bibleId,
@@ -153,10 +158,10 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
                   },
                   onReorder: (groupId, orderedIds) =>
                       db.reorderBibleSectionsInGroup(
-                    widget.bibleId,
-                    groupId,
-                    orderedIds,
-                  ),
+                        widget.bibleId,
+                        groupId,
+                        orderedIds,
+                      ),
                   onRename: (def) => _renameSection(def),
                   onEditFields: (def) => BibleSectionFieldsEditor.show(
                     context,
@@ -170,7 +175,10 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
                   onRestoreBuiltin: () async {
                     await db.resetBibleSectionLayoutToBuiltin(widget.bibleId);
                     if (context.mounted) {
-                      AppSnackBar.show(context, 'Estructura base IRIS restaurada');
+                      AppSnackBar.show(
+                        context,
+                        'Estructura base IRIS restaurada',
+                      );
                     }
                   },
                 );
@@ -180,12 +188,10 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
                   projectId: widget.projectId,
                   pdfPreset: _pdfPreset,
                   onPdfPreset: (v) async {
-                    await BibleConfigStore.savePdfPreset(
-                      widget.projectId,
-                      v,
-                    );
+                    await BibleConfigStore.savePdfPreset(widget.projectId, v);
                     setState(() => _pdfPreset = v);
                   },
+                  onStructureReset: widget.onStructureReset,
                 );
 
                 if (!wide) {
@@ -210,9 +216,7 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: CustomScrollView(slivers: body.slivers),
-                    ),
+                    Expanded(child: CustomScrollView(slivers: body.slivers)),
                     SizedBox(
                       width: 300,
                       child: DecoratedBox(
@@ -298,14 +302,15 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
   Future<void> _renameSection(BibleSectionDefinition def) async {
     final label = await _prompt(context, 'Renombrar sección', def.label);
     if (label == null || label.isEmpty) return;
-    await ref.read(databaseProvider).upsertBibleSectionDefinition(
-          def.copyWith(label: label),
-        );
+    await ref
+        .read(databaseProvider)
+        .upsertBibleSectionDefinition(def.copyWith(label: label));
   }
 
   Future<void> _addCustomSection(String groupId) async {
     final label = await _prompt(context, 'Nueva sección', '');
     if (label == null || label.isEmpty) return;
+    if (!mounted) return;
     final style = await showModalBottomSheet<String>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -334,7 +339,9 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
       styleKey,
       sectionLabel: label,
     );
-    final sectionId = await ref.read(databaseProvider).insertCustomBibleSection(
+    final sectionId = await ref
+        .read(databaseProvider)
+        .insertCustomBibleSection(
           bibleId: widget.bibleId,
           groupId: groupId,
           label: label,
@@ -364,7 +371,7 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
       projectId: widget.projectId,
       bibleId: widget.bibleId,
       name: name,
-      description: 'Blueprint ${_blueprint.label} · layout + estilos + export',
+      description: 'Base ${_blueprint.label} · estructura, estilos y export',
     );
     final prefs = await UserTemplatePreferences.load();
     prefs.defaultBibleLayoutTemplateId = id;
@@ -448,162 +455,163 @@ class _MainColumn {
   List<Widget> get slivers {
     final padH = compact ? 16.0 : 32.0;
     return [
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(padH, 24, padH, 0),
-          sliver: SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Master Configuration',
-                  style: TextStyle(
-                    fontSize: compact ? 28 : 36,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
-                    color: palette.textPrimary,
-                  ),
+      SliverPadding(
+        padding: EdgeInsets.fromLTRB(padH, 24, padH, 0),
+        sliver: SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Personalizar Biblia',
+                style: TextStyle(
+                  fontSize: compact ? 28 : 36,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
+                  color: palette.textPrimary,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Define la estructura y los presets visuales de esta biblia.',
-                  style: TextStyle(
-                    fontSize: 16,
-                    height: 1.4,
-                    color: palette.textSecondary,
-                  ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Centraliza estructura, diseño, campos, plantillas y exportación.',
+                style: TextStyle(
+                  fontSize: 16,
+                  height: 1.4,
+                  color: palette.textSecondary,
                 ),
-                const SizedBox(height: 28),
-                _GlassCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.view_quilt_outlined,
-                              color: palette.accent, size: 22),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Project Blueprint',
-                              style: AppTypography.titleMedium(palette),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Elige la plantilla base según el tipo de pieza '
-                        '(Ficción, Comercial o Documental).',
-                        style: AppTypography.caption(palette),
-                      ),
-                      const SizedBox(height: 16),
-                      // Cards apiladas (evita GridView + Expanded rotos en drawer).
-                      for (final t in BibleBlueprintType.values) ...[
-                        _BlueprintCard(
-                          type: t,
-                          selected: blueprint == t,
-                          onTap: () => onBlueprint(t),
-                          compact: true,
-                        ),
-                        if (t != BibleBlueprintType.values.last)
-                          const SizedBox(height: 10),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+              ),
+              const SizedBox(height: 28),
+              _GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 420),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Estructura de la biblia',
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.view_quilt_outlined,
+                          color: palette.accent,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Estructura base',
                             style: AppTypography.titleMedium(palette),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Renombra, reordena (único drag & drop), oculta o elimina pantallas.',
-                            style: AppTypography.caption(palette),
-                          ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Elige la plantilla base según el tipo de pieza '
+                      '(Ficción, Comercial o Documental).',
+                      style: AppTypography.caption(palette),
+                    ),
+                    const SizedBox(height: 16),
+                    // Cards apiladas (evita GridView + Expanded rotos en drawer).
+                    for (final t in BibleBlueprintType.values) ...[
+                      _BlueprintCard(
+                        type: t,
+                        selected: blueprint == t,
+                        onTap: () => onBlueprint(t),
+                        compact: true,
                       ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: onInstallExamples,
-                      icon: const Icon(Icons.auto_awesome_outlined, size: 16),
-                      label: const Text('Ejemplos de estilo'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: onSaveTemplate,
-                      icon: const Icon(Icons.save_outlined, size: 16),
-                      label: const Text('Guardar plantilla'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: onRestoreBuiltin,
-                      icon: const Icon(Icons.restore, size: 16),
-                      label: const Text('Base IRIS'),
-                    ),
+                      if (t != BibleBlueprintType.values.last)
+                        const SizedBox(height: 10),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 24),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Estructura de la biblia',
+                          style: AppTypography.titleMedium(palette),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Renombra, reordena (único drag & drop), oculta o elimina pantallas.',
+                          style: AppTypography.caption(palette),
+                        ),
+                      ],
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onInstallExamples,
+                    icon: const Icon(Icons.auto_awesome_outlined, size: 16),
+                    label: const Text('Ejemplos de estilo'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onSaveTemplate,
+                    icon: const Icon(Icons.save_outlined, size: 16),
+                    label: const Text('Guardar plantilla'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onRestoreBuiltin,
+                    icon: const Icon(Icons.restore, size: 16),
+                    label: const Text('Base IRIS'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+      SliverPadding(
+        padding: EdgeInsets.fromLTRB(padH, 0, padH, 32),
+        sliver: SliverToBoxAdapter(
+          child: _GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final group in groups) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8, top: 4),
+                    child: Text(
+                      group.label.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                        color: palette.textTertiary,
+                      ),
+                    ),
+                  ),
+                  _SectionReorderList(
+                    defs: defs.where((d) => d.groupId == group.id).toList(),
+                    styles: styles,
+                    blueprint: blueprint,
+                    expandedSectionId: expandedSectionId,
+                    onExpand: onExpandSection,
+                    onToggleHidden: onToggleHidden,
+                    onStyleChanged: onStyleChanged,
+                    onReorder: (ids) => onReorder(group.id, ids),
+                    onRename: onRename,
+                    onEditFields: onEditFields,
+                    onDelete: onDelete,
+                  ),
+                  TextButton.icon(
+                    onPressed: () => onAddSection(group.id),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Añadir sección personalizada'),
+                  ),
+                  const SizedBox(height: 12),
+                ],
               ],
             ),
           ),
         ),
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(padH, 0, padH, 32),
-          sliver: SliverToBoxAdapter(
-            child: _GlassCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final group in groups) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8, top: 4),
-                      child: Text(
-                        group.label.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
-                          color: palette.textTertiary,
-                        ),
-                      ),
-                    ),
-                    _SectionReorderList(
-                      defs: defs
-                          .where((d) => d.groupId == group.id)
-                          .toList(),
-                      styles: styles,
-                      blueprint: blueprint,
-                      expandedSectionId: expandedSectionId,
-                      onExpand: onExpandSection,
-                      onToggleHidden: onToggleHidden,
-                      onStyleChanged: onStyleChanged,
-                      onReorder: (ids) => onReorder(group.id, ids),
-                      onRename: onRename,
-                      onEditFields: onEditFields,
-                      onDelete: onDelete,
-                    ),
-                    TextButton.icon(
-                      onPressed: () => onAddSection(group.id),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Añadir sección personalizada'),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      ];
+      ),
+    ];
   }
 }
 
@@ -749,8 +757,7 @@ class _SectionReorderList extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: visible.length,
-      onReorder: (oldIndex, newIndex) {
-        if (newIndex > oldIndex) newIndex -= 1;
+      onReorderItem: (oldIndex, newIndex) {
         final next = List<BibleSectionDefinition>.from(visible);
         final item = next.removeAt(oldIndex);
         next.insert(newIndex, item);
@@ -784,8 +791,11 @@ class _SectionReorderList extends StatelessWidget {
                     children: [
                       ReorderableDragStartListener(
                         index: index,
-                        child: Icon(Icons.drag_indicator,
-                            size: 18, color: palette.textTertiary),
+                        child: Icon(
+                          Icons.drag_indicator,
+                          size: 18,
+                          color: palette.textTertiary,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Icon(
@@ -802,8 +812,9 @@ class _SectionReorderList extends StatelessWidget {
                               def.label,
                               style: TextStyle(
                                 fontSize: 14,
-                                decoration:
-                                    dimmed ? TextDecoration.lineThrough : null,
+                                decoration: dimmed
+                                    ? TextDecoration.lineThrough
+                                    : null,
                                 color: palette.textPrimary,
                               ),
                             ),
@@ -880,8 +891,11 @@ class _SectionReorderList extends StatelessWidget {
                                   color: palette.textPrimary,
                                 ),
                               ),
-                              Icon(Icons.expand_more,
-                                  size: 14, color: palette.textTertiary),
+                              Icon(
+                                Icons.expand_more,
+                                size: 14,
+                                color: palette.textTertiary,
+                              ),
                             ],
                           ),
                         ),
@@ -903,8 +917,11 @@ class _SectionReorderList extends StatelessWidget {
                       ),
                       IconButton(
                         tooltip: 'Renombrar',
-                        icon: Icon(Icons.edit_outlined,
-                            size: 18, color: palette.textSecondary),
+                        icon: Icon(
+                          Icons.edit_outlined,
+                          size: 18,
+                          color: palette.textSecondary,
+                        ),
                         onPressed: () => onRename(def),
                       ),
                       if (def.id != BibleSectionId.settings)
@@ -945,8 +962,11 @@ class _SectionReorderList extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(block.icon,
-                                    size: 12, color: palette.textTertiary),
+                                Icon(
+                                  block.icon,
+                                  size: 12,
+                                  color: palette.textTertiary,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   block.label,
@@ -981,19 +1001,20 @@ class _SectionReorderList extends StatelessWidget {
   }
 }
 
-
 class _TemplateVault extends ConsumerWidget {
   const _TemplateVault({
     required this.bibleId,
     required this.projectId,
     required this.pdfPreset,
     required this.onPdfPreset,
+    this.onStructureReset,
   });
 
   final int bibleId;
   final int projectId;
   final String pdfPreset;
   final ValueChanged<String> onPdfPreset;
+  final VoidCallback? onStructureReset;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1027,9 +1048,9 @@ class _TemplateVault extends ConsumerWidget {
         const SizedBox(height: 8),
         Text(
           'Packs con contenido funcional para comprender la app.',
-          style: AppTypography.caption(palette).copyWith(
-                color: palette.textSecondary,
-              ),
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textSecondary),
         ),
         const SizedBox(height: 12),
         for (final preset in BibleBuiltinPresets.all) ...[
@@ -1158,9 +1179,9 @@ class _TemplateVault extends ConsumerWidget {
         Text(
           'Los presets de export se configuran al pulsar «Exportar PDF». '
           'Aquí solo se guarda la última preferencia del proyecto.',
-          style: AppTypography.caption(palette).copyWith(
-                color: palette.textSecondary,
-              ),
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textSecondary),
         ),
         const SizedBox(height: 12),
         _PdfPresetTile(
@@ -1185,6 +1206,7 @@ class _TemplateVault extends ConsumerWidget {
                 child: BibleStructureEditor(
                   bibleId: bibleId,
                   projectId: projectId,
+                  onStructureReset: onStructureReset,
                 ),
               ),
             );
@@ -1238,10 +1260,7 @@ class _StyleExampleHint extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  spec.description,
-                  style: AppTypography.caption(palette),
-                ),
+                Text(spec.description, style: AppTypography.caption(palette)),
               ],
             ),
           ),
@@ -1343,14 +1362,14 @@ class _PdfPresetTile extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              selected
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_off,
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
               size: 18,
               color: selected ? palette.accent : palette.textTertiary,
             ),
             const SizedBox(width: 10),
-            Expanded(child: Text(label, style: AppTypography.bodyMedium(palette))),
+            Expanded(
+              child: Text(label, style: AppTypography.bodyMedium(palette)),
+            ),
           ],
         ),
       ),

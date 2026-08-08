@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,18 +8,20 @@ import '../../../core/database/database_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/app_snackbar.dart';
+import '../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../bible_section_fields.dart';
 
 /// Editor de sub-apartados: añadir, quitar, cambiar tipo y reordenar.
 class BibleSectionFieldsEditor extends ConsumerStatefulWidget {
   final int bibleId;
   final BibleSectionDefinition definition;
+  final bool embedded;
 
   const BibleSectionFieldsEditor({
     super.key,
     required this.bibleId,
     required this.definition,
+    this.embedded = false,
   });
 
   static Future<void> show(
@@ -34,10 +38,8 @@ class BibleSectionFieldsEditor extends ConsumerStatefulWidget {
         initialChildSize: 0.75,
         minChildSize: 0.4,
         maxChildSize: 0.95,
-        builder: (ctx, scrollController) => BibleSectionFieldsEditor(
-          bibleId: bibleId,
-          definition: definition,
-        ),
+        builder: (ctx, scrollController) =>
+            BibleSectionFieldsEditor(bibleId: bibleId, definition: definition),
       ),
     );
   }
@@ -54,19 +56,36 @@ class _BibleSectionFieldsEditorState
   @override
   void initState() {
     super.initState();
+    _reloadFields();
+  }
+
+  void _reloadFields() {
     _fields = BibleSectionFieldsConfig.parse(
       widget.definition.contentJson,
       widget.definition.id,
     );
   }
 
+  @override
+  void didUpdateWidget(BibleSectionFieldsEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.definition.id != widget.definition.id ||
+        oldWidget.definition.contentJson != widget.definition.contentJson) {
+      setState(_reloadFields);
+    }
+  }
+
   Future<void> _save() async {
-    await ref.read(databaseProvider).saveBibleSectionFields(
-          widget.bibleId,
-          widget.definition.id,
-          _fields,
-        );
-    if (mounted) Navigator.pop(context);
+    await ref
+        .read(databaseProvider)
+        .saveBibleSectionFields(widget.bibleId, widget.definition.id, _fields);
+    if (mounted && !widget.embedded) Navigator.pop(context);
+  }
+
+  Future<void> _saveEmbedded() async {
+    await ref
+        .read(databaseProvider)
+        .saveBibleSectionFields(widget.bibleId, widget.definition.id, _fields);
   }
 
   Future<void> _renameField(int index) async {
@@ -76,10 +95,7 @@ class _BibleSectionFieldsEditorState
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Renombrar sub-apartado'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-        ),
+        content: TextField(controller: controller, autofocus: true),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -96,6 +112,7 @@ class _BibleSectionFieldsEditorState
     setState(() {
       _fields[index] = field.copyWith(label: label);
     });
+    if (widget.embedded) unawaited(_saveEmbedded());
   }
 
   Future<void> _changeType(int index) async {
@@ -129,22 +146,85 @@ class _BibleSectionFieldsEditorState
     setState(() {
       _fields[index] = field.copyWith(type: picked);
     });
+    if (widget.embedded) unawaited(_saveEmbedded());
+  }
+
+  Future<void> _addRegistryModule() async {
+    final missing = BibleStitchModuleRegistry.missingModules(
+      widget.definition.id,
+      _fields,
+    );
+    if (missing.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Todos los módulos Stitch ya están en la lista')),
+        );
+      }
+      return;
+    }
+    final picked = await showModalBottomSheet<StitchModule>(
+      context: context,
+      backgroundColor: context.palette.surfaceElevated,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Text(
+                'Añadir módulo Stitch',
+                style: AppTypography.titleMedium(context.palette),
+              ),
+            ),
+            for (final module in missing)
+              ListTile(
+                leading: Icon(_iconForType(module.type)),
+                title: Text(module.label),
+                subtitle: Text(module.key),
+                onTap: () => Navigator.pop(ctx, module),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    setState(() => _fields.add(picked.toField()));
+    if (widget.embedded) unawaited(_saveEmbedded());
   }
 
   void _addField() {
     final key = BibleSectionFieldsConfig.newFieldKey();
     setState(() {
       _fields.add(
-        BibleSectionField(
-          key: key,
-          label: 'Nuevo apartado',
-          maxLines: 4,
-        ),
+        BibleSectionField(key: key, label: 'Nuevo apartado', maxLines: 4),
       );
     });
+    if (widget.embedded) unawaited(_saveEmbedded());
   }
 
   Future<void> _applyStylePack() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restaurar módulos Stitch'),
+        content: const Text(
+          '¿Restaurar los módulos estándar de esta pantalla? '
+          'Se conservan tus textos e imágenes guardados en valores.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Restaurar'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
     final picked = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: context.palette.surfaceElevated,
@@ -157,26 +237,26 @@ class _BibleSectionFieldsEditorState
               Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Text(
-                  'Plantilla de sub-apartados',
+                  'Densidad visual (opcional)',
                   style: AppTypography.titleMedium(palette),
                 ),
               ),
               ListTile(
                 leading: const Icon(Icons.movie_filter_outlined),
                 title: const Text('Cinematic'),
-                subtitle: const Text('Narrativa + atmósfera + refs moodboard'),
+                subtitle: const Text('Layout Stitch completo'),
                 onTap: () => Navigator.pop(ctx, 'cinematic'),
               ),
               ListTile(
                 leading: const Icon(Icons.settings_outlined),
                 title: const Text('Technical'),
-                subtitle: const Text('Specs + notas de rodaje + refs'),
+                subtitle: const Text('Layout Stitch completo'),
                 onTap: () => Navigator.pop(ctx, 'technical'),
               ),
               ListTile(
                 leading: const Icon(Icons.crop_square_outlined),
                 title: const Text('Minimalist'),
-                subtitle: const Text('Intención + notas + imagen'),
+                subtitle: const Text('Layout Stitch completo'),
                 onTap: () => Navigator.pop(ctx, 'minimalist'),
               ),
               const SizedBox(height: 8),
@@ -190,64 +270,87 @@ class _BibleSectionFieldsEditorState
       _fields = BibleSectionFieldsConfig.packForStyle(
         picked,
         sectionLabel: widget.definition.label,
+        sectionId: widget.definition.id,
       );
     });
+    if (widget.embedded) unawaited(_saveEmbedded());
   }
 
   void _removeField(int index) {
     setState(() => _fields.removeAt(index));
+    if (widget.embedded) unawaited(_saveEmbedded());
   }
 
   IconData _iconForType(BibleSectionFieldType type) => switch (type) {
-        BibleSectionFieldType.text => Icons.notes_outlined,
-        BibleSectionFieldType.narrative => Icons.auto_stories_outlined,
-        BibleSectionFieldType.references => Icons.collections_outlined,
-        BibleSectionFieldType.image => Icons.image_outlined,
-        BibleSectionFieldType.blocks => Icons.view_agenda_outlined,
-      };
+    BibleSectionFieldType.text => Icons.notes_outlined,
+    BibleSectionFieldType.narrative => Icons.auto_stories_outlined,
+    BibleSectionFieldType.references => Icons.collections_outlined,
+    BibleSectionFieldType.image => Icons.image_outlined,
+    BibleSectionFieldType.blocks => Icons.view_agenda_outlined,
+  };
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+    return Material(
+      color: palette.surfaceElevated,
+      child: Padding(
+      padding: EdgeInsets.all(widget.embedded ? AppSpacing.md : AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Sub-apartados · ${widget.definition.label}',
-            style: AppTypography.titleMedium(palette),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Añade campos de texto, imágenes o referencias moodboard en cualquier '
-            'orden. Por ejemplo, convierte «Referencias cinematográficas» en '
-            'imágenes.',
-            style: AppTypography.caption(palette),
-          ),
-          const SizedBox(height: AppSpacing.md),
+          if (!widget.embedded) ...[
+            Text(
+              'Sub-apartados · ${widget.definition.label}',
+              style: AppTypography.titleMedium(palette),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Añade campos de texto, imágenes o referencias moodboard en cualquier '
+              'orden. Por ejemplo, convierte «Referencias cinematográficas» en '
+              'imágenes.',
+              style: AppTypography.caption(palette),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           Expanded(
             child: ReorderableListView.builder(
               itemCount: _fields.length,
-              onReorder: (oldIndex, newIndex) {
+              onReorderItem: (oldIndex, newIndex) {
                 setState(() {
                   if (newIndex > oldIndex) newIndex--;
                   final item = _fields.removeAt(oldIndex);
                   _fields.insert(newIndex, item);
                 });
+                if (widget.embedded) unawaited(_saveEmbedded());
               },
               itemBuilder: (context, index) {
                 final field = _fields[index];
-                return ListTile(
+                final registryLabel = BibleStitchModuleRegistry
+                    .module(widget.definition.id, field.key)
+                    ?.label;
+                final hasRenderer = BibleStitchModuleRegistry.hasRenderer(
+                  widget.definition.id,
+                  field.key,
+                );
+                return Material(
                   key: ValueKey(field.key),
+                  color: palette.surfaceElevated,
+                  child: ListTile(
                   leading: Icon(_iconForType(field.type)),
-                  title: Text(field.label),
+                  title: Text(registryLabel ?? field.label),
                   subtitle: Text(
-                    BibleSectionFieldsConfig.labelForType(field.type),
-                    style: AppTypography.caption(palette),
+                    hasRenderer
+                        ? BibleSectionFieldsConfig.labelForType(field.type)
+                        : '${BibleSectionFieldsConfig.labelForType(field.type)} · sin renderer Stitch',
+                    style: AppTypography.caption(palette).copyWith(
+                      color: hasRenderer ? null : palette.warning,
+                    ),
                   ),
-                  trailing: Row(
+                  trailing: SizedBox(
+                    width: 144,
+                    child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
@@ -261,13 +364,18 @@ class _BibleSectionFieldsEditorState
                         onPressed: () => _renameField(index),
                       ),
                       IconButton(
-                        icon: Icon(Icons.delete_outline,
-                            size: 18, color: palette.error),
+                        icon: Icon(
+                          Icons.delete_outline,
+                          size: 18,
+                          color: palette.error,
+                        ),
                         tooltip: 'Eliminar',
                         onPressed: () => _removeField(index),
                       ),
                     ],
                   ),
+                  ),
+                ),
                 );
               },
             ),
@@ -275,21 +383,36 @@ class _BibleSectionFieldsEditorState
           OutlinedButton.icon(
             onPressed: _applyStylePack,
             icon: const Icon(Icons.auto_awesome_outlined),
-            label: const Text('Aplicar plantilla estándar'),
+            label: const Text('Restaurar módulos Stitch'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          OutlinedButton.icon(
+            onPressed: _addRegistryModule,
+            icon: const Icon(Icons.view_module_outlined),
+            label: const Text('Añadir módulo Stitch'),
           ),
           const SizedBox(height: AppSpacing.sm),
           OutlinedButton.icon(
             onPressed: _addField,
             icon: const Icon(Icons.add),
-            label: const Text('Añadir sub-apartado'),
+            label: const Text('Añadir campo personalizado'),
           ),
           const SizedBox(height: AppSpacing.sm),
-          FilledButton(
-            onPressed: _save,
-            child: const Text('Guardar sub-apartados'),
-          ),
+          if (widget.embedded)
+            Text(
+              'Los cambios se aplican al instante en la pantalla.',
+              style: AppTypography.caption(palette).copyWith(
+                color: palette.textTertiary,
+              ),
+            )
+          else
+            FilledButton(
+              onPressed: _save,
+              child: const Text('Guardar sub-apartados'),
+            ),
         ],
       ),
+    ),
     );
   }
 }

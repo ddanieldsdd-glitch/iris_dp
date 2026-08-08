@@ -22,6 +22,7 @@ class BibleQuickAdjustPanel extends ConsumerStatefulWidget {
   final String sectionId;
   final VoidCallback onOpenMasterConfig;
   final VoidCallback? onClose;
+  final bool embedded;
 
   const BibleQuickAdjustPanel({
     super.key,
@@ -30,6 +31,7 @@ class BibleQuickAdjustPanel extends ConsumerStatefulWidget {
     required this.sectionId,
     required this.onOpenMasterConfig,
     this.onClose,
+    this.embedded = false,
   });
 
   @override
@@ -77,7 +79,7 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
       style,
     );
     if (mounted) {
-      AppSnackBar.show(context, 'Estilo «${style.label}» aplicado');
+      AppSnackBar.show(context, 'Densidad «${style.label}» aplicada');
     }
   }
 
@@ -91,6 +93,9 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
           db: db,
           projectId: widget.projectId,
           bibleId: widget.bibleId,
+          assignedSections: widget.sectionId == BibleSectionId.moodboard
+              ? const []
+              : [widget.sectionId],
         );
         if (mounted) {
           AppSnackBar.show(context, 'Imágenes añadidas al moodboard');
@@ -130,63 +135,65 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.md,
-                AppSpacing.sm,
-                AppSpacing.sm,
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.tune, color: palette.accent, size: 22),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Ajuste rápido',
-                          style: AppTypography.titleMedium(palette),
-                        ),
-                        Text(
-                          sectionTitle,
-                          style: AppTypography.caption(palette).copyWith(
-                            color: palette.textSecondary,
+            if (!widget.embedded) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                  AppSpacing.sm,
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.tune, color: palette.accent, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Ajustes de pantalla',
+                            style: AppTypography.titleMedium(palette),
                           ),
-                        ),
-                      ],
+                          Text(
+                            sectionTitle,
+                            style: AppTypography.caption(
+                              palette,
+                            ).copyWith(color: palette.textSecondary),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  if (widget.onClose != null)
-                    IconButton(
-                      tooltip: 'Cerrar',
-                      onPressed: widget.onClose,
-                      icon: Icon(Icons.close, color: palette.textSecondary),
-                    ),
-                ],
+                    if (widget.onClose != null)
+                      IconButton(
+                        tooltip: 'Cerrar',
+                        onPressed: widget.onClose,
+                        icon: Icon(Icons.close, color: palette.textSecondary),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            Divider(height: 1, color: palette.border),
+              Divider(height: 1, color: palette.border),
+            ],
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.all(AppSpacing.lg),
+                padding: EdgeInsets.all(widget.embedded ? AppSpacing.md : AppSpacing.lg),
                 children: [
                   if (isMoodboard) ...[
                     Text(
                       'VISUAL SOURCES',
                       style: AppTypography.mono(palette).copyWith(
-                            fontSize: 10,
-                            letterSpacing: 1.1,
-                            color: palette.textSecondary,
-                          ),
+                        fontSize: 10,
+                        letterSpacing: 1.1,
+                        color: palette.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Importa stills sin ocupar el canvas del moodboard.',
-                      style: AppTypography.caption(palette).copyWith(
-                            color: palette.textTertiary,
-                          ),
+                      style: AppTypography.caption(
+                        palette,
+                      ).copyWith(color: palette.textTertiary),
                     ),
                     const SizedBox(height: 12),
                     for (final item in kMoodboardSources) ...[
@@ -195,9 +202,9 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
                           padding: const EdgeInsets.only(top: 8, bottom: 4),
                           child: Text(
                             'Integrations',
-                            style: AppTypography.caption(palette).copyWith(
-                                  color: palette.textTertiary,
-                                ),
+                            style: AppTypography.caption(
+                              palette,
+                            ).copyWith(color: palette.textTertiary),
                           ),
                         ),
                       if (item.kind == MoodboardSourceKind.personalLibrary)
@@ -205,9 +212,9 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
                           padding: const EdgeInsets.only(top: 8, bottom: 4),
                           child: Text(
                             'Local',
-                            style: AppTypography.caption(palette).copyWith(
-                                  color: palette.textTertiary,
-                                ),
+                            style: AppTypography.caption(
+                              palette,
+                            ).copyWith(color: palette.textTertiary),
                           ),
                         ),
                       ListTile(
@@ -220,8 +227,7 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
                               : palette.textTertiary,
                         ),
                         title: Text(item.label),
-                        subtitle:
-                            item.badge != null ? Text(item.badge!) : null,
+                        subtitle: item.badge != null ? Text(item.badge!) : null,
                         onTap: item.enabled
                             ? () => _importMoodboard(item.kind)
                             : null,
@@ -235,10 +241,10 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
                     Text(
                       'ESTILO DE PANTALLA',
                       style: AppTypography.mono(palette).copyWith(
-                            fontSize: 10,
-                            letterSpacing: 1.1,
-                            color: palette.textSecondary,
-                          ),
+                        fontSize: 10,
+                        letterSpacing: 1.1,
+                        color: palette.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     if (_loadingStyle)
@@ -262,8 +268,9 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
                               label: Text(s.label),
                               selected: _style == s,
                               onSelected: (_) => _setStyle(s),
-                              selectedColor:
-                                  palette.accent.withValues(alpha: 0.2),
+                              selectedColor: palette.accent.withValues(
+                                alpha: 0.2,
+                              ),
                               labelStyle: TextStyle(
                                 color: _style == s
                                     ? palette.accent
@@ -275,7 +282,7 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
                         ],
                       ),
                     const SizedBox(height: 20),
-                    if (def != null) ...[
+                    if (def != null && !widget.embedded) ...[
                       OutlinedButton.icon(
                         onPressed: () {
                           BibleSectionFieldsEditor.show(
@@ -290,28 +297,30 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
                       const SizedBox(height: 12),
                     ],
                   ],
-                  FilledButton.tonalIcon(
-                    onPressed: widget.onOpenMasterConfig,
-                    icon: const Icon(Icons.settings_outlined, size: 18),
-                    label: const Text('Abrir Master Config'),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      await BibleTutorial.reset(widget.projectId);
-                      if (context.mounted) {
-                        await BibleTutorial.show(context, widget.projectId);
-                      }
-                    },
-                    icon: const Icon(Icons.school_outlined, size: 18),
-                    label: const Text('Ver tutorial de la Biblia'),
-                  ),
+                  if (!widget.embedded) ...[
+                    FilledButton.tonalIcon(
+                      onPressed: widget.onOpenMasterConfig,
+                      icon: const Icon(Icons.settings_outlined, size: 18),
+                      label: const Text('Estructura y plantillas'),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        await BibleTutorial.reset(widget.projectId);
+                        if (context.mounted) {
+                          await BibleTutorial.show(context, widget.projectId);
+                        }
+                      },
+                      icon: const Icon(Icons.school_outlined, size: 18),
+                      label: const Text('Ver tutorial de la Biblia'),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Text(
-                    'Configuración completa de blueprint, plantillas y estructura.',
-                    style: AppTypography.caption(palette).copyWith(
-                          color: palette.textTertiary,
-                        ),
+                    'Todas las opciones pertenecen al mismo sistema de personalización.',
+                    style: AppTypography.caption(
+                      palette,
+                    ).copyWith(color: palette.textTertiary),
                   ),
                 ],
               ),

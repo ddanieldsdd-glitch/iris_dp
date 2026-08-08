@@ -8,12 +8,14 @@ class ProjectGroups extends Table {
 
 class Projects extends Table {
   IntColumn get id => integer().autoIncrement()();
-  IntColumn get groupId => integer().nullable().references(ProjectGroups, #id)();
+  IntColumn get groupId =>
+      integer().nullable().references(ProjectGroups, #id)();
   TextColumn get name => text()();
   TextColumn get director => text().nullable()();
   TextColumn get description => text().nullable()();
   TextColumn get clientName => text().nullable()();
-  TextColumn get status => text().withDefault(const Constant('preproduction'))();
+  TextColumn get status =>
+      text().withDefault(const Constant('preproduction'))();
   // 'preproduction' | 'shooting' | 'post'
   IntColumn get iconCode => integer().withDefault(const Constant(0xe3f4))();
   // Codepoint del icono (Icons.movie_creation = 0xe3f4)
@@ -27,9 +29,11 @@ class Projects extends Table {
   TextColumn get characterColorsJson => text().nullable()();
   // JSON mapa nombre → hex: {"GALA": "#E63946", "KARIM": "#2A9D8F"}
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+
   /// UUID en Supabase cuando sync cloud está activo.
   TextColumn get cloudId => text().nullable()();
   DateTimeColumn get syncUpdatedAt => dateTime().nullable()();
+
   /// Última modificación del contenido del proyecto (escenas, planos, etc.).
   DateTimeColumn get contentSyncUpdatedAt => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -58,9 +62,11 @@ class Scenes extends Table {
   // Formato: "{INT|EXT}. {NOMBRE} - {DÍA|NOCHE|AMANECER|ATARDECER}"
   TextColumn get locationPureName => text()();
   // Nombre del set de rodaje dentro de la localización (ej. "RÍO")
-  IntColumn get locationSiteId => integer().nullable().references(LocationSites, #id)();
+  IntColumn get locationSiteId =>
+      integer().nullable().references(LocationSites, #id)();
   // Localización contenedora (ej. "BOSQUE")
-  IntColumn get locationId => integer().nullable().references(LocationBasePlans, #id)();
+  IntColumn get locationId =>
+      integer().nullable().references(LocationBasePlans, #id)();
   // Set de rodaje vinculado (galería, planos, color)
   TextColumn get intExt => text().withDefault(const Constant('EXT'))();
   TextColumn get dayNight => text().withDefault(const Constant('DÍA'))();
@@ -82,16 +88,17 @@ class Shots extends Table {
   IntColumn get sceneId => integer().references(Scenes, #id)();
   IntColumn get projectId => integer().references(Projects, #id)();
   IntColumn get number => integer()();
-  TextColumn get framing => text().nullable()();       // PD, PMC, PA, PG...
-  TextColumn get lens => text().nullable()();          // 85mm, 50mm...
-  TextColumn get angle => text().nullable()();         // normal, picado, contrapicado
-  TextColumn get movement => text().nullable()();      // STEADY, DOLLY, MANO...
+  TextColumn get framing => text().nullable()(); // PD, PMC, PA, PG...
+  TextColumn get lens => text().nullable()(); // 85mm, 50mm...
+  TextColumn get angle => text().nullable()(); // normal, picado, contrapicado
+  TextColumn get movement => text().nullable()(); // STEADY, DOLLY, MANO...
   TextColumn get fStop => text().nullable()();
   TextColumn get shutterAngle => text().nullable()();
   IntColumn get fps => integer().nullable()();
   TextColumn get action => text().nullable()();
   TextColumn get notes => text().nullable()();
-  TextColumn get notesHighlight => text().nullable()(); // 'green'|'yellow'|'red'
+  TextColumn get notesHighlight =>
+      text().nullable()(); // 'green'|'yellow'|'red'
   TextColumn get description => text().nullable()();
   TextColumn get referenceImagePath => text().nullable()();
   TextColumn get cameraPlanImagePath => text().nullable()();
@@ -162,7 +169,8 @@ class CameraPlanElements extends Table {
   TextColumn get cameraLetter => text().withDefault(const Constant('A'))();
   IntColumn get cameraNumber => integer().withDefault(const Constant(1))();
   TextColumn get lightType => text().nullable()();
-  BoolColumn get lukaCompatible => boolean().withDefault(const Constant(false))();
+  BoolColumn get lukaCompatible =>
+      boolean().withDefault(const Constant(false))();
   TextColumn get lukaFixtureId => text().nullable()();
   TextColumn get externalMappingJson => text().nullable()();
   // Vínculos LUKA / Unreal / Cine Tracer (catálogo, mesh, tipo CT)
@@ -256,11 +264,9 @@ class Cameras extends Table {
   TextColumn get manufacturerUrl => text().nullable()();
   TextColumn get externalId => text().nullable()();
   IntColumn get catalogVersion => integer().nullable()();
-  BoolColumn get isCustom =>
-      boolean().withDefault(const Constant(false))();
+  BoolColumn get isCustom => boolean().withDefault(const Constant(false))();
   TextColumn get series => text().nullable()();
-  BoolColumn get vintage =>
-      boolean().withDefault(const Constant(false))();
+  BoolColumn get vintage => boolean().withDefault(const Constant(false))();
   TextColumn get rentalTagsJson => text().nullable()();
   BoolColumn get lukaCompatible =>
       boolean().withDefault(const Constant(false))();
@@ -280,8 +286,7 @@ class Lenses extends Table {
   TextColumn get formatCoverage => text()();
   TextColumn get mountType => text().nullable()();
   RealColumn get imageCircleMm => real().nullable()();
-  BoolColumn get isAnamorphic =>
-      boolean().withDefault(const Constant(false))();
+  BoolColumn get isAnamorphic => boolean().withDefault(const Constant(false))();
   RealColumn get squeezeRatio => real().nullable()();
   RealColumn get closeFocusM => real().nullable()();
   RealColumn get frontDiameterMm => real().nullable()();
@@ -289,11 +294,9 @@ class Lenses extends Table {
   TextColumn get heroImagePath => text().nullable()();
   TextColumn get externalId => text().nullable()();
   IntColumn get catalogVersion => integer().nullable()();
-  BoolColumn get isCustom =>
-      boolean().withDefault(const Constant(false))();
+  BoolColumn get isCustom => boolean().withDefault(const Constant(false))();
   TextColumn get series => text().nullable()();
-  BoolColumn get vintage =>
-      boolean().withDefault(const Constant(false))();
+  BoolColumn get vintage => boolean().withDefault(const Constant(false))();
   TextColumn get rentalTagsJson => text().nullable()();
   BoolColumn get lukaCompatible =>
       boolean().withDefault(const Constant(false))();
@@ -321,11 +324,9 @@ class Lights extends Table {
   TextColumn get heroImagePath => text().nullable()();
   TextColumn get externalId => text().nullable()();
   IntColumn get catalogVersion => integer().nullable()();
-  BoolColumn get isCustom =>
-      boolean().withDefault(const Constant(false))();
+  BoolColumn get isCustom => boolean().withDefault(const Constant(false))();
   TextColumn get series => text().nullable()();
-  BoolColumn get vintage =>
-      boolean().withDefault(const Constant(false))();
+  BoolColumn get vintage => boolean().withDefault(const Constant(false))();
   TextColumn get rentalTagsJson => text().nullable()();
   TextColumn get lukaProfileJson => text().nullable()();
   TextColumn get notes => text().nullable()();
@@ -392,6 +393,27 @@ class ProjectAnnotatedPdfs extends Table {
   DateTimeColumn get importedAt => dateTime().withDefault(currentDateAndTime)();
 }
 
+/// Capas vectoriales de anotación reutilizables por cualquier módulo.
+///
+/// [targetType] + [targetId] identifican el lienzo: por ejemplo
+/// `camera_plan_shot/42`, `location_set/8` o `pdf_page/documento:pagina`.
+class ProjectAnnotationDocuments extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  TextColumn get targetType => text()();
+  TextColumn get targetId => text()();
+  TextColumn get documentJson => text()();
+  IntColumn get documentSchemaVersion =>
+      integer().withDefault(const Constant(1))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  List<Set<Column<Object>>> get uniqueKeys => [
+    {projectId, targetType, targetId},
+  ];
+}
+
 /// Biblia visual de producción (manual operativo del look).
 class VisualBibles extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -438,7 +460,8 @@ class VisualBibles extends Table {
   TextColumn get creativeLutName => text().nullable()();
   TextColumn get creativeLutDescription => text().nullable()();
 
-  IntColumn get primaryCameraId => integer().nullable().references(Cameras, #id)();
+  IntColumn get primaryCameraId =>
+      integer().nullable().references(Cameras, #id)();
   TextColumn get recordingFormat => text().nullable()();
   TextColumn get codec => text().nullable()();
   TextColumn get resolutionNotes => text().nullable()();
@@ -472,6 +495,14 @@ class VisualBibles extends Table {
   TextColumn get conceptNarrativeIntent => text().nullable()();
   TextColumn get opticsConfigJson => text().nullable()();
 
+  /// `false` solo en Biblias nuevas que aún no han elegido cómo comenzar.
+  /// Las filas existentes migran como inicializadas para conservar su layout.
+  BoolColumn get structureInitialized =>
+      boolean().withDefault(const Constant(true))();
+
+  /// `legacy` = motor Group→Section; `v2` = BibleDocument modular.
+  TextColumn get engineVersion =>
+      text().withDefault(const Constant('legacy'))();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
 
@@ -508,6 +539,10 @@ class LightingSetups extends Table {
   TextColumn get gelNotes => text().nullable()();
   TextColumn get practicalMotivation => text().nullable()();
   TextColumn get referenceImagePath => text().nullable()();
+  IntColumn get locationBasePlanId =>
+      integer().nullable().references(LocationBasePlans, #id)();
+  IntColumn get locationSiteId =>
+      integer().nullable().references(LocationSites, #id)();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 }
 
@@ -604,8 +639,7 @@ class BibleSectionDefinitions extends Table {
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   BoolColumn get isBuiltIn => boolean().withDefault(const Constant(true))();
   BoolColumn get isHidden => boolean().withDefault(const Constant(false))();
-  TextColumn get template =>
-      text().withDefault(const Constant('standard'))();
+  TextColumn get template => text().withDefault(const Constant('standard'))();
   TextColumn get contentJson => text().nullable()();
 
   @override
@@ -615,6 +649,7 @@ class BibleSectionDefinitions extends Table {
 /// Plantillas de usuario (biblia visual, documentos de rodaje).
 class UserTemplates extends Table {
   TextColumn get id => text()();
+
   /// `bible_layout` | `shoot_document`
   TextColumn get type => text()();
   TextColumn get name => text()();
@@ -645,13 +680,15 @@ class MoodboardImages extends Table {
   // manual | scouting | artemis_capture | unreal_render | script_reference
   TextColumn get category => text().nullable()();
   // lighting | color | framing | texture | location | character | reference
-  IntColumn get groupId => integer().nullable().references(MoodboardGroups, #id)();
+  IntColumn get groupId =>
+      integer().nullable().references(MoodboardGroups, #id)();
   TextColumn get caption => text().nullable()();
   TextColumn get filmReference => text().nullable()();
   IntColumn get linkedSceneId => integer().nullable()();
   TextColumn get linkedLocationName => text().nullable()();
   IntColumn get linkedLocationBasePlanId =>
       integer().nullable().references(LocationBasePlans, #id)();
+
   /// JSON: secciones de la biblia donde debe aparecer (ej. ["lighting","concept"]).
   TextColumn get assignedSections => text().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
@@ -680,7 +717,20 @@ class PendingMediaUploads extends Table {
   IntColumn get retries => integer().withDefault(const Constant(0))();
   TextColumn get source => text().nullable()();
   TextColumn get lastError => text().nullable()();
-  TextColumn get status =>
-      text().withDefault(const Constant('pending'))(); // pending|processing|done|failed
+  TextColumn get status => text().withDefault(
+    const Constant('pending'),
+  )(); // pending|processing|done|failed
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+/// Documento modular Biblia v2 (Page → Block). No reemplaza VisualBibles.
+/// Nombre de tabla distinto a la clase de dominio [BibleDocument].
+class VisualBibleDocuments extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get bibleId => integer().references(VisualBibles, #id)();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  TextColumn get documentJson => text()();
+  IntColumn get documentSchemaVersion =>
+      integer().withDefault(const Constant(1))();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }

@@ -113,20 +113,36 @@ abstract final class MoodboardHelpers {
     required int projectId,
     int? bibleId,
     String? category,
+    List<String> assignedSections = const [],
+    String? linkedLocationName,
+    int? linkedLocationBasePlanId,
   }) async {
     final result = await ClipboardImageReader.read();
     final payload = result.payload;
     if (result.status != ClipboardImageReadStatus.success || payload == null) {
       return result.status;
     }
-    await addImageFromBytes(
-      db: db,
-      projectId: projectId,
-      bibleId: bibleId,
-      bytes: payload.bytes,
-      category: category,
-      extension: payload.extension,
-    );
+    if (assignedSections.isNotEmpty) {
+      await addImageFromBytesAssigned(
+        db: db,
+        projectId: projectId,
+        bibleId: bibleId,
+        bytes: payload.bytes,
+        assignedSections: assignedSections,
+        linkedLocationName: linkedLocationName,
+        linkedLocationBasePlanId: linkedLocationBasePlanId,
+        extension: payload.extension,
+      );
+    } else {
+      await addImageFromBytes(
+        db: db,
+        projectId: projectId,
+        bibleId: bibleId,
+        bytes: payload.bytes,
+        category: category,
+        extension: payload.extension,
+      );
+    }
     return ClipboardImageReadStatus.success;
   }
 
@@ -135,6 +151,9 @@ abstract final class MoodboardHelpers {
     required int projectId,
     int? bibleId,
     String? category,
+    List<String> assignedSections = const [],
+    String? linkedLocationName,
+    int? linkedLocationBasePlanId,
   }) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
@@ -153,14 +172,27 @@ abstract final class MoodboardHelpers {
         fileName: 'mb_${DateTime.now().millisecondsSinceEpoch}$ext',
       );
       if (copied == null) continue;
+      final derivedCategory = assignedSections.isNotEmpty
+          ? MoodboardAssociation.deriveCategoryFromSections(assignedSections)
+          : category;
       final id = await db.insertMoodboardImage(
         MoodboardImagesCompanion.insert(
           projectId: projectId,
           bibleId: Value(bibleId),
           imagePath: copied,
-          category: Value(category),
+          category: Value(derivedCategory),
           source: const Value(MoodboardSource.manual),
+          assignedSections: assignedSections.isEmpty
+              ? const Value(null)
+              : Value(jsonEncode(assignedSections)),
+          linkedLocationName: Value(linkedLocationName),
+          linkedLocationBasePlanId: Value(linkedLocationBasePlanId),
         ),
+      );
+      await MediaSyncBridge.enqueueMoodboardImage(
+        db: db,
+        projectId: projectId,
+        imageId: id,
       );
       await enrichImageMeta(imageId: id, imagePath: copied);
     }

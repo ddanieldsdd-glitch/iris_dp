@@ -125,8 +125,8 @@ class _ShootTemplateEditorScreenState
           customLabel: type == ShootBlockType.sectionHeader
               ? 'Nueva sección'
               : type == ShootBlockType.sceneHeader
-                  ? 'Escena'
-                  : null,
+              ? 'Escena'
+              : null,
           noteBody: type == ShootBlockType.note ? '' : null,
         ),
       );
@@ -155,7 +155,9 @@ class _ShootTemplateEditorScreenState
               TextField(
                 controller: noteCtrl,
                 maxLines: 4,
-                decoration: const InputDecoration(labelText: 'Texto de ejemplo'),
+                decoration: const InputDecoration(
+                  labelText: 'Texto de ejemplo',
+                ),
               ),
           ],
         ),
@@ -178,7 +180,9 @@ class _ShootTemplateEditorScreenState
       _blocks[index] = ShootDocumentBlockBlueprint(
         blockType: block.blockType,
         sortOrder: block.sortOrder,
-        customLabel: labelCtrl.text.trim().isEmpty ? null : labelCtrl.text.trim(),
+        customLabel: labelCtrl.text.trim().isEmpty
+            ? null
+            : labelCtrl.text.trim(),
         noteBody: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
         visibilityJson: block.visibilityJson,
         contentOverridesJson: block.contentOverridesJson,
@@ -187,26 +191,24 @@ class _ShootTemplateEditorScreenState
   }
 
   IconData _iconFor(String type) => switch (type) {
-        ShootBlockType.sectionHeader => Icons.title,
-        ShootBlockType.characterList => Icons.people_outline,
-        ShootBlockType.sceneHeader => Icons.movie_filter_outlined,
-        ShootBlockType.scriptExcerpt => Icons.menu_book_outlined,
-        ShootBlockType.shot => Icons.videocam_outlined,
-        ShootBlockType.note => Icons.sticky_note_2_outlined,
-        ShootBlockType.image => Icons.image_outlined,
-        ShootBlockType.pageBreak => Icons.insert_page_break_outlined,
-        ShootBlockType.spacer => Icons.height,
-        _ => Icons.widgets_outlined,
-      };
+    ShootBlockType.sectionHeader => Icons.title,
+    ShootBlockType.characterList => Icons.people_outline,
+    ShootBlockType.sceneHeader => Icons.movie_filter_outlined,
+    ShootBlockType.scriptExcerpt => Icons.menu_book_outlined,
+    ShootBlockType.shot => Icons.videocam_outlined,
+    ShootBlockType.note => Icons.sticky_note_2_outlined,
+    ShootBlockType.image => Icons.image_outlined,
+    ShootBlockType.pageBreak => Icons.insert_page_break_outlined,
+    ShootBlockType.spacer => Icons.height,
+    _ => Icons.widgets_outlined,
+  };
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
 
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -247,19 +249,20 @@ class _ShootTemplateEditorScreenState
                 DropdownButtonFormField<String>(
                   initialValue: _layoutPreset,
                   decoration: const InputDecoration(labelText: 'Layout'),
-                  items: [
-                    ShootLayoutPreset.freeform,
-                    ShootLayoutPreset.scriptLeftShotsRight,
-                    ShootLayoutPreset.stacked,
-                    ShootLayoutPreset.shotsOnly,
-                  ]
-                      .map(
-                        (p) => DropdownMenuItem(
-                          value: p,
-                          child: Text(ShootLayoutPreset.label(p)),
-                        ),
-                      )
-                      .toList(),
+                  items:
+                      [
+                            ShootLayoutPreset.freeform,
+                            ShootLayoutPreset.scriptLeftShotsRight,
+                            ShootLayoutPreset.stacked,
+                            ShootLayoutPreset.shotsOnly,
+                          ]
+                          .map(
+                            (p) => DropdownMenuItem(
+                              value: p,
+                              child: Text(ShootLayoutPreset.label(p)),
+                            ),
+                          )
+                          .toList(),
                   onChanged: (v) {
                     if (v != null) setState(() => _layoutPreset = v);
                   },
@@ -287,9 +290,8 @@ class _ShootTemplateEditorScreenState
                 : ReorderableListView.builder(
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     itemCount: _blocks.length,
-                    onReorder: (oldIndex, newIndex) {
+                    onReorderItem: (oldIndex, newIndex) {
                       setState(() {
-                        if (newIndex > oldIndex) newIndex--;
                         final item = _blocks.removeAt(oldIndex);
                         _blocks.insert(newIndex, item);
                         for (var i = 0; i < _blocks.length; i++) {
@@ -309,8 +311,10 @@ class _ShootTemplateEditorScreenState
                       final block = _blocks[index];
                       return ListTile(
                         key: ValueKey('${block.blockType}_$index'),
-                        leading: Icon(_iconFor(block.blockType),
-                            color: palette.accent),
+                        leading: Icon(
+                          _iconFor(block.blockType),
+                          color: palette.accent,
+                        ),
                         title: Text(ShootBlockType.label(block.blockType)),
                         subtitle: Text(
                           block.customLabel ??
@@ -323,14 +327,20 @@ class _ShootTemplateEditorScreenState
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.drag_handle, color: palette.textTertiary),
+                            Icon(
+                              Icons.drag_handle,
+                              color: palette.textTertiary,
+                            ),
                             IconButton(
                               icon: const Icon(Icons.edit_outlined, size: 18),
                               onPressed: () => _editBlock(index),
                             ),
                             IconButton(
-                              icon: Icon(Icons.delete_outline,
-                                  size: 18, color: palette.error),
+                              icon: Icon(
+                                Icons.delete_outline,
+                                size: 18,
+                                color: palette.error,
+                              ),
                               onPressed: () =>
                                   setState(() => _blocks.removeAt(index)),
                             ),
@@ -352,18 +362,18 @@ class _ShootTemplateEditorScreenState
 }
 
 List<ShootDocumentBlockBlueprint> defaultShootTemplateBlocks() => [
-      const ShootDocumentBlockBlueprint(
-        blockType: ShootBlockType.sectionHeader,
-        sortOrder: 0,
-        customLabel: 'Plan del día',
-      ),
-      const ShootDocumentBlockBlueprint(
-        blockType: ShootBlockType.sceneHeader,
-        sortOrder: 1,
-        customLabel: 'Escena',
-      ),
-      const ShootDocumentBlockBlueprint(
-        blockType: ShootBlockType.shot,
-        sortOrder: 2,
-      ),
-    ];
+  const ShootDocumentBlockBlueprint(
+    blockType: ShootBlockType.sectionHeader,
+    sortOrder: 0,
+    customLabel: 'Plan del día',
+  ),
+  const ShootDocumentBlockBlueprint(
+    blockType: ShootBlockType.sceneHeader,
+    sortOrder: 1,
+    customLabel: 'Escena',
+  ),
+  const ShootDocumentBlockBlueprint(
+    blockType: ShootBlockType.shot,
+    sortOrder: 2,
+  ),
+];

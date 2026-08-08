@@ -11,6 +11,7 @@ import '../../shared/visual_bible/bible_section_fields.dart';
 import '../../shared/visual_bible/moodboard_association.dart';
 import '../../shared/visual_bible/bible_layout.dart' as bible_layout;
 import '../../shared/visual_bible/bible_section_ids.dart';
+import '../../features/visual_bible/v2/migration/freeform_v2_blocks_codec.dart';
 import '../templates/user_template_models.dart';
 import 'seed_data.dart';
 import '../../shared/equipment/catalog_importer.dart';
@@ -18,341 +19,393 @@ import 'tables.dart';
 
 part 'app_database.g.dart';
 
-@DriftDatabase(tables: [
-  ProjectGroups, Projects, Scenes, Shots,
-  ShootDocuments, ShootDocumentBlocks,
-  ShotReferences, CameraPlanElements, CameraPathPoints, LocationSites,
-  LocationBasePlans,
-  LocationImages,
-  SiteImages,
-  Cameras, Lenses, Lights, ProjectEquipment,
-  LookBibles, ProjectAnnotatedPdfs,
-  VisualBibles, VisualBibleColorBlocks, VisualBibleLocationRefs, MoodboardGroups,
-  MoodboardImages, BibleSectionGroups, BibleSectionDefinitions, UserTemplates,
-  ExposureBlocks, LightingSetups, CameraTests, VisualBibleVersions, BibleComments,
-  CatalogSyncMeta, BibleSectionEvidence, LukaSyncMeta, OpticsLabSamples,
-  CloudSyncQueue, PendingMediaUploads,
-])
+@DriftDatabase(
+  tables: [
+    ProjectGroups,
+    Projects,
+    Scenes,
+    Shots,
+    ShootDocuments,
+    ShootDocumentBlocks,
+    ShotReferences,
+    CameraPlanElements,
+    CameraPathPoints,
+    LocationSites,
+    LocationBasePlans,
+    LocationImages,
+    SiteImages,
+    Cameras,
+    Lenses,
+    Lights,
+    ProjectEquipment,
+    LookBibles,
+    ProjectAnnotatedPdfs,
+    ProjectAnnotationDocuments,
+    VisualBibles,
+    VisualBibleColorBlocks,
+    VisualBibleLocationRefs,
+    MoodboardGroups,
+    MoodboardImages,
+    BibleSectionGroups,
+    BibleSectionDefinitions,
+    UserTemplates,
+    ExposureBlocks,
+    LightingSetups,
+    CameraTests,
+    VisualBibleVersions,
+    BibleComments,
+    CatalogSyncMeta,
+    BibleSectionEvidence,
+    LukaSyncMeta,
+    OpticsLabSamples,
+    CloudSyncQueue,
+    PendingMediaUploads,
+    VisualBibleDocuments,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 33;
+  int get schemaVersion => 38;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) async {
-          await m.createAll();
-          await importEmbeddedCatalog(this);
-        },
-        onUpgrade: (m, from, to) async {
-          if (from < 2) {
-            await m.addColumn(projects, projects.scriptFilePath);
-            await m.addColumn(projects, projects.scriptFileName);
-            await m.addColumn(scenes, scenes.sourceStartIndex);
-          }
-          if (from < 3) {
-            await m.addColumn(scenes, scenes.locationId);
-            await m.addColumn(locationBasePlans, locationBasePlans.description);
-            await m.createTable(locationImages);
-          }
-          if (from < 4) {
-            await m.createTable(locationSites);
-            await m.addColumn(locationBasePlans, locationBasePlans.siteId);
-          }
-          if (from < 5) {
-            await m.addColumn(scenes, scenes.locationSiteId);
-            await _wrapOrphanSetsInSites();
-            await _backfillSceneLocationSites();
-          }
-          if (from < 6) {
-            await m.createTable(siteImages);
-          }
-          if (from < 7) {
-            await _ensureDefaultSetsForAllSites();
-          }
-          if (from < 8) {
-            await m.addColumn(locationSites, locationSites.floorPlanJson);
-            await m.addColumn(locationBasePlans, locationBasePlans.floorPlanJson);
-          }
-          if (from < 9) {
-            await m.createTable(cameras);
-            await m.createTable(lenses);
-            await m.createTable(lights);
-            await m.createTable(projectEquipment);
-            await _seedEquipmentCatalog();
-          }
-          if (from < 10) {
-            await m.addColumn(locationSites, locationSites.scanPath);
-            await m.addColumn(locationSites, locationSites.scanSource);
-            await m.addColumn(locationSites, locationSites.scanMetadataJson);
-            await m.addColumn(locationBasePlans, locationBasePlans.scanPath);
-            await m.addColumn(locationBasePlans, locationBasePlans.scanSource);
-            await m.addColumn(
-              locationBasePlans,
-              locationBasePlans.scanMetadataJson,
-            );
-          }
-          if (from < 11) {
-            await m.addColumn(
-              cameraPlanElements,
-              cameraPlanElements.externalMappingJson,
-            );
-          }
-          if (from < 12) {
-            await m.createTable(lookBibles);
-            await m.createTable(projectAnnotatedPdfs);
-          }
-          if (from < 13) {
-            await m.createTable(visualBibles);
-            await m.createTable(visualBibleColorBlocks);
-            await m.createTable(visualBibleLocationRefs);
-            await m.createTable(moodboardImages);
-            await _migrateLookBiblesToVisualBibles();
-          }
-          if (from < 14) {
-            await m.addColumn(cameras, cameras.dynamicRangeStops);
-            await m.addColumn(cameras, cameras.colorScience);
-            await m.addColumn(cameras, cameras.nativeIso);
-            await m.addColumn(cameras, cameras.logFormats);
-            await m.addColumn(visualBibles, visualBibles.primaryCameraId);
-            await m.addColumn(visualBibles, visualBibles.recordingFormat);
-            await m.addColumn(visualBibles, visualBibles.codec);
-            await m.addColumn(visualBibles, visualBibles.resolutionNotes);
-            await m.addColumn(visualBibles, visualBibles.frameRateNotes);
-            await m.addColumn(visualBibles, visualBibles.nativeIso);
-            await m.addColumn(visualBibles, visualBibles.defaultTStop);
-            await m.addColumn(visualBibles, visualBibles.ndNotes);
-            await m.addColumn(visualBibles, visualBibles.deliveryColorSpace);
-            await m.addColumn(visualBibles, visualBibles.captureResolution);
-            await m.addColumn(visualBibles, visualBibles.deliveryResolution);
-            await m.addColumn(visualBibles, visualBibles.workflowPipeline);
-            await m.addColumn(visualBibles, visualBibles.diffusionNotes);
-            await m.addColumn(visualBibles, visualBibles.sensorShadowBehavior);
-            await m.addColumn(visualBibles, visualBibles.colorScienceNotes);
-            await m.addColumn(visualBibles, visualBibles.lowLightNotes);
-            await m.addColumn(visualBibles, visualBibles.opticCharacterNotes);
-            await m.addColumn(visualBibles, visualBibles.filtrationNotes);
-            await m.addColumn(visualBibles, visualBibles.cameraMovementsJson);
-            await m.addColumn(visualBibles, visualBibles.actVisualNotes);
-            await m.addColumn(visualBibles, visualBibles.cameraNarrativeIntent);
-            await m.addColumn(visualBibles, visualBibles.opticsNarrativeIntent);
-            await m.addColumn(visualBibles, visualBibles.exposureNarrativeIntent);
-            await m.addColumn(visualBibles, visualBibles.lightingNarrativeIntent);
-            await m.addColumn(visualBibles, visualBibles.colorNarrativeIntent);
-            await m.addColumn(visualBibles, visualBibles.formatNarrativeIntent);
-            await m.addColumn(visualBibles, visualBibles.textureNarrativeIntent);
-            await m.addColumn(visualBibles, visualBibles.conceptNarrativeIntent);
-            await m.addColumn(
-              visualBibleLocationRefs,
-              visualBibleLocationRefs.solarOrientation,
-            );
-            await m.addColumn(
-              visualBibleLocationRefs,
-              visualBibleLocationRefs.availableLightHours,
-            );
-            await m.addColumn(
-              visualBibleLocationRefs,
-              visualBibleLocationRefs.existingPracticals,
-            );
-            await m.addColumn(
-              visualBibleLocationRefs,
-              visualBibleLocationRefs.estimatedColorTempKelvin,
-            );
-            await m.createTable(exposureBlocks);
-            await m.createTable(lightingSetups);
-            await m.createTable(cameraTests);
-            await m.createTable(visualBibleVersions);
-            await m.createTable(bibleComments);
-          }
-          if (from < 15) {
-            await m.addColumn(cameras, cameras.mountType);
-            await m.addColumn(cameras, cameras.sensorModesJson);
-            await m.addColumn(cameras, cameras.recordingResolutionsJson);
-            await m.addColumn(cameras, cameras.weightKg);
-            await m.addColumn(cameras, cameras.powerDrawW);
-            await m.addColumn(cameras, cameras.heroImagePath);
-            await m.addColumn(cameras, cameras.manufacturerUrl);
-            await m.addColumn(cameras, cameras.externalId);
-            await m.addColumn(cameras, cameras.catalogVersion);
-            await m.addColumn(cameras, cameras.isCustom);
-            await m.addColumn(lenses, lenses.mountType);
-            await m.addColumn(lenses, lenses.imageCircleMm);
-            await m.addColumn(lenses, lenses.isAnamorphic);
-            await m.addColumn(lenses, lenses.squeezeRatio);
-            await m.addColumn(lenses, lenses.closeFocusM);
-            await m.addColumn(lenses, lenses.frontDiameterMm);
-            await m.addColumn(lenses, lenses.lensType);
-            await m.addColumn(lenses, lenses.heroImagePath);
-            await m.addColumn(lenses, lenses.externalId);
-            await m.addColumn(lenses, lenses.catalogVersion);
-            await m.addColumn(lenses, lenses.isCustom);
-            await m.addColumn(lights, lights.beamAngleDeg);
-            await m.addColumn(lights, lights.cri);
-            await m.addColumn(lights, lights.tlci);
-            await m.addColumn(lights, lights.dimmingType);
-            await m.addColumn(lights, lights.modifierCompatibilityJson);
-            await m.addColumn(lights, lights.heroImagePath);
-            await m.addColumn(lights, lights.externalId);
-            await m.addColumn(lights, lights.catalogVersion);
-            await m.addColumn(lights, lights.isCustom);
-            await m.addColumn(visualBibles, visualBibles.opticsConfigJson);
-            await m.createTable(catalogSyncMeta);
-            await m.createTable(bibleSectionEvidence);
-            await _importEmbeddedCatalogIfNeeded();
-          }
-          if (from < 16) {
-            await m.addColumn(cameras, cameras.series);
-            await m.addColumn(cameras, cameras.vintage);
-            await m.addColumn(cameras, cameras.rentalTagsJson);
-            await m.addColumn(cameras, cameras.lukaCompatible);
-            await m.addColumn(cameras, cameras.lukaProfileJson);
-            await m.addColumn(lenses, lenses.series);
-            await m.addColumn(lenses, lenses.vintage);
-            await m.addColumn(lenses, lenses.rentalTagsJson);
-            await m.addColumn(lenses, lenses.lukaCompatible);
-            await m.addColumn(lenses, lenses.lukaProfileJson);
-            await m.addColumn(lights, lights.series);
-            await m.addColumn(lights, lights.vintage);
-            await m.addColumn(lights, lights.rentalTagsJson);
-            await m.addColumn(lights, lights.lukaProfileJson);
-            await m.createTable(lukaSyncMeta);
-            await _importEmbeddedCatalogIfNeeded();
-          }
-          if (from < 17) {
-            await m.addColumn(scenes, scenes.charactersJson);
-          }
-          if (from < 18) {
-            await m.addColumn(visualBibles, visualBibles.tone);
-            await m.addColumn(visualBibles, visualBibles.creativeIntention);
-            await m.addColumn(visualBibles, visualBibles.stagingApproach);
-            await m.addColumn(visualBibles, visualBibles.pointOfView);
-            await m.addColumn(
-              visualBibles,
-              visualBibles.directionNarrativeIntent,
-            );
-            await m.addColumn(visualBibles, visualBibles.depthOfFieldNotes);
-            await m.addColumn(
-              visualBibleLocationRefs,
-              visualBibleLocationRefs.stagingNote,
-            );
-          }
-          if (from < 19) {
-            await customStatement(
-              "UPDATE moodboard_images SET source = 'manual' "
-              "WHERE source = 'ai_generated'",
-            );
-            await customStatement(
-              "UPDATE shot_references SET source = 'manual' "
-              "WHERE source = 'ai_generated'",
-            );
-          }
-          if (from < 20) {
-            await m.createTable(opticsLabSamples);
-          }
-          if (from < 21) {
-            await m.addColumn(projectEquipment, projectEquipment.sortOrder);
-          }
-          if (from < 22) {
-            await m.addColumn(moodboardImages, moodboardImages.assignedSections);
-          }
-          if (from < 23) {
-            await m.createTable(moodboardGroups);
-            await m.addColumn(moodboardImages, moodboardImages.groupId);
-          }
-          if (from < 24) {
-            await _migrateEvidenceToMoodboard();
-          }
-          if (from < 25) {
-            await m.createTable(bibleSectionGroups);
-            await m.createTable(bibleSectionDefinitions);
-            await _seedBibleSectionDefinitionsForExistingBibles();
-          }
-          if (from < 26) {
-            await m.addColumn(
-              visualBibleLocationRefs,
-              visualBibleLocationRefs.locationSiteId,
-            );
-            await m.addColumn(
-              visualBibleLocationRefs,
-              visualBibleLocationRefs.locationBasePlanId,
-            );
-            await m.addColumn(
-              moodboardImages,
-              moodboardImages.linkedLocationBasePlanId,
-            );
-            await _backfillLocationForeignKeys();
-          }
-          if (from < 27) {
-            await customStatement(
-              "UPDATE bible_section_definitions SET label = 'Dirección' "
-              "WHERE id = 'direction'",
-            );
-            await _seedBibleSectionFieldsJson();
-          }
-          if (from < 28) {
-            await m.addColumn(projects, projects.cloudId);
-            await m.addColumn(projects, projects.syncUpdatedAt);
-            await m.createTable(cloudSyncQueue);
-          }
-          if (from < 29) {
-            await m.addColumn(projects, projects.characterColorsJson);
-          }
-          if (from < 30) {
-            await m.createTable(shootDocuments);
-            await m.createTable(shootDocumentBlocks);
-            await m.addColumn(shots, shots.charactersJson);
-            await m.addColumn(shots, shots.durationSeconds);
-            await m.addColumn(shots, shots.scriptAnchorIndex);
-          }
-          if (from < 31) {
-            await m.addColumn(projects, projects.contentSyncUpdatedAt);
-          }
-          if (from < 32) {
-            await m.createTable(userTemplates);
-          }
-          if (from < 33) {
-            await m.createTable(pendingMediaUploads);
-          }
-        },
-      );
+    onCreate: (m) async {
+      await m.createAll();
+      await importEmbeddedCatalog(this);
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.addColumn(projects, projects.scriptFilePath);
+        await m.addColumn(projects, projects.scriptFileName);
+        await m.addColumn(scenes, scenes.sourceStartIndex);
+      }
+      if (from < 3) {
+        await m.addColumn(scenes, scenes.locationId);
+        await m.addColumn(locationBasePlans, locationBasePlans.description);
+        await m.createTable(locationImages);
+      }
+      if (from < 4) {
+        await m.createTable(locationSites);
+        await m.addColumn(locationBasePlans, locationBasePlans.siteId);
+      }
+      if (from < 5) {
+        await m.addColumn(scenes, scenes.locationSiteId);
+        await _wrapOrphanSetsInSites();
+        await _backfillSceneLocationSites();
+      }
+      if (from < 6) {
+        await m.createTable(siteImages);
+      }
+      if (from < 7) {
+        await _ensureDefaultSetsForAllSites();
+      }
+      if (from < 8) {
+        await m.addColumn(locationSites, locationSites.floorPlanJson);
+        await m.addColumn(locationBasePlans, locationBasePlans.floorPlanJson);
+      }
+      if (from < 9) {
+        await m.createTable(cameras);
+        await m.createTable(lenses);
+        await m.createTable(lights);
+        await m.createTable(projectEquipment);
+        await _seedEquipmentCatalog();
+      }
+      if (from < 10) {
+        await m.addColumn(locationSites, locationSites.scanPath);
+        await m.addColumn(locationSites, locationSites.scanSource);
+        await m.addColumn(locationSites, locationSites.scanMetadataJson);
+        await m.addColumn(locationBasePlans, locationBasePlans.scanPath);
+        await m.addColumn(locationBasePlans, locationBasePlans.scanSource);
+        await m.addColumn(
+          locationBasePlans,
+          locationBasePlans.scanMetadataJson,
+        );
+      }
+      if (from < 11) {
+        await m.addColumn(
+          cameraPlanElements,
+          cameraPlanElements.externalMappingJson,
+        );
+      }
+      if (from < 12) {
+        await m.createTable(lookBibles);
+        await m.createTable(projectAnnotatedPdfs);
+      }
+      if (from < 13) {
+        await m.createTable(visualBibles);
+        await m.createTable(visualBibleColorBlocks);
+        await m.createTable(visualBibleLocationRefs);
+        await m.createTable(moodboardImages);
+        await _migrateLookBiblesToVisualBibles();
+      }
+      if (from < 14) {
+        await m.addColumn(cameras, cameras.dynamicRangeStops);
+        await m.addColumn(cameras, cameras.colorScience);
+        await m.addColumn(cameras, cameras.nativeIso);
+        await m.addColumn(cameras, cameras.logFormats);
+        await m.addColumn(visualBibles, visualBibles.primaryCameraId);
+        await m.addColumn(visualBibles, visualBibles.recordingFormat);
+        await m.addColumn(visualBibles, visualBibles.codec);
+        await m.addColumn(visualBibles, visualBibles.resolutionNotes);
+        await m.addColumn(visualBibles, visualBibles.frameRateNotes);
+        await m.addColumn(visualBibles, visualBibles.nativeIso);
+        await m.addColumn(visualBibles, visualBibles.defaultTStop);
+        await m.addColumn(visualBibles, visualBibles.ndNotes);
+        await m.addColumn(visualBibles, visualBibles.deliveryColorSpace);
+        await m.addColumn(visualBibles, visualBibles.captureResolution);
+        await m.addColumn(visualBibles, visualBibles.deliveryResolution);
+        await m.addColumn(visualBibles, visualBibles.workflowPipeline);
+        await m.addColumn(visualBibles, visualBibles.diffusionNotes);
+        await m.addColumn(visualBibles, visualBibles.sensorShadowBehavior);
+        await m.addColumn(visualBibles, visualBibles.colorScienceNotes);
+        await m.addColumn(visualBibles, visualBibles.lowLightNotes);
+        await m.addColumn(visualBibles, visualBibles.opticCharacterNotes);
+        await m.addColumn(visualBibles, visualBibles.filtrationNotes);
+        await m.addColumn(visualBibles, visualBibles.cameraMovementsJson);
+        await m.addColumn(visualBibles, visualBibles.actVisualNotes);
+        await m.addColumn(visualBibles, visualBibles.cameraNarrativeIntent);
+        await m.addColumn(visualBibles, visualBibles.opticsNarrativeIntent);
+        await m.addColumn(visualBibles, visualBibles.exposureNarrativeIntent);
+        await m.addColumn(visualBibles, visualBibles.lightingNarrativeIntent);
+        await m.addColumn(visualBibles, visualBibles.colorNarrativeIntent);
+        await m.addColumn(visualBibles, visualBibles.formatNarrativeIntent);
+        await m.addColumn(visualBibles, visualBibles.textureNarrativeIntent);
+        await m.addColumn(visualBibles, visualBibles.conceptNarrativeIntent);
+        await m.addColumn(
+          visualBibleLocationRefs,
+          visualBibleLocationRefs.solarOrientation,
+        );
+        await m.addColumn(
+          visualBibleLocationRefs,
+          visualBibleLocationRefs.availableLightHours,
+        );
+        await m.addColumn(
+          visualBibleLocationRefs,
+          visualBibleLocationRefs.existingPracticals,
+        );
+        await m.addColumn(
+          visualBibleLocationRefs,
+          visualBibleLocationRefs.estimatedColorTempKelvin,
+        );
+        await m.createTable(exposureBlocks);
+        await m.createTable(lightingSetups);
+        await m.createTable(cameraTests);
+        await m.createTable(visualBibleVersions);
+        await m.createTable(bibleComments);
+      }
+      if (from < 15) {
+        await m.addColumn(cameras, cameras.mountType);
+        await m.addColumn(cameras, cameras.sensorModesJson);
+        await m.addColumn(cameras, cameras.recordingResolutionsJson);
+        await m.addColumn(cameras, cameras.weightKg);
+        await m.addColumn(cameras, cameras.powerDrawW);
+        await m.addColumn(cameras, cameras.heroImagePath);
+        await m.addColumn(cameras, cameras.manufacturerUrl);
+        await m.addColumn(cameras, cameras.externalId);
+        await m.addColumn(cameras, cameras.catalogVersion);
+        await m.addColumn(cameras, cameras.isCustom);
+        await m.addColumn(lenses, lenses.mountType);
+        await m.addColumn(lenses, lenses.imageCircleMm);
+        await m.addColumn(lenses, lenses.isAnamorphic);
+        await m.addColumn(lenses, lenses.squeezeRatio);
+        await m.addColumn(lenses, lenses.closeFocusM);
+        await m.addColumn(lenses, lenses.frontDiameterMm);
+        await m.addColumn(lenses, lenses.lensType);
+        await m.addColumn(lenses, lenses.heroImagePath);
+        await m.addColumn(lenses, lenses.externalId);
+        await m.addColumn(lenses, lenses.catalogVersion);
+        await m.addColumn(lenses, lenses.isCustom);
+        await m.addColumn(lights, lights.beamAngleDeg);
+        await m.addColumn(lights, lights.cri);
+        await m.addColumn(lights, lights.tlci);
+        await m.addColumn(lights, lights.dimmingType);
+        await m.addColumn(lights, lights.modifierCompatibilityJson);
+        await m.addColumn(lights, lights.heroImagePath);
+        await m.addColumn(lights, lights.externalId);
+        await m.addColumn(lights, lights.catalogVersion);
+        await m.addColumn(lights, lights.isCustom);
+        await m.addColumn(visualBibles, visualBibles.opticsConfigJson);
+        await m.createTable(catalogSyncMeta);
+        await m.createTable(bibleSectionEvidence);
+        await _importEmbeddedCatalogIfNeeded();
+      }
+      if (from < 16) {
+        await m.addColumn(cameras, cameras.series);
+        await m.addColumn(cameras, cameras.vintage);
+        await m.addColumn(cameras, cameras.rentalTagsJson);
+        await m.addColumn(cameras, cameras.lukaCompatible);
+        await m.addColumn(cameras, cameras.lukaProfileJson);
+        await m.addColumn(lenses, lenses.series);
+        await m.addColumn(lenses, lenses.vintage);
+        await m.addColumn(lenses, lenses.rentalTagsJson);
+        await m.addColumn(lenses, lenses.lukaCompatible);
+        await m.addColumn(lenses, lenses.lukaProfileJson);
+        await m.addColumn(lights, lights.series);
+        await m.addColumn(lights, lights.vintage);
+        await m.addColumn(lights, lights.rentalTagsJson);
+        await m.addColumn(lights, lights.lukaProfileJson);
+        await m.createTable(lukaSyncMeta);
+        await _importEmbeddedCatalogIfNeeded();
+      }
+      if (from < 17) {
+        await m.addColumn(scenes, scenes.charactersJson);
+      }
+      if (from < 18) {
+        await m.addColumn(visualBibles, visualBibles.tone);
+        await m.addColumn(visualBibles, visualBibles.creativeIntention);
+        await m.addColumn(visualBibles, visualBibles.stagingApproach);
+        await m.addColumn(visualBibles, visualBibles.pointOfView);
+        await m.addColumn(visualBibles, visualBibles.directionNarrativeIntent);
+        await m.addColumn(visualBibles, visualBibles.depthOfFieldNotes);
+        await m.addColumn(
+          visualBibleLocationRefs,
+          visualBibleLocationRefs.stagingNote,
+        );
+      }
+      if (from < 19) {
+        await customStatement(
+          "UPDATE moodboard_images SET source = 'manual' "
+          "WHERE source = 'ai_generated'",
+        );
+        await customStatement(
+          "UPDATE shot_references SET source = 'manual' "
+          "WHERE source = 'ai_generated'",
+        );
+      }
+      if (from < 20) {
+        await m.createTable(opticsLabSamples);
+      }
+      if (from < 21) {
+        await m.addColumn(projectEquipment, projectEquipment.sortOrder);
+      }
+      if (from < 22) {
+        await m.addColumn(moodboardImages, moodboardImages.assignedSections);
+      }
+      if (from < 23) {
+        await m.createTable(moodboardGroups);
+        await m.addColumn(moodboardImages, moodboardImages.groupId);
+      }
+      if (from < 24) {
+        await _migrateEvidenceToMoodboard();
+      }
+      if (from < 25) {
+        await m.createTable(bibleSectionGroups);
+        await m.createTable(bibleSectionDefinitions);
+        await _seedBibleSectionDefinitionsForExistingBibles();
+      }
+      if (from < 26) {
+        await m.addColumn(
+          visualBibleLocationRefs,
+          visualBibleLocationRefs.locationSiteId,
+        );
+        await m.addColumn(
+          visualBibleLocationRefs,
+          visualBibleLocationRefs.locationBasePlanId,
+        );
+        await m.addColumn(
+          moodboardImages,
+          moodboardImages.linkedLocationBasePlanId,
+        );
+        await _backfillLocationForeignKeys();
+      }
+      if (from < 27) {
+        await customStatement(
+          "UPDATE bible_section_definitions SET label = 'Dirección' "
+          "WHERE id = 'direction'",
+        );
+        await _seedBibleSectionFieldsJson();
+      }
+      if (from < 28) {
+        await m.addColumn(projects, projects.cloudId);
+        await m.addColumn(projects, projects.syncUpdatedAt);
+        await m.createTable(cloudSyncQueue);
+      }
+      if (from < 29) {
+        await m.addColumn(projects, projects.characterColorsJson);
+      }
+      if (from < 30) {
+        await m.createTable(shootDocuments);
+        await m.createTable(shootDocumentBlocks);
+        await m.addColumn(shots, shots.charactersJson);
+        await m.addColumn(shots, shots.durationSeconds);
+        await m.addColumn(shots, shots.scriptAnchorIndex);
+      }
+      if (from < 31) {
+        await m.addColumn(projects, projects.contentSyncUpdatedAt);
+      }
+      if (from < 32) {
+        await m.createTable(userTemplates);
+      }
+      if (from < 33) {
+        await m.createTable(pendingMediaUploads);
+      }
+      if (from < 34) {
+        await m.createTable(visualBibleDocuments);
+      }
+      if (from < 35) {
+        await m.addColumn(visualBibles, visualBibles.structureInitialized);
+        await customStatement(
+          'UPDATE visual_bibles SET structure_initialized = 1 '
+          'WHERE id IN (SELECT DISTINCT bible_id FROM bible_section_groups)',
+        );
+      }
+      if (from < 36) {
+        await m.createTable(projectAnnotationDocuments);
+      }
+      if (from < 37) {
+        await m.addColumn(visualBibles, visualBibles.engineVersion);
+      }
+      if (from < 38) {
+        await m.addColumn(lightingSetups, lightingSetups.locationBasePlanId);
+        await m.addColumn(lightingSetups, lightingSetups.locationSiteId);
+      }
+    },
+  );
 
   Future<void> _seedEquipmentCatalog() async {
     final existing = await select(cameras).get();
     if (existing.isNotEmpty) return;
 
     for (final c in kSeedCameras) {
-      await into(cameras).insert(CamerasCompanion.insert(
-        brand: c.brand,
-        model: c.model,
-        sensorWidthMm: c.sensorW,
-        sensorHeightMm: c.sensorH,
-      ));
+      await into(cameras).insert(
+        CamerasCompanion.insert(
+          brand: c.brand,
+          model: c.model,
+          sensorWidthMm: c.sensorW,
+          sensorHeightMm: c.sensorH,
+        ),
+      );
     }
     for (final l in kSeedLenses) {
-      await into(lenses).insert(LensesCompanion.insert(
-        brand: l.brand,
-        model: l.model,
-        focalLength: l.focalLength,
-        focalMin: Value(l.focalMin),
-        focalMax: Value(l.focalMax),
-        minTStop: l.minTStop,
-        formatCoverage: l.formatCoverage,
-      ));
+      await into(lenses).insert(
+        LensesCompanion.insert(
+          brand: l.brand,
+          model: l.model,
+          focalLength: l.focalLength,
+          focalMin: Value(l.focalMin),
+          focalMax: Value(l.focalMax),
+          minTStop: l.minTStop,
+          formatCoverage: l.formatCoverage,
+        ),
+      );
     }
     for (final light in kSeedLights) {
-      await into(lights).insert(LightsCompanion.insert(
-        brand: light.brand,
-        model: light.model,
-        lightType: light.type,
-        powerW: light.powerW,
-        colorTempMin: light.cMin,
-        colorTempMax: light.cMax,
-        isLukaCompatible: Value(light.luka),
-        lukaFixtureId: Value(light.lukaFixtureId),
-      ));
+      await into(lights).insert(
+        LightsCompanion.insert(
+          brand: light.brand,
+          model: light.model,
+          lightType: light.type,
+          powerW: light.powerW,
+          colorTempMin: light.cMin,
+          colorTempMax: light.cMax,
+          isLukaCompatible: Value(light.luka),
+          lukaFixtureId: Value(light.lukaFixtureId),
+        ),
+      );
     }
   }
 
@@ -365,20 +418,22 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> _wrapOrphanSetsInSites() async {
-    final orphanSets = await (select(locationBasePlans)
-          ..where((l) => l.siteId.isNull()))
-        .get();
+    final orphanSets = await (select(
+      locationBasePlans,
+    )..where((l) => l.siteId.isNull())).get();
     for (final set in orphanSets) {
-      final sites = await (select(locationSites)
-            ..where((s) => s.projectId.equals(set.projectId)))
-          .get();
-      final siteId = await insertSite(LocationSitesCompanion.insert(
-        projectId: set.projectId,
-        name: set.locationName,
-        description: Value(set.description),
-        notes: Value(set.notes),
-        sortOrder: Value(sites.length),
-      ));
+      final sites = await (select(
+        locationSites,
+      )..where((s) => s.projectId.equals(set.projectId))).get();
+      final siteId = await insertSite(
+        LocationSitesCompanion.insert(
+          projectId: set.projectId,
+          name: set.locationName,
+          description: Value(set.description),
+          notes: Value(set.notes),
+          sortOrder: Value(sites.length),
+        ),
+      );
       await updateLocation(set.copyWith(siteId: Value(siteId)));
     }
   }
@@ -400,38 +455,48 @@ class AppDatabase extends _$AppDatabase {
         siteId = site?.id;
       }
       if (siteId != null) {
-        await update(scenes).replace(
-          scene.copyWith(locationSiteId: Value(siteId)),
-        );
+        await update(
+          scenes,
+        ).replace(scene.copyWith(locationSiteId: Value(siteId)));
       }
     }
   }
 
   // ── Grupos ─────────────────────────────────────
-  Future<List<ProjectGroup>> getAllGroups() =>
-      (select(projectGroups)..orderBy([(g) => OrderingTerm.asc(g.sortOrder)])).get();
+  Future<List<ProjectGroup>> getAllGroups() => (select(
+    projectGroups,
+  )..orderBy([(g) => OrderingTerm.asc(g.sortOrder)])).get();
 
-  Stream<List<ProjectGroup>> watchAllGroups() =>
-      (select(projectGroups)..orderBy([(g) => OrderingTerm.asc(g.sortOrder)])).watch();
+  Stream<List<ProjectGroup>> watchAllGroups() => (select(
+    projectGroups,
+  )..orderBy([(g) => OrderingTerm.asc(g.sortOrder)])).watch();
 
-  Future<int> insertGroup(ProjectGroupsCompanion g) => into(projectGroups).insert(g);
+  Future<int> insertGroup(ProjectGroupsCompanion g) =>
+      into(projectGroups).insert(g);
   Future<bool> updateGroup(ProjectGroup g) => update(projectGroups).replace(g);
   Future<int> deleteGroup(int id) =>
       (delete(projectGroups)..where((g) => g.id.equals(id))).go();
 
   // ── Proyectos ─────────────────────────────────
-  Stream<List<Project>> watchProjects() =>
-      (select(projects)..orderBy([(p) => OrderingTerm.asc(p.sortOrder)])).watch();
+  Stream<List<Project>> watchProjects() => (select(
+    projects,
+  )..orderBy([(p) => OrderingTerm.asc(p.sortOrder)])).watch();
 
   Stream<List<Project>> watchProjectsByGroup(int? groupId) {
     return (select(projects)
-      ..where((p) => groupId == null ? p.groupId.isNull() : p.groupId.equals(groupId))
-      ..orderBy([(p) => OrderingTerm.asc(p.sortOrder)]))
+          ..where(
+            (p) => groupId == null
+                ? p.groupId.isNull()
+                : p.groupId.equals(groupId),
+          )
+          ..orderBy([(p) => OrderingTerm.asc(p.sortOrder)]))
         .watch();
   }
 
-  Future<int> insertProject(ProjectsCompanion project) => into(projects).insert(project);
-  Future<bool> updateProject(Project project) => update(projects).replace(project);
+  Future<int> insertProject(ProjectsCompanion project) =>
+      into(projects).insert(project);
+  Future<bool> updateProject(Project project) =>
+      update(projects).replace(project);
   Future<int> deleteProject(int id) async {
     await deleteProjectFully(id);
     return 1;
@@ -440,42 +505,47 @@ class AppDatabase extends _$AppDatabase {
   /// Elimina proyecto, datos relacionados y archivos en disco.
   Future<void> deleteProjectFully(int id) async {
     await transaction(() async {
-      final projectShots = await (select(shots)
-            ..where((s) => s.projectId.equals(id)))
-          .get();
+      final projectShots = await (select(
+        shots,
+      )..where((s) => s.projectId.equals(id))).get();
       for (final shot in projectShots) {
-        await (delete(shotReferences)..where((r) => r.shotId.equals(shot.id)))
-            .go();
+        await (delete(
+          shotReferences,
+        )..where((r) => r.shotId.equals(shot.id))).go();
       }
       await (delete(shots)..where((s) => s.projectId.equals(id))).go();
       await (delete(scenes)..where((s) => s.projectId.equals(id))).go();
-      await (delete(projectEquipment)..where((e) => e.projectId.equals(id)))
-          .go();
+      await (delete(
+        projectEquipment,
+      )..where((e) => e.projectId.equals(id))).go();
 
-      final sets = await (select(locationBasePlans)
-            ..where((l) => l.projectId.equals(id)))
-          .get();
+      final sets = await (select(
+        locationBasePlans,
+      )..where((l) => l.projectId.equals(id))).get();
       for (final set in sets) {
-        await (delete(locationImages)..where((i) => i.locationId.equals(set.id)))
-            .go();
+        await (delete(
+          locationImages,
+        )..where((i) => i.locationId.equals(set.id))).go();
       }
-      await (delete(locationBasePlans)..where((l) => l.projectId.equals(id))).go();
+      await (delete(
+        locationBasePlans,
+      )..where((l) => l.projectId.equals(id))).go();
 
-      final sites = await (select(locationSites)
-            ..where((s) => s.projectId.equals(id)))
-          .get();
+      final sites = await (select(
+        locationSites,
+      )..where((s) => s.projectId.equals(id))).get();
       for (final site in sites) {
         await (delete(siteImages)..where((i) => i.siteId.equals(site.id))).go();
       }
       await (delete(locationSites)..where((s) => s.projectId.equals(id))).go();
 
-      final shootDocs = await (select(shootDocuments)
-            ..where((d) => d.projectId.equals(id)))
-          .get();
+      final shootDocs = await (select(
+        shootDocuments,
+      )..where((d) => d.projectId.equals(id))).get();
       for (final doc in shootDocs) {
-        await (delete(shootDocumentBlocks)
-              ..where((b) => b.documentId.equals(doc.id)))
-            .go();
+        await (delete(
+          shootDocumentBlocks,
+        )..where((b) => b.documentId.equals(doc.id))).go();
       }
       await (delete(shootDocuments)..where((d) => d.projectId.equals(id))).go();
 
@@ -487,86 +557,103 @@ class AppDatabase extends _$AppDatabase {
   /// Elimina todo el contenido del proyecto pero conserva la fila Projects.
   Future<void> deleteProjectContentOnly(int id) async {
     await transaction(() async {
-      final vbs = await (select(visualBibles)
-            ..where((v) => v.projectId.equals(id)))
-          .get();
+      final vbs = await (select(
+        visualBibles,
+      )..where((v) => v.projectId.equals(id))).get();
+      await (delete(
+        visualBibleDocuments,
+      )..where((d) => d.projectId.equals(id))).go();
       for (final vb in vbs) {
-        await (delete(bibleComments)..where((c) => c.bibleId.equals(vb.id))).go();
-        await (delete(bibleSectionDefinitions)
-              ..where((s) => s.bibleId.equals(vb.id)))
-            .go();
-        await (delete(bibleSectionGroups)
-              ..where((g) => g.bibleId.equals(vb.id)))
-            .go();
-        await (delete(bibleSectionEvidence)
-              ..where((e) => e.bibleId.equals(vb.id)))
-            .go();
-        await (delete(exposureBlocks)..where((e) => e.bibleId.equals(vb.id)))
-            .go();
-        await (delete(lightingSetups)..where((l) => l.bibleId.equals(vb.id)))
-            .go();
+        await (delete(
+          bibleComments,
+        )..where((c) => c.bibleId.equals(vb.id))).go();
+        await (delete(
+          bibleSectionDefinitions,
+        )..where((s) => s.bibleId.equals(vb.id))).go();
+        await (delete(
+          bibleSectionGroups,
+        )..where((g) => g.bibleId.equals(vb.id))).go();
+        await (delete(
+          bibleSectionEvidence,
+        )..where((e) => e.bibleId.equals(vb.id))).go();
+        await (delete(
+          exposureBlocks,
+        )..where((e) => e.bibleId.equals(vb.id))).go();
+        await (delete(
+          lightingSetups,
+        )..where((l) => l.bibleId.equals(vb.id))).go();
         await (delete(cameraTests)..where((c) => c.bibleId.equals(vb.id))).go();
-        await (delete(visualBibleLocationRefs)
-              ..where((r) => r.bibleId.equals(vb.id)))
-            .go();
-        await (delete(visualBibleColorBlocks)
-              ..where((b) => b.bibleId.equals(vb.id)))
-            .go();
-        await (delete(visualBibleVersions)
-              ..where((v) => v.bibleId.equals(vb.id)))
-            .go();
+        await (delete(
+          visualBibleLocationRefs,
+        )..where((r) => r.bibleId.equals(vb.id))).go();
+        await (delete(
+          visualBibleColorBlocks,
+        )..where((b) => b.bibleId.equals(vb.id))).go();
+        await (delete(
+          visualBibleVersions,
+        )..where((v) => v.bibleId.equals(vb.id))).go();
       }
       await (delete(visualBibles)..where((v) => v.projectId.equals(id))).go();
       await (delete(lookBibles)..where((l) => l.projectId.equals(id))).go();
-      await (delete(moodboardImages)..where((m) => m.projectId.equals(id)))
-          .go();
-      await (delete(moodboardGroups)..where((g) => g.projectId.equals(id)))
-          .go();
-      await (delete(opticsLabSamples)..where((o) => o.projectId.equals(id)))
-          .go();
-      await (delete(projectAnnotatedPdfs)
-            ..where((p) => p.projectId.equals(id)))
-          .go();
+      await (delete(
+        moodboardImages,
+      )..where((m) => m.projectId.equals(id))).go();
+      await (delete(
+        moodboardGroups,
+      )..where((g) => g.projectId.equals(id))).go();
+      await (delete(
+        opticsLabSamples,
+      )..where((o) => o.projectId.equals(id))).go();
+      await (delete(
+        projectAnnotatedPdfs,
+      )..where((p) => p.projectId.equals(id))).go();
+      await (delete(
+        projectAnnotationDocuments,
+      )..where((a) => a.projectId.equals(id))).go();
 
-      final projectShots = await (select(shots)
-            ..where((s) => s.projectId.equals(id)))
-          .get();
+      final projectShots = await (select(
+        shots,
+      )..where((s) => s.projectId.equals(id))).get();
       for (final shot in projectShots) {
         final elements = await getCameraPlanElementsForShot(shot.id);
         for (final el in elements) {
           await deleteCameraPlanElement(el.id);
         }
-        await (delete(shotReferences)..where((r) => r.shotId.equals(shot.id)))
-            .go();
+        await (delete(
+          shotReferences,
+        )..where((r) => r.shotId.equals(shot.id))).go();
       }
       await (delete(shots)..where((s) => s.projectId.equals(id))).go();
       await (delete(scenes)..where((s) => s.projectId.equals(id))).go();
-      await (delete(projectEquipment)..where((e) => e.projectId.equals(id)))
-          .go();
+      await (delete(
+        projectEquipment,
+      )..where((e) => e.projectId.equals(id))).go();
 
-      final shootDocs = await (select(shootDocuments)
-            ..where((d) => d.projectId.equals(id)))
-          .get();
+      final shootDocs = await (select(
+        shootDocuments,
+      )..where((d) => d.projectId.equals(id))).get();
       for (final doc in shootDocs) {
-        await (delete(shootDocumentBlocks)
-              ..where((b) => b.documentId.equals(doc.id)))
-            .go();
+        await (delete(
+          shootDocumentBlocks,
+        )..where((b) => b.documentId.equals(doc.id))).go();
       }
       await (delete(shootDocuments)..where((d) => d.projectId.equals(id))).go();
 
-      final sets = await (select(locationBasePlans)
-            ..where((l) => l.projectId.equals(id)))
-          .get();
+      final sets = await (select(
+        locationBasePlans,
+      )..where((l) => l.projectId.equals(id))).get();
       for (final set in sets) {
-        await (delete(locationImages)..where((i) => i.locationId.equals(set.id)))
-            .go();
+        await (delete(
+          locationImages,
+        )..where((i) => i.locationId.equals(set.id))).go();
       }
-      await (delete(locationBasePlans)..where((l) => l.projectId.equals(id)))
-          .go();
+      await (delete(
+        locationBasePlans,
+      )..where((l) => l.projectId.equals(id))).go();
 
-      final sites = await (select(locationSites)
-            ..where((s) => s.projectId.equals(id)))
-          .get();
+      final sites = await (select(
+        locationSites,
+      )..where((s) => s.projectId.equals(id))).get();
       for (final site in sites) {
         await (delete(siteImages)..where((i) => i.siteId.equals(site.id))).go();
       }
@@ -584,12 +671,14 @@ class AppDatabase extends _$AppDatabase {
     );
     final project = await getProject(projectId);
     if (project?.cloudId != null) {
-      final pending = await (select(cloudSyncQueue)
-            ..where((q) =>
-                q.entityType.equals('project_content') &
-                q.localEntityId.equals('$projectId') &
-                q.processed.equals(false)))
-          .get();
+      final pending =
+          await (select(cloudSyncQueue)..where(
+                (q) =>
+                    q.entityType.equals('project_content') &
+                    q.localEntityId.equals('$projectId') &
+                    q.processed.equals(false),
+              ))
+              .get();
       if (pending.isEmpty) {
         await into(cloudSyncQueue).insert(
           CloudSyncQueueCompanion.insert(
@@ -611,16 +700,18 @@ class AppDatabase extends _$AppDatabase {
     final source = await getProject(sourceId);
     if (source == null) return -1;
 
-    final newId = await insertProject(ProjectsCompanion.insert(
-      name: '${source.name} (copia)',
-      director: Value(source.director),
-      description: Value(source.description),
-      clientName: Value(source.clientName),
-      status: Value(source.status),
-      iconCode: Value(source.iconCode),
-      groupId: Value(source.groupId),
-      scriptFileName: Value(source.scriptFileName),
-    ));
+    final newId = await insertProject(
+      ProjectsCompanion.insert(
+        name: '${source.name} (copia)',
+        director: Value(source.director),
+        description: Value(source.description),
+        clientName: Value(source.clientName),
+        status: Value(source.status),
+        iconCode: Value(source.iconCode),
+        groupId: Value(source.groupId),
+        scriptFileName: Value(source.scriptFileName),
+      ),
+    );
 
     if (source.scriptFilePath != null) {
       final scriptPath = await MediaStorage.duplicateScriptFile(
@@ -630,34 +721,38 @@ class AppDatabase extends _$AppDatabase {
       );
       if (scriptPath != null) {
         final created = (await getProject(newId))!;
-        await updateProject(created.copyWith(
-          scriptFilePath: Value(scriptPath),
-          scriptFileName: Value(source.scriptFileName),
-        ));
+        await updateProject(
+          created.copyWith(
+            scriptFilePath: Value(scriptPath),
+            scriptFileName: Value(source.scriptFileName),
+          ),
+        );
       }
     }
 
     final siteIdMap = <int, int>{};
-    final sourceSites = await (select(locationSites)
-          ..where((s) => s.projectId.equals(sourceId)))
-        .get();
+    final sourceSites = await (select(
+      locationSites,
+    )..where((s) => s.projectId.equals(sourceId))).get();
     for (final site in sourceSites) {
-      final newSiteId = await insertSite(LocationSitesCompanion.insert(
-        projectId: newId,
-        name: site.name,
-        description: Value(site.description),
-        notes: Value(site.notes),
-        floorPlanJson: Value(site.floorPlanJson),
-        scanPath: Value(site.scanPath),
-        scanSource: Value(site.scanSource),
-        scanMetadataJson: Value(site.scanMetadataJson),
-        sortOrder: Value(site.sortOrder),
-      ));
+      final newSiteId = await insertSite(
+        LocationSitesCompanion.insert(
+          projectId: newId,
+          name: site.name,
+          description: Value(site.description),
+          notes: Value(site.notes),
+          floorPlanJson: Value(site.floorPlanJson),
+          scanPath: Value(site.scanPath),
+          scanSource: Value(site.scanSource),
+          scanMetadataJson: Value(site.scanMetadataJson),
+          sortOrder: Value(site.sortOrder),
+        ),
+      );
       siteIdMap[site.id] = newSiteId;
 
-      final siteImagesList = await (select(siteImages)
-            ..where((i) => i.siteId.equals(site.id)))
-          .get();
+      final siteImagesList = await (select(
+        siteImages,
+      )..where((i) => i.siteId.equals(site.id))).get();
       for (final img in siteImagesList) {
         final newPath = await MediaStorage.duplicateImageFile(
           destProjectId: newId,
@@ -666,44 +761,48 @@ class AppDatabase extends _$AppDatabase {
           prefix: 'img',
         );
         if (newPath != null) {
-          await insertSiteImage(SiteImagesCompanion.insert(
-            siteId: newSiteId,
-            imagePath: newPath,
-            caption: Value(img.caption),
-            kind: Value(img.kind),
-            timeOfDay: Value(img.timeOfDay),
-            sortOrder: Value(img.sortOrder),
-          ));
+          await insertSiteImage(
+            SiteImagesCompanion.insert(
+              siteId: newSiteId,
+              imagePath: newPath,
+              caption: Value(img.caption),
+              kind: Value(img.kind),
+              timeOfDay: Value(img.timeOfDay),
+              sortOrder: Value(img.sortOrder),
+            ),
+          );
         }
       }
     }
 
     final setIdMap = <int, int>{};
-    final sourceSets = await (select(locationBasePlans)
-          ..where((l) => l.projectId.equals(sourceId)))
-        .get();
+    final sourceSets = await (select(
+      locationBasePlans,
+    )..where((l) => l.projectId.equals(sourceId))).get();
     for (final set in sourceSets) {
       final newSiteId = set.siteId != null ? siteIdMap[set.siteId!] : null;
-      final newSetId = await insertLocation(LocationBasePlansCompanion.insert(
-        projectId: newId,
-        siteId: Value(newSiteId),
-        locationName: set.locationName,
-        description: Value(set.description),
-        imagePath: Value(set.imagePath),
-        color: Value(set.color),
-        notes: Value(set.notes),
-        model3dPath: Value(set.model3dPath),
-        floorPlanJson: Value(set.floorPlanJson),
-        scanPath: Value(set.scanPath),
-        scanSource: Value(set.scanSource),
-        scanMetadataJson: Value(set.scanMetadataJson),
-        sortOrder: Value(set.sortOrder),
-      ));
+      final newSetId = await insertLocation(
+        LocationBasePlansCompanion.insert(
+          projectId: newId,
+          siteId: Value(newSiteId),
+          locationName: set.locationName,
+          description: Value(set.description),
+          imagePath: Value(set.imagePath),
+          color: Value(set.color),
+          notes: Value(set.notes),
+          model3dPath: Value(set.model3dPath),
+          floorPlanJson: Value(set.floorPlanJson),
+          scanPath: Value(set.scanPath),
+          scanSource: Value(set.scanSource),
+          scanMetadataJson: Value(set.scanMetadataJson),
+          sortOrder: Value(set.sortOrder),
+        ),
+      );
       setIdMap[set.id] = newSetId;
 
-      final locImages = await (select(locationImages)
-            ..where((i) => i.locationId.equals(set.id)))
-          .get();
+      final locImages = await (select(
+        locationImages,
+      )..where((i) => i.locationId.equals(set.id))).get();
       for (final img in locImages) {
         final newPath = await MediaStorage.duplicateImageFile(
           destProjectId: newId,
@@ -712,48 +811,54 @@ class AppDatabase extends _$AppDatabase {
           prefix: 'img',
         );
         if (newPath != null) {
-          await insertLocationImage(LocationImagesCompanion.insert(
-            locationId: newSetId,
-            imagePath: newPath,
-            caption: Value(img.caption),
-            kind: Value(img.kind),
-            timeOfDay: Value(img.timeOfDay),
-            sortOrder: Value(img.sortOrder),
-          ));
+          await insertLocationImage(
+            LocationImagesCompanion.insert(
+              locationId: newSetId,
+              imagePath: newPath,
+              caption: Value(img.caption),
+              kind: Value(img.kind),
+              timeOfDay: Value(img.timeOfDay),
+              sortOrder: Value(img.sortOrder),
+            ),
+          );
         }
       }
     }
 
     final sceneIdMap = <int, int>{};
-    final sourceScenes = await (select(scenes)
-          ..where((s) => s.projectId.equals(sourceId)))
-        .get();
+    final sourceScenes = await (select(
+      scenes,
+    )..where((s) => s.projectId.equals(sourceId))).get();
 
     for (final scene in sourceScenes) {
-      final newSceneId = await into(scenes).insert(ScenesCompanion.insert(
-        projectId: newId,
-        number: scene.number,
-        name: scene.name,
-        locationCanonical: scene.locationCanonical,
-        locationPureName: scene.locationPureName,
-        intExt: Value(scene.intExt),
-        dayNight: Value(scene.dayNight),
-        locationColor: Value(scene.locationColor),
-        description: Value(scene.description),
-        sourceStartIndex: Value(scene.sourceStartIndex),
-        locationId: Value(
-          scene.locationId != null ? setIdMap[scene.locationId!] : null,
+      final newSceneId = await into(scenes).insert(
+        ScenesCompanion.insert(
+          projectId: newId,
+          number: scene.number,
+          name: scene.name,
+          locationCanonical: scene.locationCanonical,
+          locationPureName: scene.locationPureName,
+          intExt: Value(scene.intExt),
+          dayNight: Value(scene.dayNight),
+          locationColor: Value(scene.locationColor),
+          description: Value(scene.description),
+          sourceStartIndex: Value(scene.sourceStartIndex),
+          locationId: Value(
+            scene.locationId != null ? setIdMap[scene.locationId!] : null,
+          ),
+          locationSiteId: Value(
+            scene.locationSiteId != null
+                ? siteIdMap[scene.locationSiteId!]
+                : null,
+          ),
+          sortOrder: Value(scene.sortOrder),
         ),
-        locationSiteId: Value(
-          scene.locationSiteId != null ? siteIdMap[scene.locationSiteId!] : null,
-        ),
-        sortOrder: Value(scene.sortOrder),
-      ));
+      );
       sceneIdMap[scene.id] = newSceneId;
 
-      final sourceShots = await (select(shots)
-            ..where((s) => s.sceneId.equals(scene.id)))
-          .get();
+      final sourceShots = await (select(
+        shots,
+      )..where((s) => s.sceneId.equals(scene.id))).get();
 
       for (final shot in sourceShots) {
         String? refPath;
@@ -766,23 +871,28 @@ class AppDatabase extends _$AppDatabase {
           );
         }
 
-        final newShotId = await into(shots).insert(ShotsCompanion.insert(
-          sceneId: newSceneId,
-          projectId: newId,
-          number: shot.number,
-          framing: Value(shot.framing),
-          lens: Value(shot.lens),
-          angle: Value(shot.angle),
-          movement: Value(shot.movement),
-          fStop: Value(shot.fStop),
-          action: Value(shot.action),
-          notes: Value(shot.notes),
-          notesHighlight: Value(shot.notesHighlight),
-          referenceImagePath: Value(refPath ?? shot.referenceImagePath),
-          sortOrder: Value(shot.sortOrder),
-        ));
+        final newShotId = await into(shots).insert(
+          ShotsCompanion.insert(
+            sceneId: newSceneId,
+            projectId: newId,
+            number: shot.number,
+            framing: Value(shot.framing),
+            lens: Value(shot.lens),
+            angle: Value(shot.angle),
+            movement: Value(shot.movement),
+            fStop: Value(shot.fStop),
+            action: Value(shot.action),
+            notes: Value(shot.notes),
+            notesHighlight: Value(shot.notesHighlight),
+            referenceImagePath: Value(refPath ?? shot.referenceImagePath),
+            sortOrder: Value(shot.sortOrder),
+          ),
+        );
 
-        await _copyCameraPlanElements(sourceShotId: shot.id, destShotId: newShotId);
+        await _copyCameraPlanElements(
+          sourceShotId: shot.id,
+          destShotId: newShotId,
+        );
       }
     }
     return newId;
@@ -825,8 +935,8 @@ class AppDatabase extends _$AppDatabase {
   // ── Escenas ───────────────────────────────────
   Stream<List<Scene>> watchScenesForProject(int projectId) =>
       (select(scenes)
-        ..where((s) => s.projectId.equals(projectId))
-        ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            ..where((s) => s.projectId.equals(projectId))
+            ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
           .watch();
 
   Future<int> insertScene(ScenesCompanion scene) async {
@@ -842,8 +952,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<int> deleteScene(int id) async {
-    final scene = await (select(scenes)..where((s) => s.id.equals(id)))
-        .getSingleOrNull();
+    final scene = await (select(
+      scenes,
+    )..where((s) => s.id.equals(id))).getSingleOrNull();
     final count = await (delete(scenes)..where((s) => s.id.equals(id))).go();
     if (scene != null) await touchProjectContent(scene.projectId);
     return count;
@@ -867,23 +978,26 @@ class AppDatabase extends _$AppDatabase {
   /// Sincroniza escenas desde el espacio de trabajo preservando planos cuando es posible.
   Future<void> syncScenesFromWorkspace(
     int projectId,
-    List<({
-      String intExt,
-      String dayNight,
-      String location,
-      String shootSet,
-      String locationSite,
-      String? name,
-      String? description,
-      String? locationColor,
-      String? charactersJson,
-      int? sourceStartIndex,
-    })> items,
+    List<
+      ({
+        String intExt,
+        String dayNight,
+        String location,
+        String shootSet,
+        String locationSite,
+        String? name,
+        String? description,
+        String? locationColor,
+        String? charactersJson,
+        int? sourceStartIndex,
+      })
+    >
+    items,
   ) async {
     await transaction(() async {
-      final existing = await (select(scenes)
-            ..where((s) => s.projectId.equals(projectId)))
-          .get();
+      final existing = await (select(
+        scenes,
+      )..where((s) => s.projectId.equals(projectId))).get();
 
       final matchedIds = <int>{};
 
@@ -893,8 +1007,7 @@ class AppDatabase extends _$AppDatabase {
         final siteName = s.locationSite.trim().isEmpty
             ? s.shootSet.trim()
             : s.locationSite.trim();
-        final site =
-            await ensureSite(projectId: projectId, siteName: siteName);
+        final site = await ensureSite(projectId: projectId, siteName: siteName);
         await ensureSiteAndSet(
           projectId: projectId,
           siteName: siteName,
@@ -933,36 +1046,40 @@ class AppDatabase extends _$AppDatabase {
 
         if (match != null) {
           matchedIds.add(match.id);
-          await update(scenes).replace(match.copyWith(
-            number: order,
-            name: name,
-            locationCanonical: canonical,
-            locationPureName: s.shootSet.trim(),
-            locationSiteId: Value(siteId),
-            intExt: s.intExt,
-            dayNight: s.dayNight,
-            locationColor: Value(s.locationColor),
-            charactersJson: Value(s.charactersJson),
-            description: Value(s.description),
-            sourceStartIndex: Value(s.sourceStartIndex),
-            sortOrder: order,
-          ));
+          await update(scenes).replace(
+            match.copyWith(
+              number: order,
+              name: name,
+              locationCanonical: canonical,
+              locationPureName: s.shootSet.trim(),
+              locationSiteId: Value(siteId),
+              intExt: s.intExt,
+              dayNight: s.dayNight,
+              locationColor: Value(s.locationColor),
+              charactersJson: Value(s.charactersJson),
+              description: Value(s.description),
+              sourceStartIndex: Value(s.sourceStartIndex),
+              sortOrder: order,
+            ),
+          );
         } else {
-          await into(scenes).insert(ScenesCompanion.insert(
-            projectId: projectId,
-            number: order,
-            name: name,
-            locationCanonical: canonical,
-            locationPureName: s.shootSet.trim(),
-            locationSiteId: Value(siteId),
-            intExt: Value(s.intExt),
-            dayNight: Value(s.dayNight),
-            locationColor: Value(s.locationColor),
-            charactersJson: Value(s.charactersJson),
-            description: Value(s.description),
-            sourceStartIndex: Value(s.sourceStartIndex),
-            sortOrder: Value(order),
-          ));
+          await into(scenes).insert(
+            ScenesCompanion.insert(
+              projectId: projectId,
+              number: order,
+              name: name,
+              locationCanonical: canonical,
+              locationPureName: s.shootSet.trim(),
+              locationSiteId: Value(siteId),
+              intExt: Value(s.intExt),
+              dayNight: Value(s.dayNight),
+              locationColor: Value(s.locationColor),
+              charactersJson: Value(s.charactersJson),
+              description: Value(s.description),
+              sourceStartIndex: Value(s.sourceStartIndex),
+              sortOrder: Value(order),
+            ),
+          );
         }
       }
 
@@ -983,10 +1100,11 @@ class AppDatabase extends _$AppDatabase {
     List<int?> sourceStartIndices,
     int newCount,
   ) async {
-    final existing = await (select(scenes)
-          ..where((s) => s.projectId.equals(projectId))
-          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
-        .get();
+    final existing =
+        await (select(scenes)
+              ..where((s) => s.projectId.equals(projectId))
+              ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            .get();
 
     final keepIds = <int>{};
 
@@ -1008,15 +1126,16 @@ class AppDatabase extends _$AppDatabase {
       if (match != null) keepIds.add(match.id);
     }
 
-    final toRemove =
-        existing.where((e) => !keepIds.contains(e.id)).toList(growable: false);
+    final toRemove = existing
+        .where((e) => !keepIds.contains(e.id))
+        .toList(growable: false);
     if (toRemove.isEmpty) return [];
 
     final result = <Scene>[];
     for (final scene in toRemove) {
-      final shotCount = await (select(shots)
-            ..where((s) => s.sceneId.equals(scene.id)))
-          .get();
+      final shotCount = await (select(
+        shots,
+      )..where((s) => s.sceneId.equals(scene.id))).get();
       if (shotCount.isNotEmpty) result.add(scene);
     }
     return result;
@@ -1024,8 +1143,9 @@ class AppDatabase extends _$AppDatabase {
 
   // Localizaciones únicas de un proyecto (para dropdown)
   Future<List<String>> getUniqueLocations(int projectId) async {
-    final allScenes = await (select(scenes)
-      ..where((s) => s.projectId.equals(projectId))).get();
+    final allScenes = await (select(
+      scenes,
+    )..where((s) => s.projectId.equals(projectId))).get();
     final locs = allScenes.map((s) => s.locationPureName).toSet().toList();
     locs.sort();
     return locs;
@@ -1034,19 +1154,21 @@ class AppDatabase extends _$AppDatabase {
   // ── Planos ────────────────────────────────────
   Stream<List<Shot>> watchShotsForScene(int sceneId) =>
       (select(shots)
-        ..where((s) => s.sceneId.equals(sceneId))
-        ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            ..where((s) => s.sceneId.equals(sceneId))
+            ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
           .watch();
 
   Future<List<Shot>> getShotsForProject(int projectId) =>
       (select(shots)
-        ..where((s) => s.projectId.equals(projectId))
-        ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)])).get();
+            ..where((s) => s.projectId.equals(projectId))
+            ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+          .get();
 
   Stream<List<Shot>> watchShotsForProject(int projectId) =>
       (select(shots)
-        ..where((s) => s.projectId.equals(projectId))
-        ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)])).watch();
+            ..where((s) => s.projectId.equals(projectId))
+            ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+          .watch();
 
   Future<int> insertShot(ShotsCompanion shot) async {
     final id = await into(shots).insert(shot);
@@ -1061,8 +1183,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<int> deleteShot(int id) async {
-    final shot = await (select(shots)..where((s) => s.id.equals(id)))
-        .getSingleOrNull();
+    final shot = await (select(
+      shots,
+    )..where((s) => s.id.equals(id))).getSingleOrNull();
     final elements = await getCameraPlanElementsForShot(id);
     for (final el in elements) {
       await deleteCameraPlanElement(el.id);
@@ -1076,24 +1199,24 @@ class AppDatabase extends _$AppDatabase {
     final projectShots = await getShotsForProject(projectId);
     if (projectShots.isEmpty) return 0;
     final shotIds = projectShots.map((s) => s.id).toList();
-    final elements = await (select(cameraPlanElements)
-          ..where((e) => e.shotId.isIn(shotIds)))
-        .get();
+    final elements = await (select(
+      cameraPlanElements,
+    )..where((e) => e.shotId.isIn(shotIds))).get();
     return elements.map((e) => e.shotId).toSet().length;
   }
 
   // ── Documentos de rodaje ───────────────────────
   Stream<List<ShootDocument>> watchShootDocumentsForProject(int projectId) =>
       (select(shootDocuments)
-        ..where((d) => d.projectId.equals(projectId))
-        ..orderBy([
-          (d) => OrderingTerm.desc(d.isPrimaryOnSet),
-          (d) => OrderingTerm.desc(d.updatedAt),
-        ])).watch();
+            ..where((d) => d.projectId.equals(projectId))
+            ..orderBy([
+              (d) => OrderingTerm.desc(d.isPrimaryOnSet),
+              (d) => OrderingTerm.desc(d.updatedAt),
+            ]))
+          .watch();
 
   Future<ShootDocument?> getShootDocument(int id) =>
-      (select(shootDocuments)..where((d) => d.id.equals(id)))
-          .getSingleOrNull();
+      (select(shootDocuments)..where((d) => d.id.equals(id))).getSingleOrNull();
 
   Future<int> insertShootDocument(ShootDocumentsCompanion doc) async {
     final id = await into(shootDocuments).insert(doc);
@@ -1109,11 +1232,12 @@ class AppDatabase extends _$AppDatabase {
 
   Future<int> deleteShootDocument(int id) async {
     final doc = await getShootDocument(id);
-    await (delete(shootDocumentBlocks)
-          ..where((b) => b.documentId.equals(id)))
-        .go();
-    final count =
-        await (delete(shootDocuments)..where((d) => d.id.equals(id))).go();
+    await (delete(
+      shootDocumentBlocks,
+    )..where((b) => b.documentId.equals(id))).go();
+    final count = await (delete(
+      shootDocuments,
+    )..where((d) => d.id.equals(id))).go();
     if (doc != null) await touchProjectContent(doc.projectId);
     return count;
   }
@@ -1129,17 +1253,23 @@ class AppDatabase extends _$AppDatabase {
     await touchProjectContent(projectId);
   }
 
-  Stream<List<ShootDocumentBlock>> watchBlocksForShootDocument(int documentId) =>
+  Stream<List<ShootDocumentBlock>> watchBlocksForShootDocument(
+    int documentId,
+  ) =>
       (select(shootDocumentBlocks)
-        ..where((b) => b.documentId.equals(documentId))
-        ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)])).watch();
+            ..where((b) => b.documentId.equals(documentId))
+            ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)]))
+          .watch();
 
   Future<List<ShootDocumentBlock>> getBlocksForShootDocument(int documentId) =>
       (select(shootDocumentBlocks)
-        ..where((b) => b.documentId.equals(documentId))
-        ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)])).get();
+            ..where((b) => b.documentId.equals(documentId))
+            ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)]))
+          .get();
 
-  Future<int> insertShootDocumentBlock(ShootDocumentBlocksCompanion block) async {
+  Future<int> insertShootDocumentBlock(
+    ShootDocumentBlocksCompanion block,
+  ) async {
     final id = await into(shootDocumentBlocks).insert(block);
     final doc = await getShootDocument(block.documentId.value);
     if (doc != null) await touchProjectContent(doc.projectId);
@@ -1154,11 +1284,12 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<int> deleteShootDocumentBlock(int id) async {
-    final block = await (select(shootDocumentBlocks)
-          ..where((b) => b.id.equals(id)))
-        .getSingleOrNull();
-    final count =
-        await (delete(shootDocumentBlocks)..where((b) => b.id.equals(id))).go();
+    final block = await (select(
+      shootDocumentBlocks,
+    )..where((b) => b.id.equals(id))).getSingleOrNull();
+    final count = await (delete(
+      shootDocumentBlocks,
+    )..where((b) => b.id.equals(id))).go();
     if (block != null) {
       final doc = await getShootDocument(block.documentId);
       if (doc != null) await touchProjectContent(doc.projectId);
@@ -1172,12 +1303,11 @@ class AppDatabase extends _$AppDatabase {
   ) async {
     await transaction(() async {
       for (var i = 0; i < blockIdsInOrder.length; i++) {
-        await (update(shootDocumentBlocks)
-              ..where(
-                (b) =>
-                    b.id.equals(blockIdsInOrder[i]) &
-                    b.documentId.equals(documentId),
-              ))
+        await (update(shootDocumentBlocks)..where(
+              (b) =>
+                  b.id.equals(blockIdsInOrder[i]) &
+                  b.documentId.equals(documentId),
+            ))
             .write(ShootDocumentBlocksCompanion(sortOrder: Value(i)));
       }
     });
@@ -1186,8 +1316,8 @@ class AppDatabase extends _$AppDatabase {
   // ── Localizaciones (contenedores) ───────────
   Stream<List<LocationSite>> watchSitesForProject(int projectId) =>
       (select(locationSites)
-        ..where((s) => s.projectId.equals(projectId))
-        ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            ..where((s) => s.projectId.equals(projectId))
+            ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
           .watch();
 
   Future<LocationSite?> getSiteById(int id) =>
@@ -1201,32 +1331,31 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> deleteSite(int id) async {
     await transaction(() async {
-      await (update(locationBasePlans)..where((l) => l.siteId.equals(id))).write(
-        const LocationBasePlansCompanion(siteId: Value(null)),
-      );
+      await (update(locationBasePlans)..where((l) => l.siteId.equals(id)))
+          .write(const LocationBasePlansCompanion(siteId: Value(null)));
       await (delete(locationSites)..where((s) => s.id.equals(id))).go();
     });
   }
 
   Stream<List<LocationBasePlan>> watchSetsForSite(int siteId) =>
       (select(locationBasePlans)
-        ..where((l) => l.siteId.equals(siteId))
-        ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
+            ..where((l) => l.siteId.equals(siteId))
+            ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
           .watch();
 
   Future<int> countSetsForSite(int siteId) async {
-    final rows = await (select(locationBasePlans)
-          ..where((l) => l.siteId.equals(siteId)))
-        .get();
+    final rows = await (select(
+      locationBasePlans,
+    )..where((l) => l.siteId.equals(siteId))).get();
     return rows.length;
   }
 
   Future<LocationSite?> findSiteByName(int projectId, String name) async {
     final key = name.trim().toLowerCase();
     if (key.isEmpty) return null;
-    final sites = await (select(locationSites)
-          ..where((s) => s.projectId.equals(projectId)))
-        .get();
+    final sites = await (select(
+      locationSites,
+    )..where((s) => s.projectId.equals(projectId))).get();
     for (final site in sites) {
       if (site.name.trim().toLowerCase() == key) return site;
     }
@@ -1236,9 +1365,9 @@ class AppDatabase extends _$AppDatabase {
   Future<LocationBasePlan?> findSetInSite(int siteId, String setName) async {
     final key = setName.trim().toLowerCase();
     if (key.isEmpty) return null;
-    final sets = await (select(locationBasePlans)
-          ..where((l) => l.siteId.equals(siteId)))
-        .get();
+    final sets = await (select(
+      locationBasePlans,
+    )..where((l) => l.siteId.equals(siteId))).get();
     for (final set in sets) {
       if (set.locationName.trim().toLowerCase() == key) return set;
     }
@@ -1257,14 +1386,16 @@ class AppDatabase extends _$AppDatabase {
 
     var site = await findSiteByName(projectId, siteKey);
     if (site == null) {
-      final sites = await (select(locationSites)
-            ..where((s) => s.projectId.equals(projectId)))
-          .get();
-      final siteId = await insertSite(LocationSitesCompanion.insert(
-        projectId: projectId,
-        name: siteKey,
-        sortOrder: Value(sites.length),
-      ));
+      final sites = await (select(
+        locationSites,
+      )..where((s) => s.projectId.equals(projectId))).get();
+      final siteId = await insertSite(
+        LocationSitesCompanion.insert(
+          projectId: projectId,
+          name: siteKey,
+          sortOrder: Value(sites.length),
+        ),
+      );
       site = (await getSiteById(siteId))!;
     }
 
@@ -1280,9 +1411,9 @@ class AppDatabase extends _$AppDatabase {
     var set = await findSetInSite(site.id, site.name);
     if (set != null) return set;
 
-    final sets = await (select(locationBasePlans)
-          ..where((l) => l.siteId.equals(site.id)))
-        .get();
+    final sets = await (select(
+      locationBasePlans,
+    )..where((l) => l.siteId.equals(site.id))).get();
 
     // Si ya hay sets pero ninguno coincide con el nombre del sitio, reutiliza el primero.
     if (sets.isNotEmpty) {
@@ -1290,13 +1421,15 @@ class AppDatabase extends _$AppDatabase {
     }
 
     final baseHex = await _siteBaseHexForSite(projectId: projectId, site: site);
-    final setId = await insertLocation(LocationBasePlansCompanion.insert(
-      projectId: projectId,
-      siteId: Value(site.id),
-      locationName: site.name,
-      color: Value(baseHex),
-      sortOrder: const Value(0),
-    ));
+    final setId = await insertLocation(
+      LocationBasePlansCompanion.insert(
+        projectId: projectId,
+        siteId: Value(site.id),
+        locationName: site.name,
+        color: Value(baseHex),
+        sortOrder: const Value(0),
+      ),
+    );
     return (await getLocationById(setId))!;
   }
 
@@ -1304,10 +1437,11 @@ class AppDatabase extends _$AppDatabase {
     required int projectId,
     required LocationSite site,
   }) async {
-    final sites = await (select(locationSites)
-          ..where((s) => s.projectId.equals(projectId))
-          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
-        .get();
+    final sites =
+        await (select(locationSites)
+              ..where((s) => s.projectId.equals(projectId))
+              ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            .get();
     final idx = sites.indexWhere((s) => s.id == site.id);
     return idx >= 0 ? idx : sites.length;
   }
@@ -1316,10 +1450,11 @@ class AppDatabase extends _$AppDatabase {
     required int projectId,
     required LocationSite site,
   }) async {
-    final sites = await (select(locationSites)
-          ..where((s) => s.projectId.equals(projectId))
-          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
-        .get();
+    final sites =
+        await (select(locationSites)
+              ..where((s) => s.projectId.equals(projectId))
+              ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            .get();
     final idx = sites.indexWhere((s) => s.id == site.id);
     return siteBaseHexForIndex(idx >= 0 ? idx : sites.length);
   }
@@ -1341,25 +1476,29 @@ class AppDatabase extends _$AppDatabase {
 
     var set = await findSetInSite(site.id, setKey);
     if (set == null) {
-      final sets = await (select(locationBasePlans)
-            ..where((l) => l.siteId.equals(site.id)))
-          .get();
-      final baseHex = await _siteBaseHexForSite(projectId: projectId, site: site);
+      final sets = await (select(
+        locationBasePlans,
+      )..where((l) => l.siteId.equals(site.id))).get();
       final setCount = sets.length + 1;
-      final siteIndex = await _siteIndexForSite(projectId: projectId, site: site);
+      final siteIndex = await _siteIndexForSite(
+        projectId: projectId,
+        site: site,
+      );
       final defaultHex = defaultSetHexForSite(
         siteIndex: siteIndex,
         setIndex: sets.length,
         totalSets: setCount,
         explicitHex: colorHex,
       );
-      final setId = await insertLocation(LocationBasePlansCompanion.insert(
-        projectId: projectId,
-        siteId: Value(site.id),
-        locationName: setKey,
-        color: Value(defaultHex),
-        sortOrder: Value(sets.length),
-      ));
+      final setId = await insertLocation(
+        LocationBasePlansCompanion.insert(
+          projectId: projectId,
+          siteId: Value(site.id),
+          locationName: setKey,
+          color: Value(defaultHex),
+          sortOrder: Value(sets.length),
+        ),
+      );
       set = (await getLocationById(setId))!;
     } else if (colorHex != null && set.color != colorHex) {
       await updateLocation(set.copyWith(color: colorHex));
@@ -1370,17 +1509,17 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Crea localización con un set inicial del mismo nombre (caso simple).
-  Future<({LocationSite site, LocationBasePlan set})> createLocationWithDefaultSet(
+  Future<({LocationSite site, LocationBasePlan set})>
+  createLocationWithDefaultSet(
     int projectId,
     String name, {
     String? colorHex,
-  }) =>
-      ensureSiteAndSet(
-        projectId: projectId,
-        siteName: name,
-        setName: name,
-        colorHex: colorHex,
-      );
+  }) => ensureSiteAndSet(
+    projectId: projectId,
+    siteName: name,
+    setName: name,
+    colorHex: colorHex,
+  );
 
   /// Convierte un set suelto en localización con varios sets (crea contenedor).
   Future<LocationSite> enableMultiSetForLocation(int setId) async {
@@ -1391,17 +1530,19 @@ class AppDatabase extends _$AppDatabase {
       if (site != null) return site;
     }
 
-    final sites = await (select(locationSites)
-          ..where((s) => s.projectId.equals(set.projectId)))
-        .get();
+    final sites = await (select(
+      locationSites,
+    )..where((s) => s.projectId.equals(set.projectId))).get();
 
-    final siteId = await insertSite(LocationSitesCompanion.insert(
-      projectId: set.projectId,
-      name: set.locationName,
-      description: Value(set.description),
-      notes: Value(set.notes),
-      sortOrder: Value(sites.length),
-    ));
+    final siteId = await insertSite(
+      LocationSitesCompanion.insert(
+        projectId: set.projectId,
+        name: set.locationName,
+        description: Value(set.description),
+        notes: Value(set.notes),
+        sortOrder: Value(sites.length),
+      ),
+    );
 
     await updateLocation(set.copyWith(siteId: Value(siteId)));
     return (await getSiteById(siteId))!;
@@ -1417,9 +1558,9 @@ class AppDatabase extends _$AppDatabase {
     final site = await getSiteById(siteId);
     if (site == null) throw StateError('Localización no encontrada');
 
-    final sets = await (select(locationBasePlans)
-          ..where((l) => l.siteId.equals(siteId)))
-        .get();
+    final sets = await (select(
+      locationBasePlans,
+    )..where((l) => l.siteId.equals(siteId))).get();
     final siteIndex = await _siteIndexForSite(projectId: projectId, site: site);
     final defaultHex = defaultSetHexForSite(
       siteIndex: siteIndex,
@@ -1428,30 +1569,34 @@ class AppDatabase extends _$AppDatabase {
       explicitHex: color,
     );
 
-    return insertLocation(LocationBasePlansCompanion.insert(
-      projectId: projectId,
-      siteId: Value(siteId),
-      locationName: name,
-      color: Value(defaultHex),
-      sortOrder: Value(sortOrder ?? sets.length),
-    ));
+    return insertLocation(
+      LocationBasePlansCompanion.insert(
+        projectId: projectId,
+        siteId: Value(siteId),
+        locationName: name,
+        color: Value(defaultHex),
+        sortOrder: Value(sortOrder ?? sets.length),
+      ),
+    );
   }
 
   // ── Sets de rodaje ────────────────────────────
   Stream<List<LocationBasePlan>> watchLocationsForProject(int projectId) =>
       (select(locationBasePlans)
-        ..where((l) => l.projectId.equals(projectId))
-        ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
+            ..where((l) => l.projectId.equals(projectId))
+            ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
           .watch();
 
-  Future<LocationBasePlan?> getLocationById(int id) =>
-      (select(locationBasePlans)..where((l) => l.id.equals(id)))
-          .getSingleOrNull();
+  Future<LocationBasePlan?> getLocationById(int id) => (select(
+    locationBasePlans,
+  )..where((l) => l.id.equals(id))).getSingleOrNull();
 
-  Future<Map<int, LocationBasePlan>> getLocationsMapForProject(int projectId) async {
-    final list = await (select(locationBasePlans)
-          ..where((l) => l.projectId.equals(projectId)))
-        .get();
+  Future<Map<int, LocationBasePlan>> getLocationsMapForProject(
+    int projectId,
+  ) async {
+    final list = await (select(
+      locationBasePlans,
+    )..where((l) => l.projectId.equals(projectId))).get();
     return {for (final l in list) l.id: l};
   }
 
@@ -1466,17 +1611,24 @@ class AppDatabase extends _$AppDatabase {
       await (update(scenes)..where((s) => s.locationId.equals(id))).write(
         const ScenesCompanion(locationId: Value(null)),
       );
-      await (delete(locationImages)..where((i) => i.locationId.equals(id))).go();
+      await (delete(
+        locationImages,
+      )..where((i) => i.locationId.equals(id))).go();
       await (delete(locationBasePlans)..where((l) => l.id.equals(id))).go();
     });
   }
 
-  Future<int> deleteLocationAndUnlink(int projectId, String locationName) async {
-    final loc = await (select(locationBasePlans)
-          ..where((l) =>
-              l.projectId.equals(projectId) &
-              l.locationName.equals(locationName)))
-        .getSingleOrNull();
+  Future<int> deleteLocationAndUnlink(
+    int projectId,
+    String locationName,
+  ) async {
+    final loc =
+        await (select(locationBasePlans)..where(
+              (l) =>
+                  l.projectId.equals(projectId) &
+                  l.locationName.equals(locationName),
+            ))
+            .getSingleOrNull();
     if (loc == null) return 0;
     await deleteLocation(loc.id);
     return 1;
@@ -1484,9 +1636,9 @@ class AppDatabase extends _$AppDatabase {
 
   /// Crea localizaciones y sets a partir de escenas.
   Future<int> syncLocationsFromScenes(int projectId) async {
-    final sceneList = await (select(scenes)
-          ..where((s) => s.projectId.equals(projectId)))
-        .get();
+    final sceneList = await (select(
+      scenes,
+    )..where((s) => s.projectId.equals(projectId))).get();
 
     final grouped = <String, ({String siteName, Set<String> setNames})>{};
 
@@ -1522,17 +1674,20 @@ class AppDatabase extends _$AppDatabase {
           ? await countSetsForSite(existingSite.id)
           : 0;
 
-      final site =
-          await ensureSite(projectId: projectId, siteName: entry.siteName);
+      final site = await ensureSite(
+        projectId: projectId,
+        siteName: entry.siteName,
+      );
       final setsAfter = await countSetsForSite(site.id);
       created += setsAfter - setsBefore;
 
       final normalizedSite = entry.siteName.trim().toLowerCase();
       final siteIdx = siteOrder.indexOf(normalizedSite);
-      final siteSets = await (select(locationBasePlans)
-            ..where((l) => l.siteId.equals(site.id))
-            ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
-          .get();
+      final siteSets =
+          await (select(locationBasePlans)
+                ..where((l) => l.siteId.equals(site.id))
+                ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
+              .get();
       var setIndex = siteSets.length;
 
       for (final setName in entry.setNames) {
@@ -1561,17 +1716,16 @@ class AppDatabase extends _$AppDatabase {
 
   /// Vincula escenas a sets por localización + nombre de set.
   Future<int> linkScenesToLocations(int projectId) async {
-    final sceneList = await (select(scenes)
-          ..where((s) => s.projectId.equals(projectId)))
-        .get();
-    final sets = await (select(locationBasePlans)
-          ..where((l) => l.projectId.equals(projectId)))
-        .get();
+    final sceneList = await (select(
+      scenes,
+    )..where((s) => s.projectId.equals(projectId))).get();
+    final sets = await (select(
+      locationBasePlans,
+    )..where((l) => l.projectId.equals(projectId))).get();
     final setsBySiteAndName = <String, int>{};
     for (final set in sets) {
       if (set.siteId == null) continue;
-      final key =
-          '${set.siteId}|${set.locationName.trim().toLowerCase()}';
+      final key = '${set.siteId}|${set.locationName.trim().toLowerCase()}';
       setsBySiteAndName[key] = set.id;
     }
 
@@ -1581,7 +1735,10 @@ class AppDatabase extends _$AppDatabase {
 
       int? siteId = scene.locationSiteId;
       if (siteId == null && setKey.isNotEmpty) {
-        final site = await findSiteByName(projectId, scene.locationPureName.trim());
+        final site = await findSiteByName(
+          projectId,
+          scene.locationPureName.trim(),
+        );
         siteId = site?.id;
       }
       if (siteId == null) continue;
@@ -1593,8 +1750,8 @@ class AppDatabase extends _$AppDatabase {
       if (setId == null) {
         final site = await getSiteById(siteId);
         if (site != null) {
-          setId = setsBySiteAndName[
-              '$siteId|${site.name.trim().toLowerCase()}'];
+          setId =
+              setsBySiteAndName['$siteId|${site.name.trim().toLowerCase()}'];
         }
       }
 
@@ -1602,10 +1759,9 @@ class AppDatabase extends _$AppDatabase {
         continue;
       }
 
-      await update(scenes).replace(scene.copyWith(
-        locationSiteId: Value(siteId),
-        locationId: Value(setId),
-      ));
+      await update(scenes).replace(
+        scene.copyWith(locationSiteId: Value(siteId), locationId: Value(setId)),
+      );
       linked++;
     }
     return linked;
@@ -1613,34 +1769,35 @@ class AppDatabase extends _$AppDatabase {
 
   /// Quita overrides de color en escenas vinculadas para heredar el set.
   Future<int> applyLocationColorToLinkedScenes(int locationId) async {
-    final affected = await (select(scenes)
-          ..where((s) => s.locationId.equals(locationId)))
-        .get();
+    final affected = await (select(
+      scenes,
+    )..where((s) => s.locationId.equals(locationId))).get();
     for (final scene in affected) {
-      await update(scenes).replace(
-        scene.copyWith(locationColor: const Value(null)),
-      );
+      await update(
+        scenes,
+      ).replace(scene.copyWith(locationColor: const Value(null)));
     }
     return affected.length;
   }
 
   /// Quita overrides de escenas de una localización contenedora.
   Future<int> clearSceneColorOverridesForSite(int siteId) async {
-    final affected = await (select(scenes)
-          ..where((s) => s.locationSiteId.equals(siteId)))
-        .get();
+    final affected = await (select(
+      scenes,
+    )..where((s) => s.locationSiteId.equals(siteId))).get();
     for (final scene in affected) {
-      await update(scenes).replace(
-        scene.copyWith(locationColor: const Value(null)),
-      );
+      await update(
+        scenes,
+      ).replace(scene.copyWith(locationColor: const Value(null)));
     }
     return affected.length;
   }
 
   /// Color solo en una escena.
   Future<void> applySceneColorOverride(int sceneId, String? colorHex) async {
-    final scene = await (select(scenes)..where((s) => s.id.equals(sceneId)))
-        .getSingleOrNull();
+    final scene = await (select(
+      scenes,
+    )..where((s) => s.id.equals(sceneId))).getSingleOrNull();
     if (scene == null) return;
     await update(scenes).replace(
       scene.copyWith(locationColor: Value(persistSceneColor(colorHex))),
@@ -1658,15 +1815,14 @@ class AppDatabase extends _$AppDatabase {
 
   /// Color base en localización: variantes en todos los sets.
   Future<void> applySiteColorFromBase(int siteId, String baseColorHex) async {
-    final siteSets = await (select(locationBasePlans)
-          ..where((l) => l.siteId.equals(siteId))
-          ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
-        .get();
+    final siteSets =
+        await (select(locationBasePlans)
+              ..where((l) => l.siteId.equals(siteId))
+              ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
+            .get();
     final variants = setVariantHexesForSiteBase(baseColorHex, siteSets.length);
     for (var i = 0; i < siteSets.length; i++) {
-      await updateLocation(
-        siteSets[i].copyWith(color: variants[i]),
-      );
+      await updateLocation(siteSets[i].copyWith(color: variants[i]));
     }
     await clearSceneColorOverridesForSite(siteId);
   }
@@ -1696,9 +1852,11 @@ class AppDatabase extends _$AppDatabase {
     for (final entry in colorsBySetKey.entries) {
       final compositeKey = entry.key;
       final pipe = compositeKey.indexOf('|');
-      final setName =
-          pipe >= 0 ? compositeKey.substring(pipe + 1) : compositeKey;
-      final siteName = siteBySetKey[compositeKey] ??
+      final setName = pipe >= 0
+          ? compositeKey.substring(pipe + 1)
+          : compositeKey;
+      final siteName =
+          siteBySetKey[compositeKey] ??
           (pipe >= 0 ? compositeKey.substring(0, pipe) : compositeKey);
       await upsertSetColor(projectId, siteName, setName, entry.value);
     }
@@ -1706,27 +1864,27 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<Scene>> watchScenesForSite(int siteId) =>
       (select(scenes)
-        ..where((s) => s.locationSiteId.equals(siteId))
-        ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            ..where((s) => s.locationSiteId.equals(siteId))
+            ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
           .watch();
 
   Future<int> countScenesForSite(int siteId) async {
-    final rows = await (select(scenes)
-          ..where((s) => s.locationSiteId.equals(siteId)))
-        .get();
+    final rows = await (select(
+      scenes,
+    )..where((s) => s.locationSiteId.equals(siteId))).get();
     return rows.length;
   }
 
   Stream<List<Scene>> watchScenesForLocation(int locationId) =>
       (select(scenes)
-        ..where((s) => s.locationId.equals(locationId))
-        ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            ..where((s) => s.locationId.equals(locationId))
+            ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
           .watch();
 
   Future<int> countScenesForLocation(int locationId) async {
-    final rows = await (select(scenes)
-          ..where((s) => s.locationId.equals(locationId)))
-        .get();
+    final rows = await (select(
+      scenes,
+    )..where((s) => s.locationId.equals(locationId))).get();
     return rows.length;
   }
 
@@ -1751,8 +1909,8 @@ class AppDatabase extends _$AppDatabase {
   // ── Imágenes de localización ──────────────────
   Stream<List<LocationImage>> watchImagesForLocation(int locationId) =>
       (select(locationImages)
-        ..where((i) => i.locationId.equals(locationId))
-        ..orderBy([(i) => OrderingTerm.asc(i.sortOrder)]))
+            ..where((i) => i.locationId.equals(locationId))
+            ..orderBy([(i) => OrderingTerm.asc(i.sortOrder)]))
           .watch();
 
   Future<int> insertLocationImage(LocationImagesCompanion image) =>
@@ -1764,8 +1922,8 @@ class AppDatabase extends _$AppDatabase {
   // ── Imágenes de localización (sitio) ──────────
   Stream<List<SiteImage>> watchImagesForSite(int siteId) =>
       (select(siteImages)
-        ..where((i) => i.siteId.equals(siteId))
-        ..orderBy([(i) => OrderingTerm.asc(i.sortOrder)]))
+            ..where((i) => i.siteId.equals(siteId))
+            ..orderBy([(i) => OrderingTerm.asc(i.sortOrder)]))
           .watch();
 
   Future<int> insertSiteImage(SiteImagesCompanion image) =>
@@ -1803,16 +1961,18 @@ class AppDatabase extends _$AppDatabase {
     int elementId,
     List<({double x, double y})> points,
   ) async {
-    await (delete(cameraPathPoints)
-          ..where((p) => p.elementId.equals(elementId)))
-        .go();
+    await (delete(
+      cameraPathPoints,
+    )..where((p) => p.elementId.equals(elementId))).go();
     for (var i = 0; i < points.length; i++) {
-      await into(cameraPathPoints).insert(CameraPathPointsCompanion.insert(
-        elementId: elementId,
-        pointNumber: i + 1,
-        x: points[i].x,
-        y: points[i].y,
-      ));
+      await into(cameraPathPoints).insert(
+        CameraPathPointsCompanion.insert(
+          elementId: elementId,
+          pointNumber: i + 1,
+          x: points[i].x,
+          y: points[i].y,
+        ),
+      );
     }
   }
 
@@ -1877,12 +2037,14 @@ class AppDatabase extends _$AppDatabase {
     required String equipmentType,
     required int equipmentId,
   }) async {
-    final row = await (select(projectEquipment)
-          ..where((e) =>
-              e.projectId.equals(projectId) &
-              e.equipmentType.equals(equipmentType) &
-              e.equipmentId.equals(equipmentId)))
-        .getSingleOrNull();
+    final row =
+        await (select(projectEquipment)..where(
+              (e) =>
+                  e.projectId.equals(projectId) &
+                  e.equipmentType.equals(equipmentType) &
+                  e.equipmentId.equals(equipmentId),
+            ))
+            .getSingleOrNull();
     return row != null;
   }
 
@@ -1902,15 +2064,17 @@ class AppDatabase extends _$AppDatabase {
     )) {
       return 0;
     }
-    return into(projectEquipment).insert(ProjectEquipmentCompanion.insert(
-      projectId: projectId,
-      equipmentType: equipmentType,
-      equipmentId: equipmentId,
-      source: Value(source),
-      status: Value(status),
-      notes: Value(notes),
-      sortOrder: Value(sortOrder),
-    ));
+    return into(projectEquipment).insert(
+      ProjectEquipmentCompanion.insert(
+        projectId: projectId,
+        equipmentType: equipmentType,
+        equipmentId: equipmentId,
+        source: Value(source),
+        status: Value(status),
+        notes: Value(notes),
+        sortOrder: Value(sortOrder),
+      ),
+    );
   }
 
   Future<bool> updateProjectEquipmentAssignment({
@@ -1920,9 +2084,9 @@ class AppDatabase extends _$AppDatabase {
     String? notes,
     int? sortOrder,
   }) async {
-    final row = await (select(projectEquipment)
-          ..where((e) => e.id.equals(assignmentId)))
-        .getSingleOrNull();
+    final row = await (select(
+      projectEquipment,
+    )..where((e) => e.id.equals(assignmentId))).getSingleOrNull();
     if (row == null) return false;
     return update(projectEquipment).replace(
       row.copyWith(
@@ -1935,9 +2099,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> clearProjectEquipment(int projectId) async {
-    await (delete(projectEquipment)
-          ..where((e) => e.projectId.equals(projectId)))
-        .go();
+    await (delete(
+      projectEquipment,
+    )..where((e) => e.projectId.equals(projectId))).go();
   }
 
   Future<int> unassignProjectEquipment(int assignmentId) =>
@@ -1952,34 +2116,31 @@ class AppDatabase extends _$AppDatabase {
   Future<Light?> getLightById(int id) =>
       (select(lights)..where((l) => l.id.equals(id))).getSingleOrNull();
 
-  Future<Camera?> getCameraByExternalId(String externalId) =>
-      (select(cameras)..where((c) => c.externalId.equals(externalId)))
-          .getSingleOrNull();
+  Future<Camera?> getCameraByExternalId(String externalId) => (select(
+    cameras,
+  )..where((c) => c.externalId.equals(externalId))).getSingleOrNull();
 
-  Future<Lense?> getLensByExternalId(String externalId) =>
-      (select(lenses)..where((l) => l.externalId.equals(externalId)))
-          .getSingleOrNull();
+  Future<Lense?> getLensByExternalId(String externalId) => (select(
+    lenses,
+  )..where((l) => l.externalId.equals(externalId))).getSingleOrNull();
 
-  Future<Light?> getLightByExternalId(String externalId) =>
-      (select(lights)..where((l) => l.externalId.equals(externalId)))
-          .getSingleOrNull();
+  Future<Light?> getLightByExternalId(String externalId) => (select(
+    lights,
+  )..where((l) => l.externalId.equals(externalId))).getSingleOrNull();
 
   Future<Camera?> getCameraByBrandModel(String brand, String model) =>
       (select(cameras)
-            ..where((c) =>
-                c.brand.equals(brand) & c.model.equals(model)))
+            ..where((c) => c.brand.equals(brand) & c.model.equals(model)))
           .getSingleOrNull();
 
   Future<Lense?> getLensByBrandModel(String brand, String model) =>
       (select(lenses)
-            ..where((l) =>
-                l.brand.equals(brand) & l.model.equals(model)))
+            ..where((l) => l.brand.equals(brand) & l.model.equals(model)))
           .getSingleOrNull();
 
   Future<Light?> getLightByBrandModel(String brand, String model) =>
       (select(lights)
-            ..where((l) =>
-                l.brand.equals(brand) & l.model.equals(model)))
+            ..where((l) => l.brand.equals(brand) & l.model.equals(model)))
           .getSingleOrNull();
 
   Future<List<Camera>> getAllCameras() =>
@@ -2086,10 +2247,13 @@ class AppDatabase extends _$AppDatabase {
     if (bible?.primaryCameraId != null) {
       return getCameraById(bible!.primaryCameraId!);
     }
-    final assigned = await (select(projectEquipment)
-          ..where((e) =>
-              e.projectId.equals(projectId) & e.equipmentType.equals('camera')))
-        .get();
+    final assigned =
+        await (select(projectEquipment)..where(
+              (e) =>
+                  e.projectId.equals(projectId) &
+                  e.equipmentType.equals('camera'),
+            ))
+            .get();
     if (assigned.isEmpty) return null;
     return getCameraById(assigned.first.equipmentId);
   }
@@ -2185,15 +2349,17 @@ class AppDatabase extends _$AppDatabase {
 
   Future<List<Shot>> getShotsWithReferencesForProject(int projectId) =>
       (select(shots)
-            ..where((s) =>
-                s.projectId.equals(projectId) &
-                s.referenceImagePath.isNotNull())
+            ..where(
+              (s) =>
+                  s.projectId.equals(projectId) &
+                  s.referenceImagePath.isNotNull(),
+            )
             ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
           .get();
 
   /// Miniaturas para la cabecera del hub: moodboard (localizaciones) + storyboard.
   Future<({List<String> moodboard, List<String> storyboard})>
-      getProjectHubVisuals(
+  getProjectHubVisuals(
     int projectId, {
     int moodLimit = 16,
     int storyLimit = 16,
@@ -2201,26 +2367,29 @@ class AppDatabase extends _$AppDatabase {
     final moodPaths = <String>[];
     final storyPaths = <String>[];
 
-    final moodboardRows = await (select(moodboardImages)
-          ..where((m) => m.projectId.equals(projectId))
-          ..orderBy([(m) => OrderingTerm.asc(m.sortOrder)]))
-        .get();
+    final moodboardRows =
+        await (select(moodboardImages)
+              ..where((m) => m.projectId.equals(projectId))
+              ..orderBy([(m) => OrderingTerm.asc(m.sortOrder)]))
+            .get();
     for (final row in moodboardRows) {
       if (_isExistingImage(row.imagePath)) {
         moodPaths.add(row.imagePath);
       }
     }
 
-    final sites = await (select(locationSites)
-          ..where((s) => s.projectId.equals(projectId))
-          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
-        .get();
+    final sites =
+        await (select(locationSites)
+              ..where((s) => s.projectId.equals(projectId))
+              ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            .get();
 
     for (final site in sites) {
-      final images = await (select(siteImages)
-            ..where((i) => i.siteId.equals(site.id))
-            ..orderBy([(i) => OrderingTerm.asc(i.sortOrder)]))
-          .get();
+      final images =
+          await (select(siteImages)
+                ..where((i) => i.siteId.equals(site.id))
+                ..orderBy([(i) => OrderingTerm.asc(i.sortOrder)]))
+              .get();
       for (final image in images) {
         if (_isExistingImage(image.imagePath)) {
           moodPaths.add(image.imagePath);
@@ -2228,19 +2397,21 @@ class AppDatabase extends _$AppDatabase {
       }
     }
 
-    final sets = await (select(locationBasePlans)
-          ..where((l) => l.projectId.equals(projectId))
-          ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
-        .get();
+    final sets =
+        await (select(locationBasePlans)
+              ..where((l) => l.projectId.equals(projectId))
+              ..orderBy([(l) => OrderingTerm.asc(l.sortOrder)]))
+            .get();
 
     for (final set in sets) {
       if (set.imagePath != null && _isExistingImage(set.imagePath!)) {
         moodPaths.add(set.imagePath!);
       }
-      final images = await (select(locationImages)
-            ..where((i) => i.locationId.equals(set.id))
-            ..orderBy([(i) => OrderingTerm.asc(i.sortOrder)]))
-          .get();
+      final images =
+          await (select(locationImages)
+                ..where((i) => i.locationId.equals(set.id))
+                ..orderBy([(i) => OrderingTerm.asc(i.sortOrder)]))
+              .get();
       for (final image in images) {
         if (_isExistingImage(image.imagePath)) {
           moodPaths.add(image.imagePath);
@@ -2248,10 +2419,11 @@ class AppDatabase extends _$AppDatabase {
       }
     }
 
-    final projectShots = await (select(shots)
-          ..where((s) => s.projectId.equals(projectId))
-          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
-        .get();
+    final projectShots =
+        await (select(shots)
+              ..where((s) => s.projectId.equals(projectId))
+              ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+            .get();
 
     for (final shot in projectShots) {
       final path = shot.referenceImagePath;
@@ -2270,27 +2442,32 @@ class AppDatabase extends _$AppDatabase {
       path.isNotEmpty && File(path).existsSync();
 
   /// Conteos ligeros para la tarjeta de proyecto en inicio.
-  Future<({
-    VisualBible? bible,
-    int sceneCount,
-    int planCount,
-    int moodboardCount,
-    int locationCount,
-  })> fetchProjectSummaryCounts(int projectId) async {
+  Future<
+    ({
+      VisualBible? bible,
+      int sceneCount,
+      int planCount,
+      int moodboardCount,
+      int locationCount,
+    })
+  >
+  fetchProjectSummaryCounts(int projectId) async {
     final bible = await getVisualBibleForProject(projectId);
-    final sceneCount = await (select(scenes)
-          ..where((s) => s.projectId.equals(projectId)))
-        .get()
-        .then((rows) => rows.length);
+    final sceneCount =
+        await (select(scenes)..where((s) => s.projectId.equals(projectId)))
+            .get()
+            .then((rows) => rows.length);
     final planCount = await countShotsWithCameraPlan(projectId);
-    final moodboardCount = await (select(moodboardImages)
-          ..where((m) => m.projectId.equals(projectId)))
-        .get()
-        .then((rows) => rows.length);
-    final locationCount = await (select(locationSites)
-          ..where((s) => s.projectId.equals(projectId)))
-        .get()
-        .then((rows) => rows.length);
+    final moodboardCount =
+        await (select(moodboardImages)
+              ..where((m) => m.projectId.equals(projectId)))
+            .get()
+            .then((rows) => rows.length);
+    final locationCount =
+        await (select(locationSites)
+              ..where((s) => s.projectId.equals(projectId)))
+            .get()
+            .then((rows) => rows.length);
     return (
       bible: bible,
       sceneCount: sceneCount,
@@ -2302,13 +2479,13 @@ class AppDatabase extends _$AppDatabase {
 
   // ── Look Bible ───────────────────────────────────────────────────────────
 
-  Stream<LookBible?> watchLookBibleForProject(int projectId) =>
-      (select(lookBibles)..where((l) => l.projectId.equals(projectId)))
-          .watchSingleOrNull();
+  Stream<LookBible?> watchLookBibleForProject(int projectId) => (select(
+    lookBibles,
+  )..where((l) => l.projectId.equals(projectId))).watchSingleOrNull();
 
-  Future<LookBible?> getLookBibleForProject(int projectId) =>
-      (select(lookBibles)..where((l) => l.projectId.equals(projectId)))
-          .getSingleOrNull();
+  Future<LookBible?> getLookBibleForProject(int projectId) => (select(
+    lookBibles,
+  )..where((l) => l.projectId.equals(projectId))).getSingleOrNull();
 
   Future<int> upsertLookBible(LookBiblesCompanion row) async {
     final existing = await getLookBibleForProject(row.projectId.value);
@@ -2316,36 +2493,81 @@ class AppDatabase extends _$AppDatabase {
       return into(lookBibles).insert(row);
     }
     await (update(lookBibles)..where((l) => l.id.equals(existing.id))).write(
-      row.copyWith(
-        id: Value(existing.id),
-        updatedAt: Value(DateTime.now()),
-      ),
+      row.copyWith(id: Value(existing.id), updatedAt: Value(DateTime.now())),
     );
     return existing.id;
   }
 
   // ── Biblia Visual ─────────────────────────────────────────────────────────
 
-  Stream<VisualBible?> watchVisualBibleForProject(int projectId) =>
-      (select(visualBibles)..where((v) => v.projectId.equals(projectId)))
-          .watchSingleOrNull();
+  Stream<VisualBible?> watchVisualBibleForProject(int projectId) => (select(
+    visualBibles,
+  )..where((v) => v.projectId.equals(projectId))).watchSingleOrNull();
 
-  Future<VisualBible?> getVisualBibleForProject(int projectId) =>
-      (select(visualBibles)..where((v) => v.projectId.equals(projectId)))
-          .getSingleOrNull();
+  Future<VisualBible?> getVisualBibleForProject(int projectId) => (select(
+    visualBibles,
+  )..where((v) => v.projectId.equals(projectId))).getSingleOrNull();
 
   Future<VisualBible> ensureVisualBibleForProject(int projectId) async {
     final existing = await getVisualBibleForProject(projectId);
-    if (existing != null) {
-      await ensureBibleSectionLayout(existing.id);
-      return existing;
-    }
+    if (existing != null) return existing;
     final id = await into(visualBibles).insert(
-      VisualBiblesCompanion.insert(projectId: projectId),
+      VisualBiblesCompanion.insert(
+        projectId: projectId,
+        structureInitialized: const Value(false),
+        engineVersion: const Value('legacy'),
+      ),
     );
-    await ensureBibleSectionLayout(id);
-    return (await (select(visualBibles)..where((v) => v.id.equals(id))).getSingle());
+    return (await (select(
+      visualBibles,
+    )..where((v) => v.id.equals(id))).getSingle());
   }
+
+  /// Confirma una Biblia vacía sin sembrar las pantallas IRIS (legacy).
+  Future<void> initializeEmptyBible(int bibleId) =>
+      (update(visualBibles)..where((v) => v.id.equals(bibleId))).write(
+        VisualBiblesCompanion(
+          structureInitialized: const Value(true),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+
+  /// Borra grupos/pantallas y vuelve al onboarding inicial (contenido técnico intacto).
+  Future<void> resetBibleStructureToEmpty(int bibleId) async {
+    await transaction(() async {
+      await (delete(
+        bibleSectionDefinitions,
+      )..where((d) => d.bibleId.equals(bibleId))).go();
+      await (delete(
+        bibleSectionGroups,
+      )..where((g) => g.bibleId.equals(bibleId))).go();
+      await (update(visualBibles)..where((v) => v.id.equals(bibleId))).write(
+        VisualBiblesCompanion(
+          structureInitialized: const Value(false),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+    });
+  }
+
+  Future<void> promoteEngineToV2(int bibleId) async {
+    await (update(visualBibles)..where((v) => v.id.equals(bibleId))).write(
+      VisualBiblesCompanion(
+        engineVersion: const Value('v2'),
+        structureInitialized: const Value(true),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> clearV2Documents(int bibleId) async {
+    await (delete(
+      visualBibleDocuments,
+    )..where((t) => t.bibleId.equals(bibleId))).go();
+  }
+
+  Future<void> _markBibleStructureInitialized(int bibleId) =>
+      initializeEmptyBible(bibleId);
 
   /// Aplica una plantilla de estructura de biblia (grupos + secciones).
   Future<void> applyBibleLayoutTemplate(
@@ -2353,12 +2575,12 @@ class AppDatabase extends _$AppDatabase {
     BibleLayoutTemplatePayload layout,
   ) async {
     await transaction(() async {
-      await (delete(bibleSectionDefinitions)
-            ..where((d) => d.bibleId.equals(bibleId)))
-          .go();
-      await (delete(bibleSectionGroups)
-            ..where((g) => g.bibleId.equals(bibleId)))
-          .go();
+      await (delete(
+        bibleSectionDefinitions,
+      )..where((d) => d.bibleId.equals(bibleId))).go();
+      await (delete(
+        bibleSectionGroups,
+      )..where((g) => g.bibleId.equals(bibleId))).go();
 
       for (final group in layout.groups) {
         await into(bibleSectionGroups).insert(
@@ -2388,20 +2610,22 @@ class AppDatabase extends _$AppDatabase {
           ),
         );
       }
+      await _markBibleStructureInitialized(bibleId);
     });
   }
 
   /// Restaura la estructura built-in de la biblia (plantilla IRIS base).
   Future<void> resetBibleSectionLayoutToBuiltin(int bibleId) async {
     await transaction(() async {
-      await (delete(bibleSectionDefinitions)
-            ..where((d) => d.bibleId.equals(bibleId)))
-          .go();
-      await (delete(bibleSectionGroups)
-            ..where((g) => g.bibleId.equals(bibleId)))
-          .go();
+      await (delete(
+        bibleSectionDefinitions,
+      )..where((d) => d.bibleId.equals(bibleId))).go();
+      await (delete(
+        bibleSectionGroups,
+      )..where((g) => g.bibleId.equals(bibleId))).go();
     });
     await _seedBibleSectionLayout(bibleId);
+    await _markBibleStructureInitialized(bibleId);
   }
 
   Future<void> setBibleSectionHidden({
@@ -2409,11 +2633,11 @@ class AppDatabase extends _$AppDatabase {
     required String sectionId,
     required bool hidden,
   }) async {
-    final def = await (select(bibleSectionDefinitions)
-          ..where(
-            (d) => d.bibleId.equals(bibleId) & d.id.equals(sectionId),
-          ))
-        .getSingleOrNull();
+    final def =
+        await (select(
+              bibleSectionDefinitions,
+            )..where((d) => d.bibleId.equals(bibleId) & d.id.equals(sectionId)))
+            .getSingleOrNull();
     if (def == null) return;
     await upsertBibleSectionDefinition(def.copyWith(isHidden: hidden));
   }
@@ -2422,13 +2646,12 @@ class AppDatabase extends _$AppDatabase {
     required int bibleId,
     required String sectionId,
   }) async {
-    await (delete(bibleSectionDefinitions)
-          ..where(
-            (d) =>
-                d.bibleId.equals(bibleId) &
-                d.id.equals(sectionId) &
-                d.isBuiltIn.equals(false),
-          ))
+    await (delete(bibleSectionDefinitions)..where(
+          (d) =>
+              d.bibleId.equals(bibleId) &
+              d.id.equals(sectionId) &
+              d.isBuiltIn.equals(false),
+        ))
         .go();
   }
 
@@ -2447,10 +2670,7 @@ class AppDatabase extends _$AppDatabase {
       return into(visualBibles).insert(row);
     }
     await (update(visualBibles)..where((v) => v.id.equals(existing.id))).write(
-      row.copyWith(
-        id: Value(existing.id),
-        updatedAt: Value(DateTime.now()),
-      ),
+      row.copyWith(id: Value(existing.id), updatedAt: Value(DateTime.now())),
     );
     return existing.id;
   }
@@ -2480,10 +2700,10 @@ class AppDatabase extends _$AppDatabase {
     int bibleId,
     String locationName,
   ) =>
-      (select(visualBibleLocationRefs)
-            ..where((r) =>
-                r.bibleId.equals(bibleId) &
-                r.locationName.equals(locationName)))
+      (select(visualBibleLocationRefs)..where(
+            (r) =>
+                r.bibleId.equals(bibleId) & r.locationName.equals(locationName),
+          ))
           .getSingleOrNull();
 
   Future<void> upsertLocationRef(VisualBibleLocationRefsCompanion row) async {
@@ -2526,8 +2746,9 @@ class AppDatabase extends _$AppDatabase {
           .where(
             (row) => MoodboardAssociation.visibleInSection(
               category: row.category,
-              assignedSections:
-                  MoodboardAssociation.decodeSections(row.assignedSections),
+              assignedSections: MoodboardAssociation.decodeSections(
+                row.assignedSections,
+              ),
               sectionId: sectionId,
             ),
           )
@@ -2577,19 +2798,23 @@ class AppDatabase extends _$AppDatabase {
         row.projectId.value,
         row.category.value,
       );
-      return into(moodboardGroups).insert(
-        row.copyWith(sortOrder: Value(max + 1)),
-      );
+      return into(
+        moodboardGroups,
+      ).insert(row.copyWith(sortOrder: Value(max + 1)));
     }
     return into(moodboardGroups).insert(row);
   }
 
-  Future<int> _maxMoodboardGroupSortOrder(int projectId, String category) async {
-    final rows = await (select(moodboardGroups)
-          ..where(
-            (g) => g.projectId.equals(projectId) & g.category.equals(category),
-          ))
-        .get();
+  Future<int> _maxMoodboardGroupSortOrder(
+    int projectId,
+    String category,
+  ) async {
+    final rows =
+        await (select(moodboardGroups)..where(
+              (g) =>
+                  g.projectId.equals(projectId) & g.category.equals(category),
+            ))
+            .get();
     if (rows.isEmpty) return 0;
     return rows.map((r) => r.sortOrder).reduce((a, b) => a > b ? a : b);
   }
@@ -2598,8 +2823,9 @@ class AppDatabase extends _$AppDatabase {
       update(moodboardGroups).replace(row);
 
   Future<void> deleteMoodboardGroup(int id) async {
-    await (update(moodboardImages)..where((m) => m.groupId.equals(id)))
-        .write(const MoodboardImagesCompanion(groupId: Value(null)));
+    await (update(moodboardImages)..where((m) => m.groupId.equals(id))).write(
+      const MoodboardImagesCompanion(groupId: Value(null)),
+    );
     await (delete(moodboardGroups)..where((g) => g.id.equals(id))).go();
   }
 
@@ -2618,11 +2844,89 @@ class AppDatabase extends _$AppDatabase {
           .watch();
 
   Future<void> ensureBibleSectionLayout(int bibleId) async {
-    final existing = await (select(bibleSectionGroups)
-          ..where((g) => g.bibleId.equals(bibleId)))
-        .get();
+    final existing = await (select(
+      bibleSectionGroups,
+    )..where((g) => g.bibleId.equals(bibleId))).get();
     if (existing.isNotEmpty) return;
     await _seedBibleSectionLayout(bibleId);
+    await _markBibleStructureInitialized(bibleId);
+  }
+
+  /// Añade una pantalla built-in sin aplicar la estructura IRIS completa.
+  Future<void> addBuiltinBibleSection({
+    required int bibleId,
+    required String sectionId,
+  }) async {
+    String? groupId;
+    for (final entry in bible_layout.BibleLayoutGroup.sectionsByGroup.entries) {
+      if (entry.value.contains(sectionId)) {
+        groupId = entry.key;
+        break;
+      }
+    }
+    final targetGroupId = groupId;
+    if (targetGroupId == null) {
+      throw ArgumentError.value(sectionId, 'sectionId', 'Pantalla desconocida');
+    }
+
+    await transaction(() async {
+      final groups = await (select(
+        bibleSectionGroups,
+      )..where((g) => g.bibleId.equals(bibleId))).get();
+      final existingGroup = groups
+          .where((g) => g.id == targetGroupId)
+          .firstOrNull;
+      if (existingGroup == null) {
+        await into(bibleSectionGroups).insert(
+          BibleSectionGroupsCompanion.insert(
+            id: targetGroupId,
+            bibleId: bibleId,
+            label: bible_layout.BibleLayoutGroup.label(targetGroupId),
+            sortOrder: Value(
+              bible_layout.BibleLayoutGroup.orderedGroups.indexOf(
+                targetGroupId,
+              ),
+            ),
+            isBuiltIn: const Value(true),
+          ),
+        );
+      }
+
+      final existing =
+          await (select(bibleSectionDefinitions)..where(
+                (d) => d.bibleId.equals(bibleId) & d.id.equals(sectionId),
+              ))
+              .getSingleOrNull();
+      if (existing == null) {
+        final siblings =
+            await (select(bibleSectionDefinitions)..where(
+                  (d) =>
+                      d.bibleId.equals(bibleId) &
+                      d.groupId.equals(targetGroupId),
+                ))
+                .get();
+        await into(bibleSectionDefinitions).insert(
+          BibleSectionDefinitionsCompanion.insert(
+            id: sectionId,
+            bibleId: bibleId,
+            groupId: targetGroupId,
+            label: BibleSectionId.label(sectionId),
+            iconKey: Value(_sectionIconKey(sectionId)),
+            sortOrder: Value(siblings.length),
+            isBuiltIn: const Value(true),
+            template: Value(_sectionTemplate(sectionId)),
+            contentJson: Value(
+              BibleSectionFieldsConfig.encode(
+                BibleSectionFieldsConfig.defaultsFor(sectionId),
+              ),
+            ),
+          ),
+        );
+      } else if (existing.isHidden) {
+        await upsertBibleSectionDefinition(existing.copyWith(isHidden: false));
+      }
+      await _markBibleStructureInitialized(bibleId);
+    });
   }
 
   Future<void> _seedBibleSectionLayout(int bibleId) async {
@@ -2663,32 +2967,32 @@ class AppDatabase extends _$AppDatabase {
   }
 
   static String _sectionIconKey(String sectionId) => switch (sectionId) {
-        BibleSectionId.direction => 'theater',
-        BibleSectionId.concept => 'auto_stories',
-        BibleSectionId.camera => 'videocam',
-        BibleSectionId.optics => 'camera',
-        BibleSectionId.exposure => 'exposure',
-        BibleSectionId.lighting => 'wb_sunny',
-        BibleSectionId.colorImage => 'palette',
-        BibleSectionId.format => 'aspect_ratio',
-        BibleSectionId.texture => 'grain',
-        BibleSectionId.location => 'location_on',
-        BibleSectionId.cameraTests => 'science',
-        BibleSectionId.workflow => 'account_tree',
-        BibleSectionId.moodboard => 'photo_library',
-        _ => 'article',
-      };
+    BibleSectionId.direction => 'theater',
+    BibleSectionId.concept => 'auto_stories',
+    BibleSectionId.camera => 'videocam',
+    BibleSectionId.optics => 'camera',
+    BibleSectionId.exposure => 'exposure',
+    BibleSectionId.lighting => 'wb_sunny',
+    BibleSectionId.colorImage => 'palette',
+    BibleSectionId.format => 'aspect_ratio',
+    BibleSectionId.texture => 'grain',
+    BibleSectionId.location => 'location_on',
+    BibleSectionId.cameraTests => 'science',
+    BibleSectionId.workflow => 'account_tree',
+    BibleSectionId.moodboard => 'photo_library',
+    _ => 'article',
+  };
 
   static String _sectionTemplate(String sectionId) => switch (sectionId) {
-        BibleSectionId.location => 'locations',
-        BibleSectionId.cameraTests => 'tests',
-        BibleSectionId.moodboard => 'moodboard',
-        BibleSectionId.workflow => 'standard',
-        BibleSectionId.colorImage => 'blocks_color',
-        BibleSectionId.exposure => 'blocks_exposure',
-        BibleSectionId.lighting => 'blocks_lighting',
-        _ => 'standard',
-      };
+    BibleSectionId.location => 'locations',
+    BibleSectionId.cameraTests => 'tests',
+    BibleSectionId.moodboard => 'moodboard',
+    BibleSectionId.workflow => 'standard',
+    BibleSectionId.colorImage => 'blocks_color',
+    BibleSectionId.exposure => 'blocks_exposure',
+    BibleSectionId.lighting => 'blocks_lighting',
+    _ => 'standard',
+  };
 
   Future<void> upsertBibleSectionGroup(BibleSectionGroup row) =>
       into(bibleSectionGroups).insertOnConflictUpdate(row);
@@ -2704,9 +3008,11 @@ class AppDatabase extends _$AppDatabase {
     String? contentJson,
   }) async {
     final id = 'custom_${DateTime.now().millisecondsSinceEpoch}';
-    final defs = await (select(bibleSectionDefinitions)
-          ..where((d) => d.bibleId.equals(bibleId) & d.groupId.equals(groupId)))
-        .get();
+    final defs =
+        await (select(bibleSectionDefinitions)..where(
+              (d) => d.bibleId.equals(bibleId) & d.groupId.equals(groupId),
+            ))
+            .get();
     final maxOrder = defs.isEmpty
         ? 0
         : defs.map((d) => d.sortOrder).reduce((a, b) => a > b ? a : b);
@@ -2721,12 +3027,11 @@ class AppDatabase extends _$AppDatabase {
         template: Value(template),
         contentJson: Value(
           contentJson ??
-              BibleSectionFieldsConfig.encode(
-                BibleSectionFieldsConfig.freeformDefaults(label),
-              ),
+              FreeformV2BlocksCodec.starterContentJson(label),
         ),
       ),
     );
+    await _markBibleStructureInitialized(bibleId);
     return id;
   }
 
@@ -2759,11 +3064,11 @@ class AppDatabase extends _$AppDatabase {
     String sectionId,
     List<BibleSectionField> fields,
   ) async {
-    final def = await (select(bibleSectionDefinitions)
-          ..where(
-            (d) => d.bibleId.equals(bibleId) & d.id.equals(sectionId),
-          ))
-        .getSingleOrNull();
+    final def =
+        await (select(
+              bibleSectionDefinitions,
+            )..where((d) => d.bibleId.equals(bibleId) & d.id.equals(sectionId)))
+            .getSingleOrNull();
     if (def == null) return;
     final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
     await upsertBibleSectionDefinition(
@@ -2782,36 +3087,34 @@ class AppDatabase extends _$AppDatabase {
   ) async {
     for (var i = 0; i < orderedSectionIds.length; i++) {
       final sectionId = orderedSectionIds[i];
-      final def = await (select(bibleSectionDefinitions)
-            ..where(
-              (d) =>
-                  d.bibleId.equals(bibleId) &
-                  d.groupId.equals(groupId) &
-                  d.id.equals(sectionId),
-            ))
-          .getSingleOrNull();
+      final def =
+          await (select(bibleSectionDefinitions)..where(
+                (d) =>
+                    d.bibleId.equals(bibleId) &
+                    d.groupId.equals(groupId) &
+                    d.id.equals(sectionId),
+              ))
+              .getSingleOrNull();
       if (def == null) continue;
-      await upsertBibleSectionDefinition(
-        def.copyWith(sortOrder: i),
-      );
+      await upsertBibleSectionDefinition(def.copyWith(sortOrder: i));
     }
   }
 
   Future<void> _migrateEvidenceToMoodboard() async {
     final evidenceRows = await select(bibleSectionEvidence).get();
     for (final ev in evidenceRows) {
-      final bible = await (select(visualBibles)
-            ..where((v) => v.id.equals(ev.bibleId)))
-          .getSingleOrNull();
+      final bible = await (select(
+        visualBibles,
+      )..where((v) => v.id.equals(ev.bibleId))).getSingleOrNull();
       if (bible == null) continue;
       final sectionsJson = jsonEncode([ev.sectionId]);
-      final existing = await (select(moodboardImages)
-            ..where(
-              (m) =>
-                  m.projectId.equals(bible.projectId) &
-                  m.imagePath.equals(ev.imagePath),
-            ))
-          .getSingleOrNull();
+      final existing =
+          await (select(moodboardImages)..where(
+                (m) =>
+                    m.projectId.equals(bible.projectId) &
+                    m.imagePath.equals(ev.imagePath),
+              ))
+              .getSingleOrNull();
       if (existing != null) {
         final merged = MoodboardAssociation.decodeSections(
           existing.assignedSections,
@@ -2819,8 +3122,9 @@ class AppDatabase extends _$AppDatabase {
         if (!merged.contains(ev.sectionId)) {
           merged.add(ev.sectionId);
         }
-        await (update(moodboardImages)..where((m) => m.id.equals(existing.id)))
-            .write(
+        await (update(
+          moodboardImages,
+        )..where((m) => m.id.equals(existing.id))).write(
           MoodboardImagesCompanion(
             assignedSections: Value(jsonEncode(merged)),
             caption: ev.caption != null && ev.caption!.isNotEmpty
@@ -2850,8 +3154,9 @@ class AppDatabase extends _$AppDatabase {
     for (final ref in refs) {
       final plan = planByName[ref.locationName];
       if (plan == null) continue;
-      await (update(visualBibleLocationRefs)..where((r) => r.id.equals(ref.id)))
-          .write(
+      await (update(
+        visualBibleLocationRefs,
+      )..where((r) => r.id.equals(ref.id))).write(
         VisualBibleLocationRefsCompanion(
           locationBasePlanId: Value(plan.id),
           locationSiteId: Value(plan.siteId),
@@ -2864,9 +3169,7 @@ class AppDatabase extends _$AppDatabase {
       final plan = planByName[row.linkedLocationName!];
       if (plan == null) continue;
       await (update(moodboardImages)..where((m) => m.id.equals(row.id))).write(
-        MoodboardImagesCompanion(
-          linkedLocationBasePlanId: Value(plan.id),
-        ),
+        MoodboardImagesCompanion(linkedLocationBasePlanId: Value(plan.id)),
       );
     }
   }
@@ -2874,17 +3177,17 @@ class AppDatabase extends _$AppDatabase {
   Future<int> insertMoodboardImage(MoodboardImagesCompanion row) async {
     if (!row.sortOrder.present) {
       final maxOrder = await _maxMoodboardSortOrder(row.projectId.value);
-      return into(moodboardImages).insert(
-        row.copyWith(sortOrder: Value(maxOrder + 1)),
-      );
+      return into(
+        moodboardImages,
+      ).insert(row.copyWith(sortOrder: Value(maxOrder + 1)));
     }
     return into(moodboardImages).insert(row);
   }
 
   Future<int> _maxMoodboardSortOrder(int projectId) async {
-    final rows = await (select(moodboardImages)
-          ..where((m) => m.projectId.equals(projectId)))
-        .get();
+    final rows = await (select(
+      moodboardImages,
+    )..where((m) => m.projectId.equals(projectId))).get();
     if (rows.isEmpty) return 0;
     return rows.map((r) => r.sortOrder).reduce((a, b) => a > b ? a : b);
   }
@@ -2905,26 +3208,26 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<int> countOpticsLabSamples(int projectId) async {
-    final rows = await (select(opticsLabSamples)
-          ..where((s) => s.projectId.equals(projectId)))
-        .get();
+    final rows = await (select(
+      opticsLabSamples,
+    )..where((s) => s.projectId.equals(projectId))).get();
     return rows.length;
   }
 
   Future<int> insertOpticsLabSample(OpticsLabSamplesCompanion row) async {
     if (!row.sortOrder.present) {
       final maxOrder = await _maxOpticsLabSampleSortOrder(row.projectId.value);
-      return into(opticsLabSamples).insert(
-        row.copyWith(sortOrder: Value(maxOrder + 1)),
-      );
+      return into(
+        opticsLabSamples,
+      ).insert(row.copyWith(sortOrder: Value(maxOrder + 1)));
     }
     return into(opticsLabSamples).insert(row);
   }
 
   Future<int> _maxOpticsLabSampleSortOrder(int projectId) async {
-    final rows = await (select(opticsLabSamples)
-          ..where((s) => s.projectId.equals(projectId)))
-        .get();
+    final rows = await (select(
+      opticsLabSamples,
+    )..where((s) => s.projectId.equals(projectId))).get();
     if (rows.isEmpty) return 0;
     return rows.map((r) => r.sortOrder).reduce((a, b) => a > b ? a : b);
   }
@@ -2934,15 +3237,19 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<OpticsLabSample?> getOpticsLabSampleById(int id) {
-    return (select(opticsLabSamples)..where((s) => s.id.equals(id)))
-        .getSingleOrNull();
+    return (select(
+      opticsLabSamples,
+    )..where((s) => s.id.equals(id))).getSingleOrNull();
   }
 
   Future<void> reorderMoodboardImage(int id, int newSortOrder) async {
-    final row = await (select(moodboardImages)..where((m) => m.id.equals(id)))
-        .getSingleOrNull();
+    final row = await (select(
+      moodboardImages,
+    )..where((m) => m.id.equals(id))).getSingleOrNull();
     if (row == null) return;
-    await update(moodboardImages).replace(row.copyWith(sortOrder: newSortOrder));
+    await update(
+      moodboardImages,
+    ).replace(row.copyWith(sortOrder: newSortOrder));
   }
 
   // ── Exposure blocks ───────────────────────────────────────────────────────
@@ -3127,6 +3434,80 @@ class AppDatabase extends _$AppDatabase {
 
   Future<int> deleteAnnotatedPdf(int id) =>
       (delete(projectAnnotatedPdfs)..where((p) => p.id.equals(id))).go();
+
+  // ── Capas vectoriales de anotación ───────────────────────────────────────
+
+  Future<ProjectAnnotationDocument?> getProjectAnnotationDocument({
+    required int projectId,
+    required String targetType,
+    required String targetId,
+  }) =>
+      (select(projectAnnotationDocuments)..where(
+            (a) =>
+                a.projectId.equals(projectId) &
+                a.targetType.equals(targetType) &
+                a.targetId.equals(targetId),
+          ))
+          .getSingleOrNull();
+
+  Stream<ProjectAnnotationDocument?> watchProjectAnnotationDocument({
+    required int projectId,
+    required String targetType,
+    required String targetId,
+  }) =>
+      (select(projectAnnotationDocuments)..where(
+            (a) =>
+                a.projectId.equals(projectId) &
+                a.targetType.equals(targetType) &
+                a.targetId.equals(targetId),
+          ))
+          .watchSingleOrNull();
+
+  Future<void> saveProjectAnnotationDocument({
+    required int projectId,
+    required String targetType,
+    required String targetId,
+    required String documentJson,
+    required int documentSchemaVersion,
+  }) async {
+    final existing = await getProjectAnnotationDocument(
+      projectId: projectId,
+      targetType: targetType,
+      targetId: targetId,
+    );
+    if (existing == null) {
+      await into(projectAnnotationDocuments).insert(
+        ProjectAnnotationDocumentsCompanion.insert(
+          projectId: projectId,
+          targetType: targetType,
+          targetId: targetId,
+          documentJson: documentJson,
+          documentSchemaVersion: Value(documentSchemaVersion),
+        ),
+      );
+      return;
+    }
+    await update(projectAnnotationDocuments).replace(
+      existing.copyWith(
+        documentJson: documentJson,
+        documentSchemaVersion: documentSchemaVersion,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<int> deleteProjectAnnotationDocument({
+    required int projectId,
+    required String targetType,
+    required String targetId,
+  }) =>
+      (delete(projectAnnotationDocuments)..where(
+            (a) =>
+                a.projectId.equals(projectId) &
+                a.targetType.equals(targetType) &
+                a.targetId.equals(targetId),
+          ))
+          .go();
 }
 
 LazyDatabase _openConnection() {

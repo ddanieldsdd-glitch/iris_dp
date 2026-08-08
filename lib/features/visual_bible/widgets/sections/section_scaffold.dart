@@ -10,7 +10,9 @@ import '../bible_navigation_scope.dart';
 import '../bible_section_shared_widgets.dart';
 import '../bible_unified_references_panel.dart';
 import '../narrative_bridge_card.dart';
+import '../../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../../bible_section_fields.dart';
+import '../bible_form_widgets.dart';
 
 /// Layout común para secciones técnicas de la biblia.
 ///
@@ -207,9 +209,64 @@ class _BibleSectionScaffoldState extends State<BibleSectionScaffold> {
                 ),
               )
             : null,
-      BibleSectionFieldType.blocks ||
-      BibleSectionFieldType.text =>
-        null,
+      BibleSectionFieldType.text => BibleTextField(
+          label: field.label,
+          hint: field.hint ?? 'Notas orientativas…',
+          maxLines: field.maxLines,
+          initialValue: BibleSectionFieldsConfig.parseValues(
+            widget.sectionContentJson,
+          )[field.key] ??
+              '',
+          onChanged: (_) {},
+        ),
+      BibleSectionFieldType.blocks => _MissingModulePlaceholder(
+          sectionId: widget.sectionId,
+          fieldKey: field.key,
+          label: field.label,
+        ),
     };
+  }
+}
+
+class _MissingModulePlaceholder extends StatelessWidget {
+  final String sectionId;
+  final String fieldKey;
+  final String label;
+
+  const _MissingModulePlaceholder({
+    required this.sectionId,
+    required this.fieldKey,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final known = BibleStitchModuleRegistry.module(sectionId, fieldKey) != null;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: palette.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            known ? Icons.hourglass_empty : Icons.help_outline,
+            color: palette.textTertiary,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              known
+                  ? '$label — renderer Stitch pendiente de conectar'
+                  : '$label — módulo personalizado sin vista dedicada',
+              style: AppTypography.caption(palette),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -10,7 +10,9 @@ import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../bible_section_fields.dart';
+import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
+import '../bible_moodboard_image_target.dart';
 import 'section_scaffold.dart';
 
 /// Textura & Grain — layout Stitch (macro split + grain/diffusion + noise floor).
@@ -286,6 +288,78 @@ class TextureSection extends ConsumerWidget {
         custom['digitalNoiseLabel'] as String? ??
             'Digital Sensor Noise (ISO $iso)';
 
+    final filmGrainWidget = _FilmGrainModule(
+      enabled: grainEnabled,
+      sizeUm: grainSize,
+      intensity: grainIntensity,
+      colorVariation: grainColorVariation,
+      preset: grainPreset,
+      palette: palette,
+      onToggle: (v) => _updateCustomData(ref, {'grainEnabled': v}),
+      onSizeEnd: (v) => _updateCustomData(ref, {'grainSize': v}),
+      onIntensityEnd: (v) => _updateCustomData(ref, {'grainIntensity': v}),
+      onColorVarEnd: (v) => _updateCustomData(ref, {'grainColorVariation': v}),
+      onPreset: (v) {
+        data.grainLevel = v;
+        onChanged(data);
+        _updateCustomData(ref, {'grainPreset': v});
+      },
+    );
+
+    final diffusionWidget = _DiffusionOpticsModule(
+      enabled: diffusionEnabled,
+      filter: diffusionFilter,
+      density: diffusionDensity,
+      halationRadius: halationRadius,
+      palette: palette,
+      onToggle: (v) => _updateCustomData(ref, {'diffusionEnabled': v}),
+      onFilter: (v) {
+        final notes = '$v $diffusionDensity'.trim();
+        data.diffusionNotes = notes;
+        onChanged(data);
+        _updateCustomData(ref, {'diffusionFilter': v});
+      },
+      onDensity: (v) {
+        final notes = '$diffusionFilter $v'.trim();
+        data.diffusionNotes = notes;
+        onChanged(data);
+        _updateCustomData(ref, {'diffusionDensity': v});
+      },
+      onHalationEnd: (v) => _updateCustomData(ref, {'halationRadius': v}),
+    );
+
+    Widget cameraSlot(String slot) => _TextureCameraSlot(
+          slot: slot,
+          db: db,
+          data: data,
+          projectId: projectId,
+          onChanged: onChanged,
+          palette: palette,
+          iso: iso,
+          grainPreset: grainPreset,
+          digitalNoiseLabel: digitalNoiseLabel,
+          highlightBehavior: highlightBehavior,
+          shadowBehavior: shadowBehavior,
+          zoomLabel: zoomLabel,
+          lumaMap: lumaMap,
+          splitView: splitView,
+          noiseDesc: noiseDesc,
+          cameraLabelOverride: cameraLabelOverride,
+          shadowChroma: shadowChroma,
+          fixedPattern: fixedPattern,
+          pushPull: pushPull,
+          grainEnabled: grainEnabled,
+          grainSize: grainSize,
+          grainIntensity: grainIntensity,
+          grainColorVariation: grainColorVariation,
+          diffusionEnabled: diffusionEnabled,
+          diffusionFilter: diffusionFilter,
+          diffusionDensity: diffusionDensity,
+          halationRadius: halationRadius,
+          updateCustomData: _updateCustomData,
+          prompt: _prompt,
+        );
+
     return BibleSectionScaffold(
       sectionId: BibleSectionId.texture,
       projectId: projectId,
@@ -306,288 +380,284 @@ class TextureSection extends ConsumerWidget {
           onReset: () => _reset(ref, context),
           onSavePreset: () => _savePreset(ref, context),
         ),
-        'textureSettings': StreamBuilder<List<Camera>>(
-          stream: db.watchAllCameras(),
-          builder: (context, camSnap) {
-            final cameras = camSnap.data ?? [];
-            Camera? cam;
-            if (data.primaryCameraId != null) {
-              for (final c in cameras) {
-                if (c.id == data.primaryCameraId) {
-                  cam = c;
-                  break;
-                }
-              }
+        'macroPreview': cameraSlot('macroPreview'),
+        'filmGrain': filmGrainWidget,
+        'diffusion': diffusionWidget,
+        'sensorNoise': cameraSlot('sensorNoise'),
+      },
+    );
+  }
+}
+
+/// Slots que dependen de la cámara activa (preview macro, noise floor, layout legacy).
+class _TextureCameraSlot extends ConsumerWidget {
+  final String slot;
+  final AppDatabase db;
+  final VisualBibleData data;
+  final int projectId;
+  final BibleChanged onChanged;
+  final AppPalette palette;
+  final int iso;
+  final String grainPreset;
+  final String digitalNoiseLabel;
+  final String highlightBehavior;
+  final String shadowBehavior;
+  final String zoomLabel;
+  final bool lumaMap;
+  final bool splitView;
+  final String noiseDesc;
+  final String? cameraLabelOverride;
+  final String shadowChroma;
+  final String fixedPattern;
+  final String pushPull;
+  final bool grainEnabled;
+  final double grainSize;
+  final double grainIntensity;
+  final double grainColorVariation;
+  final bool diffusionEnabled;
+  final String diffusionFilter;
+  final String diffusionDensity;
+  final double halationRadius;
+  final Future<void> Function(WidgetRef ref, Map<String, dynamic> update,
+      {bool syncBible})
+      updateCustomData;
+  final Future<String?> Function(
+    BuildContext context,
+    String title,
+    TextEditingController c, {
+    int maxLines,
+  }) prompt;
+
+  const _TextureCameraSlot({
+    required this.slot,
+    required this.db,
+    required this.data,
+    required this.projectId,
+    required this.onChanged,
+    required this.palette,
+    required this.iso,
+    required this.grainPreset,
+    required this.digitalNoiseLabel,
+    required this.highlightBehavior,
+    required this.shadowBehavior,
+    required this.zoomLabel,
+    required this.lumaMap,
+    required this.splitView,
+    required this.noiseDesc,
+    required this.cameraLabelOverride,
+    required this.shadowChroma,
+    required this.fixedPattern,
+    required this.pushPull,
+    required this.grainEnabled,
+    required this.grainSize,
+    required this.grainIntensity,
+    required this.grainColorVariation,
+    required this.diffusionEnabled,
+    required this.diffusionFilter,
+    required this.diffusionDensity,
+    required this.halationRadius,
+    required this.updateCustomData,
+    required this.prompt,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return StreamBuilder<List<Camera>>(
+      stream: db.watchAllCameras(),
+      builder: (context, camSnap) {
+        final cameras = camSnap.data ?? [];
+        Camera? cam;
+        if (data.primaryCameraId != null) {
+          for (final c in cameras) {
+            if (c.id == data.primaryCameraId) {
+              cam = c;
+              break;
             }
-            final cameraBadge = cameraLabelOverride?.isNotEmpty == true
-                ? cameraLabelOverride!
-                : (cam != null
-                    ? '${cam.brand} ${cam.model}'
-                    : 'Cámara no asignada');
-            final baseIso = cam?.nativeIso ?? data.nativeIso ?? iso;
+          }
+        }
+        final cameraBadge = cameraLabelOverride?.isNotEmpty == true
+            ? cameraLabelOverride!
+            : (cam != null
+                ? '${cam.brand} ${cam.model}'
+                : 'Cámara no asignada');
+        final baseIso = cam?.nativeIso ?? data.nativeIso ?? iso;
 
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 960;
+        final preview = _MacroSplitPreview(
+          projectId: projectId,
+          leftLabel: grainPreset.contains('Emulation')
+              ? grainPreset
+              : '$grainPreset Emulation',
+          rightLabel: digitalNoiseLabel,
+          highlightBehavior: highlightBehavior,
+          shadowBehavior: shadowBehavior,
+          zoomLabel: zoomLabel,
+          lumaMap: lumaMap,
+          splitView: splitView,
+          palette: palette,
+          onEditHighlight: () async {
+            final c = TextEditingController(text: highlightBehavior);
+            final v = await prompt(context, 'Highlight Roll-off', c, maxLines: 2);
+            if (v == null || v.isEmpty) return;
+            data.highlightBehavior = v;
+            onChanged(data);
+            await updateCustomData(ref, {'highlightBehavior': v});
+          },
+          onEditShadow: () async {
+            final c = TextEditingController(text: shadowBehavior);
+            final v = await prompt(context, 'Shadow Detail', c, maxLines: 2);
+            if (v == null || v.isEmpty) return;
+            data.shadowBehavior = v;
+            onChanged(data);
+            await updateCustomData(ref, {'shadowBehavior': v});
+          },
+          onToggleLuma: () => updateCustomData(ref, {'lumaMap': !lumaMap}),
+          onToggleSplit: () => updateCustomData(ref, {'splitView': !splitView}),
+          onEditZoom: () async {
+            final c = TextEditingController(text: zoomLabel);
+            final v = await prompt(context, 'Zoom', c);
+            if (v == null || v.isEmpty) return;
+            await updateCustomData(ref, {'zoomLabel': v});
+          },
+          onEditDigitalLabel: () async {
+            final c = TextEditingController(text: digitalNoiseLabel);
+            final v = await prompt(context, 'Etiqueta ruido digital', c);
+            if (v == null || v.isEmpty) return;
+            await updateCustomData(ref, {'digitalNoiseLabel': v});
+          },
+        );
 
-                final preview = _MacroSplitPreview(
-                  projectId: projectId,
-                  leftLabel: grainPreset.contains('Emulation')
-                      ? grainPreset
-                      : '$grainPreset Emulation',
-                  rightLabel: digitalNoiseLabel,
-                  highlightBehavior: highlightBehavior,
-                  shadowBehavior: shadowBehavior,
-                  zoomLabel: zoomLabel,
-                  lumaMap: lumaMap,
-                  splitView: splitView,
-                  palette: palette,
-                  onEditHighlight: () async {
-                    final c =
-                        TextEditingController(text: highlightBehavior);
-                    final v = await _prompt(
-                      context,
-                      'Highlight Roll-off',
-                      c,
-                      maxLines: 2,
-                    );
-                    if (v == null || v.isEmpty) return;
-                    data.highlightBehavior = v;
-                    onChanged(data);
-                    await _updateCustomData(
-                      ref,
-                      {'highlightBehavior': v},
-                    );
-                  },
-                  onEditShadow: () async {
-                    final c = TextEditingController(text: shadowBehavior);
-                    final v = await _prompt(
-                      context,
-                      'Shadow Detail',
-                      c,
-                      maxLines: 2,
-                    );
-                    if (v == null || v.isEmpty) return;
-                    data.shadowBehavior = v;
-                    onChanged(data);
-                    await _updateCustomData(
-                      ref,
-                      {'shadowBehavior': v},
-                    );
-                  },
-                  onToggleLuma: () =>
-                      _updateCustomData(ref, {'lumaMap': !lumaMap}),
-                  onToggleSplit: () =>
-                      _updateCustomData(ref, {'splitView': !splitView}),
-                  onEditZoom: () async {
-                    final c = TextEditingController(text: zoomLabel);
-                    final v = await _prompt(context, 'Zoom', c);
-                    if (v == null || v.isEmpty) return;
-                    await _updateCustomData(ref, {'zoomLabel': v});
-                  },
-                  onEditDigitalLabel: () async {
-                    final c =
-                        TextEditingController(text: digitalNoiseLabel);
-                    final v = await _prompt(
-                      context,
-                      'Etiqueta ruido digital',
-                      c,
-                    );
-                    if (v == null || v.isEmpty) return;
-                    await _updateCustomData(
-                      ref,
-                      {'digitalNoiseLabel': v},
-                    );
-                  },
-                );
-
-                final controls = Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _FilmGrainModule(
-                      enabled: grainEnabled,
-                      sizeUm: grainSize,
-                      intensity: grainIntensity,
-                      colorVariation: grainColorVariation,
-                      preset: grainPreset,
-                      palette: palette,
-                      onToggle: (v) =>
-                          _updateCustomData(ref, {'grainEnabled': v}),
-                      onSizeEnd: (v) =>
-                          _updateCustomData(ref, {'grainSize': v}),
-                      onIntensityEnd: (v) =>
-                          _updateCustomData(ref, {'grainIntensity': v}),
-                      onColorVarEnd: (v) => _updateCustomData(
-                        ref,
-                        {'grainColorVariation': v},
-                      ),
-                      onPreset: (v) {
-                        data.grainLevel = v;
-                        onChanged(data);
-                        _updateCustomData(ref, {'grainPreset': v});
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    _DiffusionOpticsModule(
-                      enabled: diffusionEnabled,
-                      filter: diffusionFilter,
-                      density: diffusionDensity,
-                      halationRadius: halationRadius,
-                      palette: palette,
-                      onToggle: (v) => _updateCustomData(
-                        ref,
-                        {'diffusionEnabled': v},
-                      ),
-                      onFilter: (v) {
-                        final notes =
-                            '$v $diffusionDensity'.trim();
-                        data.diffusionNotes = notes;
-                        onChanged(data);
-                        _updateCustomData(
-                          ref,
-                          {'diffusionFilter': v},
-                        );
-                      },
-                      onDensity: (v) {
-                        final notes =
-                            '$diffusionFilter $v'.trim();
-                        data.diffusionNotes = notes;
-                        onChanged(data);
-                        _updateCustomData(
-                          ref,
-                          {'diffusionDensity': v},
-                        );
-                      },
-                      onHalationEnd: (v) => _updateCustomData(
-                        ref,
-                        {'halationRadius': v},
-                      ),
-                    ),
-                  ],
-                );
-
-                final noiseFloor = _SensorNoiseFloor(
-                  description: noiseDesc,
-                  cameraBadge: cameraBadge,
-                  baseIso: baseIso,
-                  shadowChroma: shadowChroma,
-                  fixedPattern: fixedPattern,
-                  pushPull: pushPull,
-                  palette: palette,
-                  onEditDesc: () async {
-                    final c = TextEditingController(text: noiseDesc);
-                    final v = await _prompt(
-                      context,
-                      'Sensor Noise Floor',
-                      c,
-                      maxLines: 3,
-                    );
-                    if (v == null) return;
-                    data.sensorShadowBehavior = v;
-                    onChanged(data);
-                    await _updateCustomData(
-                      ref,
-                      {'noiseFloorDesc': v},
-                    );
-                  },
-                  onEditCamera: () async {
-                    final c =
-                        TextEditingController(text: cameraBadge);
-                    final v = await _prompt(
-                      context,
-                      'Cámara',
-                      c,
-                    );
-                    if (v == null) return;
-                    await _updateCustomData(
-                      ref,
-                      {'cameraLabel': v},
-                    );
-                  },
-                  onEditChroma: () async {
-                    final c =
-                        TextEditingController(text: shadowChroma);
-                    final v = await _prompt(
-                      context,
-                      'Shadow Chroma Noise',
-                      c,
-                    );
-                    if (v == null || v.isEmpty) return;
-                    await _updateCustomData(
-                      ref,
-                      {'shadowChromaNoise': v},
-                    );
-                  },
-                  onEditFpn: () async {
-                    final c =
-                        TextEditingController(text: fixedPattern);
-                    final v = await _prompt(
-                      context,
-                      'Fixed Pattern Noise',
-                      c,
-                    );
-                    if (v == null || v.isEmpty) return;
-                    await _updateCustomData(
-                      ref,
-                      {'fixedPatternNoise': v},
-                    );
-                  },
-                  onEditPushPull: () async {
-                    final c = TextEditingController(text: pushPull);
-                    final v = await _prompt(
-                      context,
-                      'Push/Pull Processing',
-                      c,
-                    );
-                    if (v == null || v.isEmpty) return;
-                    await _updateCustomData(
-                      ref,
-                      {'pushPullProcessing': v},
-                    );
-                  },
-                  onCalibrate: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Dark frame calibrado'),
-                      ),
-                    );
-                  },
-                );
-
-                if (wide) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      IntrinsicHeight(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Expanded(flex: 3, child: preview),
-                            const SizedBox(width: 14),
-                            Expanded(flex: 2, child: controls),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      noiseFloor,
-                    ],
-                  );
-                }
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    preview,
-                    const SizedBox(height: 14),
-                    controls,
-                    const SizedBox(height: 14),
-                    noiseFloor,
-                  ],
-                );
-              },
+        final noiseFloor = _SensorNoiseFloor(
+          description: noiseDesc,
+          cameraBadge: cameraBadge,
+          baseIso: baseIso,
+          shadowChroma: shadowChroma,
+          fixedPattern: fixedPattern,
+          pushPull: pushPull,
+          palette: palette,
+          onEditDesc: () async {
+            final c = TextEditingController(text: noiseDesc);
+            final v = await prompt(context, 'Sensor Noise Floor', c, maxLines: 3);
+            if (v == null) return;
+            data.sensorShadowBehavior = v;
+            onChanged(data);
+            await updateCustomData(ref, {'noiseFloorDesc': v});
+          },
+          onEditCamera: () async {
+            final c = TextEditingController(text: cameraBadge);
+            final v = await prompt(context, 'Cámara', c);
+            if (v == null) return;
+            await updateCustomData(ref, {'cameraLabel': v});
+          },
+          onEditChroma: () async {
+            final c = TextEditingController(text: shadowChroma);
+            final v = await prompt(context, 'Shadow Chroma Noise', c);
+            if (v == null || v.isEmpty) return;
+            await updateCustomData(ref, {'shadowChromaNoise': v});
+          },
+          onEditFpn: () async {
+            final c = TextEditingController(text: fixedPattern);
+            final v = await prompt(context, 'Fixed Pattern Noise', c);
+            if (v == null || v.isEmpty) return;
+            await updateCustomData(ref, {'fixedPatternNoise': v});
+          },
+          onEditPushPull: () async {
+            final c = TextEditingController(text: pushPull);
+            final v = await prompt(context, 'Push/Pull Processing', c);
+            if (v == null || v.isEmpty) return;
+            await updateCustomData(ref, {'pushPullProcessing': v});
+          },
+          onCalibrate: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Dark frame calibrado')),
             );
           },
-        ),
+        );
+
+        if (slot == 'macroPreview') return preview;
+        if (slot == 'sensorNoise') return noiseFloor;
+
+        final controls = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _FilmGrainModule(
+              enabled: grainEnabled,
+              sizeUm: grainSize,
+              intensity: grainIntensity,
+              colorVariation: grainColorVariation,
+              preset: grainPreset,
+              palette: palette,
+              onToggle: (v) => updateCustomData(ref, {'grainEnabled': v}),
+              onSizeEnd: (v) => updateCustomData(ref, {'grainSize': v}),
+              onIntensityEnd: (v) =>
+                  updateCustomData(ref, {'grainIntensity': v}),
+              onColorVarEnd: (v) =>
+                  updateCustomData(ref, {'grainColorVariation': v}),
+              onPreset: (v) {
+                data.grainLevel = v;
+                onChanged(data);
+                updateCustomData(ref, {'grainPreset': v});
+              },
+            ),
+            const SizedBox(height: 14),
+            _DiffusionOpticsModule(
+              enabled: diffusionEnabled,
+              filter: diffusionFilter,
+              density: diffusionDensity,
+              halationRadius: halationRadius,
+              palette: palette,
+              onToggle: (v) => updateCustomData(ref, {'diffusionEnabled': v}),
+              onFilter: (v) {
+                final notes = '$v $diffusionDensity'.trim();
+                data.diffusionNotes = notes;
+                onChanged(data);
+                updateCustomData(ref, {'diffusionFilter': v});
+              },
+              onDensity: (v) {
+                final notes = '$diffusionFilter $v'.trim();
+                data.diffusionNotes = notes;
+                onChanged(data);
+                updateCustomData(ref, {'diffusionDensity': v});
+              },
+              onHalationEnd: (v) =>
+                  updateCustomData(ref, {'halationRadius': v}),
+            ),
+          ],
+        );
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 960;
+            if (wide) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(flex: 3, child: preview),
+                        const SizedBox(width: 14),
+                        Expanded(flex: 2, child: controls),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  noiseFloor,
+                ],
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                preview,
+                const SizedBox(height: 14),
+                controls,
+                const SizedBox(height: 14),
+                noiseFloor,
+              ],
+            );
+          },
+        );
       },
     );
   }
@@ -736,11 +806,15 @@ class _MacroSplitPreview extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 10),
-          AspectRatio(
-            aspectRatio: 16 / 10,
-            child: ColoredBox(
-              color: Colors.black,
-              child: StreamBuilder<List<MoodboardImage>>(
+          BibleMoodboardImageTarget(
+            projectId: projectId,
+            sectionId: BibleSectionId.texture,
+            hint: 'Clic aquí → ⌘V para pegar textura',
+            child: AspectRatio(
+              aspectRatio: 16 / 10,
+              child: ColoredBox(
+                color: Colors.black,
+                child: StreamBuilder<List<MoodboardImage>>(
                 stream: db.watchMoodboardImagesForSection(
                   projectId,
                   BibleSectionId.texture,
@@ -764,11 +838,22 @@ class _MacroSplitPreview extends ConsumerWidget {
                       content = ColoredBox(
                         color: const Color(0xFF121214),
                         child: Center(
-                          child: Icon(
-                            Icons.grain,
-                            size: 40,
-                            color: palette.textTertiary
-                                .withValues(alpha: 0.4),
+                          child: TextButton.icon(
+                            onPressed: () => MoodboardHelpers.addManualImages(
+                              db: db,
+                              projectId: projectId,
+                              category: MoodboardCategory.texture,
+                              assignedSections: [BibleSectionId.texture],
+                            ),
+                            icon: Icon(Icons.add_photo_alternate_outlined,
+                                color: palette.accent, size: 20),
+                            label: Text(
+                              'Añadir textura',
+                              style: TextStyle(
+                                color: palette.accent,
+                                fontSize: 12,
+                              ),
+                            ),
                           ),
                         ),
                       );
@@ -863,6 +948,7 @@ class _MacroSplitPreview extends ConsumerWidget {
                 },
               ),
             ),
+          ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
