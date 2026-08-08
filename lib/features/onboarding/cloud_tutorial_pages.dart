@@ -2,75 +2,88 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../../core/cloud/supabase_config.dart';
+import '../../core/cloud/cloud_link_panel.dart';
+import '../../core/cloud/cloud_runtime_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'cloud_connection_widgets.dart';
 import 'tutorial_shell.dart';
 
-/// Paso: Supabase ya vinculado — la app detectó las credenciales.
-class CloudConnectedTutorialPage extends StatelessWidget {
+/// Paso: elegir vincular o desvincular Supabase al inicio.
+class CloudLinkTutorialPage extends StatelessWidget {
   final int stepIndex;
   final int totalSteps;
   final VoidCallback? onBack;
   final VoidCallback onNext;
+  final Future<void> Function({required bool active}) onCloudChanged;
 
-  const CloudConnectedTutorialPage({
+  const CloudLinkTutorialPage({
     super.key,
     required this.stepIndex,
     required this.totalSteps,
     this.onBack,
     required this.onNext,
+    required this.onCloudChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final host = Uri.tryParse(SupabaseConfig.url)?.host ?? SupabaseConfig.url;
+    final active = CloudRuntimeConfig.isActive;
+    final host = Uri.tryParse(CloudRuntimeConfig.url)?.host;
 
     return TutorialShell(
       stepIndex: stepIndex,
       totalSteps: totalSteps,
-      title: 'Nube conectada',
+      title: 'Nube Supabase',
       onBack: onBack,
       onNext: onNext,
-      nextLabel: 'Siguiente: instalar o continuar',
+      nextLabel: active
+          ? 'Siguiente: instalar o continuar'
+          : 'Continuar sin nube',
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.cloud_done_outlined, size: 56, color: palette.success),
+          Icon(
+            active ? Icons.cloud_done_outlined : Icons.cloud_outlined,
+            size: 56,
+            color: active ? palette.success : palette.accent,
+          ),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            '¡Supabase ya está vinculado!',
+            active ? 'Nube vinculada' : '¿Usar la nube?',
             style: AppTypography.titleLarge(palette),
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            'Has arrancado IRIS DP con las credenciales correctas. '
-            'La app ya puede hablar con tu proyecto en la nube.',
+            active
+                ? 'Puedes seguir con Supabase o volver a modo solo local. '
+                    'También puedes cambiarlo después en Ajustes.'
+                : 'Con Supabase sincronizas proyectos entre Mac, Windows e iPad. '
+                    'Sin nube, todo queda en este dispositivo.',
             style: AppTypography.bodyMedium(palette).copyWith(
               color: palette.textSecondary,
               height: 1.45,
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          const CloudConnectionStatusCard(),
-          const SizedBox(height: AppSpacing.lg),
-          Text('Proyecto activo', style: AppTypography.titleMedium(palette)),
-          const SizedBox(height: AppSpacing.sm),
-          SelectableText(
-            host,
-            style: AppTypography.bodyMedium(palette).copyWith(
-              fontFamily: 'monospace',
-              color: palette.accent,
+          if (active && host != null && host.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            const CloudConnectionStatusCard(),
+            const SizedBox(height: AppSpacing.sm),
+            SelectableText(
+              host,
+              style: AppTypography.bodyMedium(palette).copyWith(
+                fontFamily: 'monospace',
+                color: palette.accent,
+              ),
             ),
-          ),
+          ],
           const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Lo siguiente: crear tu cuenta o iniciar sesión. '
-            'No hace falta pegar claves dentro de la app — eso ya está hecho.',
-            style: AppTypography.bodyMedium(palette),
+          CloudLinkPanel(
+            promptRestart: false,
+            showTitle: false,
+            onCloudChanged: onCloudChanged,
           ),
         ],
       ),

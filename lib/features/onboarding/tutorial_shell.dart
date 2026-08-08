@@ -213,10 +213,10 @@ List<TutorialInfoStep> buildTutorialInfoSteps({required bool cloudMode}) {
         'Este asistente te guía en pocos pasos. Tardarás unos 2 minutos.',
       ],
       bullets: [
-        'Conectamos tu nube (ya hecho si ves el paso verde)',
-        'Creas tu cuenta o inicias sesión',
+        'Eliges si vincular Supabase o seguir solo en local',
+        'Si usas nube: creas cuenta o inicias sesión',
         'Eliges carpetas en tu Mac',
-        'Sincronizas con iPad u otros ordenadores',
+        'Con nube + Cloudinary, sincronizas con iPad u otros ordenadores',
       ],
     ),
     const TutorialInfoStep(
@@ -244,6 +244,7 @@ List<TutorialInfoStep> buildTutorialInfoSteps({required bool cloudMode}) {
           'Instala la nueva versión (.dmg, .exe o App Store)',
           'Abre la app e inicia sesión con el MISMO email',
           'Pulsa el icono de nube — la app sincroniza sola tras actualizar',
+          'Las imágenes van por Cloudinary; los datos del proyecto por Supabase',
           'No hace falta volver a migrar ni reconfigurar carpetas en el mismo dispositivo',
         ],
       ),

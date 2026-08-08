@@ -61,6 +61,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (msg.contains('password')) {
       return 'La contraseña debe tener al menos 6 caracteres.';
     }
+    if (msg.contains('invalid api key')) {
+      return 'La clave de Supabase (API key) no es válida.\n\n'
+          '1. En supabase.com → Settings → API copia la «anon public» (eyJ…)\n'
+          '2. Pégala en .env como SUPABASE_ANON_KEY\n'
+          '3. Cierra IRIS DP por completo y arranca con ./scripts/run_cloud.sh\n\n'
+          'Si vinculaste la nube a mano en Ajustes, desvincula y vuelve a '
+          'activar con la clave correcta.';
+    }
     if (msg.contains('failed host lookup') ||
         msg.contains('nxdomain') ||
         msg.contains('nodename nor servname')) {
