@@ -9,9 +9,11 @@ abstract final class CloudRuntimeConfig {
   static const _enabledKey = 'iris_cloud_enabled';
   static const _urlKey = 'iris_cloud_url';
   static const _anonKeyKey = 'iris_cloud_anon_key';
+  static const _manualKey = 'iris_cloud_manual';
 
   static var _loaded = false;
   static var _enabled = false;
+  static var _manual = false;
   static String? _url;
   static String? _anonKey;
 
@@ -39,13 +41,30 @@ abstract final class CloudRuntimeConfig {
   static Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     _enabled = prefs.getBool(_enabledKey) ?? false;
+    _manual = prefs.getBool(_manualKey) ?? false;
     _url = prefs.getString(_urlKey);
     _anonKey = prefs.getString(_anonKeyKey);
     _loaded = true;
+
+    // Si se activó con claves del build (--dart-define), refrescar desde el
+    // binario actual. Evita Invalid API key tras rotar .env / recompilar
+    // mientras SharedPreferences conserva una anon key antigua.
+    if (_enabled && !_manual && SupabaseConfig.isConfigured) {
+      final embeddedUrl = SupabaseConfig.url;
+      final embeddedKey = SupabaseConfig.anonKey;
+      if (_url != embeddedUrl || _anonKey != embeddedKey) {
+        _url = embeddedUrl;
+        _anonKey = embeddedKey;
+        await prefs.setString(_urlKey, embeddedUrl);
+        await prefs.setString(_anonKeyKey, embeddedKey);
+      }
+    }
   }
 
   /// Activa la nube. Si [url]/[anonKey] son null, usa las embebidas en compile.
   static Future<void> enable({String? url, String? anonKey}) async {
+    final manual = (url?.trim().isNotEmpty == true) ||
+        (anonKey?.trim().isNotEmpty == true);
     final resolvedUrl = (url?.trim().isNotEmpty == true)
         ? url!.trim()
         : SupabaseConfig.url;
@@ -61,9 +80,11 @@ abstract final class CloudRuntimeConfig {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_enabledKey, true);
+    await prefs.setBool(_manualKey, manual);
     await prefs.setString(_urlKey, resolvedUrl);
     await prefs.setString(_anonKeyKey, resolvedKey);
     _enabled = true;
+    _manual = manual;
     _url = resolvedUrl;
     _anonKey = resolvedKey;
     _loaded = true;
@@ -80,7 +101,9 @@ abstract final class CloudRuntimeConfig {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_enabledKey, false);
+    await prefs.remove(_manualKey);
     _enabled = false;
+    _manual = false;
   }
 
   static Future<void> initializeIfActive() async {

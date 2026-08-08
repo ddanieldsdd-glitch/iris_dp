@@ -203,6 +203,7 @@ Un solo archivo `.exe` no puede instalarse en Mac ni iPad, y viceversa. El scrip
 | Error | Causa | Solución |
 |-------|--------|----------|
 | `Failed host lookup` | URL Supabase incorrecta | Copia Project URL real desde supabase.com |
+| `Invalid API key` | Anon key antigua / incorrecta en la app | Copia «anon public» (JWT `eyJ…`) a `.env`, cierra la app y `./scripts/run_cloud.sh`. Si vinculaste a mano: Ajustes → Desvincular → Activar nube |
 | `Invalid login` | Email/contraseña | Usa «Crear cuenta» o corrige credenciales |
 | `Email not confirmed` | Confirmación activa | Desactiva en Supabase Auth → Email |
 | iPad «no abre» tras ~7 días | Firma SideStore caducada | Abre SideStore en Wi‑Fi para refrescar |

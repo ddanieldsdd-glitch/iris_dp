@@ -23,7 +23,7 @@ import 'tutorial_shell.dart';
 
 enum _TutorialPhase {
   infoWelcome,
-  cloudConnected,
+  cloudLink,
   macInstall,
   auth,
   infoStorage,
@@ -86,10 +86,12 @@ class _InitialTutorialFlowState extends ConsumerState<InitialTutorialFlow> {
     required bool cloud,
     required bool needsMigration,
   }) {
-    final phases = <_TutorialPhase>[_TutorialPhase.infoWelcome];
+    final phases = <_TutorialPhase>[
+      _TutorialPhase.infoWelcome,
+      _TutorialPhase.cloudLink,
+    ];
     if (cloud) {
       phases.addAll([
-        _TutorialPhase.cloudConnected,
         _TutorialPhase.macInstall,
         _TutorialPhase.auth,
       ]);
@@ -111,13 +113,32 @@ class _InitialTutorialFlowState extends ConsumerState<InitialTutorialFlow> {
     return phases;
   }
 
+  Future<void> _onCloudLinkChanged({required bool active}) async {
+    _needsMigration =
+        active && !await CloudSessionStore.isMigrationComplete();
+    final cloudLinkIndex = _phases.indexOf(_TutorialPhase.cloudLink);
+    _phases = _buildPhases(
+      cloud: active,
+      needsMigration: _needsMigration,
+    );
+    final newIndex = cloudLinkIndex >= 0
+        ? _phases.indexOf(_TutorialPhase.cloudLink)
+        : 0;
+    if (mounted) {
+      setState(() {
+        _phaseIndex = newIndex >= 0 ? newIndex : 0;
+      });
+    }
+  }
+
   Future<int> _resolveStartIndex(bool cloud) async {
     final user = ref.read(supabaseClientProvider)?.auth.currentUser;
     final storageOk = AppStorageConfig.isConfigured;
 
-    // Sin sesión en modo nube → siempre al paso de cuenta.
+    // Sin sesión en modo nube → paso de vinculación (entrar/salir) antes de auth.
     if (cloud && user == null) {
-      return _phases.indexOf(_TutorialPhase.auth);
+      final link = _phases.indexOf(_TutorialPhase.cloudLink);
+      return link >= 0 ? link : _phases.indexOf(_TutorialPhase.auth);
     }
 
     if (storageOk && (!cloud || user != null)) {
@@ -217,12 +238,13 @@ class _InitialTutorialFlowState extends ConsumerState<InitialTutorialFlow> {
       );
     }
 
-    if (phase == _TutorialPhase.cloudConnected) {
-      return CloudConnectedTutorialPage(
+    if (phase == _TutorialPhase.cloudLink) {
+      return CloudLinkTutorialPage(
         stepIndex: _displayStepIndex,
         totalSteps: _totalSteps,
         onBack: _goBack,
         onNext: _goNext,
+        onCloudChanged: _onCloudLinkChanged,
       );
     }
 

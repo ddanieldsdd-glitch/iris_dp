@@ -41,7 +41,8 @@ class _CloudConnectionStatusCardState extends State<CloudConnectionStatusCard> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final configured = CloudRuntimeConfig.isActive;
-    final host = Uri.tryParse(SupabaseConfig.url)?.host ?? SupabaseConfig.url;
+    final host = Uri.tryParse(CloudRuntimeConfig.url)?.host ??
+        (Uri.tryParse(SupabaseConfig.url)?.host ?? SupabaseConfig.url);
 
     if (!configured) {
       return _StatusBox(
