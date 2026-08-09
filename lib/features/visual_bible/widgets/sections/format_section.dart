@@ -12,6 +12,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../shared/visual_bible/bible_optics_context.dart';
 import '../../../../shared/visual_bible/bible_section_value_resolve.dart';
+import '../../../equipment/widgets/project_camera_roster_bar.dart';
 import '../../export/bible_section_export_reader.dart';
 import '../../bible_section_fields.dart';
 import '../../moodboard_helpers.dart';
@@ -270,6 +271,13 @@ class FormatSection extends ConsumerWidget {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+                      ProjectCameraRosterBar(
+                        db: db,
+                        projectId: projectId,
+                        activeCameraId: cam?.id,
+                        palette: palette,
                       ),
                       const SizedBox(height: 16),
                       FutureBuilder<Lense?>(

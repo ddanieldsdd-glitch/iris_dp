@@ -29,3 +29,13 @@ Tras unificar escritura en `formatData`, columnas legacy (`aspectRatio`, `captur
 - **Completion** puntúa columnas, no blob.
 
 No es bug del piloto; evaluar post-cierre Format antes de migrar otras secciones.
+
+---
+
+## Fase 6 — design system: badges de rol
+
+**Detectado:** Checkpoint C A-CAM/B-CAM (9 ago 2026).
+
+Los chips de rol en Equipo/Format/Optics Lab (`project_camera_roster_bar`, badges en `equipment_brand_grouped_list`) reutilizan tokens (`AppPalette` / `AppTypography` / `AppSpacing`) pero **no** un widget compartido: no existía uno adecuado para rol + título + hint.
+
+**Candidato:** extraer `AppRoleBadge` y consolidar con la pill `ACTIVE` de Format y el badge LUKA.

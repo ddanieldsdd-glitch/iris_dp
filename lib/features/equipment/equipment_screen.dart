@@ -19,7 +19,9 @@ import 'equipment_detail_screen.dart';
 import 'equipment_spec_helpers.dart';
 import 'services/catalog_sync_service.dart';
 import 'services/equipment_spreadsheet_service.dart';
+import '../../shared/equipment/project_equipment_roles.dart';
 import 'widgets/equipment_brand_grouped_list.dart';
+import 'widgets/project_camera_roster_bar.dart';
 import 'widgets/equipment_import_sheet.dart';
 import 'widgets/lens_set_grouped_list.dart';
 
@@ -291,30 +293,91 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
                       children: [
                         _filterBar(palette, mounts, _cameraFilter, (v) => setState(() => _cameraFilter = v)),
                         Expanded(
-                          child: StreamBuilder<List<ProjectEquipmentData>>(
-                            stream: db.watchProjectEquipment(widget.projectId),
-                            builder: (context, assignSnap) {
-                              final assigned = assignSnap.data ?? [];
-                              final assignedIds = assigned
-                                  .where((a) => a.equipmentType == 'camera')
-                                  .map((a) => a.equipmentId)
-                                  .toSet();
-                              final customIds = items.where((c) => c.isCustom).map((c) => c.id).toSet();
-                              return EquipmentBrandGroupedList<Camera>(
-                                items: items,
-                                assignedIds: assignedIds,
-                                customIds: customIds,
-                                activeFilter: _cameraFilter,
-                                vintageOnly: _vintageOnly,
-                                lukaOnly: _lukaOnly,
-                                idOf: (c) => c.id,
-                                brandOf: (c) => c.brand,
-                                seriesOf: (c) => c.series,
-                                titleOf: (c) => '${c.brand} ${c.model}',
-                                subtitleOf: cameraListSubtitle,
-                                filterOf: (c) => c.mountType,
-                                onTap: (c) => _openDetail(context, 'camera', c.id),
-                                onToggleAssign: (c) => _toggleAssign(db, 'camera', c.id, assignedIds.contains(c.id), assigned),
+                          child: StreamBuilder<VisualBible?>(
+                            stream: db.watchVisualBibleForProject(widget.projectId),
+                            builder: (context, bibleSnap) {
+                              final primaryCameraId =
+                                  bibleSnap.data?.primaryCameraId;
+                              return StreamBuilder<List<ProjectEquipmentData>>(
+                                stream: db.watchProjectEquipment(widget.projectId),
+                                builder: (context, assignSnap) {
+                                  final assigned = assignSnap.data ?? [];
+                                  final assignedIds = assigned
+                                      .where((a) => a.equipmentType == 'camera')
+                                      .map((a) => a.equipmentId)
+                                      .toSet();
+                                  final assignedCameras = assigned
+                                      .where((a) => a.equipmentType == 'camera')
+                                      .map(
+                                        (a) => items
+                                            .where((c) => c.id == a.equipmentId)
+                                            .firstOrNull,
+                                      )
+                                      .whereType<Camera>()
+                                      .toList();
+                                  final customIds =
+                                      items.where((c) => c.isCustom).map((c) => c.id).toSet();
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          AppSpacing.lg,
+                                          AppSpacing.sm,
+                                          AppSpacing.lg,
+                                          0,
+                                        ),
+                                        child: ProjectCameraRosterBar(
+                                          db: db,
+                                          projectId: widget.projectId,
+                                          activeCameraId: primaryCameraId,
+                                          palette: palette,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: EquipmentBrandGroupedList<Camera>(
+                                          items: items,
+                                          assignedIds: assignedIds,
+                                          customIds: customIds,
+                                          activeFilter: _cameraFilter,
+                                          vintageOnly: _vintageOnly,
+                                          lukaOnly: _lukaOnly,
+                                          idOf: (c) => c.id,
+                                          brandOf: (c) => c.brand,
+                                          seriesOf: (c) => c.series,
+                                          titleOf: (c) => '${c.brand} ${c.model}',
+                                          subtitleOf: cameraListSubtitle,
+                                          filterOf: (c) => c.mountType,
+                                          projectRoleLabel: (c) {
+                                            if (!assignedIds.contains(c.id)) {
+                                              return null;
+                                            }
+                                            return ProjectEquipmentRoles
+                                                .cameraRoleLabel(
+                                              cameraId: c.id,
+                                              primaryCameraId: primaryCameraId,
+                                              assignedInOrder: assignedCameras,
+                                            );
+                                          },
+                                          onTap: (c) => _openDetail(
+                                            context,
+                                            'camera',
+                                            c.id,
+                                          ),
+                                          onToggleAssign: (c) =>
+                                              _toggleAssign(
+                                            db,
+                                            'camera',
+                                            c.id,
+                                            assignedIds.contains(c.id),
+                                            assigned,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               );
                             },
                           ),

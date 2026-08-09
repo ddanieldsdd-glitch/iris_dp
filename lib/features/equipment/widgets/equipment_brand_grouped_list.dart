@@ -29,6 +29,7 @@ class EquipmentBrandGroupedList<T extends Object> extends StatelessWidget {
   final bool lukaOnly;
   final void Function(T item) onTap;
   final Future<void> Function(T item) onToggleAssign;
+  final String? Function(T item)? projectRoleLabel;
   final Widget? Function(T item)? trailingBuilder;
 
   const EquipmentBrandGroupedList({
@@ -47,6 +48,7 @@ class EquipmentBrandGroupedList<T extends Object> extends StatelessWidget {
     this.lukaOnly = false,
     required this.onTap,
     required this.onToggleAssign,
+    this.projectRoleLabel,
     this.trailingBuilder,
   });
 
@@ -181,7 +183,20 @@ class EquipmentBrandGroupedList<T extends Object> extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(titleOf(item), style: AppTypography.titleMedium(palette)),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            titleOf(item),
+                            style: AppTypography.titleMedium(palette),
+                          ),
+                        ),
+                        if (inProject) ...[
+                          const SizedBox(width: 8),
+                          ..._roleBadges(item, palette),
+                        ],
+                      ],
+                    ),
                     Text(subtitleOf(item), style: AppTypography.bodyMedium(palette)),
                   ],
                 ),
@@ -200,5 +215,35 @@ class EquipmentBrandGroupedList<T extends Object> extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  List<Widget> _roleBadges(T item, AppPalette palette) {
+    final role = projectRoleLabel?.call(item);
+    if (role == null || role.isEmpty) return const [];
+    final active = role == 'A-CAM';
+    return [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: active
+              ? palette.accent.withValues(alpha: 0.15)
+              : palette.surfaceElevated,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: active
+                ? palette.accent.withValues(alpha: 0.35)
+                : Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
+        child: Text(
+          role,
+          style: AppTypography.mono(palette).copyWith(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: active ? palette.accent : palette.textTertiary,
+          ),
+        ),
+      ),
+    ];
   }
 }

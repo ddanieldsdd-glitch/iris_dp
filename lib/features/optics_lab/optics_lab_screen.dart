@@ -13,6 +13,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/media_storage.dart';
 import '../../core/widgets/app_card.dart';
+import '../equipment/widgets/project_camera_roster_bar.dart';
 import '../luka_export/luka_compatibility_service.dart';
 import '../luka_export/luka_manifest_service.dart';
 import 'flt_frame_line_preview.dart';
@@ -514,6 +515,13 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
+        ProjectCameraRosterBar(
+          db: db,
+          projectId: widget.projectId,
+          activeCameraId: _camera?.id,
+          palette: palette,
+        ),
+        const SizedBox(height: AppSpacing.md),
         Text('Camera Settings', style: AppTypography.titleMedium(palette)),
         const SizedBox(height: AppSpacing.sm),
         StreamBuilder<List<Camera>>(
