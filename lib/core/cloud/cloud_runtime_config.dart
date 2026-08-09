@@ -50,8 +50,8 @@ abstract final class CloudRuntimeConfig {
     // binario actual. Evita Invalid API key tras rotar .env / recompilar
     // mientras SharedPreferences conserva una anon key antigua.
     if (_enabled && !_manual && SupabaseConfig.isConfigured) {
-      final embeddedUrl = SupabaseConfig.url;
-      final embeddedKey = SupabaseConfig.anonKey;
+      const embeddedUrl = SupabaseConfig.url;
+      const embeddedKey = SupabaseConfig.anonKey;
       if (_url != embeddedUrl || _anonKey != embeddedKey) {
         _url = embeddedUrl;
         _anonKey = embeddedKey;

@@ -13,7 +13,6 @@ import 'package:iris_dp/features/visual_bible/visual_bible_export_config.dart';
 import 'package:iris_dp/features/visual_bible/visual_bible_model.dart';
 import 'package:iris_dp/features/visual_bible/visual_bible_pdf_service.dart';
 import 'package:iris_dp/shared/visual_bible/bible_section_fields.dart';
-import 'package:iris_dp/shared/visual_bible/bible_section_ids.dart';
 
 /// Marcadores únicos para verificación visual/textual del PDF generado.
 const fase1MarkerCameraIso = 'FASE1-CAM-ISO-6400';
