@@ -61,7 +61,22 @@ Los chips de rol en Equipo/Format/Optics Lab (`project_camera_roster_bar`, badge
 
 **Hecho:** Format elige modo desde `Camera.sensorModesJson` vía `FormatSensorModeResolve`; Lab lee/escribe `formatData.sensorModeName` (slices 1–3).
 
-**Pendiente (datos):** rellenar gates faltantes en Excel.
+**Pendiente:** rellenar gates faltantes en Excel.
+
+### Cascada Equipo ↔ Biblia ↔ Format ↔ Lab — slice 0 iniciado
+
+**Diagnóstico (9 ago 2026):**
+- Modo Format↔Lab ya sync vía `sensorModeName`.
+- A-CAM canónico: `VisualBibles.primaryCameraId` (+ assign a `ProjectEquipment`).
+- Huecos: cambiar A-CAM no invalidaba modo; desasignar dejaba primary stale; detalle Equipo no promovía; `resolveProjectCamera` fallback sin `orderBy`; Lab lee `aspectRatio` columna no blob; presets dual-write; film aplazado.
+
+**Hecho (slice 0):**
+- `SensorModeCascade.reconcileFormatBlob` + llamada desde `syncBiblePrimaryCamera`.
+- `maybeReconcilePrimaryOnEquipmentUnassign` (lista + detalle Equipo).
+- `maybePromote*` también desde detalle Equipo.
+- Fallback `resolveProjectCamera/Lens` alineado a `sortOrder`.
+
+**Siguiente:** Lab lee `activeRatio` del blob Format; sync live cam/lens Lab↔Biblia (o restringir roster); presets → blob; film path.
 
 ### Import Excel catálogo v1.1 / v1.7 — Cámaras+Ópticas+Luces
 
@@ -72,6 +87,6 @@ Los chips de rol en Equipo/Format/Optics Lab (`project_camera_roster_bar`, badge
 2. **`Película`:** aplazada (JSON estático futuro, sin Drift).
 3. **`estado_dato` / Auditoría / Fuentes:** no persistir en Drift.
 
-**Pendiente:** rellenar gates faltantes en Excel; cascada arquitectura Equipo↔Biblia↔Lab (fase aparte).
+**Pendiente:** rellenar gates faltantes en Excel; resto cascada (ver sección arriba).
 
 ---

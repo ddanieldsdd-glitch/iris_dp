@@ -79,8 +79,18 @@ class _EquipmentDetailScreenState extends ConsumerState<EquipmentDetailScreen> {
             r.equipmentId == widget.equipmentId,
       );
       await db.unassignProjectEquipment(row.id);
+      await db.maybeReconcilePrimaryOnEquipmentUnassign(
+        projectId: widget.projectId,
+        equipmentType: widget.equipmentType,
+        equipmentId: widget.equipmentId,
+      );
     } else {
       await db.assignEquipmentToProject(
+        projectId: widget.projectId,
+        equipmentType: widget.equipmentType,
+        equipmentId: widget.equipmentId,
+      );
+      await db.maybePromotePrimaryOnEquipmentAssign(
         projectId: widget.projectId,
         equipmentType: widget.equipmentType,
         equipmentId: widget.equipmentId,

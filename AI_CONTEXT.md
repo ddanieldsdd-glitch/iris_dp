@@ -149,17 +149,17 @@ UNKNOWN:
 
 ## 11. NEXT PRIORITIES
 
-P0 Evitar stale dual-write: presets/`aspectRatio` y escritores externos documentados en `BACKLOG.md`.
-P1 Cascada arquitectura Equipo↔Biblia↔Format↔Lab (fase propia).
-P2 Dual-write presets Format / gates Excel faltantes.
+P0 Cascada slice 1: Lab lee `activeRatio` de Format blob (no solo columna `aspectRatio`).
+P1 Cascada: Lab cam/lens → Biblia en vivo o limitar a roster; presets → formatData.
+P2 Gates Excel faltantes / film path estático.
 
 ## 12. HANDOFF
 
 Si otro agente toma el proyecto ahora...
 Proyecto en `/Users/danieldiaz/Documents/IRIS DP/iris_dp` (Flutter IRIS DP).
-Hecho: Format+Camera piloto, compositor, moodboard, catálogo v1.7 + UI Equipo import oficial JSON, unificación modos Format↔Lab.
-Pendiente: cascada arquitectura Equipo↔Biblia↔Lab (fase aparte), dual-write presets Format, gates Excel.
+Hecho: Format+Camera piloto, compositor, moodboard, catálogo v1.7 + UI import, Format↔Lab modos, cascada slice 0 (A-CAM→modo + unassign reconcile).
+Pendiente: cascada slice 1+ (aspect blob, Lab live sync, presets), gates Excel, film.
 Riesgo principal: romper lectura canónica blob/legacy o sync de snapshots al tocar biblia/equipo.
-Siguiente acción: fase cascada de arquitectura (Equipo↔Biblia↔Format↔Lab) — acordada como fase propia; o rellenar gates Excel.
+Siguiente acción: Optics Lab leer `activeRatio` desde formatData; luego sync cam/lens Lab↔primary.
 Leer `ARCHITECTURE.md` + `BACKLOG.md` + `docs/catalog/README.md` antes de editar.
 Mantener cambios mínimos y correr `flutter analyze` / tests afectados.

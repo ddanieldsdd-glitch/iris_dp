@@ -11,6 +11,7 @@ import '../../shared/visual_bible/bible_section_fields.dart';
 import '../../shared/visual_bible/moodboard_association.dart';
 import '../../shared/visual_bible/bible_layout.dart' as bible_layout;
 import '../../shared/visual_bible/bible_section_ids.dart';
+import '../../shared/visual_bible/sensor_mode_cascade.dart';
 import '../../features/visual_bible/v2/migration/freeform_v2_blocks_codec.dart';
 import '../templates/user_template_models.dart';
 import 'seed_data.dart';
@@ -2247,15 +2248,9 @@ class AppDatabase extends _$AppDatabase {
     if (bible?.primaryCameraId != null) {
       return getCameraById(bible!.primaryCameraId!);
     }
-    final assigned =
-        await (select(projectEquipment)..where(
-              (e) =>
-                  e.projectId.equals(projectId) &
-                  e.equipmentType.equals('camera'),
-            ))
-            .get();
-    if (assigned.isEmpty) return null;
-    return getCameraById(assigned.first.equipmentId);
+    final firstId = await _firstAssignedEquipmentId(projectId, 'camera');
+    if (firstId == null) return null;
+    return getCameraById(firstId);
   }
 
   /// Resuelve lente principal del proyecto: Biblia > ProjectEquipment > null.
@@ -2264,15 +2259,9 @@ class AppDatabase extends _$AppDatabase {
     if (bible?.primaryLensId != null) {
       return getLensById(bible!.primaryLensId!);
     }
-    final assigned =
-        await (select(projectEquipment)..where(
-              (e) =>
-                  e.projectId.equals(projectId) &
-                  e.equipmentType.equals('lens'),
-            ))
-            .get();
-    if (assigned.isEmpty) return null;
-    return getLensById(assigned.first.equipmentId);
+    final firstId = await _firstAssignedEquipmentId(projectId, 'lens');
+    if (firstId == null) return null;
+    return getLensById(firstId);
   }
 
   /// Tras asignar equipo, promueve a principal en Biblia solo si aún no hay uno.
@@ -2300,6 +2289,44 @@ class AppDatabase extends _$AppDatabase {
           await syncBiblePrimaryLens(projectId, firstId);
         }
         break;
+    }
+  }
+
+  /// Tras desasignar: si era A-CAM/A-LENS, reasigna la siguiente o limpia primary.
+  Future<void> maybeReconcilePrimaryOnEquipmentUnassign({
+    required int projectId,
+    required String equipmentType,
+    required int equipmentId,
+  }) async {
+    final bible = await getVisualBibleForProject(projectId);
+    if (bible == null) return;
+    switch (equipmentType) {
+      case 'camera':
+        if (bible.primaryCameraId != equipmentId) return;
+        final next = await _firstAssignedEquipmentId(projectId, 'camera');
+        if (next != null) {
+          await syncBiblePrimaryCamera(projectId, next);
+        } else {
+          await (update(visualBibles)..where((v) => v.id.equals(bible.id)))
+              .write(
+            const VisualBiblesCompanion(
+              primaryCameraId: Value(null),
+            ),
+          );
+        }
+      case 'lens':
+        if (bible.primaryLensId != equipmentId) return;
+        final next = await _firstAssignedEquipmentId(projectId, 'lens');
+        if (next != null) {
+          await syncBiblePrimaryLens(projectId, next);
+        } else {
+          await (update(visualBibles)..where((v) => v.id.equals(bible.id)))
+              .write(
+            const VisualBiblesCompanion(
+              primaryLensId: Value(null),
+            ),
+          );
+        }
     }
   }
 
@@ -2343,6 +2370,57 @@ class AppDatabase extends _$AppDatabase {
         equipmentId: cameraId,
       );
     }
+    if (cam != null) {
+      await _reconcileFormatSensorModeForCamera(projectId, cam);
+    }
+  }
+
+  /// Cascada A-CAM → Format: si `sensorModeName` no está en la cámara, re-resuelve.
+  Future<void> _reconcileFormatSensorModeForCamera(
+    int projectId,
+    Camera cam,
+  ) async {
+    final bible = await getVisualBibleForProject(projectId);
+    if (bible == null) return;
+    final def = await (select(bibleSectionDefinitions)
+          ..where((d) => d.bibleId.equals(bible.id))
+          ..where((d) => d.id.equals(BibleSectionId.format)))
+        .getSingleOrNull();
+    if (def == null) return;
+
+    final fields = BibleSectionFieldsConfig.parse(
+      def.contentJson,
+      BibleSectionId.format,
+    );
+    final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
+    var blob = <String, dynamic>{};
+    final raw = values['formatData'];
+    if (raw != null && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          blob = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {}
+    }
+
+    final patch = SensorModeCascade.reconcileFormatBlob(
+      formatBlob: blob,
+      sensorModesJson: cam.sensorModesJson,
+      fallbackWidthMm: cam.sensorWidthMm,
+      fallbackHeightMm: cam.sensorHeightMm,
+    );
+    if (patch == null) return;
+
+    blob.addAll(patch);
+    values['formatData'] = jsonEncode(blob);
+    await upsertBibleSectionDefinition(
+      def.copyWith(
+        contentJson: Value(
+          BibleSectionFieldsConfig.encode(fields, values: values),
+        ),
+      ),
+    );
   }
 
   Future<void> syncBiblePrimaryLens(int projectId, int lensId) async {
