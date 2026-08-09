@@ -1,9 +1,14 @@
 export '../../shared/visual_bible/bible_layout.dart';
 
+import '../../shared/visual_bible/format_pilot_resolve.dart';
 import 'visual_bible_model.dart';
 
 /// Porcentaje aproximado de completitud por sección (0.0–1.0).
-double bibleSectionCompletion(VisualBibleData data, String sectionId) {
+double bibleSectionCompletion(
+  VisualBibleData data,
+  String sectionId, {
+  String? formatSectionContentJson,
+}) {
   bool filled(String? v) => v != null && v.trim().isNotEmpty;
 
   return switch (sectionId) {
@@ -54,11 +59,14 @@ double bibleSectionCompletion(VisualBibleData data, String sectionId) {
       filled(data.colorNarrativeIntent),
       filled(data.lightSource),
     ]),
-    BibleSectionId.format => _ratio([
-      filled(data.aspectRatio),
-      filled(data.aspectRatioJustification),
-      filled(data.formatNarrativeIntent),
-    ]),
+    BibleSectionId.format => () {
+        final blob = FormatPilotResolve.parseBlob(formatSectionContentJson);
+        return _ratio([
+          filled(FormatPilotResolve.activeRatio(blob, data)),
+          filled(FormatPilotResolve.resolution(blob, data)),
+          filled(FormatPilotResolve.intentNarrative(blob, data)),
+        ]);
+      }(),
     BibleSectionId.texture => _ratio([
       filled(data.imageTexture),
       filled(data.grainLevel),
@@ -86,8 +94,13 @@ double bibleSectionCompletionExtended({
   int locationRefCount = 0,
   int lightingSetupCount = 0,
   int sectionRefsCount = 0,
+  String? formatSectionContentJson,
 }) {
-  final base = bibleSectionCompletion(data, sectionId);
+  final base = bibleSectionCompletion(
+    data,
+    sectionId,
+    formatSectionContentJson: formatSectionContentJson,
+  );
   final withRefs = sectionRefsCount > 0
       ? (base + (sectionRefsCount.clamp(0, 6) / 6) * 0.35).clamp(0.0, 1.0)
       : base;
@@ -123,6 +136,7 @@ double bibleOverallCompletion({
   int locationRefCount = 0,
   int lightingSetupCount = 0,
   int Function(String sectionId)? sectionRefsCount,
+  String? formatSectionContentJson,
 }) {
   final knownIds = sectionIds.where(BibleSectionId.all.contains).toSet();
   if (knownIds.isEmpty) return 0;
@@ -139,6 +153,7 @@ double bibleOverallCompletion({
           locationRefCount: locationRefCount,
           lightingSetupCount: lightingSetupCount,
           sectionRefsCount: sectionRefsCount?.call(sectionId) ?? 0,
+          formatSectionContentJson: formatSectionContentJson,
         ),
   );
   return total / knownIds.length;

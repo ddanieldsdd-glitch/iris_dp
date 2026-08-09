@@ -10,6 +10,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../equipment/widgets/equipment_picker.dart';
 import '../../../../shared/visual_bible/bible_optics_context.dart';
+import '../../../../shared/visual_bible/format_pilot_resolve.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
@@ -21,6 +22,7 @@ class OpticsSection extends ConsumerStatefulWidget {
   final VisualBibleData data;
   final int projectId;
   final String? sectionContentJson;
+  final String? formatSectionContentJson;
   final BibleChanged onChanged;
 
   const OpticsSection({
@@ -28,6 +30,7 @@ class OpticsSection extends ConsumerStatefulWidget {
     required this.data,
     required this.projectId,
     this.sectionContentJson,
+    this.formatSectionContentJson,
     required this.onChanged,
   });
 
@@ -84,6 +87,9 @@ class _OpticsSectionState extends ConsumerState<OpticsSection> {
     final palette = context.palette;
     final data = widget.data;
     final config = _getConfig();
+    final formatBlob =
+        FormatPilotResolve.parseBlob(widget.formatSectionContentJson);
+    final aspectForOptics = FormatPilotResolve.activeRatio(formatBlob, data);
 
     final styleSubtitle =
         config['styleSubtitle'] as String? ?? 'Minimalist Character';
@@ -174,8 +180,9 @@ class _OpticsSectionState extends ConsumerState<OpticsSection> {
                 final opticsCtx = BibleOpticsContext.resolve(
                   primaryLens: lensSnap.data,
                   opticType: data.opticType,
-                  aspectRatio: data.aspectRatio,
+                  aspectRatio: aspectForOptics,
                   opticsConfig: config,
+                  formatData: formatBlob,
                 );
                 final showAnamorphic = opticsCtx.isAnamorphic;
 

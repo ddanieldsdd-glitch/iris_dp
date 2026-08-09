@@ -11,7 +11,7 @@ import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../shared/visual_bible/bible_optics_context.dart';
-import '../../../../shared/visual_bible/bible_section_value_resolve.dart';
+import '../../../../shared/visual_bible/format_pilot_resolve.dart';
 import '../../../equipment/widgets/project_camera_roster_bar.dart';
 import '../../export/bible_section_export_reader.dart';
 import '../../bible_section_fields.dart';
@@ -128,11 +128,7 @@ class FormatSection extends ConsumerWidget {
     final squeezeFactor = custom['squeezeFactor'] as String? ?? '2.0x';
     final squeezeDetail =
         custom['squeezeDetail'] as String? ?? 'Anamorphic S35';
-    final aspectForOptics = BibleSectionValueResolve.resolveSectionString(
-      custom,
-      'activeRatio',
-      legacy: data.aspectRatio,
-    );
+    final aspectForOptics = FormatPilotResolve.activeRatio(custom, data);
 
     final ratioName = custom['ratioName'] as String? ??
         _ratioLabel(aspectForOptics ?? data.aspectRatio ?? '');
@@ -158,15 +154,8 @@ class FormatSection extends ConsumerWidget {
     final activeRatio = aspectForOptics ??
         _formatRatio(sensorR * squeezeForRatio);
 
-    final intentNarrative = BibleSectionValueResolve.resolveSectionString(
-          custom,
-          'intentNarrative',
-          legacyFallbacks: [
-            data.formatNarrativeIntent,
-            data.aspectRatioJustification,
-          ],
-        ) ??
-        '';
+    final intentNarrative =
+        FormatPilotResolve.intentNarrative(custom, data) ?? '';
     final intentComposition = custom['intentComposition'] as String? ?? '';
     final intentReinforce = custom['intentReinforce'] as String? ?? '';
 
@@ -174,11 +163,7 @@ class FormatSection extends ConsumerWidget {
         custom['overlayCam'] as String? ?? 'ARRI 35 | 40MM ANAMORPHIC';
     final imageCircle = custom['imageCircle'] as String? ?? '';
     final cropFactor = custom['cropFactor'] as String? ?? '';
-    final resolvedResolution = BibleSectionValueResolve.resolveSectionString(
-      custom,
-      'resolution',
-      legacy: data.captureResolution,
-    );
+    final resolvedResolution = FormatPilotResolve.resolution(custom, data);
     final sensorDimsOverride = custom['sensorDims'] as String? ?? '';
 
     return BibleSectionScaffold(
@@ -199,6 +184,9 @@ class FormatSection extends ConsumerWidget {
             letterSpacing: -0.6,
           ),
         ),
+        // Mismo concepto que Director's Intent → intentNarrative (blob).
+        // El módulo stitch «narrative» escribía formatNarrativeIntent (columna).
+        'narrative': const SizedBox.shrink(),
         'formatSettings': FutureBuilder<Camera?>(
           future: db.resolveProjectCamera(projectId),
           builder: (context, camSnap) {

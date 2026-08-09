@@ -225,6 +225,10 @@ class BibleSidebar extends StatelessWidget {
 
   List<Widget> _dynamicItems(AppPalette palette) {
     final items = <Widget>[_overviewItem(palette)];
+    final formatSectionContentJson = definitions
+        ?.where((d) => d.id == BibleSectionId.format)
+        .map((d) => d.contentJson)
+        .firstOrNull;
     for (final group in groups!) {
       final color = _groupAccentColor(palette, group.label);
       items.add(
@@ -274,7 +278,11 @@ class BibleSidebar extends StatelessWidget {
             active: def.id == activeSection,
             completion: data == null
                 ? 0
-                : contentSnapshot.sectionCompletion(data!, def.id),
+                : contentSnapshot.sectionCompletion(
+                    data!,
+                    def.id,
+                    formatSectionContentJson: formatSectionContentJson,
+                  ),
             onTap: () => onSectionSelected(def.id),
             onRemove:
                 onRemoveSection == null || def.id == BibleSectionId.settings

@@ -10,6 +10,7 @@ import '../../../../core/database/app_database.dart';
 import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../shared/visual_bible/format_pilot_resolve.dart';
 import '../../bible_section_fields.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
@@ -24,6 +25,7 @@ class ConceptSection extends ConsumerWidget {
   final VisualBibleData data;
   final int projectId;
   final String? sectionContentJson;
+  final String? formatSectionContentJson;
   final BibleChanged onChanged;
 
   const ConceptSection({
@@ -31,6 +33,7 @@ class ConceptSection extends ConsumerWidget {
     required this.data,
     required this.projectId,
     this.sectionContentJson,
+    this.formatSectionContentJson,
     required this.onChanged,
   });
 
@@ -113,6 +116,7 @@ class ConceptSection extends ConsumerWidget {
           db: db,
           onChanged: onChanged,
           sectionContentJson: sectionContentJson,
+          formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
         ),
@@ -124,6 +128,7 @@ class ConceptSection extends ConsumerWidget {
           db: db,
           onChanged: onChanged,
           sectionContentJson: sectionContentJson,
+          formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
         ),
@@ -135,6 +140,7 @@ class ConceptSection extends ConsumerWidget {
           db: db,
           onChanged: onChanged,
           sectionContentJson: sectionContentJson,
+          formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
         ),
@@ -146,6 +152,7 @@ class ConceptSection extends ConsumerWidget {
           db: db,
           onChanged: onChanged,
           sectionContentJson: sectionContentJson,
+          formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
         ),
@@ -157,6 +164,7 @@ class ConceptSection extends ConsumerWidget {
           db: db,
           onChanged: onChanged,
           sectionContentJson: sectionContentJson,
+          formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
         ),
@@ -168,6 +176,7 @@ class ConceptSection extends ConsumerWidget {
           db: db,
           onChanged: onChanged,
           sectionContentJson: sectionContentJson,
+          formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
         ),
@@ -179,6 +188,7 @@ class ConceptSection extends ConsumerWidget {
           db: db,
           onChanged: onChanged,
           sectionContentJson: sectionContentJson,
+          formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
         ),
@@ -1166,6 +1176,7 @@ class _ConceptStitchModule extends ConsumerWidget {
   final AppPalette palette;
   final AppDatabase db;
   final String? sectionContentJson;
+  final String? formatSectionContentJson;
   final BibleChanged onChanged;
   final Color? Function(String?) parseHex;
   final Future<void> Function(WidgetRef ref, Map<String, dynamic> update)
@@ -1179,6 +1190,7 @@ class _ConceptStitchModule extends ConsumerWidget {
     required this.db,
     required this.onChanged,
     required this.sectionContentJson,
+    this.formatSectionContentJson,
     required this.parseHex,
     required this.updateCustomData,
   });
@@ -1223,8 +1235,11 @@ class _ConceptStitchModule extends ConsumerWidget {
     final shadowTreatment = custom['shadowTreatment'] as String? ?? '';
     final keyFrameTitle =
         custom['keyFrameTitle'] as String? ?? 'Key Frame Analysis';
+    final formatBlob = FormatPilotResolve.parseBlob(formatSectionContentJson);
+    final aspectLabel =
+        FormatPilotResolve.activeRatio(formatBlob, data) ?? '2.39:1';
     final keyFrameTech = custom['keyFrameTech'] as String? ??
-        'Aspect Ratio: ${data.aspectRatio ?? '2.39:1'} / Focal: 21mm / T2.8';
+        'Aspect Ratio: $aspectLabel / Focal: 21mm / T2.8';
     final act1 = custom['act1Intent'] as String? ?? '';
     final act2 = custom['act2Intent'] as String? ?? '';
     final act3 = custom['act3Intent'] as String? ?? '';

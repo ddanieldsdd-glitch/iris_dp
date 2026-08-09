@@ -378,6 +378,8 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
         colorBlockCount: bundle.blocks.length,
         lightingSetupCount: bundle.lightingSetups.length,
         cameraTestCount: bundle.cameraTests.length,
+        formatSectionContentJson:
+            bundle.sectionContentJsonById[BibleSectionId.format],
       );
       final built = builder.build(
         projectId: widget.projectId,
@@ -693,6 +695,10 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
           sectionDefsById,
           BibleSectionId.concept,
         ),
+        formatSectionContentJson: _sectionContentJson(
+          sectionDefsById,
+          BibleSectionId.format,
+        ),
         onChanged: _onDataChanged,
       ),
       BibleSectionId.camera => CameraSensorSection(
@@ -710,6 +716,10 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
         sectionContentJson: _sectionContentJson(
           sectionDefsById,
           BibleSectionId.optics,
+        ),
+        formatSectionContentJson: _sectionContentJson(
+          sectionDefsById,
+          BibleSectionId.format,
         ),
         onChanged: _onDataChanged,
       ),

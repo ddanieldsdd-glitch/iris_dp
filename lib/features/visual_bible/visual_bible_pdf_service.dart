@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/pdf_export_fonts.dart';
 import '../../core/utils/pdf_safe_image.dart';
+import '../../shared/visual_bible/format_pilot_resolve.dart';
 import 'export/bible_section_export_reader.dart';
 import 'visual_bible_model.dart';
 
@@ -480,40 +481,44 @@ class VisualBiblePdfService {
       );
     }
 
-    if (!isPitch &&
-        _sectionAllowed(sections, BibleSectionId.format) &&
-        (_hasAny([
-          data.aspectRatio,
-          data.aspectRatioJustification,
-          data.formatNarrativeIntent,
-          data.recordingFormat,
-          data.captureResolution,
-          data.deliveryResolution,
-        ]) ||
-            _hasCustomContent(BibleSectionId.format, sectionContentJsonById))) {
-      doc.addPage(
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => _sectionPage(
-            title: 'FORMATO',
-            fontBold: fonts.bold,
-            font: fonts.regular,
-            content: _textFieldsContent([
-              ('Relación de aspecto', data.aspectRatio),
-              ('Justificación', data.aspectRatioJustification),
-              ('Intención narrativa', data.formatNarrativeIntent),
-              ('Formato de grabación', data.recordingFormat),
-              ('Resolución de captura', data.captureResolution),
-              ('Resolución de entrega', data.deliveryResolution),
-              ..._customFieldRows(
-                BibleSectionId.format,
-                sectionContentJsonById,
-              ),
-            ], fonts),
-          ),
-        ),
+    if (!isPitch && _sectionAllowed(sections, BibleSectionId.format)) {
+      final formatBlob = FormatPilotResolve.parseBlob(
+        sectionContentJsonById[BibleSectionId.format],
       );
+      if (FormatPilotResolve.hasExportablePilotContent(data, formatBlob)) {
+        doc.addPage(
+          pw.Page(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            build: (_) => _sectionPage(
+              title: 'FORMATO',
+              fontBold: fonts.bold,
+              font: fonts.regular,
+              content: _textFieldsContent([
+                (
+                  'Relación de aspecto',
+                  FormatPilotResolve.activeRatio(formatBlob, data),
+                ),
+                (
+                  'Justificación',
+                  FormatPilotResolve.legacyJustificationForPdf(formatBlob, data),
+                ),
+                (
+                  'Intención narrativa',
+                  FormatPilotResolve.intentNarrative(formatBlob, data),
+                ),
+                ('Formato de grabación', data.recordingFormat),
+                (
+                  'Resolución de captura',
+                  FormatPilotResolve.resolution(formatBlob, data),
+                ),
+                ('Resolución de entrega', data.deliveryResolution),
+                ...FormatPilotResolve.customRowsForPdf(formatBlob),
+              ], fonts),
+            ),
+          ),
+        );
+      }
     }
 
     if (!isPitch &&

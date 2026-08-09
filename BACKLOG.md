@@ -21,16 +21,31 @@ Items registrados para no perderlos; no bloquean Fase 1 ni Fase 2.
 
 ## Fase 3 piloto Format — acoplamientos no resueltos
 
-Tras unificar escritura en `formatData`, columnas legacy (`aspectRatio`, `captureResolution`, etc.) pueden quedar stale:
+Tras unificar escritura en `formatData`, columnas legacy (`aspectRatio`, `captureResolution`, etc.) pueden quedar stale.
 
-- **Optics** sigue leyendo `data.aspectRatio` (columna).
-- **Camera** sigue escribiendo `captureResolution` en columna.
-- **PDF clásico** muestra slots de columna además de filas `formatData`.
-- **Completion** puntúa columnas, no blob.
+### Correcciones aplicadas en cierre piloto (9 ago 2026)
 
-No es bug del piloto; evaluar post-cierre Format antes de migrar otras secciones.
+- **PDF clásico:** slots Format resueltos vía `FormatPilotResolve` (blob → legacy); filas custom excluyen claves piloto.
+- **NarrativeBridge Format:** módulo stitch `narrative` oculto; mismo concepto que `intentNarrative` en Director's Intent (blob canónico).
+- **Optics / Concept / Completion / export hash:** lectura con `FormatPilotResolve` + `formatSectionContentJson`.
 
----
+### Escritores externos (permanecen — no migrados en este piloto)
+
+| Campo | Escritor | ¿Sigue columna? | ¿Migrar después? | Motivo |
+| ----- | -------- | --------------- | ---------------- | ------ |
+| `aspectRatio` | `bible_preset_service.dart` | Sí | Sí (presets) | Aplica plantillas globales; fuera alcance Format |
+| `captureResolution` | `camera_sensor_section.dart` | Sí | Sí (Camera) | Campo de Cámara; Format lee blob primero vía resolve |
+| `formatNarrativeIntent` | ~~NarrativeBridgeCard Format~~ | No (oculto) | — | Duplicado eliminado en Format |
+| `formatNarrativeIntent` | Otras secciones vía `setNarrativeIntentForSection` | Sí (otras secciones) | Por sección | No afecta Format tras ocultar bridge |
+| `aspectRatioJustification` | Ningún widget activo | Solo lectura legacy | Evaluar | Fallback de `intentNarrative`; sin escritor UI |
+
+### Pendiente post-Format (fuera de alcance)
+
+- **Completion** de otras secciones sin blob.
+- **Migración Camera** de `captureResolution`.
+- **Presets** escribiendo `aspectRatio` sin blob.
+
+No es bug del piloto si queda documentado; evaluar antes de migrar otras secciones.
 
 ## Fase 6 — design system: badges de rol
 

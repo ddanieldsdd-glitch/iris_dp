@@ -44,7 +44,11 @@ class BibleContentSnapshot {
       )
       .length;
 
-  double sectionCompletion(VisualBibleData data, String sectionId) =>
+  double sectionCompletion(
+    VisualBibleData data,
+    String sectionId, {
+    String? formatSectionContentJson,
+  }) =>
       bibleSectionCompletionExtended(
         data: data,
         sectionId: sectionId,
@@ -54,6 +58,7 @@ class BibleContentSnapshot {
         locationRefCount: locationRefs.length,
         lightingSetupCount: lightingSetups.length,
         sectionRefsCount: refsForSection(sectionId),
+        formatSectionContentJson: formatSectionContentJson,
       );
 }
 
@@ -130,6 +135,10 @@ class BibleOverviewSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final formatSectionContentJson = definitions
+        .where((def) => def.id == BibleSectionId.format)
+        .map((def) => def.contentJson)
+        .firstOrNull;
     final sectionIds = definitions
         .where(
           (def) =>
@@ -148,6 +157,7 @@ class BibleOverviewSection extends StatelessWidget {
       locationRefCount: snapshot.locationRefs.length,
       lightingSetupCount: snapshot.lightingSetups.length,
       sectionRefsCount: snapshot.refsForSection,
+      formatSectionContentJson: formatSectionContentJson,
     );
     final incomplete =
         definitions
@@ -156,13 +166,27 @@ class BibleOverviewSection extends StatelessWidget {
                   !def.isHidden &&
                   def.id != BibleSectionId.settings &&
                   BibleSectionId.all.contains(def.id) &&
-                  snapshot.sectionCompletion(data, def.id) < 0.85,
+                  snapshot.sectionCompletion(
+                    data,
+                    def.id,
+                    formatSectionContentJson: formatSectionContentJson,
+                  ) < 0.85,
             )
             .toList()
           ..sort(
             (a, b) => snapshot
-                .sectionCompletion(data, a.id)
-                .compareTo(snapshot.sectionCompletion(data, b.id)),
+                .sectionCompletion(
+                  data,
+                  a.id,
+                  formatSectionContentJson: formatSectionContentJson,
+                )
+                .compareTo(
+                  snapshot.sectionCompletion(
+                    data,
+                    b.id,
+                    formatSectionContentJson: formatSectionContentJson,
+                  ),
+                ),
           );
 
     return ColoredBox(
@@ -190,7 +214,14 @@ class BibleOverviewSection extends StatelessWidget {
                   progress: progress,
                   completed: sectionIds
                       .where(
-                        (id) => snapshot.sectionCompletion(data, id) >= 0.85,
+                        (id) =>
+                            snapshot.sectionCompletion(
+                              data,
+                              id,
+                              formatSectionContentJson:
+                                  formatSectionContentJson,
+                            ) >=
+                            0.85,
                       )
                       .length,
                   total: sectionIds.length,
@@ -263,7 +294,11 @@ class BibleOverviewSection extends StatelessWidget {
                       .map(
                         (def) => _SectionProgressTile(
                           definition: def,
-                          progress: snapshot.sectionCompletion(data, def.id),
+                          progress: snapshot.sectionCompletion(
+                            data,
+                            def.id,
+                            formatSectionContentJson: formatSectionContentJson,
+                          ),
                           onTap: () => onOpenSection(def.id),
                         ),
                       ),
