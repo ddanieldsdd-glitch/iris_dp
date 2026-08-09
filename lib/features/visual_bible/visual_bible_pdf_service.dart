@@ -206,14 +206,15 @@ class VisualBiblePdfService {
             content: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(
-                  data.visualConcept!,
-                  style: pw.TextStyle(
-                    font: fonts.regular,
-                    fontSize: 13,
-                    lineSpacing: 7,
+                if (data.visualConcept?.trim().isNotEmpty == true)
+                  pw.Text(
+                    data.visualConcept!.trim(),
+                    style: pw.TextStyle(
+                      font: fonts.regular,
+                      fontSize: 13,
+                      lineSpacing: 7,
+                    ),
                   ),
-                ),
                 if (data.conceptNarrativeIntent?.isNotEmpty == true) ...[
                   pw.SizedBox(height: 12),
                   pw.Text(

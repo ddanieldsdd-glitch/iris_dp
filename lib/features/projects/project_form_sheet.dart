@@ -106,6 +106,7 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
     final db = ref.read(databaseProvider);
     final director = _directorCtrl.text.trim();
 
+    try {
     if (_isEditing) {
       final updated = widget.project!.copyWith(
         name: name,
@@ -143,6 +144,14 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
     }
 
     if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo guardar el proyecto: $e'),
+        ),
+      );
+    }
   }
 
   @override

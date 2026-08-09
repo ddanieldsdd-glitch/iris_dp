@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart' show Value;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../cloud/cloud_providers.dart';
@@ -53,13 +54,19 @@ abstract final class ProjectCloudActions {
         CloudRuntimeConfig.isActive &&
         loggedIn &&
         workspaceId != null) {
-      return sync.createProject(
-        workspaceId: workspaceId,
-        name: name,
-        directorDisplay: director,
-        status: status,
-        iconCode: iconCode,
-      );
+      try {
+        return await sync.createProject(
+          workspaceId: workspaceId,
+          name: name,
+          directorDisplay: director,
+          status: status,
+          iconCode: iconCode,
+        );
+      } catch (e, st) {
+        debugPrint(
+          'Cloud createProject failed; falling back to local-only: $e\n$st',
+        );
+      }
     }
 
     return db.insertProject(

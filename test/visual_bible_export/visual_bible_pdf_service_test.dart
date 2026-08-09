@@ -50,4 +50,31 @@ void main() {
     expect(bytes, isNotEmpty);
     expect(bytes.sublist(0, 4), '%PDF'.codeUnits);
   });
+
+  test('buildBytes no falla si Concepto solo tiene contentJson custom', () async {
+    final conceptContent = BibleSectionFieldsConfig.encode(
+      BibleSectionFieldsConfig.defaultsFor(BibleSectionId.concept),
+      values: {
+        'conceptData': jsonEncode({'act1Intent': 'Prueba acto 1'}),
+      },
+    );
+
+    final bytes = await VisualBiblePdfService.buildBytes(
+      mode: VisualBibleExportMode.full,
+      projectName: 'Proyecto prueba',
+      director: 'Director',
+      data: VisualBibleData(id: 1, projectId: 1),
+      colorBlocks: const [],
+      exposureBlocks: const [],
+      lightingSetups: const [],
+      cameraTests: const [],
+      moodboard: const [],
+      includedSections: {BibleSectionId.concept},
+      sectionContentJsonById: {
+        BibleSectionId.concept: conceptContent,
+      },
+    );
+
+    expect(bytes, isNotEmpty);
+  });
 }
