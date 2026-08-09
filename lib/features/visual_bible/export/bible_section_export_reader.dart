@@ -193,6 +193,7 @@ abstract final class BibleSectionExportReader {
     },
     BibleSectionId.format: {
       'sensorMode': 'Modo sensor',
+      'sensorModeName': 'Modo sensor (catálogo)',
       'sensorDetail': 'Detalle sensor',
       'squeezeFactor': 'Factor squeeze',
       'squeezeDetail': 'Detalle squeeze',

@@ -12,7 +12,10 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../shared/visual_bible/bible_optics_context.dart';
 import '../../../../shared/visual_bible/format_pilot_resolve.dart';
+import '../../../../shared/visual_bible/format_sensor_mode_resolve.dart';
 import '../../../equipment/widgets/project_camera_roster_bar.dart';
+import '../../../optics_lab/optics_calculator.dart';
+import '../../../optics_lab/sensor_mode_utils.dart';
 import '../../export/bible_section_export_reader.dart';
 import '../../bible_section_fields.dart';
 import '../../moodboard_helpers.dart';
@@ -122,9 +125,8 @@ class FormatSection extends ConsumerWidget {
     final db = ref.watch(databaseProvider);
     final custom = _getCustomData();
 
-    final sensorMode = custom['sensorMode'] as String? ?? '4:3';
-    final sensorDetail =
-        custom['sensorDetail'] as String? ?? 'Open Gate (2.8K)';
+    final sensorModeTitle = FormatSensorModeResolve.displayTitle(custom);
+    final sensorDetail = FormatSensorModeResolve.displayDetail(custom);
     final squeezeFactor = custom['squeezeFactor'] as String? ?? '2.0x';
     final squeezeDetail =
         custom['squeezeDetail'] as String? ?? 'Anamorphic S35';
@@ -141,7 +143,10 @@ class FormatSection extends ConsumerWidget {
       } catch (_) {}
     }
 
-    final sensorR = _parseRatio(sensorMode) ?? 4 / 3;
+    final sensorR = _parseRatio(
+          FormatSensorModeResolve.ratioTokenForCalc(custom),
+        ) ??
+        4 / 3;
 
     final opticsCtxSync = BibleOpticsContext.resolve(
       opticType: data.opticType,
@@ -278,38 +283,66 @@ class FormatSection extends ConsumerWidget {
                             opticsConfig: opticsConfig,
                             formatData: custom,
                           );
+                          final modes = parseSensorModesJson(cam?.sensorModesJson);
                           return Row(
                             children: [
                               Expanded(
                                 child: _LogicTile(
                                   eyebrow: 'SENSOR MODE',
-                                  title: sensorMode,
+                                  title: sensorModeTitle,
                                   detail: sensorDetail,
                                   palette: palette,
                                   onTap: () async {
-                                    final t =
-                                        TextEditingController(text: sensorMode);
-                                    final d =
-                                        TextEditingController(text: sensorDetail);
-                                    final ok = await _promptPair(
+                                    if (modes.isNotEmpty) {
+                                      final selected =
+                                          await _promptSensorModeCatalog(
+                                        context,
+                                        modes: modes,
+                                        currentName:
+                                            FormatSensorModeResolve.modeName(
+                                          custom,
+                                        ),
+                                      );
+                                      if (!context.mounted) return;
+                                      if (selected == null) return;
+                                      if (selected == _kCustomSensorMode) {
+                                        await _editSensorModeFreeText(
+                                          context,
+                                          ref,
+                                          custom: custom,
+                                          squeezeFactor: squeezeFactor,
+                                          isAnamorphic: opticsCtx.isAnamorphic,
+                                        );
+                                        return;
+                                      }
+                                      final mode = modes.firstWhere(
+                                        (m) => m.name == selected,
+                                      );
+                                      final update =
+                                          FormatSensorModeResolve.blobUpdateForMode(
+                                        name: mode.name,
+                                        widthPx: mode.maxWidthPx,
+                                        heightPx: mode.maxHeightPx,
+                                        widthMm: mode.widthMm,
+                                        heightMm: mode.heightMm,
+                                      );
+                                      await _updateCustomData(ref, update);
+                                      _syncCalculatedRatio(
+                                        ref,
+                                        update[FormatSensorModeResolve
+                                            .legacyRatioKey] as String,
+                                        opticsCtx.isAnamorphic
+                                            ? squeezeFactor
+                                            : '1.0x',
+                                      );
+                                      return;
+                                    }
+                                    await _editSensorModeFreeText(
                                       context,
-                                      'Sensor Mode',
-                                      t,
-                                      d,
-                                      aLabel: 'Ratio (4:3)',
-                                      bLabel: 'Detalle',
-                                    );
-                                    if (ok != true) return;
-                                    await _updateCustomData(ref, {
-                                      'sensorMode': t.text.trim(),
-                                      'sensorDetail': d.text.trim(),
-                                    });
-                                    _syncCalculatedRatio(
                                       ref,
-                                      t.text.trim(),
-                                      opticsCtx.isAnamorphic
-                                          ? squeezeFactor
-                                          : '1.0x',
+                                      custom: custom,
+                                      squeezeFactor: squeezeFactor,
+                                      isAnamorphic: opticsCtx.isAnamorphic,
                                     );
                                   },
                                 ),
@@ -344,7 +377,9 @@ class FormatSection extends ConsumerWidget {
                                       });
                                       _syncCalculatedRatio(
                                         ref,
-                                        sensorMode,
+                                        FormatSensorModeResolve.ratioTokenForCalc(
+                                          custom,
+                                        ),
                                         t.text.trim(),
                                       );
                                     },
@@ -731,6 +766,94 @@ class FormatSection extends ConsumerWidget {
     if (sensorR == null || squeeze == null) return;
     final ratio = _formatRatio(sensorR * squeeze);
     _updateCustomData(ref, {'activeRatio': ratio});
+  }
+
+  Future<void> _editSensorModeFreeText(
+    BuildContext context,
+    WidgetRef ref, {
+    required Map<String, dynamic> custom,
+    required String squeezeFactor,
+    required bool isAnamorphic,
+  }) async {
+    final t = TextEditingController(
+      text: FormatSensorModeResolve.ratioTokenForCalc(custom),
+    );
+    final d = TextEditingController(
+      text: FormatSensorModeResolve.displayDetail(custom),
+    );
+    final ok = await _promptPair(
+      context,
+      'Sensor Mode',
+      t,
+      d,
+      aLabel: 'Ratio (4:3) o nombre',
+      bLabel: 'Detalle',
+    );
+    if (ok != true) return;
+    await _updateCustomData(ref, {
+      FormatSensorModeResolve.legacyRatioKey: t.text.trim(),
+      FormatSensorModeResolve.detailKey: d.text.trim(),
+      // Texto libre: limpia modo de catálogo.
+      FormatSensorModeResolve.nameKey: '',
+    });
+    _syncCalculatedRatio(
+      ref,
+      t.text.trim(),
+      isAnamorphic ? squeezeFactor : '1.0x',
+    );
+  }
+
+  static const _kCustomSensorMode = '__custom__';
+
+  static Future<String?> _promptSensorModeCatalog(
+    BuildContext context, {
+    required List<SensorModeSpec> modes,
+    String? currentName,
+  }) {
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Modo de sensor'),
+        children: [
+          for (final mode in modes)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, mode.name),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    mode.name,
+                    style: TextStyle(
+                      fontWeight: mode.name == currentName
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    FormatSensorModeResolve.detailForMode(
+                      name: mode.name,
+                      widthPx: mode.maxWidthPx,
+                      heightPx: mode.maxHeightPx,
+                      widthMm: mode.widthMm,
+                      heightMm: mode.heightMm,
+                    ),
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          const Divider(height: 1),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, _kCustomSensorMode),
+            child: const Text('Personalizado…'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _editIntent(

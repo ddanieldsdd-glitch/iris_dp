@@ -57,9 +57,11 @@ Los chips de rol en Equipo/Format/Optics Lab (`project_camera_roster_bar`, badge
 
 **Fuera de alcance (post-piloto):** unificación modos sensor Format ↔ Optics Lab (PHFX); migrar más campos Camera al blob.
 
-### Unificación modos PHFX (Format ↔ Optics Lab)
+### Unificación modos PHFX (Format ↔ Optics Lab) — slice 1 iniciado
 
-Dos modelos hoy: `sensorMode` string en Format vs `SensorModeSpec` (mm/px) en catálogo PHFX → Optics Lab. Requiere diseño nuevo; aplazada hasta routing estable (**routing ya en `69c6aec`**). Format sigue heredando solo dimensiones mm vía `resolveProjectCamera()`.
+**Hecho:** Format elige modo desde `Camera.sensorModesJson` (cámara de proyecto) vía `FormatSensorModeResolve` + picker; persiste `sensorModeName` en `formatData` sin dual-write a `captureResolution`/`resolution`.
+
+**Pendiente:** Optics Lab leer `sensorModeName` de Format al abrir; sync bidireccional; rellenar gates faltantes en Excel.
 
 ### Import Excel catálogo v1.1 / v1.7 — Cámaras+Ópticas+Luces
 

@@ -151,7 +151,7 @@ UNKNOWN:
 
 P0 Evitar stale dual-write: presets/`aspectRatio` y escritores externos documentados en `BACKLOG.md`.
 P1 UI import catálogo en Equipo (JSON v1.7 Cámaras/Ópticas/Luces ya importables por API).
-P2 Unificación modos sensor Format ↔ Optics Lab (plan Claude P3; fase propia).
+P2 Completar unificación modos: Optics Lab ↔ Format bidireccional (slice 1 Format→catálogo hecho).
 
 ## 12. HANDOFF
 
@@ -160,6 +160,6 @@ Proyecto en `/Users/danieldiaz/Documents/IRIS DP/iris_dp` (Flutter IRIS DP).
 Hecho: Format+Camera piloto, compositor, moodboard, catálogo v1.7 Cámaras+Modos+Ópticas+Luces (`CatalogExcelImporter` + `docs/catalog/*`).
 Pendiente: UI import Equipo, P3 unificación modos Format↔Lab, cascada arquitectura (fase aparte), dual-write presets.
 Riesgo principal: romper lectura canónica blob/legacy o sync de snapshots al tocar biblia/equipo.
-Siguiente acción (plan Claude): P3 unificación modos sensor Format ↔ Optics Lab con datos reales de `Modos_Cámara`.
+Siguiente acción: Optics Lab respeta `formatData.sensorModeName`; luego cascada arquitectura (fase aparte).
 Leer `ARCHITECTURE.md` + `BACKLOG.md` + `docs/catalog/README.md` antes de editar.
 Mantener cambios mínimos y correr `flutter analyze` / tests afectados.
