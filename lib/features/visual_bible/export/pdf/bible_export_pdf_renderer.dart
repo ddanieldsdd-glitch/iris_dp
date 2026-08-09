@@ -305,18 +305,22 @@ class BibleExportPdfRenderer {
     );
   }
 
-  pw.Widget _narrativeBlock(BibleBlock block) => pw.Container(
-    padding: const pw.EdgeInsets.only(left: 12, top: 4, bottom: 4),
-    decoration: const pw.BoxDecoration(
-      border: pw.Border(
-        left: pw.BorderSide(color: PdfColors.blue400, width: 3),
+  pw.Widget _narrativeBlock(BibleBlock block) {
+    final text = block.content['text']?.toString().trim() ?? '';
+    if (text.isEmpty) return pw.SizedBox.shrink();
+    return pw.Container(
+      padding: const pw.EdgeInsets.only(left: 12, top: 4, bottom: 4),
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(
+          left: pw.BorderSide(color: PdfColors.blue400, width: 3),
+        ),
       ),
-    ),
-    child: pw.Text(
-      '"${block.content['text']?.toString() ?? ''}"',
-      style: const pw.TextStyle(fontSize: 12),
-    ),
-  );
+      child: pw.Text(
+        '"$text"',
+        style: const pw.TextStyle(fontSize: 12),
+      ),
+    );
+  }
 
   pw.Widget _imageBlock(BibleBlock block, Map<String, Uint8List> images) {
     final path = _imagePaths(block).firstOrNull;

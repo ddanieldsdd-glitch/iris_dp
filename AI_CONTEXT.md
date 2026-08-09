@@ -107,7 +107,7 @@ PARTIAL:
 
 BROKEN:
 
-* Compositor: citas vacías `""` en Cámara/Exposición/Localización si sin narrativa (cosmético; `BACKLOG.md`)
+* (ninguno activo de export compositor citas vacías — resuelto)
 
 UNKNOWN:
 
@@ -149,18 +149,18 @@ UNKNOWN:
 
 ## 11. NEXT PRIORITIES
 
-P0 Bug cosmético citas vacías compositor (`_narrativeBlock` → omitir texto vacío).
-P1 Evitar stale dual-write: presets/`aspectRatio` y escritores externos documentados en `BACKLOG.md`.
-P2 Import Excel catálogo v1.1 (extender `EquipmentSpreadsheetService` + `catalog_importer`; decisiones en `BACKLOG.md`).
-P3 Diseño unificación modos sensor Format ↔ Optics Lab (tras datos `Modos_Cámara`).
+P0 Evitar stale dual-write: presets/`aspectRatio` y escritores externos documentados en `BACKLOG.md`.
+P1 Import Excel catálogo v1.1 (extender `EquipmentSpreadsheetService` + `catalog_importer`; decisiones en `BACKLOG.md`).
+P2 Diseño unificación modos sensor Format ↔ Optics Lab (tras datos `Modos_Cámara`).
+P3 Dedupe menor Óptica compositor (cita + fila tabla).
 
 ## 12. HANDOFF
 
 Si otro agente toma el proyecto ahora...
 Proyecto en `/Users/danieldiaz/Documents/IRIS DP/iris_dp` (Flutter IRIS DP).
-Hecho: sync nube, VB clásica+PDF/compositor, Format + Camera piloto (`captureResolution`), routing A/B-CAM, releases.
-Pendiente: commit working tree Camera (y adyacentes), fix citas compositor, Excel v1.1, PHFX modes, deuda arquitectura.
+Hecho: sync nube, VB clásica+PDF/compositor, Format + Camera piloto, guard citas vacías compositor, routing A/B-CAM, releases.
+Pendiente: commit moodboard WIP si aplica, Excel v1.1, PHFX modes, dedupe Óptica compositor, deuda arquitectura.
 Riesgo principal: romper lectura canónica blob/legacy o sync de snapshots al tocar biblia/equipo.
-Siguiente acción: P0 compositor (guard en `_narrativeBlock`); no tocar v2 más allá de eso.
+Siguiente acción: P1 import Excel catálogo (buscar `EquipmentSpreadsheetService` / `catalog_importer` antes de inventar).
 Leer `ARCHITECTURE.md` + `BACKLOG.md` antes de editar.
 Mantener cambios mínimos y correr `flutter analyze` / tests afectados.

@@ -280,4 +280,34 @@ void main() {
     expect(text, contains('Rodaje'));
     expect(text, contains('Look A'));
   });
+
+  test('omite bloque narrative vacío (sin comillas literales)', () async {
+    const page = BibleExportPage(
+      id: 'empty-narrative',
+      label: 'Cámara',
+      type: BibleExportPageType.generated,
+      blocks: [
+        BibleBlock(
+          id: 'narrative-empty',
+          type: BibleBlockKind.narrative,
+          content: {'text': '   '},
+        ),
+        BibleBlock(
+          id: 'body',
+          type: BibleBlockKind.text,
+          content: {'text': 'CUERPO VISIBLE'},
+        ),
+      ],
+    );
+
+    final bytes = await BibleExportPdfRenderer().buildBytes(
+      composition([page]),
+    );
+    final pdf = sf.PdfDocument(inputBytes: bytes);
+    addTearDown(pdf.dispose);
+    final text = normalized(sf.PdfTextExtractor(pdf).extractText());
+
+    expect(text, contains('CUERPO VISIBLE'));
+    expect(text, isNot(contains('""')));
+  });
 }
