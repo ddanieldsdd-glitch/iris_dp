@@ -150,16 +150,16 @@ UNKNOWN:
 ## 11. NEXT PRIORITIES
 
 P0 Evitar stale dual-write: presets/`aspectRatio` y escritores externos documentados en `BACKLOG.md`.
-P1 UI import catálogo + Ópticas/Luces (Cámaras+Modos ya vía `CatalogExcelImporter` / JSON v1.7).
-P2 Fase cascada sensor (Equipo↔Biblia↔Format↔Lab) — arquitectura aparte de Fase 3; datos `Modos_Cámara` ya parcialmente en JSON.
+P1 UI import catálogo en Equipo (JSON v1.7 Cámaras/Ópticas/Luces ya importables por API).
+P2 Unificación modos sensor Format ↔ Optics Lab (plan Claude P3; fase propia).
 
 ## 12. HANDOFF
 
 Si otro agente toma el proyecto ahora...
 Proyecto en `/Users/danieldiaz/Documents/IRIS DP/iris_dp` (Flutter IRIS DP).
-Hecho: Format+Camera piloto, compositor citas, moodboard orden manual, slice catálogo Cámeras+Modos (`CatalogExcelImporter` + `docs/catalog/cameras_modos_v1_7.json`).
-Pendiente: UI import catálogo, Ópticas/Luces, cascada sensor (fase propia), dual-write presets, deuda arquitectura.
+Hecho: Format+Camera piloto, compositor, moodboard, catálogo v1.7 Cámaras+Modos+Ópticas+Luces (`CatalogExcelImporter` + `docs/catalog/*`).
+Pendiente: UI import Equipo, P3 unificación modos Format↔Lab, cascada arquitectura (fase aparte), dual-write presets.
 Riesgo principal: romper lectura canónica blob/legacy o sync de snapshots al tocar biblia/equipo.
-Siguiente acción: UI Equipo para import JSON/Excel de catálogo, o rellenar gates faltantes en Excel.
+Siguiente acción (plan Claude): P3 unificación modos sensor Format ↔ Optics Lab con datos reales de `Modos_Cámara`.
 Leer `ARCHITECTURE.md` + `BACKLOG.md` + `docs/catalog/README.md` antes de editar.
 Mantener cambios mínimos y correr `flutter analyze` / tests afectados.

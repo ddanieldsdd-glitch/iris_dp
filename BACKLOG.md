@@ -61,15 +61,15 @@ Los chips de rol en Equipo/Format/Optics Lab (`project_camera_roster_bar`, badge
 
 Dos modelos hoy: `sensorMode` string en Format vs `SensorModeSpec` (mm/px) en catálogo PHFX → Optics Lab. Requiere diseño nuevo; aplazada hasta routing estable (**routing ya en `69c6aec`**). Format sigue heredando solo dimensiones mm vía `resolveProjectCamera()`.
 
-### Import Excel catálogo v1.1 / v1.7 — slice Cámeras+Modos (iniciado)
+### Import Excel catálogo v1.1 / v1.7 — Cámaras+Ópticas+Luces
 
-**Hecho:** `CatalogExcelImporter` + `upsertCatalogCameras`; fixture `docs/catalog/cameras_modos_v1_7.json`; tool `tools/export_catalog_excel_to_json.py`.
+**Hecho:** `CatalogExcelImporter` (cameras/lenses/lights JSON) + `upsertCatalog*`; fixtures en `docs/catalog/`; meta en `docs/catalog/design/`; tool `tools/export_catalog_excel_to_json.py`.
 
 **Decisiones cerradas:**
-1. **`Modos_Cámara`:** → `sensorModesJson`; al importar catálogo, Excel/JSON **gana** sobre expansion embebida (no borra JSON assets; se aplica después).
+1. **`Modos_Cámara`:** → `sensorModesJson`; Excel/JSON **gana** sobre expansion embebida.
 2. **`Película`:** aplazada (JSON estático futuro, sin Drift).
 3. **`estado_dato` / Auditoría / Fuentes:** no persistir en Drift.
 
-**Pendiente:** UI de import en Equipo; Ópticas/Luces; rellenar gates faltantes en Excel (muchos modos sin `gate_*_mm`).
+**Pendiente:** UI de import en Equipo; rellenar gates faltantes en Excel; P3 unificación modos Format↔Optics Lab (plan Claude; fase propia).
 
 ---

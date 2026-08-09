@@ -371,10 +371,4 @@ Future<({int upserted, int skippedCustom})> upsertCatalogLights(
   return (upserted: upserted, skippedCustom: skippedCustom);
 }
 
-Future<void> _upsertLights(
-  AppDatabase db,
-  List<CatalogLightEntry> entries,
-) async {
-  await upsertCatalogLights(db, entries);
-}
 
