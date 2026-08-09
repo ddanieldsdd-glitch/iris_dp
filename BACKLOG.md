@@ -54,3 +54,25 @@ No es bug del piloto si queda documentado; evaluar antes de migrar otras seccion
 Los chips de rol en Equipo/Format/Optics Lab (`project_camera_roster_bar`, badges en `equipment_brand_grouped_list`) reutilizan tokens (`AppPalette` / `AppTypography` / `AppSpacing`) pero **no** un widget compartido: no existía uno adecuado para rol + título + hint.
 
 **Candidato:** extraer `AppRoleBadge` y consolidar con la pill `ACTIVE` de Format y el badge LUKA.
+
+---
+
+## Pendiente post-routing (no iniciado — 9 ago 2026)
+
+### Piloto Camera (`camera_sensor_section.dart`)
+
+Dualidad columnas vs `contentJson` intacta (nunca empezado). El futuro «modo de sensor a nivel de proyecto» (unificación PHFX/Format) debería vivir en blob de cámara — razón para no aplazarlo indefinidamente. **No empezar** hasta cerrar verificación real de Format piloto en PDF.
+
+### Unificación modos PHFX (Format ↔ Optics Lab)
+
+Dos modelos hoy: `sensorMode` string en Format vs `SensorModeSpec` (mm/px) en catálogo PHFX → Optics Lab. Requiere diseño nuevo; aplazada hasta routing estable (**routing ya en `69c6aec`**). Format sigue heredando solo dimensiones mm vía `resolveProjectCamera()`.
+
+### Import Excel catálogo v1.1
+
+Código actual (`equipment_spreadsheet_service` / `catalog_importer`) solo conoce hojas/columnas v0. **No escribir importador** hasta cerrar estas 3 decisiones:
+
+1. **`Modos_Cámara` vs JSON embebido:** ¿sustituye el merge `cameras_expansion.json` / `phfx_camera_formats.json` → `sensorModesJson`, o convive (Excel gana / JSON fallback)?
+2. **`Película`:** no hay tabla Drift; propuesta por defecto — catálogo estático JSON (no asignable a proyecto como cámara/óptica), sin migración de schema.
+3. **`estado_dato` / `Auditoría` / `Fuentes`:** metadatos de curación humana; **no** persistir en Drift (salvo que producto pida trazabilidad en app).
+
+Datos Excel (referencia): Cámaras 6/70 verificadas, Ópticas 65/416, Luces 0/90, Modos_Cámara 43 filas (5 cámaras), Película 8. Curación en paralelo, no bloquea código de routing/Format.
