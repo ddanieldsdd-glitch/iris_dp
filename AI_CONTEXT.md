@@ -150,16 +150,16 @@ UNKNOWN:
 ## 11. NEXT PRIORITIES
 
 P0 Evitar stale dual-write: presets/`aspectRatio` y escritores externos documentados en `BACKLOG.md`.
-P1 UI import catálogo en Equipo (JSON v1.7 Cámaras/Ópticas/Luces ya importables por API).
-P2 Cascada arquitectura Equipo↔Biblia↔Format↔Lab (unificación modos Format↔Lab cerrada en slices).
+P1 Cascada arquitectura Equipo↔Biblia↔Format↔Lab (fase propia).
+P2 Dual-write presets Format / gates Excel faltantes.
 
 ## 12. HANDOFF
 
 Si otro agente toma el proyecto ahora...
 Proyecto en `/Users/danieldiaz/Documents/IRIS DP/iris_dp` (Flutter IRIS DP).
-Hecho: Format+Camera piloto, compositor, moodboard, catálogo v1.7 Cámaras+Modos+Ópticas+Luces (`CatalogExcelImporter` + `docs/catalog/*`).
-Pendiente: UI import Equipo, P3 unificación modos Format↔Lab, cascada arquitectura (fase aparte), dual-write presets.
+Hecho: Format+Camera piloto, compositor, moodboard, catálogo v1.7 + UI Equipo import oficial JSON, unificación modos Format↔Lab.
+Pendiente: cascada arquitectura Equipo↔Biblia↔Lab (fase aparte), dual-write presets Format, gates Excel.
 Riesgo principal: romper lectura canónica blob/legacy o sync de snapshots al tocar biblia/equipo.
-Siguiente acción: fase cascada de arquitectura (Equipo↔Biblia↔Lab) o UI import catálogo; unificación modos Format↔Lab cerrada.
+Siguiente acción: fase cascada de arquitectura (Equipo↔Biblia↔Format↔Lab) — acordada como fase propia; o rellenar gates Excel.
 Leer `ARCHITECTURE.md` + `BACKLOG.md` + `docs/catalog/README.md` antes de editar.
 Mantener cambios mínimos y correr `flutter analyze` / tests afectados.

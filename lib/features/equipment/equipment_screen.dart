@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -19,6 +20,7 @@ import 'equipment_detail_screen.dart';
 import 'equipment_spec_helpers.dart';
 import 'services/catalog_sync_service.dart';
 import 'services/equipment_spreadsheet_service.dart';
+import '../../shared/equipment/official_catalog_import.dart';
 import '../../shared/equipment/project_equipment_roles.dart';
 import 'widgets/equipment_brand_grouped_list.dart';
 import 'widgets/project_camera_roster_bar.dart';
@@ -161,6 +163,47 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
     }
   }
 
+  /// Catálogo oficial (Cámaras+modos / Ópticas / Luces) ≠ lista de equipo del proyecto.
+  Future<void> _importOfficialCatalog() async {
+    try {
+      final picked = await UserFilePicker.pickFiles(
+        dialogTitle: 'Catálogo oficial (JSON v1.7)',
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        allowMultiple: true,
+      );
+      if (picked == null || picked.files.isEmpty) return;
+
+      final files = <({String name, String content})>[];
+      for (final file in picked.files) {
+        final bytes = file.bytes ??
+            (file.path != null ? await File(file.path!).readAsBytes() : null);
+        if (bytes == null) continue;
+        files.add((name: file.name, content: utf8.decode(bytes)));
+      }
+      if (files.isEmpty) {
+        if (mounted) {
+          AppSnackBar.show(context, 'No se pudo leer el archivo', isError: true);
+        }
+        return;
+      }
+
+      final db = ref.read(databaseProvider);
+      final summary = await importOfficialCatalogJsonFiles(db, files);
+      if (!mounted) return;
+      setState(() => _syncMessage = summary.snackMessage);
+      AppSnackBar.show(
+        context,
+        summary.snackMessage,
+        isError: !summary.ok,
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.show(context, 'Error al importar catálogo: $e', isError: true);
+      }
+    }
+  }
+
   @override
   void dispose() {
     _tabs.dispose();
@@ -221,6 +264,8 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
                   _exportEquipmentList();
                 case 'import':
                   _importEquipmentList();
+                case 'import_catalog':
+                  _importOfficialCatalog();
                 case 'share':
                   _shareExportedTemplate();
               }
@@ -230,7 +275,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
                 value: 'export',
                 child: ListTile(
                   leading: Icon(Icons.upload_file_outlined),
-                  title: Text('Exportar a Excel'),
+                  title: Text('Exportar lista a Excel'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -238,7 +283,15 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
                 value: 'import',
                 child: ListTile(
                   leading: Icon(Icons.download_outlined),
-                  title: Text('Importar desde Excel'),
+                  title: Text('Importar lista desde Excel'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'import_catalog',
+                child: ListTile(
+                  leading: Icon(Icons.library_add_outlined),
+                  title: Text('Importar catálogo oficial (JSON)'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),

@@ -55,25 +55,23 @@ Los chips de rol en Equipo/Format/Optics Lab (`project_camera_roster_bar`, badge
 
 **Tests:** `camera_pilot_resolve_test`, `camera_section_persistence_pilot_test`, `camera_pdf_export_regression_test`, `camera_completion_pilot_test`.
 
-**Fuera de alcance (post-piloto):** unificación modos sensor Format ↔ Optics Lab (PHFX); migrar más campos Camera al blob.
+**Fuera de alcance (post-piloto):** migrar más campos Camera al blob.
 
-### Unificación modos PHFX (Format ↔ Optics Lab) — slice 1 iniciado
+### Unificación modos PHFX (Format ↔ Optics Lab) — cerrado
 
-**Hecho:** Format elige modo desde `Camera.sensorModesJson` (cámara de proyecto) vía `FormatSensorModeResolve` + picker; persiste `sensorModeName` en `formatData` sin dual-write a `captureResolution`/`resolution`.
+**Hecho:** Format elige modo desde `Camera.sensorModesJson` vía `FormatSensorModeResolve`; Lab lee/escribe `formatData.sensorModeName` (slices 1–3).
 
-**Hecho (slice 2+3):** Optics Lab lee `sensorModeName` de Format al abrir; al cambiar modo / Guardar en Biblia escribe de vuelta a `formatData`.
-
-**Pendiente:** rellenar gates faltantes en Excel; cascada arquitectura Equipo↔Biblia↔Lab (fase aparte).
+**Pendiente (datos):** rellenar gates faltantes en Excel.
 
 ### Import Excel catálogo v1.1 / v1.7 — Cámaras+Ópticas+Luces
 
-**Hecho:** `CatalogExcelImporter` (cameras/lenses/lights JSON) + `upsertCatalog*`; fixtures en `docs/catalog/`; meta en `docs/catalog/design/`; tool `tools/export_catalog_excel_to_json.py`.
+**Hecho:** `CatalogExcelImporter` + `upsertCatalog*`; fixtures `docs/catalog/`; tool `tools/export_catalog_excel_to_json.py`; UI Equipo «Importar catálogo oficial (JSON)» vía `official_catalog_import.dart`.
 
 **Decisiones cerradas:**
 1. **`Modos_Cámara`:** → `sensorModesJson`; Excel/JSON **gana** sobre expansion embebida.
 2. **`Película`:** aplazada (JSON estático futuro, sin Drift).
 3. **`estado_dato` / Auditoría / Fuentes:** no persistir en Drift.
 
-**Pendiente:** UI de import en Equipo; rellenar gates faltantes en Excel; P3 unificación modos Format↔Optics Lab (plan Claude; fase propia).
+**Pendiente:** rellenar gates faltantes en Excel; cascada arquitectura Equipo↔Biblia↔Lab (fase aparte).
 
 ---

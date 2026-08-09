@@ -20,6 +20,14 @@ python3 tools/export_catalog_excel_to_json.py \
   docs/catalog/
 ```
 
+## UI Equipo
+
+Menú ⋮ → **Importar catálogo oficial (JSON)** (multi-archivo).
+Clasifica por nombre (`cameras_*` / `lenses_*` / `lights_*`) o por forma del JSON.
+Código: `lib/shared/equipment/official_catalog_import.dart`.
+
+Distinto de **Importar lista desde Excel** (roundtrip del proyecto).
+
 ## Import en app (`CatalogExcelImporter`)
 
 Orden Claude (P2):
