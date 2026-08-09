@@ -61,12 +61,15 @@ Los chips de rol en Equipo/Format/Optics Lab (`project_camera_roster_bar`, badge
 
 Dos modelos hoy: `sensorMode` string en Format vs `SensorModeSpec` (mm/px) en catálogo PHFX → Optics Lab. Requiere diseño nuevo; aplazada hasta routing estable (**routing ya en `69c6aec`**). Format sigue heredando solo dimensiones mm vía `resolveProjectCamera()`.
 
-### Import Excel catálogo v1.1
+### Import Excel catálogo v1.1 / v1.7 — slice Cámeras+Modos (iniciado)
 
-Código actual (`equipment_spreadsheet_service` / `catalog_importer`) solo conoce hojas/columnas v0. **No escribir importador** hasta cerrar estas 3 decisiones:
+**Hecho:** `CatalogExcelImporter` + `upsertCatalogCameras`; fixture `docs/catalog/cameras_modos_v1_7.json`; tool `tools/export_catalog_excel_to_json.py`.
 
-1. **`Modos_Cámara` vs JSON embebido:** ¿sustituye el merge `cameras_expansion.json` / `phfx_camera_formats.json` → `sensorModesJson`, o convive (Excel gana / JSON fallback)?
-2. **`Película`:** no hay tabla Drift; propuesta por defecto — catálogo estático JSON (no asignable a proyecto como cámara/óptica), sin migración de schema.
-3. **`estado_dato` / `Auditoría` / `Fuentes`:** metadatos de curación humana; **no** persistir en Drift (salvo que producto pida trazabilidad en app).
+**Decisiones cerradas:**
+1. **`Modos_Cámara`:** → `sensorModesJson`; al importar catálogo, Excel/JSON **gana** sobre expansion embebida (no borra JSON assets; se aplica después).
+2. **`Película`:** aplazada (JSON estático futuro, sin Drift).
+3. **`estado_dato` / Auditoría / Fuentes:** no persistir en Drift.
 
-Datos Excel (referencia): Cámaras 6/70 verificadas, Ópticas 65/416, Luces 0/90, Modos_Cámara 43 filas (5 cámaras), Película 8. Curación en paralelo, no bloquea código de routing/Format.
+**Pendiente:** UI de import en Equipo; Ópticas/Luces; rellenar gates faltantes en Excel (muchos modos sin `gate_*_mm`).
+
+---

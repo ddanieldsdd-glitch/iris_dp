@@ -157,14 +157,23 @@ Future<void> importCatalogFromJson(
   );
 }
 
-Future<void> _upsertCameras(
+/// Upsert de cámaras de catálogo oficial (`isCustom=false`).
+///
+/// No toca filas custom del usuario con el mismo [CatalogCameraEntry.externalId].
+/// Devuelve cuántas se escribieron y cuántas se omitieron por ser custom.
+Future<({int upserted, int skippedCustom})> upsertCatalogCameras(
   AppDatabase db,
   List<CatalogCameraEntry> entries,
 ) async {
+  var upserted = 0;
+  var skippedCustom = 0;
   for (final e in entries) {
     final existing = await db.getCameraByExternalId(e.externalId);
     if (existing != null) {
-      if (existing.isCustom) continue;
+      if (existing.isCustom) {
+        skippedCustom++;
+        continue;
+      }
       await db.updateCamera(existing.copyWith(
         brand: e.brand,
         model: e.model,
@@ -188,6 +197,7 @@ Future<void> _upsertCameras(
         lukaProfileJson: Value(_encodeProfile(e.lukaProfile)),
         catalogVersion: const Value(kEmbeddedCatalogVersion),
       ));
+      upserted++;
     } else {
       await db.insertCamera(CamerasCompanion.insert(
         brand: e.brand,
@@ -214,8 +224,17 @@ Future<void> _upsertCameras(
         catalogVersion: const Value(kEmbeddedCatalogVersion),
         isCustom: const Value(false),
       ));
+      upserted++;
     }
   }
+  return (upserted: upserted, skippedCustom: skippedCustom);
+}
+
+Future<void> _upsertCameras(
+  AppDatabase db,
+  List<CatalogCameraEntry> entries,
+) async {
+  await upsertCatalogCameras(db, entries);
 }
 
 Future<void> _upsertLenses(AppDatabase db, List<CatalogLensEntry> entries) async {
