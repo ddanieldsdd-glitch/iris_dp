@@ -38,6 +38,7 @@ credentials.json
 .pub-cache/
 .pub/
 /build/
+.venv_pdf/
 
 # Symbolication related
 app.*.symbols

@@ -20,176 +20,236 @@ const fase1MarkerCameraIso = 'FASE1-CAM-ISO-6400';
 const fase1MarkerCameraBit = 'FASE1-CAM-BIT-12';
 const fase1MarkerLocationWeather = 'FASE1-LOC-WEATHER-TORMENTA';
 const fase1MarkerLocationCoords = 'FASE1-LOC-COORDS-41.38';
+const fase1MarkerLocationGoldenHour = 'FASE1-LOC-GOLDEN-0630';
+const fase1MarkerOpticsFilter = 'FASE1-OPTICS-FILTER';
+const fase1MarkerOpticsFocal = 'FASE1-OPTICS-FOCAL-40';
+const fase1MarkerOpticsMaint = 'FASE1-OPTICS-MAINT';
+const fase1MarkerOpticsSet = 'FASE1-OPTICS-SET-A';
+const fase1MarkerOpticsNarrative = 'FASE1-OPTICS-NARRATIVE';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('genera PDFs reales clásico y compositor con custom camera + location', () async {
-    final outDir = Directory('build/fase1_verification');
-    outDir.createSync(recursive: true);
+  test(
+    'genera PDFs reales clásico y compositor con camera, location y optics',
+    () async {
+      final outDir = Directory('build/fase1_verification');
+      outDir.createSync(recursive: true);
 
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
 
-    final projectId = await db.insertProject(
-      ProjectsCompanion.insert(
-        name: 'Verificación Fase 1 Export',
-        director: const Value('Director Prueba'),
-      ),
-    );
-    final bible = await db.ensureVisualBibleForProject(projectId);
-    await db.addBuiltinBibleSection(
-      bibleId: bible.id,
-      sectionId: BibleSectionId.camera,
-    );
-    await db.addBuiltinBibleSection(
-      bibleId: bible.id,
-      sectionId: BibleSectionId.location,
-    );
-
-    final cameraContent = BibleSectionFieldsConfig.encode(
-      BibleSectionFieldsConfig.defaultsFor(BibleSectionId.camera),
-      values: {
-        'cameraData': jsonEncode({
-          'isoNote': fase1MarkerCameraIso,
-          'bitDepth': fase1MarkerCameraBit,
-          'colorSpace': 'LogC4',
-          'dualIso': 'Sí',
-          'editorialCaption': 'EXT. NIGHT — CHECKPOINT',
-        }),
-      },
-    );
-    final locationContent = BibleSectionFieldsConfig.encode(
-      BibleSectionFieldsConfig.defaultsFor(BibleSectionId.location),
-      values: {
-        'locationData': jsonEncode({
-          'byPlan': {
-            '99': {
-              'weather': fase1MarkerLocationWeather,
-              'coords': fase1MarkerLocationCoords,
-              'locLabel': 'LOC-A',
-              'strategy': 'Rodar en golden hour',
-            },
-          },
-        }),
-      },
-    );
-
-    for (final sectionId in [BibleSectionId.camera, BibleSectionId.location]) {
-      final def = await (db.select(db.bibleSectionDefinitions)
-            ..where(
-              (d) => d.bibleId.equals(bible.id) & d.id.equals(sectionId),
-            ))
-          .getSingle();
-      await db.upsertBibleSectionDefinition(
-        def.copyWith(
-          contentJson: Value(
-            sectionId == BibleSectionId.camera ? cameraContent : locationContent,
-          ),
+      final projectId = await db.insertProject(
+        ProjectsCompanion.insert(
+          name: 'Verificación Fase 1 Export',
+          director: const Value('Director Prueba'),
         ),
       );
-    }
-
-    final repo = VisualBibleRepository(VisualBibleDao(db));
-    final bundle = await repo.loadExportBundle(projectId: projectId);
-    final now = DateTime.utc(2026, 8, 9, 10);
-
-    final config = VisualBibleExportConfig(
-      id: 'fase1-verify',
-      name: 'Verificación Fase 1',
-      audience: VisualBibleExportAudience.general,
-      mode: VisualBibleExportMode.full,
-      sections: {
+      final bible = await db.ensureVisualBibleForProject(projectId);
+      for (final sectionId in [
         BibleSectionId.camera,
         BibleSectionId.location,
-        BibleSectionId.exposure,
-      },
-      destination: VisualBibleExportDestination.saveFile,
-      updatedAt: now,
-    );
+        BibleSectionId.optics,
+      ]) {
+        await db.addBuiltinBibleSection(
+          bibleId: bible.id,
+          sectionId: sectionId,
+        );
+      }
 
-    final classicBytes = await VisualBiblePdfService.buildBytes(
-      mode: config.mode,
-      projectName: 'Verificación Fase 1 Export',
-      director: 'Director Prueba',
-      data: bundle.data,
-      colorBlocks: bundle.blocks,
-      exposureBlocks: bundle.exposureBlocks,
-      lightingSetups: bundle.lightingSetups,
-      cameraTests: bundle.cameraTests,
-      moodboard: bundle.moodboard,
-      includedSections: config.sections,
-      sectionContentJsonById: bundle.sectionContentJsonById,
-    );
-    final classicPath = File('${outDir.path}/classic_export.pdf');
-    await classicPath.writeAsBytes(classicBytes);
-
-    final composition = BibleExportCompositionBuilder(
-      idFactory: () => 'fase1-composition',
-      clock: () => now,
-    ).build(
-      projectId: projectId,
-      config: config,
-      bundle: bundle,
-      includeCover: true,
-    );
-    final composerBytes = await BibleExportPdfRenderer(database: db).buildBytes(
-      composition,
-    );
-    final composerPath = File('${outDir.path}/composer_export.pdf');
-    await composerPath.writeAsBytes(composerBytes);
-
-    expect(classicPath.existsSync(), isTrue);
-    expect(composerPath.existsSync(), isTrue);
-    expect(classicBytes.length, greaterThan(1000));
-    expect(composerBytes.length, greaterThan(1000));
-
-    // Extracción textual real (el binario PDF comprime streams; latin1 directo no sirve).
-    final classicExtracted = await _extractPdfText(classicPath);
-    final composerExtracted = await _extractPdfText(composerPath);
-
-    for (final marker in [
-      fase1MarkerCameraIso,
-      fase1MarkerCameraBit,
-      fase1MarkerLocationWeather,
-      fase1MarkerLocationCoords,
-    ]) {
-      expect(
-        classicExtracted.contains(marker),
-        isTrue,
-        reason: 'PDF clásico debe contener $marker',
+      final cameraContent = BibleSectionFieldsConfig.encode(
+        BibleSectionFieldsConfig.defaultsFor(BibleSectionId.camera),
+        values: {
+          'cameraData': jsonEncode({
+            'isoNote': fase1MarkerCameraIso,
+            'bitDepth': fase1MarkerCameraBit,
+            'colorSpace': 'LogC4',
+            'dualIso': 'Sí',
+            'editorialCaption': 'EXT. NIGHT — CHECKPOINT',
+          }),
+        },
       );
-      expect(
-        composerExtracted.contains(marker),
-        isTrue,
-        reason: 'PDF compositor debe contener $marker',
+      final locationContent = BibleSectionFieldsConfig.encode(
+        BibleSectionFieldsConfig.defaultsFor(BibleSectionId.location),
+        values: {
+          'locationData': jsonEncode({
+            'byPlan': {
+              '99': {
+                'weather': fase1MarkerLocationWeather,
+                'coords': fase1MarkerLocationCoords,
+                'locLabel': 'LOC-A',
+                'strategy': 'Rodar en golden hour',
+                'goldenHour': fase1MarkerLocationGoldenHour,
+                'palette': ['#112233', '#AABBCC'],
+              },
+            },
+          }),
+        },
       );
-    }
 
-    expect(classicExtracted.toUpperCase(), contains('LOCALIZACIÓN'));
-    expect(composerExtracted, contains('Localización'));
+      for (final sectionId in [BibleSectionId.camera, BibleSectionId.location]) {
+        final def = await (db.select(db.bibleSectionDefinitions)
+              ..where(
+                (d) => d.bibleId.equals(bible.id) & d.id.equals(sectionId),
+              ))
+            .getSingle();
+        await db.upsertBibleSectionDefinition(
+          def.copyWith(
+            contentJson: Value(
+              sectionId == BibleSectionId.camera
+                  ? cameraContent
+                  : locationContent,
+            ),
+          ),
+        );
+      }
 
-    // Escribir manifiesto para revisión humana.
-    await File('${outDir.path}/VERIFICATION.txt').writeAsString('''
-PDFs generados para checkpoint Fase 1
+      await db.upsertVisualBible(
+        VisualBiblesCompanion(
+          id: Value(bible.id),
+          projectId: Value(projectId),
+          opticsConfigJson: Value(
+            jsonEncode({
+              'styleSubtitle': 'Minimalist Character',
+              'tStop': 'T2.8',
+              'filtrationStack': [
+                {
+                  'name': fase1MarkerOpticsFilter,
+                  'density': '1/4',
+                  'justification': 'Suavizar piel en primeros planos',
+                },
+              ],
+              'anamorphicSpecs': [
+                {
+                  'focalLength': fase1MarkerOpticsFocal,
+                  'tStop': 'T2.0',
+                  'cfd': '12"',
+                  'distortion': 'Low',
+                },
+              ],
+              'maintenanceLog': [
+                {
+                  'title': fase1MarkerOpticsMaint,
+                  'date': '2026-08-09',
+                  'description': 'Calibración de back focus',
+                },
+              ],
+              'lensSets': [
+                {
+                  'name': fase1MarkerOpticsSet,
+                  'isAnamorphic': true,
+                  'squeezeRatio': 2.0,
+                  'aspectRatio': '2.39:1',
+                },
+              ],
+            }),
+          ),
+          opticsNarrativeIntent: const Value(fase1MarkerOpticsNarrative),
+        ),
+      );
+
+      final repo = VisualBibleRepository(VisualBibleDao(db));
+      final bundle = await repo.loadExportBundle(projectId: projectId);
+      final now = DateTime.utc(2026, 8, 9, 10);
+
+      final config = VisualBibleExportConfig(
+        id: 'fase1-verify',
+        name: 'Verificación Fase 1',
+        audience: VisualBibleExportAudience.general,
+        mode: VisualBibleExportMode.full,
+        sections: {
+          BibleSectionId.camera,
+          BibleSectionId.location,
+          BibleSectionId.optics,
+          BibleSectionId.exposure,
+        },
+        destination: VisualBibleExportDestination.saveFile,
+        updatedAt: now,
+      );
+
+      final classicBytes = await VisualBiblePdfService.buildBytes(
+        mode: config.mode,
+        projectName: 'Verificación Fase 1 Export',
+        director: 'Director Prueba',
+        data: bundle.data,
+        colorBlocks: bundle.blocks,
+        exposureBlocks: bundle.exposureBlocks,
+        lightingSetups: bundle.lightingSetups,
+        cameraTests: bundle.cameraTests,
+        moodboard: bundle.moodboard,
+        includedSections: config.sections,
+        sectionContentJsonById: bundle.sectionContentJsonById,
+      );
+      final classicPath = File('${outDir.path}/classic_export.pdf');
+      await classicPath.writeAsBytes(classicBytes);
+
+      final composition = BibleExportCompositionBuilder(
+        idFactory: () => 'fase1-composition',
+        clock: () => now,
+      ).build(
+        projectId: projectId,
+        config: config,
+        bundle: bundle,
+        includeCover: true,
+      );
+      final composerBytes = await BibleExportPdfRenderer(database: db).buildBytes(
+        composition,
+      );
+      final composerPath = File('${outDir.path}/composer_export.pdf');
+      await composerPath.writeAsBytes(composerBytes);
+
+      expect(classicPath.existsSync(), isTrue);
+      expect(composerPath.existsSync(), isTrue);
+
+      final classicExtracted = await _extractPdfText(classicPath);
+      final composerExtracted = await _extractPdfText(composerPath);
+
+      for (final marker in [
+        fase1MarkerCameraIso,
+        fase1MarkerCameraBit,
+        fase1MarkerLocationWeather,
+        fase1MarkerLocationCoords,
+        fase1MarkerLocationGoldenHour,
+        fase1MarkerOpticsFilter,
+        fase1MarkerOpticsFocal,
+        fase1MarkerOpticsMaint,
+        fase1MarkerOpticsSet,
+        fase1MarkerOpticsNarrative,
+      ]) {
+        expect(
+          classicExtracted.contains(marker),
+          isTrue,
+          reason: 'PDF clásico debe contener $marker',
+        );
+        expect(
+          composerExtracted.contains(marker),
+          isTrue,
+          reason: 'PDF compositor debe contener $marker',
+        );
+      }
+
+      expect(classicExtracted.toUpperCase(), contains('LOCALIZACIÓN'));
+      expect(classicExtracted.toUpperCase(), contains('ÓPTICA'));
+      expect(composerExtracted, contains('Localización'));
+      expect(composerExtracted, contains('Óptica'));
+
+      await File('${outDir.path}/VERIFICATION.txt').writeAsString('''
+PDFs generados para checkpoint Fase 1 (cierre)
 Classic: ${classicPath.absolute.path}
 Composer: ${composerPath.absolute.path}
 
 Marcadores esperados en ambos PDFs:
-- $fase1MarkerCameraIso (Nota ISO / cámara)
-- $fase1MarkerCameraBit (Bit depth / cámara)
-- $fase1MarkerLocationWeather (Clima / localización set 99)
-- $fase1MarkerLocationCoords (Coordenadas / localización set 99)
-
-Abrir los PDFs y confirmar sección LOCALIZACIÓN + campos custom de cámara.
+- Cámara: $fase1MarkerCameraIso, $fase1MarkerCameraBit
+- Location: $fase1MarkerLocationWeather, $fase1MarkerLocationCoords, $fase1MarkerLocationGoldenHour
+- Optics: $fase1MarkerOpticsFilter, $fase1MarkerOpticsFocal, $fase1MarkerOpticsMaint, $fase1MarkerOpticsSet, $fase1MarkerOpticsNarrative
 ''');
-  });
+    },
+  );
 }
 
 Future<String> _extractPdfText(File pdf) async {
   final venvPython = File('.venv_pdf/bin/python');
   if (!venvPython.existsSync()) {
-    // Fallback mínimo si no hay venv (p.ej. CI): comprueba marcadores en binario sin garantía.
     return latin1.decode(await pdf.readAsBytes(), allowInvalid: true);
   }
   final result = await Process.run(

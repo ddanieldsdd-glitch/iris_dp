@@ -71,5 +71,54 @@ void main() {
         isFalse,
       );
     });
+
+    test('parsea opticsConfigJson con listas anidadas', () {
+      final rows = BibleSectionExportReader.rowsFromOpticsConfigJson(
+        jsonEncode({
+          'styleSubtitle': 'FASE1-OPTICS-STYLE',
+          'tStop': 'T2.8',
+          'filtrationStack': [
+            {
+              'name': 'FASE1-OPTICS-FILTER',
+              'density': '1/4',
+              'justification': 'Suavizar piel en primeros planos',
+            },
+          ],
+          'anamorphicSpecs': [
+            {
+              'focalLength': 'FASE1-OPTICS-FOCAL-40',
+              'tStop': 'T2.0',
+              'cfd': '12"',
+              'distortion': 'Low',
+            },
+          ],
+          'maintenanceLog': [
+            {
+              'title': 'FASE1-OPTICS-MAINT',
+              'date': '2026-08-09',
+              'description': 'Calibración de back focus',
+            },
+          ],
+          'lensSets': [
+            {
+              'name': 'FASE1-OPTICS-SET-A',
+              'isAnamorphic': true,
+              'squeezeRatio': 2.0,
+              'aspectRatio': '2.39:1',
+            },
+          ],
+        }),
+        narrativeIntent: 'FASE1-OPTICS-NARRATIVE',
+      );
+
+      final labels = rows.map((row) => row.label).join('\n');
+      final values = rows.map((row) => row.value).join('\n');
+      final all = '$labels\n$values';
+      expect(labels, contains('Filtración · FASE1-OPTICS-FILTER'));
+      expect(all, contains('FASE1-OPTICS-FOCAL-40'));
+      expect(all, contains('FASE1-OPTICS-MAINT'));
+      expect(all, contains('FASE1-OPTICS-SET-A'));
+      expect(all, contains('FASE1-OPTICS-NARRATIVE'));
+    });
   });
 }

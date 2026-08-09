@@ -13,6 +13,16 @@ class BibleSectionExportEntry {
 }
 
 /// Lee `contentJson` de secciones VB y lo convierte en filas exportables.
+///
+/// Cobertura contentJson (blobs `*Data` en [BibleSectionDefinitions.contentJson]):
+/// camera, location, lighting, exposure, direction, color_image, concept,
+/// texture, format, workflow.
+///
+/// Rutas de export distintas (no usan este reader):
+/// - moodboard → tabla [MoodboardImage]
+/// - camera_tests → tabla [CameraTest]
+/// - optics → [VisualBibleData.opticsConfigJson] (ver [rowsFromOpticsConfigJson])
+/// - settings → no exportable
 abstract final class BibleSectionExportReader {
   BibleSectionExportReader._();
 
@@ -76,6 +86,16 @@ abstract final class BibleSectionExportReader {
       'practicalsDetail': 'Practical light sources',
       'mapsUrl': 'Google Maps',
       'earthUrl': 'Google Earth',
+      'palette': 'Paleta de color',
+      'sunrise': 'Amanecer',
+      'sunriseAz': 'Azimut amanecer',
+      'sunset': 'Atardecer',
+      'sunsetAz': 'Azimut atardecer',
+      'daylightWindow': 'Ventana de luz diurna',
+      'blueHour': 'Hora azul',
+      'goldenHour': 'Golden hour',
+      'maxElevation': 'Elevación máxima solar',
+      'shadowRatio': 'Ratio de sombra',
     },
     BibleSectionId.lighting: {
       'heroBadge': 'Badge de escena',
@@ -376,5 +396,171 @@ abstract final class BibleSectionExportReader {
       }
     }
     return parts.join('\n');
+  }
+
+  /// Export estructurado de óptica desde [VisualBibleData.opticsConfigJson].
+  static bool hasOpticsExportContent(
+    String? opticsConfigJson, {
+    String? narrativeIntent,
+    String? lensPhilosophy,
+  }) =>
+      rowsFromOpticsConfigJson(
+        opticsConfigJson,
+        narrativeIntent: narrativeIntent,
+        lensPhilosophy: lensPhilosophy,
+      ).isNotEmpty;
+
+  static List<BibleSectionExportEntry> rowsFromOpticsConfigJson(
+    String? jsonStr, {
+    String? narrativeIntent,
+    String? lensPhilosophy,
+  }) {
+    final rows = <BibleSectionExportEntry>[];
+    final narrative = narrativeIntent?.trim();
+    if (narrative != null && narrative.isNotEmpty) {
+      rows.add(
+        BibleSectionExportEntry(label: 'Intención narrativa', value: narrative),
+      );
+    } else {
+      final philosophy = lensPhilosophy?.trim();
+      if (philosophy != null && philosophy.isNotEmpty) {
+        rows.add(
+          BibleSectionExportEntry(
+            label: 'Filosofía de lente',
+            value: philosophy,
+          ),
+        );
+      }
+    }
+
+    final config = _parseOpticsConfig(jsonStr);
+    if (config.isEmpty) return rows;
+
+    void addScalar(String key, String label) {
+      final value = config[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) {
+        rows.add(BibleSectionExportEntry(label: label, value: value));
+      }
+    }
+
+    addScalar('styleSubtitle', 'Estilo / subtítulo');
+    addScalar('primarySetName', 'Set principal');
+    addScalar('tStop', 'T-stop');
+    addScalar('squeeze', 'Squeeze');
+    addScalar('bokehCharacteristic', 'Característica bokeh');
+    addScalar('flareBehavior', 'Comportamiento flare');
+
+    _appendOpticsListRows(
+      rows,
+      config['filtrationStack'],
+      sectionLabel: 'Filtración',
+      formatItem: (item) {
+        final name = item['name']?.toString().trim() ?? '';
+        final parts = <String>[];
+        final density = item['density']?.toString().trim();
+        final justification = item['justification']?.toString().trim();
+        if (density != null && density.isNotEmpty) {
+          parts.add('Densidad: $density');
+        }
+        if (justification != null && justification.isNotEmpty) {
+          parts.add(justification);
+        }
+        return (
+          label: name.isEmpty ? 'Filtro' : name,
+          value: parts.join('\n'),
+        );
+      },
+    );
+
+    _appendOpticsListRows(
+      rows,
+      config['anamorphicSpecs'],
+      sectionLabel: 'Especificación',
+      formatItem: (item) {
+        final focal = item['focalLength']?.toString().trim() ?? '';
+        final parts = <String>[];
+        for (final entry in [
+          ('T-stop', item['tStop']),
+          ('CFD', item['cfd']),
+          ('Distorsión', item['distortion']),
+        ]) {
+          final value = entry.$2?.toString().trim();
+          if (value != null && value.isNotEmpty) {
+            parts.add('${entry.$1}: $value');
+          }
+        }
+        return (
+          label: focal.isEmpty ? 'Lente' : focal,
+          value: parts.join(' · '),
+        );
+      },
+    );
+
+    _appendOpticsListRows(
+      rows,
+      config['maintenanceLog'],
+      sectionLabel: 'Mantenimiento',
+      formatItem: (item) {
+        final title = item['title']?.toString().trim() ?? 'Entrada';
+        final parts = <String>[];
+        final date = item['date']?.toString().trim();
+        final body =
+            item['description']?.toString().trim() ??
+            item['body']?.toString().trim();
+        if (date != null && date.isNotEmpty) parts.add('Fecha: $date');
+        if (body != null && body.isNotEmpty) parts.add(body);
+        return (label: title, value: parts.join('\n'));
+      },
+    );
+
+    _appendOpticsListRows(
+      rows,
+      config['lensSets'],
+      sectionLabel: 'Set de lentes',
+      formatItem: (item) {
+        final name = item['name']?.toString().trim() ?? 'Set';
+        final parts = <String>[];
+        if (item['isAnamorphic'] == true) parts.add('Anamórfico');
+        final squeeze = item['squeezeRatio']?.toString().trim();
+        final ratio = item['aspectRatio']?.toString().trim();
+        if (squeeze != null && squeeze.isNotEmpty) {
+          parts.add('Squeeze: ${squeeze}x');
+        }
+        if (ratio != null && ratio.isNotEmpty) parts.add('Ratio: $ratio');
+        return (label: name, value: parts.join(' · '));
+      },
+    );
+
+    return rows;
+  }
+
+  static Map<String, dynamic> _parseOpticsConfig(String? jsonStr) {
+    if (jsonStr == null || jsonStr.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is Map<String, dynamic>) return decoded;
+    } catch (_) {}
+    return {};
+  }
+
+  static void _appendOpticsListRows(
+    List<BibleSectionExportEntry> rows,
+    dynamic raw, {
+    required String sectionLabel,
+    required ({String label, String value}) Function(Map<String, dynamic> item)
+    formatItem,
+  }) {
+    if (raw is! List) return;
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final formatted = formatItem(Map<String, dynamic>.from(item));
+      if (formatted.value.trim().isEmpty) continue;
+      rows.add(
+        BibleSectionExportEntry(
+          label: '$sectionLabel · ${formatted.label}',
+          value: formatted.value,
+        ),
+      );
+    }
   }
 }

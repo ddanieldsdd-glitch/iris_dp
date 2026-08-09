@@ -360,6 +360,28 @@ class BibleExportCompositionBuilder {
             ),
           );
         }
+      case BibleSectionId.optics:
+        final opticsRows = BibleSectionExportReader.rowsFromOpticsConfigJson(
+          bundle.data.opticsConfigJson,
+          narrativeIntent: bundle.data.opticsNarrativeIntent,
+          lensPhilosophy: bundle.data.lensPhilosophy,
+        );
+        if (opticsRows.isNotEmpty) {
+          extra.add(
+            BibleBlock(
+              id: '${page.id}__optics',
+              type: BibleBlockKind.specsTable,
+              layout: BibleBlockLayout(row: page.blocks.length + extra.length),
+              content: {
+                'columns': ['campo', 'valor'],
+                'rows': [
+                  for (final row in opticsRows)
+                    {'campo': row.label, 'valor': row.value},
+                ],
+              },
+            ),
+          );
+        }
     }
     if (sectionId != null) {
       final customRows = BibleSectionExportReader.rowsForSection(

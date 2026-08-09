@@ -726,18 +726,27 @@ class VisualBiblePdfService {
 
     if (!isPitch &&
         _sectionAllowed(sections, BibleSectionId.optics) &&
-        data.opticsConfigJson?.isNotEmpty == true) {
+        BibleSectionExportReader.hasOpticsExportContent(
+          data.opticsConfigJson,
+          narrativeIntent: data.opticsNarrativeIntent,
+          lensPhilosophy: data.lensPhilosophy,
+        )) {
+      final opticsRows = BibleSectionExportReader.rowsFromOpticsConfigJson(
+        data.opticsConfigJson,
+        narrativeIntent: data.opticsNarrativeIntent,
+        lensPhilosophy: data.lensPhilosophy,
+      );
       doc.addPage(
         pw.Page(
           theme: theme,
           pageFormat: PdfPageFormat.a4,
           build: (_) => _sectionPage(
-            title: 'CONFIGURACIÓN ÓPTICA (FLT)',
+            title: 'ÓPTICA',
             fontBold: fonts.bold,
             font: fonts.regular,
-            content: pw.Text(
-              data.opticsConfigJson!,
-              style: const pw.TextStyle(fontSize: 10),
+            content: _textFieldsContent(
+              opticsRows.map((row) => (row.label, row.value)).toList(),
+              fonts,
             ),
           ),
         ),
