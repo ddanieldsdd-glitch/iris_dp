@@ -102,8 +102,12 @@ abstract final class CloudRuntimeConfig {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_enabledKey, false);
     await prefs.remove(_manualKey);
+    await prefs.remove(_urlKey);
+    await prefs.remove(_anonKeyKey);
     _enabled = false;
     _manual = false;
+    _url = null;
+    _anonKey = null;
   }
 
   static Future<void> initializeIfActive() async {

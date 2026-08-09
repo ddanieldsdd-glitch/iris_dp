@@ -11,6 +11,7 @@ typedef VisualBibleExportBundle = ({
   List<LightingSetupModel> lightingSetups,
   List<CameraTestModel> cameraTests,
   List<MoodboardImageModel> moodboard,
+  Map<String, String?> sectionContentJsonById,
 });
 
 /// Puerta de entrada de Visual Bible a persistencia local.
@@ -72,6 +73,7 @@ class VisualBibleRepository {
     final lightingRows = await _dao.watchLightingSetups(bible.id).first;
     final testRows = await _dao.watchCameraTests(bible.id).first;
     final moodRows = await _dao.watchMoodboardImages(projectId).first;
+    final sectionRows = await _dao.watchSectionDefinitions(bible.id).first;
     return (
       data: data,
       blocks: colorRows.map(ColorBlockModel.fromRow).toList(),
@@ -79,6 +81,9 @@ class VisualBibleRepository {
       lightingSetups: lightingRows.map(LightingSetupModel.fromRow).toList(),
       cameraTests: testRows.map(CameraTestModel.fromRow).toList(),
       moodboard: moodRows.map(MoodboardImageModel.fromRow).toList(),
+      sectionContentJsonById: {
+        for (final row in sectionRows) row.id: row.contentJson,
+      },
     );
   }
 

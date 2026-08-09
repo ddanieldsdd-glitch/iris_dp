@@ -491,6 +491,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
               cameraTests: bundle.cameraTests,
               moodboard: bundle.moodboard,
               includedSections: config.sections,
+              sectionContentJsonById: bundle.sectionContentJsonById,
             );
       final suffix = config.isDepartment
           ? VisualBibleDepartment.label(
@@ -1034,6 +1035,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                         lightingSetups: bundle.lightingSetups,
                         cameraTests: bundle.cameraTests,
                         moodboard: bundle.moodboard,
+                        sectionContentJsonById: bundle.sectionContentJsonById,
                       );
                     },
                   ),

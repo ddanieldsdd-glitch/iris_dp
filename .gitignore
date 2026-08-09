@@ -24,6 +24,10 @@ migrate_working_dir/
 #.vscode/
 
 .env
+.env.*
+*.pem
+credentials.json
+*serviceAccount*
 
 # Flutter/Dart/Pub related
 **/doc/api/

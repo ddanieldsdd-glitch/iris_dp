@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:iris_dp/shared/visual_bible/bible_section_fields.dart';
 import 'package:iris_dp/features/visual_bible/bible_block_catalog.dart';
 import 'package:iris_dp/features/visual_bible/data/visual_bible_repository.dart';
 import 'package:iris_dp/features/visual_bible/export/builder/bible_export_composition_builder.dart';
@@ -31,6 +32,7 @@ void main() {
   VisualBibleExportBundle bundle({
     String direction = 'Mirada original',
     bool withLighting = false,
+    Map<String, String?> sectionContentJsonById = const {},
   }) => (
     data: VisualBibleData(
       id: 7,
@@ -53,6 +55,7 @@ void main() {
         : <LightingSetupModel>[],
     cameraTests: <CameraTestModel>[],
     moodboard: <MoodboardImageModel>[],
+    sectionContentJsonById: sectionContentJsonById,
   );
 
   BibleDocument document({String direction = 'Mirada original'}) =>
@@ -153,6 +156,40 @@ void main() {
         isTrue,
       );
       expect(lighting.metadata['sourceBlocks'], isA<List>());
+    });
+
+    test('incluye campos custom de contentJson como bloque specsTable', () {
+      final cameraContent = BibleSectionFieldsConfig.encode(
+        BibleSectionFieldsConfig.defaultsFor(BibleSectionId.camera),
+        values: {
+          'cameraData': jsonEncode({'isoNote': '640 ISO', 'bitDepth': '12-bit'}),
+        },
+      );
+      final composition =
+          BibleExportCompositionBuilder(
+            idFactory: () => 'composition-camera-custom',
+            clock: () => now,
+          ).build(
+            projectId: 4,
+            config: config.copyWith(
+              sections: {BibleSectionId.camera},
+            ),
+            bundle: bundle(
+              sectionContentJsonById: {
+                BibleSectionId.camera: cameraContent,
+              },
+            ),
+            includeCover: false,
+          );
+
+      final camera = composition.pages.firstWhere(
+        (page) => page.source?.sectionId == BibleSectionId.camera,
+      );
+      final customBlock = camera.blocks.firstWhere(
+        (block) => block.id.endsWith('__custom_fields'),
+      );
+      expect(customBlock.type, BibleBlockKind.specsTable);
+      expect(customBlock.content['rows'], isNotEmpty);
     });
 
     test('selects configured v2 pages without sharing mutable content', () {

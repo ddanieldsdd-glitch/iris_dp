@@ -11,6 +11,7 @@ import '../../v2/model/bible_page.dart';
 import '../../visual_bible_export_config.dart';
 import '../../../../shared/visual_bible/bible_section_ids.dart';
 import '../model/bible_export_composition.dart';
+import '../bible_section_export_reader.dart';
 
 typedef BibleExportIdFactory = String Function();
 typedef BibleExportClock = DateTime Function();
@@ -202,6 +203,7 @@ class BibleExportCompositionBuilder {
             groupId: 'export',
             label: BibleSectionId.label(orderedIds[index]),
             sortOrder: index,
+            contentJson: bundle.sectionContentJsonById[orderedIds[index]],
           ),
       ],
       data: bundle.data,
@@ -358,6 +360,31 @@ class BibleExportCompositionBuilder {
             ),
           );
         }
+    }
+    if (sectionId != null) {
+      final customRows = BibleSectionExportReader.rowsForSection(
+        sectionId,
+        BibleSectionExportReader.parseCustomBlob(
+          bundle.sectionContentJsonById[sectionId],
+          sectionId,
+        ),
+      );
+      if (customRows.isNotEmpty) {
+        extra.add(
+          BibleBlock(
+            id: '${page.id}__custom_fields',
+            type: BibleBlockKind.specsTable,
+            layout: BibleBlockLayout(row: page.blocks.length + extra.length),
+            content: {
+              'columns': ['campo', 'valor'],
+              'rows': [
+                for (final row in customRows)
+                  {'campo': row.label, 'valor': row.value},
+              ],
+            },
+          ),
+        );
+      }
     }
     final blocks = [...page.blocks, ...extra];
     return page.copyWith(
