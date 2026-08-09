@@ -11,6 +11,8 @@ import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../shared/visual_bible/bible_optics_context.dart';
+import '../../../../shared/visual_bible/bible_section_value_resolve.dart';
+import '../../export/bible_section_export_reader.dart';
 import '../../bible_section_fields.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
@@ -32,23 +34,11 @@ class FormatSection extends ConsumerWidget {
     required this.onChanged,
   });
 
-  Map<String, dynamic> _getCustomData() {
-    if (sectionContentJson == null || sectionContentJson!.isEmpty) return {};
-    try {
-      final decoded = jsonDecode(sectionContentJson!);
-      if (decoded is! Map<String, dynamic>) return {};
-      final valuesRaw = decoded['values'] ?? decoded['_values'];
-      if (valuesRaw is Map) {
-        final vals = Map<String, dynamic>.from(valuesRaw);
-        if (vals['formatData'] is String) {
-          final parsed = jsonDecode(vals['formatData'] as String);
-          if (parsed is Map<String, dynamic>) return parsed;
-        }
-        return vals;
-      }
-    } catch (_) {}
-    return {};
-  }
+  Map<String, dynamic> _getCustomData() =>
+      BibleSectionExportReader.parseCustomBlob(
+        sectionContentJson,
+        BibleSectionId.format,
+      );
 
   Future<void> _updateCustomData(
     WidgetRef ref,
@@ -137,8 +127,14 @@ class FormatSection extends ConsumerWidget {
     final squeezeFactor = custom['squeezeFactor'] as String? ?? '2.0x';
     final squeezeDetail =
         custom['squeezeDetail'] as String? ?? 'Anamorphic S35';
-    final ratioName =
-        custom['ratioName'] as String? ?? _ratioLabel(data.aspectRatio ?? '');
+    final aspectForOptics = BibleSectionValueResolve.resolveSectionString(
+      custom,
+      'activeRatio',
+      legacy: data.aspectRatio,
+    );
+
+    final ratioName = custom['ratioName'] as String? ??
+        _ratioLabel(aspectForOptics ?? data.aspectRatio ?? '');
 
     Map<String, dynamic> opticsConfig = {};
     if (data.opticsConfigJson != null && data.opticsConfigJson!.isNotEmpty) {
@@ -152,19 +148,23 @@ class FormatSection extends ConsumerWidget {
 
     final opticsCtxSync = BibleOpticsContext.resolve(
       opticType: data.opticType,
-      aspectRatio: data.aspectRatio,
+      aspectRatio: aspectForOptics,
       opticsConfig: opticsConfig,
       formatData: custom,
     );
     final squeezeForRatio =
         opticsCtxSync.isAnamorphic ? opticsCtxSync.squeezeRatio : 1.0;
-    final activeRatio = custom['activeRatio'] as String? ??
-        data.aspectRatio ??
+    final activeRatio = aspectForOptics ??
         _formatRatio(sensorR * squeezeForRatio);
 
-    final intentNarrative = custom['intentNarrative'] as String? ??
-        data.formatNarrativeIntent ??
-        data.aspectRatioJustification ??
+    final intentNarrative = BibleSectionValueResolve.resolveSectionString(
+          custom,
+          'intentNarrative',
+          legacyFallbacks: [
+            data.formatNarrativeIntent,
+            data.aspectRatioJustification,
+          ],
+        ) ??
         '';
     final intentComposition = custom['intentComposition'] as String? ?? '';
     final intentReinforce = custom['intentReinforce'] as String? ?? '';
@@ -173,7 +173,11 @@ class FormatSection extends ConsumerWidget {
         custom['overlayCam'] as String? ?? 'ARRI 35 | 40MM ANAMORPHIC';
     final imageCircle = custom['imageCircle'] as String? ?? '';
     final cropFactor = custom['cropFactor'] as String? ?? '';
-    final resolutionOverride = custom['resolution'] as String? ?? '';
+    final resolvedResolution = BibleSectionValueResolve.resolveSectionString(
+      custom,
+      'resolution',
+      legacy: data.captureResolution,
+    );
     final sensorDimsOverride = custom['sensorDims'] as String? ?? '';
 
     return BibleSectionScaffold(
@@ -218,9 +222,7 @@ class FormatSection extends ConsumerWidget {
                 : (cam != null
                     ? '${cam.sensorWidthMm.toStringAsFixed(2)} × ${cam.sensorHeightMm.toStringAsFixed(2)} mm'
                     : '—');
-            final resolution = resolutionOverride.isNotEmpty
-                ? resolutionOverride
-                : (data.captureResolution ?? '—');
+            final resolution = resolvedResolution ?? '—';
             final circle = imageCircle.isNotEmpty
                 ? imageCircle
                 : (cam != null
@@ -287,7 +289,7 @@ class FormatSection extends ConsumerWidget {
                           final opticsCtx = BibleOpticsContext.resolve(
                             primaryLens: lensSnap.data,
                             opticType: data.opticType,
-                            aspectRatio: data.aspectRatio,
+                            aspectRatio: aspectForOptics,
                             opticsConfig: opticsConfig,
                             formatData: custom,
                           );
@@ -396,8 +398,6 @@ class FormatSection extends ConsumerWidget {
                             'activeRatio': ratio,
                             'ratioName': n.text.trim(),
                           });
-                          data.aspectRatio = ratio;
-                          onChanged(data);
                         },
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
@@ -531,8 +531,6 @@ class FormatSection extends ConsumerWidget {
                               await _prompt(context, 'Resolution', c);
                           if (v != null) {
                             await _updateCustomData(ref, {'resolution': v});
-                            data.captureResolution = v.isEmpty ? null : v;
-                            onChanged(data);
                           }
                         },
                       ),
@@ -654,7 +652,6 @@ class FormatSection extends ConsumerWidget {
                                       key: it.$3,
                                       title: it.$1,
                                       value: it.$2,
-                                      syncNarrative: it.$4,
                                     ),
                                   ),
                                   const SizedBox(height: 20),
@@ -679,7 +676,6 @@ class FormatSection extends ConsumerWidget {
                                       key: items[i].$3,
                                       title: items[i].$1,
                                       value: items[i].$2,
-                                      syncNarrative: items[i].$4,
                                     ),
                                   ),
                                 ),
@@ -750,8 +746,6 @@ class FormatSection extends ConsumerWidget {
     if (sensorR == null || squeeze == null) return;
     final ratio = _formatRatio(sensorR * squeeze);
     _updateCustomData(ref, {'activeRatio': ratio});
-    data.aspectRatio = ratio;
-    onChanged(data);
   }
 
   Future<void> _editIntent(
@@ -760,17 +754,11 @@ class FormatSection extends ConsumerWidget {
     required String key,
     required String title,
     required String value,
-    required bool syncNarrative,
   }) async {
     final c = TextEditingController(text: value);
     final v = await _prompt(context, title, c, maxLines: 5);
     if (v == null) return;
     await _updateCustomData(ref, {key: v});
-    if (syncNarrative) {
-      data.formatNarrativeIntent = v;
-      data.aspectRatioJustification = v;
-      onChanged(data);
-    }
   }
 
   static Future<String?> _prompt(

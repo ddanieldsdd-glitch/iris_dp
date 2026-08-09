@@ -16,3 +16,16 @@ Items registrados para no perderlos; no bloquean Fase 1 ni Fase 2.
 **Relacionado (menor):** en la página de **Óptica** del compositor, "Intención narrativa" puede aparecer duplicada (cita en encabezado + primera fila de tabla). Redundante, no incorrecto.
 
 **Archivos probables:** `lib/features/visual_bible/export/pdf/`, `lib/features/visual_bible/export/builder/bible_export_composition_builder.dart`.
+
+---
+
+## Fase 3 piloto Format — acoplamientos no resueltos
+
+Tras unificar escritura en `formatData`, columnas legacy (`aspectRatio`, `captureResolution`, etc.) pueden quedar stale:
+
+- **Optics** sigue leyendo `data.aspectRatio` (columna).
+- **Camera** sigue escribiendo `captureResolution` en columna.
+- **PDF clásico** muestra slots de columna además de filas `formatData`.
+- **Completion** puntúa columnas, no blob.
+
+No es bug del piloto; evaluar post-cierre Format antes de migrar otras secciones.
