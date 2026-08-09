@@ -229,6 +229,10 @@ class BibleSidebar extends StatelessWidget {
         ?.where((d) => d.id == BibleSectionId.format)
         .map((d) => d.contentJson)
         .firstOrNull;
+    final cameraSectionContentJson = definitions
+        ?.where((d) => d.id == BibleSectionId.camera)
+        .map((d) => d.contentJson)
+        .firstOrNull;
     for (final group in groups!) {
       final color = _groupAccentColor(palette, group.label);
       items.add(
@@ -282,6 +286,7 @@ class BibleSidebar extends StatelessWidget {
                     data!,
                     def.id,
                     formatSectionContentJson: formatSectionContentJson,
+                    cameraSectionContentJson: cameraSectionContentJson,
                   ),
             onTap: () => onSectionSelected(def.id),
             onRemove:

@@ -154,5 +154,31 @@ void main() {
       expect(bible?.primaryLensId, lens1);
       expect((await db.resolveProjectLens(projectId))?.id, lens1);
     });
+    test('segunda cámara sin principal previo promueve la primera asignada, no la nueva', () async {
+      final projectId = await seedProject();
+      final camA = await seedCamera(externalId: 'route_cam_first');
+      final camB = await seedCamera(externalId: 'route_cam_second');
+
+      await db.assignEquipmentToProject(
+        projectId: projectId,
+        equipmentType: 'camera',
+        equipmentId: camA,
+      );
+      // Simula asignación legacy sin auto-promoción tras la primera cámara.
+      await db.assignEquipmentToProject(
+        projectId: projectId,
+        equipmentType: 'camera',
+        equipmentId: camB,
+      );
+      await db.maybePromotePrimaryOnEquipmentAssign(
+        projectId: projectId,
+        equipmentType: 'camera',
+        equipmentId: camB,
+      );
+
+      final bible = await db.getVisualBibleForProject(projectId);
+      expect(bible?.primaryCameraId, camA);
+      expect((await db.resolveProjectCamera(projectId))?.id, camA);
+    });
   });
 }

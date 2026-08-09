@@ -47,6 +47,16 @@ class ProjectCameraRosterBar extends StatelessWidget {
                 final assigned = camSnap.data ?? [];
                 if (assigned.length < 2) return const SizedBox.shrink();
 
+                final primary = ProjectEquipmentRoles.resolvePrimaryCameraId(
+                  primaryCameraId: primaryId,
+                  assignedInOrder: assigned,
+                );
+                final sorted = [...assigned]..sort((a, b) {
+                    if (a.id == primary) return -1;
+                    if (b.id == primary) return 1;
+                    return assigned.indexOf(a).compareTo(assigned.indexOf(b));
+                  });
+
                 return Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                   child: Column(
@@ -65,7 +75,7 @@ class ProjectCameraRosterBar extends StatelessWidget {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          for (final cam in assigned)
+                          for (final cam in sorted)
                             _RoleChip(
                               palette: palette,
                               role: ProjectEquipmentRoles.cameraRoleLabel(

@@ -2276,6 +2276,8 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Tras asignar equipo, promueve a principal en Biblia solo si aún no hay uno.
+  /// Si ya hay varias asignadas sin principal (legacy), promueve la **primera**
+  /// en orden de proyecto — nunca la recién añadida si no es la primera.
   Future<void> maybePromotePrimaryOnEquipmentAssign({
     required int projectId,
     required String equipmentType,
@@ -2285,13 +2287,39 @@ class AppDatabase extends _$AppDatabase {
     switch (equipmentType) {
       case 'camera':
         if (bible?.primaryCameraId == null) {
-          await syncBiblePrimaryCamera(projectId, equipmentId);
+          final firstId =
+              await _firstAssignedEquipmentId(projectId, 'camera') ??
+                  equipmentId;
+          await syncBiblePrimaryCamera(projectId, firstId);
         }
+        break;
       case 'lens':
         if (bible?.primaryLensId == null) {
-          await syncBiblePrimaryLens(projectId, equipmentId);
+          final firstId =
+              await _firstAssignedEquipmentId(projectId, 'lens') ?? equipmentId;
+          await syncBiblePrimaryLens(projectId, firstId);
         }
+        break;
     }
+  }
+
+  Future<int?> _firstAssignedEquipmentId(
+    int projectId,
+    String equipmentType,
+  ) async {
+    final assigned =
+        await (select(projectEquipment)..where(
+              (e) =>
+                  e.projectId.equals(projectId) &
+                  e.equipmentType.equals(equipmentType),
+            )
+            ..orderBy([
+              (e) => OrderingTerm.asc(e.sortOrder),
+              (e) => OrderingTerm.asc(e.id),
+            ]))
+            .get();
+    if (assigned.isEmpty) return null;
+    return assigned.first.equipmentId;
   }
 
   Future<void> syncBiblePrimaryCamera(int projectId, int cameraId) async {

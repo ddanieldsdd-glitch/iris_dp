@@ -12,6 +12,7 @@ typedef VisualBibleExportBundle = ({
   List<CameraTestModel> cameraTests,
   List<MoodboardImageModel> moodboard,
   Map<String, String?> sectionContentJsonById,
+  String? primaryCameraLabel,
 });
 
 /// Puerta de entrada de Visual Bible a persistencia local.
@@ -74,6 +75,10 @@ class VisualBibleRepository {
     final testRows = await _dao.watchCameraTests(bible.id).first;
     final moodRows = await _dao.watchMoodboardImages(projectId).first;
     final sectionRows = await _dao.watchSectionDefinitions(bible.id).first;
+    final camera = await _dao.database.resolveProjectCamera(projectId);
+    final primaryCameraLabel = camera != null
+        ? '${camera.brand} ${camera.model}'
+        : null;
     return (
       data: data,
       blocks: colorRows.map(ColorBlockModel.fromRow).toList(),
@@ -84,6 +89,7 @@ class VisualBibleRepository {
       sectionContentJsonById: {
         for (final row in sectionRows) row.id: row.contentJson,
       },
+      primaryCameraLabel: primaryCameraLabel,
     );
   }
 

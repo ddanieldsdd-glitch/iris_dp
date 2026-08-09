@@ -179,6 +179,7 @@ void main() {
         moodboard: bundle.moodboard,
         includedSections: config.sections,
         sectionContentJsonById: bundle.sectionContentJsonById,
+        primaryCameraLabel: bundle.primaryCameraLabel,
       );
       final classicPath = File('${outDir.path}/classic_export.pdf');
       await classicPath.writeAsBytes(classicBytes);

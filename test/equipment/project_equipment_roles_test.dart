@@ -44,6 +44,46 @@ void main() {
       );
     });
 
+    test('A-CAM sigue en la cámara principal aunque la lista venga en otro orden', () {
+      final a = Camera(
+        id: 1,
+        brand: 'ARRI',
+        model: 'A',
+        sensorWidthMm: 28,
+        sensorHeightMm: 19,
+        isCustom: false,
+        vintage: false,
+        lukaCompatible: false,
+      );
+      final b = Camera(
+        id: 2,
+        brand: 'RED',
+        model: 'B',
+        sensorWidthMm: 28,
+        sensorHeightMm: 19,
+        isCustom: false,
+        vintage: false,
+        lukaCompatible: false,
+      );
+
+      expect(
+        ProjectEquipmentRoles.cameraRoleLabel(
+          cameraId: 1,
+          primaryCameraId: 1,
+          assignedInOrder: [b, a],
+        ),
+        'A-CAM',
+      );
+      expect(
+        ProjectEquipmentRoles.cameraRoleLabel(
+          cameraId: 2,
+          primaryCameraId: 1,
+          assignedInOrder: [b, a],
+        ),
+        'B-CAM',
+      );
+    });
+
     test('drivesActiveSpecs solo es true para A-CAM', () {
       final a = Camera(
         id: 1,

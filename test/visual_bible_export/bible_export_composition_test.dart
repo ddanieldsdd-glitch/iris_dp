@@ -56,6 +56,7 @@ void main() {
     cameraTests: <CameraTestModel>[],
     moodboard: <MoodboardImageModel>[],
     sectionContentJsonById: sectionContentJsonById,
+    primaryCameraLabel: null,
   );
 
   BibleDocument document({String direction = 'Mirada original'}) =>

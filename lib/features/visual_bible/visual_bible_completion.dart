@@ -1,5 +1,6 @@
 export '../../shared/visual_bible/bible_layout.dart';
 
+import '../../shared/visual_bible/camera_pilot_resolve.dart';
 import '../../shared/visual_bible/format_pilot_resolve.dart';
 import 'visual_bible_model.dart';
 
@@ -8,6 +9,7 @@ double bibleSectionCompletion(
   VisualBibleData data,
   String sectionId, {
   String? formatSectionContentJson,
+  String? cameraSectionContentJson,
 }) {
   bool filled(String? v) => v != null && v.trim().isNotEmpty;
 
@@ -25,13 +27,17 @@ double bibleSectionCompletion(
       data.actVisualNotes.any((a) => filled(a['intent'])),
       filled(data.conceptNarrativeIntent),
     ]),
-    BibleSectionId.camera => _ratio([
-      data.primaryCameraId != null,
-      filled(data.cameraPhilosophy),
-      filled(data.movementStyle),
-      filled(data.recordingFormat),
-      filled(data.cameraNarrativeIntent),
-    ]),
+    BibleSectionId.camera => () {
+        final blob = CameraPilotResolve.parseBlob(cameraSectionContentJson);
+        return _ratio([
+          data.primaryCameraId != null,
+          filled(data.cameraPhilosophy),
+          filled(data.movementStyle),
+          filled(data.recordingFormat),
+          filled(data.cameraNarrativeIntent),
+          filled(CameraPilotResolve.captureResolution(blob, data)),
+        ]);
+      }(),
     BibleSectionId.optics => _ratio([
       filled(data.lensPhilosophy),
       filled(data.opticType),
@@ -95,11 +101,13 @@ double bibleSectionCompletionExtended({
   int lightingSetupCount = 0,
   int sectionRefsCount = 0,
   String? formatSectionContentJson,
+  String? cameraSectionContentJson,
 }) {
   final base = bibleSectionCompletion(
     data,
     sectionId,
     formatSectionContentJson: formatSectionContentJson,
+    cameraSectionContentJson: cameraSectionContentJson,
   );
   final withRefs = sectionRefsCount > 0
       ? (base + (sectionRefsCount.clamp(0, 6) / 6) * 0.35).clamp(0.0, 1.0)
@@ -137,6 +145,7 @@ double bibleOverallCompletion({
   int lightingSetupCount = 0,
   int Function(String sectionId)? sectionRefsCount,
   String? formatSectionContentJson,
+  String? cameraSectionContentJson,
 }) {
   final knownIds = sectionIds.where(BibleSectionId.all.contains).toSet();
   if (knownIds.isEmpty) return 0;
@@ -154,6 +163,7 @@ double bibleOverallCompletion({
           lightingSetupCount: lightingSetupCount,
           sectionRefsCount: sectionRefsCount?.call(sectionId) ?? 0,
           formatSectionContentJson: formatSectionContentJson,
+          cameraSectionContentJson: cameraSectionContentJson,
         ),
   );
   return total / knownIds.length;

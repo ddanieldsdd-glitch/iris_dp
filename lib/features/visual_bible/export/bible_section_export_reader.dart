@@ -61,6 +61,7 @@ abstract final class BibleSectionExportReader {
       'sensorLabel': 'Sensor',
       'mountLabel': 'Montura',
       'dynamicRange': 'Rango dinámico',
+      'captureResolution': 'Resolución de captura',
     },
     BibleSectionId.location: {
       'coords': 'Coordenadas',

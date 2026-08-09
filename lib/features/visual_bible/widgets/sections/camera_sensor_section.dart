@@ -10,7 +10,9 @@ import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../equipment/widgets/equipment_picker.dart';
-import '../../bible_section_fields.dart';
+import '../../../../shared/visual_bible/bible_section_fields.dart';
+import '../../../../shared/visual_bible/camera_pilot_resolve.dart';
+import '../../export/bible_section_export_reader.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
@@ -32,23 +34,11 @@ class CameraSensorSection extends ConsumerWidget {
     required this.onChanged,
   });
 
-  Map<String, dynamic> _getCustom() {
-    if (sectionContentJson == null || sectionContentJson!.isEmpty) return {};
-    try {
-      final decoded = jsonDecode(sectionContentJson!);
-      if (decoded is! Map<String, dynamic>) return {};
-      final valuesRaw = decoded['values'] ?? decoded['_values'];
-      if (valuesRaw is Map) {
-        final vals = Map<String, dynamic>.from(valuesRaw);
-        if (vals['cameraData'] is String) {
-          final parsed = jsonDecode(vals['cameraData'] as String);
-          if (parsed is Map<String, dynamic>) return parsed;
-        }
-        return vals;
-      }
-    } catch (_) {}
-    return {};
-  }
+  Map<String, dynamic> _getCustom() =>
+      BibleSectionExportReader.parseCustomBlob(
+        sectionContentJson,
+        BibleSectionId.camera,
+      );
 
   Future<void> _updateCustom(
     WidgetRef ref,
@@ -98,6 +88,8 @@ class CameraSensorSection extends ConsumerWidget {
     final palette = context.palette;
     final db = ref.watch(databaseProvider);
     final custom = _getCustom();
+    final resolvedCaptureResolution =
+        CameraPilotResolve.captureResolution(custom, data);
 
     final isoNote = custom['isoNote'] as String? ?? 'Base. Usar 3200 p/ noche ext.';
     final shutter = custom['shutterAngle'] as String? ?? '180°';
@@ -474,12 +466,12 @@ class CameraSensorSection extends ConsumerWidget {
                           const SizedBox(height: 20),
                           _kvRow(
                             'Resolución de captura',
-                            data.captureResolution ?? '—',
+                            resolvedCaptureResolution ?? '—',
                             palette,
                             accent: true,
                             onTap: () async {
                               final ctrl = TextEditingController(
-                                text: data.captureResolution ?? '',
+                                text: resolvedCaptureResolution ?? '',
                               );
                               final v = await _prompt(
                                 context,
@@ -487,9 +479,9 @@ class CameraSensorSection extends ConsumerWidget {
                                 ctrl,
                               );
                               if (v == null) return;
-                              data.captureResolution =
-                                  v.isEmpty ? null : v;
-                              onChanged(data);
+                              await _updateCustom(ref, {
+                                'captureResolution': v,
+                              });
                             },
                           ),
                           _kvRow(

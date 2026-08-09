@@ -48,6 +48,7 @@ class BibleContentSnapshot {
     VisualBibleData data,
     String sectionId, {
     String? formatSectionContentJson,
+    String? cameraSectionContentJson,
   }) =>
       bibleSectionCompletionExtended(
         data: data,
@@ -59,6 +60,7 @@ class BibleContentSnapshot {
         lightingSetupCount: lightingSetups.length,
         sectionRefsCount: refsForSection(sectionId),
         formatSectionContentJson: formatSectionContentJson,
+        cameraSectionContentJson: cameraSectionContentJson,
       );
 }
 
@@ -139,6 +141,10 @@ class BibleOverviewSection extends StatelessWidget {
         .where((def) => def.id == BibleSectionId.format)
         .map((def) => def.contentJson)
         .firstOrNull;
+    final cameraSectionContentJson = definitions
+        .where((def) => def.id == BibleSectionId.camera)
+        .map((def) => def.contentJson)
+        .firstOrNull;
     final sectionIds = definitions
         .where(
           (def) =>
@@ -158,6 +164,7 @@ class BibleOverviewSection extends StatelessWidget {
       lightingSetupCount: snapshot.lightingSetups.length,
       sectionRefsCount: snapshot.refsForSection,
       formatSectionContentJson: formatSectionContentJson,
+      cameraSectionContentJson: cameraSectionContentJson,
     );
     final incomplete =
         definitions
@@ -170,6 +177,7 @@ class BibleOverviewSection extends StatelessWidget {
                     data,
                     def.id,
                     formatSectionContentJson: formatSectionContentJson,
+                    cameraSectionContentJson: cameraSectionContentJson,
                   ) < 0.85,
             )
             .toList()
@@ -179,12 +187,14 @@ class BibleOverviewSection extends StatelessWidget {
                   data,
                   a.id,
                   formatSectionContentJson: formatSectionContentJson,
+                  cameraSectionContentJson: cameraSectionContentJson,
                 )
                 .compareTo(
                   snapshot.sectionCompletion(
                     data,
                     b.id,
                     formatSectionContentJson: formatSectionContentJson,
+                    cameraSectionContentJson: cameraSectionContentJson,
                   ),
                 ),
           );
@@ -220,6 +230,8 @@ class BibleOverviewSection extends StatelessWidget {
                               id,
                               formatSectionContentJson:
                                   formatSectionContentJson,
+                              cameraSectionContentJson:
+                                  cameraSectionContentJson,
                             ) >=
                             0.85,
                       )
@@ -298,6 +310,7 @@ class BibleOverviewSection extends StatelessWidget {
                             data,
                             def.id,
                             formatSectionContentJson: formatSectionContentJson,
+                            cameraSectionContentJson: cameraSectionContentJson,
                           ),
                           onTap: () => onOpenSection(def.id),
                         ),

@@ -34,7 +34,7 @@ Tras unificar escritura en `formatData`, columnas legacy (`aspectRatio`, `captur
 | Campo | Escritor | ¿Sigue columna? | ¿Migrar después? | Motivo |
 | ----- | -------- | --------------- | ---------------- | ------ |
 | `aspectRatio` | `bible_preset_service.dart` | Sí | Sí (presets) | Aplica plantillas globales; fuera alcance Format |
-| `captureResolution` | `camera_sensor_section.dart` | Sí | Sí (Camera) | Campo de Cámara; Format lee blob primero vía resolve |
+| `captureResolution` | ~~`camera_sensor_section.dart`~~ | Solo fallback | Hecho (Camera) | Escritura canónica en blob; columna legacy sin dual-write |
 | `formatNarrativeIntent` | ~~NarrativeBridgeCard Format~~ | No (oculto) | — | Duplicado eliminado en Format |
 | `formatNarrativeIntent` | Otras secciones vía `setNarrativeIntentForSection` | Sí (otras secciones) | Por sección | No afecta Format tras ocultar bridge |
 | `aspectRatioJustification` | Ningún widget activo | Solo lectura legacy | Evaluar | Fallback de `intentNarrative`; sin escritor UI |
@@ -42,7 +42,6 @@ Tras unificar escritura en `formatData`, columnas legacy (`aspectRatio`, `captur
 ### Pendiente post-Format (fuera de alcance)
 
 - **Completion** de otras secciones sin blob.
-- **Migración Camera** de `captureResolution`.
 - **Presets** escribiendo `aspectRatio` sin blob.
 
 No es bug del piloto si queda documentado; evaluar antes de migrar otras secciones.
@@ -59,9 +58,13 @@ Los chips de rol en Equipo/Format/Optics Lab (`project_camera_roster_bar`, badge
 
 ## Pendiente post-routing (no iniciado — 9 ago 2026)
 
-### Piloto Camera (`camera_sensor_section.dart`)
+### Piloto Camera (`camera_sensor_section.dart`) — cerrado (9 ago 2026)
 
-Dualidad columnas vs `contentJson` intacta (nunca empezado). El futuro «modo de sensor a nivel de proyecto» (unificación PHFX/Format) debería vivir en blob de cámara — razón para no aplazarlo indefinidamente. **No empezar** hasta cerrar verificación real de Format piloto en PDF.
+**Migrado:** `captureResolution` → blob canónico `cameraData` vía `CameraPilotResolve`; UI Cámara escribe/lee blob (columna legacy solo fallback); hash export incluye resolución resuelta; label PDF «Resolución de captura»; completion/sidebar/overview leen blob vía `cameraSectionContentJson`.
+
+**Tests:** `camera_pilot_resolve_test`, `camera_section_persistence_pilot_test`, `camera_pdf_export_regression_test`, `camera_completion_pilot_test`.
+
+**Fuera de alcance (post-piloto):** unificación modos sensor Format ↔ Optics Lab (PHFX); migrar más campos Camera al blob.
 
 ### Unificación modos PHFX (Format ↔ Optics Lab)
 

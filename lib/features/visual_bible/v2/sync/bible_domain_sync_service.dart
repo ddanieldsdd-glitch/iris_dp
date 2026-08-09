@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 import '../../../../core/database/app_database.dart';
+import '../../../../shared/visual_bible/camera_pilot_resolve.dart';
 import '../../../../shared/visual_bible/format_pilot_resolve.dart';
 import '../../visual_bible_model.dart';
 import '../layout/page_layout_recipe_registry.dart';
@@ -109,8 +110,10 @@ abstract final class BibleDomainSyncService {
     int lightingSetupCount = 0,
     int cameraTestCount = 0,
     String? formatSectionContentJson,
+    String? cameraSectionContentJson,
   }) {
     final formatBlob = FormatPilotResolve.parseBlob(formatSectionContentJson);
+    final cameraBlob = CameraPilotResolve.parseBlob(cameraSectionContentJson);
     final payload = {
       'id': data.id,
       'tone': data.tone,
@@ -120,6 +123,8 @@ abstract final class BibleDomainSyncService {
       'formatResolution': FormatPilotResolve.resolution(formatBlob, data),
       'formatIntentNarrative':
           FormatPilotResolve.intentNarrative(formatBlob, data),
+      'cameraCaptureResolution':
+          CameraPilotResolve.captureResolution(cameraBlob, data),
       'documentUpdatedAt': document?.updatedAt.toIso8601String(),
       'pageCount': document?.pages.length ?? 0,
       'moodboardCount': moodboardCount,

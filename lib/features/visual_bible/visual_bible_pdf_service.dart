@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/pdf_export_fonts.dart';
 import '../../core/utils/pdf_safe_image.dart';
+import '../../shared/visual_bible/camera_pilot_resolve.dart';
 import '../../shared/visual_bible/format_pilot_resolve.dart';
 import 'export/bible_section_export_reader.dart';
 import 'visual_bible_model.dart';
@@ -27,6 +28,7 @@ class VisualBiblePdfService {
     required List<MoodboardImageModel> moodboard,
     Set<String>? includedSections,
     Map<String, String?> sectionContentJsonById = const {},
+    String? primaryCameraLabel,
   }) async {
     final doc = await buildDocument(
       mode: mode,
@@ -40,6 +42,7 @@ class VisualBiblePdfService {
       moodboard: moodboard,
       includedSections: includedSections,
       sectionContentJsonById: sectionContentJsonById,
+      primaryCameraLabel: primaryCameraLabel,
     );
     return doc.save();
   }
@@ -79,6 +82,7 @@ class VisualBiblePdfService {
     required List<MoodboardImageModel> moodboard,
     Set<String>? includedSections,
     Map<String, String?> sectionContentJsonById = const {},
+    String? primaryCameraLabel,
   }) async {
     final isPitch = mode == VisualBibleExportMode.pitch;
     final isTech = mode == VisualBibleExportMode.techScout;
@@ -396,22 +400,20 @@ class VisualBiblePdfService {
     }
 
     if (!isPitch &&
-        (_sectionAllowed(sections, BibleSectionId.exposure) ||
-            _sectionAllowed(sections, BibleSectionId.camera)) &&
+        _sectionAllowed(sections, BibleSectionId.exposure) &&
         (data.exposureNarrativeIntent?.isNotEmpty == true ||
             exposureBlocks.isNotEmpty ||
             data.highlightBehavior != null ||
             data.shadowBehavior != null ||
             data.nativeIso != null ||
             data.recordingFormat != null ||
-            _hasCustomContent(BibleSectionId.exposure, sectionContentJsonById) ||
-            _hasCustomContent(BibleSectionId.camera, sectionContentJsonById))) {
+            _hasCustomContent(BibleSectionId.exposure, sectionContentJsonById))) {
       doc.addPage(
         pw.Page(
           theme: theme,
           pageFormat: PdfPageFormat.a4,
           build: (_) => _sectionPage(
-            title: 'EXPOSICIÓN Y CÁMARA',
+            title: 'EXPOSICIÓN',
             fontBold: fonts.bold,
             font: fonts.regular,
             content: pw.Column(
@@ -441,23 +443,47 @@ class VisualBiblePdfService {
                         pw.Text('${b.blockName}: K:F ${b.keyFillRatio ?? "—"}'),
                   ),
                 ],
-                if (_sectionAllowed(sections, BibleSectionId.exposure))
-                  _customFieldsWidget(
-                    BibleSectionId.exposure,
-                    sectionContentJsonById,
-                    fonts,
-                  ),
-                if (_sectionAllowed(sections, BibleSectionId.camera))
-                  _customFieldsWidget(
-                    BibleSectionId.camera,
-                    sectionContentJsonById,
-                    fonts,
-                  ),
+                _customFieldsWidget(
+                  BibleSectionId.exposure,
+                  sectionContentJsonById,
+                  fonts,
+                ),
               ],
             ),
           ),
         ),
       );
+    }
+
+    if (!isPitch && _sectionAllowed(sections, BibleSectionId.camera)) {
+      final cameraBlob = CameraPilotResolve.parseBlob(
+        sectionContentJsonById[BibleSectionId.camera],
+      );
+      if (CameraPilotResolve.hasExportablePilotContent(
+        data,
+        cameraBlob,
+        primaryCameraLabel: primaryCameraLabel,
+      )) {
+        doc.addPage(
+          pw.Page(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            build: (_) => _sectionPage(
+              title: 'CÁMARA Y SENSOR',
+              fontBold: fonts.bold,
+              font: fonts.regular,
+              content: _textFieldsContent([
+                ...CameraPilotResolve.fixedSlotsForPdf(
+                  data,
+                  cameraBlob,
+                  primaryCameraLabel: primaryCameraLabel,
+                ),
+                ...CameraPilotResolve.customRowsForPdf(cameraBlob),
+              ], fonts),
+            ),
+          ),
+        );
+      }
     }
 
     if (!isPitch &&

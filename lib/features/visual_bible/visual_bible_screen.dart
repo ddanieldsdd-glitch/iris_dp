@@ -380,6 +380,8 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
         cameraTestCount: bundle.cameraTests.length,
         formatSectionContentJson:
             bundle.sectionContentJsonById[BibleSectionId.format],
+        cameraSectionContentJson:
+            bundle.sectionContentJsonById[BibleSectionId.camera],
       );
       final built = builder.build(
         projectId: widget.projectId,
@@ -494,6 +496,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
               moodboard: bundle.moodboard,
               includedSections: config.sections,
               sectionContentJsonById: bundle.sectionContentJsonById,
+              primaryCameraLabel: bundle.primaryCameraLabel,
             );
       final suffix = config.isDepartment
           ? VisualBibleDepartment.label(
@@ -1046,6 +1049,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                         cameraTests: bundle.cameraTests,
                         moodboard: bundle.moodboard,
                         sectionContentJsonById: bundle.sectionContentJsonById,
+                        primaryCameraLabel: bundle.primaryCameraLabel,
                       );
                     },
                   ),
