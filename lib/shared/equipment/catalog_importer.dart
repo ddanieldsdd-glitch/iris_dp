@@ -126,7 +126,7 @@ Future<void> importEmbeddedCatalog(
 
   await _upsertCameras(db, cameras);
   await _upsertLenses(db, lenses);
-  await _upsertLights(db, lights);
+  await upsertCatalogLights(db, lights);
 
   await db.upsertCatalogSyncMeta(
     CatalogSyncMetaCompanion(
@@ -147,7 +147,7 @@ Future<void> importCatalogFromJson(
 }) async {
   await _upsertCameras(db, cameras);
   await _upsertLenses(db, lenses);
-  await _upsertLights(db, lights);
+  await upsertCatalogLights(db, lights);
   await db.upsertCatalogSyncMeta(
     CatalogSyncMetaCompanion(
       remoteVersion: Value(version),
@@ -370,3 +370,11 @@ Future<({int upserted, int skippedCustom})> upsertCatalogLights(
   }
   return (upserted: upserted, skippedCustom: skippedCustom);
 }
+
+Future<void> _upsertLights(
+  AppDatabase db,
+  List<CatalogLightEntry> entries,
+) async {
+  await upsertCatalogLights(db, entries);
+}
+
