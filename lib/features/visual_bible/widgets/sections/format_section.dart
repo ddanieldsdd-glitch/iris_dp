@@ -198,19 +198,10 @@ class FormatSection extends ConsumerWidget {
             letterSpacing: -0.6,
           ),
         ),
-        'formatSettings': StreamBuilder<List<Camera>>(
-          stream: db.watchAllCameras(),
-          builder: (context, snap) {
-            final cameras = snap.data ?? [];
-            Camera? cam;
-            if (data.primaryCameraId != null) {
-              for (final c in cameras) {
-                if (c.id == data.primaryCameraId) {
-                  cam = c;
-                  break;
-                }
-              }
-            }
+        'formatSettings': FutureBuilder<Camera?>(
+          future: db.resolveProjectCamera(projectId),
+          builder: (context, camSnap) {
+            final cam = camSnap.data;
 
             final body = cam != null
                 ? '${cam.brand} ${cam.model}'
@@ -282,9 +273,7 @@ class FormatSection extends ConsumerWidget {
                       ),
                       const SizedBox(height: 16),
                       FutureBuilder<Lense?>(
-                        future: data.primaryLensId != null
-                            ? db.getLensById(data.primaryLensId!)
-                            : Future.value(null),
+                        future: db.resolveProjectLens(projectId),
                         builder: (context, lensSnap) {
                           final opticsCtx = BibleOpticsContext.resolve(
                             primaryLens: lensSnap.data,

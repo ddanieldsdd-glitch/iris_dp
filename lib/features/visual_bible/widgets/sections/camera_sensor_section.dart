@@ -257,15 +257,10 @@ class CameraSensorSection extends ConsumerWidget {
           stream: db.watchAllCameras(),
           builder: (context, snap) {
             final cameras = snap.data ?? [];
-            Camera? selected;
-            if (data.primaryCameraId != null) {
-              for (final c in cameras) {
-                if (c.id == data.primaryCameraId) {
-                  selected = c;
-                  break;
-                }
-              }
-            }
+            return FutureBuilder<Camera?>(
+              future: db.resolveProjectCamera(projectId),
+              builder: (context, resolvedSnap) {
+                final selected = resolvedSnap.data;
             final camName = selected != null
                 ? '${selected.brand} ${selected.model}'
                 : 'Seleccionar cámara…';
@@ -1059,6 +1054,8 @@ class CameraSensorSection extends ConsumerWidget {
                   ),
                 ),
               ],
+            );
+              },
             );
           },
         ),

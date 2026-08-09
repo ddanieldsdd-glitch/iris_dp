@@ -2258,6 +2258,42 @@ class AppDatabase extends _$AppDatabase {
     return getCameraById(assigned.first.equipmentId);
   }
 
+  /// Resuelve lente principal del proyecto: Biblia > ProjectEquipment > null.
+  Future<Lense?> resolveProjectLens(int projectId) async {
+    final bible = await getVisualBibleForProject(projectId);
+    if (bible?.primaryLensId != null) {
+      return getLensById(bible!.primaryLensId!);
+    }
+    final assigned =
+        await (select(projectEquipment)..where(
+              (e) =>
+                  e.projectId.equals(projectId) &
+                  e.equipmentType.equals('lens'),
+            ))
+            .get();
+    if (assigned.isEmpty) return null;
+    return getLensById(assigned.first.equipmentId);
+  }
+
+  /// Tras asignar equipo, promueve a principal en Biblia solo si aún no hay uno.
+  Future<void> maybePromotePrimaryOnEquipmentAssign({
+    required int projectId,
+    required String equipmentType,
+    required int equipmentId,
+  }) async {
+    final bible = await getVisualBibleForProject(projectId);
+    switch (equipmentType) {
+      case 'camera':
+        if (bible?.primaryCameraId == null) {
+          await syncBiblePrimaryCamera(projectId, equipmentId);
+        }
+      case 'lens':
+        if (bible?.primaryLensId == null) {
+          await syncBiblePrimaryLens(projectId, equipmentId);
+        }
+    }
+  }
+
   Future<void> syncBiblePrimaryCamera(int projectId, int cameraId) async {
     final bible = await ensureVisualBibleForProject(projectId);
     final cam = await getCameraById(cameraId);

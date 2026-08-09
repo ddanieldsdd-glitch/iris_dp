@@ -169,9 +169,7 @@ class _OpticsSectionState extends ConsumerState<OpticsSection> {
             final db = ref.read(databaseProvider);
 
             return FutureBuilder<Lense?>(
-              future: data.primaryLensId != null
-                  ? db.getLensById(data.primaryLensId!)
-                  : Future.value(null),
+              future: db.resolveProjectLens(widget.projectId),
               builder: (context, lensSnap) {
                 final opticsCtx = BibleOpticsContext.resolve(
                   primaryLens: lensSnap.data,

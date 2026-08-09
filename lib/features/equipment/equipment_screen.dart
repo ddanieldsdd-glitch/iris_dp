@@ -446,6 +446,11 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
         equipmentType: type,
         equipmentId: id,
       );
+      await db.maybePromotePrimaryOnEquipmentAssign(
+        projectId: widget.projectId,
+        equipmentType: type,
+        equipmentId: id,
+      );
     }
   }
 }

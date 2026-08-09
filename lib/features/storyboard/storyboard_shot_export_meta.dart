@@ -76,22 +76,9 @@ class StoryboardShotExportMeta {
       }
     }
 
-    if (bible?.primaryLensId != null) {
-      final lens = await db.getLensById(bible!.primaryLensId!);
-      if (lens != null) {
-        lensSeriesHeader = '${lens.brand} ${lens.model}'.trim();
-      }
-    } else {
-      final equipment = await db.watchProjectEquipment(project.id).first;
-      for (final row in equipment) {
-        if (row.equipmentType == 'lens') {
-          final lens = await db.getLensById(row.equipmentId);
-          if (lens != null) {
-            lensSeriesHeader = '${lens.brand} ${lens.model}'.trim();
-            break;
-          }
-        }
-      }
+    final lens = await db.resolveProjectLens(project.id);
+    if (lens != null) {
+      lensSeriesHeader = '${lens.brand} ${lens.model}'.trim();
     }
 
     final orientationHeader = _orientationLabel(shot.angle, scene.dayNight);

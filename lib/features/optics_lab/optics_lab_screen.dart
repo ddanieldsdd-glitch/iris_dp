@@ -109,9 +109,14 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
 
     if (lensId != null) {
       _lens = await db.getLensById(lensId);
+    } else {
+      _lens = await db.resolveProjectLens(widget.projectId);
+    }
+    if (_lens != null) {
       _applyLensFocal(_lens);
       _anamorphicPreview = _lens?.isAnamorphic ?? false;
-      _lensSqueeze = _lens?.squeezeRatio ?? (_lens?.isAnamorphic == true ? 2.0 : 1.0);
+      _lensSqueeze =
+          _lens?.squeezeRatio ?? (_lens?.isAnamorphic == true ? 2.0 : 1.0);
     }
 
     if (bible?.aspectRatio != null) {
