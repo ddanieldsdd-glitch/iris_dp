@@ -904,10 +904,3 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
     );
   }
 }
-
-extension _FirstOrNull<E> on Iterable<E> {
-  E? get firstOrNull {
-    final it = iterator;
-    return it.moveNext() ? it.current : null;
-  }
-}
