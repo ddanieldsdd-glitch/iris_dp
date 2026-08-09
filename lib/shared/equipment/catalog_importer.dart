@@ -237,11 +237,19 @@ Future<void> _upsertCameras(
   await upsertCatalogCameras(db, entries);
 }
 
-Future<void> _upsertLenses(AppDatabase db, List<CatalogLensEntry> entries) async {
+Future<({int upserted, int skippedCustom})> upsertCatalogLenses(
+  AppDatabase db,
+  List<CatalogLensEntry> entries,
+) async {
+  var upserted = 0;
+  var skippedCustom = 0;
   for (final e in entries) {
     final existing = await db.getLensByExternalId(e.externalId);
     if (existing != null) {
-      if (existing.isCustom) continue;
+      if (existing.isCustom) {
+        skippedCustom++;
+        continue;
+      }
       await db.updateLens(existing.copyWith(
         brand: e.brand,
         model: e.model,
@@ -265,6 +273,7 @@ Future<void> _upsertLenses(AppDatabase db, List<CatalogLensEntry> entries) async
         lukaProfileJson: Value(_encodeProfile(e.lukaProfile)),
         catalogVersion: const Value(kEmbeddedCatalogVersion),
       ));
+      upserted++;
     } else {
       await db.insertLens(LensesCompanion.insert(
         brand: e.brand,
@@ -291,16 +300,29 @@ Future<void> _upsertLenses(AppDatabase db, List<CatalogLensEntry> entries) async
         catalogVersion: const Value(kEmbeddedCatalogVersion),
         isCustom: const Value(false),
       ));
+      upserted++;
     }
   }
+  return (upserted: upserted, skippedCustom: skippedCustom);
 }
 
-Future<void> _upsertLights(AppDatabase db, List<CatalogLightEntry> entries) async {
+Future<void> _upsertLenses(AppDatabase db, List<CatalogLensEntry> entries) async {
+  await upsertCatalogLenses(db, entries);
+}
+
+Future<({int upserted, int skippedCustom})> upsertCatalogLights(
+  AppDatabase db,
+  List<CatalogLightEntry> entries,
+) async {
+  var upserted = 0;
+  var skippedCustom = 0;
   for (final e in entries) {
-    final all = await db.watchAllLights().first;
-    final existing = all.where((l) => l.externalId == e.externalId).firstOrNull;
+    final existing = await db.getLightByExternalId(e.externalId);
     if (existing != null) {
-      if (existing.isCustom) continue;
+      if (existing.isCustom) {
+        skippedCustom++;
+        continue;
+      }
       await db.updateLight(existing.copyWith(
         brand: e.brand,
         model: e.model,
@@ -320,6 +342,7 @@ Future<void> _upsertLights(AppDatabase db, List<CatalogLightEntry> entries) asyn
         lukaProfileJson: Value(_encodeProfile(e.lukaProfile)),
         catalogVersion: const Value(kEmbeddedCatalogVersion),
       ));
+      upserted++;
     } else {
       await db.insertLight(LightsCompanion.insert(
         brand: e.brand,
@@ -342,13 +365,8 @@ Future<void> _upsertLights(AppDatabase db, List<CatalogLightEntry> entries) asyn
         catalogVersion: const Value(kEmbeddedCatalogVersion),
         isCustom: const Value(false),
       ));
+      upserted++;
     }
   }
-}
-
-extension _FirstOrNull<E> on Iterable<E> {
-  E? get firstOrNull {
-    final it = iterator;
-    return it.moveNext() ? it.current : null;
-  }
+  return (upserted: upserted, skippedCustom: skippedCustom);
 }

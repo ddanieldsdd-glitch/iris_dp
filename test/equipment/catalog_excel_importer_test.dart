@@ -252,4 +252,54 @@ void main() {
     final entries = parseCameraCatalog(path.readAsStringSync());
     expect(entries.first.externalId, isNotEmpty);
   });
+
+  test('Excel v1.7 JSON: import Ópticas no toca custom', () async {
+    await db.insertLens(
+      LensesCompanion.insert(
+        brand: 'User',
+        model: 'Custom Lens',
+        focalLength: 50,
+        minTStop: 1.5,
+        formatCoverage: 'S35',
+        externalId: const Value('user_custom_lens'),
+        isCustom: const Value(true),
+      ),
+    );
+
+    final path = File('docs/catalog/lenses_v1_7.json');
+    expect(path.existsSync(), isTrue);
+    final result = await CatalogExcelImporter.importLensesFromJson(
+      db,
+      path.readAsStringSync(),
+    );
+    expect(result.ok, isTrue);
+    expect(result.camerasParsed, greaterThanOrEqualTo(400));
+    expect(result.camerasUpserted, result.camerasParsed);
+
+    final official = await db.getLensByExternalId('arri_signature_12');
+    expect(official, isNotNull);
+    expect(official!.isCustom, isFalse);
+    expect(official.focalLength, 12);
+
+    final custom = await db.getLensByExternalId('user_custom_lens');
+    expect(custom!.brand, 'User');
+    expect(custom.isCustom, isTrue);
+  });
+
+  test('Excel v1.7 JSON: import Luces', () async {
+    final path = File('docs/catalog/lights_v1_7.json');
+    expect(path.existsSync(), isTrue);
+    final result = await CatalogExcelImporter.importLightsFromJson(
+      db,
+      path.readAsStringSync(),
+    );
+    expect(result.ok, isTrue);
+    expect(result.camerasParsed, greaterThanOrEqualTo(90));
+    expect(result.camerasUpserted, result.camerasParsed);
+
+    final lights = await db.watchAllLights().first;
+    final sky = lights.where((l) => l.externalId == 'arri_skypanel_s360');
+    expect(sky, isNotEmpty);
+    expect(sky.first.powerW, 900);
+  });
 }

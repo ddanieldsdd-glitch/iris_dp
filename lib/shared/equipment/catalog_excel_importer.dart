@@ -164,6 +164,58 @@ abstract final class CatalogExcelImporter {
     );
   }
 
+  /// Importa ópticas desde JSON normalizado (`CatalogLensEntry`).
+  static Future<CatalogExcelImportResult> importLensesFromJson(
+    AppDatabase db,
+    String jsonStr,
+  ) async {
+    late final List<CatalogLensEntry> lenses;
+    try {
+      lenses = parseLensCatalog(jsonStr);
+    } catch (e) {
+      return CatalogExcelImportResult(
+        camerasParsed: 0,
+        modesParsed: 0,
+        camerasUpserted: 0,
+        camerasSkippedCustom: 0,
+        errors: ['JSON de ópticas inválido: $e'],
+      );
+    }
+    final stats = await upsertCatalogLenses(db, lenses);
+    return CatalogExcelImportResult(
+      camerasParsed: lenses.length,
+      modesParsed: 0,
+      camerasUpserted: stats.upserted,
+      camerasSkippedCustom: stats.skippedCustom,
+    );
+  }
+
+  /// Importa luces desde JSON normalizado (`CatalogLightEntry`).
+  static Future<CatalogExcelImportResult> importLightsFromJson(
+    AppDatabase db,
+    String jsonStr,
+  ) async {
+    late final List<CatalogLightEntry> lights;
+    try {
+      lights = parseLightCatalog(jsonStr);
+    } catch (e) {
+      return CatalogExcelImportResult(
+        camerasParsed: 0,
+        modesParsed: 0,
+        camerasUpserted: 0,
+        camerasSkippedCustom: 0,
+        errors: ['JSON de luces inválido: $e'],
+      );
+    }
+    final stats = await upsertCatalogLights(db, lights);
+    return CatalogExcelImportResult(
+      camerasParsed: lights.length,
+      modesParsed: 0,
+      camerasUpserted: stats.upserted,
+      camerasSkippedCustom: stats.skippedCustom,
+    );
+  }
+
   static Sheet? _findSheet(Excel excel, String name) {
     for (final key in excel.tables.keys) {
       if (key.trim().toLowerCase() == name.trim().toLowerCase()) {
