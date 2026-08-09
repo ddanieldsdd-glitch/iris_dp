@@ -361,9 +361,16 @@ class BibleExportCompositionBuilder {
           );
         }
       case BibleSectionId.optics:
+        final hasNarrativeBlock = page.blocks.any(
+          (b) => b.type == BibleBlockKind.narrative,
+        );
         final opticsRows = BibleSectionExportReader.rowsFromOpticsConfigJson(
           bundle.data.opticsConfigJson,
-          narrativeIntent: bundle.data.opticsNarrativeIntent,
+          // La cita narrative del template ya muestra la intención; no repetir
+          // como primera fila de la tabla de specs.
+          narrativeIntent: hasNarrativeBlock
+              ? null
+              : bundle.data.opticsNarrativeIntent,
           lensPhilosophy: bundle.data.lensPhilosophy,
         );
         if (opticsRows.isNotEmpty) {

@@ -152,14 +152,13 @@ UNKNOWN:
 P0 Evitar stale dual-write: presets/`aspectRatio` y escritores externos documentados en `BACKLOG.md`.
 P1 Import Excel catálogo v1.1 (extender `EquipmentSpreadsheetService` + `catalog_importer`; decisiones en `BACKLOG.md`).
 P2 Diseño unificación modos sensor Format ↔ Optics Lab (tras datos `Modos_Cámara`).
-P3 Dedupe menor Óptica compositor (cita + fila tabla).
 
 ## 12. HANDOFF
 
 Si otro agente toma el proyecto ahora...
 Proyecto en `/Users/danieldiaz/Documents/IRIS DP/iris_dp` (Flutter IRIS DP).
-Hecho: sync nube, VB clásica+PDF/compositor, Format + Camera piloto, guard citas vacías compositor, routing A/B-CAM, releases.
-Pendiente: commit moodboard WIP si aplica, Excel v1.1, PHFX modes, dedupe Óptica compositor, deuda arquitectura.
+Hecho: sync nube, VB clásica+PDF/compositor, Format + Camera piloto, citas vacías + dedupe Óptica compositor, routing A/B-CAM, releases.
+Pendiente: moodboard WIP local si aplica, Excel v1.1, PHFX modes, deuda arquitectura.
 Riesgo principal: romper lectura canónica blob/legacy o sync de snapshots al tocar biblia/equipo.
 Siguiente acción: P1 import Excel catálogo (buscar `EquipmentSpreadsheetService` / `catalog_importer` antes de inventar).
 Leer `ARCHITECTURE.md` + `BACKLOG.md` antes de editar.

@@ -4,9 +4,9 @@ Items registrados para no perderlos; no bloquean Fase 1 ni Fase 2.
 
 ## Export compositor — template de citas narrativas
 
-**Resuelto (9 ago 2026):** `_narrativeBlock` omite el bloque si `text` está vacío/blanco → ya no se pintan comillas literales `""` en Cámara/Exposición/Localización.
-
-**Pendiente (menor):** en la página de **Óptica** del compositor, "Intención narrativa" puede aparecer duplicada (cita en encabezado + primera fila de tabla). Archivo: `bible_export_composition_builder.dart`.
+**Resuelto (9 ago 2026):**
+- `_narrativeBlock` omite el bloque si `text` está vacío/blanco → ya no se pintan comillas literales `""`.
+- Óptica: si la página ya tiene bloque `narrative`, el enrich no vuelve a inyectar «Intención narrativa» en la tabla de specs.
 
 ---
 

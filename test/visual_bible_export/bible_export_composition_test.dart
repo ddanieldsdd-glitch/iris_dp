@@ -193,6 +193,70 @@ void main() {
       expect(customBlock.content['rows'], isNotEmpty);
     });
 
+    test('Óptica no duplica intención narrativa en specsTable si ya hay cita', () {
+      final composition =
+          BibleExportCompositionBuilder(
+            idFactory: () => 'composition-optics-dedupe',
+            clock: () => now,
+          ).build(
+            projectId: 4,
+            config: config.copyWith(sections: {BibleSectionId.optics}),
+            bundle: (
+              data: VisualBibleData(
+                id: 7,
+                projectId: 4,
+                opticsNarrativeIntent: 'INTENCION OPTICA UNICA',
+                opticsConfigJson: jsonEncode({
+                  'primaryLenses': ['Master Prime 35'],
+                }),
+              ),
+              blocks: <ColorBlockModel>[],
+              exposureBlocks: <ExposureBlockModel>[],
+              lightingSetups: <LightingSetupModel>[],
+              cameraTests: <CameraTestModel>[],
+              moodboard: <MoodboardImageModel>[],
+              sectionContentJsonById: const <String, String?>{},
+              primaryCameraLabel: null,
+            ),
+            sourceDocument: BibleDocument(
+              bibleId: 7,
+              projectId: 4,
+              pages: [
+                BiblePage(
+                  id: BibleSectionId.optics,
+                  groupId: 'technical',
+                  label: 'Óptica',
+                  sortOrder: 0,
+                  blocks: const [
+                    BibleBlock(
+                      id: 'optics-narrative',
+                      type: BibleBlockKind.narrative,
+                      content: {'text': 'INTENCION OPTICA UNICA'},
+                    ),
+                  ],
+                ),
+              ],
+              updatedAt: now,
+            ),
+            includeCover: false,
+          );
+
+      final optics = composition.pages.firstWhere(
+        (page) => page.source?.sectionId == BibleSectionId.optics,
+      );
+      expect(
+        optics.blocks.where((b) => b.type == BibleBlockKind.narrative).length,
+        1,
+      );
+      final specsRows = optics.blocks
+          .where((b) => b.type == BibleBlockKind.specsTable)
+          .expand((b) => (b.content['rows'] as List?) ?? const [])
+          .map((row) => (row as Map)['campo']?.toString())
+          .whereType<String>()
+          .toList();
+      expect(specsRows, isNot(contains('Intención narrativa')));
+    });
+
     test('selects configured v2 pages without sharing mutable content', () {
       final source = document();
       final composition =
