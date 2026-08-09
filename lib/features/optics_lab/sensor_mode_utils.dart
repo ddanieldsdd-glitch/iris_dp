@@ -211,3 +211,15 @@ SensorModeSpec modeOrFallback(Camera camera, SensorModeSpec? selected) {
     heightMm: camera.sensorHeightMm,
   );
 }
+
+/// Elige el modo por nombre (Format `sensorModeName`) o cae a [modeOrFallback].
+SensorModeSpec modeNamedOrFallback(Camera camera, String? preferredName) {
+  final modes = parseSensorModesJson(camera.sensorModesJson);
+  final want = preferredName?.trim();
+  if (want != null && want.isNotEmpty) {
+    for (final m in modes) {
+      if (m.name == want) return m;
+    }
+  }
+  return modeOrFallback(camera, modes.isNotEmpty ? modes.first : null);
+}

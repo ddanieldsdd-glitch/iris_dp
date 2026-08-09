@@ -61,7 +61,9 @@ Los chips de rol en Equipo/Format/Optics Lab (`project_camera_roster_bar`, badge
 
 **Hecho:** Format elige modo desde `Camera.sensorModesJson` (cámara de proyecto) vía `FormatSensorModeResolve` + picker; persiste `sensorModeName` en `formatData` sin dual-write a `captureResolution`/`resolution`.
 
-**Pendiente:** Optics Lab leer `sensorModeName` de Format al abrir; sync bidireccional; rellenar gates faltantes en Excel.
+**Hecho (slice 2+3):** Optics Lab lee `sensorModeName` de Format al abrir; al cambiar modo / Guardar en Biblia escribe de vuelta a `formatData`.
+
+**Pendiente:** rellenar gates faltantes en Excel; cascada arquitectura Equipo↔Biblia↔Lab (fase aparte).
 
 ### Import Excel catálogo v1.1 / v1.7 — Cámaras+Ópticas+Luces
 

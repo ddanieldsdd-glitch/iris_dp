@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'bible_section_fields.dart';
+
 /// Resolución del modo de sensor en Format (P3): catálogo PHFX ↔ blob formatData.
 ///
 /// Clave canónica: [nameKey] (`sensorModeName`).
@@ -14,6 +18,20 @@ abstract final class FormatSensorModeResolve {
     final name = blob[nameKey]?.toString().trim();
     if (name != null && name.isNotEmpty) return name;
     return null;
+  }
+
+  /// Lee el nombre canónico desde `contentJson` de la sección Format.
+  static String? modeNameFromSectionContentJson(String? contentJson) {
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final raw = values['formatData'];
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      return modeName(Map<String, dynamic>.from(decoded));
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Título UI: nombre PHFX si existe; si no, ratio legacy.

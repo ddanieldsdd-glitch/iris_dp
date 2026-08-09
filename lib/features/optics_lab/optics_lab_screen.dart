@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,9 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/media_storage.dart';
 import '../../core/widgets/app_card.dart';
+import '../../shared/visual_bible/bible_section_fields.dart';
+import '../../shared/visual_bible/bible_section_ids.dart';
+import '../../shared/visual_bible/format_sensor_mode_resolve.dart';
 import '../equipment/widgets/project_camera_roster_bar.dart';
 import '../luka_export/luka_compatibility_service.dart';
 import '../luka_export/luka_manifest_service.dart';
@@ -78,6 +82,8 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
   String _recordingProfileId = 'full';
   LukaCompatReport? _cameraLuka;
   LukaCompatReport? _lensLuka;
+  /// Modo preferido desde Format (`sensorModeName`), si existe.
+  String? _formatPreferredModeName;
 
   @override
   void initState() {
@@ -96,6 +102,17 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
     final bible = await db.getVisualBibleForProject(widget.projectId);
     final camId = widget.initialCameraId ?? bible?.primaryCameraId;
     final lensId = widget.initialLensId ?? bible?.primaryLensId;
+
+    if (bible != null) {
+      final formatDef = await (db.select(db.bibleSectionDefinitions)
+            ..where((d) => d.bibleId.equals(bible.id))
+            ..where((d) => d.id.equals(BibleSectionId.format)))
+          .getSingleOrNull();
+      _formatPreferredModeName =
+          FormatSensorModeResolve.modeNameFromSectionContentJson(
+        formatDef?.contentJson,
+      );
+    }
 
     if (camId != null) {
       _camera = await db.getCameraById(camId);
@@ -149,20 +166,58 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
     if (_lens != null) _lensLuka = svc.evaluateLens(_lens!, camera: _camera);
   }
 
-  void _applyCameraModes(Camera? cam) {
+  void _applyCameraModes(Camera? cam, {String? preferredName}) {
     if (cam == null) return;
-    final modes = _parseModes(cam.sensorModesJson);
-    if (modes.isNotEmpty) {
-      _mode = modes.first;
-    } else {
-      _mode = SensorModeSpec(
-        name: 'Open Gate',
-        widthMm: cam.sensorWidthMm,
-        heightMm: cam.sensorHeightMm,
-      );
-    }
+    final want = preferredName ?? _formatPreferredModeName;
+    _mode = modeNamedOrFallback(cam, want);
     _recordingCodec = SensorModeContext.defaultCodecForCamera(cam);
     _recordingProfileId = 'full';
+  }
+
+  /// Escribe el modo elegido en Format (`formatData.sensorModeName`).
+  Future<void> _syncModeToFormat(SensorModeSpec mode) async {
+    final db = ref.read(databaseProvider);
+    final bible = await db.getVisualBibleForProject(widget.projectId);
+    if (bible == null) return;
+    final def = await (db.select(db.bibleSectionDefinitions)
+          ..where((d) => d.bibleId.equals(bible.id))
+          ..where((d) => d.id.equals(BibleSectionId.format)))
+        .getSingleOrNull();
+    if (def == null) return;
+
+    final fields = BibleSectionFieldsConfig.parse(
+      def.contentJson,
+      BibleSectionId.format,
+    );
+    final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
+    var blob = <String, dynamic>{};
+    final raw = values['formatData'];
+    if (raw != null && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          blob = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {}
+    }
+    blob.addAll(
+      FormatSensorModeResolve.blobUpdateForMode(
+        name: mode.name,
+        widthPx: mode.maxWidthPx,
+        heightPx: mode.maxHeightPx,
+        widthMm: mode.widthMm,
+        heightMm: mode.heightMm,
+      ),
+    );
+    values['formatData'] = jsonEncode(blob);
+    await db.upsertBibleSectionDefinition(
+      def.copyWith(
+        contentJson: Value(
+          BibleSectionFieldsConfig.encode(fields, values: values),
+        ),
+      ),
+    );
+    _formatPreferredModeName = mode.name;
   }
 
   List<RecordingProfileOption> get _recordingProfiles {
@@ -360,6 +415,7 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
       tStop: _tStop.toStringAsFixed(1),
       configJson: jsonEncode(snapshot),
     );
+    await _syncModeToFormat(_mode);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Configuración guardada en la Biblia')),
@@ -543,7 +599,12 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
                 final cam = cameras.where((c) => c.id == id).firstOrNull;
                 setState(() {
                   _camera = cam;
-                  _applyCameraModes(cam);
+                  // Conserva el modo actual si la nueva cámara lo tiene;
+                  // si no, el preferido de Format.
+                  _applyCameraModes(
+                    cam,
+                    preferredName: _mode.name,
+                  );
                 });
                 await _refreshLukaReports();
                 if (mounted) setState(() {});
@@ -569,7 +630,7 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
                 return DropdownMenuItem(value: m.name, child: Text(label, overflow: TextOverflow.ellipsis));
               })
               .toList(),
-          onChanged: (name) {
+          onChanged: (name) async {
             final modes = _parseModes(_camera?.sensorModesJson);
             final m = modes.where((x) => x.name == name).firstOrNull;
             if (m != null) {
@@ -577,6 +638,7 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
                 _mode = m;
                 _recordingProfileId = 'full';
               });
+              await _syncModeToFormat(m);
             }
           },
         ),
