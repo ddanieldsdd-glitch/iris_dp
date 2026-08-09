@@ -13,6 +13,7 @@ import 'package:iris_dp/features/visual_bible/visual_bible_export_config.dart';
 import 'package:iris_dp/features/visual_bible/visual_bible_model.dart';
 import 'package:iris_dp/features/visual_bible/visual_bible_pdf_service.dart';
 import 'package:iris_dp/shared/visual_bible/bible_section_fields.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 /// Marcadores únicos para verificación visual/textual del PDF generado.
 const fase1MarkerCameraIso = 'FASE1-CAM-ISO-6400';
@@ -247,21 +248,18 @@ Marcadores esperados en ambos PDFs:
 }
 
 Future<String> _extractPdfText(File pdf) async {
-  final venvPython = File('.venv_pdf/bin/python');
-  if (!venvPython.existsSync()) {
-    return latin1.decode(await pdf.readAsBytes(), allowInvalid: true);
+  final bytes = await pdf.readAsBytes();
+  final document = sf.PdfDocument(inputBytes: bytes);
+  try {
+    final extractor = sf.PdfTextExtractor(document);
+    final buffer = StringBuffer();
+    for (var i = 0; i < document.pages.count; i++) {
+      buffer.writeln(
+        extractor.extractText(startPageIndex: i, endPageIndex: i),
+      );
+    }
+    return buffer.toString();
+  } finally {
+    document.dispose();
   }
-  final result = await Process.run(
-    venvPython.path,
-    [
-      '-c',
-      'from pypdf import PdfReader; import sys; r=PdfReader(sys.argv[1]); print("\\n".join((p.extract_text() or "") for p in r.pages))',
-      pdf.path,
-    ],
-    runInShell: true,
-  );
-  if (result.exitCode != 0) {
-    throw StateError('No se pudo extraer texto del PDF: ${result.stderr}');
-  }
-  return result.stdout as String;
 }
