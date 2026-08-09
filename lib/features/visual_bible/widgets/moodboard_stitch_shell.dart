@@ -278,7 +278,7 @@ class MoodboardStitchActionBar extends StatelessWidget {
               items: const [
                 DropdownMenuItem(
                   value: MoodboardSortMode.recent,
-                  child: Text('Recientes'),
+                  child: Text('Orden manual'),
                 ),
                 DropdownMenuItem(
                   value: MoodboardSortMode.caption,

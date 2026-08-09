@@ -267,7 +267,10 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
     final sorted = List<MoodboardImage>.from(images);
     switch (_sortMode) {
       case MoodboardSortMode.recent:
-        sorted.sort((a, b) => b.id.compareTo(a.id));
+        sorted.sort((a, b) {
+          final cmp = a.sortOrder.compareTo(b.sortOrder);
+          return cmp != 0 ? cmp : a.id.compareTo(b.id);
+        });
       case MoodboardSortMode.caption:
         sorted.sort((a, b) {
           final ca = (a.caption ?? a.filmReference ?? '').toLowerCase();
@@ -1293,6 +1296,9 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
   }
 
   Future<void> _swapOrder(List<MoodboardImage> list, int a, int b) async {
+    if (_sortMode != MoodboardSortMode.recent) {
+      setState(() => _sortMode = MoodboardSortMode.recent);
+    }
     final db = ref.read(databaseProvider);
     final orderA = list[a].sortOrder;
     final orderB = list[b].sortOrder;
@@ -1355,165 +1361,175 @@ class _MoodboardImageCardState extends State<_MoodboardImageCard> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        onSecondaryTapUp: widget.onSecondaryTap == null
-            ? null
-            : (details) => widget.onSecondaryTap!(details.globalPosition),
-        child: AnimatedScale(
-          scale: _hovered ? 1.015 : 1.0,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-          child: AspectRatio(
-            aspectRatio: widget.imageAspect.clamp(0.55, 2.8),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.black,
-                border: Border.all(
-                  color: widget.isSelected
-                      ? palette.accent
-                      : Colors.white.withValues(alpha: 0.06),
-                  width: widget.isSelected ? 1.5 : 0.5,
-                ),
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.file(
-                    File(image.imagePath),
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    errorBuilder: (_, __, ___) => ColoredBox(
-                      color: palette.surfaceElevated,
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        color: palette.textTertiary,
-                      ),
+      child: AnimatedScale(
+        scale: _hovered ? 1.015 : 1.0,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        child: AspectRatio(
+          aspectRatio: widget.imageAspect.clamp(0.55, 2.8),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              GestureDetector(
+                onTap: widget.onTap,
+                onSecondaryTapUp: widget.onSecondaryTap == null
+                    ? null
+                    : (details) =>
+                        widget.onSecondaryTap!(details.globalPosition),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    border: Border.all(
+                      color: widget.isSelected
+                          ? palette.accent
+                          : Colors.white.withValues(alpha: 0.06),
+                      width: widget.isSelected ? 1.5 : 0.5,
                     ),
                   ),
-                  // Gradient + title/note only on hover (ShotDeck).
-                  AnimatedOpacity(
-                    opacity: _hovered ? 1 : 0,
-                    duration: const Duration(milliseconds: 160),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withValues(alpha: 0.55),
-                            Colors.transparent,
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.72),
-                          ],
-                          stops: const [0, 0.28, 0.55, 1],
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.file(
+                        File(image.imagePath),
+                        fit: BoxFit.cover,
+                        alignment: Alignment.center,
+                        errorBuilder: (_, __, ___) => ColoredBox(
+                          color: palette.surfaceElevated,
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            color: palette.textTertiary,
+                          ),
                         ),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                height: 1.2,
-                                shadows: [
-                                  Shadow(
-                                    blurRadius: 6,
-                                    color: Colors.black54,
+                      // Gradient + title/note only on hover (ShotDeck).
+                      IgnorePointer(
+                        child: AnimatedOpacity(
+                          opacity: _hovered ? 1 : 0,
+                          duration: const Duration(milliseconds: 160),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withValues(alpha: 0.55),
+                                  Colors.transparent,
+                                  Colors.transparent,
+                                  Colors.black.withValues(alpha: 0.72),
+                                ],
+                                stops: const [0, 0.28, 0.55, 1],
+                              ),
+                            ),
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.2,
+                                      shadows: [
+                                        Shadow(
+                                          blurRadius: 6,
+                                          color: Colors.black54,
+                                        ),
+                                      ],
+                                    ),
                                   ),
+                                  const Spacer(),
+                                  if (note != null)
+                                    Text(
+                                      note,
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.88),
+                                        fontSize: 12,
+                                        height: 1.35,
+                                        shadows: const [
+                                          Shadow(
+                                            blurRadius: 6,
+                                            color: Colors.black54,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
-                            const Spacer(),
-                            if (note != null)
-                              Text(
-                                note,
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.88),
-                                  fontSize: 12,
-                                  height: 1.35,
-                                  shadows: const [
-                                    Shadow(
-                                      blurRadius: 6,
-                                      color: Colors.black54,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
+                          ),
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (pending)
+                Positioned(
+                  top: 8,
+                  left: widget.isSelected ? 36 : 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.warning.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'PENDIENTE',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: Colors.black,
                       ),
                     ),
                   ),
-                  if (pending)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 3,
+                ),
+              if (widget.isSelected)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Icon(
+                    Icons.check_circle,
+                    color: palette.accent,
+                  ),
+                ),
+              if (!widget.selectionMode)
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.onMoveEarlier != null)
+                        _IconBtn(
+                          icon: Icons.arrow_back,
+                          onTap: widget.onMoveEarlier!,
                         ),
-                        decoration: BoxDecoration(
-                          color: palette.warning.withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(4),
+                      if (widget.onMoveLater != null)
+                        _IconBtn(
+                          icon: Icons.arrow_forward,
+                          onTap: widget.onMoveLater!,
                         ),
-                        child: const Text(
-                          'PENDIENTE',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                            color: Colors.black,
-                          ),
-                        ),
+                      _IconBtn(
+                        icon: Icons.close,
+                        onTap: widget.onDelete,
                       ),
-                    ),
-                  if (widget.isSelected)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Icon(
-                        Icons.check_circle,
-                        color: palette.accent,
-                      ),
-                    ),
-                  if (_hovered && !widget.selectionMode)
-                    Positioned(
-                      bottom: 8,
-                      right: 8,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (widget.onMoveEarlier != null)
-                            _IconBtn(
-                              icon: Icons.arrow_back,
-                              onTap: widget.onMoveEarlier!,
-                            ),
-                          if (widget.onMoveLater != null)
-                            _IconBtn(
-                              icon: Icons.arrow_forward,
-                              onTap: widget.onMoveLater!,
-                            ),
-                          _IconBtn(
-                            icon: Icons.close,
-                            onTap: widget.onDelete,
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
+                    ],
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -1530,6 +1546,7 @@ class _IconBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
         width: 26,
