@@ -19,14 +19,21 @@ abstract final class BibleV2ProfessionalTemplates {
     documentary,
   ];
 
+  /// Solo Plantilla 1 (cinematic / ficción) está operativa.
+  static List<BibleTemplatePackage> get available => [cinematic];
+
+  static bool isAvailable(BibleTemplatePackage pack) =>
+      pack.id == cinematic.id;
+
   static BibleTemplatePackage get cinematic => _professional(
     id: 'v2_prof_cinematic',
-    name: 'Cinematic DP Bible',
+    name: 'Plantilla 1',
     description:
-        'Dirección, concepto, cámara, iluminación y moodboard con identidad editorial.',
-    category: 'Cinematográfica',
+        'Ficción · cinematic. Deck de Iluminación con contenedores de comportamiento, '
+        'refs fílmicas y localizaciones.',
+    category: 'Ficción',
     themeId: BibleThemeIds.cinematic,
-    legacy: BibleBuiltinPresets.fictionNoir,
+    legacy: BibleBuiltinPresets.plantilla1,
     sections: const [
       ('Dirección', 'direction'),
       ('Concepto', 'concept'),

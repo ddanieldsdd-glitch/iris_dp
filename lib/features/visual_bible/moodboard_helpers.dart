@@ -20,14 +20,16 @@ import 'visual_bible_model.dart';
 abstract final class MoodboardHelpers {
   /// Extrae paleta dominante al añadir una still.
   static Future<void> enrichImageMeta({
+    required AppDatabase db,
     required int imageId,
     required String imagePath,
   }) async {
     final colors = await MoodboardPaletteExtractor.fromFile(imagePath);
     if (colors.isEmpty) return;
-    final existing = await MoodboardReferenceMetaStore.load(imageId);
+    final existing = await MoodboardReferenceMetaStore.load(db, imageId);
     if (existing.paletteHex.isNotEmpty) return;
     await MoodboardReferenceMetaStore.save(
+      db,
       imageId,
       existing.copyWith(
         paletteHex: colors.map(MoodboardPaletteExtractor.toHex).toList(),
@@ -63,7 +65,7 @@ abstract final class MoodboardHelpers {
       projectId: projectId,
       imageId: id,
     );
-    await enrichImageMeta(imageId: id, imagePath: copied);
+    await enrichImageMeta(db: db, imageId: id, imagePath: copied);
     return id;
   }
 
@@ -73,6 +75,7 @@ abstract final class MoodboardHelpers {
     int? bibleId,
     required Uint8List bytes,
     required List<String> assignedSections,
+    List<int> assignedCardIds = const [],
     String? linkedLocationName,
     int? linkedLocationBasePlanId,
     String extension = '.png',
@@ -95,6 +98,9 @@ abstract final class MoodboardHelpers {
         assignedSections: assignedSections.isEmpty
             ? const Value(null)
             : Value(jsonEncode(assignedSections)),
+        assignedCardIds: assignedCardIds.isEmpty
+            ? const Value(null)
+            : Value(jsonEncode(assignedCardIds)),
         linkedLocationName: Value(linkedLocationName),
         linkedLocationBasePlanId: Value(linkedLocationBasePlanId),
       ),
@@ -104,7 +110,7 @@ abstract final class MoodboardHelpers {
       projectId: projectId,
       imageId: id,
     );
-    await enrichImageMeta(imageId: id, imagePath: copied);
+    await enrichImageMeta(db: db, imageId: id, imagePath: copied);
     return id;
   }
 
@@ -194,7 +200,7 @@ abstract final class MoodboardHelpers {
         projectId: projectId,
         imageId: id,
       );
-      await enrichImageMeta(imageId: id, imagePath: copied);
+      await enrichImageMeta(db: db, imageId: id, imagePath: copied);
     }
   }
 
@@ -295,6 +301,7 @@ abstract final class MoodboardHelpers {
     required String sectionId,
     String? locationName,
     int? locationBasePlanId,
+    int? cardId,
   }) async {
     final sections = <String>[sectionId];
     if (locationName != null) sections.add(BibleSectionId.location);
@@ -312,9 +319,17 @@ abstract final class MoodboardHelpers {
         final current =
             MoodboardAssociation.decodeSections(row.assignedSections);
         final merged = {...current, ...sections}.toList();
+        final cardIds =
+            MoodboardAssociation.decodeCardIds(row.assignedCardIds);
+        if (cardId != null && !cardIds.contains(cardId)) {
+          cardIds.add(cardId);
+        }
         await db.updateMoodboardImage(
           row.copyWith(
             assignedSections: Value(jsonEncode(merged)),
+            assignedCardIds: Value(
+              cardIds.isEmpty ? null : jsonEncode(cardIds),
+            ),
             category: Value(
               MoodboardAssociation.deriveCategoryFromSections(merged),
             ),
@@ -339,9 +354,48 @@ abstract final class MoodboardHelpers {
           MoodboardAssociation.deriveCategoryFromSections(sections),
         ),
         assignedSections: Value(jsonEncode(sections)),
+        assignedCardIds: cardId == null
+            ? const Value(null)
+            : Value(jsonEncode([cardId])),
         linkedLocationName: Value(locationName),
         linkedLocationBasePlanId: Value(locationBasePlanId),
       ),
     );
+  }
+
+  /// Pega / asigna imagen como cover o galería de una narrative card.
+  static Future<int> addImageForNarrativeCard({
+    required AppDatabase db,
+    required int projectId,
+    required int bibleId,
+    required int cardId,
+    required String sectionId,
+    required Uint8List bytes,
+    String extension = '.png',
+    int? locationBasePlanId,
+    bool asCover = false,
+  }) async {
+    final id = await addImageFromBytesAssigned(
+      db: db,
+      projectId: projectId,
+      bibleId: bibleId,
+      bytes: bytes,
+      assignedSections: [
+        sectionId,
+        if (locationBasePlanId != null) BibleSectionId.location,
+      ],
+      assignedCardIds: [cardId],
+      linkedLocationBasePlanId: locationBasePlanId,
+      extension: extension,
+    );
+    if (asCover) {
+      final card = await db.getNarrativeCard(cardId);
+      if (card != null) {
+        await db.updateNarrativeCard(
+          card.copyWith(coverMoodboardImageId: Value(id)),
+        );
+      }
+    }
+    return id;
   }
 }

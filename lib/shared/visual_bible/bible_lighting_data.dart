@@ -121,6 +121,33 @@ abstract final class BibleLightingData {
     }).toList();
   }
 
+  static int colorTemp(Map<String, dynamic> data) =>
+      (data['colorTemp'] as num?)?.toInt() ??
+      (data['targetKelvin'] as num?)?.toInt() ??
+      5600;
+
+  static double tintValue(Map<String, dynamic> data) {
+    final raw = data['tintValue'];
+    if (raw is num) return raw.toDouble();
+    final tint = data['tint']?.toString() ?? '';
+    final m = RegExp(r'([+-]?\d+(?:\.\d+)?)').firstMatch(tint);
+    return double.tryParse(m?.group(1) ?? '') ?? 0;
+  }
+
+  static int contrastNum(Map<String, dynamic> data) {
+    final n = data['contrastNum'];
+    if (n is num) return n.round();
+    final ratio = data['contrastRatio']?.toString() ?? '8:1';
+    final m = RegExp(r'(\d+)').firstMatch(ratio);
+    return int.tryParse(m?.group(1) ?? '') ?? 8;
+  }
+
+  static List<String> fixtureTypeLabels(Map<String, dynamic> data) {
+    final raw = data['fixtureTypes'];
+    if (raw is! List) return const [];
+    return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+  }
+
   static Map<String, dynamic> telemetryForPlan(
     Map<String, dynamic> data,
     int? planId,

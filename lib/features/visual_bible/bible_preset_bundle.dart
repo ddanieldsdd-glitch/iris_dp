@@ -77,6 +77,9 @@ class BiblePresetBundle {
     this.includes = const [],
   });
 
+  /// Solo plantillas de Ficción están operativas por ahora.
+  bool get isAvailable => blueprint.isAvailable;
+
   Map<String, dynamic> toJson() => {
     'version': 1,
     'id': id,
@@ -167,19 +170,25 @@ class BiblePresetBundle {
   }
 }
 
-/// Tres presets built-in con contenido de ejemplo funcional.
+/// Presets built-in. Solo Plantilla 1 (Ficción · Cinematic) está operativa.
 abstract final class BibleBuiltinPresets {
+  static const plantilla1Id = 'builtin_plantilla_1';
+  /// Legacy id — resuelve a [plantilla1].
   static const fictionNoirId = 'builtin_fiction_noir';
   static const commercialCleanId = 'builtin_commercial_clean';
   static const documentaryObsId = 'builtin_documentary_obs';
 
   static List<BiblePresetBundle> get all => [
-    fictionNoir,
+    plantilla1,
     commercialClean,
     documentaryObs,
   ];
 
+  static List<BiblePresetBundle> get available =>
+      all.where((p) => p.isAvailable).toList();
+
   static BiblePresetBundle? byId(String id) {
+    if (id == fictionNoirId || id == plantilla1Id) return plantilla1;
     for (final p in all) {
       if (p.id == id) return p;
     }
@@ -210,25 +219,24 @@ abstract final class BibleBuiltinPresets {
     );
   }
 
-  static final fictionNoir = BiblePresetBundle(
-    id: fictionNoirId,
-    name: 'Ficción — Noir / alto contraste',
+  static final plantilla1 = BiblePresetBundle(
+    id: plantilla1Id,
+    name: 'Plantilla 1',
     description:
-        'Lookbook de ficción: narrativa de aislamiento, paletas INT noche / EXT día, '
-        'ratios de luz y exposición coherentes (3200K / 4:1).',
+        'Base de ficción en estilo cinematic. Incluye el deck de Iluminación '
+        '(visión general, comportamiento de la luz, refs fílmicas y localizaciones).',
     blueprint: BibleBlueprintType.fiction,
     sectionStyles: _stylesFor(BibleBlueprintType.fiction),
     exportDefaults: _exportFor(
-      id: fictionNoirId,
-      name: 'Biblia completa — Noir',
+      id: plantilla1Id,
+      name: 'Biblia — Plantilla 1',
       mode: VisualBibleExportMode.full,
     ),
     includes: const [
-      'Dirección + concepto con intención narrativa',
-      '2 colorimetrías (INT noche / EXT día)',
-      'Iluminación 4:1 + Kelvin 3200K',
-      'Exposición T2.8 / ISO 800',
-      'Textura grain 500T + difusión suave',
+      'Estructura Ficción completa',
+      'Estilo cinematic en todas las pantallas',
+      'Iluminación: overview + comportamientos + film refs + localizaciones',
+      'Contenedores de luz vinculados a tags del moodboard',
     ],
     sampleSeed: const BiblePresetSampleSeed(
       visualBibleFields: {
@@ -299,6 +307,8 @@ abstract final class BibleBuiltinPresets {
           'colorTemp': 3200,
           'contrastRatio': '4:1',
           'visualIntent': 'Alto contraste motivado por prácticos',
+          'temperatureNote':
+              'Sensación fría en exteriores; dualismo cálido/frío en INT.',
         },
         BibleSectionId.exposure: {
           'baseIso': '800',
@@ -320,6 +330,9 @@ abstract final class BibleBuiltinPresets {
       },
     ),
   );
+
+  /// Alias legacy.
+  static BiblePresetBundle get fictionNoir => plantilla1;
 
   static final commercialClean = BiblePresetBundle(
     id: commercialCleanId,

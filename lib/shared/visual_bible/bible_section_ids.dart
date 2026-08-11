@@ -130,4 +130,20 @@ abstract final class BibleSectionId {
         exposure => MoodboardCategory.lighting,
         _ => null,
       };
+
+  /// Sección canónica de export para una categoría de moodboard (1:1).
+  /// Evita el reverse-lookup de [moodboardCategory], que mapea varias
+  /// secciones (p. ej. lighting + exposure) a la misma categoría.
+  static String? sectionForMoodboardCategory(String? category) =>
+      switch (category) {
+        MoodboardCategory.lighting => lighting,
+        MoodboardCategory.color => colorImage,
+        MoodboardCategory.optics => optics,
+        MoodboardCategory.texture => texture,
+        MoodboardCategory.location => location,
+        MoodboardCategory.cameraTest => cameraTests,
+        MoodboardCategory.framing => concept,
+        MoodboardCategory.reference => moodboard,
+        _ => null,
+      };
 }

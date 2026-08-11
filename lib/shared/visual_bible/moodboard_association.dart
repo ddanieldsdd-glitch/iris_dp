@@ -144,6 +144,20 @@ abstract final class MoodboardAssociation {
     return [];
   }
 
+  static List<int> decodeCardIds(String? json) {
+    if (json == null || json.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is List) {
+        return decoded
+            .map((e) => int.tryParse(e.toString()))
+            .whereType<int>()
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
   static String? categoryForSection(String sectionId) =>
       BibleSectionId.moodboardCategory(sectionId);
 }

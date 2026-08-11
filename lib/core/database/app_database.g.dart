@@ -21510,6 +21510,28 @@ class $MoodboardImagesTable extends MoodboardImages
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _assignedCardIdsMeta = const VerificationMeta(
+    'assignedCardIds',
+  );
+  @override
+  late final GeneratedColumn<String> assignedCardIds = GeneratedColumn<String>(
+    'assigned_card_ids',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _metaJsonMeta = const VerificationMeta(
+    'metaJson',
+  );
+  @override
+  late final GeneratedColumn<String> metaJson = GeneratedColumn<String>(
+    'meta_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _sortOrderMeta = const VerificationMeta(
     'sortOrder',
   );
@@ -21537,6 +21559,8 @@ class $MoodboardImagesTable extends MoodboardImages
     linkedLocationName,
     linkedLocationBasePlanId,
     assignedSections,
+    assignedCardIds,
+    metaJson,
     sortOrder,
   ];
   @override
@@ -21645,6 +21669,21 @@ class $MoodboardImagesTable extends MoodboardImages
         ),
       );
     }
+    if (data.containsKey('assigned_card_ids')) {
+      context.handle(
+        _assignedCardIdsMeta,
+        assignedCardIds.isAcceptableOrUnknown(
+          data['assigned_card_ids']!,
+          _assignedCardIdsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('meta_json')) {
+      context.handle(
+        _metaJsonMeta,
+        metaJson.isAcceptableOrUnknown(data['meta_json']!, _metaJsonMeta),
+      );
+    }
     if (data.containsKey('sort_order')) {
       context.handle(
         _sortOrderMeta,
@@ -21712,6 +21751,14 @@ class $MoodboardImagesTable extends MoodboardImages
         DriftSqlType.string,
         data['${effectivePrefix}assigned_sections'],
       ),
+      assignedCardIds: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}assigned_card_ids'],
+      ),
+      metaJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}meta_json'],
+      ),
       sortOrder: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
@@ -21741,6 +21788,13 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
 
   /// JSON: secciones de la biblia donde debe aparecer (ej. ["lighting","concept"]).
   final String? assignedSections;
+
+  /// JSON: ids de narrative cards donde refuerza el detalle (ej. [12, 34]).
+  final String? assignedCardIds;
+
+  /// JSON: MoodboardReferenceMeta (tags, luz, composición, etc.)
+  /// Migrado desde SharedPreferences en schemaVersion 39.
+  final String? metaJson;
   final int sortOrder;
   const MoodboardImage({
     required this.id,
@@ -21756,6 +21810,8 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     this.linkedLocationName,
     this.linkedLocationBasePlanId,
     this.assignedSections,
+    this.assignedCardIds,
+    this.metaJson,
     required this.sortOrder,
   });
   @override
@@ -21794,6 +21850,12 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     if (!nullToAbsent || assignedSections != null) {
       map['assigned_sections'] = Variable<String>(assignedSections);
     }
+    if (!nullToAbsent || assignedCardIds != null) {
+      map['assigned_card_ids'] = Variable<String>(assignedCardIds);
+    }
+    if (!nullToAbsent || metaJson != null) {
+      map['meta_json'] = Variable<String>(metaJson);
+    }
     map['sort_order'] = Variable<int>(sortOrder);
     return map;
   }
@@ -21831,6 +21893,12 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
       assignedSections: assignedSections == null && nullToAbsent
           ? const Value.absent()
           : Value(assignedSections),
+      assignedCardIds: assignedCardIds == null && nullToAbsent
+          ? const Value.absent()
+          : Value(assignedCardIds),
+      metaJson: metaJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(metaJson),
       sortOrder: Value(sortOrder),
     );
   }
@@ -21858,6 +21926,8 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
         json['linkedLocationBasePlanId'],
       ),
       assignedSections: serializer.fromJson<String?>(json['assignedSections']),
+      assignedCardIds: serializer.fromJson<String?>(json['assignedCardIds']),
+      metaJson: serializer.fromJson<String?>(json['metaJson']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
     );
   }
@@ -21880,6 +21950,8 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
         linkedLocationBasePlanId,
       ),
       'assignedSections': serializer.toJson<String?>(assignedSections),
+      'assignedCardIds': serializer.toJson<String?>(assignedCardIds),
+      'metaJson': serializer.toJson<String?>(metaJson),
       'sortOrder': serializer.toJson<int>(sortOrder),
     };
   }
@@ -21898,6 +21970,8 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     Value<String?> linkedLocationName = const Value.absent(),
     Value<int?> linkedLocationBasePlanId = const Value.absent(),
     Value<String?> assignedSections = const Value.absent(),
+    Value<String?> assignedCardIds = const Value.absent(),
+    Value<String?> metaJson = const Value.absent(),
     int? sortOrder,
   }) => MoodboardImage(
     id: id ?? this.id,
@@ -21923,6 +21997,10 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     assignedSections: assignedSections.present
         ? assignedSections.value
         : this.assignedSections,
+    assignedCardIds: assignedCardIds.present
+        ? assignedCardIds.value
+        : this.assignedCardIds,
+    metaJson: metaJson.present ? metaJson.value : this.metaJson,
     sortOrder: sortOrder ?? this.sortOrder,
   );
   MoodboardImage copyWithCompanion(MoodboardImagesCompanion data) {
@@ -21950,6 +22028,10 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
       assignedSections: data.assignedSections.present
           ? data.assignedSections.value
           : this.assignedSections,
+      assignedCardIds: data.assignedCardIds.present
+          ? data.assignedCardIds.value
+          : this.assignedCardIds,
+      metaJson: data.metaJson.present ? data.metaJson.value : this.metaJson,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
     );
   }
@@ -21970,6 +22052,8 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
           ..write('linkedLocationName: $linkedLocationName, ')
           ..write('linkedLocationBasePlanId: $linkedLocationBasePlanId, ')
           ..write('assignedSections: $assignedSections, ')
+          ..write('assignedCardIds: $assignedCardIds, ')
+          ..write('metaJson: $metaJson, ')
           ..write('sortOrder: $sortOrder')
           ..write(')'))
         .toString();
@@ -21990,6 +22074,8 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     linkedLocationName,
     linkedLocationBasePlanId,
     assignedSections,
+    assignedCardIds,
+    metaJson,
     sortOrder,
   );
   @override
@@ -22009,6 +22095,8 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
           other.linkedLocationName == this.linkedLocationName &&
           other.linkedLocationBasePlanId == this.linkedLocationBasePlanId &&
           other.assignedSections == this.assignedSections &&
+          other.assignedCardIds == this.assignedCardIds &&
+          other.metaJson == this.metaJson &&
           other.sortOrder == this.sortOrder);
 }
 
@@ -22026,6 +22114,8 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
   final Value<String?> linkedLocationName;
   final Value<int?> linkedLocationBasePlanId;
   final Value<String?> assignedSections;
+  final Value<String?> assignedCardIds;
+  final Value<String?> metaJson;
   final Value<int> sortOrder;
   const MoodboardImagesCompanion({
     this.id = const Value.absent(),
@@ -22041,6 +22131,8 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
     this.linkedLocationName = const Value.absent(),
     this.linkedLocationBasePlanId = const Value.absent(),
     this.assignedSections = const Value.absent(),
+    this.assignedCardIds = const Value.absent(),
+    this.metaJson = const Value.absent(),
     this.sortOrder = const Value.absent(),
   });
   MoodboardImagesCompanion.insert({
@@ -22057,6 +22149,8 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
     this.linkedLocationName = const Value.absent(),
     this.linkedLocationBasePlanId = const Value.absent(),
     this.assignedSections = const Value.absent(),
+    this.assignedCardIds = const Value.absent(),
+    this.metaJson = const Value.absent(),
     this.sortOrder = const Value.absent(),
   }) : projectId = Value(projectId),
        imagePath = Value(imagePath);
@@ -22074,6 +22168,8 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
     Expression<String>? linkedLocationName,
     Expression<int>? linkedLocationBasePlanId,
     Expression<String>? assignedSections,
+    Expression<String>? assignedCardIds,
+    Expression<String>? metaJson,
     Expression<int>? sortOrder,
   }) {
     return RawValuesInsertable({
@@ -22092,6 +22188,8 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
       if (linkedLocationBasePlanId != null)
         'linked_location_base_plan_id': linkedLocationBasePlanId,
       if (assignedSections != null) 'assigned_sections': assignedSections,
+      if (assignedCardIds != null) 'assigned_card_ids': assignedCardIds,
+      if (metaJson != null) 'meta_json': metaJson,
       if (sortOrder != null) 'sort_order': sortOrder,
     });
   }
@@ -22110,6 +22208,8 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
     Value<String?>? linkedLocationName,
     Value<int?>? linkedLocationBasePlanId,
     Value<String?>? assignedSections,
+    Value<String?>? assignedCardIds,
+    Value<String?>? metaJson,
     Value<int>? sortOrder,
   }) {
     return MoodboardImagesCompanion(
@@ -22127,6 +22227,8 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
       linkedLocationBasePlanId:
           linkedLocationBasePlanId ?? this.linkedLocationBasePlanId,
       assignedSections: assignedSections ?? this.assignedSections,
+      assignedCardIds: assignedCardIds ?? this.assignedCardIds,
+      metaJson: metaJson ?? this.metaJson,
       sortOrder: sortOrder ?? this.sortOrder,
     );
   }
@@ -22175,6 +22277,12 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
     if (assignedSections.present) {
       map['assigned_sections'] = Variable<String>(assignedSections.value);
     }
+    if (assignedCardIds.present) {
+      map['assigned_card_ids'] = Variable<String>(assignedCardIds.value);
+    }
+    if (metaJson.present) {
+      map['meta_json'] = Variable<String>(metaJson.value);
+    }
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
@@ -22197,6 +22305,641 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
           ..write('linkedLocationName: $linkedLocationName, ')
           ..write('linkedLocationBasePlanId: $linkedLocationBasePlanId, ')
           ..write('assignedSections: $assignedSections, ')
+          ..write('assignedCardIds: $assignedCardIds, ')
+          ..write('metaJson: $metaJson, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $VisualBibleNarrativeCardsTable extends VisualBibleNarrativeCards
+    with TableInfo<$VisualBibleNarrativeCardsTable, VisualBibleNarrativeCard> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $VisualBibleNarrativeCardsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _bibleIdMeta = const VerificationMeta(
+    'bibleId',
+  );
+  @override
+  late final GeneratedColumn<int> bibleId = GeneratedColumn<int>(
+    'bible_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES visual_bibles (id)',
+    ),
+  );
+  static const VerificationMeta _sectionIdMeta = const VerificationMeta(
+    'sectionId',
+  );
+  @override
+  late final GeneratedColumn<String> sectionId = GeneratedColumn<String>(
+    'section_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bodyMeta = const VerificationMeta('body');
+  @override
+  late final GeneratedColumn<String> body = GeneratedColumn<String>(
+    'body',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverMoodboardImageIdMeta =
+      const VerificationMeta('coverMoodboardImageId');
+  @override
+  late final GeneratedColumn<int> coverMoodboardImageId = GeneratedColumn<int>(
+    'cover_moodboard_image_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES moodboard_images (id)',
+    ),
+  );
+  static const VerificationMeta _locationBasePlanIdMeta =
+      const VerificationMeta('locationBasePlanId');
+  @override
+  late final GeneratedColumn<int> locationBasePlanId = GeneratedColumn<int>(
+    'location_base_plan_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES location_base_plans (id)',
+    ),
+  );
+  static const VerificationMeta _metaJsonMeta = const VerificationMeta(
+    'metaJson',
+  );
+  @override
+  late final GeneratedColumn<String> metaJson = GeneratedColumn<String>(
+    'meta_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bibleId,
+    sectionId,
+    kind,
+    title,
+    body,
+    coverMoodboardImageId,
+    locationBasePlanId,
+    metaJson,
+    sortOrder,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'visual_bible_narrative_cards';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<VisualBibleNarrativeCard> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('bible_id')) {
+      context.handle(
+        _bibleIdMeta,
+        bibleId.isAcceptableOrUnknown(data['bible_id']!, _bibleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bibleIdMeta);
+    }
+    if (data.containsKey('section_id')) {
+      context.handle(
+        _sectionIdMeta,
+        sectionId.isAcceptableOrUnknown(data['section_id']!, _sectionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sectionIdMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('body')) {
+      context.handle(
+        _bodyMeta,
+        body.isAcceptableOrUnknown(data['body']!, _bodyMeta),
+      );
+    }
+    if (data.containsKey('cover_moodboard_image_id')) {
+      context.handle(
+        _coverMoodboardImageIdMeta,
+        coverMoodboardImageId.isAcceptableOrUnknown(
+          data['cover_moodboard_image_id']!,
+          _coverMoodboardImageIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_base_plan_id')) {
+      context.handle(
+        _locationBasePlanIdMeta,
+        locationBasePlanId.isAcceptableOrUnknown(
+          data['location_base_plan_id']!,
+          _locationBasePlanIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('meta_json')) {
+      context.handle(
+        _metaJsonMeta,
+        metaJson.isAcceptableOrUnknown(data['meta_json']!, _metaJsonMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  VisualBibleNarrativeCard map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return VisualBibleNarrativeCard(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      bibleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bible_id'],
+      )!,
+      sectionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}section_id'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      body: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body'],
+      ),
+      coverMoodboardImageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cover_moodboard_image_id'],
+      ),
+      locationBasePlanId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}location_base_plan_id'],
+      ),
+      metaJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}meta_json'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+    );
+  }
+
+  @override
+  $VisualBibleNarrativeCardsTable createAlias(String alias) {
+    return $VisualBibleNarrativeCardsTable(attachedDatabase, alias);
+  }
+}
+
+class VisualBibleNarrativeCard extends DataClass
+    implements Insertable<VisualBibleNarrativeCard> {
+  final int id;
+  final int bibleId;
+
+  /// BibleSectionId (p. ej. lighting); reutilizable en color/texture.
+  final String sectionId;
+
+  /// style | film_ref | location_light | overview
+  final String kind;
+  final String title;
+  final String? body;
+  final int? coverMoodboardImageId;
+  final int? locationBasePlanId;
+
+  /// JSON libre (summary, filmTitle, year, dp…).
+  final String? metaJson;
+  final int sortOrder;
+  const VisualBibleNarrativeCard({
+    required this.id,
+    required this.bibleId,
+    required this.sectionId,
+    required this.kind,
+    required this.title,
+    this.body,
+    this.coverMoodboardImageId,
+    this.locationBasePlanId,
+    this.metaJson,
+    required this.sortOrder,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['bible_id'] = Variable<int>(bibleId);
+    map['section_id'] = Variable<String>(sectionId);
+    map['kind'] = Variable<String>(kind);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || body != null) {
+      map['body'] = Variable<String>(body);
+    }
+    if (!nullToAbsent || coverMoodboardImageId != null) {
+      map['cover_moodboard_image_id'] = Variable<int>(coverMoodboardImageId);
+    }
+    if (!nullToAbsent || locationBasePlanId != null) {
+      map['location_base_plan_id'] = Variable<int>(locationBasePlanId);
+    }
+    if (!nullToAbsent || metaJson != null) {
+      map['meta_json'] = Variable<String>(metaJson);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    return map;
+  }
+
+  VisualBibleNarrativeCardsCompanion toCompanion(bool nullToAbsent) {
+    return VisualBibleNarrativeCardsCompanion(
+      id: Value(id),
+      bibleId: Value(bibleId),
+      sectionId: Value(sectionId),
+      kind: Value(kind),
+      title: Value(title),
+      body: body == null && nullToAbsent ? const Value.absent() : Value(body),
+      coverMoodboardImageId: coverMoodboardImageId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coverMoodboardImageId),
+      locationBasePlanId: locationBasePlanId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationBasePlanId),
+      metaJson: metaJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(metaJson),
+      sortOrder: Value(sortOrder),
+    );
+  }
+
+  factory VisualBibleNarrativeCard.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return VisualBibleNarrativeCard(
+      id: serializer.fromJson<int>(json['id']),
+      bibleId: serializer.fromJson<int>(json['bibleId']),
+      sectionId: serializer.fromJson<String>(json['sectionId']),
+      kind: serializer.fromJson<String>(json['kind']),
+      title: serializer.fromJson<String>(json['title']),
+      body: serializer.fromJson<String?>(json['body']),
+      coverMoodboardImageId: serializer.fromJson<int?>(
+        json['coverMoodboardImageId'],
+      ),
+      locationBasePlanId: serializer.fromJson<int?>(json['locationBasePlanId']),
+      metaJson: serializer.fromJson<String?>(json['metaJson']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'bibleId': serializer.toJson<int>(bibleId),
+      'sectionId': serializer.toJson<String>(sectionId),
+      'kind': serializer.toJson<String>(kind),
+      'title': serializer.toJson<String>(title),
+      'body': serializer.toJson<String?>(body),
+      'coverMoodboardImageId': serializer.toJson<int?>(coverMoodboardImageId),
+      'locationBasePlanId': serializer.toJson<int?>(locationBasePlanId),
+      'metaJson': serializer.toJson<String?>(metaJson),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+    };
+  }
+
+  VisualBibleNarrativeCard copyWith({
+    int? id,
+    int? bibleId,
+    String? sectionId,
+    String? kind,
+    String? title,
+    Value<String?> body = const Value.absent(),
+    Value<int?> coverMoodboardImageId = const Value.absent(),
+    Value<int?> locationBasePlanId = const Value.absent(),
+    Value<String?> metaJson = const Value.absent(),
+    int? sortOrder,
+  }) => VisualBibleNarrativeCard(
+    id: id ?? this.id,
+    bibleId: bibleId ?? this.bibleId,
+    sectionId: sectionId ?? this.sectionId,
+    kind: kind ?? this.kind,
+    title: title ?? this.title,
+    body: body.present ? body.value : this.body,
+    coverMoodboardImageId: coverMoodboardImageId.present
+        ? coverMoodboardImageId.value
+        : this.coverMoodboardImageId,
+    locationBasePlanId: locationBasePlanId.present
+        ? locationBasePlanId.value
+        : this.locationBasePlanId,
+    metaJson: metaJson.present ? metaJson.value : this.metaJson,
+    sortOrder: sortOrder ?? this.sortOrder,
+  );
+  VisualBibleNarrativeCard copyWithCompanion(
+    VisualBibleNarrativeCardsCompanion data,
+  ) {
+    return VisualBibleNarrativeCard(
+      id: data.id.present ? data.id.value : this.id,
+      bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
+      sectionId: data.sectionId.present ? data.sectionId.value : this.sectionId,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      title: data.title.present ? data.title.value : this.title,
+      body: data.body.present ? data.body.value : this.body,
+      coverMoodboardImageId: data.coverMoodboardImageId.present
+          ? data.coverMoodboardImageId.value
+          : this.coverMoodboardImageId,
+      locationBasePlanId: data.locationBasePlanId.present
+          ? data.locationBasePlanId.value
+          : this.locationBasePlanId,
+      metaJson: data.metaJson.present ? data.metaJson.value : this.metaJson,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VisualBibleNarrativeCard(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('sectionId: $sectionId, ')
+          ..write('kind: $kind, ')
+          ..write('title: $title, ')
+          ..write('body: $body, ')
+          ..write('coverMoodboardImageId: $coverMoodboardImageId, ')
+          ..write('locationBasePlanId: $locationBasePlanId, ')
+          ..write('metaJson: $metaJson, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    bibleId,
+    sectionId,
+    kind,
+    title,
+    body,
+    coverMoodboardImageId,
+    locationBasePlanId,
+    metaJson,
+    sortOrder,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is VisualBibleNarrativeCard &&
+          other.id == this.id &&
+          other.bibleId == this.bibleId &&
+          other.sectionId == this.sectionId &&
+          other.kind == this.kind &&
+          other.title == this.title &&
+          other.body == this.body &&
+          other.coverMoodboardImageId == this.coverMoodboardImageId &&
+          other.locationBasePlanId == this.locationBasePlanId &&
+          other.metaJson == this.metaJson &&
+          other.sortOrder == this.sortOrder);
+}
+
+class VisualBibleNarrativeCardsCompanion
+    extends UpdateCompanion<VisualBibleNarrativeCard> {
+  final Value<int> id;
+  final Value<int> bibleId;
+  final Value<String> sectionId;
+  final Value<String> kind;
+  final Value<String> title;
+  final Value<String?> body;
+  final Value<int?> coverMoodboardImageId;
+  final Value<int?> locationBasePlanId;
+  final Value<String?> metaJson;
+  final Value<int> sortOrder;
+  const VisualBibleNarrativeCardsCompanion({
+    this.id = const Value.absent(),
+    this.bibleId = const Value.absent(),
+    this.sectionId = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.title = const Value.absent(),
+    this.body = const Value.absent(),
+    this.coverMoodboardImageId = const Value.absent(),
+    this.locationBasePlanId = const Value.absent(),
+    this.metaJson = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  });
+  VisualBibleNarrativeCardsCompanion.insert({
+    this.id = const Value.absent(),
+    required int bibleId,
+    required String sectionId,
+    required String kind,
+    required String title,
+    this.body = const Value.absent(),
+    this.coverMoodboardImageId = const Value.absent(),
+    this.locationBasePlanId = const Value.absent(),
+    this.metaJson = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  }) : bibleId = Value(bibleId),
+       sectionId = Value(sectionId),
+       kind = Value(kind),
+       title = Value(title);
+  static Insertable<VisualBibleNarrativeCard> custom({
+    Expression<int>? id,
+    Expression<int>? bibleId,
+    Expression<String>? sectionId,
+    Expression<String>? kind,
+    Expression<String>? title,
+    Expression<String>? body,
+    Expression<int>? coverMoodboardImageId,
+    Expression<int>? locationBasePlanId,
+    Expression<String>? metaJson,
+    Expression<int>? sortOrder,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bibleId != null) 'bible_id': bibleId,
+      if (sectionId != null) 'section_id': sectionId,
+      if (kind != null) 'kind': kind,
+      if (title != null) 'title': title,
+      if (body != null) 'body': body,
+      if (coverMoodboardImageId != null)
+        'cover_moodboard_image_id': coverMoodboardImageId,
+      if (locationBasePlanId != null)
+        'location_base_plan_id': locationBasePlanId,
+      if (metaJson != null) 'meta_json': metaJson,
+      if (sortOrder != null) 'sort_order': sortOrder,
+    });
+  }
+
+  VisualBibleNarrativeCardsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? bibleId,
+    Value<String>? sectionId,
+    Value<String>? kind,
+    Value<String>? title,
+    Value<String?>? body,
+    Value<int?>? coverMoodboardImageId,
+    Value<int?>? locationBasePlanId,
+    Value<String?>? metaJson,
+    Value<int>? sortOrder,
+  }) {
+    return VisualBibleNarrativeCardsCompanion(
+      id: id ?? this.id,
+      bibleId: bibleId ?? this.bibleId,
+      sectionId: sectionId ?? this.sectionId,
+      kind: kind ?? this.kind,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      coverMoodboardImageId:
+          coverMoodboardImageId ?? this.coverMoodboardImageId,
+      locationBasePlanId: locationBasePlanId ?? this.locationBasePlanId,
+      metaJson: metaJson ?? this.metaJson,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (bibleId.present) {
+      map['bible_id'] = Variable<int>(bibleId.value);
+    }
+    if (sectionId.present) {
+      map['section_id'] = Variable<String>(sectionId.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (body.present) {
+      map['body'] = Variable<String>(body.value);
+    }
+    if (coverMoodboardImageId.present) {
+      map['cover_moodboard_image_id'] = Variable<int>(
+        coverMoodboardImageId.value,
+      );
+    }
+    if (locationBasePlanId.present) {
+      map['location_base_plan_id'] = Variable<int>(locationBasePlanId.value);
+    }
+    if (metaJson.present) {
+      map['meta_json'] = Variable<String>(metaJson.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VisualBibleNarrativeCardsCompanion(')
+          ..write('id: $id, ')
+          ..write('bibleId: $bibleId, ')
+          ..write('sectionId: $sectionId, ')
+          ..write('kind: $kind, ')
+          ..write('title: $title, ')
+          ..write('body: $body, ')
+          ..write('coverMoodboardImageId: $coverMoodboardImageId, ')
+          ..write('locationBasePlanId: $locationBasePlanId, ')
+          ..write('metaJson: $metaJson, ')
           ..write('sortOrder: $sortOrder')
           ..write(')'))
         .toString();
@@ -29820,6 +30563,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $MoodboardImagesTable moodboardImages = $MoodboardImagesTable(
     this,
   );
+  late final $VisualBibleNarrativeCardsTable visualBibleNarrativeCards =
+      $VisualBibleNarrativeCardsTable(this);
   late final $BibleSectionGroupsTable bibleSectionGroups =
       $BibleSectionGroupsTable(this);
   late final $BibleSectionDefinitionsTable bibleSectionDefinitions =
@@ -29875,6 +30620,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     visualBibleLocationRefs,
     moodboardGroups,
     moodboardImages,
+    visualBibleNarrativeCards,
     bibleSectionGroups,
     bibleSectionDefinitions,
     userTemplates,
@@ -33386,6 +34132,37 @@ final class $$LocationBasePlansTableReferences
     );
   }
 
+  static MultiTypedResultKey<
+    $VisualBibleNarrativeCardsTable,
+    List<VisualBibleNarrativeCard>
+  >
+  _visualBibleNarrativeCardsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.visualBibleNarrativeCards,
+        aliasName: $_aliasNameGenerator(
+          db.locationBasePlans.id,
+          db.visualBibleNarrativeCards.locationBasePlanId,
+        ),
+      );
+
+  $$VisualBibleNarrativeCardsTableProcessedTableManager
+  get visualBibleNarrativeCardsRefs {
+    final manager =
+        $$VisualBibleNarrativeCardsTableTableManager(
+          $_db,
+          $_db.visualBibleNarrativeCards,
+        ).filter(
+          (f) => f.locationBasePlanId.id.sqlEquals($_itemColumn<int>('id')!),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _visualBibleNarrativeCardsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$LightingSetupsTable, List<LightingSetup>>
   _lightingSetupsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.lightingSetups,
@@ -33621,6 +34398,33 @@ class $$LocationBasePlansTableFilterComposer
                 $removeJoinBuilderFromRootComposer,
           ),
     );
+    return f(composer);
+  }
+
+  Expression<bool> visualBibleNarrativeCardsRefs(
+    Expression<bool> Function($$VisualBibleNarrativeCardsTableFilterComposer f)
+    f,
+  ) {
+    final $$VisualBibleNarrativeCardsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.visualBibleNarrativeCards,
+          getReferencedColumn: (t) => t.locationBasePlanId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VisualBibleNarrativeCardsTableFilterComposer(
+                $db: $db,
+                $table: $db.visualBibleNarrativeCards,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
     return f(composer);
   }
 
@@ -33971,6 +34775,33 @@ class $$LocationBasePlansTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> visualBibleNarrativeCardsRefs<T extends Object>(
+    Expression<T> Function($$VisualBibleNarrativeCardsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$VisualBibleNarrativeCardsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.visualBibleNarrativeCards,
+          getReferencedColumn: (t) => t.locationBasePlanId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VisualBibleNarrativeCardsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.visualBibleNarrativeCards,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
   Expression<T> lightingSetupsRefs<T extends Object>(
     Expression<T> Function($$LightingSetupsTableAnnotationComposer a) f,
   ) {
@@ -34017,6 +34848,7 @@ class $$LocationBasePlansTableTableManager
             bool locationImagesRefs,
             bool visualBibleLocationRefsRefs,
             bool moodboardImagesRefs,
+            bool visualBibleNarrativeCardsRefs,
             bool lightingSetupsRefs,
           })
         > {
@@ -34116,6 +34948,7 @@ class $$LocationBasePlansTableTableManager
                 locationImagesRefs = false,
                 visualBibleLocationRefsRefs = false,
                 moodboardImagesRefs = false,
+                visualBibleNarrativeCardsRefs = false,
                 lightingSetupsRefs = false,
               }) {
                 return PrefetchHooks(
@@ -34125,6 +34958,8 @@ class $$LocationBasePlansTableTableManager
                     if (locationImagesRefs) db.locationImages,
                     if (visualBibleLocationRefsRefs) db.visualBibleLocationRefs,
                     if (moodboardImagesRefs) db.moodboardImages,
+                    if (visualBibleNarrativeCardsRefs)
+                      db.visualBibleNarrativeCards,
                     if (lightingSetupsRefs) db.lightingSetups,
                   ],
                   addJoins:
@@ -34262,6 +35097,27 @@ class $$LocationBasePlansTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (visualBibleNarrativeCardsRefs)
+                        await $_getPrefetchedData<
+                          LocationBasePlan,
+                          $LocationBasePlansTable,
+                          VisualBibleNarrativeCard
+                        >(
+                          currentTable: table,
+                          referencedTable: $$LocationBasePlansTableReferences
+                              ._visualBibleNarrativeCardsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$LocationBasePlansTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).visualBibleNarrativeCardsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.locationBasePlanId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (lightingSetupsRefs)
                         await $_getPrefetchedData<
                           LocationBasePlan,
@@ -34310,6 +35166,7 @@ typedef $$LocationBasePlansTableProcessedTableManager =
         bool locationImagesRefs,
         bool visualBibleLocationRefsRefs,
         bool moodboardImagesRefs,
+        bool visualBibleNarrativeCardsRefs,
         bool lightingSetupsRefs,
       })
     >;
@@ -43645,6 +44502,34 @@ final class $$VisualBiblesTableReferences
     );
   }
 
+  static MultiTypedResultKey<
+    $VisualBibleNarrativeCardsTable,
+    List<VisualBibleNarrativeCard>
+  >
+  _visualBibleNarrativeCardsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.visualBibleNarrativeCards,
+        aliasName: $_aliasNameGenerator(
+          db.visualBibles.id,
+          db.visualBibleNarrativeCards.bibleId,
+        ),
+      );
+
+  $$VisualBibleNarrativeCardsTableProcessedTableManager
+  get visualBibleNarrativeCardsRefs {
+    final manager = $$VisualBibleNarrativeCardsTableTableManager(
+      $_db,
+      $_db.visualBibleNarrativeCards,
+    ).filter((f) => f.bibleId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _visualBibleNarrativeCardsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$BibleSectionGroupsTable, List<BibleSectionGroup>>
   _bibleSectionGroupsRefsTable(_$AppDatabase db) =>
       MultiTypedResultKey.fromTable(
@@ -44319,6 +45204,33 @@ class $$VisualBiblesTableFilterComposer
                 $removeJoinBuilderFromRootComposer,
           ),
     );
+    return f(composer);
+  }
+
+  Expression<bool> visualBibleNarrativeCardsRefs(
+    Expression<bool> Function($$VisualBibleNarrativeCardsTableFilterComposer f)
+    f,
+  ) {
+    final $$VisualBibleNarrativeCardsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.visualBibleNarrativeCards,
+          getReferencedColumn: (t) => t.bibleId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VisualBibleNarrativeCardsTableFilterComposer(
+                $db: $db,
+                $table: $db.visualBibleNarrativeCards,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
     return f(composer);
   }
 
@@ -45380,6 +46292,33 @@ class $$VisualBiblesTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> visualBibleNarrativeCardsRefs<T extends Object>(
+    Expression<T> Function($$VisualBibleNarrativeCardsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$VisualBibleNarrativeCardsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.visualBibleNarrativeCards,
+          getReferencedColumn: (t) => t.bibleId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VisualBibleNarrativeCardsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.visualBibleNarrativeCards,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
   Expression<T> bibleSectionGroupsRefs<T extends Object>(
     Expression<T> Function($$BibleSectionGroupsTableAnnotationComposer a) f,
   ) {
@@ -45632,6 +46571,7 @@ class $$VisualBiblesTableTableManager
             bool visualBibleColorBlocksRefs,
             bool visualBibleLocationRefsRefs,
             bool moodboardImagesRefs,
+            bool visualBibleNarrativeCardsRefs,
             bool bibleSectionGroupsRefs,
             bool bibleSectionDefinitionsRefs,
             bool exposureBlocksRefs,
@@ -45934,6 +46874,7 @@ class $$VisualBiblesTableTableManager
                 visualBibleColorBlocksRefs = false,
                 visualBibleLocationRefsRefs = false,
                 moodboardImagesRefs = false,
+                visualBibleNarrativeCardsRefs = false,
                 bibleSectionGroupsRefs = false,
                 bibleSectionDefinitionsRefs = false,
                 exposureBlocksRefs = false,
@@ -45950,6 +46891,8 @@ class $$VisualBiblesTableTableManager
                     if (visualBibleColorBlocksRefs) db.visualBibleColorBlocks,
                     if (visualBibleLocationRefsRefs) db.visualBibleLocationRefs,
                     if (moodboardImagesRefs) db.moodboardImages,
+                    if (visualBibleNarrativeCardsRefs)
+                      db.visualBibleNarrativeCards,
                     if (bibleSectionGroupsRefs) db.bibleSectionGroups,
                     if (bibleSectionDefinitionsRefs) db.bibleSectionDefinitions,
                     if (exposureBlocksRefs) db.exposureBlocks,
@@ -46083,6 +47026,27 @@ class $$VisualBiblesTableTableManager
                                 table,
                                 p0,
                               ).moodboardImagesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.bibleId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (visualBibleNarrativeCardsRefs)
+                        await $_getPrefetchedData<
+                          VisualBible,
+                          $VisualBiblesTable,
+                          VisualBibleNarrativeCard
+                        >(
+                          currentTable: table,
+                          referencedTable: $$VisualBiblesTableReferences
+                              ._visualBibleNarrativeCardsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$VisualBiblesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).visualBibleNarrativeCardsRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.bibleId == item.id,
@@ -46305,6 +47269,7 @@ typedef $$VisualBiblesTableProcessedTableManager =
         bool visualBibleColorBlocksRefs,
         bool visualBibleLocationRefsRefs,
         bool moodboardImagesRefs,
+        bool visualBibleNarrativeCardsRefs,
         bool bibleSectionGroupsRefs,
         bool bibleSectionDefinitionsRefs,
         bool exposureBlocksRefs,
@@ -47923,6 +48888,8 @@ typedef $$MoodboardImagesTableCreateCompanionBuilder =
       Value<String?> linkedLocationName,
       Value<int?> linkedLocationBasePlanId,
       Value<String?> assignedSections,
+      Value<String?> assignedCardIds,
+      Value<String?> metaJson,
       Value<int> sortOrder,
     });
 typedef $$MoodboardImagesTableUpdateCompanionBuilder =
@@ -47940,6 +48907,8 @@ typedef $$MoodboardImagesTableUpdateCompanionBuilder =
       Value<String?> linkedLocationName,
       Value<int?> linkedLocationBasePlanId,
       Value<String?> assignedSections,
+      Value<String?> assignedCardIds,
+      Value<String?> metaJson,
       Value<int> sortOrder,
     });
 
@@ -48033,6 +49002,37 @@ final class $$MoodboardImagesTableReferences
       manager.$state.copyWith(prefetchedData: [item]),
     );
   }
+
+  static MultiTypedResultKey<
+    $VisualBibleNarrativeCardsTable,
+    List<VisualBibleNarrativeCard>
+  >
+  _visualBibleNarrativeCardsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.visualBibleNarrativeCards,
+        aliasName: $_aliasNameGenerator(
+          db.moodboardImages.id,
+          db.visualBibleNarrativeCards.coverMoodboardImageId,
+        ),
+      );
+
+  $$VisualBibleNarrativeCardsTableProcessedTableManager
+  get visualBibleNarrativeCardsRefs {
+    final manager =
+        $$VisualBibleNarrativeCardsTableTableManager(
+          $_db,
+          $_db.visualBibleNarrativeCards,
+        ).filter(
+          (f) => f.coverMoodboardImageId.id.sqlEquals($_itemColumn<int>('id')!),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _visualBibleNarrativeCardsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$MoodboardImagesTableFilterComposer
@@ -48086,6 +49086,16 @@ class $$MoodboardImagesTableFilterComposer
 
   ColumnFilters<String> get assignedSections => $composableBuilder(
     column: $table.assignedSections,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get assignedCardIds => $composableBuilder(
+    column: $table.assignedCardIds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get metaJson => $composableBuilder(
+    column: $table.metaJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -48185,6 +49195,33 @@ class $$MoodboardImagesTableFilterComposer
     );
     return composer;
   }
+
+  Expression<bool> visualBibleNarrativeCardsRefs(
+    Expression<bool> Function($$VisualBibleNarrativeCardsTableFilterComposer f)
+    f,
+  ) {
+    final $$VisualBibleNarrativeCardsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.visualBibleNarrativeCards,
+          getReferencedColumn: (t) => t.coverMoodboardImageId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VisualBibleNarrativeCardsTableFilterComposer(
+                $db: $db,
+                $table: $db.visualBibleNarrativeCards,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$MoodboardImagesTableOrderingComposer
@@ -48238,6 +49275,16 @@ class $$MoodboardImagesTableOrderingComposer
 
   ColumnOrderings<String> get assignedSections => $composableBuilder(
     column: $table.assignedSections,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get assignedCardIds => $composableBuilder(
+    column: $table.assignedCardIds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get metaJson => $composableBuilder(
+    column: $table.metaJson,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -48383,6 +49430,14 @@ class $$MoodboardImagesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get assignedCardIds => $composableBuilder(
+    column: $table.assignedCardIds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get metaJson =>
+      $composableBuilder(column: $table.metaJson, builder: (column) => column);
+
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
 
@@ -48478,6 +49533,33 @@ class $$MoodboardImagesTableAnnotationComposer
         );
     return composer;
   }
+
+  Expression<T> visualBibleNarrativeCardsRefs<T extends Object>(
+    Expression<T> Function($$VisualBibleNarrativeCardsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$VisualBibleNarrativeCardsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.visualBibleNarrativeCards,
+          getReferencedColumn: (t) => t.coverMoodboardImageId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VisualBibleNarrativeCardsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.visualBibleNarrativeCards,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$MoodboardImagesTableTableManager
@@ -48498,6 +49580,7 @@ class $$MoodboardImagesTableTableManager
             bool bibleId,
             bool groupId,
             bool linkedLocationBasePlanId,
+            bool visualBibleNarrativeCardsRefs,
           })
         > {
   $$MoodboardImagesTableTableManager(
@@ -48528,6 +49611,8 @@ class $$MoodboardImagesTableTableManager
                 Value<String?> linkedLocationName = const Value.absent(),
                 Value<int?> linkedLocationBasePlanId = const Value.absent(),
                 Value<String?> assignedSections = const Value.absent(),
+                Value<String?> assignedCardIds = const Value.absent(),
+                Value<String?> metaJson = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
               }) => MoodboardImagesCompanion(
                 id: id,
@@ -48543,6 +49628,8 @@ class $$MoodboardImagesTableTableManager
                 linkedLocationName: linkedLocationName,
                 linkedLocationBasePlanId: linkedLocationBasePlanId,
                 assignedSections: assignedSections,
+                assignedCardIds: assignedCardIds,
+                metaJson: metaJson,
                 sortOrder: sortOrder,
               ),
           createCompanionCallback:
@@ -48560,6 +49647,8 @@ class $$MoodboardImagesTableTableManager
                 Value<String?> linkedLocationName = const Value.absent(),
                 Value<int?> linkedLocationBasePlanId = const Value.absent(),
                 Value<String?> assignedSections = const Value.absent(),
+                Value<String?> assignedCardIds = const Value.absent(),
+                Value<String?> metaJson = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
               }) => MoodboardImagesCompanion.insert(
                 id: id,
@@ -48575,6 +49664,8 @@ class $$MoodboardImagesTableTableManager
                 linkedLocationName: linkedLocationName,
                 linkedLocationBasePlanId: linkedLocationBasePlanId,
                 assignedSections: assignedSections,
+                assignedCardIds: assignedCardIds,
+                metaJson: metaJson,
                 sortOrder: sortOrder,
               ),
           withReferenceMapper: (p0) => p0
@@ -48591,10 +49682,14 @@ class $$MoodboardImagesTableTableManager
                 bibleId = false,
                 groupId = false,
                 linkedLocationBasePlanId = false,
+                visualBibleNarrativeCardsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
-                  explicitlyWatchedTables: [],
+                  explicitlyWatchedTables: [
+                    if (visualBibleNarrativeCardsRefs)
+                      db.visualBibleNarrativeCards,
+                  ],
                   addJoins:
                       <
                         T extends TableManagerState<
@@ -48676,7 +49771,29 @@ class $$MoodboardImagesTableTableManager
                         return state;
                       },
                   getPrefetchedDataCallback: (items) async {
-                    return [];
+                    return [
+                      if (visualBibleNarrativeCardsRefs)
+                        await $_getPrefetchedData<
+                          MoodboardImage,
+                          $MoodboardImagesTable,
+                          VisualBibleNarrativeCard
+                        >(
+                          currentTable: table,
+                          referencedTable: $$MoodboardImagesTableReferences
+                              ._visualBibleNarrativeCardsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$MoodboardImagesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).visualBibleNarrativeCardsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.coverMoodboardImageId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
                   },
                 );
               },
@@ -48701,6 +49818,645 @@ typedef $$MoodboardImagesTableProcessedTableManager =
         bool bibleId,
         bool groupId,
         bool linkedLocationBasePlanId,
+        bool visualBibleNarrativeCardsRefs,
+      })
+    >;
+typedef $$VisualBibleNarrativeCardsTableCreateCompanionBuilder =
+    VisualBibleNarrativeCardsCompanion Function({
+      Value<int> id,
+      required int bibleId,
+      required String sectionId,
+      required String kind,
+      required String title,
+      Value<String?> body,
+      Value<int?> coverMoodboardImageId,
+      Value<int?> locationBasePlanId,
+      Value<String?> metaJson,
+      Value<int> sortOrder,
+    });
+typedef $$VisualBibleNarrativeCardsTableUpdateCompanionBuilder =
+    VisualBibleNarrativeCardsCompanion Function({
+      Value<int> id,
+      Value<int> bibleId,
+      Value<String> sectionId,
+      Value<String> kind,
+      Value<String> title,
+      Value<String?> body,
+      Value<int?> coverMoodboardImageId,
+      Value<int?> locationBasePlanId,
+      Value<String?> metaJson,
+      Value<int> sortOrder,
+    });
+
+final class $$VisualBibleNarrativeCardsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $VisualBibleNarrativeCardsTable,
+          VisualBibleNarrativeCard
+        > {
+  $$VisualBibleNarrativeCardsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $VisualBiblesTable _bibleIdTable(_$AppDatabase db) =>
+      db.visualBibles.createAlias(
+        $_aliasNameGenerator(
+          db.visualBibleNarrativeCards.bibleId,
+          db.visualBibles.id,
+        ),
+      );
+
+  $$VisualBiblesTableProcessedTableManager get bibleId {
+    final $_column = $_itemColumn<int>('bible_id')!;
+
+    final manager = $$VisualBiblesTableTableManager(
+      $_db,
+      $_db.visualBibles,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_bibleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $MoodboardImagesTable _coverMoodboardImageIdTable(_$AppDatabase db) =>
+      db.moodboardImages.createAlias(
+        $_aliasNameGenerator(
+          db.visualBibleNarrativeCards.coverMoodboardImageId,
+          db.moodboardImages.id,
+        ),
+      );
+
+  $$MoodboardImagesTableProcessedTableManager? get coverMoodboardImageId {
+    final $_column = $_itemColumn<int>('cover_moodboard_image_id');
+    if ($_column == null) return null;
+    final manager = $$MoodboardImagesTableTableManager(
+      $_db,
+      $_db.moodboardImages,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(
+      _coverMoodboardImageIdTable($_db),
+    );
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $LocationBasePlansTable _locationBasePlanIdTable(_$AppDatabase db) =>
+      db.locationBasePlans.createAlias(
+        $_aliasNameGenerator(
+          db.visualBibleNarrativeCards.locationBasePlanId,
+          db.locationBasePlans.id,
+        ),
+      );
+
+  $$LocationBasePlansTableProcessedTableManager? get locationBasePlanId {
+    final $_column = $_itemColumn<int>('location_base_plan_id');
+    if ($_column == null) return null;
+    final manager = $$LocationBasePlansTableTableManager(
+      $_db,
+      $_db.locationBasePlans,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_locationBasePlanIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$VisualBibleNarrativeCardsTableFilterComposer
+    extends Composer<_$AppDatabase, $VisualBibleNarrativeCardsTable> {
+  $$VisualBibleNarrativeCardsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sectionId => $composableBuilder(
+    column: $table.sectionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get metaJson => $composableBuilder(
+    column: $table.metaJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$VisualBiblesTableFilterComposer get bibleId {
+    final $$VisualBiblesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableFilterComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$MoodboardImagesTableFilterComposer get coverMoodboardImageId {
+    final $$MoodboardImagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.coverMoodboardImageId,
+      referencedTable: $db.moodboardImages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MoodboardImagesTableFilterComposer(
+            $db: $db,
+            $table: $db.moodboardImages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationBasePlansTableFilterComposer get locationBasePlanId {
+    final $$LocationBasePlansTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationBasePlanId,
+      referencedTable: $db.locationBasePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationBasePlansTableFilterComposer(
+            $db: $db,
+            $table: $db.locationBasePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$VisualBibleNarrativeCardsTableOrderingComposer
+    extends Composer<_$AppDatabase, $VisualBibleNarrativeCardsTable> {
+  $$VisualBibleNarrativeCardsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sectionId => $composableBuilder(
+    column: $table.sectionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get metaJson => $composableBuilder(
+    column: $table.metaJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$VisualBiblesTableOrderingComposer get bibleId {
+    final $$VisualBiblesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableOrderingComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$MoodboardImagesTableOrderingComposer get coverMoodboardImageId {
+    final $$MoodboardImagesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.coverMoodboardImageId,
+      referencedTable: $db.moodboardImages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MoodboardImagesTableOrderingComposer(
+            $db: $db,
+            $table: $db.moodboardImages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationBasePlansTableOrderingComposer get locationBasePlanId {
+    final $$LocationBasePlansTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationBasePlanId,
+      referencedTable: $db.locationBasePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationBasePlansTableOrderingComposer(
+            $db: $db,
+            $table: $db.locationBasePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$VisualBibleNarrativeCardsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $VisualBibleNarrativeCardsTable> {
+  $$VisualBibleNarrativeCardsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get sectionId =>
+      $composableBuilder(column: $table.sectionId, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get body =>
+      $composableBuilder(column: $table.body, builder: (column) => column);
+
+  GeneratedColumn<String> get metaJson =>
+      $composableBuilder(column: $table.metaJson, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  $$VisualBiblesTableAnnotationComposer get bibleId {
+    final $$VisualBiblesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bibleId,
+      referencedTable: $db.visualBibles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VisualBiblesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.visualBibles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$MoodboardImagesTableAnnotationComposer get coverMoodboardImageId {
+    final $$MoodboardImagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.coverMoodboardImageId,
+      referencedTable: $db.moodboardImages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MoodboardImagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.moodboardImages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationBasePlansTableAnnotationComposer get locationBasePlanId {
+    final $$LocationBasePlansTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.locationBasePlanId,
+          referencedTable: $db.locationBasePlans,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$LocationBasePlansTableAnnotationComposer(
+                $db: $db,
+                $table: $db.locationBasePlans,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$VisualBibleNarrativeCardsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $VisualBibleNarrativeCardsTable,
+          VisualBibleNarrativeCard,
+          $$VisualBibleNarrativeCardsTableFilterComposer,
+          $$VisualBibleNarrativeCardsTableOrderingComposer,
+          $$VisualBibleNarrativeCardsTableAnnotationComposer,
+          $$VisualBibleNarrativeCardsTableCreateCompanionBuilder,
+          $$VisualBibleNarrativeCardsTableUpdateCompanionBuilder,
+          (
+            VisualBibleNarrativeCard,
+            $$VisualBibleNarrativeCardsTableReferences,
+          ),
+          VisualBibleNarrativeCard,
+          PrefetchHooks Function({
+            bool bibleId,
+            bool coverMoodboardImageId,
+            bool locationBasePlanId,
+          })
+        > {
+  $$VisualBibleNarrativeCardsTableTableManager(
+    _$AppDatabase db,
+    $VisualBibleNarrativeCardsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$VisualBibleNarrativeCardsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$VisualBibleNarrativeCardsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$VisualBibleNarrativeCardsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> bibleId = const Value.absent(),
+                Value<String> sectionId = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String?> body = const Value.absent(),
+                Value<int?> coverMoodboardImageId = const Value.absent(),
+                Value<int?> locationBasePlanId = const Value.absent(),
+                Value<String?> metaJson = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => VisualBibleNarrativeCardsCompanion(
+                id: id,
+                bibleId: bibleId,
+                sectionId: sectionId,
+                kind: kind,
+                title: title,
+                body: body,
+                coverMoodboardImageId: coverMoodboardImageId,
+                locationBasePlanId: locationBasePlanId,
+                metaJson: metaJson,
+                sortOrder: sortOrder,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int bibleId,
+                required String sectionId,
+                required String kind,
+                required String title,
+                Value<String?> body = const Value.absent(),
+                Value<int?> coverMoodboardImageId = const Value.absent(),
+                Value<int?> locationBasePlanId = const Value.absent(),
+                Value<String?> metaJson = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => VisualBibleNarrativeCardsCompanion.insert(
+                id: id,
+                bibleId: bibleId,
+                sectionId: sectionId,
+                kind: kind,
+                title: title,
+                body: body,
+                coverMoodboardImageId: coverMoodboardImageId,
+                locationBasePlanId: locationBasePlanId,
+                metaJson: metaJson,
+                sortOrder: sortOrder,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$VisualBibleNarrativeCardsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({
+                bibleId = false,
+                coverMoodboardImageId = false,
+                locationBasePlanId = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (bibleId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.bibleId,
+                                    referencedTable:
+                                        $$VisualBibleNarrativeCardsTableReferences
+                                            ._bibleIdTable(db),
+                                    referencedColumn:
+                                        $$VisualBibleNarrativeCardsTableReferences
+                                            ._bibleIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (coverMoodboardImageId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.coverMoodboardImageId,
+                                    referencedTable:
+                                        $$VisualBibleNarrativeCardsTableReferences
+                                            ._coverMoodboardImageIdTable(db),
+                                    referencedColumn:
+                                        $$VisualBibleNarrativeCardsTableReferences
+                                            ._coverMoodboardImageIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (locationBasePlanId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.locationBasePlanId,
+                                    referencedTable:
+                                        $$VisualBibleNarrativeCardsTableReferences
+                                            ._locationBasePlanIdTable(db),
+                                    referencedColumn:
+                                        $$VisualBibleNarrativeCardsTableReferences
+                                            ._locationBasePlanIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$VisualBibleNarrativeCardsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $VisualBibleNarrativeCardsTable,
+      VisualBibleNarrativeCard,
+      $$VisualBibleNarrativeCardsTableFilterComposer,
+      $$VisualBibleNarrativeCardsTableOrderingComposer,
+      $$VisualBibleNarrativeCardsTableAnnotationComposer,
+      $$VisualBibleNarrativeCardsTableCreateCompanionBuilder,
+      $$VisualBibleNarrativeCardsTableUpdateCompanionBuilder,
+      (VisualBibleNarrativeCard, $$VisualBibleNarrativeCardsTableReferences),
+      VisualBibleNarrativeCard,
+      PrefetchHooks Function({
+        bool bibleId,
+        bool coverMoodboardImageId,
+        bool locationBasePlanId,
       })
     >;
 typedef $$BibleSectionGroupsTableCreateCompanionBuilder =
@@ -54487,6 +56243,11 @@ class $AppDatabaseManager {
       $$MoodboardGroupsTableTableManager(_db, _db.moodboardGroups);
   $$MoodboardImagesTableTableManager get moodboardImages =>
       $$MoodboardImagesTableTableManager(_db, _db.moodboardImages);
+  $$VisualBibleNarrativeCardsTableTableManager get visualBibleNarrativeCards =>
+      $$VisualBibleNarrativeCardsTableTableManager(
+        _db,
+        _db.visualBibleNarrativeCards,
+      );
   $$BibleSectionGroupsTableTableManager get bibleSectionGroups =>
       $$BibleSectionGroupsTableTableManager(_db, _db.bibleSectionGroups);
   $$BibleSectionDefinitionsTableTableManager get bibleSectionDefinitions =>

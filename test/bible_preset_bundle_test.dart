@@ -9,11 +9,15 @@ import 'package:iris_dp/shared/visual_bible/bible_section_ids.dart';
 
 void main() {
   group('BibleBuiltinPresets', () {
-    test('incluye ficción, comercial y documental', () {
+    test('incluye Plantilla 1, comercial y documental', () {
       expect(BibleBuiltinPresets.all.length, 3);
       expect(
-        BibleBuiltinPresets.byId(BibleBuiltinPresets.fictionNoirId)?.blueprint,
+        BibleBuiltinPresets.byId(BibleBuiltinPresets.plantilla1Id)?.blueprint,
         BibleBlueprintType.fiction,
+      );
+      expect(
+        BibleBuiltinPresets.byId(BibleBuiltinPresets.fictionNoirId)?.name,
+        'Plantilla 1',
       );
       expect(
         BibleBuiltinPresets.byId(BibleBuiltinPresets.commercialCleanId)
@@ -27,15 +31,15 @@ void main() {
       );
     });
 
-    test('seed de ficción tiene colorimetrías y Kelvin', () {
-      final seed = BibleBuiltinPresets.fictionNoir.sampleSeed!;
+    test('seed de Plantilla 1 tiene colorimetrías y Kelvin', () {
+      final seed = BibleBuiltinPresets.plantilla1.sampleSeed!;
       expect(seed.colorBlocks.length, greaterThanOrEqualTo(2));
       expect(seed.visualBibleFields['lightSource'], '3200K');
       expect(seed.visualBibleFields['keyFillRatioNight'], '4:1');
     });
 
     test('bundle encode/decode roundtrip', () {
-      final original = BibleBuiltinPresets.fictionNoir;
+      final original = BibleBuiltinPresets.plantilla1;
       final decoded = BiblePresetBundle.tryDecode(original.encode());
       expect(decoded, isNotNull);
       expect(decoded!.id, original.id);

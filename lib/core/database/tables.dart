@@ -691,6 +691,30 @@ class MoodboardImages extends Table {
 
   /// JSON: secciones de la biblia donde debe aparecer (ej. ["lighting","concept"]).
   TextColumn get assignedSections => text().nullable()();
+  /// JSON: ids de narrative cards donde refuerza el detalle (ej. [12, 34]).
+  TextColumn get assignedCardIds => text().nullable()();
+  /// JSON: MoodboardReferenceMeta (tags, luz, composición, etc.)
+  /// Migrado desde SharedPreferences en schemaVersion 39.
+  TextColumn get metaJson => text().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+}
+
+/// Cartas narrativas del deck por sección (estilos, refs fílmicas, loc. luz…).
+class VisualBibleNarrativeCards extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get bibleId => integer().references(VisualBibles, #id)();
+  /// BibleSectionId (p. ej. lighting); reutilizable en color/texture.
+  TextColumn get sectionId => text()();
+  /// style | film_ref | location_light | overview
+  TextColumn get kind => text()();
+  TextColumn get title => text()();
+  TextColumn get body => text().nullable()();
+  IntColumn get coverMoodboardImageId =>
+      integer().nullable().references(MoodboardImages, #id)();
+  IntColumn get locationBasePlanId =>
+      integer().nullable().references(LocationBasePlans, #id)();
+  /// JSON libre (summary, filmTitle, year, dp…).
+  TextColumn get metaJson => text().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 }
 

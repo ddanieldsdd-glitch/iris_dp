@@ -145,6 +145,15 @@ class _VisualBibleV2ScreenState extends ConsumerState<VisualBibleV2Screen> {
       package: pack,
       isExample: examplesMode,
       onUse: () async {
+        if (!BibleV2ProfessionalTemplates.isAvailable(pack)) {
+          if (mounted) {
+            AppSnackBar.show(
+              context,
+              '«${pack.name}» estará disponible próximamente. Usa Plantilla 1.',
+            );
+          }
+          return;
+        }
         final history = _history;
         if (history == null) return;
         final previous = history.current;

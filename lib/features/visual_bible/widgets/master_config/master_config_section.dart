@@ -83,6 +83,14 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
   }
 
   Future<void> _applyBlueprint(BibleBlueprintType type) async {
+    if (!type.isAvailable) {
+      if (!mounted) return;
+      AppSnackBar.show(
+        context,
+        '«${type.label}» estará disponible próximamente. Usa Ficción (Plantilla 1).',
+      );
+      return;
+    }
     final db = ref.read(databaseProvider);
     await BibleBlueprintService.apply(
       db: db,
@@ -96,12 +104,9 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
       _blueprint = type;
       _styles = styles;
     });
-    final hiddenCount = type.defaultHiddenSectionIds.length;
     AppSnackBar.show(
       context,
-      hiddenCount == 0
-          ? 'Base «${type.label}»: todas las pantallas visibles'
-          : 'Base «${type.label}»: $hiddenCount pantallas ocultas',
+      'Base «Plantilla 1 · ${type.label}»: estructura cinematic aplicada',
     );
   }
 
@@ -502,8 +507,8 @@ class _MainColumn {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Elige la plantilla base según el tipo de pieza '
-                      '(Ficción, Comercial o Documental).',
+                      'Elige la plantilla base. Ahora solo Ficción (Plantilla 1 · Cinematic) '
+                      'está operativa; Comercial y Documental llegan próximamente.',
                       style: AppTypography.caption(palette),
                     ),
                     const SizedBox(height: 16),
@@ -637,9 +642,11 @@ class _BlueprintCard extends StatelessWidget {
           : palette.surfaceElevated,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        onTap: onTap,
+        onTap: type.isAvailable ? onTap : onTap,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
+        child: Opacity(
+          opacity: type.isAvailable ? 1 : 0.55,
+          child: Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -664,7 +671,7 @@ class _BlueprintCard extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      type.label,
+                      type.availabilityLabel,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -672,13 +679,35 @@ class _BlueprintCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (selected)
+                  if (!type.isAvailable)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: palette.surfaceOverlay,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'PRÓXIMAMENTE',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontFamily: 'monospace',
+                          letterSpacing: 0.6,
+                          color: palette.textTertiary,
+                        ),
+                      ),
+                    )
+                  else if (selected)
                     Icon(Icons.check_circle, color: palette.accent, size: 20),
                 ],
               ),
               const SizedBox(height: 8),
               Text(
-                type.subtitle,
+                type.isAvailable
+                    ? 'Plantilla 1 · estilo cinematic. ${type.subtitle}'
+                    : type.subtitle,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -715,6 +744,7 @@ class _BlueprintCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -840,11 +870,15 @@ class _SectionReorderList extends StatelessWidget {
                       const SizedBox(width: 6),
                       PopupMenuButton<BibleSectionStyle>(
                         initialValue: style,
-                        onSelected: (s) => onStyleChanged(def, s),
+                        onSelected: (s) {
+                          if (!s.isAvailable) return;
+                          onStyleChanged(def, s);
+                        },
                         itemBuilder: (_) => [
                           for (final s in BibleSectionStyle.values)
                             PopupMenuItem(
                               value: s,
+                              enabled: s.isAvailable,
                               child: Row(
                                 children: [
                                   Container(
@@ -856,7 +890,7 @@ class _SectionReorderList extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(s.label),
+                                  Text(s.availabilityLabel),
                                 ],
                               ),
                             ),
@@ -1047,7 +1081,8 @@ class _TemplateVault extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Packs con contenido funcional para comprender la app.',
+          'Plantilla 1 (Ficción · Cinematic) es la base operativa. '
+          'Comercial y Documental llegan próximamente.',
           style: AppTypography.caption(
             palette,
           ).copyWith(color: palette.textSecondary),
@@ -1055,32 +1090,44 @@ class _TemplateVault extends ConsumerWidget {
         const SizedBox(height: 12),
         for (final preset in BibleBuiltinPresets.all) ...[
           _VaultCard(
-            title: preset.name,
-            subtitle: preset.includes.take(2).join(' · '),
-            accent: true,
-            actionLabel: 'Aplicar',
-            onAction: () async {
-              await BiblePresetService.applyBundle(
-                db: db,
-                projectId: projectId,
-                bibleId: bibleId,
-                bundle: preset,
-              );
-              if (context.mounted) {
-                AppSnackBar.show(
-                  context,
-                  '«${preset.name}» aplicada con datos de ejemplo',
-                );
-              }
-            },
+            title: preset.isAvailable
+                ? preset.name
+                : '${preset.name} · Próximamente',
+            subtitle: preset.isAvailable
+                ? preset.includes.take(2).join(' · ')
+                : 'No aplicable todavía',
+            accent: preset.isAvailable,
+            actionLabel: preset.isAvailable ? 'Aplicar' : 'Pronto',
+            onAction: preset.isAvailable
+                ? () async {
+                    await BiblePresetService.applyBundle(
+                      db: db,
+                      projectId: projectId,
+                      bibleId: bibleId,
+                      bundle: preset,
+                    );
+                    if (context.mounted) {
+                      AppSnackBar.show(
+                        context,
+                        '«${preset.name}» aplicada con datos de ejemplo',
+                      );
+                    }
+                  }
+                : () {
+                    AppSnackBar.show(
+                      context,
+                      '«${preset.name}» estará disponible próximamente',
+                    );
+                  },
           ),
           const SizedBox(height: 10),
         ],
         const SizedBox(height: 10),
         _VaultCard(
-          title: 'Ejemplos Cinematic / Technical / Minimalist',
+          title: 'Ejemplos de estilo · solo Cinematic',
           subtitle:
-              'Tres pantallas demo con contenido de ejemplo para ver todo lo que permite cada estilo',
+              'Technical y Minimalist llegan próximamente. '
+              'Por ahora se mantiene el ejemplo cinematic.',
           accent: true,
           actionLabel: 'Añadir',
           onAction: () async {

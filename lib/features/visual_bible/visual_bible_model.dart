@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 import '../../core/database/app_database.dart';
 
 import '../../shared/visual_bible/bible_section_ids.dart';
+import 'moodboard_reference_meta.dart';
 
 export '../../shared/visual_bible/bible_section_ids.dart';
+export 'moodboard_reference_meta.dart' show MoodboardReferenceMeta;
 
 /// Callback compartido cuando cambian los datos editables de la biblia.
 typedef BibleChanged = void Function(VisualBibleData data);
@@ -876,6 +878,248 @@ class LocationRefModel {
   }
 }
 
+/// Carta del deck narrativo (estilo / ref fílmica / luz por localización…).
+class NarrativeCardModel {
+  final int id;
+  final int bibleId;
+  final String sectionId;
+  final String kind;
+  String title;
+  String? body;
+  int? coverMoodboardImageId;
+  int? locationBasePlanId;
+  Map<String, dynamic> meta;
+  int sortOrder;
+
+  NarrativeCardModel({
+    required this.id,
+    required this.bibleId,
+    required this.sectionId,
+    required this.kind,
+    required this.title,
+    this.body,
+    this.coverMoodboardImageId,
+    this.locationBasePlanId,
+    Map<String, dynamic>? meta,
+    this.sortOrder = 0,
+  }) : meta = meta ?? {};
+
+  factory NarrativeCardModel.fromRow(VisualBibleNarrativeCard row) {
+    return NarrativeCardModel(
+      id: row.id,
+      bibleId: row.bibleId,
+      sectionId: row.sectionId,
+      kind: row.kind,
+      title: row.title,
+      body: row.body,
+      coverMoodboardImageId: row.coverMoodboardImageId,
+      locationBasePlanId: row.locationBasePlanId,
+      meta: _decodeMeta(row.metaJson),
+      sortOrder: row.sortOrder,
+    );
+  }
+
+  static Map<String, dynamic> _decodeMeta(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
+    return {};
+  }
+
+  String? get summary {
+    final s = meta['summary']?.toString();
+    if (s != null && s.trim().isNotEmpty) return s.trim();
+    final b = body?.trim();
+    if (b == null || b.isEmpty) return null;
+    if (b.length <= 180) return b;
+    return '${b.substring(0, 177)}…';
+  }
+
+  set summary(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      meta.remove('summary');
+    } else {
+      meta['summary'] = value.trim();
+    }
+  }
+
+  String? get filmTitle => meta['filmTitle']?.toString();
+  set filmTitle(String? v) {
+    if (v == null || v.trim().isEmpty) {
+      meta.remove('filmTitle');
+    } else {
+      meta['filmTitle'] = v.trim();
+    }
+  }
+
+  String? get filmDp => meta['filmDp']?.toString();
+  set filmDp(String? v) {
+    if (v == null || v.trim().isEmpty) {
+      meta.remove('filmDp');
+    } else {
+      meta['filmDp'] = v.trim();
+    }
+  }
+
+  String? get filmYear => meta['filmYear']?.toString();
+  set filmYear(String? v) {
+    if (v == null || v.trim().isEmpty) {
+      meta.remove('filmYear');
+    } else {
+      meta['filmYear'] = v.trim();
+    }
+  }
+
+  String? get lightingLook => meta['lightingLook']?.toString();
+  set lightingLook(String? v) => _setMetaKey('lightingLook', v);
+
+  String? get lightSource => meta['lightSource']?.toString();
+  set lightSource(String? v) => _setMetaKey('lightSource', v);
+
+  String? get lightTexture => meta['lightTexture']?.toString();
+  set lightTexture(String? v) => _setMetaKey('lightTexture', v);
+
+  String? get colorMood => meta['colorMood']?.toString();
+  set colorMood(String? v) => _setMetaKey('colorMood', v);
+
+  /// Pie de foto del plano representante (contenedor de luz).
+  String? get heroCaption => meta['heroCaption']?.toString();
+  set heroCaption(String? v) => _setMetaKey('heroCaption', v);
+
+  /// Bloques de refuerzo (texto / imagen) bajo la paleta del contenedor.
+  List<ContainerReinforcementBlock> get reinforcementBlocks {
+    final raw = meta['reinforcementBlocks'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((m) => ContainerReinforcementBlock.fromJson(
+              Map<String, dynamic>.from(m),
+            ))
+        .where((b) => b.isNotEmpty)
+        .toList();
+  }
+
+  set reinforcementBlocks(List<ContainerReinforcementBlock> blocks) {
+    final encoded = blocks.where((b) => b.isNotEmpty).map((b) => b.toJson()).toList();
+    if (encoded.isEmpty) {
+      meta.remove('reinforcementBlocks');
+    } else {
+      meta['reinforcementBlocks'] = encoded;
+    }
+  }
+
+  void _setMetaKey(String key, String? v) {
+    if (v == null || v.trim().isEmpty) {
+      meta.remove(key);
+    } else {
+      meta[key] = v.trim();
+    }
+  }
+
+  VisualBibleNarrativeCardsCompanion toCompanion() {
+    return VisualBibleNarrativeCardsCompanion(
+      id: Value(id),
+      bibleId: Value(bibleId),
+      sectionId: Value(sectionId),
+      kind: Value(kind),
+      title: Value(title),
+      body: Value(body),
+      coverMoodboardImageId: Value(coverMoodboardImageId),
+      locationBasePlanId: Value(locationBasePlanId),
+      metaJson: Value(meta.isEmpty ? null : jsonEncode(meta)),
+      sortOrder: Value(sortOrder),
+    );
+  }
+
+}
+
+/// Bloque editable de refuerzo en el detalle de un contenedor de luz.
+class ContainerReinforcementBlock {
+  final String type;
+  final String? text;
+  final int? imageId;
+
+  const ContainerReinforcementBlock({
+    required this.type,
+    this.text,
+    this.imageId,
+  });
+
+  factory ContainerReinforcementBlock.text(String value) =>
+      ContainerReinforcementBlock(type: 'text', text: value);
+
+  factory ContainerReinforcementBlock.image(int id) =>
+      ContainerReinforcementBlock(type: 'image', imageId: id);
+
+  factory ContainerReinforcementBlock.fromJson(Map<String, dynamic> json) {
+    return ContainerReinforcementBlock(
+      type: json['type']?.toString() ?? 'text',
+      text: json['text']?.toString(),
+      imageId: json['imageId'] is int
+          ? json['imageId'] as int
+          : int.tryParse(json['imageId']?.toString() ?? ''),
+    );
+  }
+
+  bool get isText => type == 'text';
+  bool get isImage => type == 'image';
+
+  bool get isNotEmpty =>
+      (isText && text != null && text!.trim().isNotEmpty) ||
+      (isImage && imageId != null);
+
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        if (text != null && text!.trim().isNotEmpty) 'text': text!.trim(),
+        if (imageId != null) 'imageId': imageId,
+      };
+
+  ContainerReinforcementBlock copyWith({
+    String? type,
+    String? text,
+    int? imageId,
+    bool clearText = false,
+    bool clearImage = false,
+  }) {
+    return ContainerReinforcementBlock(
+      type: type ?? this.type,
+      text: clearText ? null : (text ?? this.text),
+      imageId: clearImage ? null : (imageId ?? this.imageId),
+    );
+  }
+}
+
+extension NarrativeCardModelCopy on NarrativeCardModel {
+  NarrativeCardModel copyWith({
+    String? title,
+    String? body,
+    int? coverMoodboardImageId,
+    bool clearCover = false,
+    int? locationBasePlanId,
+    Map<String, dynamic>? meta,
+    int? sortOrder,
+  }) {
+    return NarrativeCardModel(
+      id: id,
+      bibleId: bibleId,
+      sectionId: sectionId,
+      kind: kind,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      coverMoodboardImageId: clearCover
+          ? null
+          : (coverMoodboardImageId ?? this.coverMoodboardImageId),
+      locationBasePlanId: locationBasePlanId ?? this.locationBasePlanId,
+      meta: meta ?? Map<String, dynamic>.from(this.meta),
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+}
+
 class MoodboardImageModel {
   final int id;
   final int projectId;
@@ -890,7 +1134,9 @@ class MoodboardImageModel {
   int? linkedLocationBasePlanId;
   int? groupId;
   List<String> assignedSections;
+  List<int> assignedCardIds;
   int sortOrder;
+  MoodboardReferenceMeta meta;
 
   MoodboardImageModel({
     required this.id,
@@ -906,8 +1152,11 @@ class MoodboardImageModel {
     this.linkedLocationBasePlanId,
     this.groupId,
     List<String>? assignedSections,
+    List<int>? assignedCardIds,
     this.sortOrder = 0,
-  }) : assignedSections = assignedSections ?? [];
+    this.meta = const MoodboardReferenceMeta(),
+  }) : assignedSections = assignedSections ?? [],
+       assignedCardIds = assignedCardIds ?? [];
 
   factory MoodboardImageModel.fromRow(MoodboardImage row) {
     return MoodboardImageModel(
@@ -924,7 +1173,56 @@ class MoodboardImageModel {
       linkedLocationBasePlanId: row.linkedLocationBasePlanId,
       groupId: row.groupId,
       assignedSections: VisualBibleData._decodeStringList(row.assignedSections),
+      assignedCardIds: VisualBibleData._decodeIntList(row.assignedCardIds),
       sortOrder: row.sortOrder,
+      meta: _metaFromRaw(row.metaJson),
+    );
+  }
+
+  static MoodboardReferenceMeta _metaFromRaw(String? raw) {
+    if (raw == null || raw.trim().isEmpty) {
+      return const MoodboardReferenceMeta();
+    }
+    try {
+      return MoodboardReferenceMeta.fromJson(
+        jsonDecode(raw) as Map<String, dynamic>,
+      );
+    } catch (_) {
+      return const MoodboardReferenceMeta();
+    }
+  }
+
+  MoodboardImageModel copyWith({
+    String? category,
+    String? caption,
+    String? filmReference,
+    int? linkedSceneId,
+    String? linkedLocationName,
+    int? linkedLocationBasePlanId,
+    int? groupId,
+    List<String>? assignedSections,
+    List<int>? assignedCardIds,
+    int? sortOrder,
+    MoodboardReferenceMeta? meta,
+  }) {
+    return MoodboardImageModel(
+      id: id,
+      projectId: projectId,
+      bibleId: bibleId,
+      imagePath: imagePath,
+      source: source,
+      category: category ?? this.category,
+      caption: caption ?? this.caption,
+      filmReference: filmReference ?? this.filmReference,
+      linkedSceneId: linkedSceneId ?? this.linkedSceneId,
+      linkedLocationName: linkedLocationName ?? this.linkedLocationName,
+      linkedLocationBasePlanId:
+          linkedLocationBasePlanId ?? this.linkedLocationBasePlanId,
+      groupId: groupId ?? this.groupId,
+      assignedSections: assignedSections ?? this.assignedSections,
+      assignedCardIds: assignedCardIds ?? this.assignedCardIds,
+      sortOrder: sortOrder ?? this.sortOrder,
+      meta: meta ?? this.meta,
     );
   }
 
@@ -946,6 +1244,11 @@ class MoodboardImageModel {
         assignedSections.isEmpty
             ? null
             : VisualBibleData._encodeStringList(assignedSections),
+      ),
+      assignedCardIds: Value(
+        assignedCardIds.isEmpty
+            ? null
+            : VisualBibleData._encodeIntList(assignedCardIds),
       ),
       sortOrder: Value(sortOrder),
     );

@@ -1,6 +1,8 @@
 import '../../../core/database/app_database.dart';
 import '../../../core/database/dao/visual_bible_dao.dart';
 import '../../../core/templates/user_template_service.dart';
+import '../../../shared/visual_bible/bible_section_ids.dart';
+import '../moodboard_reference_meta.dart';
 import '../visual_bible_model.dart';
 
 /// Bundle de datos para exportación PDF de la biblia.
@@ -11,6 +13,7 @@ typedef VisualBibleExportBundle = ({
   List<LightingSetupModel> lightingSetups,
   List<CameraTestModel> cameraTests,
   List<MoodboardImageModel> moodboard,
+  List<NarrativeCardModel> narrativeCards,
   Map<String, String?> sectionContentJsonById,
   String? primaryCameraLabel,
 });
@@ -75,17 +78,31 @@ class VisualBibleRepository {
     final testRows = await _dao.watchCameraTests(bible.id).first;
     final moodRows = await _dao.watchMoodboardImages(projectId).first;
     final sectionRows = await _dao.watchSectionDefinitions(bible.id).first;
+    final narrativeRows = await _dao.database
+        .watchNarrativeCardsForSection(bible.id, BibleSectionId.lighting)
+        .first;
     final camera = await _dao.database.resolveProjectCamera(projectId);
     final primaryCameraLabel = camera != null
         ? '${camera.brand} ${camera.model}'
         : null;
+    final moodboardModels = moodRows.map(MoodboardImageModel.fromRow).toList();
+    // Incluye migración lazy prefs → Drift para que el PDF vea tags/notas.
+    final moodboardMeta = await MoodboardReferenceMetaStore.loadMany(
+      _dao.database,
+      moodboardModels.map((m) => m.id),
+    );
     return (
       data: data,
       blocks: colorRows.map(ColorBlockModel.fromRow).toList(),
       exposureBlocks: exposureRows.map(ExposureBlockModel.fromRow).toList(),
       lightingSetups: lightingRows.map(LightingSetupModel.fromRow).toList(),
       cameraTests: testRows.map(CameraTestModel.fromRow).toList(),
-      moodboard: moodRows.map(MoodboardImageModel.fromRow).toList(),
+      moodboard: [
+        for (final model in moodboardModels)
+          model.copyWith(meta: moodboardMeta[model.id] ?? model.meta),
+      ],
+      narrativeCards:
+          narrativeRows.map(NarrativeCardModel.fromRow).toList(),
       sectionContentJsonById: {
         for (final row in sectionRows) row.id: row.contentJson,
       },

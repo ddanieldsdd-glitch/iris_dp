@@ -11,6 +11,7 @@ import '../../shared/visual_bible/bible_section_fields.dart';
 import '../../shared/visual_bible/moodboard_association.dart';
 import '../../shared/visual_bible/bible_layout.dart' as bible_layout;
 import '../../shared/visual_bible/bible_section_ids.dart';
+import '../../shared/visual_bible/narrative_card_kind.dart';
 import '../../shared/visual_bible/sensor_mode_cascade.dart';
 import '../../features/visual_bible/v2/migration/freeform_v2_blocks_codec.dart';
 import '../templates/user_template_models.dart';
@@ -45,6 +46,7 @@ part 'app_database.g.dart';
     VisualBibles,
     VisualBibleColorBlocks,
     VisualBibleLocationRefs,
+    VisualBibleNarrativeCards,
     MoodboardGroups,
     MoodboardImages,
     BibleSectionGroups,
@@ -70,7 +72,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 38;
+  int get schemaVersion => 40;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -363,6 +365,13 @@ class AppDatabase extends _$AppDatabase {
       if (from < 38) {
         await m.addColumn(lightingSetups, lightingSetups.locationBasePlanId);
         await m.addColumn(lightingSetups, lightingSetups.locationSiteId);
+      }
+      if (from < 39) {
+        await m.addColumn(moodboardImages, moodboardImages.metaJson);
+      }
+      if (from < 40) {
+        await m.addColumn(moodboardImages, moodboardImages.assignedCardIds);
+        await m.createTable(visualBibleNarrativeCards);
       }
     },
   );
@@ -2388,10 +2397,6 @@ class AppDatabase extends _$AppDatabase {
         .getSingleOrNull();
     if (def == null) return;
 
-    final fields = BibleSectionFieldsConfig.parse(
-      def.contentJson,
-      BibleSectionId.format,
-    );
     final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
     var blob = <String, dynamic>{};
     final raw = values['formatData'];
@@ -2412,8 +2417,38 @@ class AppDatabase extends _$AppDatabase {
     );
     if (patch == null) return;
 
+    await patchFormatDataBlob(projectId, patch);
+  }
+
+  Future<void> patchFormatDataBlob(
+    int projectId,
+    Map<String, dynamic> patch,
+  ) async {
+    final bible = await getVisualBibleForProject(projectId);
+    if (bible == null) return;
+    final def = await (select(bibleSectionDefinitions)
+          ..where((d) => d.bibleId.equals(bible.id))
+          ..where((d) => d.id.equals(BibleSectionId.format)))
+        .getSingleOrNull();
+    if (def == null) return;
+
+    final fields = BibleSectionFieldsConfig.parse(
+      def.contentJson,
+      BibleSectionId.format,
+    );
+    final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
+    var blob = <String, dynamic>{};
+    final raw = values['formatData'];
+    if (raw != null && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) blob = Map<String, dynamic>.from(decoded);
+      } catch (_) {}
+    }
+
     blob.addAll(patch);
     values['formatData'] = jsonEncode(blob);
+
     await upsertBibleSectionDefinition(
       def.copyWith(
         contentJson: Value(
@@ -2831,6 +2866,123 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> deleteColorBlock(int id) =>
       (delete(visualBibleColorBlocks)..where((b) => b.id.equals(id))).go();
+
+  Stream<List<VisualBibleNarrativeCard>> watchNarrativeCardsForSection(
+    int bibleId,
+    String sectionId, {
+    String? kind,
+  }) {
+    final query = select(visualBibleNarrativeCards)
+      ..where((c) {
+        final base =
+            c.bibleId.equals(bibleId) & c.sectionId.equals(sectionId);
+        if (kind != null) return base & c.kind.equals(kind);
+        return base;
+      })
+      ..orderBy([(c) => OrderingTerm.asc(c.sortOrder)]);
+    return query.watch();
+  }
+
+  Future<VisualBibleNarrativeCard?> getNarrativeCard(int id) =>
+      (select(visualBibleNarrativeCards)..where((c) => c.id.equals(id)))
+          .getSingleOrNull();
+
+  Future<VisualBibleNarrativeCard?> getNarrativeCardForLocationLight(
+    int bibleId,
+    int locationBasePlanId,
+  ) =>
+      (select(visualBibleNarrativeCards)
+            ..where(
+              (c) =>
+                  c.bibleId.equals(bibleId) &
+                  c.sectionId.equals(BibleSectionId.lighting) &
+                  c.kind.equals(NarrativeCardKind.locationLight) &
+                  c.locationBasePlanId.equals(locationBasePlanId),
+            )
+            ..limit(1))
+          .getSingleOrNull();
+
+  Future<int> insertNarrativeCard(VisualBibleNarrativeCardsCompanion row) =>
+      into(visualBibleNarrativeCards).insert(row);
+
+  Future<void> updateNarrativeCard(VisualBibleNarrativeCard row) =>
+      update(visualBibleNarrativeCards).replace(row);
+
+  Future<void> deleteNarrativeCard(int id) async {
+    final images = await select(moodboardImages).get();
+    for (final img in images) {
+      final ids = MoodboardAssociation.decodeCardIds(img.assignedCardIds);
+      if (!ids.contains(id)) continue;
+      ids.remove(id);
+      await (update(moodboardImages)..where((m) => m.id.equals(img.id))).write(
+        MoodboardImagesCompanion(
+          assignedCardIds: Value(
+            ids.isEmpty ? null : jsonEncode(ids),
+          ),
+        ),
+      );
+    }
+    await (delete(visualBibleNarrativeCards)..where((c) => c.id.equals(id)))
+        .go();
+  }
+
+  Stream<List<MoodboardImage>> watchMoodboardImagesForCard(
+    int projectId,
+    int cardId,
+  ) {
+    return watchMoodboardImages(projectId).map((rows) {
+      return rows
+          .where(
+            (row) => MoodboardAssociation.decodeCardIds(row.assignedCardIds)
+                .contains(cardId),
+          )
+          .toList();
+    });
+  }
+
+  Future<void> assignMoodboardImageToCard({
+    required int imageId,
+    required int cardId,
+    String? sectionId,
+  }) async {
+    final row = await (select(moodboardImages)
+          ..where((m) => m.id.equals(imageId)))
+        .getSingleOrNull();
+    if (row == null) return;
+    final cardIds = MoodboardAssociation.decodeCardIds(row.assignedCardIds);
+    if (!cardIds.contains(cardId)) cardIds.add(cardId);
+    final sections = MoodboardAssociation.decodeSections(row.assignedSections);
+    if (sectionId != null && !sections.contains(sectionId)) {
+      sections.add(sectionId);
+    }
+    await (update(moodboardImages)..where((m) => m.id.equals(imageId))).write(
+      MoodboardImagesCompanion(
+        assignedCardIds: Value(jsonEncode(cardIds)),
+        assignedSections: Value(
+          sections.isEmpty ? row.assignedSections : jsonEncode(sections),
+        ),
+      ),
+    );
+  }
+
+  Future<void> unassignMoodboardImageFromCard({
+    required int imageId,
+    required int cardId,
+  }) async {
+    final row = await (select(moodboardImages)
+          ..where((m) => m.id.equals(imageId)))
+        .getSingleOrNull();
+    if (row == null) return;
+    final cardIds = MoodboardAssociation.decodeCardIds(row.assignedCardIds);
+    cardIds.remove(cardId);
+    await (update(moodboardImages)..where((m) => m.id.equals(imageId))).write(
+      MoodboardImagesCompanion(
+        assignedCardIds: Value(
+          cardIds.isEmpty ? null : jsonEncode(cardIds),
+        ),
+      ),
+    );
+  }
 
   Stream<List<VisualBibleLocationRef>> watchLocationRefsForBible(int bibleId) =>
       (select(visualBibleLocationRefs)
@@ -3336,6 +3488,30 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> updateMoodboardImage(MoodboardImage row) =>
       update(moodboardImages).replace(row);
+
+  Future<void> saveMoodboardImageMeta(
+    int imageId,
+    Map<String, dynamic>? metaJson,
+  ) async {
+    await (update(moodboardImages)..where((m) => m.id.equals(imageId))).write(
+      MoodboardImagesCompanion(
+        metaJson: metaJson == null ? const Value(null) : Value(jsonEncode(metaJson)),
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>?> getMoodboardImageMeta(int imageId) async {
+    final row = await (select(moodboardImages)
+          ..where((m) => m.id.equals(imageId)))
+        .getSingleOrNull();
+    final raw = row?.metaJson;
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    return null;
+  }
 
   Future<void> deleteMoodboardImage(int id) =>
       (delete(moodboardImages)..where((m) => m.id.equals(id))).go();

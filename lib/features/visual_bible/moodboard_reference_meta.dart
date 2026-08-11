@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/database/app_database.dart';
+
 /// INT/EXT alineado con guion literario / técnico (`Scenes.intExt`).
 const kMoodboardIntExt = <String>['INT', 'EXT', 'INT/EXT'];
 
@@ -259,15 +261,54 @@ class MoodboardReferenceMeta {
     if (n != null && n.isNotEmpty) return n;
     return null;
   }
+
+  /// Líneas compactas para export PDF (tags + facetas + notas).
+  /// Máximo 2 líneas para no saturar la celda del moodboard.
+  List<String> get exportDetailLines {
+    final facets = <String>[
+      if (tags.isNotEmpty) tags.join(' · '),
+      if (_trimOrNull(lightingLook) case final v?) v,
+      if (_trimOrNull(lightSource) case final v?) v,
+      if (_trimOrNull(lightTexture) case final v?) v,
+      if (_trimOrNull(composition) case final v?) v,
+      if (_trimOrNull(colorMood) case final v?) v,
+      if (_trimOrNull(timeOfDay) case final v?) v,
+      if (_trimOrNull(locationKind) case final v?) v,
+    ];
+    final lines = <String>[];
+    if (facets.isNotEmpty) {
+      lines.add(facets.take(4).join(' · '));
+    }
+    final note = primaryNote;
+    if (note != null) lines.add(note);
+    return lines;
+  }
+
+  static String? _trimOrNull(String? value) {
+    final t = value?.trim();
+    if (t == null || t.isEmpty) return null;
+    return t;
+  }
 }
 
-/// Persistencia local de meta por imagen (sin migración Drift).
+/// Persistencia local de meta por imagen (Drift + migración lazy desde SharedPreferences).
 abstract final class MoodboardReferenceMetaStore {
-  static String _key(int imageId) => 'moodboard_ref_meta_$imageId';
+  static String _legacyKey(int imageId) => 'moodboard_ref_meta_$imageId';
 
-  static Future<MoodboardReferenceMeta> load(int imageId) async {
+  static MoodboardReferenceMeta? _metaFromRaw(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      return MoodboardReferenceMeta.fromJson(
+        jsonDecode(raw) as Map<String, dynamic>,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<MoodboardReferenceMeta> _loadFromLegacyPrefs(int imageId) async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key(imageId));
+    final raw = prefs.getString(_legacyKey(imageId));
     if (raw == null || raw.isEmpty) return const MoodboardReferenceMeta();
     try {
       return MoodboardReferenceMeta.fromJson(
@@ -278,29 +319,62 @@ abstract final class MoodboardReferenceMetaStore {
     }
   }
 
-  static Future<void> save(int imageId, MoodboardReferenceMeta meta) async {
-    final prefs = await SharedPreferences.getInstance();
+  static Future<MoodboardReferenceMeta> load(
+    AppDatabase db,
+    int imageId,
+  ) async {
+    final fromDb = await db.getMoodboardImageMeta(imageId);
+    if (fromDb != null) {
+      return MoodboardReferenceMeta.fromJson(fromDb);
+    }
+
+    final legacy = await _loadFromLegacyPrefs(imageId);
+    if (!legacy.isEmpty) {
+      await db.saveMoodboardImageMeta(imageId, legacy.toJson());
+      return legacy;
+    }
+
+    return const MoodboardReferenceMeta();
+  }
+
+  static Future<void> save(
+    AppDatabase db,
+    int imageId,
+    MoodboardReferenceMeta meta,
+  ) async {
     if (meta.isEmpty) {
-      await prefs.remove(_key(imageId));
+      await db.saveMoodboardImageMeta(imageId, null);
       return;
     }
-    await prefs.setString(_key(imageId), jsonEncode(meta.toJson()));
+    await db.saveMoodboardImageMeta(imageId, meta.toJson());
   }
 
   static Future<Map<int, MoodboardReferenceMeta>> loadMany(
+    AppDatabase db,
     Iterable<int> ids,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
+    final idList = ids.toList();
+    if (idList.isEmpty) return {};
+
+    final rows = await (db.select(db.moodboardImages)
+          ..where((m) => m.id.isIn(idList)))
+        .get();
     final out = <int, MoodboardReferenceMeta>{};
-    for (final id in ids) {
-      final raw = prefs.getString(_key(id));
-      if (raw == null || raw.isEmpty) continue;
-      try {
-        out[id] = MoodboardReferenceMeta.fromJson(
-          jsonDecode(raw) as Map<String, dynamic>,
-        );
-      } catch (_) {}
+
+    for (final row in rows) {
+      final fromColumn = _metaFromRaw(row.metaJson);
+      if (fromColumn != null && !fromColumn.isEmpty) {
+        out[row.id] = fromColumn;
+        continue;
+      }
+
+      final legacy = await _loadFromLegacyPrefs(row.id);
+      if (!legacy.isEmpty) {
+        await db.saveMoodboardImageMeta(row.id, legacy.toJson());
+        out[row.id] = legacy;
+      }
     }
+
     return out;
   }
 }

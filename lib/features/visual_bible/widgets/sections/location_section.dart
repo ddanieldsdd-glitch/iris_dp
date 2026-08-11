@@ -27,6 +27,10 @@ import '../bible_paste_zone.dart';
 import '../moodboard_drag.dart';
 import '../bible_visual_color_sheet.dart';
 import '../moodboard_strip.dart';
+import '../../moodboard_helpers.dart';
+import '../../services/lighting_narrative_cards_service.dart';
+import '../../../../shared/visual_bible/bible_section_ids.dart';
+import '../narrative_deck/narrative_card_detail.dart';
 
 /// Localización — layout Stitch (hero + solar + atmósfera + staging).
 class LocationSection extends ConsumerStatefulWidget {
@@ -517,9 +521,47 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
 
   Future<void> _dropMoodboardPhoto(MoodboardDragPayload drag) async {
     if (!File(drag.imagePath).existsSync()) return;
-    _model.referenceImages.add(drag.imagePath);
+    final db = ref.read(databaseProvider);
+    // Prefer shared moodboard link over copying a disconnected path.
+    await MoodboardHelpers.linkMoodboardToSection(
+      db: db,
+      projectId: widget.projectId,
+      payload: drag,
+      sectionId: BibleSectionId.location,
+      locationName: widget.plan.locationName,
+      locationBasePlanId: widget.plan.id,
+    );
+    final lightCard = await db.getNarrativeCardForLocationLight(
+      widget.bibleId,
+      widget.plan.id,
+    );
+    if (lightCard != null && drag.moodboardImageId != null) {
+      await db.assignMoodboardImageToCard(
+        imageId: drag.moodboardImageId!,
+        cardId: lightCard.id,
+        sectionId: BibleSectionId.lighting,
+      );
+    }
+    if (!_model.referenceImages.contains(drag.imagePath)) {
+      _model.referenceImages.add(drag.imagePath);
+    }
     setState(() {});
     await widget.onSaveRef(_model);
+  }
+
+  Future<void> _syncLightingNoteToCard(String note) async {
+    final db = ref.read(databaseProvider);
+    await LightingNarrativeCardsService.ensureSeeded(
+      db: db,
+      bibleId: widget.bibleId,
+      projectId: widget.projectId,
+    );
+    await LightingNarrativeCardsService.syncLocationNoteToCard(
+      db: db,
+      bibleId: widget.bibleId,
+      locationBasePlanId: widget.plan.id,
+      lightingNote: note.trim().isEmpty ? null : note.trim(),
+    );
   }
 
   Future<void> _openMaps() async {
@@ -794,6 +836,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                           also: (v) {
                             _model.lightingNote = v;
                             widget.onSaveRef(_model);
+                            _syncLightingNoteToCard(v);
                           },
                         ),
                         child: Text(
@@ -811,6 +854,14 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                       ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 16),
+                _LightingIdeaFromBible(
+                  projectId: widget.projectId,
+                  bibleId: widget.bibleId,
+                  planId: widget.plan.id,
+                  lightingNote: _model.lightingNote ?? siteLightNote,
+                  palette: palette,
                 ),
                 const SizedBox(height: 16),
                 _SolarCard(
@@ -2172,6 +2223,149 @@ class _LocationHubHeader extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+
+/// Pincelada de luz sincronizada desde Iluminación + CTA de drill-down.
+class _LightingIdeaFromBible extends ConsumerWidget {
+  final int projectId;
+  final int bibleId;
+  final int planId;
+  final String lightingNote;
+  final AppPalette palette;
+
+  const _LightingIdeaFromBible({
+    required this.projectId,
+    required this.bibleId,
+    required this.planId,
+    required this.lightingNote,
+    required this.palette,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(databaseProvider);
+
+    return FutureBuilder<VisualBibleNarrativeCard?>(
+      future: () async {
+        await LightingNarrativeCardsService.ensureSeeded(
+          db: db,
+          bibleId: bibleId,
+          projectId: projectId,
+        );
+        return db.getNarrativeCardForLocationLight(bibleId, planId);
+      }(),
+      builder: (context, snap) {
+        final card = snap.data;
+        final summary = card != null
+            ? NarrativeCardModel.fromRow(card).summary
+            : null;
+        final text = (summary?.isNotEmpty == true)
+            ? summary!
+            : (lightingNote.isNotEmpty
+                ? lightingNote
+                : 'Sin idea de luz aún — ábrela en Iluminación.');
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xB31A1A1C),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.wb_sunny_outlined,
+                    size: 16,
+                    color: palette.accent,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'IDEA DE LUZ (DESDE ILUMINACIÓN)',
+                      style: AppTypography.mono(palette).copyWith(
+                        fontSize: 11,
+                        letterSpacing: 1.1,
+                        color: palette.textTertiary,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      if (card != null) {
+                        await NarrativeCardDetailPage.open(
+                          context,
+                          projectId: projectId,
+                          bibleId: bibleId,
+                          cardId: card.id,
+                        );
+                      } else {
+                        BibleNavigationScope.goToSection(
+                          context,
+                          BibleSectionId.lighting,
+                          planId: planId,
+                        );
+                      }
+                    },
+                    child: Text(
+                      'Abrir en Iluminación',
+                      style: TextStyle(color: palette.accent, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                text,
+                style: AppTypography.bodyMedium(palette).copyWith(
+                  color: palette.textSecondary,
+                  height: 1.45,
+                ),
+              ),
+              if (card != null) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 72,
+                  child: StreamBuilder<List<MoodboardImage>>(
+                    stream: db.watchMoodboardImagesForCard(projectId, card.id),
+                    builder: (context, imgSnap) {
+                      final imgs = imgSnap.data ?? [];
+                      if (imgs.isEmpty) return const SizedBox.shrink();
+                      return ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: imgs.length.clamp(0, 8),
+                        separatorBuilder: (_, __) => const SizedBox(width: 6),
+                        itemBuilder: (context, i) {
+                          final path = imgs[i].imagePath;
+                          if (!File(path).existsSync()) {
+                            return const SizedBox(width: 96);
+                          }
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: Image.file(
+                              File(path),
+                              width: 96,
+                              height: 72,
+                              fit: BoxFit.cover,
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

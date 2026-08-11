@@ -1,5 +1,6 @@
 import 'bible_section_fields.dart';
 import 'bible_section_ids.dart';
+import 'bible_subsection_kind_catalog.dart';
 
 /// Metadatos de un módulo Stitch wireable desde el panel Widgets.
 class StitchModule {
@@ -10,6 +11,8 @@ class StitchModule {
   final int maxLines;
   final bool required;
   final bool legacyOnly;
+  /// Kind del catálogo de sub-apartados (nombre + icono reutilizable).
+  final BibleSubsectionKindId? subsectionKind;
 
   const StitchModule({
     required this.key,
@@ -19,7 +22,14 @@ class StitchModule {
     this.maxLines = 3,
     this.required = false,
     this.legacyOnly = false,
+    this.subsectionKind,
   });
+
+  BibleSubsectionKind get catalogKind {
+    final annotated = BibleSubsectionKindCatalog.byId(subsectionKind);
+    if (annotated != null) return annotated;
+    return BibleSubsectionKindCatalog.fromFieldType(type);
+  }
 
   BibleSectionField toField() => BibleSectionField(
         key: key,
@@ -137,34 +147,57 @@ abstract final class BibleStitchModuleRegistry {
           ],
         BibleSectionId.lighting => const [
             StitchModule(
-              key: 'narrative',
-              label: 'Intención narrativa',
-              type: BibleSectionFieldType.narrative,
-              maxLines: 4,
-            ),
-            StitchModule(
-              key: 'narrativeStory',
-              label: 'Qué nos cuenta la luz',
+              key: 'overview',
+              label: 'Visión general',
               type: BibleSectionFieldType.narrative,
               maxLines: 6,
+              subsectionKind: BibleSubsectionKindId.narrativeIntent,
             ),
-            StitchModule(key: 'colorLanguage', label: 'Color y luz'),
-            StitchModule(key: 'textureLanguage', label: 'Textura y atmósfera'),
-            StitchModule(key: 'lightSources', label: 'Fuentes de luz'),
-            StitchModule(key: 'gafferPhilosophy', label: 'Directivas de gaffer'),
-            StitchModule(key: 'locationContext', label: 'Set / localización activa'),
-            StitchModule(key: 'lightBehavior', label: 'Comportamiento de luz en set'),
-            StitchModule(key: 'setTelemetry', label: 'Telemetría del set'),
-            StitchModule(key: 'miredConverter', label: 'Conversor Mired / Kelvin'),
+            StitchModule(
+              key: 'lightBehaviors',
+              label: 'Comportamiento de la luz',
+              type: BibleSectionFieldType.blocks,
+              subsectionKind: BibleSubsectionKindId.dynamicBlocks,
+            ),
+            StitchModule(
+              key: 'filmRefs',
+              label: 'Referencias fílmicas',
+              type: BibleSectionFieldType.blocks,
+              subsectionKind: BibleSubsectionKindId.dynamicBlocks,
+            ),
+            StitchModule(
+              key: 'locationLights',
+              label: 'Localizaciones (luz)',
+              type: BibleSectionFieldType.blocks,
+              subsectionKind: BibleSubsectionKindId.dynamicBlocks,
+            ),
+            StitchModule(
+              key: 'lightStyles',
+              label: 'Estilos de luz',
+              type: BibleSectionFieldType.blocks,
+              legacyOnly: true,
+              subsectionKind: BibleSubsectionKindId.dynamicBlocks,
+            ),
+            StitchModule(
+              key: 'lightingTagRefs',
+              label: 'Referencias por etiquetas',
+              type: BibleSectionFieldType.blocks,
+              legacyOnly: true,
+              subsectionKind: BibleSubsectionKindId.moodboardRefs,
+            ),
             StitchModule(
               key: 'diagrams',
               label: 'Diagramas de iluminación',
               type: BibleSectionFieldType.blocks,
+              legacyOnly: true,
+              subsectionKind: BibleSubsectionKindId.dynamicBlocks,
             ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
+              legacyOnly: true,
+              subsectionKind: BibleSubsectionKindId.moodboardRefs,
             ),
           ],
         BibleSectionId.optics => const [
@@ -338,6 +371,22 @@ abstract final class BibleStitchModuleRegistry {
     }
 
     if (sectionId == BibleSectionId.lighting) {
+      const deckKeys = {
+        'overview',
+        'lightBehaviors',
+        'lightStyles',
+        'lightingTagRefs',
+        'filmRefs',
+        'locationLights',
+      };
+      final hasDeck = keys.any(deckKeys.contains);
+      if (!hasDeck) {
+        return defaultFieldsFor(sectionId);
+      }
+      if ((keys.contains('lightStyles') || keys.contains('lightingTagRefs')) &&
+          !keys.contains('lightBehaviors')) {
+        return defaultFieldsFor(sectionId);
+      }
       const act1Keys = {
         'narrativeStory',
         'colorLanguage',
@@ -345,7 +394,8 @@ abstract final class BibleStitchModuleRegistry {
         'lightSources',
       };
       const act2Keys = {'locationContext', 'lightBehavior', 'setTelemetry'};
-      final hasNewSlots = keys.any(act1Keys.contains) || keys.any(act2Keys.contains);
+      final hasNewSlots =
+          keys.any(act1Keys.contains) || keys.any(act2Keys.contains);
       if (keys.contains('philosophy') &&
           (hasNewSlots || !keys.contains('narrativeStory'))) {
         return defaultFieldsFor(sectionId);

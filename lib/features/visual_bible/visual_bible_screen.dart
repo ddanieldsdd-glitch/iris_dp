@@ -36,6 +36,7 @@ import 'export/store/bible_export_composition_store.dart';
 import 'state/visual_bible_providers.dart';
 import 'v2/persistence/bible_document_store.dart';
 import 'v2/sync/bible_domain_sync_service.dart';
+import 'moodboard_export_layout.dart';
 import 'visual_bible_export_config.dart';
 import 'visual_bible_export_config_sheet.dart';
 import 'visual_bible_model.dart';
@@ -92,6 +93,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
   Timer? _saveDebounce;
   String _activeSection = BibleSidebar.overviewSectionId;
   int? _pendingPlanId;
+  String? _pendingFocus;
   String? _moodboardInitialFilter;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _livePanelOpen = false;
@@ -233,8 +235,12 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
       for (final preset in BibleBuiltinPresets.all)
         BibleTemplateChoice(
           id: preset.id,
-          name: preset.name,
-          description: preset.description,
+          name: preset.isAvailable
+              ? preset.name
+              : '${preset.name} · Próximamente',
+          description: preset.isAvailable
+              ? preset.description
+              : 'Disponible próximamente. Usa Plantilla 1 (Ficción · Cinematic).',
           category: examplesMode ? 'Cinematography' : 'IRIS',
           screenCount: BibleSectionId.all.length - 1,
         ),
@@ -252,13 +258,19 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
       context,
       templates: choices,
       examplesMode: examplesMode,
-      onUse: (template) => BiblePresetService.applyById(
-        db: db,
-        projectId: widget.projectId,
-        bibleId: bibleId,
-        templateId: template.id,
-        applySampleSeed: examplesMode,
-      ),
+      onUse: (template) async {
+        final bundle = BibleBuiltinPresets.byId(template.id);
+        if (bundle != null && !bundle.isAvailable) {
+          throw StateError('Plantilla no disponible todavía');
+        }
+        await BiblePresetService.applyById(
+          db: db,
+          projectId: widget.projectId,
+          bibleId: bibleId,
+          templateId: template.id,
+          applySampleSeed: examplesMode,
+        );
+      },
     );
     if (applied == null || !mounted) return;
     await BibleDomainSyncService.syncFromLegacy(
@@ -497,6 +509,8 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
               includedSections: config.sections,
               sectionContentJsonById: bundle.sectionContentJsonById,
               primaryCameraLabel: bundle.primaryCameraLabel,
+              moodboardLayout: config.moodboardLayout,
+              includeAllMoodboardImages: config.includeAllMoodboardImages,
             );
       final suffix = config.isDepartment
           ? VisualBibleDepartment.label(
@@ -616,6 +630,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
     setState(() {
       _activeSection = sectionId;
       _pendingPlanId = planId;
+      _pendingFocus = focus;
     });
   }
 
@@ -741,6 +756,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
         projectId: widget.projectId,
         bibleId: bibleId,
         initialPlanId: _pendingPlanId,
+        initialFocus: _pendingFocus,
         sectionContentJson: _sectionContentJson(
           sectionDefsById,
           BibleSectionId.lighting,
@@ -1038,6 +1054,9 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                         '${_project!.name.replaceAll(RegExp(r'[^\w\s-]'), '').trim()}_biblia_fotografia',
                     buildPdfBytes: () async {
                       final bundle = await _loadExportBundle();
+                      final last = await VisualBibleExportConfigStore.loadLast(
+                        widget.projectId,
+                      );
                       return VisualBiblePdfService.buildBytes(
                         mode: VisualBibleExportMode.full,
                         projectName: _project!.name,
@@ -1050,6 +1069,8 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                         moodboard: bundle.moodboard,
                         sectionContentJsonById: bundle.sectionContentJsonById,
                         primaryCameraLabel: bundle.primaryCameraLabel,
+                        moodboardLayout:
+                            last?.moodboardLayout ?? MoodboardExportLayout.defaults,
                       );
                     },
                   ),

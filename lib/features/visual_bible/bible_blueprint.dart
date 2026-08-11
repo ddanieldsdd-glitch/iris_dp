@@ -28,6 +28,12 @@ extension BibleBlueprintTypeX on BibleBlueprintType {
           'Run & gun. Equipo ágil y luz disponible.',
       };
 
+  /// Solo Ficción está operativa; el resto se muestra como próximamente.
+  bool get isAvailable => this == BibleBlueprintType.fiction;
+
+  String get availabilityLabel =>
+      isAvailable ? label : '$label · Próximamente';
+
   IconData get icon => switch (this) {
         BibleBlueprintType.fiction => Icons.movie_outlined,
         BibleBlueprintType.commercial => Icons.smart_display_outlined,
@@ -75,6 +81,12 @@ extension BibleSectionStyleX on BibleSectionStyle {
         BibleSectionStyle.minimalist => 'Minimalist',
       };
 
+  /// Solo Cinematic está en desarrollo activo.
+  bool get isAvailable => this == BibleSectionStyle.cinematic;
+
+  String get availabilityLabel =>
+      isAvailable ? label : '$label · Próximamente';
+
   Color get dotColor => switch (this) {
         BibleSectionStyle.cinematic => const Color(0xFFC9C2E5),
         BibleSectionStyle.technical => const Color(0xFFBBC7DF),
@@ -101,45 +113,15 @@ extension BibleSectionStyleX on BibleSectionStyle {
 }
 
 /// Estilo por defecto según sección + blueprint.
+///
+/// Plantilla 1 (Ficción): todo cinematic mientras no existan layouts
+/// technical / minimalist.
 BibleSectionStyle defaultStyleForSection(
   String sectionId,
   BibleBlueprintType blueprint,
 ) {
-  const narrative = {
-    BibleSectionId.direction,
-    BibleSectionId.concept,
-    BibleSectionId.moodboard,
-  };
-  const technical = {
-    BibleSectionId.camera,
-    BibleSectionId.optics,
-    BibleSectionId.exposure,
-    BibleSectionId.lighting,
-    BibleSectionId.colorImage,
-    BibleSectionId.format,
-    BibleSectionId.texture,
-    BibleSectionId.workflow,
-  };
-
-  if (blueprint == BibleBlueprintType.commercial) {
-    if (sectionId == BibleSectionId.colorImage ||
-        sectionId == BibleSectionId.moodboard) {
-      return BibleSectionStyle.cinematic;
-    }
-    if (technical.contains(sectionId)) return BibleSectionStyle.technical;
-  }
-
-  if (blueprint == BibleBlueprintType.documentary) {
-    if (sectionId == BibleSectionId.location ||
-        sectionId == BibleSectionId.lighting) {
-      return BibleSectionStyle.cinematic;
-    }
-    return BibleSectionStyle.minimalist;
-  }
-
-  // Ficción
-  if (narrative.contains(sectionId)) return BibleSectionStyle.cinematic;
-  if (technical.contains(sectionId)) return BibleSectionStyle.technical;
+  // Comercial / documental: cuando se activen tendrán defaults propios.
+  // Hasta entonces Plantilla 1 fuerza cinematic.
   return BibleSectionStyle.cinematic;
 }
 
