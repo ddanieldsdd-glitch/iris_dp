@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/utils/clipboard_image_reader.dart';
 import '../../bible_paste_helpers.dart';
 import '../../bible_block_catalog.dart';
 import '../commands/bible_document_history.dart';
@@ -207,10 +206,14 @@ class _BibleCanvasEditorState extends State<BibleCanvasEditor> {
       ],
     },
     BibleBlockKind.workflowPipeline => {
-      'steps': ['Preproduction', 'Shoot', 'Grade'],
+      'steps': List<String>.from(kBibleWorkflowDefaultSteps),
     },
-    BibleBlockKind.heroImage ||
-    BibleBlockKind.moodboardRefs => {'label': 'Imagen'},
+    BibleBlockKind.lightingDiagram => {
+      'label': 'Setup',
+      'nodes': <Map<String, dynamic>>[],
+    },
+    BibleBlockKind.moodboardRefs => {'images': <Map<String, dynamic>>[]},
+    BibleBlockKind.heroImage => {'label': 'Imagen'},
     _ => {'label': kind.label, 'text': ''},
   };
 
@@ -294,6 +297,23 @@ class _BibleCanvasEditorState extends State<BibleCanvasEditor> {
         );
         if (stored == null) return;
         final from = block.content;
+        if (block.type == BibleBlockKind.moodboardRefs) {
+          final images = List<Map<String, dynamic>>.from(
+            (block.content['images'] as List? ?? const []).whereType<Map>().map(
+              (e) => Map<String, dynamic>.from(e),
+            ),
+          );
+          images.add({'path': stored});
+          _apply(
+            UpdateBlockContentCommand(
+              pageId: page.id,
+              blockId: block.id,
+              from: from,
+              to: {...block.content, 'images': images},
+            ),
+          );
+          return;
+        }
         final to = {
           ...block.content,
           'image': {'path': stored, 'source': 'local'},

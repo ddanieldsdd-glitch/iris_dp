@@ -151,6 +151,20 @@ void main() {
           'locationLights',
         ],
       );
+
+      final both = BibleStitchModuleRegistry.normalizeFields(
+        BibleSectionId.lighting,
+        [
+          BibleSectionField(key: 'overview', label: 'Overview'),
+          BibleSectionField(key: 'lightBehaviors', label: 'Behaviors'),
+          BibleSectionField(key: 'lightStyles', label: 'Legacy styles'),
+          BibleSectionField(key: 'filmRefs', label: 'Film'),
+        ],
+      );
+      expect(
+        both.map((f) => f.key).toList(),
+        ['overview', 'lightBehaviors', 'filmRefs'],
+      );
     });
   });
 }

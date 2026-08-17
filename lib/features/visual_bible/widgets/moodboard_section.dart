@@ -79,7 +79,10 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
 
   Future<void> _refreshMetaCache(List<MoodboardImage> images) async {
     final ids = images.map((i) => i.id);
-    final map = await MoodboardReferenceMetaStore.loadMany(ids);
+    final map = await MoodboardReferenceMetaStore.loadMany(
+      ref.read(databaseProvider),
+      ids,
+    );
     if (!mounted) return;
     setState(() => _metaById = map);
     await _refreshAspectCache(images);

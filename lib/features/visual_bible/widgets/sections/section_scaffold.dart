@@ -99,6 +99,7 @@ class _BibleSectionScaffoldState extends State<BibleSectionScaffold> {
       };
 
   Future<void> _onModeChanged(BibleVisualMode mode) async {
+    if (!mode.isAvailable) return;
     setState(() => _mode = mode);
     await BibleSectionStyleStore.save(
       widget.projectId,

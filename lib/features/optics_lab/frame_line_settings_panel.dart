@@ -136,21 +136,34 @@ class FrameLineSettingsPanel extends StatelessWidget {
   }
 
   Widget _buildFrameLineFields(BuildContext context, AppPalette palette, FrameLineConfig cfg) {
+    final aspectKey = cfg.aspectPreset.isCustom
+        ? 'custom_${cfg.customAspectRatio?.toStringAsFixed(4)}'
+        : cfg.aspectPreset.id;
     return KeyedSubtree(
-      key: ValueKey('${cfg.id}_${cfg.scalingPercent}_${cfg.offsetLeftPx}_${cfg.offsetTopPx}'),
+      key: ValueKey(
+        '${cfg.id}_${aspectKey}_${cfg.scalingPercent}_${cfg.offsetLeftPx}_${cfg.offsetTopPx}',
+      ),
       child: _buildFrameLineFieldsInner(context, palette, cfg),
     );
   }
 
+  String _aspectDropdownValue(FrameLineConfig cfg) {
+    if (cfg.aspectPreset.isCustom) return 'custom';
+    final effective = cfg.effectiveAspectRatio;
+    if (effective != null) {
+      for (final p in kAspectRatioPresets) {
+        if (p.ratio != null && (p.ratio! - effective).abs() < 0.02) {
+          return p.id;
+        }
+      }
+    }
+    return kAspectRatioPresets.any((p) => p.id == cfg.aspectPreset.id)
+        ? cfg.aspectPreset.id
+        : 'custom';
+  }
+
   Widget _buildFrameLineFieldsInner(BuildContext context, AppPalette palette, FrameLineConfig cfg) {
-    final presetId = cfg.aspectPreset.isCustom
-        ? 'custom'
-        : (kAspectRatioPresets
-                .where((p) => p.ratio != null && cfg.effectiveAspectRatio != null)
-                .where((p) => (p.ratio! - cfg.effectiveAspectRatio!).abs() < 0.02)
-                .map((p) => p.id)
-                .firstOrNull ??
-            cfg.aspectPreset.id);
+    final dropdownValue = _aspectDropdownValue(cfg);
 
     final wPx = activeComputed?.widthPx;
     final hPx = activeComputed?.heightPx;
@@ -160,9 +173,7 @@ class FrameLineSettingsPanel extends StatelessWidget {
       children: [
         DropdownButtonFormField<String>(
           decoration: const InputDecoration(labelText: 'Aspect Ratio'),
-          initialValue: presetId == 'custom' || kAspectRatioPresets.any((p) => p.id == presetId)
-              ? presetId
-              : 'custom',
+          initialValue: dropdownValue,
           items: kAspectRatioPresets
               .map((p) => DropdownMenuItem(value: p.id, child: Text(p.label)))
               .toList(),
@@ -181,6 +192,7 @@ class FrameLineSettingsPanel extends StatelessWidget {
             final preset = kAspectRatioPresets.firstWhere((p) => p.id == id);
             onConfigChanged(cfg.copyWith(
               aspectPreset: preset,
+              customAspectRatio: null,
               formatName: preset.label,
             ));
           },
@@ -485,12 +497,5 @@ class FrameLineSettingsPanel extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-extension _FirstOrNull<E> on Iterable<E> {
-  E? get firstOrNull {
-    final it = iterator;
-    return it.moveNext() ? it.current : null;
   }
 }

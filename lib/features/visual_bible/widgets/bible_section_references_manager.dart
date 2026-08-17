@@ -316,7 +316,10 @@ class _FullRefCardState extends ConsumerState<_FullRefCard> {
   }
 
   Future<void> _loadMeta() async {
-    final meta = await MoodboardReferenceMetaStore.load(widget.image.id);
+    final meta = await MoodboardReferenceMetaStore.load(
+      ref.read(databaseProvider),
+      widget.image.id,
+    );
     if (mounted) setState(() => _meta = meta);
   }
 

@@ -55,6 +55,7 @@ void main() {
         : <LightingSetupModel>[],
     cameraTests: <CameraTestModel>[],
     moodboard: <MoodboardImageModel>[],
+    narrativeCards: <NarrativeCardModel>[],
     sectionContentJsonById: sectionContentJsonById,
     primaryCameraLabel: null,
   );
@@ -175,8 +176,7 @@ void main() {
             config: config.copyWith(
               sections: {BibleSectionId.camera},
             ),
-            bundle: bundle(
-              sectionContentJsonById: {
+            bundle: bundle(sectionContentJsonById: {
                 BibleSectionId.camera: cameraContent,
               },
             ),
@@ -215,6 +215,7 @@ void main() {
               lightingSetups: <LightingSetupModel>[],
               cameraTests: <CameraTestModel>[],
               moodboard: <MoodboardImageModel>[],
+              narrativeCards: <NarrativeCardModel>[],
               sectionContentJsonById: const <String, String?>{},
               primaryCameraLabel: null,
             ),
@@ -255,6 +256,181 @@ void main() {
           .whereType<String>()
           .toList();
       expect(specsRows, isNot(contains('Intención narrativa')));
+    });
+
+    test('Localización enriquece sets, solar y refs', () {
+      final locationContent = BibleSectionFieldsConfig.encode(
+        BibleSectionFieldsConfig.defaultsFor(BibleSectionId.location),
+        values: {
+          'locationData': jsonEncode({
+            'azimuth': '180°',
+            'goldenHour': '19:10',
+            'weather': 'Claro',
+          }),
+        },
+      );
+      final composition =
+          BibleExportCompositionBuilder(
+            idFactory: () => 'composition-location',
+            clock: () => now,
+          ).build(
+            projectId: 4,
+            config: config.copyWith(sections: {BibleSectionId.location}),
+            bundle: (
+              data: VisualBibleData(id: 7, projectId: 4),
+              blocks: <ColorBlockModel>[],
+              exposureBlocks: <ExposureBlockModel>[],
+              lightingSetups: <LightingSetupModel>[],
+              cameraTests: <CameraTestModel>[],
+              moodboard: [
+                MoodboardImageModel(
+                  id: 1,
+                  projectId: 4,
+                  imagePath: '/loc.jpg',
+                  source: MoodboardSource.manual,
+                  category: MoodboardCategory.location,
+                  linkedLocationName: 'Casa norte',
+                ),
+              ],
+              narrativeCards: <NarrativeCardModel>[],
+              sectionContentJsonById: {
+                BibleSectionId.location: locationContent,
+              },
+              primaryCameraLabel: null,
+            ),
+            includeCover: false,
+          );
+
+      final location = composition.pages.firstWhere(
+        (page) => page.source?.sectionId == BibleSectionId.location,
+      );
+      expect(
+        location.blocks.any((b) => b.type == BibleBlockKind.chipSelect),
+        isTrue,
+      );
+      expect(
+        location.blocks.any((b) => b.type == BibleBlockKind.heroImage),
+        isTrue,
+      );
+      expect(
+        location.blocks.any((b) => b.type == BibleBlockKind.telemetry),
+        isTrue,
+      );
+      expect(
+        location.blocks.any((b) => b.type == BibleBlockKind.moodboardRefs),
+        isTrue,
+      );
+    });
+
+    test('Exposición incluye stills asignados a la sección', () {
+      final composition =
+          BibleExportCompositionBuilder(
+            idFactory: () => 'composition-exposure-stills',
+            clock: () => now,
+          ).build(
+            projectId: 4,
+            config: config.copyWith(sections: {BibleSectionId.exposure}),
+            bundle: (
+              data: VisualBibleData(id: 7, projectId: 4),
+              blocks: <ColorBlockModel>[],
+              exposureBlocks: <ExposureBlockModel>[],
+              lightingSetups: <LightingSetupModel>[],
+              cameraTests: <CameraTestModel>[],
+              moodboard: [
+                MoodboardImageModel(
+                  id: 2,
+                  projectId: 4,
+                  imagePath: '/exp.jpg',
+                  source: MoodboardSource.manual,
+                  assignedSections: [BibleSectionId.exposure],
+                ),
+              ],
+              narrativeCards: <NarrativeCardModel>[],
+              sectionContentJsonById: const <String, String?>{},
+              primaryCameraLabel: null,
+            ),
+            includeCover: false,
+          );
+
+      final exposure = composition.pages.firstWhere(
+        (page) => page.source?.sectionId == BibleSectionId.exposure,
+      );
+      expect(
+        exposure.blocks.any((b) => b.type == BibleBlockKind.moodboardRefs),
+        isTrue,
+      );
+    });
+
+    test('Moodboard con refs parciales incluye todas las stills', () {
+      final composition =
+          BibleExportCompositionBuilder(
+            idFactory: () => 'composition-moodboard-all',
+            clock: () => now,
+          ).build(
+            projectId: 4,
+            config: config.copyWith(sections: {BibleSectionId.moodboard}),
+            bundle: (
+              data: VisualBibleData(id: 7, projectId: 4),
+              blocks: <ColorBlockModel>[],
+              exposureBlocks: <ExposureBlockModel>[],
+              lightingSetups: <LightingSetupModel>[],
+              cameraTests: <CameraTestModel>[],
+              moodboard: [
+                for (var i = 1; i <= 3; i++)
+                  MoodboardImageModel(
+                    id: i,
+                    projectId: 4,
+                    imagePath: '/still_$i.jpg',
+                    source: MoodboardSource.manual,
+                  ),
+              ],
+              narrativeCards: <NarrativeCardModel>[],
+              sectionContentJsonById: const <String, String?>{},
+              primaryCameraLabel: null,
+            ),
+            includeCover: false,
+            sourceDocument: BibleDocument(
+              bibleId: 7,
+              projectId: 4,
+              updatedAt: now,
+              pages: [
+                BiblePage(
+                  id: BibleSectionId.moodboard,
+                  groupId: 'refs',
+                  label: 'Moodboard',
+                  sortOrder: 0,
+                  blocks: [
+                    BibleBlock(
+                      id: 'partial-refs',
+                      type: BibleBlockKind.moodboardRefs,
+                      content: {
+                        'images': [
+                          {'path': '/still_1.jpg'},
+                        ],
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+
+      final moodboard = composition.pages.firstWhere(
+        (page) => page.source?.sectionId == BibleSectionId.moodboard,
+      );
+      final paths = <String>[];
+      for (final block in moodboard.blocks.where(
+        (b) => b.type == BibleBlockKind.moodboardRefs,
+      )) {
+        final images = block.content['images'];
+        if (images is! List) continue;
+        for (final item in images) {
+          if (item is Map && item['path'] != null) {
+            paths.add(item['path'].toString());
+          }
+        }
+      }
+      expect(paths, ['/still_1.jpg', '/still_2.jpg', '/still_3.jpg']);
     });
 
     test('selects configured v2 pages without sharing mutable content', () {

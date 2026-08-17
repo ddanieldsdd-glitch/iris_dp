@@ -139,6 +139,7 @@ void main() {
       final payload = BiblePdfLayoutBridge.layoutPayload(doc);
       expect(payload['pages'], isA<List>());
       expect((payload['pages'] as List).first['id'], 'p1');
+      expect(payload['gridColumns'], 12);
     });
   });
 
@@ -169,7 +170,23 @@ void main() {
         isNot(contains(BibleBlockKind.dynamicBlocks)),
       );
       expect(BibleBlockKind.text.status, BibleBlockStatus.live);
+      expect(BibleBlockKind.moodboardRefs.status, BibleBlockStatus.live);
+      expect(BibleBlockKind.colorPalette.status, BibleBlockStatus.live);
+      expect(BibleBlockKind.telemetry.status, BibleBlockStatus.live);
+      expect(BibleBlockKind.lightingDiagram.status, BibleBlockStatus.live);
+      expect(BibleBlockKind.workflowPipeline.status, BibleBlockStatus.live);
       expect(BibleBlockKind.dynamicBlocks.status, BibleBlockStatus.planned);
+      expect(
+        BibleBlockCatalog.pickerKinds,
+        contains(BibleBlockKind.moodboardRefs),
+      );
+    });
+  });
+
+  group('BiblePdfLayoutBridge gaps', () {
+    test('no deja gaps de PDF clásico', () {
+      expect(BiblePdfLayoutBridge.pdfGaps, isEmpty);
+      expect(BiblePdfLayoutBridge.gridColumns, 12);
     });
   });
 }

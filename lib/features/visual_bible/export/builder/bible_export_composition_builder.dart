@@ -8,8 +8,12 @@ import '../../v2/model/bible_block.dart';
 import '../../v2/model/bible_block_layout.dart';
 import '../../v2/model/bible_document.dart';
 import '../../v2/model/bible_page.dart';
+import '../../moodboard_export_grouper.dart';
+import '../../moodboard_export_layout.dart';
+import '../../visual_bible_model.dart';
 import '../../visual_bible_export_config.dart';
 import '../../../../shared/visual_bible/bible_section_ids.dart';
+import '../../../../shared/visual_bible/narrative_card_kind.dart';
 import '../model/bible_export_composition.dart';
 import '../bible_section_export_reader.dart';
 
@@ -106,6 +110,7 @@ class BibleExportCompositionBuilder {
             margins: margins,
           ),
           bundle,
+          config,
         ),
       );
     }
@@ -252,8 +257,10 @@ class BibleExportCompositionBuilder {
   BibleExportPage _enrichPage(
     BibleExportPage page,
     BibleExportSourceBundle bundle,
+    VisualBibleExportConfig config,
   ) {
     final sectionId = page.source?.sectionId;
+    final blocks = List<BibleBlock>.from(page.blocks);
     final extra = <BibleBlock>[];
     switch (sectionId) {
       case BibleSectionId.colorImage:
@@ -262,7 +269,7 @@ class BibleExportCompositionBuilder {
             BibleBlock(
               id: '${page.id}__palettes',
               type: BibleBlockKind.colorPalette,
-              layout: BibleBlockLayout(row: page.blocks.length),
+              layout: BibleBlockLayout(row: blocks.length),
               content: {
                 'colors': [
                   for (final block in bundle.blocks)
@@ -279,7 +286,7 @@ class BibleExportCompositionBuilder {
             BibleBlock(
               id: '${page.id}__exposure',
               type: BibleBlockKind.specsTable,
-              layout: BibleBlockLayout(row: page.blocks.length),
+              layout: BibleBlockLayout(row: blocks.length),
               content: {
                 'columns': ['block', 'highlights', 'shadows', 'ratio'],
                 'rows': [
@@ -296,6 +303,50 @@ class BibleExportCompositionBuilder {
           );
         }
       case BibleSectionId.lighting:
+        final lightingCards = bundle.narrativeCards
+            .where((c) => c.sectionId == BibleSectionId.lighting)
+            .toList()
+          ..sort((a, b) {
+            int rank(String kind) => switch (kind) {
+                  NarrativeCardKind.overview => 0,
+                  NarrativeCardKind.style => 1,
+                  NarrativeCardKind.filmRef => 2,
+                  NarrativeCardKind.locationLight => 3,
+                  _ => 9,
+                };
+            final rk = rank(a.kind).compareTo(rank(b.kind));
+            if (rk != 0) return rk;
+            return a.sortOrder.compareTo(b.sortOrder);
+          });
+        for (final card in lightingCards) {
+          final body = StringBuffer();
+          if (card.kind == NarrativeCardKind.filmRef) {
+            final bits = [
+              if (card.filmTitle?.isNotEmpty == true) card.filmTitle,
+              if (card.filmDp?.isNotEmpty == true) 'DP ${card.filmDp}',
+              if (card.filmYear?.isNotEmpty == true) card.filmYear,
+            ].whereType<String>();
+            if (bits.isNotEmpty) body.writeln(bits.join(' · '));
+          }
+          if (card.summary?.isNotEmpty == true) {
+            body.writeln(card.summary);
+          }
+          if (card.body?.isNotEmpty == true) body.writeln(card.body);
+          final text = body.toString().trim();
+          if (text.isEmpty && card.title.trim().isEmpty) continue;
+          extra.add(
+            BibleBlock(
+              id: '${page.id}__narr_${card.id}',
+              type: BibleBlockKind.text,
+              layout: BibleBlockLayout(row: blocks.length + extra.length),
+              content: {
+                'label':
+                    '${NarrativeCardKind.label(card.kind)} · ${card.title}',
+                'text': text.isEmpty ? card.title : text,
+              },
+            ),
+          );
+        }
         for (final setup in bundle.lightingSetups) {
           List<dynamic> nodes;
           try {
@@ -307,7 +358,7 @@ class BibleExportCompositionBuilder {
             BibleBlock(
               id: '${page.id}__lighting_${setup.id}',
               type: BibleBlockKind.lightingDiagram,
-              layout: BibleBlockLayout(row: page.blocks.length + extra.length),
+              layout: BibleBlockLayout(row: blocks.length + extra.length),
               content: {
                 'label': setup.setupName,
                 'text': setup.narrativeNote ?? '',
@@ -319,13 +370,15 @@ class BibleExportCompositionBuilder {
             ),
           );
         }
+      case BibleSectionId.location:
+        extra.addAll(_locationBlocks(page, blocks.length + extra.length, bundle));
       case BibleSectionId.cameraTests:
         if (bundle.cameraTests.isNotEmpty) {
           extra.add(
             BibleBlock(
               id: '${page.id}__camera_tests',
               type: BibleBlockKind.specsTable,
-              layout: BibleBlockLayout(row: page.blocks.length),
+              layout: BibleBlockLayout(row: blocks.length),
               content: {
                 'columns': ['test', 'lut', 'light', 'notes'],
                 'rows': [
@@ -343,25 +396,94 @@ class BibleExportCompositionBuilder {
         }
       case BibleSectionId.moodboard:
         if (bundle.moodboard.isNotEmpty) {
-          extra.add(
-            BibleBlock(
-              id: '${page.id}__moodboard',
-              type: BibleBlockKind.moodboardRefs,
-              layout: BibleBlockLayout(row: page.blocks.length),
-              content: {
-                'images': [
-                  for (final image in bundle.moodboard)
-                    {
-                      'path': image.imagePath,
-                      if (image.caption != null) 'caption': image.caption,
-                    },
-                ],
-              },
-            ),
+          final layout = config.resolvedMoodboardLayout;
+          final groups = MoodboardExportGrouper.group(bundle.moodboard, layout);
+          final blockSpecs =
+              <({String? title, List<MoodboardImageModel> images})>[];
+
+          if (layout.grouping == MoodboardExportGrouping.flat) {
+            blockSpecs.add((title: null, images: groups.flat));
+          } else {
+            for (final facet in MoodboardExportGrouper.facetOrder) {
+              final facetImages = groups.byFacet[facet];
+              if (facetImages == null || facetImages.isEmpty) continue;
+              blockSpecs.add((
+                title: MoodboardExportLayout.facetLabel(facet),
+                images: facetImages,
+              ));
+            }
+            if (layout.includeUnclassified && groups.unclassified.isNotEmpty) {
+              blockSpecs.add((
+                title: 'Sin clasificar',
+                images: groups.unclassified,
+              ));
+            }
+          }
+
+          final emptyIdx = blocks.indexWhere(
+            (b) =>
+                b.type == BibleBlockKind.moodboardRefs &&
+                _moodboardRefsImagesEmpty(b),
           );
+          final anyIdx = blocks.indexWhere(
+            (b) => b.type == BibleBlockKind.moodboardRefs,
+          );
+
+          var specIndex = 0;
+          if (emptyIdx >= 0 && specIndex < blockSpecs.length) {
+            blocks[emptyIdx] = blocks[emptyIdx].copyWith(
+              content: _moodboardRefsContent(
+                blockSpecs[specIndex].images,
+                layout,
+                title: blockSpecs[specIndex].title,
+              ),
+            );
+            specIndex++;
+          } else if (anyIdx >= 0 && specIndex < blockSpecs.length) {
+            // Un bloque con algunas stills no debe recortar el resto del moodboard.
+            blocks[anyIdx] = blocks[anyIdx].copyWith(
+              content: _moodboardRefsContent(
+                blockSpecs[specIndex].images,
+                layout,
+                title: blockSpecs[specIndex].title ??
+                    blocks[anyIdx].content['title']?.toString(),
+              ),
+            );
+            specIndex++;
+          } else if (anyIdx < 0 && specIndex < blockSpecs.length) {
+            extra.add(
+              BibleBlock(
+                id: '${page.id}__moodboard',
+                type: BibleBlockKind.moodboardRefs,
+                layout: BibleBlockLayout(row: blocks.length),
+                content: _moodboardRefsContent(
+                  blockSpecs[specIndex].images,
+                  layout,
+                  title: blockSpecs[specIndex].title,
+                ),
+              ),
+            );
+            specIndex++;
+          }
+
+          for (; specIndex < blockSpecs.length; specIndex++) {
+            final spec = blockSpecs[specIndex];
+            extra.add(
+              BibleBlock(
+                id: '${page.id}__moodboard_$specIndex',
+                type: BibleBlockKind.moodboardRefs,
+                layout: BibleBlockLayout(row: blocks.length + extra.length),
+                content: _moodboardRefsContent(
+                  spec.images,
+                  layout,
+                  title: spec.title,
+                ),
+              ),
+            );
+          }
         }
       case BibleSectionId.optics:
-        final hasNarrativeBlock = page.blocks.any(
+        final hasNarrativeBlock = blocks.any(
           (b) => b.type == BibleBlockKind.narrative,
         );
         final opticsRows = BibleSectionExportReader.rowsFromOpticsConfigJson(
@@ -378,7 +500,7 @@ class BibleExportCompositionBuilder {
             BibleBlock(
               id: '${page.id}__optics',
               type: BibleBlockKind.specsTable,
-              layout: BibleBlockLayout(row: page.blocks.length + extra.length),
+              layout: BibleBlockLayout(row: blocks.length + extra.length),
               content: {
                 'columns': ['campo', 'valor'],
                 'rows': [
@@ -389,6 +511,36 @@ class BibleExportCompositionBuilder {
             ),
           );
         }
+    }
+    if (sectionId != null && sectionId != BibleSectionId.moodboard) {
+      final stills = MoodboardExportGrouper.imagesForSection(
+        bundle.moodboard,
+        sectionId,
+      );
+      if (stills.isNotEmpty) {
+        final emptyIdx = blocks.indexWhere(
+          (b) =>
+              b.type == BibleBlockKind.moodboardRefs &&
+              _moodboardRefsImagesEmpty(b),
+        );
+        final content = _moodboardRefsContent(
+          stills,
+          config.resolvedMoodboardLayout,
+          title: 'Referencias',
+        );
+        if (emptyIdx >= 0) {
+          blocks[emptyIdx] = blocks[emptyIdx].copyWith(content: content);
+        } else {
+          extra.add(
+            BibleBlock(
+              id: '${page.id}__section_refs',
+              type: BibleBlockKind.moodboardRefs,
+              layout: BibleBlockLayout(row: blocks.length + extra.length),
+              content: content,
+            ),
+          );
+        }
+      }
     }
     if (sectionId != null) {
       final customRows = BibleSectionExportReader.rowsForSection(
@@ -403,7 +555,7 @@ class BibleExportCompositionBuilder {
           BibleBlock(
             id: '${page.id}__custom_fields',
             type: BibleBlockKind.specsTable,
-            layout: BibleBlockLayout(row: page.blocks.length + extra.length),
+            layout: BibleBlockLayout(row: blocks.length + extra.length),
             content: {
               'columns': ['campo', 'valor'],
               'rows': [
@@ -415,14 +567,138 @@ class BibleExportCompositionBuilder {
         );
       }
     }
-    final blocks = [...page.blocks, ...extra];
+    final merged = [...blocks, ...extra];
     return page.copyWith(
-      blocks: blocks,
+      blocks: merged,
       metadata: {
         ...page.metadata,
-        'sourceBlocks': blocks.map((block) => block.toJson()).toList(),
+        'sourceBlocks': merged.map((block) => block.toJson()).toList(),
       },
     );
+  }
+
+  static List<BibleBlock> _locationBlocks(
+    BibleExportPage page,
+    int startRow,
+    BibleExportSourceBundle bundle,
+  ) {
+    final extra = <BibleBlock>[];
+    final images = _locationMoodboardImages(bundle.moodboard);
+    final setNames = <String>{
+      for (final image in images)
+        if (image.linkedLocationName?.trim().isNotEmpty == true)
+          image.linkedLocationName!.trim(),
+    };
+    if (setNames.isNotEmpty) {
+      extra.add(
+        BibleBlock(
+          id: '${page.id}__location_sets',
+          type: BibleBlockKind.chipSelect,
+          layout: BibleBlockLayout(row: startRow + extra.length),
+          content: {
+            'chips': setNames.toList(),
+            'selected': setNames.toList(),
+          },
+        ),
+      );
+    }
+    if (images.isNotEmpty) {
+      extra.add(
+        BibleBlock(
+          id: '${page.id}__location_hero',
+          type: BibleBlockKind.heroImage,
+          layout: BibleBlockLayout(row: startRow + extra.length, colSpan: 8),
+          content: {'image': {'path': images.first.imagePath}},
+        ),
+      );
+      extra.add(
+        BibleBlock(
+          id: '${page.id}__location_refs',
+          type: BibleBlockKind.moodboardRefs,
+          layout: BibleBlockLayout(row: startRow + extra.length),
+          content: _moodboardRefsContent(
+            images,
+            MoodboardExportLayout.defaults,
+            title: 'Referencias de localización',
+          ),
+        ),
+      );
+    }
+    final solar = _locationSolarMetrics(
+      BibleSectionExportReader.parseCustomBlob(
+        bundle.sectionContentJsonById[BibleSectionId.location],
+        BibleSectionId.location,
+      ),
+    );
+    if (solar.isNotEmpty) {
+      extra.add(
+        BibleBlock(
+          id: '${page.id}__location_solar',
+          type: BibleBlockKind.telemetry,
+          layout: BibleBlockLayout(row: startRow + extra.length, colSpan: 4),
+          content: {'metrics': solar},
+        ),
+      );
+    }
+    return extra;
+  }
+
+  static List<MoodboardImageModel> _locationMoodboardImages(
+    List<MoodboardImageModel> moodboard,
+  ) {
+    return [
+      for (final image in moodboard)
+        if (image.assignedSections.contains(BibleSectionId.location) ||
+            image.category == MoodboardCategory.location ||
+            (image.linkedLocationName?.trim().isNotEmpty ?? false) ||
+            image.linkedLocationBasePlanId != null)
+          image,
+    ];
+  }
+
+  static List<Map<String, String>> _locationSolarMetrics(
+    Map<String, dynamic> blob,
+  ) {
+    const keys = [
+      ('azimuth', 'Azimut'),
+      ('sunrise', 'Amanecer'),
+      ('sunset', 'Atardecer'),
+      ('goldenHour', 'Golden hour'),
+      ('daylightWindow', 'Ventana'),
+    ];
+    return [
+      for (final (key, label) in keys)
+        if ((blob[key]?.toString().trim().isNotEmpty ?? false))
+          {'label': label, 'value': blob[key].toString().trim()},
+    ];
+  }
+
+  static Map<String, dynamic> _moodboardRefsContent(
+    List<MoodboardImageModel> images,
+    MoodboardExportLayout layout, {
+    String? title,
+  }) => {
+    if (title != null) 'title': title,
+    'images': images.map((image) => _moodboardImageJson(image, layout)).toList(),
+  };
+
+  static Map<String, dynamic> _moodboardImageJson(
+    MoodboardImageModel image,
+    MoodboardExportLayout layout,
+  ) {
+    final caption = MoodboardExportGrouper.captionFor(image, layout.density);
+    final details = MoodboardExportGrouper.detailLinesFor(image, layout.density);
+    return {
+      'path': image.imagePath,
+      if (caption != null) 'caption': caption,
+      if (details.isNotEmpty) 'details': details,
+    };
+  }
+
+  static bool _moodboardRefsImagesEmpty(BibleBlock block) {
+    final images = block.content['images'] ?? block.content['items'];
+    if (images is! List) return true;
+    return images.isEmpty;
   }
 
   static String _sectionId(BiblePage page) => page.legacySectionId ?? page.id;

@@ -8,7 +8,9 @@ import '../../../core/database/database_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../shared/visual_bible/bible_section_ids.dart';
 import '../../../shared/visual_bible/bible_stitch_module_registry.dart';
+import '../../../shared/visual_bible/bible_subsection_kind_catalog.dart';
 import '../bible_section_fields.dart';
 
 /// Editor de sub-apartados: añadir, quitar, cambiar tipo y reordenar.
@@ -289,6 +291,56 @@ class _BibleSectionFieldsEditorState
     BibleSectionFieldType.blocks => Icons.view_agenda_outlined,
   };
 
+  Widget _contentFamilyChip(
+    AppPalette palette,
+    BibleWidgetContentFamily family,
+  ) {
+    final isCinematic = family == BibleWidgetContentFamily.cinematic;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: isCinematic
+            ? palette.accent.withValues(alpha: 0.12)
+            : palette.surfaceOverlay.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isCinematic
+              ? palette.accent.withValues(alpha: 0.35)
+              : palette.border,
+        ),
+      ),
+      child: Text(
+        family.label,
+        style: AppTypography.mono(palette).copyWith(
+          fontSize: 9,
+          letterSpacing: 0.4,
+          color: isCinematic ? palette.accent : palette.textSecondary,
+        ),
+      ),
+    );
+  }
+
+  String _fieldSubtitle(
+    BibleSectionField field,
+    bool hasRenderer,
+    AppPalette palette,
+  ) {
+    final module = BibleStitchModuleRegistry.module(
+      widget.definition.id,
+      field.key,
+    );
+    final kindLabel = module?.catalogKind.label ??
+        BibleSubsectionKindCatalog.fromFieldType(field.type).label;
+    final typeLabel = BibleSectionFieldsConfig.labelForType(field.type);
+  final rendererNote = hasRenderer
+        ? typeLabel
+        : '$typeLabel · sin renderer Stitch';
+    if (widget.definition.id == BibleSectionId.lighting && module != null) {
+      return '$kindLabel · $rendererNote';
+    }
+    return rendererNote;
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -327,26 +379,41 @@ class _BibleSectionFieldsEditorState
               },
               itemBuilder: (context, index) {
                 final field = _fields[index];
-                final registryLabel = BibleStitchModuleRegistry
-                    .module(widget.definition.id, field.key)
-                    ?.label;
+                final module = BibleStitchModuleRegistry.module(
+                  widget.definition.id,
+                  field.key,
+                );
+                final registryLabel = module?.label;
                 final hasRenderer = BibleStitchModuleRegistry.hasRenderer(
                   widget.definition.id,
                   field.key,
                 );
+                final showFamilyChip =
+                    widget.definition.id == BibleSectionId.lighting &&
+                        module != null;
                 return Material(
                   key: ValueKey(field.key),
                   color: palette.surfaceElevated,
                   child: ListTile(
-                  leading: Icon(_iconForType(field.type)),
+                  leading: Icon(
+                    module?.catalogKind.icon ?? _iconForType(field.type),
+                  ),
                   title: Text(registryLabel ?? field.label),
-                  subtitle: Text(
-                    hasRenderer
-                        ? BibleSectionFieldsConfig.labelForType(field.type)
-                        : '${BibleSectionFieldsConfig.labelForType(field.type)} · sin renderer Stitch',
-                    style: AppTypography.caption(palette).copyWith(
-                      color: hasRenderer ? null : palette.warning,
-                    ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (showFamilyChip) ...[
+                        const SizedBox(height: 4),
+                        _contentFamilyChip(palette, module!.contentFamily),
+                        const SizedBox(height: 4),
+                      ],
+                      Text(
+                        _fieldSubtitle(field, hasRenderer, palette),
+                        style: AppTypography.caption(palette).copyWith(
+                          color: hasRenderer ? null : palette.warning,
+                        ),
+                      ),
+                    ],
                   ),
                   trailing: SizedBox(
                     width: 144,

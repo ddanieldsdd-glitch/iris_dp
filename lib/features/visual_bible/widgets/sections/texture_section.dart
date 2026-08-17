@@ -10,6 +10,7 @@ import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../bible_section_fields.dart';
+import '../../v2/model/bible_json_parse.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_moodboard_image_target.dart';
@@ -101,15 +102,15 @@ class TextureSection extends ConsumerWidget {
   void _syncBibleFields(Map<String, dynamic> d) {
     var dirty = false;
 
-    final preset = d['grainPreset'] as String?;
+    final preset = bibleJsonString(d['grainPreset']);
     if (preset != null && preset.isNotEmpty && data.grainLevel != preset) {
       data.grainLevel = preset;
       dirty = true;
     }
 
-    final grainOn = d['grainEnabled'] as bool? ?? false;
-    final intensity = (d['grainIntensity'] as num?)?.toDouble();
-    final sizeUm = (d['grainSize'] as num?)?.toDouble();
+    final grainOn = bibleJsonBool(d['grainEnabled']) ?? false;
+    final intensity = bibleJsonDouble(d['grainIntensity']);
+    final sizeUm = bibleJsonDouble(d['grainSize']);
     if (grainOn && intensity != null) {
       final label =
           '${preset ?? 'Grain'} · ${sizeUm?.toStringAsFixed(1) ?? '—'}µm · ${(intensity * 100).round()}%';
@@ -119,9 +120,9 @@ class TextureSection extends ConsumerWidget {
       }
     }
 
-    final diffOn = d['diffusionEnabled'] as bool? ?? false;
-    final filter = d['diffusionFilter'] as String?;
-    final density = d['diffusionDensity'] as String?;
+    final diffOn = bibleJsonBool(d['diffusionEnabled']) ?? false;
+    final filter = bibleJsonString(d['diffusionFilter']);
+    final density = bibleJsonString(d['diffusionDensity']);
     if (diffOn && filter != null) {
       final notes = '$filter ${density ?? ''}'.trim();
       if (data.diffusionNotes != notes) {
@@ -130,20 +131,20 @@ class TextureSection extends ConsumerWidget {
       }
     }
 
-    final hl = d['highlightBehavior'] as String?;
+    final hl = bibleJsonString(d['highlightBehavior']);
     if (hl != null && data.highlightBehavior != hl) {
       data.highlightBehavior = hl;
       dirty = true;
     }
-    final sh = d['shadowBehavior'] as String?;
+    final sh = bibleJsonString(d['shadowBehavior']);
     if (sh != null && data.shadowBehavior != sh) {
       data.shadowBehavior = sh;
       dirty = true;
     }
 
-    final pushPull = d['pushPullProcessing'] as String?;
-    final chroma = d['shadowChromaNoise'] as String?;
-    final fpn = d['fixedPatternNoise'] as String?;
+    final pushPull = bibleJsonString(d['pushPullProcessing']);
+    final chroma = bibleJsonString(d['shadowChromaNoise']);
+    final fpn = bibleJsonString(d['fixedPatternNoise']);
     if (pushPull != null || chroma != null || fpn != null) {
       final parts = <String>[
         if (chroma != null && chroma.isNotEmpty) 'Chroma: $chroma',
@@ -234,58 +235,58 @@ class TextureSection extends ConsumerWidget {
     final db = ref.watch(databaseProvider);
     final custom = _getCustomData();
 
-    final grainEnabled = custom['grainEnabled'] as bool? ?? false;
-    final grainSize = (custom['grainSize'] as num?)?.toDouble() ?? 1.5;
+    final grainEnabled = bibleJsonBool(custom['grainEnabled']) ?? false;
+    final grainSize = bibleJsonDouble(custom['grainSize']) ?? 1.5;
     final grainIntensity =
-        (custom['grainIntensity'] as num?)?.toDouble() ?? 0.45;
+        bibleJsonDouble(custom['grainIntensity']) ?? 0.45;
     final grainColorVariation =
-        (custom['grainColorVariation'] as num?)?.toDouble() ?? 0.3;
+        bibleJsonDouble(custom['grainColorVariation']) ?? 0.3;
     var grainPreset =
-        custom['grainPreset'] as String? ?? data.grainLevel ?? 'Kodak Vision3 500T';
+        bibleJsonString(custom['grainPreset']) ?? data.grainLevel ?? 'Kodak Vision3 500T';
     if (!_grainPresets.contains(grainPreset)) {
       grainPreset = _grainPresets.contains(data.grainLevel)
           ? data.grainLevel!
           : 'Custom';
     }
 
-    final diffusionEnabled = custom['diffusionEnabled'] as bool? ?? false;
-    var diffusionFilter = custom['diffusionFilter'] as String? ?? 'Pro-Mist';
+    final diffusionEnabled = bibleJsonBool(custom['diffusionEnabled']) ?? false;
+    var diffusionFilter = bibleJsonString(custom['diffusionFilter']) ?? 'Pro-Mist';
     if (!_diffusionFilters.contains(diffusionFilter)) {
       diffusionFilter = 'Pro-Mist';
     }
-    var diffusionDensity = custom['diffusionDensity'] as String? ?? '1/4';
+    var diffusionDensity = bibleJsonString(custom['diffusionDensity']) ?? '1/4';
     if (!_densitySteps.contains(diffusionDensity)) {
       diffusionDensity = '1/4';
     }
     final halationRadius =
-        (custom['halationRadius'] as num?)?.toDouble() ?? 0.35;
+        bibleJsonDouble(custom['halationRadius']) ?? 0.35;
 
-    final highlightBehavior = custom['highlightBehavior'] as String? ??
+    final highlightBehavior = bibleJsonString(custom['highlightBehavior']) ??
         data.highlightBehavior ??
         'Soft roll-off';
-    final shadowBehavior = custom['shadowBehavior'] as String? ??
+    final shadowBehavior = bibleJsonString(custom['shadowBehavior']) ??
         data.shadowBehavior ??
         'Preserve detail';
 
-    final lumaMap = custom['lumaMap'] as bool? ?? false;
-    final splitView = custom['splitView'] as bool? ?? true;
-    final zoomLabel = custom['zoomLabel'] as String? ?? '100%';
+    final lumaMap = bibleJsonBool(custom['lumaMap']) ?? false;
+    final splitView = bibleJsonBool(custom['splitView']) ?? true;
+    final zoomLabel = bibleJsonString(custom['zoomLabel']) ?? '100%';
 
     final shadowChroma =
-        custom['shadowChromaNoise'] as String? ?? 'Low';
+        bibleJsonString(custom['shadowChromaNoise']) ?? 'Low';
     final fixedPattern =
-        custom['fixedPatternNoise'] as String? ?? 'Minimal';
+        bibleJsonString(custom['fixedPatternNoise']) ?? 'Minimal';
     final pushPull =
-        custom['pushPullProcessing'] as String? ?? 'None';
-    final noiseDesc = custom['noiseFloorDesc'] as String? ??
+        bibleJsonString(custom['pushPullProcessing']) ?? 'None';
+    final noiseDesc = bibleJsonString(custom['noiseFloorDesc']) ??
         data.sensorShadowBehavior ??
         'Caracterización del ruido nativo del sensor en sombras profundas y pushes.';
-    final cameraLabelOverride = custom['cameraLabel'] as String?;
-    final savedPreset = custom['savedPresetName'] as String?;
+    final cameraLabelOverride = bibleJsonString(custom['cameraLabel']);
+    final savedPreset = bibleJsonString(custom['savedPresetName']);
 
     final iso = data.nativeIso ?? 800;
     final digitalNoiseLabel =
-        custom['digitalNoiseLabel'] as String? ??
+        bibleJsonString(custom['digitalNoiseLabel']) ??
             'Digital Sensor Noise (ISO $iso)';
 
     final filmGrainWidget = _FilmGrainModule(

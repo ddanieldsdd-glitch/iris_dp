@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../../../core/database/app_database.dart';
 import '../../../../core/utils/pdf_export_fonts.dart';
 import '../../../../core/utils/pdf_safe_image.dart';
+import 'moodboard_pdf_tiles.dart';
 import '../../../../shared/annotations/annotation_document.dart';
 import '../../../../shared/annotations/annotation_pdf_renderer.dart';
 import '../../bible_block_catalog.dart';
@@ -275,6 +276,7 @@ class BibleExportPdfRenderer {
       BibleBlockKind.narrative => _narrativeBlock(block),
       BibleBlockKind.heroImage => _imageBlock(block, images),
       BibleBlockKind.moodboardRefs => _moodboardBlock(block, images),
+      BibleBlockKind.chipSelect => _chipSelectBlock(block),
       BibleBlockKind.colorPalette => _colorPaletteBlock(block),
       BibleBlockKind.telemetry => _telemetryBlock(block),
       BibleBlockKind.equipmentList => _equipmentBlock(block),
@@ -285,7 +287,6 @@ class BibleExportPdfRenderer {
         lightingAnnotations,
       ),
       BibleBlockKind.dynamicBlocks => _dynamicBlock(block),
-      _ => _fallbackBlock(block),
     };
   }
 
@@ -351,19 +352,83 @@ class BibleExportPdfRenderer {
   }
 
   pw.Widget _moodboardBlock(BibleBlock block, Map<String, Uint8List> images) {
-    final available = _imagePaths(
-      block,
-    ).map((path) => images[path]).whereType<Uint8List>().toList();
-    if (available.isEmpty) return _placeholder('Moodboard sin imágenes');
+    final tiles = <({Uint8List bytes, String? caption, List<String> details})>[];
+    final candidates =
+        block.content['images'] ?? block.content['items'] ?? const [];
+    if (candidates is List) {
+      for (final candidate in candidates) {
+        String? path;
+        String? caption;
+        var details = const <String>[];
+        if (candidate is String) {
+          path = candidate;
+        } else if (candidate is Map) {
+          final map = Map<String, dynamic>.from(candidate);
+          path = BibleImageContent.fromJson(map).path;
+          final rawCaption = map['caption']?.toString().trim();
+          caption = (rawCaption == null || rawCaption.isEmpty)
+              ? null
+              : rawCaption;
+          final rawDetails = map['details'];
+          if (rawDetails is List) {
+            details = rawDetails
+                .map((e) => e.toString().trim())
+                .where((e) => e.isNotEmpty)
+                .toList();
+          }
+        }
+        if (path == null || path.isEmpty) continue;
+        final bytes = images[path];
+        if (bytes == null) continue;
+        tiles.add((bytes: bytes, caption: caption, details: details));
+      }
+    }
+    if (tiles.isEmpty) return _placeholder('Moodboard sin imágenes');
+    final sectionTitle = block.content['title']?.toString().trim();
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (sectionTitle != null && sectionTitle.isNotEmpty) ...[
+          pw.Text(
+            sectionTitle,
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+          ),
+          pw.SizedBox(height: 8),
+        ],
+        MoodboardPdfTiles.wrap(
+          tiles: [
+            for (final tile in tiles)
+              MoodboardPdfTiles.tileColumn(
+                image: pw.MemoryImage(tile.bytes),
+                caption: tile.caption,
+                details: tile.details,
+                tileWidth: 150,
+                imageHeight: 105,
+                detailLimit: 4,
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _chipSelectBlock(BibleBlock block) {
+    final chips = (block.content['chips'] as List? ?? const [])
+        .map((e) => e.toString())
+        .toList();
+    if (chips.isEmpty) return _placeholder('Sin tags');
     return pw.Wrap(
       spacing: 6,
-      runSpacing: 6,
+      runSpacing: 4,
       children: [
-        for (final bytes in available)
+        for (final chip in chips)
           pw.Container(
-            width: 150,
-            height: 105,
-            child: pw.Image(pw.MemoryImage(bytes), fit: pw.BoxFit.cover),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey400),
+              borderRadius: pw.BorderRadius.circular(8),
+            ),
+            child: pw.Text(chip, style: const pw.TextStyle(fontSize: 9)),
           ),
       ],
     );
@@ -567,6 +632,9 @@ class BibleExportPdfRenderer {
     final steps = (block.content['steps'] as List? ?? const [])
         .map((value) => value.toString())
         .toList();
+    if (steps.isEmpty) {
+      steps.addAll(kBibleWorkflowDefaultSteps);
+    }
     return pw.Wrap(
       crossAxisAlignment: pw.WrapCrossAlignment.center,
       children: [
@@ -579,7 +647,7 @@ class BibleExportPdfRenderer {
               borderRadius: pw.BorderRadius.circular(12),
             ),
             child: pw.Text(
-              steps[index],
+              PdfExportFonts.asciiFallback(steps[index]),
               style: const pw.TextStyle(fontSize: 9),
             ),
           ),

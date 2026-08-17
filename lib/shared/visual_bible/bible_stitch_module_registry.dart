@@ -31,6 +31,8 @@ class StitchModule {
     return BibleSubsectionKindCatalog.fromFieldType(type);
   }
 
+  BibleWidgetContentFamily get contentFamily => catalogKind.contentFamily;
+
   BibleSectionField toField() => BibleSectionField(
         key: key,
         label: label,
@@ -157,26 +159,26 @@ abstract final class BibleStitchModuleRegistry {
               key: 'lightBehaviors',
               label: 'Comportamiento de la luz',
               type: BibleSectionFieldType.blocks,
-              subsectionKind: BibleSubsectionKindId.dynamicBlocks,
+              subsectionKind: BibleSubsectionKindId.behaviorMosaic,
             ),
             StitchModule(
               key: 'filmRefs',
               label: 'Referencias fílmicas',
               type: BibleSectionFieldType.blocks,
-              subsectionKind: BibleSubsectionKindId.dynamicBlocks,
+              subsectionKind: BibleSubsectionKindId.cardDeck,
             ),
             StitchModule(
               key: 'locationLights',
               label: 'Localizaciones (luz)',
               type: BibleSectionFieldType.blocks,
-              subsectionKind: BibleSubsectionKindId.dynamicBlocks,
+              subsectionKind: BibleSubsectionKindId.cardDeck,
             ),
             StitchModule(
               key: 'lightStyles',
               label: 'Estilos de luz',
               type: BibleSectionFieldType.blocks,
               legacyOnly: true,
-              subsectionKind: BibleSubsectionKindId.dynamicBlocks,
+              subsectionKind: BibleSubsectionKindId.cardDeck,
             ),
             StitchModule(
               key: 'lightingTagRefs',
@@ -190,7 +192,7 @@ abstract final class BibleStitchModuleRegistry {
               label: 'Diagramas de iluminación',
               type: BibleSectionFieldType.blocks,
               legacyOnly: true,
-              subsectionKind: BibleSubsectionKindId.dynamicBlocks,
+              subsectionKind: BibleSubsectionKindId.setupList,
             ),
             StitchModule(
               key: 'references',
@@ -386,6 +388,13 @@ abstract final class BibleStitchModuleRegistry {
       if ((keys.contains('lightStyles') || keys.contains('lightingTagRefs')) &&
           !keys.contains('lightBehaviors')) {
         return defaultFieldsFor(sectionId);
+      }
+      // Evitar doble UI: mosaico + deck legacy de estilos/tags.
+      if (keys.contains('lightBehaviors')) {
+        fields = [
+          for (final f in fields)
+            if (f.key != 'lightStyles' && f.key != 'lightingTagRefs') f,
+        ];
       }
       const act1Keys = {
         'narrativeStory',

@@ -12,6 +12,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../shared/visual_bible/bible_optics_context.dart';
 import '../../../../shared/visual_bible/format_pilot_resolve.dart';
+import '../../../../shared/visual_bible/format_ratio_format.dart';
 import '../../../../shared/visual_bible/format_sensor_mode_resolve.dart';
 import '../../../equipment/widgets/project_camera_roster_bar.dart';
 import '../../../optics_lab/optics_calculator.dart';
@@ -91,24 +92,6 @@ class FormatSection extends ConsumerWidget {
     return m != null ? double.tryParse(m.group(1)!) : null;
   }
 
-  String _formatRatio(double r) {
-    // Common cinema ratios
-    final known = <(double, String)>[
-      (2.39, '2.39:1'),
-      (2.40, '2.40:1'),
-      (2.35, '2.35:1'),
-      (1.85, '1.85:1'),
-      (1.78, '1.78:1'),
-      (1.66, '1.66:1'),
-      (1.33, '1.33:1'),
-      (1.0, '1:1'),
-    ];
-    for (final e in known) {
-      if ((r - e.$1).abs() < 0.02) return e.$2;
-    }
-    return '${r.toStringAsFixed(2)}:1';
-  }
-
   String _ratioLabel(String ratio) {
     if (ratio.contains('2.39') || ratio.contains('2.40')) {
       return 'Widescreen Cinemascope';
@@ -157,7 +140,7 @@ class FormatSection extends ConsumerWidget {
     final squeezeForRatio =
         opticsCtxSync.isAnamorphic ? opticsCtxSync.squeezeRatio : 1.0;
     final activeRatio = aspectForOptics ??
-        _formatRatio(sensorR * squeezeForRatio);
+        FormatRatioFormat.format(sensorR * squeezeForRatio);
 
     final intentNarrative =
         FormatPilotResolve.intentNarrative(custom, data) ?? '';
@@ -764,7 +747,7 @@ class FormatSection extends ConsumerWidget {
     final sensorR = _parseRatio(sensorMode);
     final squeeze = _parseSqueeze(squeezeFactor);
     if (sensorR == null || squeeze == null) return;
-    final ratio = _formatRatio(sensorR * squeeze);
+    final ratio = FormatRatioFormat.format(sensorR * squeeze);
     _updateCustomData(ref, {'activeRatio': ratio});
   }
 

@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
+import '../../core/navigation/route_observer.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -37,8 +38,11 @@ class EquipmentScreen extends ConsumerStatefulWidget {
 }
 
 class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, RouteAware {
+  static const _labTabIndex = 3;
+
   late final TabController _tabs;
+  final _labKey = GlobalKey<OpticsLabScreenState>();
   String? _syncMessage;
   String? _cameraFilter;
   String? _lensFilter;
@@ -51,6 +55,26 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
     super.initState();
     _tabs = TabController(length: 5, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureCatalog());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context)!);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    if (_tabs.index == _labTabIndex) {
+      _labKey.currentState?.reload();
+    }
   }
 
   Future<void> _ensureCatalog() async {
@@ -202,12 +226,6 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
         AppSnackBar.show(context, 'Error al importar catálogo: $e', isError: true);
       }
     }
-  }
-
-  @override
-  void dispose() {
-    _tabs.dispose();
-    super.dispose();
   }
 
   Widget _filterBar(AppPalette palette, List<String> chips, String? value, ValueChanged<String?> onChanged) {
@@ -519,6 +537,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
                   },
                 ),
                 OpticsLabScreen(
+                  key: _labKey,
                   projectId: widget.projectId,
                   showSaveToBible: true,
                   embedded: true,

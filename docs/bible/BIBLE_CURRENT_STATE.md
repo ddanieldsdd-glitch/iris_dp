@@ -76,10 +76,11 @@ Tests: `test/visual_bible_sync_test.dart`.
 
 - direction, concept, color, lighting (+ diagramas), exposure/camera, moodboard (modo full), tests, optics
 - format, texture, workflow (secciones de texto)
+- **location**: sets, hero, panel solar y campos custom (+ refs de locación)
 
-**Compositor híbrido:** cubre bloques enriquecidos del builder + anotaciones.
+**Compositor híbrido:** cubre bloques enriquecidos del builder + anotaciones (incluye Localización).
 
-**Gap pendiente:** pantalla **Localización** (`location`) sin página PDF dedicada en legacy.
+**Gaps:** ninguno (`BiblePdfLayoutBridge.pdfGaps` vacío). El WYSIWYG de bloques es `BibleExportPdfRenderer`; el puente v2 solo serializa layout (grid 12).
 
 ## 8. UX cerrada en auditoría
 
@@ -112,4 +113,4 @@ Suite global (última verificación): **172 passed, 4 skipped** (`widget_test`, 
 
 - Guía v2: `docs/bible/BIBLE_V2_README.md`
 - Flag y política: `lib/features/visual_bible/v2/bible_v2_policy.dart`
-- Puente PDF v2: `lib/features/visual_bible/v2/pdf/bible_pdf_layout_bridge.dart` (`pdfGaps`: solo `location`)
+- Puente PDF v2: `lib/features/visual_bible/v2/pdf/bible_pdf_layout_bridge.dart` (`pdfGaps` vacío; layout grid 12)

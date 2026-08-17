@@ -259,19 +259,23 @@ class _ContainerMetricsPanelState extends State<ContainerMetricsPanel> {
               onChangeEnd: (v) => _patch({'blackLevelIre': v.round()}),
             ),
           ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: Text(
-              'Crushed blacks',
-              style: AppTypography.bodyMedium(palette).copyWith(fontSize: 12),
-            ),
-            value: _crushedBlacks,
-            activeThumbColor: palette.accent,
-            onChanged: (v) {
-              setState(() => _crushedBlacks = v);
-              _patch({'crushedBlacks': v});
-            },
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Crushed blacks',
+                  style: AppTypography.bodyMedium(palette).copyWith(fontSize: 12),
+                ),
+              ),
+              Switch(
+                value: _crushedBlacks,
+                activeThumbColor: palette.accent,
+                onChanged: (v) {
+                  setState(() => _crushedBlacks = v);
+                  _patch({'crushedBlacks': v});
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           Row(

@@ -148,14 +148,22 @@ abstract final class LightingNarrativeCardsService {
     if (plan == null) return;
 
     final summary = card.summary;
-    final existing = await (db.select(db.visualBibleLocationRefs)
+    final byPlanId = await (db.select(db.visualBibleLocationRefs)
           ..where(
             (r) =>
                 r.bibleId.equals(card.bibleId) &
-                (r.locationBasePlanId.equals(planId) |
-                    r.locationName.equals(plan.locationName)),
+                r.locationBasePlanId.equals(planId),
           ))
         .get();
+    final existing = byPlanId.isNotEmpty
+        ? byPlanId
+        : await (db.select(db.visualBibleLocationRefs)
+              ..where(
+                (r) =>
+                    r.bibleId.equals(card.bibleId) &
+                    r.locationName.equals(plan.locationName),
+              ))
+            .get();
 
     if (existing.isEmpty) {
       await db.upsertLocationRef(
@@ -170,26 +178,26 @@ abstract final class LightingNarrativeCardsService {
       return;
     }
 
-    for (final row in existing) {
-      await db.upsertLocationRef(
-        VisualBibleLocationRefsCompanion(
-          id: Value(row.id),
-          bibleId: Value(row.bibleId),
-          locationName: Value(row.locationName),
-          locationBasePlanId: Value(row.locationBasePlanId ?? planId),
-          locationSiteId: Value(row.locationSiteId ?? plan.siteId),
-          lightingNote: Value(summary),
-          colorNote: Value(row.colorNote),
-          stagingNote: Value(row.stagingNote),
-          referenceImages: Value(row.referenceImages),
-          linkedShotIds: Value(row.linkedShotIds),
-          solarOrientation: Value(row.solarOrientation),
-          availableLightHours: Value(row.availableLightHours),
-          existingPracticals: Value(row.existingPracticals),
-          estimatedColorTempKelvin: Value(row.estimatedColorTempKelvin),
-        ),
-      );
-    }
+    // Una sola fila: preferir match por planId; si solo hay por nombre, la primera.
+    final row = existing.first;
+    await db.upsertLocationRef(
+      VisualBibleLocationRefsCompanion(
+        id: Value(row.id),
+        bibleId: Value(row.bibleId),
+        locationName: Value(row.locationName),
+        locationBasePlanId: Value(row.locationBasePlanId ?? planId),
+        locationSiteId: Value(row.locationSiteId ?? plan.siteId),
+        lightingNote: Value(summary),
+        colorNote: Value(row.colorNote),
+        stagingNote: Value(row.stagingNote),
+        referenceImages: Value(row.referenceImages),
+        linkedShotIds: Value(row.linkedShotIds),
+        solarOrientation: Value(row.solarOrientation),
+        availableLightHours: Value(row.availableLightHours),
+        existingPracticals: Value(row.existingPracticals),
+        estimatedColorTempKelvin: Value(row.estimatedColorTempKelvin),
+      ),
+    );
   }
 
   /// Actualiza summary de la card location_light desde lightingNote de Localización.

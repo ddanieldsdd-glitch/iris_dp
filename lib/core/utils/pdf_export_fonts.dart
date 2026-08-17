@@ -21,4 +21,10 @@ abstract final class PdfExportFonts {
 
   static pw.ThemeData theme({required pw.Font regular, required pw.Font bold}) =>
       pw.ThemeData.withFont(base: regular, bold: bold);
+
+  /// Sustituye glifos que Helvetica/pdf por defecto no dibuja bien.
+  static String asciiFallback(String text) => text
+      .replaceAll('→', '->')
+      .replaceAll('—', '-')
+      .replaceAll('–', '-');
 }

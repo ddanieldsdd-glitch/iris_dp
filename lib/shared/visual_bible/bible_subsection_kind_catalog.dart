@@ -2,10 +2,23 @@ import 'package:flutter/material.dart';
 
 import 'bible_section_fields.dart';
 
-/// Identificador estable de un tipo de sub-apartado reutilizable en la biblia.
+/// Familia de **contenido** del widget (no el look visual de la sección).
 ///
-/// Catálogo paralelo a [BibleSectionFieldType]: no rompe pantallas existentes;
-/// permite nombre UI + icono + mapeo al tipo de field persistido.
+/// - [cinematic]: narrativa + stills del moodboard.
+/// - [technical]: números, specs, diagramas.
+enum BibleWidgetContentFamily {
+  cinematic,
+  technical,
+}
+
+extension BibleWidgetContentFamilyX on BibleWidgetContentFamily {
+  String get label => switch (this) {
+        BibleWidgetContentFamily.cinematic => 'Cinematic',
+        BibleWidgetContentFamily.technical => 'Technical',
+      };
+}
+
+/// Identificador estable de un tipo de sub-apartado reutilizable en la biblia.
 enum BibleSubsectionKindId {
   textField,
   narrativeIntent,
@@ -17,6 +30,11 @@ enum BibleSubsectionKindId {
   paletteTarget,
   reinforcementText,
   reinforcementImages,
+  behaviorMosaic,
+  cardDeck,
+  telemetryPanel,
+  setupList,
+  lightingDiagram,
 }
 
 /// Entrada del catálogo de sub-apartados (nombre, logo, tipo wireable).
@@ -26,6 +44,7 @@ class BibleSubsectionKind {
   final String description;
   final IconData icon;
   final BibleSectionFieldType fieldType;
+  final BibleWidgetContentFamily contentFamily;
 
   const BibleSubsectionKind({
     required this.id,
@@ -33,6 +52,7 @@ class BibleSubsectionKind {
     required this.description,
     required this.icon,
     required this.fieldType,
+    required this.contentFamily,
   });
 
   String get storageKey => id.name;
@@ -47,6 +67,7 @@ abstract final class BibleSubsectionKindCatalog {
       description: 'Texto corto o técnico editable.',
       icon: Icons.short_text,
       fieldType: BibleSectionFieldType.text,
+      contentFamily: BibleWidgetContentFamily.technical,
     ),
     BibleSubsectionKind(
       id: BibleSubsectionKindId.narrativeIntent,
@@ -54,6 +75,7 @@ abstract final class BibleSubsectionKindCatalog {
       description: 'Bloque narrativo largo (visión, intención, análisis).',
       icon: Icons.menu_book_outlined,
       fieldType: BibleSectionFieldType.narrative,
+      contentFamily: BibleWidgetContentFamily.cinematic,
     ),
     BibleSubsectionKind(
       id: BibleSubsectionKindId.moodboardRefs,
@@ -61,6 +83,7 @@ abstract final class BibleSubsectionKindCatalog {
       description: 'Galería de stills del moodboard asignados a la sección.',
       icon: Icons.dashboard_customize_outlined,
       fieldType: BibleSectionFieldType.references,
+      contentFamily: BibleWidgetContentFamily.cinematic,
     ),
     BibleSubsectionKind(
       id: BibleSubsectionKindId.referenceImages,
@@ -68,6 +91,7 @@ abstract final class BibleSubsectionKindCatalog {
       description: 'Slot de imagen / cover de referencia.',
       icon: Icons.image_outlined,
       fieldType: BibleSectionFieldType.image,
+      contentFamily: BibleWidgetContentFamily.cinematic,
     ),
     BibleSubsectionKind(
       id: BibleSubsectionKindId.dynamicBlocks,
@@ -75,6 +99,47 @@ abstract final class BibleSubsectionKindCatalog {
       description: 'Grid o lista de cartas/contenedores editables.',
       icon: Icons.view_module_outlined,
       fieldType: BibleSectionFieldType.blocks,
+      contentFamily: BibleWidgetContentFamily.cinematic,
+    ),
+    BibleSubsectionKind(
+      id: BibleSubsectionKindId.behaviorMosaic,
+      label: 'Mosaico de contenedores',
+      description: 'Grid de contenedores de comportamiento de luz.',
+      icon: Icons.grid_view_outlined,
+      fieldType: BibleSectionFieldType.blocks,
+      contentFamily: BibleWidgetContentFamily.cinematic,
+    ),
+    BibleSubsectionKind(
+      id: BibleSubsectionKindId.cardDeck,
+      label: 'Deck de cartas',
+      description: 'Grid de cartas narrativas (refs fílmicas, sets…).',
+      icon: Icons.view_agenda_outlined,
+      fieldType: BibleSectionFieldType.blocks,
+      contentFamily: BibleWidgetContentFamily.cinematic,
+    ),
+    BibleSubsectionKind(
+      id: BibleSubsectionKindId.telemetryPanel,
+      label: 'Panel de telemetría',
+      description: 'Kelvin, tint, contraste, fixtures y métricas.',
+      icon: Icons.speed_outlined,
+      fieldType: BibleSectionFieldType.blocks,
+      contentFamily: BibleWidgetContentFamily.technical,
+    ),
+    BibleSubsectionKind(
+      id: BibleSubsectionKindId.setupList,
+      label: 'Lista de setups',
+      description: 'Setups de iluminación por set con notas.',
+      icon: Icons.list_alt_outlined,
+      fieldType: BibleSectionFieldType.blocks,
+      contentFamily: BibleWidgetContentFamily.technical,
+    ),
+    BibleSubsectionKind(
+      id: BibleSubsectionKindId.lightingDiagram,
+      label: 'Diagrama de planta',
+      description: 'Plano de luces con nodos de fixture y cámara.',
+      icon: Icons.map_outlined,
+      fieldType: BibleSectionFieldType.blocks,
+      contentFamily: BibleWidgetContentFamily.technical,
     ),
     BibleSubsectionKind(
       id: BibleSubsectionKindId.headerTags,
@@ -82,6 +147,7 @@ abstract final class BibleSubsectionKindCatalog {
       description: 'Chips de tags encima del título del contenedor.',
       icon: Icons.label_outline,
       fieldType: BibleSectionFieldType.text,
+      contentFamily: BibleWidgetContentFamily.cinematic,
     ),
     BibleSubsectionKind(
       id: BibleSubsectionKindId.heroWithCaption,
@@ -89,6 +155,7 @@ abstract final class BibleSubsectionKindCatalog {
       description: 'Imagen representante con apuntes del plano.',
       icon: Icons.photo_size_select_actual_outlined,
       fieldType: BibleSectionFieldType.image,
+      contentFamily: BibleWidgetContentFamily.cinematic,
     ),
     BibleSubsectionKind(
       id: BibleSubsectionKindId.paletteTarget,
@@ -96,6 +163,7 @@ abstract final class BibleSubsectionKindCatalog {
       description: 'Visor de paleta de color del still representante.',
       icon: Icons.palette_outlined,
       fieldType: BibleSectionFieldType.references,
+      contentFamily: BibleWidgetContentFamily.cinematic,
     ),
     BibleSubsectionKind(
       id: BibleSubsectionKindId.reinforcementText,
@@ -103,6 +171,7 @@ abstract final class BibleSubsectionKindCatalog {
       description: 'Bloque narrativo adicional bajo la paleta.',
       icon: Icons.notes_outlined,
       fieldType: BibleSectionFieldType.narrative,
+      contentFamily: BibleWidgetContentFamily.cinematic,
     ),
     BibleSubsectionKind(
       id: BibleSubsectionKindId.reinforcementImages,
@@ -110,6 +179,7 @@ abstract final class BibleSubsectionKindCatalog {
       description: 'Grid de referencias extra con paleta opcional.',
       icon: Icons.collections_outlined,
       fieldType: BibleSectionFieldType.references,
+      contentFamily: BibleWidgetContentFamily.cinematic,
     ),
   ];
 

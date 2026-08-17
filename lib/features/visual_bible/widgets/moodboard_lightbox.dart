@@ -16,6 +16,7 @@ import '../../../shared/annotations/annotation_document.dart';
 import '../../../shared/visual_bible/bible_section_ids.dart';
 import '../moodboard_annotation_store.dart';
 import '../moodboard_catalog_service.dart';
+import '../services/moodboard_lighting_link_service.dart';
 import '../moodboard_palette_extractor.dart';
 import '../moodboard_reference_meta.dart';
 import '../visual_bible_model.dart';
@@ -339,7 +340,7 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
       pendingReview: _meta.pendingReview,
       paletteHex: colors.map(MoodboardPaletteExtractor.toHex).toList(),
     );
-    await MoodboardReferenceMetaStore.save(_image.id, next);
+    await MoodboardReferenceMetaStore.save(ref.read(databaseProvider), _image.id, next);
     _metaById[_image.id] = next;
     widget.onMetaSaved?.call(_image.id, next);
   }
@@ -401,9 +402,17 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
       colorMood: _colorMood,
       pendingReview: _pendingReview,
     );
-    await MoodboardReferenceMetaStore.save(_image.id, next);
+    await MoodboardReferenceMetaStore.save(ref.read(databaseProvider), _image.id, next);
     _metaById[_image.id] = next;
     widget.onMetaSaved?.call(_image.id, next);
+    if (widget.bibleId != null) {
+      await MoodboardLightingLinkService.linkImageToMatchingCards(
+        db: ref.read(databaseProvider),
+        bibleId: widget.bibleId!,
+        imageId: _image.id,
+        meta: next,
+      );
+    }
     await _persistPlacement();
   }
 
@@ -697,11 +706,34 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
     await _linkLocation(name: created.set.locationName, planId: created.set.id);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+  Future<void> _handleClose() async {
+    await _saveMetaSilent();
+    await _persistStrokes();
+    widget.onClose();
+  }
 
-    final stage = _Stage(
+  void _openExpandedImage() {
+    if (_annotateMode) return;
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Cerrar imagen',
+      barrierColor: Colors.black.withValues(alpha: 0.92),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (ctx, anim, secondary) {
+        return _ExpandedImageViewer(
+          imagePath: _image.imagePath,
+          onClose: () => Navigator.of(ctx).pop(),
+        );
+      },
+      transitionBuilder: (ctx, anim, secondary, child) {
+        return FadeTransition(opacity: anim, child: child);
+      },
+    );
+  }
+
+  _Stage _buildStage() {
+    return _Stage(
       image: _image,
       palette: _palette,
       extracting: _extracting,
@@ -733,30 +765,25 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
       onNoteSelected: (id) => setState(() => _selectedNoteId = id),
       onNoteEdit: (note) => _editNote(note.id),
       onDeleteNote: _deleteSelectedNote,
+      onExpandImage: _annotateMode ? null : _openExpandedImage,
     );
+  }
 
-    final side = _SidePanel(
-      image: _image,
+  _ShotTitleNotes _buildTitleNotes({
+    int notesMaxLines = 3,
+    bool showTitle = true,
+  }) {
+    return _ShotTitleNotes(
       titleCtrl: _titleCtrl,
-      yearCtrl: _yearCtrl,
-      directorCtrl: _directorCtrl,
-      dopCtrl: _dopCtrl,
       notesCtrl: _notesCtrl,
-      tagsCtrl: _tagsCtrl,
-      cameraCtrl: _cameraCtrl,
-      lensesCtrl: _lensesCtrl,
-      aspectCtrl: _aspectCtrl,
-      commentCtrl: _commentCtrl,
-      lightingLook: _lightingLook,
-      lightSource: _lightSource,
-      lightTexture: _lightTexture,
-      composition: _composition,
-      locationKind: _locationKind,
-      locationName: _locationName,
-      timeOfDay: _timeOfDay,
-      colorMood: _colorMood,
-      pendingReview: _pendingReview,
-      assignedSections: _assignedSections,
+      locationLabel: (_locationName ?? _image.linkedLocationName)?.trim(),
+      notesMaxLines: notesMaxLines,
+      showTitle: showTitle,
+    );
+  }
+
+  _BibleCatalogBlock _buildCatalog() {
+    return _BibleCatalogBlock(
       intExtOptions: _intExtOptions,
       timeOptions: _timeOptions,
       lightingLookOptions: _lightingLookOptions,
@@ -765,22 +792,14 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
       compositionOptions: _compositionOptions,
       colorMoodOptions: _colorMoodOptions,
       projectLocations: _projectLocations,
-      onLightingLook: (v) {
-        setState(() => _lightingLook = v);
-        _saveMetaSilent();
-      },
-      onLightSource: (v) {
-        setState(() => _lightSource = v);
-        _saveMetaSilent();
-      },
-      onLightTexture: (v) {
-        setState(() => _lightTexture = v);
-        _saveMetaSilent();
-      },
-      onComposition: (v) {
-        setState(() => _composition = v);
-        _saveMetaSilent();
-      },
+      locationKind: _locationKind,
+      locationName: _locationName,
+      timeOfDay: _timeOfDay,
+      lightingLook: _lightingLook,
+      lightSource: _lightSource,
+      lightTexture: _lightTexture,
+      composition: _composition,
+      colorMood: _colorMood,
       onLocationKind: (v) {
         setState(() => _locationKind = v);
         _saveMetaSilent();
@@ -797,55 +816,256 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
         setState(() => _timeOfDay = v);
         _saveMetaSilent();
       },
+      onLightingLook: (v) {
+        setState(() => _lightingLook = v);
+        _saveMetaSilent();
+      },
+      onLightSource: (v) {
+        setState(() => _lightSource = v);
+        _saveMetaSilent();
+      },
+      onLightTexture: (v) {
+        setState(() => _lightTexture = v);
+        _saveMetaSilent();
+      },
+      onComposition: (v) {
+        setState(() => _composition = v);
+        _saveMetaSilent();
+      },
       onColorMood: (v) {
         setState(() => _colorMood = v);
         _saveMetaSilent();
       },
-      onPendingReview: (v) {
-        setState(() => _pendingReview = v);
-        _saveMetaSilent();
-      },
+      onAddCatalogOption: _addCatalogOption,
+    );
+  }
+
+  _BibleScreensBlock _buildScreens() {
+    return _BibleScreensBlock(
+      assignedSections: _assignedSections,
+      linkedLocationName: _locationName ?? _image.linkedLocationName,
       onAssignedSectionsChanged: (next) async {
         setState(() => _assignedSections = next);
         await _persistPlacement();
       },
       onSuggestSections: _applySuggestedSections,
-      onAddCatalogOption: _addCatalogOption,
-      bibleId: widget.bibleId,
-      annotateMode: _annotateMode,
-      onClose: () async {
-        await _saveMetaSilent();
-        await _persistStrokes();
-        widget.onClose();
-      },
+    );
+  }
+
+  _TechnicalCreditsBlock _buildCredits() {
+    return _TechnicalCreditsBlock(
+      yearCtrl: _yearCtrl,
+      aspectCtrl: _aspectCtrl,
+      directorCtrl: _directorCtrl,
+      dopCtrl: _dopCtrl,
+      cameraCtrl: _cameraCtrl,
+      lensesCtrl: _lensesCtrl,
+      tagsCtrl: _tagsCtrl,
       onSave: _saveMetaSilent,
+    );
+  }
+
+  _UserNotesBlock _buildUserNotes() {
+    return _UserNotesBlock(
+      bibleId: widget.bibleId,
+      imageId: _image.id,
+      commentCtrl: _commentCtrl,
+      onPostComment: _postComment,
+    );
+  }
+
+  _LightboxActionBar _buildActions() {
+    return _LightboxActionBar(
+      annotateMode: _annotateMode,
       onAdd: () => widget.onAddToProject(_image),
       onShare: _share,
       onToggleAnnotate: () => setState(() {
         _annotateMode = !_annotateMode;
         if (_annotateMode) _tool = _LightboxTool.draw;
       }),
-      onPostComment: _postComment,
     );
+  }
 
+  Widget _buildChromeHeader({required bool showTitle}) {
+    return _LightboxChromeHeader(
+      annotateMode: _annotateMode,
+      pendingReview: _pendingReview,
+      showTitle: showTitle,
+      titleCtrl: showTitle ? _titleCtrl : null,
+      onPendingReview: (v) {
+        setState(() => _pendingReview = v);
+        _saveMetaSilent();
+      },
+      onClose: _handleClose,
+    );
+  }
+
+  Widget _buildDesktopLayout() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 16, 4),
+                child: _buildTitleNotes(notesMaxLines: 2),
+              ),
+              Expanded(
+                flex: 3,
+                child: _buildStage(),
+              ),
+              Expanded(
+                flex: 2,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  child: _buildCatalog(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          width: 360,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFF121214),
+              border: Border(
+                left: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildChromeHeader(showTitle: false),
+                if (_pendingReview)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: _PendingReviewBanner(),
+                  ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    children: [
+                      _buildScreens(),
+                      const SizedBox(height: 16),
+                      _buildCredits(),
+                      const SizedBox(height: 20),
+                      _buildUserNotes(),
+                    ],
+                  ),
+                ),
+                _buildActions(),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileLayout() {
+    final stageHeight = MediaQuery.sizeOf(context).height * 0.42;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildChromeHeader(showTitle: true),
+        if (_pendingReview)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: _PendingReviewBanner(),
+          ),
+        SizedBox(height: stageHeight, child: _buildStage()),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            children: [
+              _buildTitleNotes(notesMaxLines: 4, showTitle: false),
+              const SizedBox(height: 16),
+              _buildCatalog(),
+              const SizedBox(height: 16),
+              _buildScreens(),
+              const SizedBox(height: 16),
+              _buildCredits(),
+              const SizedBox(height: 20),
+              _buildUserNotes(),
+            ],
+          ),
+        ),
+        _buildActions(),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 900;
     return Focus(
       focusNode: _focus,
       onKeyEvent: _onKey,
       child: Material(
         color: const Color(0xF20E0E10),
-        child: wide
-            ? Row(
-                children: [
-                  Expanded(child: stage),
-                  SizedBox(width: 380, child: side),
-                ],
-              )
-            : Column(
-                children: [
-                  Expanded(flex: 5, child: stage),
-                  Expanded(flex: 5, child: side),
-                ],
+        child: wide ? _buildDesktopLayout() : _buildMobileLayout(),
+      ),
+    );
+  }
+}
+
+class _ExpandedImageViewer extends StatelessWidget {
+  final String imagePath;
+  final VoidCallback onClose;
+
+  const _ExpandedImageViewer({
+    required this.imagePath,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          onClose();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Material(
+        color: Colors.black,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            InteractiveViewer(
+              minScale: 1,
+              maxScale: 5,
+              child: Center(
+                child: Image.file(
+                  File(imagePath),
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => Icon(
+                    Icons.broken_image_outlined,
+                    color: palette.textTertiary,
+                    size: 48,
+                  ),
+                ),
               ),
+            ),
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  tooltip: 'Cerrar',
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -875,6 +1095,7 @@ class _Stage extends StatefulWidget {
   final ValueChanged<String?> onNoteSelected;
   final Future<void> Function(AnnotationNote note) onNoteEdit;
   final VoidCallback onDeleteNote;
+  final VoidCallback? onExpandImage;
 
   const _Stage({
     required this.image,
@@ -900,6 +1121,7 @@ class _Stage extends StatefulWidget {
     required this.onNoteSelected,
     required this.onNoteEdit,
     required this.onDeleteNote,
+    this.onExpandImage,
   });
 
   @override
@@ -930,7 +1152,7 @@ class _StageState extends State<_Stage> {
                 fit: StackFit.expand,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
                     child: Center(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
@@ -938,7 +1160,7 @@ class _StageState extends State<_Stage> {
                             constraints.maxWidth,
                             constraints.maxHeight,
                           );
-                          return ClipRRect(
+                          final canvas = ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: AnnotationCanvas(
                               controller: widget.annotationController,
@@ -990,6 +1212,14 @@ class _StageState extends State<_Stage> {
                                     ),
                                 ],
                               ),
+                            ),
+                          );
+                          if (widget.onExpandImage == null) return canvas;
+                          return MouseRegion(
+                            cursor: SystemMouseCursors.zoomIn,
+                            child: GestureDetector(
+                              onTap: widget.onExpandImage,
+                              child: canvas,
                             ),
                           );
                         },
@@ -1053,37 +1283,42 @@ class _StageState extends State<_Stage> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        'PALETA DEL PLANO',
-                        style: AppTypography.mono(palette).copyWith(
-                          fontSize: 10,
-                          letterSpacing: 1.2,
-                          color: palette.textSecondary,
-                        ),
-                      ),
-                      const Spacer(),
-                      if (widget.extracting)
-                        const SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      else
-                        TextButton(
-                          onPressed: widget.onReextract,
-                          child: const Text('Re-extraer'),
-                        ),
-                    ],
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: widget.extracting
+                        ? const Padding(
+                            padding: EdgeInsets.only(bottom: 4),
+                            child: SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : TextButton(
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: widget.onReextract,
+                            child: Text(
+                              'Re-extraer',
+                              style: AppTypography.caption(palette).copyWith(
+                                color: palette.accent,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
                   ),
-                  const SizedBox(height: 6),
                   SizedBox(
-                    height: 40,
+                    height: 28,
                     child: widget.palette.isEmpty
                         ? Container(
                             alignment: Alignment.center,
@@ -1092,7 +1327,6 @@ class _StageState extends State<_Stage> {
                               border: Border.all(
                                 color: Colors.white.withValues(alpha: 0.18),
                               ),
-                              borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               widget.extracting
@@ -1103,41 +1337,16 @@ class _StageState extends State<_Stage> {
                               ).copyWith(color: palette.textSecondary),
                             ),
                           )
-                        : DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.22),
-                              ),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(5),
-                              child: Row(
-                                children: [
-                                  for (
-                                    var i = 0;
-                                    i < widget.palette.length;
-                                    i++
-                                  )
-                                    Expanded(
-                                      child: ColoredBox(
-                                        color: widget.palette[i],
-                                        child: i < widget.palette.length - 1
-                                            ? Align(
-                                                alignment:
-                                                    Alignment.centerRight,
-                                                child: Container(
-                                                  width: 1,
-                                                  color: Colors.black
-                                                      .withValues(alpha: 0.25),
-                                                ),
-                                              )
-                                            : null,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
+                        : Row(
+                            children: [
+                              for (var i = 0; i < widget.palette.length; i++)
+                                Expanded(
+                                  child: ColoredBox(
+                                    color: widget.palette[i],
+                                    child: const SizedBox.expand(),
+                                  ),
+                                ),
+                            ],
                           ),
                   ),
                 ],
@@ -1323,133 +1532,45 @@ class _ToolBtn extends StatelessWidget {
   }
 }
 
-class _SidePanel extends ConsumerWidget {
-  final MoodboardImageModel image;
-  final TextEditingController titleCtrl;
-  final TextEditingController yearCtrl;
-  final TextEditingController directorCtrl;
-  final TextEditingController dopCtrl;
-  final TextEditingController notesCtrl;
-  final TextEditingController tagsCtrl;
-  final TextEditingController cameraCtrl;
-  final TextEditingController lensesCtrl;
-  final TextEditingController aspectCtrl;
-  final TextEditingController commentCtrl;
-  final String? lightingLook;
-  final String? lightSource;
-  final String? lightTexture;
-  final String? composition;
-  final String? locationKind;
-  final String? locationName;
-  final String? timeOfDay;
-  final String? colorMood;
-  final bool pendingReview;
-  final List<String> assignedSections;
-  final List<String> intExtOptions;
-  final List<String> timeOptions;
-  final List<String> lightingLookOptions;
-  final List<String> lightSourceOptions;
-  final List<String> lightTextureOptions;
-  final List<String> compositionOptions;
-  final List<String> colorMoodOptions;
-  final List<LocationBasePlan> projectLocations;
-  final ValueChanged<String?> onLightingLook;
-  final ValueChanged<String?> onLightSource;
-  final ValueChanged<String?> onLightTexture;
-  final ValueChanged<String?> onComposition;
-  final ValueChanged<String?> onLocationKind;
-  final Future<void> Function(LocationBasePlan? plan) onSelectLocation;
-  final Future<void> Function() onAddLocation;
-  final ValueChanged<String?> onTimeOfDay;
-  final ValueChanged<String?> onColorMood;
-  final ValueChanged<bool> onPendingReview;
-  final ValueChanged<List<String>> onAssignedSectionsChanged;
-  final Future<void> Function() onSuggestSections;
-  final Future<void> Function(MoodboardCatalogKey key) onAddCatalogOption;
-  final int? bibleId;
+class _LightboxChromeHeader extends StatelessWidget {
   final bool annotateMode;
+  final bool pendingReview;
+  final bool showTitle;
+  final TextEditingController? titleCtrl;
+  final ValueChanged<bool> onPendingReview;
   final VoidCallback onClose;
-  final Future<void> Function() onSave;
-  final VoidCallback onAdd;
-  final VoidCallback onShare;
-  final VoidCallback onToggleAnnotate;
-  final Future<void> Function() onPostComment;
 
-  const _SidePanel({
-    required this.image,
-    required this.titleCtrl,
-    required this.yearCtrl,
-    required this.directorCtrl,
-    required this.dopCtrl,
-    required this.notesCtrl,
-    required this.tagsCtrl,
-    required this.cameraCtrl,
-    required this.lensesCtrl,
-    required this.aspectCtrl,
-    required this.commentCtrl,
-    required this.lightingLook,
-    required this.lightSource,
-    required this.lightTexture,
-    required this.composition,
-    required this.locationKind,
-    required this.locationName,
-    required this.timeOfDay,
-    required this.colorMood,
-    required this.pendingReview,
-    required this.assignedSections,
-    required this.intExtOptions,
-    required this.timeOptions,
-    required this.lightingLookOptions,
-    required this.lightSourceOptions,
-    required this.lightTextureOptions,
-    required this.compositionOptions,
-    required this.colorMoodOptions,
-    required this.projectLocations,
-    required this.onLightingLook,
-    required this.onLightSource,
-    required this.onLightTexture,
-    required this.onComposition,
-    required this.onLocationKind,
-    required this.onSelectLocation,
-    required this.onAddLocation,
-    required this.onTimeOfDay,
-    required this.onColorMood,
-    required this.onPendingReview,
-    required this.onAssignedSectionsChanged,
-    required this.onSuggestSections,
-    required this.onAddCatalogOption,
-    required this.bibleId,
+  const _LightboxChromeHeader({
     required this.annotateMode,
+    required this.pendingReview,
+    required this.showTitle,
+    this.titleCtrl,
+    required this.onPendingReview,
     required this.onClose,
-    required this.onSave,
-    required this.onAdd,
-    required this.onShare,
-    required this.onToggleAnnotate,
-    required this.onPostComment,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final palette = context.palette;
-    final db = ref.watch(databaseProvider);
-    final locLabel = (locationName ?? image.linkedLocationName)?.trim();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF121214),
-        border: Border(
-          left: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 8, 4),
+      child: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 8, 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
+          Expanded(
+            child: showTitle && titleCtrl != null
+                ? TextField(
+                    controller: titleCtrl,
+                    style: AppTypography.titleMedium(palette).copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: 'Título del plano / referencia',
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                  )
+                : Text(
                     annotateMode ? 'ANOTAR' : 'DETALLE DEL PLANO',
                     style: AppTypography.mono(palette).copyWith(
                       fontSize: 11,
@@ -1459,482 +1580,654 @@ class _SidePanel extends ConsumerWidget {
                           : palette.accent,
                     ),
                   ),
-                ),
-                IconButton(
-                  tooltip: pendingReview
-                      ? 'Quitar pendiente'
-                      : 'Marcar pendiente',
-                  onPressed: () => onPendingReview(!pendingReview),
-                  icon: Icon(
-                    pendingReview
-                        ? Icons.mark_email_unread
-                        : Icons.mark_email_read_outlined,
-                    color: pendingReview
-                        ? palette.warning
-                        : palette.textTertiary,
-                    size: 20,
-                  ),
-                ),
-                IconButton(
-                  onPressed: onClose,
-                  icon: Icon(Icons.close, color: palette.textSecondary),
-                ),
-              ],
+          ),
+          IconButton(
+            tooltip: pendingReview ? 'Quitar pendiente' : 'Marcar pendiente',
+            onPressed: () => onPendingReview(!pendingReview),
+            icon: Icon(
+              pendingReview
+                  ? Icons.mark_email_unread
+                  : Icons.mark_email_read_outlined,
+              color: pendingReview ? palette.warning : palette.textTertiary,
+              size: 20,
             ),
           ),
-          if (pendingReview)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: palette.warning.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: palette.warning.withValues(alpha: 0.35),
-                  ),
-                ),
-                child: Text(
-                  'Pendiente de revisar',
-                  style: AppTypography.caption(palette).copyWith(
-                    color: palette.warning,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+          IconButton(
+            onPressed: onClose,
+            icon: Icon(Icons.close, color: palette.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingReviewBanner extends StatelessWidget {
+  const _PendingReviewBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: palette.warning.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: palette.warning.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        'Pendiente de revisar',
+        style: AppTypography.caption(palette).copyWith(
+          color: palette.warning,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _ShotTitleNotes extends StatelessWidget {
+  final TextEditingController titleCtrl;
+  final TextEditingController notesCtrl;
+  final String? locationLabel;
+  final int notesMaxLines;
+  final bool showTitle;
+
+  const _ShotTitleNotes({
+    required this.titleCtrl,
+    required this.notesCtrl,
+    required this.locationLabel,
+    this.notesMaxLines = 3,
+    this.showTitle = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final loc = locationLabel;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showTitle)
+          TextField(
+            controller: titleCtrl,
+            style: AppTypography.titleMedium(
+              palette,
+            ).copyWith(fontSize: 20, fontWeight: FontWeight.w700),
+            decoration: const InputDecoration(
+              hintText: 'Título del plano / referencia',
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+        if (loc != null && loc.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              loc.toUpperCase(),
+              style: AppTypography.mono(palette).copyWith(
+                fontSize: 10,
+                letterSpacing: 0.8,
+                color: palette.textTertiary,
               ),
             ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              children: [
-                TextField(
-                  controller: titleCtrl,
-                  style: AppTypography.titleMedium(
-                    palette,
-                  ).copyWith(fontSize: 18, fontWeight: FontWeight.w700),
-                  decoration: const InputDecoration(
-                    hintText: 'Título del plano / referencia',
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-                if (locLabel != null && locLabel.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      locLabel.toUpperCase(),
-                      style: AppTypography.mono(palette).copyWith(
-                        fontSize: 10,
-                        letterSpacing: 0.8,
-                        color: palette.textTertiary,
-                      ),
-                    ),
-                  ),
-                TextField(
-                  controller: notesCtrl,
-                  maxLines: 4,
-                  style: AppTypography.bodyMedium(
-                    palette,
-                  ).copyWith(height: 1.45, color: palette.textSecondary),
-                  decoration: InputDecoration(
-                    hintText: 'Apunte principal del plano…',
-                    hintStyle: AppTypography.bodyMedium(
-                      palette,
-                    ).copyWith(color: palette.textTertiary),
-                    filled: true,
-                    fillColor: Colors.white.withValues(alpha: 0.03),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.08),
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.08),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(
-                        color: palette.accent.withValues(alpha: 0.45),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                _CatalogSectionLabel(text: 'Catálogo biblia', palette: palette),
-                const SizedBox(height: 8),
-                _ChipRow(
-                  label: 'INT / EXT (guion)',
-                  options: intExtOptions,
-                  value: locationKind,
-                  onChanged: onLocationKind,
-                  palette: palette,
-                  onAddCustom: () =>
-                      onAddCatalogOption(MoodboardCatalogKey.intExt),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Localización',
-                  style: AppTypography.caption(palette).copyWith(
-                    color: palette.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final plan in projectLocations)
-                      FilterChip(
-                        label: Text(plan.locationName),
-                        selected: locationName == plan.locationName,
-                        onSelected: (v) => onSelectLocation(v ? plan : null),
-                        showCheckmark: false,
-                        visualDensity: VisualDensity.compact,
-                        labelStyle: TextStyle(
-                          fontSize: 11,
-                          color: locationName == plan.locationName
-                              ? palette.textPrimary
-                              : palette.textSecondary,
-                        ),
-                        selectedColor: palette.accent.withValues(alpha: 0.22),
-                        backgroundColor: Colors.white.withValues(alpha: 0.03),
-                        side: BorderSide(
-                          color: locationName == plan.locationName
-                              ? palette.accent.withValues(alpha: 0.5)
-                              : Colors.white.withValues(alpha: 0.08),
-                        ),
-                      ),
-                    ActionChip(
-                      avatar: Icon(Icons.add, size: 16, color: palette.accent),
-                      label: const Text('Añadir'),
-                      onPressed: onAddLocation,
-                      visualDensity: VisualDensity.compact,
-                      labelStyle: TextStyle(
-                        fontSize: 11,
-                        color: palette.accent,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      backgroundColor: Colors.white.withValues(alpha: 0.03),
-                      side: BorderSide(
-                        color: palette.accent.withValues(alpha: 0.35),
-                      ),
-                    ),
-                  ],
-                ),
-                if (projectLocations.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      'Sin sets aún. Añade uno o crea localizaciones desde el guion.',
-                      style: AppTypography.caption(
-                        palette,
-                      ).copyWith(color: palette.textTertiary),
-                    ),
-                  ),
-                const SizedBox(height: 10),
-                _ChipRow(
-                  label: 'Hora del día',
-                  options: timeOptions,
-                  value: timeOfDay,
-                  onChanged: onTimeOfDay,
-                  palette: palette,
-                  onAddCustom: () =>
-                      onAddCatalogOption(MoodboardCatalogKey.timeOfDay),
-                ),
-                const SizedBox(height: 10),
-                _ChipRow(
-                  label: 'Calidad de luz',
-                  options: lightingLookOptions,
-                  value: lightingLook,
-                  onChanged: onLightingLook,
-                  palette: palette,
-                  onAddCustom: () =>
-                      onAddCatalogOption(MoodboardCatalogKey.lightingLook),
-                ),
-                const SizedBox(height: 10),
-                _ChipRow(
-                  label: 'Tipo / fuente de luz',
-                  options: lightSourceOptions,
-                  value: lightSource,
-                  onChanged: onLightSource,
-                  palette: palette,
-                  onAddCustom: () =>
-                      onAddCatalogOption(MoodboardCatalogKey.lightSource),
-                ),
-                const SizedBox(height: 10),
-                _ChipRow(
-                  label: 'Textura de la luz',
-                  options: lightTextureOptions,
-                  value: lightTexture,
-                  onChanged: onLightTexture,
-                  palette: palette,
-                  onAddCustom: () =>
-                      onAddCatalogOption(MoodboardCatalogKey.lightTexture),
-                ),
-                const SizedBox(height: 10),
-                _ChipRow(
-                  label: 'Composición',
-                  options: compositionOptions,
-                  value: composition,
-                  onChanged: onComposition,
-                  palette: palette,
-                  onAddCustom: () =>
-                      onAddCatalogOption(MoodboardCatalogKey.composition),
-                ),
-                const SizedBox(height: 10),
-                _ChipRow(
-                  label: 'Look color',
-                  options: colorMoodOptions,
-                  value: colorMood,
-                  onChanged: onColorMood,
-                  palette: palette,
-                  onAddCustom: () =>
-                      onAddCatalogOption(MoodboardCatalogKey.colorMood),
-                ),
-                const SizedBox(height: 16),
-                _CatalogSectionLabel(
-                  text: 'Aparece en la biblia',
-                  palette: palette,
-                ),
-                const SizedBox(height: 8),
-                MoodboardAssignmentBadges(
-                  assignedSections: assignedSections,
-                  linkedLocationName: locationName ?? image.linkedLocationName,
-                ),
-                const SizedBox(height: 10),
-                MoodboardSectionAssignField(
-                  selected: assignedSections,
-                  onChanged: onAssignedSectionsChanged,
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: onSuggestSections,
-                    icon: const Icon(Icons.auto_awesome_outlined, size: 16),
-                    label: const Text('Sugerir pantallas desde catálogo'),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Theme(
-                  data: Theme.of(
-                    context,
-                  ).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    tilePadding: EdgeInsets.zero,
-                    childrenPadding: EdgeInsets.zero,
-                    title: Text(
-                      'Créditos y técnico',
-                      style: AppTypography.caption(palette).copyWith(
-                        color: palette.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    children: [
-                      TextField(
-                        controller: yearCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Año',
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: aspectCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Aspect ratio',
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: directorCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Director',
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: dopCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'DP / DoP',
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: cameraCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Cámara',
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: lensesCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Óptica',
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: tagsCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Tags (coma)',
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                  ),
-                ),
-                FilledButton.tonal(
-                  onPressed: () async {
-                    await onSave();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Detalles guardados'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    }
-                  },
-                  child: const Text('Guardar'),
-                ),
-                const SizedBox(height: 20),
-                _CatalogSectionLabel(text: 'Notas', palette: palette),
-                const SizedBox(height: 8),
-                if (bibleId == null || bibleId! <= 0)
-                  Text(
-                    'Guarda la biblia para comentar.',
-                    style: AppTypography.caption(palette),
-                  )
-                else
-                  StreamBuilder<List<BibleComment>>(
-                    stream: db.watchBibleComments(
-                      bibleId!,
-                      targetType: 'moodboard',
-                      targetId: image.id,
-                    ),
-                    builder: (context, snap) {
-                      final comments = snap.data ?? [];
-                      if (comments.isEmpty) {
-                        return Text(
-                          'Sin notas aún.',
-                          style: AppTypography.caption(
-                            palette,
-                          ).copyWith(color: palette.textTertiary),
-                        );
-                      }
-                      return Column(
-                        children: [
-                          for (final c in comments)
-                            Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.03),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.06),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    c.comment,
-                                    style: AppTypography.bodyMedium(
-                                      palette,
-                                    ).copyWith(fontSize: 13, height: 1.4),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Text(
-                                        '${c.authorRole.toUpperCase()} · '
-                                        '${c.createdAt.toLocal().toString().substring(0, 16)}',
-                                        style: AppTypography.caption(palette),
-                                      ),
-                                      const Spacer(),
-                                      InkWell(
-                                        onTap: () =>
-                                            db.deleteBibleComment(c.id),
-                                        child: Icon(
-                                          Icons.close,
-                                          size: 14,
-                                          color: palette.textTertiary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: commentCtrl,
-                        decoration: const InputDecoration(
-                          hintText: 'Añadir nota…',
-                          isDense: true,
-                        ),
-                        onSubmitted: (_) => onPostComment(),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: onPostComment,
-                      icon: Icon(Icons.send, color: palette.accent),
-                    ),
-                  ],
-                ),
-              ],
+          ),
+        TextField(
+          controller: notesCtrl,
+          maxLines: notesMaxLines,
+          style: AppTypography.bodyMedium(
+            palette,
+          ).copyWith(height: 1.4, color: palette.textSecondary, fontSize: 13),
+          decoration: InputDecoration(
+            hintText: 'Apunte principal del plano…',
+            hintStyle: AppTypography.bodyMedium(
+              palette,
+            ).copyWith(color: palette.textTertiary, fontSize: 13),
+            filled: true,
+            fillColor: Colors.white.withValues(alpha: 0.03),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 8,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: palette.accent.withValues(alpha: 0.45),
+              ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: onAdd,
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('A biblia'),
+        ),
+      ],
+    );
+  }
+}
+
+class _BibleCatalogBlock extends StatelessWidget {
+  final List<String> intExtOptions;
+  final List<String> timeOptions;
+  final List<String> lightingLookOptions;
+  final List<String> lightSourceOptions;
+  final List<String> lightTextureOptions;
+  final List<String> compositionOptions;
+  final List<String> colorMoodOptions;
+  final List<LocationBasePlan> projectLocations;
+  final String? locationKind;
+  final String? locationName;
+  final String? timeOfDay;
+  final String? lightingLook;
+  final String? lightSource;
+  final String? lightTexture;
+  final String? composition;
+  final String? colorMood;
+  final ValueChanged<String?> onLocationKind;
+  final Future<void> Function(LocationBasePlan? plan) onSelectLocation;
+  final Future<void> Function() onAddLocation;
+  final ValueChanged<String?> onTimeOfDay;
+  final ValueChanged<String?> onLightingLook;
+  final ValueChanged<String?> onLightSource;
+  final ValueChanged<String?> onLightTexture;
+  final ValueChanged<String?> onComposition;
+  final ValueChanged<String?> onColorMood;
+  final Future<void> Function(MoodboardCatalogKey key) onAddCatalogOption;
+
+  const _BibleCatalogBlock({
+    required this.intExtOptions,
+    required this.timeOptions,
+    required this.lightingLookOptions,
+    required this.lightSourceOptions,
+    required this.lightTextureOptions,
+    required this.compositionOptions,
+    required this.colorMoodOptions,
+    required this.projectLocations,
+    required this.locationKind,
+    required this.locationName,
+    required this.timeOfDay,
+    required this.lightingLook,
+    required this.lightSource,
+    required this.lightTexture,
+    required this.composition,
+    required this.colorMood,
+    required this.onLocationKind,
+    required this.onSelectLocation,
+    required this.onAddLocation,
+    required this.onTimeOfDay,
+    required this.onLightingLook,
+    required this.onLightSource,
+    required this.onLightTexture,
+    required this.onComposition,
+    required this.onColorMood,
+    required this.onAddCatalogOption,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _CatalogSectionLabel(text: 'Catálogo biblia', palette: palette),
+        const SizedBox(height: 8),
+        _ChipRow(
+          label: 'INT / EXT (guion)',
+          options: intExtOptions,
+          value: locationKind,
+          onChanged: onLocationKind,
+          palette: palette,
+          onAddCustom: () => onAddCatalogOption(MoodboardCatalogKey.intExt),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Localización',
+          style: AppTypography.caption(palette).copyWith(
+            color: palette.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          children: [
+            for (final plan in projectLocations)
+              FilterChip(
+                label: Text(plan.locationName),
+                selected: locationName == plan.locationName,
+                onSelected: (v) => onSelectLocation(v ? plan : null),
+                showCheckmark: false,
+                visualDensity: VisualDensity.compact,
+                labelStyle: TextStyle(
+                  fontSize: 11,
+                  color: locationName == plan.locationName
+                      ? palette.textPrimary
+                      : palette.textSecondary,
                 ),
-                FilledButton.tonalIcon(
-                  onPressed: onToggleAnnotate,
-                  icon: Icon(
-                    annotateMode ? Icons.check : Icons.draw_outlined,
-                    size: 16,
-                  ),
-                  label: Text(annotateMode ? 'Listo' : 'Anotar'),
+                selectedColor: palette.accent.withValues(alpha: 0.22),
+                backgroundColor: Colors.white.withValues(alpha: 0.03),
+                side: BorderSide(
+                  color: locationName == plan.locationName
+                      ? palette.accent.withValues(alpha: 0.5)
+                      : Colors.white.withValues(alpha: 0.08),
                 ),
-                OutlinedButton.icon(
-                  onPressed: onShare,
-                  icon: const Icon(Icons.ios_share, size: 16),
-                  label: const Text('Share'),
-                ),
-              ],
+              ),
+            ActionChip(
+              avatar: Icon(Icons.add, size: 16, color: palette.accent),
+              label: const Text('Añadir'),
+              onPressed: onAddLocation,
+              visualDensity: VisualDensity.compact,
+              labelStyle: TextStyle(
+                fontSize: 11,
+                color: palette.accent,
+                fontWeight: FontWeight.w600,
+              ),
+              backgroundColor: Colors.white.withValues(alpha: 0.03),
+              side: BorderSide(color: palette.accent.withValues(alpha: 0.35)),
             ),
+          ],
+        ),
+        if (projectLocations.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Sin sets aún. Añade uno o crea localizaciones desde el guion.',
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: palette.textTertiary),
+            ),
+          ),
+        const SizedBox(height: 8),
+        _ChipRow(
+          label: 'Hora del día',
+          options: timeOptions,
+          value: timeOfDay,
+          onChanged: onTimeOfDay,
+          palette: palette,
+          onAddCustom: () => onAddCatalogOption(MoodboardCatalogKey.timeOfDay),
+        ),
+        const SizedBox(height: 8),
+        _ChipRow(
+          label: 'Calidad de luz',
+          options: lightingLookOptions,
+          value: lightingLook,
+          onChanged: onLightingLook,
+          palette: palette,
+          onAddCustom: () =>
+              onAddCatalogOption(MoodboardCatalogKey.lightingLook),
+        ),
+        const SizedBox(height: 8),
+        _ChipRow(
+          label: 'Tipo / fuente de luz',
+          options: lightSourceOptions,
+          value: lightSource,
+          onChanged: onLightSource,
+          palette: palette,
+          onAddCustom: () =>
+              onAddCatalogOption(MoodboardCatalogKey.lightSource),
+        ),
+        const SizedBox(height: 8),
+        _ChipRow(
+          label: 'Textura de la luz',
+          options: lightTextureOptions,
+          value: lightTexture,
+          onChanged: onLightTexture,
+          palette: palette,
+          onAddCustom: () =>
+              onAddCatalogOption(MoodboardCatalogKey.lightTexture),
+        ),
+        const SizedBox(height: 8),
+        _ChipRow(
+          label: 'Composición',
+          options: compositionOptions,
+          value: composition,
+          onChanged: onComposition,
+          palette: palette,
+          onAddCustom: () =>
+              onAddCatalogOption(MoodboardCatalogKey.composition),
+        ),
+        const SizedBox(height: 8),
+        _ChipRow(
+          label: 'Look color',
+          options: colorMoodOptions,
+          value: colorMood,
+          onChanged: onColorMood,
+          palette: palette,
+          onAddCustom: () => onAddCatalogOption(MoodboardCatalogKey.colorMood),
+        ),
+      ],
+    );
+  }
+}
+
+class _BibleScreensBlock extends StatelessWidget {
+  final List<String> assignedSections;
+  final String? linkedLocationName;
+  final ValueChanged<List<String>> onAssignedSectionsChanged;
+  final Future<void> Function() onSuggestSections;
+
+  const _BibleScreensBlock({
+    required this.assignedSections,
+    required this.linkedLocationName,
+    required this.onAssignedSectionsChanged,
+    required this.onSuggestSections,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _CatalogSectionLabel(text: 'Aparece en la biblia', palette: palette),
+        const SizedBox(height: 8),
+        MoodboardAssignmentBadges(
+          assignedSections: assignedSections,
+          linkedLocationName: linkedLocationName,
+        ),
+        const SizedBox(height: 10),
+        MoodboardSectionAssignField(
+          selected: assignedSections,
+          onChanged: onAssignedSectionsChanged,
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: onSuggestSections,
+            icon: const Icon(Icons.auto_awesome_outlined, size: 16),
+            label: const Text('Sugerir pantallas desde catálogo'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TechnicalCreditsBlock extends StatelessWidget {
+  final TextEditingController yearCtrl;
+  final TextEditingController aspectCtrl;
+  final TextEditingController directorCtrl;
+  final TextEditingController dopCtrl;
+  final TextEditingController cameraCtrl;
+  final TextEditingController lensesCtrl;
+  final TextEditingController tagsCtrl;
+  final Future<void> Function() onSave;
+
+  const _TechnicalCreditsBlock({
+    required this.yearCtrl,
+    required this.aspectCtrl,
+    required this.directorCtrl,
+    required this.dopCtrl,
+    required this.cameraCtrl,
+    required this.lensesCtrl,
+    required this.tagsCtrl,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: EdgeInsets.zero,
+            title: Text(
+              'Créditos y técnico',
+              style: AppTypography.caption(palette).copyWith(
+                color: palette.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            children: [
+              TextField(
+                controller: yearCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Año',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: aspectCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Aspect ratio',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: directorCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Director',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: dopCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'DP / DoP',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: cameraCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Cámara',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: lensesCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Óptica',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: tagsCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Tags (coma)',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+        FilledButton.tonal(
+          onPressed: () async {
+            await onSave();
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Detalles guardados'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          },
+          child: const Text('Guardar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _UserNotesBlock extends ConsumerWidget {
+  final int? bibleId;
+  final int imageId;
+  final TextEditingController commentCtrl;
+  final Future<void> Function() onPostComment;
+
+  const _UserNotesBlock({
+    required this.bibleId,
+    required this.imageId,
+    required this.commentCtrl,
+    required this.onPostComment,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final db = ref.watch(databaseProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _CatalogSectionLabel(text: 'Notas', palette: palette),
+        const SizedBox(height: 8),
+        if (bibleId == null || bibleId! <= 0)
+          Text(
+            'Guarda la biblia para comentar.',
+            style: AppTypography.caption(palette),
+          )
+        else
+          StreamBuilder<List<BibleComment>>(
+            stream: db.watchBibleComments(
+              bibleId!,
+              targetType: 'moodboard',
+              targetId: imageId,
+            ),
+            builder: (context, snap) {
+              final comments = snap.data ?? [];
+              if (comments.isEmpty) {
+                return Text(
+                  'Sin notas aún.',
+                  style: AppTypography.caption(
+                    palette,
+                  ).copyWith(color: palette.textTertiary),
+                );
+              }
+              return Column(
+                children: [
+                  for (final c in comments)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.03),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.06),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            c.comment,
+                            style: AppTypography.bodyMedium(
+                              palette,
+                            ).copyWith(fontSize: 13, height: 1.4),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Text(
+                                '${c.authorRole.toUpperCase()} · '
+                                '${c.createdAt.toLocal().toString().substring(0, 16)}',
+                                style: AppTypography.caption(palette),
+                              ),
+                              const Spacer(),
+                              InkWell(
+                                onTap: () => db.deleteBibleComment(c.id),
+                                child: Icon(
+                                  Icons.close,
+                                  size: 14,
+                                  color: palette.textTertiary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: commentCtrl,
+                decoration: const InputDecoration(
+                  hintText: 'Añadir nota…',
+                  isDense: true,
+                ),
+                onSubmitted: (_) => onPostComment(),
+              ),
+            ),
+            IconButton(
+              onPressed: onPostComment,
+              icon: Icon(Icons.send, color: palette.accent),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _LightboxActionBar extends StatelessWidget {
+  final bool annotateMode;
+  final VoidCallback onAdd;
+  final VoidCallback onShare;
+  final VoidCallback onToggleAnnotate;
+
+  const _LightboxActionBar({
+    required this.annotateMode,
+    required this.onAdd,
+    required this.onShare,
+    required this.onToggleAnnotate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          OutlinedButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('A biblia'),
+          ),
+          FilledButton.tonalIcon(
+            onPressed: onToggleAnnotate,
+            icon: Icon(
+              annotateMode ? Icons.check : Icons.draw_outlined,
+              size: 16,
+            ),
+            label: Text(annotateMode ? 'Listo' : 'Anotar'),
+          ),
+          OutlinedButton.icon(
+            onPressed: onShare,
+            icon: const Icon(Icons.ios_share, size: 16),
+            label: const Text('Share'),
           ),
         ],
       ),
@@ -1987,10 +2280,10 @@ class _ChipRow extends StatelessWidget {
             palette,
           ).copyWith(color: palette.textSecondary, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Wrap(
-          spacing: 6,
-          runSpacing: 6,
+          spacing: 4,
+          runSpacing: 4,
           children: [
             for (final opt in options)
               FilterChip(

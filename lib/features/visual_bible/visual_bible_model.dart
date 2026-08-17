@@ -999,12 +999,13 @@ class NarrativeCardModel {
         .map((m) => ContainerReinforcementBlock.fromJson(
               Map<String, dynamic>.from(m),
             ))
-        .where((b) => b.isNotEmpty)
+        .where((b) => b.isPersistedDraft)
         .toList();
   }
 
   set reinforcementBlocks(List<ContainerReinforcementBlock> blocks) {
-    final encoded = blocks.where((b) => b.isNotEmpty).map((b) => b.toJson()).toList();
+    final encoded =
+        blocks.where((b) => b.isPersistedDraft).map((b) => b.toJson()).toList();
     if (encoded.isEmpty) {
       meta.remove('reinforcementBlocks');
     } else {
@@ -1072,9 +1073,12 @@ class ContainerReinforcementBlock {
       (isText && text != null && text!.trim().isNotEmpty) ||
       (isImage && imageId != null);
 
+  /// Incluye borradores de texto vacíos (para poder crear y editar el bloque).
+  bool get isPersistedDraft => isText || (isImage && imageId != null);
+
   Map<String, dynamic> toJson() => {
         'type': type,
-        if (text != null && text!.trim().isNotEmpty) 'text': text!.trim(),
+        if (text != null) 'text': text,
         if (imageId != null) 'imageId': imageId,
       };
 

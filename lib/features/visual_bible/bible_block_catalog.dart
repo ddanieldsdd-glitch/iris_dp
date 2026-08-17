@@ -79,18 +79,8 @@ extension BibleBlockKindX on BibleBlockKind {
 
   /// Estado de implementación en el renderer.
   BibleBlockStatus get status => switch (this) {
-    BibleBlockKind.text ||
-    BibleBlockKind.narrative ||
-    BibleBlockKind.heroImage ||
-    BibleBlockKind.chipSelect ||
-    BibleBlockKind.equipmentList ||
-    BibleBlockKind.specsTable => BibleBlockStatus.live,
-    BibleBlockKind.moodboardRefs ||
-    BibleBlockKind.colorPalette ||
-    BibleBlockKind.telemetry ||
-    BibleBlockKind.lightingDiagram ||
-    BibleBlockKind.workflowPipeline => BibleBlockStatus.partial,
     BibleBlockKind.dynamicBlocks => BibleBlockStatus.planned,
+    _ => BibleBlockStatus.live,
   };
 
   /// Mapeo al tipo legacy de campo (hasta migrar el editor).
@@ -110,6 +100,15 @@ abstract final class BibleBlockCatalog {
   static Iterable<BibleBlockKind> get pickerKinds =>
       BibleBlockKind.values.where((k) => k.status == BibleBlockStatus.live);
 }
+
+/// Pasos por defecto alineados con la sección Workflow legacy.
+const kBibleWorkflowDefaultSteps = [
+  'CÁMARA',
+  'BACKUP',
+  'DAILIES',
+  'COLOR',
+  'ENTREGA',
+];
 
 enum BibleBlockStatus { live, partial, planned }
 
@@ -159,7 +158,7 @@ abstract final class BibleBlueprintPacks {
         BibleSectionId.colorImage => const [
           BibleBlockKind.narrative,
           BibleBlockKind.colorPalette,
-          BibleBlockKind.dynamicBlocks,
+          BibleBlockKind.text,
           BibleBlockKind.moodboardRefs,
         ],
         BibleSectionId.moodboard => const [

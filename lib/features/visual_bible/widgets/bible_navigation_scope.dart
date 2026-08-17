@@ -71,6 +71,20 @@ class BibleNavigationScope extends InheritedWidget {
         );
   }
 
+  /// Abre Iluminación centrada en una carta narrativa.
+  static void openLightingCard(
+    BuildContext context, {
+    required int cardId,
+    int? planId,
+  }) {
+    goToSection(
+      context,
+      BibleSectionId.lighting,
+      planId: planId,
+      focus: 'card:$cardId',
+    );
+  }
+
   @override
   bool updateShouldNotify(BibleNavigationScope oldWidget) =>
       openSection != oldWidget.openSection ||

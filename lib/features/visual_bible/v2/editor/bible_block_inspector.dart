@@ -260,8 +260,7 @@ class _BlockInspectorBody extends StatelessWidget {
             block.type.label.toUpperCase(),
             style: AppTypography.label(palette),
           ),
-          if (block.type == BibleBlockKind.heroImage ||
-              block.type == BibleBlockKind.moodboardRefs) ...[
+          if (block.type == BibleBlockKind.heroImage) ...[
             const SizedBox(height: 16),
             Text('IMAGE', style: AppTypography.label(palette)),
             const SizedBox(height: 8),

@@ -14,6 +14,12 @@ abstract final class PageLayoutRecipeRegistry {
   static const locationHero = 'location_hero_v1';
   static const overviewDashboard = 'overview_dashboard_v1';
   static const freeformGrid = 'freeform_grid_v1';
+  static const opticsSpecs = 'optics_specs_v1';
+  static const exposureHud = 'exposure_hud_v1';
+  static const textureLook = 'texture_look_v1';
+  static const cameraTests = 'camera_tests_v1';
+  static const colorImage = 'color_image_v1';
+  static const workflowPipeline = 'workflow_pipeline_v1';
 
   static PageLayoutRecipe? byId(String? id) {
     if (id == null || id.isEmpty) return null;
@@ -36,6 +42,12 @@ abstract final class PageLayoutRecipeRegistry {
       BibleSectionId.format => aspectRatioHud,
       BibleSectionId.moodboard => moodboardMasonry,
       BibleSectionId.location => locationHero,
+      BibleSectionId.optics => opticsSpecs,
+      BibleSectionId.exposure => exposureHud,
+      BibleSectionId.texture => textureLook,
+      BibleSectionId.cameraTests => cameraTests,
+      BibleSectionId.colorImage => colorImage,
+      BibleSectionId.workflow => workflowPipeline,
       BibleSidebar.overviewSectionId => overviewDashboard,
       _ when sectionId.startsWith('custom_') => freeformGrid,
       _ => null,
@@ -52,6 +64,12 @@ abstract final class PageLayoutRecipeRegistry {
     _location,
     _overview,
     _freeform,
+    _optics,
+    _exposure,
+    _texture,
+    _cameraTests,
+    _colorImage,
+    _workflow,
   ];
 
   static final _direction = PageLayoutRecipe(
@@ -328,6 +346,178 @@ abstract final class PageLayoutRecipeRegistry {
         label: 'Contenido',
         colSpan: 12,
         rowSpan: 6,
+      ),
+    ],
+  );
+
+  static final _optics = PageLayoutRecipe(
+    id: opticsSpecs,
+    sectionId: BibleSectionId.optics,
+    label: 'Óptica · Specs',
+    description: 'Intención, tabla de lentes y referencias.',
+    preferredThemeId: BibleThemeIds.technical,
+    slots: const [
+      PageLayoutSlot(
+        id: 'narrative',
+        kind: 'narrative',
+        label: 'Intención narrativa',
+        colSpan: 12,
+        rowSpan: 2,
+      ),
+      PageLayoutSlot(
+        id: 'specs',
+        kind: 'specs_table',
+        label: 'Especificaciones',
+        colSpan: 12,
+        rowSpan: 3,
+      ),
+      PageLayoutSlot(
+        id: 'refs',
+        kind: 'references',
+        label: 'Referencias',
+        colSpan: 12,
+        rowSpan: 3,
+      ),
+    ],
+  );
+
+  static final _exposure = PageLayoutRecipe(
+    id: exposureHud,
+    sectionId: BibleSectionId.exposure,
+    label: 'Exposición · HUD',
+    description: 'Intención, telemetría y referencias.',
+    preferredThemeId: BibleThemeIds.technical,
+    slots: const [
+      PageLayoutSlot(
+        id: 'narrative',
+        kind: 'narrative',
+        label: 'Intención narrativa',
+        colSpan: 8,
+        rowSpan: 2,
+      ),
+      PageLayoutSlot(
+        id: 'telemetry',
+        kind: 'telemetry',
+        label: 'Telemetría',
+        colSpan: 4,
+        rowSpan: 2,
+      ),
+      PageLayoutSlot(
+        id: 'refs',
+        kind: 'references',
+        label: 'Referencias',
+        colSpan: 12,
+        rowSpan: 4,
+      ),
+    ],
+  );
+
+  static final _texture = PageLayoutRecipe(
+    id: textureLook,
+    sectionId: BibleSectionId.texture,
+    label: 'Textura · Look',
+    description: 'Intención, notas y referencias de look.',
+    preferredThemeId: BibleThemeIds.cinematic,
+    slots: const [
+      PageLayoutSlot(
+        id: 'narrative',
+        kind: 'narrative',
+        label: 'Intención narrativa',
+        colSpan: 12,
+        rowSpan: 2,
+      ),
+      PageLayoutSlot(
+        id: 'notes',
+        kind: 'text',
+        label: 'Notas de look',
+        colSpan: 12,
+        rowSpan: 2,
+      ),
+      PageLayoutSlot(
+        id: 'refs',
+        kind: 'references',
+        label: 'Referencias',
+        colSpan: 12,
+        rowSpan: 4,
+      ),
+    ],
+  );
+
+  static final _cameraTests = PageLayoutRecipe(
+    id: cameraTests,
+    sectionId: BibleSectionId.cameraTests,
+    label: 'Pruebas de cámara',
+    description: 'Comparador hero y referencias de test.',
+    preferredThemeId: BibleThemeIds.technical,
+    slots: const [
+      PageLayoutSlot(
+        id: 'hero',
+        kind: 'hero',
+        label: 'Comparador',
+        colSpan: 12,
+        rowSpan: 4,
+      ),
+      PageLayoutSlot(
+        id: 'refs',
+        kind: 'references',
+        label: 'Referencias',
+        colSpan: 12,
+        rowSpan: 4,
+      ),
+    ],
+  );
+
+  static final _colorImage = PageLayoutRecipe(
+    id: colorImage,
+    sectionId: BibleSectionId.colorImage,
+    label: 'Color e imagen',
+    description: 'Paleta, intención y referencias.',
+    preferredThemeId: BibleThemeIds.cinematic,
+    slots: const [
+      PageLayoutSlot(
+        id: 'palette',
+        kind: 'color_palette',
+        label: 'Paleta',
+        colSpan: 6,
+        rowSpan: 2,
+      ),
+      PageLayoutSlot(
+        id: 'narrative',
+        kind: 'narrative',
+        label: 'Intención',
+        colSpan: 6,
+        rowSpan: 2,
+      ),
+      PageLayoutSlot(
+        id: 'refs',
+        kind: 'references',
+        label: 'Referencias',
+        colSpan: 12,
+        rowSpan: 4,
+      ),
+    ],
+  );
+
+  static final _workflow = PageLayoutRecipe(
+    id: workflowPipeline,
+    sectionId: BibleSectionId.workflow,
+    label: 'Workflow · Pipeline',
+    description: 'Pasos del pipeline y notas técnicas.',
+    preferredThemeId: BibleThemeIds.technical,
+    slots: const [
+      PageLayoutSlot(
+        id: 'pipeline',
+        kind: 'pipeline',
+        label: 'Pipeline',
+        colSpan: 12,
+        rowSpan: 2,
+      ),
+      PageLayoutSlot(
+        id: 'notes',
+        kind: 'text',
+        label: 'Notas',
+        colSpan: 12,
+        rowSpan: 3,
       ),
     ],
   );

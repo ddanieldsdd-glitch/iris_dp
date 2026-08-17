@@ -199,9 +199,19 @@ abstract final class BibleV2ProfessionalTemplates {
         _block(BibleBlockKind.specsTable, rowSpan: 3),
         _block(BibleBlockKind.heroImage, rowSpan: 3),
       ],
-      'color_image' => [
-        _block(BibleBlockKind.colorPalette, rowSpan: 2),
+      'texture' => [
         _block(BibleBlockKind.narrative, rowSpan: 2),
+        _block(BibleBlockKind.moodboardRefs, rowSpan: 4),
+        _block(BibleBlockKind.text, rowSpan: 2),
+      ],
+      'camera_tests' => [
+        _block(BibleBlockKind.heroImage, rowSpan: 4),
+        _block(BibleBlockKind.moodboardRefs, rowSpan: 4),
+      ],
+      'color_image' => [
+        _block(BibleBlockKind.colorPalette, colSpan: 6, rowSpan: 2),
+        _block(BibleBlockKind.narrative, colSpan: 6, rowSpan: 2),
+        _block(BibleBlockKind.moodboardRefs, rowSpan: 4),
       ],
       'location' => [
         _block(BibleBlockKind.heroImage, rowSpan: 4),

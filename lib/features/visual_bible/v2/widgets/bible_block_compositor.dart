@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -49,7 +50,14 @@ class BibleBlockRenderer extends StatelessWidget {
         editing: editing,
         onChanged: onChanged,
       ),
-      BibleBlockKind.heroImage || BibleBlockKind.moodboardRefs => _ImageBlock(
+      BibleBlockKind.heroImage => _ImageBlock(
+        block: block,
+        theme: theme,
+        projectId: projectId,
+        editing: editing,
+        onChanged: onChanged,
+      ),
+      BibleBlockKind.moodboardRefs => _MoodboardRefsBlock(
         block: block,
         theme: theme,
         projectId: projectId,
@@ -68,7 +76,12 @@ class BibleBlockRenderer extends StatelessWidget {
         editing: editing,
         onChanged: onChanged,
       ),
-      BibleBlockKind.telemetry => _TelemetryBlock(block: block, theme: theme),
+      BibleBlockKind.telemetry => _TelemetryBlock(
+        block: block,
+        theme: theme,
+        editing: editing,
+        onChanged: onChanged,
+      ),
       BibleBlockKind.equipmentList => _EquipmentListBlock(
         block: block,
         theme: theme,
@@ -78,6 +91,8 @@ class BibleBlockRenderer extends StatelessWidget {
       BibleBlockKind.lightingDiagram => _LightingDiagramBlock(
         block: block,
         theme: theme,
+        editing: editing,
+        onChanged: onChanged,
       ),
       BibleBlockKind.specsTable => _SpecsTableBlock(
         block: block,
@@ -302,6 +317,179 @@ class _ImageBlock extends StatelessWidget {
   }
 }
 
+class _MoodboardRefsBlock extends StatelessWidget {
+  final BibleBlock block;
+  final BibleTheme theme;
+  final int projectId;
+  final bool editing;
+  final ValueChanged<BibleBlock>? onChanged;
+
+  const _MoodboardRefsBlock({
+    required this.block,
+    required this.theme,
+    required this.projectId,
+    required this.editing,
+    this.onChanged,
+  });
+
+  List<Map<String, dynamic>> _images() {
+    final candidates =
+        block.content['images'] ?? block.content['items'] ?? const [];
+    if (candidates is! List) return const [];
+    final out = <Map<String, dynamic>>[];
+    for (final candidate in candidates) {
+      if (candidate is String && candidate.trim().isNotEmpty) {
+        out.add({'path': candidate});
+      } else if (candidate is Map) {
+        out.add(Map<String, dynamic>.from(candidate));
+      }
+    }
+    return out;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final images = _images();
+    final title = block.content['title']?.toString().trim();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (title != null && title.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(title, style: AppTypography.label(palette)),
+          ),
+        if (images.isEmpty && !editing)
+          SizedBox(
+            height: 88,
+            child: Center(
+              child: Text(
+                'Sin referencias',
+                style: AppTypography.caption(palette),
+              ),
+            ),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < images.length; i++)
+                _MoodboardTile(
+                  image: images[i],
+                  theme: theme,
+                  onRemove: editing
+                      ? () {
+                          final next = List<Map<String, dynamic>>.from(images)
+                            ..removeAt(i);
+                          onChanged?.call(
+                            block.copyWith(
+                              content: {...block.content, 'images': next},
+                            ),
+                          );
+                        }
+                      : null,
+                ),
+            ],
+          ),
+        if (editing) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 120,
+            child: UniversalBibleImageInput(
+              projectId: projectId,
+              value: null,
+              onChanged: (img) {
+                final path = img.path;
+                if (path == null || path.isEmpty) return;
+                onChanged?.call(
+                  block.copyWith(
+                    content: {
+                      ...block.content,
+                      'images': [
+                        ...images,
+                        {'path': path, if (img.caption != null) 'caption': img.caption},
+                      ],
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MoodboardTile extends StatelessWidget {
+  final Map<String, dynamic> image;
+  final BibleTheme theme;
+  final VoidCallback? onRemove;
+
+  const _MoodboardTile({
+    required this.image,
+    required this.theme,
+    this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final path = BibleImageContent.fromJson(image).path;
+    final caption = image['caption']?.toString();
+    final file = path == null || path.isEmpty ? null : File(path);
+    return SizedBox(
+      width: 120,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(theme.shape.radius),
+                child: SizedBox(
+                  width: 120,
+                  height: 80,
+                  child: file != null && file.existsSync()
+                      ? Image.file(file, fit: BoxFit.cover)
+                      : ColoredBox(
+                          color: Colors.black26,
+                          child: Icon(
+                            Icons.image_outlined,
+                            color: context.palette.textTertiary,
+                          ),
+                        ),
+                ),
+              ),
+              if (onRemove != null)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, size: 16, color: Colors.white),
+                    onPressed: onRemove,
+                  ),
+                ),
+            ],
+          ),
+          if (caption != null && caption.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                caption,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption(context.palette),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ChipSelectBlock extends StatelessWidget {
   final BibleBlock block;
   final BibleTheme theme;
@@ -430,6 +618,17 @@ class _ColorPaletteBlock extends StatelessWidget {
                     );
                   }
                 : null,
+            onChanged: editing
+                ? (nextColor) {
+                    final next = List<Map<String, dynamic>>.from(colors);
+                    next[i] = {...next[i], ...nextColor};
+                    onChanged?.call(
+                      block.copyWith(
+                        content: {...block.content, 'colors': next},
+                      ),
+                    );
+                  }
+                : null,
           ),
         if (editing)
           ActionChip(
@@ -453,8 +652,14 @@ class _Swatch extends StatelessWidget {
   final String hex;
   final String name;
   final VoidCallback? onRemove;
+  final ValueChanged<Map<String, String>>? onChanged;
 
-  const _Swatch({required this.hex, required this.name, this.onRemove});
+  const _Swatch({
+    required this.hex,
+    required this.name,
+    this.onRemove,
+    this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -483,9 +688,38 @@ class _Swatch extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        Text(hex.toUpperCase(), style: AppTypography.label(context.palette)),
-        if (name.isNotEmpty)
-          Text(name, style: AppTypography.caption(context.palette)),
+        if (onChanged != null) ...[
+          SizedBox(
+            width: 88,
+            child: TextFormField(
+              initialValue: hex,
+              style: AppTypography.label(context.palette),
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: '#HEX',
+              ),
+              onChanged: (v) => onChanged!({'hex': v, 'name': name}),
+            ),
+          ),
+          SizedBox(
+            width: 88,
+            child: TextFormField(
+              initialValue: name,
+              style: AppTypography.caption(context.palette),
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: 'Nombre',
+              ),
+              onChanged: (v) => onChanged!({'hex': hex, 'name': v}),
+            ),
+          ),
+        ] else ...[
+          Text(hex.toUpperCase(), style: AppTypography.label(context.palette)),
+          if (name.isNotEmpty)
+            Text(name, style: AppTypography.caption(context.palette)),
+        ],
       ],
     );
   }
@@ -494,41 +728,123 @@ class _Swatch extends StatelessWidget {
 class _TelemetryBlock extends StatelessWidget {
   final BibleBlock block;
   final BibleTheme theme;
+  final bool editing;
+  final ValueChanged<BibleBlock>? onChanged;
 
-  const _TelemetryBlock({required this.block, required this.theme});
+  const _TelemetryBlock({
+    required this.block,
+    required this.theme,
+    this.editing = false,
+    this.onChanged,
+  });
 
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
+  List<Map<String, dynamic>> _metrics() {
     final metrics = (block.content['metrics'] as List? ?? const [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
     if (metrics.isEmpty) {
-      metrics.addAll([
+      return [
         {'label': 'Kelvin', 'value': block.content['kelvin'] ?? '—'},
         {'label': 'Ratio', 'value': block.content['ratio'] ?? '—'},
         {'label': 'IRE', 'value': block.content['ire'] ?? '—'},
-      ]);
+      ];
     }
-    return Row(
+    return metrics;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final metrics = _metrics();
+    return Column(
       children: [
-        for (final m in metrics)
-          Expanded(
-            child: Column(
-              children: [
-                Text(
-                  m['value']?.toString() ?? '—',
-                  style: AppTypography.titleMedium(palette).copyWith(
-                    color: _parseColor(theme.colors.accent) ?? palette.accent,
-                    fontSize: theme.typography.h2,
+        Row(
+          children: [
+            for (var i = 0; i < metrics.length; i++)
+              Expanded(
+                child: Column(
+                  children: [
+                    if (editing)
+                      TextFormField(
+                        initialValue: metrics[i]['value']?.toString() ?? '',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.titleMedium(palette).copyWith(
+                          color:
+                              _parseColor(theme.colors.accent) ?? palette.accent,
+                          fontSize: theme.typography.h2,
+                        ),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                        ),
+                        onChanged: (v) {
+                          final next = List<Map<String, dynamic>>.from(metrics);
+                          next[i] = {...next[i], 'value': v};
+                          onChanged?.call(
+                            block.copyWith(
+                              content: {...block.content, 'metrics': next},
+                            ),
+                          );
+                        },
+                      )
+                    else
+                      Text(
+                        metrics[i]['value']?.toString() ?? '—',
+                        style: AppTypography.titleMedium(palette).copyWith(
+                          color:
+                              _parseColor(theme.colors.accent) ?? palette.accent,
+                          fontSize: theme.typography.h2,
+                        ),
+                      ),
+                    if (editing)
+                      TextFormField(
+                        initialValue: metrics[i]['label']?.toString() ?? '',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.label(palette),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                        ),
+                        onChanged: (v) {
+                          final next = List<Map<String, dynamic>>.from(metrics);
+                          next[i] = {...next[i], 'label': v};
+                          onChanged?.call(
+                            block.copyWith(
+                              content: {...block.content, 'metrics': next},
+                            ),
+                          );
+                        },
+                      )
+                    else
+                      Text(
+                        (metrics[i]['label']?.toString() ?? '').toUpperCase(),
+                        style: AppTypography.label(palette),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        if (editing)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () {
+                onChanged?.call(
+                  block.copyWith(
+                    content: {
+                      ...block.content,
+                      'metrics': [
+                        ...metrics,
+                        {'label': 'Métrica', 'value': '—'},
+                      ],
+                    },
                   ),
-                ),
-                Text(
-                  (m['label']?.toString() ?? '').toUpperCase(),
-                  style: AppTypography.label(palette),
-                ),
-              ],
+                );
+              },
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Añadir métrica'),
             ),
           ),
       ],
@@ -610,40 +926,121 @@ class _EquipmentListBlock extends StatelessWidget {
 class _LightingDiagramBlock extends StatelessWidget {
   final BibleBlock block;
   final BibleTheme theme;
+  final bool editing;
+  final ValueChanged<BibleBlock>? onChanged;
 
-  const _LightingDiagramBlock({required this.block, required this.theme});
+  const _LightingDiagramBlock({
+    required this.block,
+    required this.theme,
+    this.editing = false,
+    this.onChanged,
+  });
+
+  List<Map<String, dynamic>> _nodes() {
+    var nodes = block.content['nodes'];
+    if (nodes is String) {
+      try {
+        nodes = jsonDecode(nodes);
+      } catch (_) {
+        nodes = const [];
+      }
+    }
+    return (nodes as List? ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final nodes = (block.content['nodes'] as List? ?? const []).length;
-    return Container(
-      height: 140,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        border: Border.all(color: palette.border),
-        borderRadius: BorderRadius.circular(8),
-        color: palette.surfaceOverlay,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.grid_on_outlined, color: palette.accent),
-          const SizedBox(height: 8),
-          Text(
-            nodes > 0
-                ? 'Diagrama de iluminación ($nodes nodos)'
-                : 'Diagrama de iluminación',
-            style: AppTypography.bodyMedium(palette),
+    final nodes = _nodes();
+    final label = block.content['label']?.toString();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (label != null && label.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(label, style: AppTypography.label(palette)),
           ),
-          Text(
-            'Editar en sección Lighting o inspector',
-            style: AppTypography.caption(palette),
+        Container(
+          height: 180,
+          decoration: BoxDecoration(
+            border: Border.all(color: palette.border),
+            borderRadius: BorderRadius.circular(8),
+            color: palette.surfaceOverlay,
           ),
-        ],
-      ),
+          child: CustomPaint(
+            painter: _LightingPlanPainter(nodes: nodes, palette: palette),
+            child: nodes.isEmpty
+                ? Center(
+                    child: Text(
+                      'Planta de luz vacía',
+                      style: AppTypography.caption(palette),
+                    ),
+                  )
+                : null,
+          ),
+        ),
+        if (block.content['text']?.toString().isNotEmpty == true)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              block.content['text'].toString(),
+              style: AppTypography.caption(palette),
+            ),
+          ),
+        if (editing)
+          TextFormField(
+            initialValue: block.content['label']?.toString() ?? '',
+            decoration: const InputDecoration(
+              isDense: true,
+              labelText: 'Nombre del setup',
+            ),
+            onChanged: (v) => onChanged?.call(
+              block.copyWith(content: {...block.content, 'label': v}),
+            ),
+          ),
+      ],
     );
   }
+}
+
+class _LightingPlanPainter extends CustomPainter {
+  final List<Map<String, dynamic>> nodes;
+  final AppPalette palette;
+
+  _LightingPlanPainter({required this.nodes, required this.palette});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final element in nodes) {
+      final x = ((element['x'] as num?)?.toDouble() ?? 150) / 600;
+      final y = ((element['y'] as num?)?.toDouble() ?? 150) / 400;
+      final type = element['type']?.toString() ?? 'light';
+      final color = switch (type) {
+        'camera' => Colors.blue,
+        'subject' => palette.textPrimary,
+        'key' => Colors.amber,
+        'fill' => Colors.lightBlue,
+        'rim' => Colors.orange,
+        _ => palette.textTertiary,
+      };
+      canvas.drawCircle(
+        Offset(
+          x.clamp(0.03, 0.97) * size.width,
+          y.clamp(0.03, 0.97) * size.height,
+        ),
+        7,
+        Paint()..color = color,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LightingPlanPainter oldDelegate) =>
+      oldDelegate.nodes != nodes;
 }
 
 class _SpecsTableBlock extends StatelessWidget {
@@ -751,7 +1148,7 @@ class _WorkflowPipelineBlock extends StatelessWidget {
         .map((e) => e.toString())
         .toList();
     if (steps.isEmpty) {
-      steps.addAll(['Preproduction', 'Camera prep', 'Shoot', 'DIT', 'Grade']);
+      steps.addAll(kBibleWorkflowDefaultSteps);
     }
 
     return SingleChildScrollView(
@@ -759,14 +1156,18 @@ class _WorkflowPipelineBlock extends StatelessWidget {
       child: Row(
         children: [
           for (var i = 0; i < steps.length; i++) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: palette.surfaceOverlay,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: palette.border),
-              ),
-              child: Text(steps[i], style: AppTypography.bodyMedium(palette)),
+            InputChip(
+              label: Text(steps[i], style: AppTypography.bodyMedium(palette)),
+              onDeleted: editing
+                  ? () {
+                      final next = List<String>.from(steps)..removeAt(i);
+                      onChanged?.call(
+                        block.copyWith(
+                          content: {...block.content, 'steps': next},
+                        ),
+                      );
+                    }
+                  : null,
             ),
             if (i < steps.length - 1)
               Padding(

@@ -509,7 +509,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
               includedSections: config.sections,
               sectionContentJsonById: bundle.sectionContentJsonById,
               primaryCameraLabel: bundle.primaryCameraLabel,
-              moodboardLayout: config.moodboardLayout,
+              moodboardLayout: config.resolvedMoodboardLayout,
               includeAllMoodboardImages: config.includeAllMoodboardImages,
             );
       final suffix = config.isDepartment

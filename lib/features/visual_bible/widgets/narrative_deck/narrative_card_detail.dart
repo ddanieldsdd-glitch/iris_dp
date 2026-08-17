@@ -9,6 +9,7 @@ import '../../../../core/database/app_database.dart';
 import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/app_snackbar.dart';
 import '../../../../shared/visual_bible/narrative_card_kind.dart';
 import '../../moodboard_helpers.dart';
 import '../../moodboard_reference_meta.dart';
@@ -16,7 +17,10 @@ import '../../services/lighting_narrative_cards_service.dart';
 import '../../services/moodboard_lighting_link_service.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
+import '../bible_navigation_scope.dart';
 import '../bible_paste_zone.dart';
+import '../bible_quick_adjust_panel.dart';
+import '../bible_settings_drawer.dart';
 import 'container_detail/container_header_tags.dart';
 import 'container_detail/container_hero_with_caption.dart';
 import 'container_detail/container_metrics_panel.dart';
@@ -71,6 +75,7 @@ class NarrativeCardDetailPage extends ConsumerStatefulWidget {
 
 class _NarrativeCardDetailPageState
     extends ConsumerState<NarrativeCardDetailPage> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _titleCtrl = TextEditingController();
   final _bodyCtrl = TextEditingController();
   final _summaryCtrl = TextEditingController();
@@ -80,6 +85,33 @@ class _NarrativeCardDetailPageState
   final _captionCtrl = TextEditingController();
   NarrativeCardModel? _card;
   bool _techExpanded = false;
+
+  String get _sectionId =>
+      _card?.sectionId.isNotEmpty == true
+          ? _card!.sectionId
+          : BibleSectionId.lighting;
+
+  void _openScreenAdjustments() {
+    _scaffoldKey.currentState?.openEndDrawer();
+  }
+
+  void _openMasterConfigFromAdjust() {
+    Navigator.of(context).maybePop(); // cierra drawer
+    final openSection = BibleNavigationScope.maybeOf(context)?.openSection;
+    if (openSection != null) {
+      Navigator.of(context).pop(); // cierra detalle
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        openSection(BibleSectionId.settings);
+      });
+      return;
+    }
+    if (mounted) {
+      AppSnackBar.show(
+        context,
+        'Vuelve a la biblia y abre Configuración → Estructura y plantillas.',
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -200,7 +232,10 @@ class _NarrativeCardDetailPageState
     if (mounted) setState(() => _card = card);
   }
 
-  Future<void> _persistCardMeta(NarrativeCardModel card) async {
+  Future<void> _persistCardMeta(
+    NarrativeCardModel card, {
+    bool relinkTags = false,
+  }) async {
     final db = ref.read(databaseProvider);
     final row = await db.getNarrativeCard(card.id);
     if (row == null) return;
@@ -209,8 +244,11 @@ class _NarrativeCardDetailPageState
         metaJson: Value(card.meta.isEmpty ? null : jsonEncode(card.meta)),
       ),
     );
-    if (card.kind == NarrativeCardKind.style ||
-        card.kind == NarrativeCardKind.filmRef) {
+    // Solo re-vincular moodboard cuando cambian tags (no en cada keystroke
+    // de métricas / refuerzos — evita lost-update y spam de assigns).
+    if (relinkTags &&
+        (card.kind == NarrativeCardKind.style ||
+            card.kind == NarrativeCardKind.filmRef)) {
       await MoodboardLightingLinkService.linkAllTaggedImages(
         db: db,
         projectId: widget.projectId,
@@ -249,7 +287,29 @@ class _NarrativeCardDetailPageState
     final db = ref.watch(databaseProvider);
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: palette.background,
+      endDrawer: Builder(
+        builder: (context) {
+          final screenW = MediaQuery.sizeOf(context).width;
+          final drawerW = screenW < 700
+              ? screenW
+              : BibleSettingsDrawer.width.clamp(340, screenW * 0.42);
+          return Drawer(
+            width: drawerW.toDouble(),
+            backgroundColor: palette.surfaceElevated,
+            child: SafeArea(
+              child: BibleQuickAdjustPanel(
+                bibleId: widget.bibleId,
+                projectId: widget.projectId,
+                sectionId: _sectionId,
+                onOpenMasterConfig: _openMasterConfigFromAdjust,
+                onClose: () => Navigator.of(context).maybePop(),
+              ),
+            ),
+          );
+        },
+      ),
       appBar: AppBar(
         backgroundColor: palette.background,
         title: Text(
@@ -265,6 +325,11 @@ class _NarrativeCardDetailPageState
               onPressed: widget.onOpenLocation,
               child: const Text('Ver en Localización'),
             ),
+          IconButton(
+            tooltip: 'Ajustes de pantalla',
+            icon: Icon(Icons.tune, color: palette.textSecondary),
+            onPressed: _openScreenAdjustments,
+          ),
           TextButton(
             onPressed: _saveFields,
             child: Text('Guardar', style: TextStyle(color: palette.accent)),
@@ -723,7 +788,8 @@ class _StyleContainerDetailBody extends StatefulWidget {
   final Widget? technicalPanel;
   final ValueChanged<bool> onTechExpandedChanged;
   final ValueChanged<NarrativeCardModel> onCardUpdated;
-  final Future<void> Function(NarrativeCardModel card) onPersistMeta;
+  final Future<void> Function(NarrativeCardModel card, {bool relinkTags})
+      onPersistMeta;
   final Future<void> Function(int imageId) onCoverSet;
   final Future<List<MoodboardImageModel>> Function() matchedImagesLoader;
 
@@ -922,7 +988,7 @@ class _StyleContainerDetailBodyState extends State<_StyleContainerDetailBody> {
           palette: palette,
           onChanged: (updated) async {
             widget.onCardUpdated(updated);
-            await widget.onPersistMeta(updated);
+            await widget.onPersistMeta(updated, relinkTags: true);
             await _refreshMatched();
           },
         ),

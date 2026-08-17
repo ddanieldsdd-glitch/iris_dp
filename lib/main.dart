@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/navigation/route_observer.dart';
 import 'core/cloud/cloud_providers.dart';
 import 'core/cloud/connectivity_gate.dart';
 import 'core/storage/app_lifecycle_persistence.dart';
@@ -41,6 +42,7 @@ class IrisDPApp extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       themeMode: themeMode,
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [routeObserver],
       home: AppSplashScreen(
         bootstrap: _bootstrapApp(),
         child: AppLifecyclePersistence(

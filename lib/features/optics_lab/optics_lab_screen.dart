@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,9 +13,11 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/media_storage.dart';
 import '../../core/widgets/app_card.dart';
-import '../../shared/visual_bible/bible_section_fields.dart';
 import '../../shared/visual_bible/bible_section_ids.dart';
+import '../../shared/visual_bible/format_pilot_resolve.dart';
+import '../../shared/visual_bible/format_ratio_format.dart';
 import '../../shared/visual_bible/format_sensor_mode_resolve.dart';
+import '../visual_bible/visual_bible_model.dart';
 import '../equipment/widgets/project_camera_roster_bar.dart';
 import '../luka_export/luka_compatibility_service.dart';
 import '../luka_export/luka_manifest_service.dart';
@@ -53,10 +54,10 @@ class OpticsLabScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<OpticsLabScreen> createState() => _OpticsLabScreenState();
+  ConsumerState<OpticsLabScreen> createState() => OpticsLabScreenState();
 }
 
-class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
+class OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
   final _captureKey = GlobalKey();
   Camera? _camera;
   Lense? _lens;
@@ -97,12 +98,15 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadDefaults());
   }
 
+  Future<void> reload() => _loadDefaults();
+
   Future<void> _loadDefaults() async {
     final db = ref.read(databaseProvider);
     final bible = await db.getVisualBibleForProject(widget.projectId);
     final camId = widget.initialCameraId ?? bible?.primaryCameraId;
     final lensId = widget.initialLensId ?? bible?.primaryLensId;
 
+    var blob = const <String, dynamic>{};
     if (bible != null) {
       final formatDef = await (db.select(db.bibleSectionDefinitions)
             ..where((d) => d.bibleId.equals(bible.id))
@@ -112,6 +116,7 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
           FormatSensorModeResolve.modeNameFromSectionContentJson(
         formatDef?.contentJson,
       );
+      blob = FormatPilotResolve.parseBlob(formatDef?.contentJson);
     }
 
     if (camId != null) {
@@ -137,8 +142,15 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
           _lens?.squeezeRatio ?? (_lens?.isAnamorphic == true ? 2.0 : 1.0);
     }
 
-    if (bible?.aspectRatio != null) {
-      _aspect = OpticsCalculator.parseAspectRatio(bible!.aspectRatio);
+    if (bible != null) {
+      final resolvedRatio = FormatPilotResolve.activeRatio(
+        blob,
+        VisualBibleData.fromRow(bible),
+      );
+      if (resolvedRatio != null) {
+        _aspect = OpticsCalculator.parseAspectRatio(resolvedRatio);
+        _syncFrameLineAFromAspect(_aspect);
+      }
     }
     if (bible?.defaultTStop != null) {
       _tStop = double.tryParse(bible!.defaultTStop!) ?? _tStop;
@@ -156,6 +168,29 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
 
     await _refreshLukaReports();
     if (mounted) setState(() => _loaded = true);
+  }
+
+  void _syncFrameLineAFromAspect(double aspect) {
+    final preset = presetForRatio(aspect);
+    final idx = _frameLines.indexWhere((f) => f.id == 'A');
+    if (idx < 0) return;
+    final updated = preset.isCustom
+        ? _frameLines[idx].copyWith(
+            aspectPreset: preset,
+            customAspectRatio: aspect,
+            formatName: FormatRatioFormat.format(aspect),
+          )
+        : _frameLines[idx].copyWith(
+            aspectPreset: preset,
+            customAspectRatio: null,
+            formatName: preset.label,
+          );
+    setState(() {
+      _frameLines = [
+        for (var i = 0; i < _frameLines.length; i++)
+          if (i == idx) updated else _frameLines[i],
+      ];
+    });
   }
 
   Future<void> _refreshLukaReports() async {
@@ -177,44 +212,14 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
   /// Escribe el modo elegido en Format (`formatData.sensorModeName`).
   Future<void> _syncModeToFormat(SensorModeSpec mode) async {
     final db = ref.read(databaseProvider);
-    final bible = await db.getVisualBibleForProject(widget.projectId);
-    if (bible == null) return;
-    final def = await (db.select(db.bibleSectionDefinitions)
-          ..where((d) => d.bibleId.equals(bible.id))
-          ..where((d) => d.id.equals(BibleSectionId.format)))
-        .getSingleOrNull();
-    if (def == null) return;
-
-    final fields = BibleSectionFieldsConfig.parse(
-      def.contentJson,
-      BibleSectionId.format,
-    );
-    final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
-    var blob = <String, dynamic>{};
-    final raw = values['formatData'];
-    if (raw != null && raw.trim().isNotEmpty) {
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is Map) {
-          blob = Map<String, dynamic>.from(decoded);
-        }
-      } catch (_) {}
-    }
-    blob.addAll(
+    await db.patchFormatDataBlob(
+      widget.projectId,
       FormatSensorModeResolve.blobUpdateForMode(
         name: mode.name,
         widthPx: mode.maxWidthPx,
         heightPx: mode.maxHeightPx,
         widthMm: mode.widthMm,
         heightMm: mode.heightMm,
-      ),
-    );
-    values['formatData'] = jsonEncode(blob);
-    await db.upsertBibleSectionDefinition(
-      def.copyWith(
-        contentJson: Value(
-          BibleSectionFieldsConfig.encode(fields, values: values),
-        ),
       ),
     );
     _formatPreferredModeName = mode.name;
@@ -272,12 +277,23 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
     }
   }
 
-  double get _deliveryAspect {
-    final primary = _frameLines.firstWhere(
-      (f) => f.id == 'A',
-      orElse: () => _frameLines.first,
-    );
-    return primary.effectiveAspectRatio ?? _aspect;
+  FrameLineConfig get _frameLineA => _frameLines.firstWhere(
+        (f) => f.id == 'A',
+        orElse: () => _frameLines.first,
+      );
+
+  double get _deliveryAspect =>
+      _frameLineA.effectiveAspectRatio ?? _aspect;
+
+  void _applyFrameLineConfig(FrameLineConfig cfg) {
+    setState(() {
+      _frameLines =
+          _frameLines.map((f) => f.id == cfg.id ? cfg : f).toList();
+      if (cfg.id == 'A') {
+        final aspect = cfg.effectiveAspectRatio;
+        if (aspect != null) _aspect = aspect;
+      }
+    });
   }
 
   SensorModeContext? get _sensorContext {
@@ -415,6 +431,14 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
       tStop: _tStop.toStringAsFixed(1),
       configJson: jsonEncode(snapshot),
     );
+    final formatPatch = <String, dynamic>{
+      'activeRatio': FormatRatioFormat.format(_deliveryAspect),
+    };
+    final resolution = _result.resolutionLabel?.trim();
+    if (resolution != null && resolution.isNotEmpty) {
+      formatPatch['resolution'] = resolution;
+    }
+    await db.patchFormatDataBlob(widget.projectId, formatPatch);
     await _syncModeToFormat(_mode);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -764,12 +788,7 @@ class _OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
           onLensGuideChanged: (g) => setState(() => _lensGuide = g),
           frameLeader: _frameLeader,
           onFrameLeaderChanged: (l) => setState(() => _frameLeader = l),
-          onConfigChanged: (cfg) {
-            setState(() {
-              _frameLines =
-                  _frameLines.map((f) => f.id == cfg.id ? cfg : f).toList();
-            });
-          },
+          onConfigChanged: _applyFrameLineConfig,
         ),
       ],
     );

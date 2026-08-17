@@ -10,11 +10,21 @@ import '../../core/utils/pdf_safe_image.dart';
 import '../../shared/visual_bible/camera_pilot_resolve.dart';
 import '../../shared/visual_bible/format_pilot_resolve.dart';
 import 'export/bible_section_export_reader.dart';
+import 'export/pdf/moodboard_pdf_tiles.dart';
+import 'moodboard_export_grouper.dart';
+import 'moodboard_export_layout.dart';
 import 'visual_bible_model.dart';
 
 /// Genera PDFs de la Biblia de Fotografía (Pitch, Tech Scout, completa).
 class VisualBiblePdfService {
   VisualBiblePdfService._();
+
+  /// Clave interna para stills sin sección/categoría en REFERENCIAS VISUALES Pitch/Tech.
+  static const pitchRefsUnclassifiedKey = '__pitch_refs_unclassified__';
+
+  /// Subgrupo localización sin set vinculado en REFERENCIAS VISUALES Pitch/Tech.
+  static const pitchRefsLocationUnassignedKey =
+      '__pitch_refs_location_unassigned__';
 
   static Future<Uint8List> buildBytes({
     required String mode,
@@ -29,6 +39,8 @@ class VisualBiblePdfService {
     Set<String>? includedSections,
     Map<String, String?> sectionContentJsonById = const {},
     String? primaryCameraLabel,
+    MoodboardExportLayout moodboardLayout = MoodboardExportLayout.defaults,
+    bool includeAllMoodboardImages = false,
   }) async {
     final doc = await buildDocument(
       mode: mode,
@@ -43,6 +55,8 @@ class VisualBiblePdfService {
       includedSections: includedSections,
       sectionContentJsonById: sectionContentJsonById,
       primaryCameraLabel: primaryCameraLabel,
+      moodboardLayout: moodboardLayout,
+      includeAllMoodboardImages: includeAllMoodboardImages,
     );
     return doc.save();
   }
@@ -70,6 +84,171 @@ class VisualBiblePdfService {
     return included.contains(sectionId);
   }
 
+  static List<pw.Widget> _moodboardWrapTiles(
+    List<({
+      pw.MemoryImage image,
+      String? caption,
+      List<String> details,
+    })> cells, {
+    required pw.Font font,
+    double? tileWidth = 175,
+    double imageHeight = 120,
+    double fontSize = 7,
+    int detailLimit = 2,
+  }) {
+    return [
+      for (final cell in cells)
+        MoodboardPdfTiles.tileColumn(
+          image: cell.image,
+          font: font,
+          caption: cell.caption,
+          details: cell.details,
+          tileWidth: tileWidth,
+          imageHeight: imageHeight,
+          fontSize: fontSize,
+          detailLimit: detailLimit,
+        ),
+    ];
+  }
+
+  static Future<
+      List<
+          ({
+            pw.MemoryImage image,
+            String? caption,
+            List<String> details,
+          })>> _loadMoodboardCells(
+    List<MoodboardImageModel> images,
+    MoodboardExportLayout layout,
+  ) async {
+    final cells =
+        <
+            ({
+              pw.MemoryImage image,
+              String? caption,
+              List<String> details,
+            })>[];
+    for (final img in images) {
+      final bytes = await PdfSafeImage.loadFromPathMaxEdge(img.imagePath);
+      if (bytes == null) continue;
+      cells.add((
+        image: pw.MemoryImage(bytes),
+        caption: MoodboardExportGrouper.captionFor(img, layout.density),
+        details: MoodboardExportGrouper.detailLinesFor(img, layout.density),
+      ));
+    }
+    return cells;
+  }
+
+  /// Secciones donde debe aparecer un still en export Pitch/Tech.
+  /// - Con asignación explícita: dedupe preservando orden.
+  /// - Sin asignación: una sola sección canónica por categoría (no reverse
+  ///   lookup, que duplicaba lighting+exposure para category=lighting).
+  static List<String> exportSectionsForMoodboardImage(MoodboardImageModel img) {
+    if (img.assignedSections.isNotEmpty) {
+      final seen = <String>{};
+      return [
+        for (final sid in img.assignedSections)
+          if (seen.add(sid)) sid,
+      ];
+    }
+    final primary = BibleSectionId.sectionForMoodboardCategory(img.category);
+    return primary == null ? const [] : [primary];
+  }
+
+  static String pitchRefsSectionLabel(String sectionKey) =>
+      sectionKey == pitchRefsUnclassifiedKey
+      ? 'Sin clasificar'
+      : BibleSectionId.label(sectionKey);
+
+  static List<
+      MapEntry<
+          String,
+          List<({
+            MoodboardImageModel img,
+            pw.MemoryImage? image,
+          })>>> orderedPitchRefsEntries(
+    Map<
+        String,
+        List<({
+          MoodboardImageModel img,
+          pw.MemoryImage? image,
+        })>> refsBySection,
+  ) {
+    final ordered =
+        <
+            MapEntry<
+                String,
+                List<({
+                  MoodboardImageModel img,
+                  pw.MemoryImage? image,
+                })>>>[];
+    for (final sid in BibleSectionId.all) {
+      final items = refsBySection[sid];
+      if (items == null || items.isEmpty) continue;
+      ordered.add(MapEntry(sid, items));
+    }
+    final unclassified = refsBySection[pitchRefsUnclassifiedKey];
+    if (unclassified != null && unclassified.isNotEmpty) {
+      ordered.add(MapEntry(pitchRefsUnclassifiedKey, unclassified));
+    }
+    return ordered;
+  }
+
+  static String pitchRefsLocationGroupKey(MoodboardImageModel img) {
+    final planId = img.linkedLocationBasePlanId;
+    if (planId != null) return 'plan:$planId';
+    final name = img.linkedLocationName?.trim();
+    if (name != null && name.isNotEmpty) return 'name:$name';
+    return pitchRefsLocationUnassignedKey;
+  }
+
+  static String pitchRefsLocationGroupLabel(
+    String groupKey,
+    MoodboardImageModel sample,
+  ) {
+    if (groupKey == pitchRefsLocationUnassignedKey) {
+      return 'Sin set asignado';
+    }
+    if (groupKey.startsWith('name:')) {
+      return groupKey.substring('name:'.length);
+    }
+    final linkedName = sample.linkedLocationName?.trim();
+    if (linkedName != null && linkedName.isNotEmpty) return linkedName;
+    final planId = sample.linkedLocationBasePlanId;
+    if (planId != null) return 'Set $planId';
+    return 'Localización';
+  }
+
+  static List<
+      MapEntry<
+          String,
+          List<({
+            MoodboardImageModel img,
+            pw.MemoryImage? image,
+          })>>> orderedPitchRefsLocationGroups(
+    List<({
+      MoodboardImageModel img,
+      pw.MemoryImage? image,
+    })> items,
+  ) {
+    final groups =
+        <String, List<({MoodboardImageModel img, pw.MemoryImage? image})>>{};
+    for (final item in items) {
+      final key = pitchRefsLocationGroupKey(item.img);
+      groups.putIfAbsent(key, () => []).add(item);
+    }
+    final keys = groups.keys.toList();
+    keys.sort((a, b) {
+      if (a == pitchRefsLocationUnassignedKey) return 1;
+      if (b == pitchRefsLocationUnassignedKey) return -1;
+      return a.compareTo(b);
+    });
+    return [
+      for (final key in keys) MapEntry(key, groups[key]!),
+    ];
+  }
+
   static Future<pw.Document> buildDocument({
     required String mode,
     required String projectName,
@@ -83,10 +262,16 @@ class VisualBiblePdfService {
     Set<String>? includedSections,
     Map<String, String?> sectionContentJsonById = const {},
     String? primaryCameraLabel,
+    MoodboardExportLayout moodboardLayout = MoodboardExportLayout.defaults,
+    bool includeAllMoodboardImages = false,
   }) async {
     final isPitch = mode == VisualBibleExportMode.pitch;
     final isTech = mode == VisualBibleExportMode.techScout;
     final sections = includedSections;
+    final boardLayout =
+        (!isPitch && !isTech) || includeAllMoodboardImages
+            ? moodboardLayout.copyWith(maxImagesFlat: 0, maxImagesPerFacet: 0)
+            : moodboardLayout;
     final fonts = await PdfExportFonts.load();
     final theme = PdfExportFonts.theme(
       regular: fonts.regular,
@@ -407,7 +592,18 @@ class VisualBiblePdfService {
             data.shadowBehavior != null ||
             data.nativeIso != null ||
             data.recordingFormat != null ||
-            _hasCustomContent(BibleSectionId.exposure, sectionContentJsonById))) {
+            _hasCustomContent(BibleSectionId.exposure, sectionContentJsonById) ||
+            MoodboardExportGrouper.imagesForSection(
+              moodboard,
+              BibleSectionId.exposure,
+            ).isNotEmpty)) {
+      final exposureCells = await _loadMoodboardCells(
+        MoodboardExportGrouper.imagesForSection(
+          moodboard,
+          BibleSectionId.exposure,
+        ),
+        boardLayout,
+      );
       doc.addPage(
         pw.Page(
           theme: theme,
@@ -448,6 +644,7 @@ class VisualBiblePdfService {
                   sectionContentJsonById,
                   fonts,
                 ),
+                ..._stillStrip(exposureCells, fonts),
               ],
             ),
           ),
@@ -486,26 +683,39 @@ class VisualBiblePdfService {
       }
     }
 
-    if (!isPitch &&
-        _sectionAllowed(sections, BibleSectionId.location) &&
-        _hasCustomContent(BibleSectionId.location, sectionContentJsonById)) {
-      doc.addPage(
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => _sectionPage(
-            title: 'LOCALIZACIÓN',
-            fontBold: fonts.bold,
-            font: fonts.regular,
-            content: _customFieldsWidget(
-              BibleSectionId.location,
-              sectionContentJsonById,
-              fonts,
-              leadingSpacing: false,
+    if (!isPitch && _sectionAllowed(sections, BibleSectionId.location)) {
+      final locationStills = moodboard.where(_isLocationStill).toList();
+      if (_hasCustomContent(
+            BibleSectionId.location,
+            sectionContentJsonById,
+          ) ||
+          locationStills.isNotEmpty) {
+        final locationCells = await _loadMoodboardCells(
+          locationStills,
+          moodboardLayout,
+        );
+        final locationBlob = BibleSectionExportReader.parseCustomBlob(
+          sectionContentJsonById[BibleSectionId.location],
+          BibleSectionId.location,
+        );
+        doc.addPage(
+          pw.Page(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            build: (_) => _sectionPage(
+              title: 'LOCALIZACIÓN',
+              fontBold: fonts.bold,
+              font: fonts.regular,
+              content: _locationPageContent(
+                blob: locationBlob,
+                cells: locationCells,
+                stills: locationStills,
+                fonts: fonts,
+              ),
             ),
           ),
-        ),
-      );
+        );
+      }
     }
 
     if (!isPitch && _sectionAllowed(sections, BibleSectionId.format)) {
@@ -557,7 +767,18 @@ class VisualBiblePdfService {
           data.textureNarrativeIntent,
           data.filtrationNotes,
         ]) ||
-            _hasCustomContent(BibleSectionId.texture, sectionContentJsonById))) {
+            _hasCustomContent(BibleSectionId.texture, sectionContentJsonById) ||
+            MoodboardExportGrouper.imagesForSection(
+              moodboard,
+              BibleSectionId.texture,
+            ).isNotEmpty)) {
+      final textureCells = await _loadMoodboardCells(
+        MoodboardExportGrouper.imagesForSection(
+          moodboard,
+          BibleSectionId.texture,
+        ),
+        boardLayout,
+      );
       doc.addPage(
         pw.Page(
           theme: theme,
@@ -566,17 +787,23 @@ class VisualBiblePdfService {
             title: 'TEXTURA',
             fontBold: fonts.bold,
             font: fonts.regular,
-            content: _textFieldsContent([
-              ('Textura de imagen', data.imageTexture),
-              ('Grano', data.grainLevel),
-              ('Difusión', data.diffusionNotes),
-              ('Filtración', data.filtrationNotes),
-              ('Intención narrativa', data.textureNarrativeIntent),
-              ..._customFieldRows(
-                BibleSectionId.texture,
-                sectionContentJsonById,
-              ),
-            ], fonts),
+            content: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                _textFieldsContent([
+                  ('Textura de imagen', data.imageTexture),
+                  ('Grano', data.grainLevel),
+                  ('Difusión', data.diffusionNotes),
+                  ('Filtración', data.filtrationNotes),
+                  ('Intención narrativa', data.textureNarrativeIntent),
+                  ..._customFieldRows(
+                    BibleSectionId.texture,
+                    sectionContentJsonById,
+                  ),
+                ], fonts),
+                ..._stillStrip(textureCells, fonts),
+              ],
+            ),
           ),
         ),
       );
@@ -620,34 +847,95 @@ class VisualBiblePdfService {
         !isTech &&
         _sectionAllowed(sections, BibleSectionId.moodboard) &&
         moodboard.isNotEmpty) {
-      final images = <pw.MemoryImage>[];
-      for (final img in moodboard.take(12)) {
-        final bytes = await PdfSafeImage.loadFromPathMaxEdge(img.imagePath);
-        if (bytes != null) images.add(pw.MemoryImage(bytes));
+      final groups = MoodboardExportGrouper.group(moodboard, boardLayout);
+      final detailLimit =
+          boardLayout.density == MoodboardExportDensity.rich ? 4 : 2;
+      final pageChildren = <pw.Widget>[];
+
+      if (boardLayout.grouping == MoodboardExportGrouping.flat) {
+        pageChildren.addAll([
+          _sectionHeader('MOODBOARD', fonts.bold),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            'Plano · grid continuo',
+            style: pw.TextStyle(
+              font: fonts.regular,
+              fontSize: 9,
+              color: const PdfColor.fromInt(0xFF8E8E93),
+              letterSpacing: 1,
+            ),
+          ),
+          pw.SizedBox(height: 12),
+        ]);
+        final cells = await _loadMoodboardCells(groups.flat, boardLayout);
+        if (cells.isNotEmpty) {
+          pageChildren.add(
+            MoodboardPdfTiles.flatGrid(
+              tiles: _moodboardWrapTiles(
+                cells,
+                font: fonts.regular,
+                tileWidth: null,
+                imageHeight: 100,
+                detailLimit: detailLimit,
+              ),
+            ),
+          );
+        }
+      } else {
+        for (final facet in MoodboardExportGrouper.facetOrder) {
+          final facetImages = groups.byFacet[facet];
+          if (facetImages == null || facetImages.isEmpty) continue;
+          final cells = await _loadMoodboardCells(facetImages, boardLayout);
+          if (cells.isEmpty) continue;
+          pageChildren.addAll([
+            MoodboardPdfTiles.facetSectionHeader(
+              facetLabel: MoodboardExportLayout.facetLabel(facet),
+              bold: fonts.bold,
+            ),
+            MoodboardPdfTiles.wrap(
+              tiles: _moodboardWrapTiles(
+                cells,
+                font: fonts.regular,
+                tileWidth: 220,
+                imageHeight: 115,
+                detailLimit: detailLimit,
+              ),
+            ),
+            pw.SizedBox(height: 20),
+          ]);
+        }
+        if (boardLayout.includeUnclassified &&
+            groups.unclassified.isNotEmpty) {
+          final cells = await _loadMoodboardCells(
+            groups.unclassified,
+            boardLayout,
+          );
+          if (cells.isNotEmpty) {
+            pageChildren.addAll([
+              MoodboardPdfTiles.facetSectionHeader(
+                facetLabel: 'Sin clasificar',
+                bold: fonts.bold,
+              ),
+              MoodboardPdfTiles.wrap(
+                tiles: _moodboardWrapTiles(
+                  cells,
+                  font: fonts.regular,
+                  tileWidth: 220,
+                  imageHeight: 115,
+                  detailLimit: detailLimit,
+                ),
+              ),
+            ]);
+          }
+        }
       }
-      if (images.isNotEmpty) {
+
+      if (pageChildren.isNotEmpty) {
         doc.addPage(
-          pw.Page(
+          pw.MultiPage(
             theme: theme,
             pageFormat: PdfPageFormat.a4.landscape,
-            build: (_) => pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                _sectionHeader('MOODBOARD', fonts.bold),
-                pw.SizedBox(height: 12),
-                pw.Expanded(
-                  child: pw.GridView(
-                    crossAxisCount: 4,
-                    crossAxisSpacing: 6,
-                    mainAxisSpacing: 6,
-                    children: [
-                      for (final img in images)
-                        pw.Image(img, fit: pw.BoxFit.cover),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            build: (_) => pageChildren,
           ),
         );
       }
@@ -688,66 +976,110 @@ class VisualBiblePdfService {
       final refsBySection =
           <String, List<({MoodboardImageModel img, pw.MemoryImage? image})>>{};
       for (final img in moodboard) {
-        final assigned = img.assignedSections.isNotEmpty
-            ? img.assignedSections
-            : [
-                for (final sid in BibleSectionId.all)
-                  if (BibleSectionId.moodboardCategory(sid) == img.category)
-                    sid,
-              ];
+        final assigned = exportSectionsForMoodboardImage(img);
         final bytes = await PdfSafeImage.loadFromPath(img.imagePath);
         final memory = bytes != null ? pw.MemoryImage(bytes) : null;
+        final item = (img: img, image: memory);
+        if (assigned.isEmpty) {
+          refsBySection.putIfAbsent(pitchRefsUnclassifiedKey, () => []).add(
+            item,
+          );
+          continue;
+        }
+        final includeFilteredAsUnclassified = includeAllMoodboardImages &&
+            _sectionAllowed(sections, BibleSectionId.moodboard);
+        var addedToAllowedSection = false;
         for (final sid in assigned) {
           if (!_sectionAllowed(sections, sid) &&
               sections != null &&
               sections.isNotEmpty) {
             continue;
           }
-          refsBySection.putIfAbsent(sid, () => []).add((
-            img: img,
-            image: memory,
-          ));
+          refsBySection.putIfAbsent(sid, () => []).add(item);
+          addedToAllowedSection = true;
+        }
+        if (!addedToAllowedSection && includeFilteredAsUnclassified) {
+          refsBySection.putIfAbsent(pitchRefsUnclassifiedKey, () => []).add(
+            item,
+          );
         }
       }
       if (refsBySection.isNotEmpty) {
+        final pitchDetailLimit =
+            moodboardLayout.density == MoodboardExportDensity.rich ? 4 : 2;
+        final orderedRefs = orderedPitchRefsEntries(refsBySection);
         doc.addPage(
           pw.MultiPage(
             theme: theme,
             pageFormat: PdfPageFormat.a4,
             build: (context) => [
               _sectionHeader('REFERENCIAS VISUALES', fonts.bold),
-              for (final entry in refsBySection.entries) ...[
+              for (final entry in orderedRefs) ...[
                 pw.Text(
-                  BibleSectionId.label(entry.key),
+                  pitchRefsSectionLabel(entry.key),
                   style: pw.TextStyle(font: fonts.bold, fontSize: 12),
                 ),
                 pw.SizedBox(height: 8),
-                pw.Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final item in entry.value)
-                      if (item.image != null)
-                        pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Image(
-                              item.image!,
-                              height: 80,
-                              fit: pw.BoxFit.contain,
-                            ),
-                            if (item.img.caption?.isNotEmpty == true)
-                              pw.Text(
-                                item.img.caption!,
-                                style: pw.TextStyle(
-                                  font: fonts.regular,
-                                  fontSize: 8,
-                                ),
+                if (entry.key == BibleSectionId.location)
+                  for (final locGroup
+                      in orderedPitchRefsLocationGroups(entry.value)) ...[
+                    pw.Text(
+                      pitchRefsLocationGroupLabel(
+                        locGroup.key,
+                        locGroup.value.first.img,
+                      ),
+                      style: pw.TextStyle(font: fonts.regular, fontSize: 10),
+                    ),
+                    pw.SizedBox(height: 6),
+                    MoodboardPdfTiles.wrap(
+                      spacing: 8,
+                      tiles: [
+                        for (final item in locGroup.value)
+                          if (item.image != null)
+                            MoodboardPdfTiles.tileColumn(
+                              image: item.image!,
+                              font: fonts.regular,
+                              caption: MoodboardExportGrouper.captionFor(
+                                item.img,
+                                moodboardLayout.density,
                               ),
-                          ],
-                        ),
-                  ],
-                ),
+                              details: MoodboardExportGrouper.detailLinesFor(
+                                item.img,
+                                moodboardLayout.density,
+                              ),
+                              tileWidth: 120,
+                              imageHeight: 80,
+                              fontSize: 8,
+                              detailLimit: pitchDetailLimit,
+                            ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 12),
+                  ]
+                else
+                  MoodboardPdfTiles.wrap(
+                    spacing: 8,
+                    tiles: [
+                      for (final item in entry.value)
+                        if (item.image != null)
+                          MoodboardPdfTiles.tileColumn(
+                            image: item.image!,
+                            font: fonts.regular,
+                            caption: MoodboardExportGrouper.captionFor(
+                              item.img,
+                              moodboardLayout.density,
+                            ),
+                            details: MoodboardExportGrouper.detailLinesFor(
+                              item.img,
+                              moodboardLayout.density,
+                            ),
+                            tileWidth: 120,
+                            imageHeight: 80,
+                            fontSize: 8,
+                            detailLimit: pitchDetailLimit,
+                          ),
+                    ],
+                  ),
                 pw.SizedBox(height: 16),
               ],
             ],
@@ -1095,6 +1427,157 @@ class VisualBiblePdfService {
 
   static bool _hasAny(Iterable<String?> values) =>
       values.any((value) => value?.trim().isNotEmpty == true);
+
+  static List<pw.Widget> _stillStrip(
+    List<
+        ({
+          pw.MemoryImage image,
+          String? caption,
+          List<String> details,
+        })> cells,
+    ({pw.Font regular, pw.Font bold}) fonts,
+  ) {
+    if (cells.isEmpty) return const [];
+    return [
+      pw.SizedBox(height: 14),
+      pw.Text(
+        'REFERENCIAS',
+        style: pw.TextStyle(
+          font: fonts.bold,
+          fontSize: 8,
+          color: PdfColors.grey600,
+          letterSpacing: 1,
+        ),
+      ),
+      pw.SizedBox(height: 8),
+      pw.Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: _moodboardWrapTiles(
+          cells,
+          font: fonts.regular,
+          tileWidth: 120,
+          imageHeight: 80,
+        ),
+      ),
+    ];
+  }
+
+  static bool _isLocationStill(MoodboardImageModel img) =>
+      img.assignedSections.contains(BibleSectionId.location) ||
+      img.category == MoodboardCategory.location ||
+      (img.linkedLocationName?.trim().isNotEmpty ?? false) ||
+      img.linkedLocationBasePlanId != null;
+
+  static pw.Widget _locationPageContent({
+    required Map<String, dynamic> blob,
+    required List<
+        ({
+          pw.MemoryImage image,
+          String? caption,
+          List<String> details,
+        })> cells,
+    required List<MoodboardImageModel> stills,
+    required ({pw.Font regular, pw.Font bold}) fonts,
+  }) {
+    final setNames = <String>{
+      for (final img in stills)
+        if (img.linkedLocationName?.trim().isNotEmpty == true)
+          img.linkedLocationName!.trim(),
+    };
+    const solarKeys = [
+      ('azimuth', 'Azimut'),
+      ('sunrise', 'Amanecer'),
+      ('sunset', 'Atardecer'),
+      ('goldenHour', 'Golden hour'),
+      ('daylightWindow', 'Ventana'),
+    ];
+    final solar = [
+      for (final (key, label) in solarKeys)
+        if ((blob[key]?.toString().trim().isNotEmpty ?? false))
+          (label, blob[key].toString().trim()),
+    ];
+    final hero = cells.isEmpty ? null : cells.first;
+    final rest = cells.length <= 1 ? const <({pw.MemoryImage image, String? caption, List<String> details})>[] : cells.sublist(1);
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (setNames.isNotEmpty) ...[
+          pw.Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (final name in setNames)
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey400),
+                    borderRadius: pw.BorderRadius.circular(8),
+                  ),
+                  child: pw.Text(name, style: const pw.TextStyle(fontSize: 9)),
+                ),
+            ],
+          ),
+          pw.SizedBox(height: 12),
+        ],
+        if (hero != null) ...[
+          pw.Container(
+            height: 160,
+            width: double.infinity,
+            child: pw.Image(hero.image, fit: pw.BoxFit.cover),
+          ),
+          pw.SizedBox(height: 12),
+        ],
+        if (solar.isNotEmpty) ...[
+          pw.Row(
+            children: [
+              for (final (label, value) in solar)
+                pw.Expanded(
+                  child: pw.Column(
+                    children: [
+                      pw.Text(
+                        value,
+                        style: pw.TextStyle(
+                          font: fonts.bold,
+                          fontSize: 11,
+                        ),
+                      ),
+                      pw.Text(
+                        label.toUpperCase(),
+                        style: const pw.TextStyle(
+                          fontSize: 7,
+                          color: PdfColors.grey600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          pw.SizedBox(height: 12),
+        ],
+        _textFieldsContent(
+          BibleSectionExportReader.rowsForSection(
+            BibleSectionId.location,
+            blob,
+          ).map((row) => (row.label, row.value)).toList(),
+          fonts,
+        ),
+        if (rest.isNotEmpty) ...[
+          pw.SizedBox(height: 10),
+          pw.Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _moodboardWrapTiles(rest, font: fonts.regular),
+          ),
+        ],
+      ],
+    );
+  }
 
   static bool _hasCustomContent(
     String sectionId,

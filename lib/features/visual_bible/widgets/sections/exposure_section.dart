@@ -11,6 +11,7 @@ import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../bible_section_fields.dart';
+import '../../v2/model/bible_json_parse.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
@@ -125,31 +126,31 @@ class ExposureSection extends ConsumerWidget {
     final db = ref.watch(databaseProvider);
     final custom = _getCustom();
 
-    final sceneBadge = custom['sceneBadge'] as String? ??
+    final sceneBadge = bibleJsonString(custom['sceneBadge']) ??
         'SCENE • EXPOSURE STRATEGY';
     final baseIso = data.nativeIso ??
-        (custom['baseIso'] as num?)?.toInt() ??
+        bibleJsonInt(custom['baseIso']) ??
         800;
     final tStop = data.defaultTStop ??
-        custom['targetTStop'] as String? ??
+        bibleJsonString(custom['targetTStop']) ??
         'T2.8';
-    final shutter = (custom['shutterAngle'] as num?)?.toDouble() ?? 180.0;
-    final ndFilter = custom['ndFilter'] as String? ??
+    final shutter = bibleJsonDouble(custom['shutterAngle']) ?? 180.0;
+    final ndFilter = bibleJsonString(custom['ndFilter']) ??
         (data.ndNotes?.isNotEmpty == true ? data.ndNotes! : 'Clear');
     final exposureIndex =
-        (custom['exposureIndex'] as num?)?.toDouble() ?? baseIso.toDouble();
+        bibleJsonDouble(custom['exposureIndex']) ?? baseIso.toDouble();
 
     final sourceIntensity =
-        custom['sourceIntensity'] as String? ?? 'Harsh Daylight';
+        bibleJsonString(custom['sourceIntensity']) ?? 'Harsh Daylight';
     final sensorSensitivity =
-        custom['sensorSensitivity'] as String? ?? 'EI $baseIso';
+        bibleJsonString(custom['sensorSensitivity']) ?? 'EI $baseIso';
     final opticsLimit =
-        custom['opticsLimit'] as String? ?? 'Wide Open $tStop';
+        bibleJsonString(custom['opticsLimit']) ?? 'Wide Open $tStop';
 
-    final crush = (custom['lumaCrush'] as num?)?.toDouble() ?? 8.0;
-    final peak = (custom['lumaPeak'] as num?)?.toDouble() ?? 92.0;
+    final crush = bibleJsonDouble(custom['lumaCrush']) ?? 8.0;
+    final peak = bibleJsonDouble(custom['lumaPeak']) ?? 92.0;
 
-    final narrativeIntent = custom['narrativeIntent'] as String? ??
+    final narrativeIntent = bibleJsonString(custom['narrativeIntent']) ??
         data.exposureNarrativeIntent ??
         '';
     final tags = (custom['intentTags'] as List?)
@@ -226,8 +227,7 @@ class ExposureSection extends ConsumerWidget {
                             _updateCustom(ref, {
                               'baseIso': next,
                               'exposureIndex':
-                                  (custom['exposureIndex'] as num?)
-                                          ?.toDouble() ??
+                                  bibleJsonDouble(custom['exposureIndex']) ??
                                       next.toDouble(),
                             });
                           },
@@ -1178,11 +1178,11 @@ class _LocationExposureSlots extends ConsumerWidget {
                             defaults: (
                               iso: data.nativeIso ?? 800,
                               tStop: data.defaultTStop ?? 'T2.8',
-                              nd: custom['ndFilter'] as String? ??
+                              nd: bibleJsonString(custom['ndFilter']) ??
                                   data.ndNotes ??
                                   'Clear',
                               shutter:
-                                  (custom['shutterAngle'] as num?)?.toDouble() ??
+                                  bibleJsonDouble(custom['shutterAngle']) ??
                                       180.0,
                             ),
                             onPatch: (patch) => onPatch(plan.id, patch),
@@ -1252,15 +1252,14 @@ class _LocationExposureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iso = (slot['iso'] as num?)?.toInt() ?? defaults.iso;
-    final tStop = slot['tStop'] as String? ?? defaults.tStop;
-    final nd = slot['nd'] as String? ?? defaults.nd;
-    final shutter =
-        (slot['shutter'] as num?)?.toDouble() ?? defaults.shutter;
-    final approach = slot['approach'] as String? ?? '';
-    final highlight = slot['highlightStrategy'] as String? ?? '';
-    final shadow = slot['shadowStrategy'] as String? ?? '';
-    final keyFill = slot['keyFill'] as String? ?? '';
+    final iso = bibleJsonInt(slot['iso']) ?? defaults.iso;
+    final tStop = bibleJsonString(slot['tStop']) ?? defaults.tStop;
+    final nd = bibleJsonString(slot['nd']) ?? defaults.nd;
+    final shutter = bibleJsonDouble(slot['shutter']) ?? defaults.shutter;
+    final approach = bibleJsonString(slot['approach']) ?? '';
+    final highlight = bibleJsonString(slot['highlightStrategy']) ?? '';
+    final shadow = bibleJsonString(slot['shadowStrategy']) ?? '';
+    final keyFill = bibleJsonString(slot['keyFill']) ?? '';
 
     final chips = <(String, String)>[
       if (locRef.solarOrientation?.isNotEmpty == true)
@@ -1795,9 +1794,10 @@ class _ExposureIndexBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final min = math.max(100.0, baseIso / 4);
-    final max = math.min(12800.0, baseIso * 4);
-    final value = exposureIndex.clamp(min, max);
+    final minIso = math.max(100.0, baseIso <= 0 ? 100.0 : baseIso / 4);
+    var maxIso = math.min(12800.0, math.max(baseIso, 100.0) * 4);
+    if (maxIso <= minIso) maxIso = minIso + 1;
+    final value = exposureIndex.clamp(minIso, maxIso);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1830,8 +1830,8 @@ class _ExposureIndexBar extends StatelessWidget {
           ),
           child: Slider(
             value: value,
-            min: min,
-            max: max,
+            min: minIso,
+            max: maxIso,
             onChanged: onChanged,
             activeColor: palette.accent,
             inactiveColor: Colors.white.withValues(alpha: 0.08),
@@ -1848,7 +1848,9 @@ class _ExposureIndexBar extends StatelessWidget {
             ),
             const Spacer(),
             Text(
-              value > baseIso
+              baseIso <= 0 || value <= 0
+                  ? '—'
+                  : value > baseIso
                   ? '+${(math.log(value / baseIso) / math.ln2).toStringAsFixed(1)} stop'
                   : value < baseIso
                       ? '${(math.log(value / baseIso) / math.ln2).toStringAsFixed(1)} stop'

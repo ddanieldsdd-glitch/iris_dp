@@ -92,17 +92,17 @@ Flag SharedPreferences `BibleEngineV2Flag` queda como compatibilidad; fuente de 
 | text | Completo | Sí | Sí | live |
 | narrative | Completo | Sí | Sí | live |
 | heroImage | Completo | UniversalBibleImageInput | Sí | live |
-| moodboardRefs | Parcial (grid) | Sí | Sí | partial |
+| moodboardRefs | Grid de refs | Sí | Sí | live |
 | chipSelect | Completo | Sí | Sí | live |
-| colorPalette | Parcial | Sí | Sí | partial |
-| telemetry | Lectura | Sí | Sí | partial |
+| colorPalette | Swatches + hex | Sí | Sí | live |
+| telemetry | Editable | Sí | Sí | live |
 | equipmentList | Completo | Sí | Sí | live |
-| lightingDiagram | Placeholder | Sí | Sí | partial |
+| lightingDiagram | Preview de planta | Sí | Sí | live |
 | specsTable | Completo | Sí | Sí | live |
-| workflowPipeline | Parcial | Sí | Sí | partial |
-| dynamicBlocks | Placeholder | Sí | Fallback | planned |
+| workflowPipeline | Pasos persistidos | Sí | Sí | live |
+| dynamicBlocks | Placeholder (puente migración) | Sí | Fallback | planned |
 
-Kinds `planned`/`partial` ocultos del picker de usuario en V2.
+Kinds `planned` ocultos del picker de usuario en V2.
 
 ---
 

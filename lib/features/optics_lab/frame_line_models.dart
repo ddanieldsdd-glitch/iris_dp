@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+const _frameLineCopyUnset = Object();
+
 /// Presets de aspect ratio alineados con ARRI Frame Line Tool.
 class AspectRatioPreset {
   final String id;
@@ -144,7 +146,7 @@ class FrameLineConfig {
 
   FrameLineConfig copyWith({
     AspectRatioPreset? aspectPreset,
-    double? customAspectRatio,
+    Object? customAspectRatio = _frameLineCopyUnset,
     bool? showFrameLine,
     bool? aspectLock,
     double? scalingPercent,
@@ -163,7 +165,9 @@ class FrameLineConfig {
         id: id,
         label: label,
         aspectPreset: aspectPreset ?? this.aspectPreset,
-        customAspectRatio: customAspectRatio ?? this.customAspectRatio,
+        customAspectRatio: identical(customAspectRatio, _frameLineCopyUnset)
+            ? this.customAspectRatio
+            : customAspectRatio as double?,
         showFrameLine: showFrameLine ?? this.showFrameLine,
         aspectLock: aspectLock ?? this.aspectLock,
         scalingPercent: scalingPercent ?? this.scalingPercent,

@@ -750,6 +750,11 @@ extension BibleVisualModeExt on BibleVisualMode {
         BibleVisualMode.minimalist => 'Minimalist',
       };
 
+  bool get isAvailable => this == BibleVisualMode.cinematic;
+
+  String get availabilityLabel =>
+      isAvailable ? label : '$label · Próximamente';
+
   IconData get icon => switch (this) {
         BibleVisualMode.cinematic => Icons.movie_filter_outlined,
         BibleVisualMode.technical => Icons.settings_outlined,
@@ -792,18 +797,35 @@ class BibleSectionModeDropdown extends StatelessWidget {
               .map(
                 (m) => DropdownMenuItem(
                   value: m,
+                  // El valor persistido puede ser technical/minimalist; si el
+                  // ítem actual queda disabled, DropdownButton lanza y la
+                  // pantalla entera deja de pintarse.
+                  enabled: m.isAvailable || m == value,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(m.icon, size: 14, color: palette.textTertiary),
+                      Icon(
+                        m.icon,
+                        size: 14,
+                        color: m.isAvailable || m == value
+                            ? palette.textTertiary
+                            : palette.textTertiary.withValues(alpha: 0.5),
+                      ),
                       const SizedBox(width: 5),
-                      Text(m.label),
+                      Text(
+                        m == value || m.isAvailable
+                            ? m.label
+                            : m.availabilityLabel,
+                      ),
                     ],
                   ),
                 ),
               )
               .toList(),
-          onChanged: (v) => v != null ? onChanged(v) : null,
+          onChanged: (v) {
+            if (v == null || !v.isAvailable) return;
+            onChanged(v);
+          },
         ),
       ),
     );

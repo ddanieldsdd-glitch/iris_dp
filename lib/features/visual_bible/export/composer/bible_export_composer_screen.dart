@@ -779,14 +779,7 @@ class _BibleExportComposerScreenState extends State<BibleExportComposerScreen> {
             spacing: 6,
             runSpacing: 6,
             children: [
-              for (final kind in [
-                BibleBlockKind.narrative,
-                BibleBlockKind.moodboardRefs,
-                BibleBlockKind.heroImage,
-                BibleBlockKind.colorPalette,
-                BibleBlockKind.telemetry,
-                BibleBlockKind.dynamicBlocks,
-              ])
+              for (final kind in BibleBlockCatalog.pickerKinds)
                 ActionChip(
                   avatar: Icon(kind.icon, size: 16),
                   label: Text(kind.label, style: const TextStyle(fontSize: 11)),

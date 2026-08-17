@@ -2,16 +2,20 @@ import '../model/bible_document.dart';
 import '../model/bible_page.dart';
 import '../theme/bible_theme.dart';
 
-/// Puente layout canvas → PDF (Fase 10).
+/// Serializa el layout del canvas v2 (grid 12 / colSpan / rowSpan).
 ///
-/// Serializa la misma estructura de páginas/bloques que consume el editor
-/// para que la exportación pueda converger a WYSIWYG sin romper el PDF actual.
+/// El PDF de entrega **no** consume este Map: [BibleExportPdfRenderer]
+/// pinta los mismos [BibleBlock] que el editor. Este puente existe para
+/// tests WYSIWYG (mismo `colSpan`/`rowSpan` que en pantalla).
 abstract final class BiblePdfLayoutBridge {
-  /// Payload estable para el servicio PDF (incremental).
+  static const int gridColumns = 12;
+
+  /// Payload estable para auditoría de layout (tests / debug).
   static Map<String, dynamic> layoutPayload(BibleDocument doc) {
     return {
       'schemaVersion': doc.schemaVersion,
       'theme': doc.resolvedTheme.toJson(),
+      'gridColumns': gridColumns,
       'pages': [
         for (final page in doc.pages.where((p) => !p.isHidden))
           _pagePayload(page, doc.resolvedTheme),
@@ -44,8 +48,6 @@ abstract final class BiblePdfLayoutBridge {
     };
   }
 
-  /// Secciones legacy que aún faltan en PDF clásico (auditoría).
-  static const pdfGaps = [
-    'location',
-  ];
+  /// Gaps de PDF clásico pendientes. Vacío: Localización ya tiene página rica.
+  static const pdfGaps = <String>[];
 }

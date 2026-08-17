@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'moodboard_export_layout.dart';
 import 'visual_bible_model.dart';
 
 /// Audiencia del PDF: documento general o ficha por departamento.
@@ -27,6 +28,10 @@ class VisualBibleExportConfig {
   final Set<String> sections;
   final VisualBibleExportDestination destination;
   final DateTime updatedAt;
+  final MoodboardExportLayout moodboardLayout;
+  /// Pitch/Tech: incluir en REFERENCIAS VISUALES stills de secciones no
+  /// seleccionadas (bucket Sin clasificar).
+  final bool includeAllMoodboardImages;
 
   const VisualBibleExportConfig({
     required this.id,
@@ -38,6 +43,8 @@ class VisualBibleExportConfig {
     required this.sections,
     required this.destination,
     required this.updatedAt,
+    this.moodboardLayout = MoodboardExportLayout.defaults,
+    this.includeAllMoodboardImages = false,
   });
 
   factory VisualBibleExportConfig.defaults() {
@@ -49,8 +56,58 @@ class VisualBibleExportConfig {
       sections: defaultSectionsForMode(VisualBibleExportMode.full),
       destination: VisualBibleExportDestination.saveFile,
       updatedAt: DateTime.now(),
+      moodboardLayout:
+          defaultMoodboardLayoutForMode(VisualBibleExportMode.full),
     );
   }
+
+  /// Defaults de layout moodboard por modo (tabla diseño export PDF).
+  static MoodboardExportLayout defaultMoodboardLayoutForMode(String mode) =>
+      switch (mode) {
+        VisualBibleExportMode.pitch => const MoodboardExportLayout(
+          grouping: MoodboardExportGrouping.flat,
+          density: MoodboardExportDensity.rich,
+          maxImagesFlat: 12,
+        ),
+        VisualBibleExportMode.techScout => const MoodboardExportLayout(
+          grouping: MoodboardExportGrouping.byFacet,
+          facets: {
+            MoodboardExportFacet.light,
+            MoodboardExportFacet.location,
+          },
+          density: MoodboardExportDensity.standard,
+        ),
+        _ => const MoodboardExportLayout(maxImagesFlat: 0),
+      };
+
+  /// Defaults de layout moodboard por departamento (ficha PDF).
+  static MoodboardExportLayout defaultMoodboardLayoutForDepartment(
+    String department,
+  ) =>
+      switch (department) {
+        VisualBibleDepartment.gaffer => const MoodboardExportLayout(
+          grouping: MoodboardExportGrouping.byFacet,
+          facets: {
+            MoodboardExportFacet.light,
+            MoodboardExportFacet.location,
+          },
+          density: MoodboardExportDensity.standard,
+        ),
+        VisualBibleDepartment.colorist => const MoodboardExportLayout(
+          grouping: MoodboardExportGrouping.byFacet,
+          facets: {
+            MoodboardExportFacet.color,
+            MoodboardExportFacet.texture,
+          },
+          density: MoodboardExportDensity.rich,
+        ),
+        VisualBibleDepartment.productionDesign => const MoodboardExportLayout(
+          grouping: MoodboardExportGrouping.flat,
+          density: MoodboardExportDensity.standard,
+          maxImagesFlat: 24,
+        ),
+        _ => MoodboardExportLayout.defaults,
+      };
 
   static Set<String> defaultSectionsForMode(String mode) => switch (mode) {
         VisualBibleExportMode.pitch => {
@@ -105,6 +162,14 @@ class VisualBibleExportConfig {
       department != null &&
       department!.isNotEmpty;
 
+  /// Full / «incluir todas» no recorta stills. Pitch/Tech sí respetan el tope.
+  MoodboardExportLayout get resolvedMoodboardLayout {
+    if (includeAllMoodboardImages || mode == VisualBibleExportMode.full) {
+      return moodboardLayout.copyWith(maxImagesFlat: 0, maxImagesPerFacet: 0);
+    }
+    return moodboardLayout;
+  }
+
   String get summaryLabel {
     if (isDepartment) {
       final dept = VisualBibleDepartment.label(department!);
@@ -124,6 +189,8 @@ class VisualBibleExportConfig {
     Set<String>? sections,
     VisualBibleExportDestination? destination,
     DateTime? updatedAt,
+    MoodboardExportLayout? moodboardLayout,
+    bool? includeAllMoodboardImages,
     bool clearDepartment = false,
   }) {
     return VisualBibleExportConfig(
@@ -136,6 +203,9 @@ class VisualBibleExportConfig {
       sections: sections ?? this.sections,
       destination: destination ?? this.destination,
       updatedAt: updatedAt ?? this.updatedAt,
+      moodboardLayout: moodboardLayout ?? this.moodboardLayout,
+      includeAllMoodboardImages:
+          includeAllMoodboardImages ?? this.includeAllMoodboardImages,
     );
   }
 
@@ -149,6 +219,8 @@ class VisualBibleExportConfig {
         'sections': sections.toList(),
         'destination': destination.name,
         'updatedAt': updatedAt.toIso8601String(),
+        'moodboardLayout': moodboardLayout.toJson(),
+        'includeAllMoodboardImages': includeAllMoodboardImages,
       };
 
   factory VisualBibleExportConfig.fromJson(Map<String, dynamic> json) {
@@ -174,6 +246,11 @@ class VisualBibleExportConfig {
       ),
       updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
           DateTime.now(),
+      moodboardLayout: MoodboardExportLayout.fromJson(
+        json['moodboardLayout'] as Map<String, dynamic>?,
+      ),
+      includeAllMoodboardImages:
+          json['includeAllMoodboardImages'] as bool? ?? false,
     );
   }
 }

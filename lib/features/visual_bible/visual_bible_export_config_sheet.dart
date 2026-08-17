@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import 'moodboard_export_layout.dart';
 import 'visual_bible_export_config.dart';
 import 'visual_bible_model.dart';
 
@@ -102,6 +103,9 @@ class _VisualBibleExportConfigSheetState
           mode: _config.mode,
           sections:
               VisualBibleExportConfig.defaultSectionsForMode(_config.mode),
+          moodboardLayout: VisualBibleExportConfig.defaultMoodboardLayoutForMode(
+            _config.mode,
+          ),
           name: _config.id == 'default' || _config.name.startsWith('Ficha')
               ? VisualBibleExportMode.label(_config.mode)
               : _config.name,
@@ -114,6 +118,8 @@ class _VisualBibleExportConfigSheetState
           department: dept,
           sections:
               VisualBibleExportConfig.defaultSectionsForDepartment(dept),
+          moodboardLayout:
+              VisualBibleExportConfig.defaultMoodboardLayoutForDepartment(dept),
           name: _config.id == 'default' ||
                   _config.name == 'Documento general' ||
                   VisualBibleExportMode.label(_config.mode) == _config.name
@@ -130,6 +136,8 @@ class _VisualBibleExportConfigSheetState
       _config = _config.copyWith(
         mode: mode,
         sections: VisualBibleExportConfig.defaultSectionsForMode(mode),
+        moodboardLayout:
+            VisualBibleExportConfig.defaultMoodboardLayoutForMode(mode),
         name: _config.id == 'default' ||
                 _saved.every((e) => e.id != _config.id)
             ? VisualBibleExportMode.label(mode)
@@ -145,6 +153,10 @@ class _VisualBibleExportConfigSheetState
         department: department,
         sections:
             VisualBibleExportConfig.defaultSectionsForDepartment(department),
+        moodboardLayout:
+            VisualBibleExportConfig.defaultMoodboardLayoutForDepartment(
+              department,
+            ),
         name: 'Ficha · ${VisualBibleDepartment.label(department)}',
       );
       _nameCtrl.text = _config.name;
@@ -160,6 +172,69 @@ class _VisualBibleExportConfigSheetState
       next.add(id);
     }
     setState(() => _config = _config.copyWith(sections: next));
+  }
+
+  void _setMoodboardGrouping(MoodboardExportGrouping grouping) {
+    var layout = _config.moodboardLayout.copyWith(grouping: grouping);
+    if (grouping == MoodboardExportGrouping.byFacet && layout.facets.isEmpty) {
+      layout = layout.copyWith(facets: MoodboardExportFacet.values.toSet());
+    }
+    setState(() => _config = _config.copyWith(moodboardLayout: layout));
+  }
+
+  void _toggleMoodboardFacet(MoodboardExportFacet facet) {
+    final layout = _config.moodboardLayout;
+    final next = Set<MoodboardExportFacet>.from(layout.facets);
+    if (next.contains(facet)) {
+      if (next.length <= 1) return;
+      next.remove(facet);
+    } else {
+      next.add(facet);
+    }
+    setState(
+      () => _config = _config.copyWith(
+        moodboardLayout: layout.copyWith(facets: next),
+      ),
+    );
+  }
+
+  void _setMoodboardDensity(MoodboardExportDensity density) {
+    setState(
+      () => _config = _config.copyWith(
+        moodboardLayout: _config.moodboardLayout.copyWith(density: density),
+      ),
+    );
+  }
+
+  void _setMoodboardIncludeUnclassified(bool value) {
+    setState(
+      () => _config = _config.copyWith(
+        moodboardLayout:
+            _config.moodboardLayout.copyWith(includeUnclassified: value),
+      ),
+    );
+  }
+
+  /// Por faceta solo en documento completo (página MOODBOARD landscape).
+  bool get _moodboardFacetGroupingAvailable =>
+      !_config.isDepartment && _config.mode == VisualBibleExportMode.full;
+
+  bool get _isPitchMode =>
+      !_config.isDepartment && _config.mode == VisualBibleExportMode.pitch;
+
+  bool get _isPitchOrTechMode =>
+      !_config.isDepartment &&
+      (_config.mode == VisualBibleExportMode.pitch ||
+          _config.mode == VisualBibleExportMode.techScout);
+
+  bool get _showIncludeAllMoodboardToggle =>
+      _isPitchOrTechMode &&
+      _config.sections.contains(BibleSectionId.moodboard);
+
+  void _setIncludeAllMoodboardImages(bool value) {
+    setState(
+      () => _config = _config.copyWith(includeAllMoodboardImages: value),
+    );
   }
 
   Future<void> _saveDocument() async {
@@ -437,6 +512,28 @@ class _VisualBibleExportConfigSheetState
                               ),
                           ],
                         ),
+                        if (_isPitchMode) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          _PitchExportInfoBanner(palette: palette),
+                        ],
+                        if (_showIncludeAllMoodboardToggle) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              'Incluir todas las imágenes del moodboard',
+                              style: AppTypography.bodyMedium(palette),
+                            ),
+                            subtitle: Text(
+                              'Aunque no estén en las secciones seleccionadas '
+                              '(aparecen en Sin clasificar)',
+                              style: AppTypography.caption(palette)
+                                  .copyWith(color: palette.textSecondary),
+                            ),
+                            value: _config.includeAllMoodboardImages,
+                            onChanged: _setIncludeAllMoodboardImages,
+                          ),
+                        ],
                       ] else ...[
                         _sectionLabel(palette, 'Departamento'),
                         const SizedBox(height: AppSpacing.sm),
@@ -507,6 +604,137 @@ class _VisualBibleExportConfigSheetState
                             ),
                         ],
                       ),
+                      if (_config.sections.contains(BibleSectionId.moodboard)) ...[
+                        const SizedBox(height: AppSpacing.xl),
+                        _sectionLabel(palette, 'Moodboard en PDF'),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Organización y densidad de las referencias visuales.',
+                          style: AppTypography.caption(palette)
+                              .copyWith(color: palette.textSecondary),
+                        ),
+                        if (!_moodboardFacetGroupingAvailable) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            _isPitchMode
+                                ? 'En Pitch las referencias van a REFERENCIAS VISUALES '
+                                    '(por sección de biblia), no a una página Moodboard. '
+                                    'La densidad de ficha abajo aplica a esas referencias.'
+                                : 'La organización por faceta solo aplica al modo '
+                                    'Documento completo. Pitch/Tech y fichas de '
+                                    'departamento usan otras reglas de maquetación.',
+                            style: AppTypography.caption(palette).copyWith(
+                              color: palette.textSecondary,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: AppSpacing.sm),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _ChoiceCard(
+                                title: MoodboardExportLayout.groupingLabel(
+                                  MoodboardExportGrouping.flat,
+                                ),
+                                subtitle: 'Grid continuo',
+                                icon: Icons.grid_view_outlined,
+                                selected: _config.moodboardLayout.grouping ==
+                                    MoodboardExportGrouping.flat,
+                                onTap: () => _setMoodboardGrouping(
+                                  MoodboardExportGrouping.flat,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: _ChoiceCard(
+                                title: MoodboardExportLayout.groupingLabel(
+                                  MoodboardExportGrouping.byFacet,
+                                ),
+                                subtitle: _moodboardFacetGroupingAvailable
+                                    ? 'Grupos por faceta'
+                                    : 'Solo documento completo',
+                                icon: Icons.category_outlined,
+                                selected: _config.moodboardLayout.grouping ==
+                                    MoodboardExportGrouping.byFacet,
+                                onTap: _moodboardFacetGroupingAvailable
+                                    ? () => _setMoodboardGrouping(
+                                          MoodboardExportGrouping.byFacet,
+                                        )
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_config.moodboardLayout.grouping ==
+                            MoodboardExportGrouping.byFacet) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            'Facetas',
+                            style: AppTypography.label(palette).copyWith(
+                              color: palette.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final facet in MoodboardExportFacet.values)
+                                FilterChip(
+                                  label: Text(
+                                    MoodboardExportLayout.facetLabel(facet),
+                                  ),
+                                  selected: _config.moodboardLayout.facets
+                                      .contains(facet),
+                                  onSelected: (_) =>
+                                      _toggleMoodboardFacet(facet),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              'Incluir sin clasificar',
+                              style: AppTypography.bodyMedium(palette),
+                            ),
+                            subtitle: Text(
+                              'Stills que no entran en una faceta activa',
+                              style: AppTypography.caption(palette)
+                                  .copyWith(color: palette.textSecondary),
+                            ),
+                            value: _config.moodboardLayout.includeUnclassified,
+                            onChanged: _setMoodboardIncludeUnclassified,
+                          ),
+                        ],
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          'Densidad de ficha',
+                          style: AppTypography.label(palette).copyWith(
+                            color: palette.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final density
+                                in MoodboardExportDensity.values)
+                              ChoiceChip(
+                                label: Text(
+                                  MoodboardExportLayout.densityLabel(density),
+                                ),
+                                selected:
+                                    _config.moodboardLayout.density == density,
+                                onSelected: (_) =>
+                                    _setMoodboardDensity(density),
+                              ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: AppSpacing.xl),
                       _sectionLabel(palette, 'Destino'),
                       const SizedBox(height: AppSpacing.sm),
@@ -633,6 +861,42 @@ class _VisualBibleExportConfigSheetState
   }
 }
 
+class _PitchExportInfoBanner extends StatelessWidget {
+  final AppPalette palette;
+
+  const _PitchExportInfoBanner({required this.palette});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: palette.accentMuted.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: palette.accent.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lightbulb_outline, size: 18, color: palette.accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Pitch no incluye página Moodboard ni páginas de texto de '
+              'Iluminación, Textura o Localización. Las stills del moodboard '
+              'se agrupan en REFERENCIAS VISUALES según su sección de biblia '
+              '(localización con subtítulos por set cuando aplique).',
+              style: AppTypography.caption(palette).copyWith(
+                color: palette.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PresetChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -692,26 +956,29 @@ class _ChoiceCard extends StatelessWidget {
   final String subtitle;
   final IconData icon;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _ChoiceCard({
     required this.title,
     required this.subtitle,
     required this.icon,
     required this.selected,
-    required this.onTap,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final enabled = onTap != null;
     return Material(
       color: selected ? palette.accentMuted : palette.surface,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
+        child: Opacity(
+          opacity: enabled ? 1 : 0.45,
+          child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
@@ -744,6 +1011,7 @@ class _ChoiceCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
         ),
       ),
     );

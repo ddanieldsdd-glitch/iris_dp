@@ -254,6 +254,16 @@ void main() {
           },
         ),
         BibleBlock(
+          id: 'lighting',
+          type: BibleBlockKind.lightingDiagram,
+          content: {
+            'label': 'Key window',
+            'nodes': [
+              {'type': 'key', 'x': 100, 'y': 80},
+            ],
+          },
+        ),
+        BibleBlock(
           id: 'dynamic',
           type: BibleBlockKind.dynamicBlocks,
           content: {
@@ -278,6 +288,7 @@ void main() {
     expect(text, contains('Fresnel 2K'));
     expect(text, contains('S35'));
     expect(text, contains('Rodaje'));
+    expect(text.toUpperCase(), contains('KEY WINDOW'));
     expect(text, contains('Look A'));
   });
 
@@ -310,4 +321,64 @@ void main() {
     expect(text, contains('CUERPO VISIBLE'));
     expect(text, isNot(contains('""')));
   });
+
+  test('cada kind live tiene renderer PDF (sin fallback genérico)', () async {
+    final live = BibleBlockKind.values
+        .where((k) => k.status == BibleBlockStatus.live)
+        .toList();
+    final page = BibleExportPage(
+      id: 'live-kinds',
+      label: 'Live',
+      type: BibleExportPageType.generated,
+      blocks: [
+        for (final kind in live)
+          BibleBlock(id: kind.name, type: kind, content: _livePdfContent(kind)),
+      ],
+    );
+    final bytes = await BibleExportPdfRenderer(
+      imageLoader: (path, {maxEdge = 2048}) async => null,
+    ).buildBytes(composition([page]));
+    final pdf = sf.PdfDocument(inputBytes: bytes);
+    addTearDown(pdf.dispose);
+    final text = normalized(sf.PdfTextExtractor(pdf).extractText());
+
+    expect(text, contains('CITA LIVE'));
+    expect(text, contains('TAGLIVE'));
+    expect(text, contains('CÁMARA'));
+    expect(text, contains('3200K'));
+    expect(text, isNot(contains('Campo de texto')));
+  });
 }
+
+Map<String, dynamic> _livePdfContent(BibleBlockKind kind) => switch (kind) {
+  BibleBlockKind.narrative => {'text': 'CITA LIVE'},
+  BibleBlockKind.text => {'text': 'Texto live'},
+  BibleBlockKind.chipSelect => {
+    'chips': ['TAGLIVE'],
+  },
+  BibleBlockKind.telemetry => {'kelvin': '3200K'},
+  BibleBlockKind.workflowPipeline => const {'steps': <String>[]},
+  BibleBlockKind.colorPalette => {
+    'colors': [
+      {'hex': '#111111', 'name': 'INK'},
+    ],
+  },
+  BibleBlockKind.equipmentList => {
+    'items': ['HMI'],
+  },
+  BibleBlockKind.specsTable => {
+    'columns': ['label', 'value'],
+    'rows': [
+      {'label': 'ISO', 'value': '800'},
+    ],
+  },
+  BibleBlockKind.moodboardRefs => {'images': <String>[]},
+  BibleBlockKind.heroImage => {'path': '/missing.jpg'},
+  BibleBlockKind.lightingDiagram => {
+    'label': 'Planta live',
+    'nodes': [
+      {'type': 'key', 'x': 10, 'y': 10},
+    ],
+  },
+  BibleBlockKind.dynamicBlocks => {'items': ['x']},
+};

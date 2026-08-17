@@ -58,6 +58,12 @@ void main() {
       expect(card.reinforcementBlocks.length, 2);
       expect(card.reinforcementBlocks.first.text, 'Atmósfera húmeda');
       expect(card.reinforcementBlocks.last.imageId, 42);
+
+      card.reinforcementBlocks = [
+        ContainerReinforcementBlock.text(''),
+      ];
+      expect(card.reinforcementBlocks.length, 1);
+      expect(card.reinforcementBlocks.first.text, '');
     });
 
     test('film meta getters', () {
