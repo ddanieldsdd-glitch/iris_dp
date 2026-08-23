@@ -19,7 +19,6 @@ import '../bible_navigation_scope.dart';
 import '../bible_paste_zone.dart';
 import 'narrative_card_detail.dart';
 import 'narrative_card_tile.dart';
-import 'lighting_global_metrics_panel.dart';
 
 /// Bloque del deck: cabecera + grid de cartas + CTA añadir.
 class NarrativeDeckBlock extends ConsumerWidget {
@@ -33,6 +32,9 @@ class NarrativeDeckBlock extends ConsumerWidget {
   final bool allowDelete;
   final Widget Function(NarrativeCardModel card)? technicalPanelBuilder;
 
+  /// Columnas fijas del grid (null = responsive por ancho).
+  final int? gridColumns;
+
   const NarrativeDeckBlock({
     super.key,
     required this.projectId,
@@ -44,6 +46,7 @@ class NarrativeDeckBlock extends ConsumerWidget {
     this.allowAdd = true,
     this.allowDelete = true,
     this.technicalPanelBuilder,
+    this.gridColumns,
   });
 
   @override
@@ -124,11 +127,12 @@ class NarrativeDeckBlock extends ConsumerWidget {
             return LayoutBuilder(
               builder: (context, constraints) {
                 final w = constraints.maxWidth;
-                final cross = w >= 900
-                    ? 4
-                    : w >= 600
-                        ? 3
-                        : 2;
+                final cross = gridColumns ??
+                    (w >= 900
+                        ? 4
+                        : w >= 600
+                            ? 3
+                            : 2);
                 return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -234,6 +238,7 @@ class LightingOverviewBlock extends ConsumerStatefulWidget {
   final int bibleId;
   final Map<String, dynamic> lightingData;
   final Future<void> Function(Map<String, dynamic> patch) onUpdateLightingData;
+  final bool compact;
 
   const LightingOverviewBlock({
     super.key,
@@ -241,6 +246,7 @@ class LightingOverviewBlock extends ConsumerStatefulWidget {
     required this.bibleId,
     required this.lightingData,
     required this.onUpdateLightingData,
+    this.compact = false,
   });
 
   @override
@@ -302,8 +308,10 @@ class _LightingOverviewBlockState extends ConsumerState<LightingOverviewBlock> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            BibleCrossNavChips.techTriplet(current: BibleSectionId.lighting),
-            const SizedBox(height: 12),
+            if (!widget.compact) ...[
+              BibleCrossNavChips.techTriplet(current: BibleSectionId.lighting),
+              const SizedBox(height: 12),
+            ],
             _HeroBanner(
               projectId: widget.projectId,
               bibleId: widget.bibleId,
@@ -313,7 +321,8 @@ class _LightingOverviewBlockState extends ConsumerState<LightingOverviewBlock> {
               subtitle: subtitle,
               palette: palette,
               db: db,
-              onEditMeta: () => _editHero(context, overview, badge, title, subtitle),
+              onEditMeta: () =>
+                  _editHero(context, overview, badge, title, subtitle),
               onCoverAssigned: (imageId) async {
                 if (overview == null) return;
                 final row = await db.getNarrativeCard(overview.id);
@@ -328,51 +337,26 @@ class _LightingOverviewBlockState extends ConsumerState<LightingOverviewBlock> {
                 );
               },
             ),
-            const SizedBox(height: 16),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 880;
-                final narrative = _OverviewNarrativePanel(
-                  palette: palette,
-                  story: story,
-                  onStoryChanged: (v) async {
-                    await widget.onUpdateLightingData({'narrativeStory': v});
-                    if (overview != null) {
-                      final row = await db.getNarrativeCard(overview.id);
-                      if (row != null) {
-                        await db.updateNarrativeCard(
-                          row.copyWith(
-                            body: Value(v.trim().isEmpty ? null : v),
-                          ),
-                        );
-                      }
+            if (!widget.compact) ...[
+              const SizedBox(height: 16),
+              _OverviewNarrativePanel(
+                palette: palette,
+                story: story,
+                onStoryChanged: (v) async {
+                  await widget.onUpdateLightingData({'narrativeStory': v});
+                  if (overview != null) {
+                    final row = await db.getNarrativeCard(overview.id);
+                    if (row != null) {
+                      await db.updateNarrativeCard(
+                        row.copyWith(
+                          body: Value(v.trim().isEmpty ? null : v),
+                        ),
+                      );
                     }
-                  },
-                );
-                final metrics = LightingGlobalMetricsPanel(
-                  lightingData: data,
-                  onUpdate: widget.onUpdateLightingData,
-                );
-                if (wide) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 3, child: narrative),
-                      const SizedBox(width: 16),
-                      Expanded(flex: 2, child: metrics),
-                    ],
-                  );
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    narrative,
-                    const SizedBox(height: 16),
-                    metrics,
-                  ],
-                );
-              },
-            ),
+                  }
+                },
+              ),
+            ],
           ],
         );
       },

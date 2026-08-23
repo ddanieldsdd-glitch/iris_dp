@@ -1,7 +1,9 @@
 import 'dart:convert';
 
-import 'bible_section_ids.dart';
 import 'bible_stitch_module_registry.dart';
+import 'bible_subsection_kind_catalog.dart';
+import 'bible_subsection_kind_profiles.dart';
+import 'bible_widget_size.dart';
 
 int _parseMaxLines(dynamic value) {
   if (value is int) return value;
@@ -19,7 +21,7 @@ enum BibleSectionFieldType {
   blocks,
 }
 
-/// Sub-apartado configurable (nombre, orden, hint).
+/// Sub-apartado configurable (nombre, orden, hint, kind y tamaño S/M/L).
 class BibleSectionField {
   final String key;
   final String label;
@@ -27,13 +29,33 @@ class BibleSectionField {
   final int maxLines;
   final BibleSectionFieldType type;
 
+  /// Tipo canónico del widget (catálogo de sub-apartados).
+  final BibleSubsectionKindId? kind;
+
+  /// Tamaño semántico S/M/L (ancho en grid).
+  final BibleWidgetSize size;
+
+  /// Binding de datos (p.ej. slot Stitch `filmRefs` para un `cardDeck`).
+  final String? binding;
+
   const BibleSectionField({
     required this.key,
     required this.label,
     this.hint,
     this.maxLines = 3,
     this.type = BibleSectionFieldType.text,
+    this.kind,
+    this.size = BibleWidgetSize.large,
+    this.binding,
   });
+
+  /// Kind resuelto: explícito, módulo Stitch o inferido por tipo.
+  BibleSubsectionKindId resolvedKind(String sectionId) {
+    if (kind != null) return kind!;
+    final module = BibleStitchModuleRegistry.module(sectionId, key);
+    if (module?.subsectionKind != null) return module!.subsectionKind!;
+    return BibleSubsectionKindCatalog.fromFieldType(type).id;
+  }
 
   Map<String, dynamic> toJson() => {
         'key': key,
@@ -41,18 +63,27 @@ class BibleSectionField {
         if (hint != null) 'hint': hint,
         'maxLines': maxLines,
         'type': type.name,
+        if (kind != null) 'kind': kind!.name,
+        if (size != BibleWidgetSize.large) 'size': size.storageKey,
+        if (binding != null && binding != key) 'binding': binding,
       };
 
   factory BibleSectionField.fromJson(Map<String, dynamic> json) {
+    final type = BibleSectionFieldType.values.firstWhere(
+      (t) => t.name == json['type'],
+      orElse: () => BibleSectionFieldType.text,
+    );
+    final kindKey = json['kind']?.toString();
+    final parsedKind = BibleSubsectionKindCatalog.byStorageKey(kindKey)?.id;
     return BibleSectionField(
       key: json['key'] as String,
       label: json['label'] as String,
       hint: json['hint'] as String?,
       maxLines: _parseMaxLines(json['maxLines']),
-      type: BibleSectionFieldType.values.firstWhere(
-        (t) => t.name == json['type'],
-        orElse: () => BibleSectionFieldType.text,
-      ),
+      type: type,
+      kind: parsedKind,
+      size: BibleWidgetSize.fromStorage(json['size']?.toString()),
+      binding: json['binding']?.toString(),
     );
   }
 
@@ -61,6 +92,9 @@ class BibleSectionField {
     String? hint,
     int? maxLines,
     BibleSectionFieldType? type,
+    BibleSubsectionKindId? kind,
+    BibleWidgetSize? size,
+    String? binding,
   }) {
     return BibleSectionField(
       key: key,
@@ -68,6 +102,9 @@ class BibleSectionField {
       hint: hint ?? this.hint,
       maxLines: maxLines ?? this.maxLines,
       type: type ?? this.type,
+      kind: kind ?? this.kind,
+      size: size ?? this.size,
+      binding: binding ?? this.binding,
     );
   }
 }
@@ -78,7 +115,41 @@ abstract final class BibleSectionFieldsConfig {
   static const _valuesKey = 'values';
 
   static List<BibleSectionField> defaultsFor(String sectionId) =>
-      BibleStitchModuleRegistry.defaultFieldsFor(sectionId);
+      BibleStitchModuleRegistry.defaultFieldsFor(sectionId)
+          .map((f) => _enrichField(sectionId, f))
+          .toList();
+
+  /// Enriquece kind/size/binding desde el registry Stitch y perfiles S/M/L.
+  static BibleSectionField enrichField(
+    String sectionId,
+    BibleSectionField field,
+  ) =>
+      _enrichField(sectionId, field);
+
+  static BibleSectionField _enrichField(
+    String sectionId,
+    BibleSectionField field,
+  ) {
+    final module = BibleStitchModuleRegistry.module(sectionId, field.key);
+    final resolvedKind = field.kind ??
+        module?.subsectionKind ??
+        BibleSubsectionKindCatalog.fromFieldType(field.type).id;
+    final resolvedSize = BibleSubsectionKindProfiles.clampSize(
+      resolvedKind,
+      field.size,
+    );
+    final resolvedBinding = field.binding ?? module?.key ?? field.key;
+    if (field.kind == resolvedKind &&
+        field.size == resolvedSize &&
+        field.binding == resolvedBinding) {
+      return field;
+    }
+    return field.copyWith(
+      kind: resolvedKind,
+      size: resolvedSize,
+      binding: resolvedBinding,
+    );
+  }
 
   static List<BibleSectionField> parse(String? contentJson, String sectionId) {
     if (contentJson == null || contentJson.isEmpty) {
@@ -99,6 +170,7 @@ abstract final class BibleSectionFieldsConfig {
       final parsed = raw
           .whereType<Map<String, dynamic>>()
           .map(BibleSectionField.fromJson)
+          .map((f) => _enrichField(sectionId, f))
           .toList();
       return BibleStitchModuleRegistry.normalizeFields(sectionId, parsed);
     } catch (_) {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -18,12 +19,15 @@ import '../../services/mired_converter.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
 import '../bible_moodboard_image_target.dart';
+import '../bible_navigation_scope.dart';
 import '../../bible_paste_helpers.dart';
 import '../lighting_diagram/lighting_diagram_editor.dart';
 import '../narrative_deck/narrative_deck_block.dart';
 import '../narrative_deck/narrative_card_detail.dart';
 import '../narrative_deck/lighting_behaviors_block.dart';
+import '../narrative_deck/lighting_global_metrics_panel.dart';
 import '../narrative_deck/lighting_tagged_refs_block.dart';
+import 'lighting_widget_bindings.dart';
 import 'section_scaffold.dart';
 
 /// Iluminación — deck narrativo (overview → estilos → refs → localizaciones).
@@ -54,6 +58,10 @@ class LightingSection extends ConsumerStatefulWidget {
 class _LightingSectionState extends ConsumerState<LightingSection> {
   int? _selectedPlanId;
   bool _handledFocus = false;
+  int? _detailCardId;
+  Widget? _detailTechnicalPanel;
+  VoidCallback? _detailOnOpenLocation;
+  Completer<void>? _detailClosed;
 
   @override
   void initState() {
@@ -83,12 +91,40 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
     final id = int.tryParse(focus.substring(5));
     if (id == null || !mounted) return;
     _handledFocus = true;
-    await NarrativeCardDetailPage.open(
-      context,
-      projectId: widget.projectId,
-      bibleId: widget.bibleId,
-      cardId: id,
-    );
+    await _openCardDetail(cardId: id);
+  }
+
+  Future<void> _openCardDetail({
+    required int cardId,
+    Widget? technicalPanel,
+    VoidCallback? onOpenLocation,
+  }) {
+    final previous = _detailClosed;
+    if (previous != null && !previous.isCompleted) {
+      previous.complete();
+    }
+    final closed = Completer<void>();
+    setState(() {
+      _detailCardId = cardId;
+      _detailTechnicalPanel = technicalPanel;
+      _detailOnOpenLocation = onOpenLocation;
+      _detailClosed = closed;
+    });
+    return closed.future;
+  }
+
+  void _closeCardDetail() {
+    if (_detailCardId == null) return;
+    setState(() {
+      _detailCardId = null;
+      _detailTechnicalPanel = null;
+      _detailOnOpenLocation = null;
+    });
+    final closed = _detailClosed;
+    _detailClosed = null;
+    if (closed != null && !closed.isCompleted) {
+      closed.complete();
+    }
   }
 
   Map<String, dynamic> _getCustom() {
@@ -208,7 +244,37 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
         (custom['selectedPlanId'] as num?)?.toInt() ??
         shootCtx.activeSetId;
 
-    return BibleSectionScaffold(
+    final parentNav = BibleNavigationScope.maybeOf(context);
+
+    LightingWidgetBindings.bind(
+      LightingWidgetBindingsContext(
+        projectId: widget.projectId,
+        bibleId: widget.bibleId,
+        lightingData: custom,
+        onUpdateLightingData: _updateCustom,
+        selectedPlanId: selectedPlanId,
+        db: db,
+        data: widget.data,
+        onChanged: widget.onChanged,
+        onUpdatePlan: _updatePlan,
+        onSyncLightingNote: _syncLightingNote,
+        onAddSetup: (ctx, planId) => _addSetup(ctx, planId),
+        locationTechnicalPanelBuilder: (card) => _LocationTechnicalPanel(
+          projectId: widget.projectId,
+          bibleId: widget.bibleId,
+          planId: card.locationBasePlanId ?? selectedPlanId,
+          lightingData: custom,
+          onUpdatePlan: _updatePlan,
+          onUpdateCustom: _updateCustom,
+          onSyncLightingNote: _syncLightingNote,
+          onAddSetup: () => _addSetup(context, card.locationBasePlanId ?? selectedPlanId),
+          data: widget.data,
+          onChanged: widget.onChanged,
+        ),
+      ),
+    );
+
+    final home = BibleSectionScaffold(
       sectionId: BibleSectionId.lighting,
       projectId: widget.projectId,
       data: widget.data,
@@ -219,74 +285,7 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
       sectionNumber: null,
       sectionTitle: 'Iluminación',
       fieldWidgets: {
-        'overview': LightingOverviewBlock(
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-          lightingData: custom,
-          onUpdateLightingData: (patch) async {
-            await _updateCustom(patch);
-            if (patch.containsKey('narrativeStory')) {
-              final story = (patch['narrativeStory'] as String?)?.trim() ?? '';
-              widget.data.lightingPhilosophy =
-                  story.isEmpty ? null : story;
-              widget.data.lightingNarrativeIntent =
-                  story.isEmpty ? null : story;
-              widget.onChanged(widget.data);
-            }
-          },
-        ),
-        'lightBehaviors': LightingBehaviorsBlock(
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-        ),
-        // Legacy: slots separados (layouts antiguos).
-        'lightStyles': NarrativeDeckBlock(
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-          sectionId: BibleSectionId.lighting,
-          kind: NarrativeCardKind.style,
-          title: 'Comportamiento de la luz',
-          subtitle:
-              'Textura, calidad, color y cómo se comporta la luz en el proyecto',
-        ),
-        'lightingTagRefs': LightingTaggedRefsBlock(
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-        ),
-        'filmRefs': NarrativeDeckBlock(
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-          sectionId: BibleSectionId.lighting,
-          kind: NarrativeCardKind.filmRef,
-          title: 'Referencias fílmicas',
-          subtitle: 'Películas que nos inspiran y nos ayudan a definir la luz',
-        ),
-        'locationLights': NarrativeDeckBlock(
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-          sectionId: BibleSectionId.lighting,
-          kind: NarrativeCardKind.locationLight,
-          title: 'Localizaciones',
-          subtitle: 'Cómo afrontamos la luz en cada set',
-          allowAdd: false,
-          allowDelete: false,
-          technicalPanelBuilder: (card) => _LocationTechnicalPanel(
-            projectId: widget.projectId,
-            bibleId: widget.bibleId,
-            planId: card.locationBasePlanId ?? selectedPlanId,
-            lightingData: custom,
-            onUpdatePlan: _updatePlan,
-            onUpdateCustom: _updateCustom,
-            onSyncLightingNote: _syncLightingNote,
-            onAddSetup: () => _addSetup(
-              context,
-              card.locationBasePlanId ?? selectedPlanId,
-            ),
-            data: widget.data,
-            onChanged: widget.onChanged,
-          ),
-        ),
-        // Legacy slots: keep widgets available if old layouts still reference them.
+        // Legacy slots no cubiertos por el registry Stitch.
         'diagrams': _SetupsBlock(
           projectId: widget.projectId,
           bibleId: widget.bibleId,
@@ -296,6 +295,52 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
           onAdd: () => _addSetup(context, selectedPlanId),
         ),
       },
+    );
+
+    return BibleNavigationScope(
+      openMoodboard: parentNav?.openMoodboard ??
+          ({String? sectionId, String? moodboardFilter}) {},
+      openLocations: parentNav?.openLocations ??
+          ({int? siteId, int? setId}) {},
+      openSection: parentNav?.openSection,
+      openBibleLocation: parentNav?.openBibleLocation,
+      openNarrativeCardDetail: ({
+        required int cardId,
+        Widget? technicalPanel,
+        VoidCallback? onOpenLocation,
+      }) =>
+          _openCardDetail(
+            cardId: cardId,
+            technicalPanel: technicalPanel,
+            onOpenLocation: onOpenLocation,
+          ),
+      child: Navigator(
+        pages: [
+          MaterialPage<void>(
+            key: const ValueKey('lighting-home'),
+            child: home,
+          ),
+          if (_detailCardId != null)
+            MaterialPage<void>(
+              key: ValueKey('lighting-card-$_detailCardId'),
+              child: NarrativeCardDetailPage(
+                projectId: widget.projectId,
+                bibleId: widget.bibleId,
+                cardId: _detailCardId!,
+                technicalPanel: _detailTechnicalPanel,
+                onOpenLocation: _detailOnOpenLocation,
+                embedded: true,
+              ),
+            ),
+        ],
+        onDidRemovePage: (page) {
+          final key = page.key;
+          if (key is ValueKey<String> &&
+              key.value.startsWith('lighting-card-')) {
+            _closeCardDetail();
+          }
+        },
+      ),
     );
   }
 

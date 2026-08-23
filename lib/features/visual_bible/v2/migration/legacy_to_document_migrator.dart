@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../../../shared/visual_bible/bible_section_fields.dart';
+import '../../../../shared/visual_bible/bible_widget_size.dart';
 import '../../bible_block_catalog.dart';
 import '../../bible_blueprint.dart';
 import '../../visual_bible_model.dart';
@@ -9,6 +10,7 @@ import '../model/bible_block_layout.dart';
 import '../model/bible_document.dart';
 import '../model/bible_page.dart';
 import '../migration/freeform_v2_blocks_codec.dart';
+import '../migration/stitch_to_block_bridge.dart';
 import '../layout/page_layout_recipe_registry.dart';
 import '../model/bible_page_mode.dart';
 import '../theme/bible_theme.dart';
@@ -134,7 +136,6 @@ abstract final class LegacyToDocumentMigrator {
     var row = 0;
 
     for (final field in fields) {
-      final kind = _kindForField(field);
       final content = <String, dynamic>{
         'label': field.label,
         if (field.hint != null) 'hint': field.hint,
@@ -143,29 +144,22 @@ abstract final class LegacyToDocumentMigrator {
         'fieldKey': field.key,
       };
 
-      // Enriquecer con columnas fat de VisualBibleData cuando existan.
       if (data != null) {
         _enrichContentFromData(section.id, field.key, content, data);
       }
 
+      final block = StitchToBlockBridge.fieldToBlock(
+        sectionId: section.id,
+        field: field,
+        row: row,
+        values: values,
+      );
       blocks.add(
-        BibleBlock(
-          id: '${section.id}__${field.key}',
-          type: kind,
-          layout: BibleBlockLayout(
-            col: 0,
-            row: row,
-            colSpan:
-                kind == BibleBlockKind.moodboardRefs ||
-                    kind == BibleBlockKind.heroImage
-                ? 12
-                : 12,
-            rowSpan: kind == BibleBlockKind.narrative ? 3 : 2,
-          ),
-          content: content,
+        block.copyWith(
+          content: {...block.content, ...content},
         ),
       );
-      row += 2;
+      row += field.size == BibleWidgetSize.small ? 1 : 2;
     }
 
     if (blocks.isEmpty) {
@@ -179,16 +173,6 @@ abstract final class LegacyToDocumentMigrator {
     }
 
     return blocks;
-  }
-
-  static BibleBlockKind _kindForField(BibleSectionField field) {
-    return switch (field.type) {
-      BibleSectionFieldType.narrative => BibleBlockKind.narrative,
-      BibleSectionFieldType.references ||
-      BibleSectionFieldType.image => BibleBlockKind.moodboardRefs,
-      BibleSectionFieldType.blocks => BibleBlockKind.dynamicBlocks,
-      BibleSectionFieldType.text => BibleBlockKind.text,
-    };
   }
 
   static void _enrichContentFromData(

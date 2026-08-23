@@ -14,12 +14,20 @@ class BibleNavigationScope extends InheritedWidget {
   /// Abre la sección Location de la biblia (no el módulo externo).
   final void Function({int? planId})? openBibleLocation;
 
+  /// Abre el detalle de una carta en el navigator anidado de la sección, si existe.
+  final Future<void> Function({
+    required int cardId,
+    Widget? technicalPanel,
+    VoidCallback? onOpenLocation,
+  })? openNarrativeCardDetail;
+
   const BibleNavigationScope({
     super.key,
     required this.openMoodboard,
     required this.openLocations,
     this.openSection,
     this.openBibleLocation,
+    this.openNarrativeCardDetail,
     required super.child,
   });
 
@@ -88,7 +96,8 @@ class BibleNavigationScope extends InheritedWidget {
   @override
   bool updateShouldNotify(BibleNavigationScope oldWidget) =>
       openSection != oldWidget.openSection ||
-      openBibleLocation != oldWidget.openBibleLocation;
+      openBibleLocation != oldWidget.openBibleLocation ||
+      openNarrativeCardDetail != oldWidget.openNarrativeCardDetail;
 }
 
 /// Chips de navegación cruzada entre pantallas técnicas.

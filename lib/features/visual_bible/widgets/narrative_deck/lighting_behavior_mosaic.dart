@@ -24,11 +24,13 @@ import 'narrative_card_detail.dart';
 class LightingBehaviorMosaicBlock extends ConsumerWidget {
   final int projectId;
   final int bibleId;
+  final bool compact;
 
   const LightingBehaviorMosaicBlock({
     super.key,
     required this.projectId,
     required this.bibleId,
+    this.compact = false,
   });
 
   @override
@@ -92,11 +94,13 @@ class LightingBehaviorMosaicBlock extends ConsumerWidget {
                         builder: (context, constraints) {
                           final wide = constraints.maxWidth >= 900;
                           final mid = constraints.maxWidth >= 620;
-                          final cross = wide
-                              ? 3
-                              : mid
-                                  ? 2
-                                  : 1;
+                          final cross = compact
+                              ? 1
+                              : wide
+                                  ? 3
+                                  : mid
+                                      ? 2
+                                      : 1;
                           return GridView.builder(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),

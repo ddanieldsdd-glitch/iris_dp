@@ -97,7 +97,7 @@ void main() {
     expect(missing.map((m) => m.key), contains('filmGrain'));
   });
 
-  test('lighting registry includes act1 and act2 slots', () {
+  test('lighting registry includes deck slots', () {
     final modules = BibleStitchModuleRegistry.modulesFor(BibleSectionId.lighting)
         .where((m) => !m.legacyOnly)
         .map((m) => m.key)
@@ -105,21 +105,16 @@ void main() {
     expect(
       modules,
       containsAll([
-        'narrativeStory',
-        'colorLanguage',
-        'textureLanguage',
-        'lightSources',
-        'gafferPhilosophy',
-        'locationContext',
-        'lightBehavior',
-        'setTelemetry',
-        'diagrams',
-        'references',
+        'overview',
+        'globalMetrics',
+        'lightBehaviors',
+        'filmRefs',
+        'locationLights',
       ]),
     );
   });
 
-  test('normalizeFields strips legacy philosophy when act1 slots exist', () {
+  test('normalizeFields upgrades legacy act1 layout to deck defaults', () {
     final legacy = [
       const BibleSectionField(key: 'philosophy', label: 'Filosofía'),
       const BibleSectionField(key: 'narrativeStory', label: 'Historia'),
@@ -129,7 +124,7 @@ void main() {
       BibleSectionId.lighting,
       legacy,
     );
-    expect(normalized.map((f) => f.key), contains('narrativeStory'));
+    expect(normalized.map((f) => f.key), contains('overview'));
     expect(normalized.map((f) => f.key), isNot(contains('philosophy')));
   });
 }

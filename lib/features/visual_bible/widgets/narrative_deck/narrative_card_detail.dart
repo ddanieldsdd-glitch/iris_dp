@@ -18,6 +18,7 @@ import '../../services/moodboard_lighting_link_service.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
 import '../bible_navigation_scope.dart';
+import '../bible_image_copy_menu.dart';
 import '../bible_paste_zone.dart';
 import '../bible_quick_adjust_panel.dart';
 import '../bible_settings_drawer.dart';
@@ -37,6 +38,7 @@ class NarrativeCardDetailPage extends ConsumerStatefulWidget {
   final int cardId;
   final Widget? technicalPanel;
   final VoidCallback? onOpenLocation;
+  final bool embedded;
 
   const NarrativeCardDetailPage({
     super.key,
@@ -45,6 +47,7 @@ class NarrativeCardDetailPage extends ConsumerStatefulWidget {
     required this.cardId,
     this.technicalPanel,
     this.onOpenLocation,
+    this.embedded = false,
   });
 
   static Future<void> open(
@@ -55,6 +58,14 @@ class NarrativeCardDetailPage extends ConsumerStatefulWidget {
     Widget? technicalPanel,
     VoidCallback? onOpenLocation,
   }) {
+    final nested = BibleNavigationScope.maybeOf(context)?.openNarrativeCardDetail;
+    if (nested != null) {
+      return nested(
+        cardId: cardId,
+        technicalPanel: technicalPanel,
+        onOpenLocation: onOpenLocation,
+      );
+    }
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => NarrativeCardDetailPage(
@@ -210,6 +221,13 @@ class _NarrativeCardDetailPageState
         projectId: widget.projectId,
         bibleId: widget.bibleId,
       );
+      if (card.kind == NarrativeCardKind.filmRef) {
+        await MoodboardLightingLinkService.linkImagesByFilmTitle(
+          db: db,
+          projectId: widget.projectId,
+          bibleId: widget.bibleId,
+        );
+      }
     }
     if (mounted) setState(() => _card = card);
   }
@@ -254,6 +272,13 @@ class _NarrativeCardDetailPageState
         projectId: widget.projectId,
         bibleId: widget.bibleId,
       );
+      if (card.kind == NarrativeCardKind.filmRef) {
+        await MoodboardLightingLinkService.linkImagesByFilmTitle(
+          db: db,
+          projectId: widget.projectId,
+          bibleId: widget.bibleId,
+        );
+      }
     }
     if (mounted) setState(() => _card = card);
   }
@@ -289,6 +314,7 @@ class _NarrativeCardDetailPageState
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: palette.background,
+      endDrawerEnableOpenDragGesture: !widget.embedded,
       endDrawer: Builder(
         builder: (context) {
           final screenW = MediaQuery.sizeOf(context).width;
@@ -312,6 +338,7 @@ class _NarrativeCardDetailPageState
       ),
       appBar: AppBar(
         backgroundColor: palette.background,
+        automaticallyImplyLeading: true,
         title: Text(
           card == null ? 'Detalle' : NarrativeCardKind.label(card.kind),
           style: AppTypography.bodyMedium(palette).copyWith(
@@ -415,19 +442,30 @@ class _NarrativeCardDetailPageState
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'STILLS COINCIDENTES',
+                    'STILLS POR PELÍCULA',
                     style: AppTypography.mono(palette).copyWith(
                       fontSize: 11,
                       letterSpacing: 1.2,
                       color: palette.textTertiary,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Coinciden stills del moodboard cuya referencia cinematográfica '
+                    'encaja con el nombre de la película.',
+                    style: AppTypography.bodyMedium(palette).copyWith(
+                      fontSize: 11,
+                      color: palette.textTertiary,
+                    ),
+                  ),
                   const SizedBox(height: 10),
-                  _TagMatchedPreview(
+                  _FilmMatchedPreview(
                     projectId: widget.projectId,
+                    bibleId: widget.bibleId,
                     card: card,
                     db: db,
                     palette: palette,
+                    onLinked: () => setState(() {}),
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -572,7 +610,10 @@ class _CoverEditor extends StatelessWidget {
                   builder: (context, snap) {
                     final path = snap.data?.imagePath;
                     if (path != null && File(path).existsSync()) {
-                      return Image.file(File(path), fit: BoxFit.cover);
+                      return BibleImageCopyMenu(
+                        imagePath: path,
+                        child: Image.file(File(path), fit: BoxFit.cover),
+                      );
                     }
                     return ColoredBox(
                       color: Colors.white.withValues(alpha: 0.04),
@@ -662,14 +703,18 @@ class _CardGallery extends StatelessWidget {
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, i) {
                 final img = imgs[i];
+                final path = img.imagePath;
                 return ClipRRect(
                   borderRadius: BorderRadius.circular(6),
-                  child: File(img.imagePath).existsSync()
-                      ? Image.file(
-                          File(img.imagePath),
-                          width: 160,
-                          height: 120,
-                          fit: BoxFit.cover,
+                  child: File(path).existsSync()
+                      ? BibleImageCopyMenu(
+                          imagePath: path,
+                          child: Image.file(
+                            File(path),
+                            width: 160,
+                            height: 120,
+                            fit: BoxFit.cover,
+                          ),
                         )
                       : SizedBox(
                           width: 160,
@@ -687,22 +732,45 @@ class _CardGallery extends StatelessWidget {
   }
 }
 
-/// Vista previa de stills del moodboard que coinciden con las etiquetas de la carta.
-class _TagMatchedPreview extends StatelessWidget {
+/// Vista previa de stills del moodboard que coinciden con el título de película.
+class _FilmMatchedPreview extends StatelessWidget {
   final int projectId;
+  final int bibleId;
   final NarrativeCardModel card;
   final AppDatabase db;
   final AppPalette palette;
+  final VoidCallback onLinked;
 
-  const _TagMatchedPreview({
+  const _FilmMatchedPreview({
     required this.projectId,
+    required this.bibleId,
     required this.card,
     required this.db,
     required this.palette,
+    required this.onLinked,
   });
+
+  Future<void> _linkAll(BuildContext context) async {
+    final n = await MoodboardLightingLinkService.linkImagesByFilmTitle(
+      db: db,
+      projectId: projectId,
+      bibleId: bibleId,
+    );
+    onLinked();
+    if (context.mounted) {
+      AppSnackBar.show(
+        context,
+        n > 0
+            ? 'Vinculados $n stills por nombre de película'
+            : 'No hay stills nuevos que vincular',
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final filmTitle = FilmTitleMatcher.resolveFilmTitle(card);
+
     return StreamBuilder<List<MoodboardImage>>(
       stream: db.watchMoodboardImages(projectId),
       builder: (context, snap) {
@@ -723,48 +791,114 @@ class _TagMatchedPreview extends StatelessWidget {
               pool: pool,
               container: card,
             );
-            final criteria = LightingBehaviorTagFilter.fromCard(card);
-            if (matched.isEmpty) {
+            final unlinked = matched
+                .where((img) => !img.assignedCardIds.contains(card.id))
+                .length;
+
+            if (filmTitle == null) {
               return Text(
-                criteria.hasAny
-                    ? 'Ningún still del moodboard coincide aún con estos tags.'
-                    : 'Define tags arriba para ver stills coincidentes del moodboard.',
+                'Escribe el nombre de la película arriba para ver stills coincidentes.',
                 style: AppTypography.bodyMedium(palette).copyWith(
                   fontSize: 12,
                   color: palette.textTertiary,
                 ),
               );
             }
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                final cross = constraints.maxWidth >= 700
-                    ? 3
-                    : constraints.maxWidth >= 420
-                        ? 2
-                        : 1;
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: matched.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: cross,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    childAspectRatio: 1.35,
+            if (matched.isEmpty) {
+              return Text(
+                'Ningún still del moodboard tiene la referencia «$filmTitle». '
+                'Clasifica imágenes en el moodboard con ese nombre en '
+                '«Referencia cinematográfica».',
+                style: AppTypography.bodyMedium(palette).copyWith(
+                  fontSize: 12,
+                  color: palette.textTertiary,
+                ),
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (unlinked > 0)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => _linkAll(context),
+                      icon: Icon(Icons.link, size: 16, color: palette.accent),
+                      label: Text(
+                        'Vincular $unlinked still${unlinked == 1 ? '' : 's'}',
+                        style: TextStyle(color: palette.accent),
+                      ),
+                    ),
                   ),
-                  itemBuilder: (context, i) {
-                    final path = matched[i].imagePath;
-                    return ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: File(path).existsSync()
-                          ? Image.file(File(path), fit: BoxFit.cover)
-                          : ColoredBox(
-                              color: Colors.white.withValues(alpha: 0.04),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final cross = constraints.maxWidth >= 700
+                        ? 3
+                        : constraints.maxWidth >= 420
+                            ? 2
+                            : 1;
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: matched.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: cross,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 1.35,
+                      ),
+                      itemBuilder: (context, i) {
+                        final img = matched[i];
+                        final path = img.imagePath;
+                        final linked = img.assignedCardIds.contains(card.id);
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: File(path).existsSync()
+                                  ? BibleImageCopyMenu(
+                                      imagePath: path,
+                                      child: Image.file(
+                                        File(path),
+                                        fit: BoxFit.cover,
+                                      ),
+                                    )
+                                  : ColoredBox(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.04),
+                                    ),
                             ),
+                            if (linked)
+                              Positioned(
+                                top: 6,
+                                right: 6,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: palette.accent.withValues(alpha: 0.9),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 2,
+                                    ),
+                                    child: Icon(
+                                      Icons.check,
+                                      size: 12,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     );
                   },
-                );
-              },
+                ),
+              ],
             );
           },
         );

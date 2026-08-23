@@ -13,6 +13,7 @@ import '../narrative_bridge_card.dart';
 import '../../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../../bible_section_fields.dart';
 import '../bible_form_widgets.dart';
+import '../bible_section_widget_grid.dart';
 
 /// Layout común para secciones técnicas de la biblia.
 ///
@@ -128,12 +129,6 @@ class _BibleSectionScaffoldState extends State<BibleSectionScaffold> {
       widget.sectionId,
     );
 
-    final items = <Widget>[];
-    for (final field in fields) {
-      final w = _buildField(context, field);
-      if (w != null) items.add(w);
-    }
-
     final density = switch (_mode) {
       BibleVisualMode.technical => 0.92,
       BibleVisualMode.minimalist => 0.88,
@@ -168,19 +163,20 @@ class _BibleSectionScaffoldState extends State<BibleSectionScaffold> {
                     ),
               ),
             ),
-          for (var i = 0; i < items.length; i++) ...[
-            if (i > 0) SizedBox(height: _sectionGap * density),
-            items[i],
-          ],
+          BibleSectionWidgetGrid(
+            sectionId: widget.sectionId,
+            projectId: widget.projectId,
+            bibleId: widget.data.id,
+            fields: fields,
+            fieldWidgets: widget.fieldWidgets,
+            rowGap: _sectionGap * density,
+            fallbackBuilder: _buildFieldFallback,
+          ),
         ],
       ),
     );
   }
-
-  Widget? _buildField(BuildContext context, BibleSectionField field) {
-    final override = widget.fieldWidgets[field.key];
-    if (override != null) return override;
-
+  Widget? _buildFieldFallback(BuildContext context, BibleSectionField field) {
     return switch (field.type) {
       BibleSectionFieldType.narrative => NarrativeBridgeCard(
           title: field.label,

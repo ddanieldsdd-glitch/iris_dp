@@ -6,11 +6,13 @@ import 'lighting_behavior_mosaic.dart';
 class LightingBehaviorsBlock extends StatelessWidget {
   final int projectId;
   final int bibleId;
+  final bool compact;
 
   const LightingBehaviorsBlock({
     super.key,
     required this.projectId,
     required this.bibleId,
+    this.compact = false,
   });
 
   @override
@@ -18,6 +20,7 @@ class LightingBehaviorsBlock extends StatelessWidget {
     return LightingBehaviorMosaicBlock(
       projectId: projectId,
       bibleId: bibleId,
+      compact: compact,
     );
   }
 }
