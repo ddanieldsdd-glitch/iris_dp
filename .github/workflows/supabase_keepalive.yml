@@ -1,16 +1,24 @@
 name: Supabase keepalive
 
+# GitHub solo ejecuta cron desde la rama por defecto (main).
+# Los cron se desactivan si el repo lleva ~60 días sin commits.
 on:
   schedule:
-    # Cada 3 días a las 06:00 UTC
-    - cron: '0 6 */3 * *'
+    # Varias veces al día: Supabase pide “unas pocas queries de usuario cada día”.
+    - cron: '0 6 * * *'
+    - cron: '0 14 * * *'
+    - cron: '0 22 * * *'
   workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/supabase_keepalive.yml'
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase Auth health
+      - name: Query Postgres via PostgREST
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -25,17 +33,30 @@ jobs:
             exit 1
           fi
           BASE="${SUPABASE_URL%/}"
-          URL="${BASE}/auth/v1/health"
-          echo "GET $URL"
-          CODE=$(curl -sS \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-            -o /tmp/supabase_health.json \
-            -w "%{http_code}" \
-            "$URL")
-          echo "HTTP $CODE"
-          cat /tmp/supabase_health.json || true
-          if [ "$CODE" != "200" ]; then
-            echo "Health check failed with status $CODE"
-            exit 1
-          fi
+          # /auth/v1/health NO cuenta: no toca Postgres.
+          # GET a una tabla sí: PostgREST ejecuta SQL (aunque RLS devuelva []).
+          ping_table() {
+            local table="$1"
+            local url="${BASE}/rest/v1/${table}?select=*&limit=1"
+            echo "GET $url"
+            local code
+            code=$(curl -sS --fail-with-body --retry 2 --retry-delay 2 \
+              -H "apikey: ${SUPABASE_ANON_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+              -H "Accept: application/json" \
+              -H "Prefer: count=exact" \
+              -o /tmp/supabase_keepalive.json \
+              -w "%{http_code}" \
+              "$url" || true)
+            echo "HTTP $code"
+            head -c 400 /tmp/supabase_keepalive.json || true
+            echo
+            if [ "$code" != "200" ]; then
+              echo "REST ping failed for ${table} with status $code"
+              return 1
+            fi
+          }
+          ping_table app_releases
+          ping_table profiles
+          ping_table cloud_projects
+          echo "Keepalive OK: Postgres received queries."
