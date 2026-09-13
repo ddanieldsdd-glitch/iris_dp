@@ -30,6 +30,7 @@ VisualBible (Drift VisualBibles + VisualBibleData)
 | Export compositor | Config sheet → compositor → preview | PDF híbrido (`BibleExportPdfRenderer`) |
 | Moodboard detalle | `moodboard_lightbox.dart` | Catálogo + marcadores pantalla + anotaciones |
 | Sync proyecto | `project_content_bundle.dart` v4 | Biblia + moodboard + anotaciones + setups |
+| Moodboard en V2 | `BiblePageRenderer` + `MoodboardSection` | Host mínimo en canvas; export PDF del moodboard sigue leyendo `content.images` del bloque (pendiente: pool global Drift) |
 
 ## 3. Compositor PDF (no destructivo)
 
