@@ -33,6 +33,9 @@ void main() {
       contentJson: BibleSectionFieldsConfig.encode(fields),
     );
 
+    await tester.binding.setSurfaceSize(const Size(900, 3200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.dark,
@@ -48,8 +51,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('Cinematic'), findsWidgets);
-    expect(find.text('Technical'), findsOneWidget);
-    expect(find.textContaining('Mosaico de contenedores'), findsOneWidget);
-    expect(find.textContaining('Lista de setups'), findsOneWidget);
+    expect(find.text('Technical'), findsWidgets);
+    expect(find.text('Sensación de temperatura'), findsOneWidget);
+    expect(find.textContaining('Mosaico de contenedores'), findsWidgets);
+    expect(find.textContaining('Lista de setups'), findsWidgets);
+    expect(find.textContaining('Panel de telemetría'), findsWidgets);
   });
 }

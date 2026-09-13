@@ -9,11 +9,13 @@ import '../bible_form_widgets.dart';
 class LightingGlobalMetricsPanel extends StatefulWidget {
   final Map<String, dynamic> lightingData;
   final Future<void> Function(Map<String, dynamic> patch) onUpdate;
+  final bool compact;
 
   const LightingGlobalMetricsPanel({
     super.key,
     required this.lightingData,
     required this.onUpdate,
+    this.compact = false,
   });
 
   @override
@@ -95,7 +97,7 @@ class _LightingGlobalMetricsPanelState extends State<LightingGlobalMetricsPanel>
     final tempNote = (data['temperatureNote'] as String?) ?? '';
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(widget.compact ? 12 : 20),
       decoration: BoxDecoration(
         color: const Color(0xB31A1A1C),
         borderRadius: BorderRadius.circular(8),
@@ -104,27 +106,29 @@ class _LightingGlobalMetricsPanelState extends State<LightingGlobalMetricsPanel>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'SENSACIÓN DE TEMPERATURA',
-            style: AppTypography.mono(palette).copyWith(
-              fontSize: 11,
-              letterSpacing: 1.2,
-              color: palette.accent,
+          if (!widget.compact) ...[
+            Text(
+              'SENSACIÓN DE TEMPERATURA',
+              style: AppTypography.mono(palette).copyWith(
+                fontSize: 11,
+                letterSpacing: 1.2,
+                color: palette.accent,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          BibleTextField(
-            label: 'Sensación general de la luz',
-            hint: 'Fría y clínica, cálida y acogedora, mixta día/noche…',
-            maxLines: 4,
-            initialValue: tempNote,
-            onChanged: (v) => widget.onUpdate({'temperatureNote': v}),
-          ),
-          const SizedBox(height: 20),
-          Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
-          const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            BibleTextField(
+              label: 'Sensación general de la luz',
+              hint: 'Fría y clínica, cálida y acogedora, mixta día/noche…',
+              maxLines: 4,
+              initialValue: tempNote,
+              onChanged: (v) => widget.onUpdate({'temperatureNote': v}),
+            ),
+            const SizedBox(height: 20),
+            Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
+            const SizedBox(height: 16),
+          ],
           Text(
-            'MÉTRICAS GLOBALES',
+            widget.compact ? 'MÉTRICAS' : 'MÉTRICAS GLOBALES',
             style: AppTypography.mono(palette).copyWith(
               fontSize: 10,
               letterSpacing: 1.3,
@@ -137,156 +141,160 @@ class _LightingGlobalMetricsPanelState extends State<LightingGlobalMetricsPanel>
             value: '${_temp.round()}K',
             palette: palette,
           ),
-          const SizedBox(height: 6),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 4,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-            ),
-            child: Slider(
-              value: _temp.clamp(2000, 10000),
-              min: 2000,
-              max: 10000,
-              divisions: 80,
-              activeColor: palette.accent,
-              inactiveColor: Colors.white12,
-              onChanged: (v) => setState(() => _temp = v),
-              onChangeEnd: (v) => widget.onUpdate({
-                'colorTemp': v.round(),
-                'targetKelvin': v.round(),
-              }),
-            ),
-          ),
-          Container(
-            height: 5,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(3),
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFF8914), Colors.white, Color(0xFF5C98FF)],
+          if (!widget.compact) ...[
+            const SizedBox(height: 6),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              ),
+              child: Slider(
+                value: _temp.clamp(2000, 10000),
+                min: 2000,
+                max: 10000,
+                divisions: 80,
+                activeColor: palette.accent,
+                inactiveColor: Colors.white12,
+                onChanged: (v) => setState(() => _temp = v),
+                onChangeEnd: (v) => widget.onUpdate({
+                  'colorTemp': v.round(),
+                  'targetKelvin': v.round(),
+                }),
               ),
             ),
-          ),
-          const SizedBox(height: 18),
-          _MetricLabel(
-            label: 'Tint / shift',
-            value: _tintLabel,
-            palette: palette,
-          ),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(trackHeight: 4),
-            child: Slider(
-              value: _tint.clamp(-0.5, 0.5),
-              min: -0.5,
-              max: 0.5,
-              divisions: 100,
-              activeColor: palette.accent,
-              inactiveColor: Colors.white12,
-              onChanged: (v) => setState(() => _tint = v),
-              onChangeEnd: (v) => widget.onUpdate({
-                'tintValue': v,
-                'tint': '${v >= 0 ? '+' : ''}${v.toStringAsFixed(2)} G',
-              }),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _MetricLabel(
-            label: 'Contraste (objetivo)',
-            value: '${_contrast.round()}:1',
-            palette: palette,
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                flex: 1,
-                child: Container(height: 14, color: Colors.white),
-              ),
-              Expanded(
-                flex: _contrast.round().clamp(1, 32),
-                child: Container(
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.12),
-                    ),
-                  ),
+            Container(
+              height: 5,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(3),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF8914), Colors.white, Color(0xFF5C98FF)],
                 ),
               ),
-            ],
-          ),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(trackHeight: 2),
-            child: Slider(
-              value: _contrast.clamp(2, 32),
-              min: 2,
-              max: 32,
-              divisions: 30,
-              activeColor: palette.accent,
-              inactiveColor: Colors.white12,
-              onChanged: (v) => setState(() => _contrast = v),
-              onChangeEnd: (v) => widget.onUpdate({
-                'contrastNum': v.round(),
-                'contrastRatio': '${v.round()}:1',
-              }),
             ),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'FIXTURES PRINCIPALES',
-                  style: AppTypography.mono(palette).copyWith(
-                    fontSize: 10,
-                    letterSpacing: 1.2,
-                    color: palette.textTertiary,
-                  ),
-                ),
+            const SizedBox(height: 18),
+          ],
+          if (!widget.compact) ...[
+            _MetricLabel(
+              label: 'Tint / shift',
+              value: _tintLabel,
+              palette: palette,
+            ),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(trackHeight: 4),
+              child: Slider(
+                value: _tint.clamp(-0.5, 0.5),
+                min: -0.5,
+                max: 0.5,
+                divisions: 100,
+                activeColor: palette.accent,
+                inactiveColor: Colors.white12,
+                onChanged: (v) => setState(() => _tint = v),
+                onChangeEnd: (v) => widget.onUpdate({
+                  'tintValue': v,
+                  'tint': '${v >= 0 ? '+' : ''}${v.toStringAsFixed(2)} G',
+                }),
               ),
-              TextButton(
-                onPressed: _editFixtureTypes,
-                child: Text(
-                  'Editar',
-                  style: TextStyle(color: palette.accent, fontSize: 12),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          if (types.isEmpty)
-            Text(
-              'HMI, LED, prácticos…',
-              style: AppTypography.bodyMedium(palette).copyWith(
-                fontSize: 12,
-                color: palette.textTertiary,
-              ),
-            )
-          else
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
+            ),
+            const SizedBox(height: 12),
+            _MetricLabel(
+              label: 'Contraste (objetivo)',
+              value: '${_contrast.round()}:1',
+              palette: palette,
+            ),
+            const SizedBox(height: 6),
+            Row(
               children: [
-                for (final t in types)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
+                Expanded(
+                  flex: 1,
+                  child: Container(height: 14, color: Colors.white),
+                ),
+                Expanded(
+                  flex: _contrast.round().clamp(1, 32),
+                  child: Container(
+                    height: 14,
                     decoration: BoxDecoration(
-                      color: palette.surfaceElevated,
-                      borderRadius: BorderRadius.circular(6),
+                      color: Colors.black,
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.06),
+                        color: Colors.white.withValues(alpha: 0.12),
                       ),
                     ),
-                    child: Text(
-                      t,
-                      style: AppTypography.mono(palette).copyWith(fontSize: 11),
-                    ),
                   ),
+                ),
               ],
             ),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(trackHeight: 2),
+              child: Slider(
+                value: _contrast.clamp(2, 32),
+                min: 2,
+                max: 32,
+                divisions: 30,
+                activeColor: palette.accent,
+                inactiveColor: Colors.white12,
+                onChanged: (v) => setState(() => _contrast = v),
+                onChangeEnd: (v) => widget.onUpdate({
+                  'contrastNum': v.round(),
+                  'contrastRatio': '${v.round()}:1',
+                }),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'FIXTURES PRINCIPALES',
+                    style: AppTypography.mono(palette).copyWith(
+                      fontSize: 10,
+                      letterSpacing: 1.2,
+                      color: palette.textTertiary,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _editFixtureTypes,
+                  child: Text(
+                    'Editar',
+                    style: TextStyle(color: palette.accent, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            if (types.isEmpty)
+              Text(
+                'HMI, LED, prácticos…',
+                style: AppTypography.bodyMedium(palette).copyWith(
+                  fontSize: 12,
+                  color: palette.textTertiary,
+                ),
+              )
+            else
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final t in types)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: palette.surfaceElevated,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.06),
+                        ),
+                      ),
+                      child: Text(
+                        t,
+                        style: AppTypography.mono(palette).copyWith(fontSize: 11),
+                      ),
+                    ),
+                ],
+              ),
+          ],
         ],
       ),
     );

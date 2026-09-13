@@ -10,6 +10,7 @@ void main() {
         .toList();
     expect(keys, [
       'overview',
+      'globalMetrics',
       'lightBehaviors',
       'filmRefs',
       'locationLights',
@@ -30,10 +31,35 @@ void main() {
       normalized.map((f) => f.key).toList(),
       [
         'overview',
+        'globalMetrics',
         'lightBehaviors',
         'filmRefs',
         'locationLights',
       ],
     );
+  });
+
+  test('normalize inserta globalMetrics y deduplica locationLights', () {
+    final normalized = BibleStitchModuleRegistry.normalizeFields(
+      BibleSectionId.lighting,
+      [
+        BibleSectionField(key: 'overview', label: 'Overview'),
+        BibleSectionField(key: 'lightBehaviors', label: 'Behaviors'),
+        BibleSectionField(key: 'filmRefs', label: 'Film'),
+        BibleSectionField(key: 'locationLights', label: 'Loc A'),
+        BibleSectionField(key: 'locationLights', label: 'Loc B'),
+      ],
+    );
+    expect(
+      normalized.map((f) => f.key).toList(),
+      [
+        'overview',
+        'globalMetrics',
+        'lightBehaviors',
+        'filmRefs',
+        'locationLights',
+      ],
+    );
+    expect(normalized.where((f) => f.key == 'locationLights').length, 1);
   });
 }

@@ -9,6 +9,7 @@ void main() {
     expect(
       LightingWidgetCatalog.coversFieldWidgetKeys({
         'overview',
+        'globalMetrics',
         'lightBehaviors',
         'filmRefs',
         'locationLights',
@@ -29,6 +30,14 @@ void main() {
     expect(behaviors?.subsectionKind, BibleSubsectionKindId.behaviorMosaic);
     expect(behaviors?.contentFamily, BibleWidgetContentFamily.cinematic);
 
+    final metrics = BibleStitchModuleRegistry.module(
+      BibleSectionId.lighting,
+      'globalMetrics',
+    );
+    expect(metrics?.subsectionKind, BibleSubsectionKindId.telemetryPanel);
+    expect(metrics?.contentFamily, BibleWidgetContentFamily.technical);
+    expect(metrics?.label, 'Sensación de temperatura');
+
     final diagrams = BibleStitchModuleRegistry.module(
       BibleSectionId.lighting,
       'diagrams',
@@ -37,24 +46,18 @@ void main() {
     expect(diagrams?.contentFamily, BibleWidgetContentFamily.technical);
   });
 
-  test('nested overview incluye cinematic y technical', () {
+  test('nested overview es cinematic; métricas son slot técnico', () {
     final nested = LightingWidgetCatalog.nestedForSlot('overview');
     expect(
-      nested.any(
+      nested.every(
         (e) => e.contentFamily == BibleWidgetContentFamily.cinematic,
       ),
       isTrue,
     );
-    expect(
-      nested.any(
-        (e) => e.contentFamily == BibleWidgetContentFamily.technical,
-      ),
-      isTrue,
-    );
-    expect(
-      nested.firstWhere((e) => e.id == 'nested_global_metrics').subsectionKind,
-      BibleSubsectionKindId.telemetryPanel,
-    );
+    expect(nested.any((e) => e.id == 'nested_global_metrics'), isFalse);
+    final metrics = LightingWidgetCatalog.forSlot('globalMetrics');
+    expect(metrics?.contentFamily, BibleWidgetContentFamily.technical);
+    expect(metrics?.subsectionKind, BibleSubsectionKindId.telemetryPanel);
   });
 
   test('cada slot del catálogo tiene entrada forSlot', () {

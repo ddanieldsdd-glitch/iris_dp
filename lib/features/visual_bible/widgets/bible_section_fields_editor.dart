@@ -11,6 +11,9 @@ import '../../../core/theme/app_typography.dart';
 import '../../../shared/visual_bible/bible_section_ids.dart';
 import '../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../../../shared/visual_bible/bible_subsection_kind_catalog.dart';
+import '../../../shared/visual_bible/bible_subsection_kind_profiles.dart';
+import '../../../shared/visual_bible/bible_widget_size.dart';
+import '../../../shared/visual_bible/lighting_widget_catalog.dart';
 import '../bible_section_fields.dart';
 
 /// Editor de sub-apartados: añadir, quitar, cambiar tipo y reordenar.
@@ -150,6 +153,155 @@ class _BibleSectionFieldsEditorState
     });
     if (widget.embedded) unawaited(_saveEmbedded());
   }
+
+  Future<void> _changeSize(int index) async {
+    final field = _fields[index];
+    final kindId = field.resolvedKind(widget.definition.id);
+    final allowed = BibleSubsectionKindProfiles.allowedSizes(kindId).toList()
+      ..sort((a, b) => a.gridWeight.compareTo(b.gridWeight));
+
+    final picked = await showModalBottomSheet<BibleWidgetSize>(
+      context: context,
+      backgroundColor: context.palette.surfaceElevated,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Text(
+                'Tamaño del widget',
+                style: AppTypography.titleMedium(context.palette),
+              ),
+            ),
+            for (final size in allowed)
+              ListTile(
+                leading: Icon(_iconForSize(size)),
+                title: Text('Tamaño ${size.label}'),
+                subtitle: Text(_sizeDescription(size)),
+                selected: field.size == size,
+                onTap: () => Navigator.pop(ctx, size),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    setState(() {
+      _fields[index] = field.copyWith(size: picked);
+    });
+    if (widget.embedded) unawaited(_saveEmbedded());
+  }
+
+  Future<void> _addWidgetByKind() async {
+    final recommended =
+        BibleSectionKindRecommendations.forSection(widget.definition.id);
+    final pickedKind = await showModalBottomSheet<BibleSubsectionKindId>(
+      context: context,
+      backgroundColor: context.palette.surfaceElevated,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Text(
+                'Añadir widget',
+                style: AppTypography.titleMedium(context.palette),
+              ),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final kindId in recommended)
+                    ListTile(
+                      leading: Icon(
+                        BibleSubsectionKindCatalog.byId(kindId)?.icon ??
+                            Icons.widgets_outlined,
+                      ),
+                      title: Text(
+                        BibleSubsectionKindCatalog.byId(kindId)?.label ??
+                            kindId.name,
+                      ),
+                      subtitle: Text(
+                        BibleSubsectionKindCatalog.byId(kindId)?.description ??
+                            '',
+                      ),
+                      onTap: () => Navigator.pop(ctx, kindId),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (pickedKind == null) return;
+
+    final catalogKind = BibleSubsectionKindCatalog.byId(pickedKind)!;
+    final allowed = BibleSubsectionKindProfiles.allowedSizes(pickedKind).toList()
+      ..sort((a, b) => a.gridWeight.compareTo(b.gridWeight));
+    final defaultSize = BibleSubsectionKindProfiles.defaultSize(pickedKind);
+
+    final pickedSize = await showModalBottomSheet<BibleWidgetSize>(
+      context: context,
+      backgroundColor: context.palette.surfaceElevated,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Text(
+                'Tamaño · ${catalogKind.label}',
+                style: AppTypography.titleMedium(context.palette),
+              ),
+            ),
+            for (final size in allowed)
+              ListTile(
+                leading: Icon(_iconForSize(size)),
+                title: Text('Tamaño ${size.label}'),
+                subtitle: Text(_sizeDescription(size)),
+                selected: size == defaultSize,
+                onTap: () => Navigator.pop(ctx, size),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (pickedSize == null) return;
+
+    final key = BibleSectionFieldsConfig.newFieldKey();
+    setState(() {
+      _fields.add(
+        BibleSectionField(
+          key: key,
+          label: catalogKind.label,
+          type: catalogKind.fieldType,
+          kind: pickedKind,
+          size: pickedSize,
+          binding: key,
+          maxLines: catalogKind.fieldType == BibleSectionFieldType.narrative
+              ? 4
+              : 3,
+        ),
+      );
+    });
+    if (widget.embedded) unawaited(_saveEmbedded());
+  }
+
+  IconData _iconForSize(BibleWidgetSize size) => switch (size) {
+        BibleWidgetSize.small => Icons.crop_square,
+        BibleWidgetSize.medium => Icons.crop_landscape,
+        BibleWidgetSize.large => Icons.crop_16_9,
+      };
+
+  String _sizeDescription(BibleWidgetSize size) => switch (size) {
+        BibleWidgetSize.small => 'Compacto · 1/3 del ancho',
+        BibleWidgetSize.medium => 'Medio · mitad del ancho',
+        BibleWidgetSize.large => 'Completo · ancho total',
+      };
 
   Future<void> _addRegistryModule() async {
     final missing = BibleStitchModuleRegistry.missingModules(
@@ -332,9 +484,10 @@ class _BibleSectionFieldsEditorState
     final kindLabel = module?.catalogKind.label ??
         BibleSubsectionKindCatalog.fromFieldType(field.type).label;
     final typeLabel = BibleSectionFieldsConfig.labelForType(field.type);
+    final sizeLabel = 'Tamaño ${field.size.label}';
   final rendererNote = hasRenderer
-        ? typeLabel
-        : '$typeLabel · sin renderer Stitch';
+        ? '$typeLabel · $sizeLabel'
+        : '$typeLabel · $sizeLabel · sin renderer Stitch';
     if (widget.definition.id == BibleSectionId.lighting && module != null) {
       return '$kindLabel · $rendererNote';
     }
@@ -391,6 +544,9 @@ class _BibleSectionFieldsEditorState
                 final showFamilyChip =
                     widget.definition.id == BibleSectionId.lighting &&
                         module != null;
+                final nested = widget.definition.id == BibleSectionId.lighting
+                    ? LightingWidgetCatalog.nestedForSlot(field.key)
+                    : const <LightingWidgetCatalogEntry>[];
                 return Material(
                   key: ValueKey(field.key),
                   color: palette.surfaceElevated,
@@ -402,9 +558,9 @@ class _BibleSectionFieldsEditorState
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (showFamilyChip) ...[
+                      if (showFamilyChip && module != null) ...[
                         const SizedBox(height: 4),
-                        _contentFamilyChip(palette, module!.contentFamily),
+                        _contentFamilyChip(palette, module.contentFamily),
                         const SizedBox(height: 4),
                       ],
                       Text(
@@ -413,13 +569,31 @@ class _BibleSectionFieldsEditorState
                           color: hasRenderer ? null : palette.warning,
                         ),
                       ),
+                      for (final nestedEntry in nested) ...[
+                        const SizedBox(height: 2),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text(
+                            '↳ ${nestedEntry.label} · '
+                            '${BibleSubsectionKindCatalog.byId(nestedEntry.subsectionKind)?.label ?? nestedEntry.widgetName}'
+                            '${nestedEntry.reusable ? ' · reutilizable' : ''}',
+                            style: AppTypography.caption(palette).copyWith(
+                              fontSize: 11,
+                              color: palette.textTertiary,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
-                  trailing: SizedBox(
-                    width: 144,
-                    child: Row(
+                  trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      IconButton(
+                        icon: const Icon(Icons.aspect_ratio_outlined, size: 18),
+                        tooltip: 'Cambiar tamaño',
+                        onPressed: () => _changeSize(index),
+                      ),
                       IconButton(
                         icon: const Icon(Icons.category_outlined, size: 18),
                         tooltip: 'Cambiar tipo',
@@ -441,7 +615,6 @@ class _BibleSectionFieldsEditorState
                       ),
                     ],
                   ),
-                  ),
                 ),
                 );
               },
@@ -451,6 +624,12 @@ class _BibleSectionFieldsEditorState
             onPressed: _applyStylePack,
             icon: const Icon(Icons.auto_awesome_outlined),
             label: const Text('Restaurar módulos Stitch'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          OutlinedButton.icon(
+            onPressed: _addWidgetByKind,
+            icon: const Icon(Icons.add_box_outlined),
+            label: const Text('Añadir widget'),
           ),
           const SizedBox(height: AppSpacing.sm),
           OutlinedButton.icon(

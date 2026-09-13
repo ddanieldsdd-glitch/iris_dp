@@ -31,6 +31,7 @@ class LightingWidgetCatalogEntry {
 abstract final class LightingWidgetCatalog {
   static const slotKeys = [
     'overview',
+    'globalMetrics',
     'lightBehaviors',
     'filmRefs',
     'locationLights',
@@ -50,7 +51,17 @@ abstract final class LightingWidgetCatalog {
       subsectionKind: BibleSubsectionKindId.narrativeIntent,
       widgetName: 'LightingOverviewBlock',
       reusable: false,
-      notes: 'Compuesto: hero + narrativa + métricas globales.',
+      notes: 'Hero + intención narrativa. Tipo reutilizable: narrativeIntent.',
+    ),
+    LightingWidgetCatalogEntry(
+      id: 'slot_globalMetrics',
+      slotKey: 'globalMetrics',
+      label: 'Sensación de temperatura',
+      contentFamily: BibleWidgetContentFamily.technical,
+      subsectionKind: BibleSubsectionKindId.telemetryPanel,
+      widgetName: 'LightingGlobalMetricsPanel',
+      reusable: true,
+      notes: 'Instancia técnica del tipo telemetryPanel (WB, tint, contraste).',
     ),
     LightingWidgetCatalogEntry(
       id: 'slot_lightBehaviors',
@@ -69,7 +80,7 @@ abstract final class LightingWidgetCatalog {
       subsectionKind: BibleSubsectionKindId.cardDeck,
       widgetName: 'NarrativeDeckBlock',
       reusable: true,
-      notes: 'kind: film_ref',
+      notes: 'Primera instancia del tipo reutilizable cardDeck (kind: film_ref).',
     ),
     LightingWidgetCatalogEntry(
       id: 'slot_locationLights',
@@ -135,15 +146,6 @@ abstract final class LightingWidgetCatalog {
       contentFamily: BibleWidgetContentFamily.cinematic,
       subsectionKind: BibleSubsectionKindId.narrativeIntent,
       widgetName: '_OverviewNarrativePanel',
-      reusable: true,
-    ),
-    LightingWidgetCatalogEntry(
-      id: 'nested_global_metrics',
-      parentSlotKey: 'overview',
-      label: 'Métricas globales de luz',
-      contentFamily: BibleWidgetContentFamily.technical,
-      subsectionKind: BibleSubsectionKindId.telemetryPanel,
-      widgetName: 'LightingGlobalMetricsPanel',
       reusable: true,
     ),
     // —— Nested mosaico / detalle de contenedor ——

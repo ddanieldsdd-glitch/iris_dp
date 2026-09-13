@@ -1,6 +1,8 @@
 import 'bible_section_fields.dart';
 import 'bible_section_ids.dart';
 import 'bible_subsection_kind_catalog.dart';
+import 'bible_subsection_kind_profiles.dart';
+import 'bible_widget_size.dart';
 
 /// Metadatos de un módulo Stitch wireable desde el panel Widgets.
 class StitchModule {
@@ -33,13 +35,23 @@ class StitchModule {
 
   BibleWidgetContentFamily get contentFamily => catalogKind.contentFamily;
 
-  BibleSectionField toField() => BibleSectionField(
-        key: key,
-        label: label,
-        hint: hint,
-        maxLines: maxLines,
-        type: type,
-      );
+  BibleSectionField toField({BibleWidgetSize? size}) {
+    final kindId = subsectionKind ?? catalogKind.id;
+    final resolvedSize = BibleSubsectionKindProfiles.clampSize(
+      kindId,
+      size ?? BibleSubsectionKindProfiles.defaultSize(kindId),
+    );
+    return BibleSectionField(
+      key: key,
+      label: label,
+      hint: hint,
+      maxLines: maxLines,
+      type: type,
+      kind: kindId,
+      size: resolvedSize,
+      binding: key,
+    );
+  }
 }
 
 /// Catálogo de módulos Stitch por pantalla — fuente única para defaults y panel Widgets.
@@ -51,18 +63,48 @@ abstract final class BibleStitchModuleRegistry {
               label: 'Intención narrativa',
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
+              subsectionKind: BibleSubsectionKindId.narrativeIntent,
             ),
-            StitchModule(key: 'colorPalette', label: 'Paleta de color'),
-            StitchModule(key: 'colorSymbolism', label: 'Simbología de color'),
-            StitchModule(key: 'lightPhilosophy', label: 'Filosofía de luz'),
-            StitchModule(key: 'keyFrame', label: 'Key Frame Analysis'),
-            StitchModule(key: 'shadowTreatment', label: 'Tratamiento de sombras'),
-            StitchModule(key: 'actComposition', label: 'Composición por actos'),
-            StitchModule(key: 'actNotes', label: 'Intención visual por acto'),
+            StitchModule(
+              key: 'colorPalette',
+              label: 'Paleta de color',
+              subsectionKind: BibleSubsectionKindId.paletteTarget,
+            ),
+            StitchModule(
+              key: 'colorSymbolism',
+              label: 'Simbología de color',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
+            StitchModule(
+              key: 'lightPhilosophy',
+              label: 'Filosofía de luz',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
+            StitchModule(
+              key: 'keyFrame',
+              label: 'Key Frame Analysis',
+              subsectionKind: BibleSubsectionKindId.heroWithCaption,
+            ),
+            StitchModule(
+              key: 'shadowTreatment',
+              label: 'Tratamiento de sombras',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
+            StitchModule(
+              key: 'actComposition',
+              label: 'Composición por actos',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
+            StitchModule(
+              key: 'actNotes',
+              label: 'Intención visual por acto',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
+              subsectionKind: BibleSubsectionKindId.moodboardRefs,
             ),
             StitchModule(
               key: 'visualConcept',
@@ -76,15 +118,33 @@ abstract final class BibleStitchModuleRegistry {
               label: 'Intención narrativa',
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
+              subsectionKind: BibleSubsectionKindId.narrativeIntent,
             ),
-            StitchModule(key: 'macroPreview', label: 'Vista macro grano / ruido'),
-            StitchModule(key: 'filmGrain', label: 'Film Grain'),
-            StitchModule(key: 'diffusion', label: 'Diffusion Optics'),
-            StitchModule(key: 'sensorNoise', label: 'Sensor Noise Floor'),
+            StitchModule(
+              key: 'macroPreview',
+              label: 'Vista macro grano / ruido',
+              subsectionKind: BibleSubsectionKindId.heroWithCaption,
+            ),
+            StitchModule(
+              key: 'filmGrain',
+              label: 'Film Grain',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
+            StitchModule(
+              key: 'diffusion',
+              label: 'Diffusion Optics',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
+            StitchModule(
+              key: 'sensorNoise',
+              label: 'Sensor Noise Floor',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
+              subsectionKind: BibleSubsectionKindId.moodboardRefs,
             ),
             StitchModule(
               key: 'textureSettings',
@@ -98,36 +158,69 @@ abstract final class BibleStitchModuleRegistry {
               label: 'Intención narrativa',
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
+              subsectionKind: BibleSubsectionKindId.narrativeIntent,
             ),
-            StitchModule(key: 'lut', label: 'LUT y color science'),
+            StitchModule(
+              key: 'lut',
+              label: 'LUT y color science',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
             StitchModule(
               key: 'blocks',
               label: 'Paletas por bloque',
               type: BibleSectionFieldType.blocks,
+              subsectionKind: BibleSubsectionKindId.paletteTarget,
             ),
-            StitchModule(key: 'baseTemp', label: 'Temperatura base (K)'),
+            StitchModule(
+              key: 'baseTemp',
+              label: 'Temperatura base (K)',
+              subsectionKind: BibleSubsectionKindId.telemetryPanel,
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
+              subsectionKind: BibleSubsectionKindId.moodboardRefs,
             ),
           ],
         BibleSectionId.direction => const [
-            StitchModule(key: 'header', label: 'Cabecera de escena'),
+            StitchModule(
+              key: 'header',
+              label: 'Cabecera de escena',
+              subsectionKind: BibleSubsectionKindId.headerTags,
+            ),
             StitchModule(
               key: 'narrative',
               label: 'Intención narrativa',
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
+              subsectionKind: BibleSubsectionKindId.narrativeIntent,
             ),
-            StitchModule(key: 'toneStrategies', label: 'Tono y estrategias'),
-            StitchModule(key: 'acts', label: 'Arco por actos'),
-            StitchModule(key: 'keyFrame', label: 'Key Frame'),
-            StitchModule(key: 'transitions', label: 'Lenguaje de transiciones'),
+            StitchModule(
+              key: 'toneStrategies',
+              label: 'Tono y estrategias',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
+            StitchModule(
+              key: 'acts',
+              label: 'Arco por actos',
+              subsectionKind: BibleSubsectionKindId.cardDeck,
+            ),
+            StitchModule(
+              key: 'keyFrame',
+              label: 'Key Frame',
+              subsectionKind: BibleSubsectionKindId.heroWithCaption,
+            ),
+            StitchModule(
+              key: 'transitions',
+              label: 'Lenguaje de transiciones',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias de dirección',
               type: BibleSectionFieldType.references,
+              subsectionKind: BibleSubsectionKindId.moodboardRefs,
             ),
           ],
         BibleSectionId.camera => const [
@@ -136,15 +229,33 @@ abstract final class BibleStitchModuleRegistry {
               label: 'Intención narrativa',
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
+              subsectionKind: BibleSubsectionKindId.narrativeIntent,
             ),
-            StitchModule(key: 'cameraBody', label: 'Cámara y formato'),
-            StitchModule(key: 'philosophy', label: 'Filosofía de cámara'),
-            StitchModule(key: 'movements', label: 'Movimientos de cámara'),
-            StitchModule(key: 'specsReference', label: 'Fichas técnicas'),
+            StitchModule(
+              key: 'cameraBody',
+              label: 'Cámara y formato',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
+            StitchModule(
+              key: 'philosophy',
+              label: 'Filosofía de cámara',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
+            StitchModule(
+              key: 'movements',
+              label: 'Movimientos de cámara',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
+            StitchModule(
+              key: 'specsReference',
+              label: 'Fichas técnicas',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
+              subsectionKind: BibleSubsectionKindId.moodboardRefs,
             ),
           ],
         BibleSectionId.lighting => const [
@@ -154,6 +265,12 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 6,
               subsectionKind: BibleSubsectionKindId.narrativeIntent,
+            ),
+            StitchModule(
+              key: 'globalMetrics',
+              label: 'Sensación de temperatura',
+              type: BibleSectionFieldType.blocks,
+              subsectionKind: BibleSubsectionKindId.telemetryPanel,
             ),
             StitchModule(
               key: 'lightBehaviors',
@@ -208,12 +325,18 @@ abstract final class BibleStitchModuleRegistry {
               label: 'Intención narrativa',
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
+              subsectionKind: BibleSubsectionKindId.narrativeIntent,
             ),
-            StitchModule(key: 'opticSettings', label: 'Filosofía y kit de lentes'),
+            StitchModule(
+              key: 'opticSettings',
+              label: 'Filosofía y kit de lentes',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
+              subsectionKind: BibleSubsectionKindId.moodboardRefs,
             ),
           ],
         BibleSectionId.exposure => const [
@@ -222,32 +345,49 @@ abstract final class BibleStitchModuleRegistry {
               label: 'Intención narrativa',
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
+              subsectionKind: BibleSubsectionKindId.narrativeIntent,
             ),
-            StitchModule(key: 'globalExposure', label: 'Exposición global'),
+            StitchModule(
+              key: 'globalExposure',
+              label: 'Exposición global',
+              subsectionKind: BibleSubsectionKindId.telemetryPanel,
+            ),
             StitchModule(
               key: 'blocks',
               label: 'Bloques de exposición',
               type: BibleSectionFieldType.blocks,
+              subsectionKind: BibleSubsectionKindId.dynamicBlocks,
             ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
+              subsectionKind: BibleSubsectionKindId.moodboardRefs,
             ),
           ],
         BibleSectionId.format => const [
-            StitchModule(key: 'header', label: 'Cabecera'),
+            StitchModule(
+              key: 'header',
+              label: 'Cabecera',
+              subsectionKind: BibleSubsectionKindId.headerTags,
+            ),
             StitchModule(
               key: 'narrative',
               label: 'Intención narrativa',
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
+              subsectionKind: BibleSubsectionKindId.narrativeIntent,
             ),
-            StitchModule(key: 'formatSettings', label: 'Aspect ratio y entrega'),
+            StitchModule(
+              key: 'formatSettings',
+              label: 'Aspect ratio y entrega',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
+              subsectionKind: BibleSubsectionKindId.moodboardRefs,
             ),
           ],
         BibleSectionId.workflow => const [
@@ -256,12 +396,18 @@ abstract final class BibleStitchModuleRegistry {
               label: 'Intención narrativa',
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
+              subsectionKind: BibleSubsectionKindId.narrativeIntent,
             ),
-            StitchModule(key: 'workflowSettings', label: 'Pipeline de workflow'),
+            StitchModule(
+              key: 'workflowSettings',
+              label: 'Pipeline de workflow',
+              subsectionKind: BibleSubsectionKindId.textField,
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
+              subsectionKind: BibleSubsectionKindId.moodboardRefs,
             ),
           ],
         _ => const [
@@ -270,11 +416,13 @@ abstract final class BibleStitchModuleRegistry {
               label: 'Intención narrativa',
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
+              subsectionKind: BibleSubsectionKindId.narrativeIntent,
             ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
+              subsectionKind: BibleSubsectionKindId.moodboardRefs,
             ),
           ],
       };
@@ -375,6 +523,7 @@ abstract final class BibleStitchModuleRegistry {
     if (sectionId == BibleSectionId.lighting) {
       const deckKeys = {
         'overview',
+        'globalMetrics',
         'lightBehaviors',
         'lightStyles',
         'lightingTagRefs',
@@ -410,10 +559,37 @@ abstract final class BibleStitchModuleRegistry {
         return defaultFieldsFor(sectionId);
       }
       if (hasNewSlots && keys.contains('philosophy')) {
-        return fields.where((f) => f.key != 'philosophy').toList();
+        fields = fields.where((f) => f.key != 'philosophy').toList();
       }
+      return _ensureLightingGlobalMetrics(_dedupeFieldKeys(fields));
     }
 
     return fields;
+  }
+
+  static List<BibleSectionField> _dedupeFieldKeys(
+    List<BibleSectionField> fields,
+  ) {
+    final seen = <String>{};
+    return [
+      for (final field in fields)
+        if (seen.add(field.key)) field,
+    ];
+  }
+
+  /// Inserta el slot técnico de métricas si el layout tiene overview y aún no lo incluye.
+  static List<BibleSectionField> _ensureLightingGlobalMetrics(
+    List<BibleSectionField> fields,
+  ) {
+    if (fields.any((f) => f.key == 'globalMetrics')) return fields;
+    final slot = module(BibleSectionId.lighting, 'globalMetrics')?.toField();
+    if (slot == null) return fields;
+    final overviewIdx = fields.indexWhere((f) => f.key == 'overview');
+    if (overviewIdx < 0) return [slot, ...fields];
+    return [
+      ...fields.sublist(0, overviewIdx + 1),
+      slot,
+      ...fields.sublist(overviewIdx + 1),
+    ];
   }
 }

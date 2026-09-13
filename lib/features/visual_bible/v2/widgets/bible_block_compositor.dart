@@ -2,10 +2,26 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../shared/visual_bible/narrative_card_kind.dart';
 import '../../bible_block_catalog.dart';
+import '../../widgets/bible_dark_glass_panel.dart';
+import '../../widgets/catalog/direction/direction_acts_widget.dart';
+import '../../widgets/catalog/direction/direction_visual_strategy_widget.dart';
+import '../../widgets/catalog/shared/bible_point_list_widget.dart';
+import '../../widgets/catalog/shared/bible_references_widget.dart';
+import '../../widgets/catalog/shared/bible_tagged_text_widget.dart';
+import '../bible_block_schemas.dart';
+import '../../widgets/bible_thirds_painter.dart';
+import '../../widgets/color_palette_strip.dart';
+import '../../widgets/moodboard_lightbox.dart';
+import '../../widgets/narrative_deck/lighting_behavior_mosaic.dart';
+import '../../widgets/narrative_deck/narrative_deck_block.dart';
+import '../../visual_bible_model.dart';
+import '../layout/bible_grid_layout.dart';
 import '../model/bible_json_parse.dart';
 import '../model/bible_block.dart';
 import '../model/bible_block_layout.dart';
@@ -13,11 +29,13 @@ import '../model/bible_image_content.dart';
 import '../theme/bible_theme.dart';
 import 'universal_bible_image_input.dart';
 
-/// Renderiza un [BibleBlock] según su [BibleBlockKind].
+/// Renderiza un [BibleBlock] según su [BibleBlockKind] y `subsectionKind`.
 class BibleBlockRenderer extends StatelessWidget {
   final BibleBlock block;
   final BibleTheme theme;
   final int projectId;
+  final int? bibleId;
+  final String? sectionId;
   final bool editing;
   final ValueChanged<BibleBlock>? onChanged;
 
@@ -26,113 +44,325 @@ class BibleBlockRenderer extends StatelessWidget {
     required this.block,
     required this.theme,
     required this.projectId,
+    this.bibleId,
+    this.sectionId,
     this.editing = false,
     this.onChanged,
   });
 
+  String? get _subsectionKind => block.content['subsectionKind']?.toString();
+
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
     final pad = block.style.padding ?? theme.spacing.m;
     final radius = block.style.radius ?? theme.shape.radius;
     final showCard = block.style.showCard ?? true;
 
-    Widget child = switch (block.type) {
-      BibleBlockKind.text => _TextBlock(
+    final catalog = _catalogWidgetFor(block, projectId: projectId);
+    if (catalog != null) return catalog;
+
+    Widget child = switch (_subsectionKind) {
+      'textField' => _TextBlock(
         block: block,
         theme: theme,
         editing: editing,
         onChanged: onChanged,
       ),
-      BibleBlockKind.narrative => _NarrativeBlock(
-        block: block,
-        theme: theme,
-        editing: editing,
-        onChanged: onChanged,
-      ),
-      BibleBlockKind.heroImage => _ImageBlock(
+      'moodboardRefs' => _MoodboardRefsBlock(
         block: block,
         theme: theme,
         projectId: projectId,
         editing: editing,
         onChanged: onChanged,
       ),
-      BibleBlockKind.moodboardRefs => _MoodboardRefsBlock(
+      'heroWithCaption' => _ImageBlock(
         block: block,
         theme: theme,
         projectId: projectId,
         editing: editing,
         onChanged: onChanged,
+        showThirds: true,
       ),
-      BibleBlockKind.chipSelect => _ChipSelectBlock(
+      'telemetryPanel' => _TelemetryBlock(
         block: block,
         theme: theme,
         editing: editing,
         onChanged: onChanged,
       ),
-      BibleBlockKind.colorPalette => _ColorPaletteBlock(
+      'cardDeck' => _CardDeckBlock(
+        block: block,
+        theme: theme,
+        projectId: projectId,
+        bibleId: bibleId,
+        sectionId: sectionId,
+        editing: editing,
+        onChanged: onChanged,
+      ),
+      'paletteTarget' => _ColorPaletteBlock(
         block: block,
         theme: theme,
         editing: editing,
         onChanged: onChanged,
       ),
-      BibleBlockKind.telemetry => _TelemetryBlock(
+      'headerTags' => _ChipSelectBlock(
         block: block,
         theme: theme,
         editing: editing,
         onChanged: onChanged,
       ),
-      BibleBlockKind.equipmentList => _EquipmentListBlock(
+      'behaviorMosaic' => _BehaviorMosaicBlock(
         block: block,
         theme: theme,
+        projectId: projectId,
+        bibleId: bibleId,
         editing: editing,
         onChanged: onChanged,
       ),
-      BibleBlockKind.lightingDiagram => _LightingDiagramBlock(
-        block: block,
-        theme: theme,
-        editing: editing,
-        onChanged: onChanged,
-      ),
-      BibleBlockKind.specsTable => _SpecsTableBlock(
-        block: block,
-        theme: theme,
-        editing: editing,
-        onChanged: onChanged,
-      ),
-      BibleBlockKind.workflowPipeline => _WorkflowPipelineBlock(
-        block: block,
-        theme: theme,
-        editing: editing,
-        onChanged: onChanged,
-      ),
-      BibleBlockKind.dynamicBlocks => _DynamicBlocksBlock(
-        block: block,
-        theme: theme,
-      ),
+      _ => switch (block.type) {
+        BibleBlockKind.text => _TextBlock(
+          block: block,
+          theme: theme,
+          editing: editing,
+          onChanged: onChanged,
+        ),
+        BibleBlockKind.narrative => _NarrativeBlock(
+          block: block,
+          theme: theme,
+          editing: editing,
+          onChanged: onChanged,
+        ),
+        BibleBlockKind.heroImage => _ImageBlock(
+          block: block,
+          theme: theme,
+          projectId: projectId,
+          editing: editing,
+          onChanged: onChanged,
+        ),
+        BibleBlockKind.moodboardRefs => _MoodboardRefsBlock(
+          block: block,
+          theme: theme,
+          projectId: projectId,
+          editing: editing,
+          onChanged: onChanged,
+        ),
+        BibleBlockKind.chipSelect => _ChipSelectBlock(
+          block: block,
+          theme: theme,
+          editing: editing,
+          onChanged: onChanged,
+        ),
+        BibleBlockKind.colorPalette => _ColorPaletteBlock(
+          block: block,
+          theme: theme,
+          editing: editing,
+          onChanged: onChanged,
+        ),
+        BibleBlockKind.telemetry => _TelemetryBlock(
+          block: block,
+          theme: theme,
+          editing: editing,
+          onChanged: onChanged,
+        ),
+        BibleBlockKind.equipmentList => _EquipmentListBlock(
+          block: block,
+          theme: theme,
+          editing: editing,
+          onChanged: onChanged,
+        ),
+        BibleBlockKind.lightingDiagram => _LightingDiagramBlock(
+          block: block,
+          theme: theme,
+          editing: editing,
+          onChanged: onChanged,
+        ),
+        BibleBlockKind.specsTable => _SpecsTableBlock(
+          block: block,
+          theme: theme,
+          editing: editing,
+          onChanged: onChanged,
+        ),
+        BibleBlockKind.workflowPipeline => _WorkflowPipelineBlock(
+          block: block,
+          theme: theme,
+          editing: editing,
+          onChanged: onChanged,
+        ),
+        BibleBlockKind.dynamicBlocks => _DynamicBlocksBlock(
+          block: block,
+          theme: theme,
+          projectId: projectId,
+          bibleId: bibleId,
+          sectionId: sectionId,
+          editing: editing,
+          onChanged: onChanged,
+        ),
+      },
     };
+
+    final textColor = _parseColor(block.style.textColor);
+    if (textColor != null) {
+      child = DefaultTextStyle.merge(
+        style: TextStyle(color: textColor),
+        child: child,
+      );
+    }
+    final opacity = block.style.opacity;
+    if (opacity != null) {
+      child = Opacity(opacity: opacity.clamp(0.0, 1.0), child: child);
+    }
 
     if (!showCard) return Padding(padding: EdgeInsets.all(pad), child: child);
 
-    return Container(
+    return BibleDarkGlassPanel(
       padding: EdgeInsets.all(pad),
-      decoration: BoxDecoration(
-        color:
-            _parseColor(block.style.backgroundColor) ??
-            _parseColor(theme.colors.card) ??
-            palette.surfaceElevated,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-          color:
-              _parseColor(block.style.borderColor) ??
-              _parseColor(theme.colors.border) ??
-              palette.border,
-          width: block.style.borderWidth ?? theme.shape.borderWidth,
-        ),
-      ),
+      borderRadius: radius,
       child: child,
     );
   }
+}
+
+Widget? _catalogWidgetFor(BibleBlock block, {required int projectId}) {
+  final kind = block.content['subsectionKind']?.toString();
+  final label = block.content['label']?.toString() ?? '';
+  switch (kind) {
+    case BibleBlockSchemas.narrativeIntent:
+      return BibleTaggedTextWidget(
+        title: label.isEmpty ? 'Intención narrativa' : label,
+        text: block.content['text']?.toString() ?? '',
+        tags: BibleBlockSchemas.parseTags(block.content['tags']),
+      );
+    case BibleBlockSchemas.tonePoints:
+    case BibleBlockSchemas.transitions:
+      return BiblePointListWidget(
+        title: label.isEmpty
+            ? (kind == BibleBlockSchemas.transitions
+                  ? 'Lenguaje de transiciones'
+                  : 'Tono y atmósfera')
+            : label,
+        icon: kind == BibleBlockSchemas.transitions
+            ? Icons.animation
+            : Icons.blur_on,
+        points: BibleBlockSchemas.parsePointList(block.content['points']),
+      );
+    case BibleBlockSchemas.visualStrategy:
+      return DirectionVisualStrategyWidget(pillars: _strategyPillars(block));
+    case BibleBlockSchemas.acts:
+      return DirectionActsWidget(acts: _directionActs(block));
+    case BibleBlockSchemas.narrativeRefs:
+      final items = _narrativeRefItems(block);
+      return Builder(
+        builder: (context) => BibleReferencesWidget(
+          title: label.isEmpty ? 'Referencias de dirección' : label,
+          mode: ReferencesWidgetMode.narrative,
+          items: items,
+          onOpenItem: (item) {
+            final path = item.path;
+            if (path == null || path.isEmpty) return;
+            MoodboardLightbox.show(
+              context: context,
+              images: [
+                MoodboardImageModel(
+                  id: item.moodboardImageId ?? -1,
+                  projectId: projectId,
+                  imagePath: path,
+                  source: 'bible_block',
+                  caption: item.title,
+                ),
+              ],
+              initialIndex: 0,
+              metaById: const {},
+              projectId: projectId,
+              onAddToProject: (_) async {},
+            );
+          },
+        ),
+      );
+    default:
+      return null;
+  }
+}
+
+List<DirectionStrategyPillar> _strategyPillars(BibleBlock block) {
+  final extras = BibleBlockSchemas.parsePointList(block.content['extras']);
+  final pillars = <DirectionStrategyPillar>[];
+  if (block.content['pillars'] is List) {
+    for (final item in block.content['pillars'] as List) {
+      if (item is! Map) continue;
+      final id = item['id']?.toString() ?? '';
+      pillars.add(
+        DirectionStrategyPillar(
+          id: id,
+          title: item['title']?.toString() ?? '',
+          body: item['body']?.toString() ?? '',
+          icon: switch (id) {
+            'camera' => Icons.videocam_outlined,
+            'blocking' => Icons.person_pin_outlined,
+            'pov' => Icons.center_focus_strong,
+            _ => Icons.auto_awesome_outlined,
+          },
+        ),
+      );
+    }
+  }
+  if (pillars.isEmpty) {
+    pillars.addAll(const [
+      DirectionStrategyPillar(
+        id: 'camera',
+        title: 'Cámara',
+        icon: Icons.videocam_outlined,
+      ),
+      DirectionStrategyPillar(
+        id: 'blocking',
+        title: 'Blocking',
+        icon: Icons.person_pin_outlined,
+      ),
+      DirectionStrategyPillar(
+        id: 'pov',
+        title: 'POV',
+        icon: Icons.center_focus_strong,
+      ),
+    ]);
+  }
+  for (final extra in extras) {
+    pillars.add(
+      DirectionStrategyPillar(
+        id: extra['title'] ?? 'extra',
+        title: extra['title'] ?? 'Estrategia',
+        body: extra['body'] ?? '',
+      ),
+    );
+  }
+  return pillars;
+}
+
+List<DirectionActItem> _directionActs(BibleBlock block) {
+  final raw = block.content['acts'];
+  if (raw is! List || raw.isEmpty) {
+    return const [
+      DirectionActItem(phase: 'ACTO I'),
+      DirectionActItem(phase: 'ACTO II'),
+      DirectionActItem(phase: 'ACTO III'),
+    ];
+  }
+  return [
+    for (final item in raw)
+      if (item is Map)
+        DirectionActItem(
+          phase: item['phase']?.toString() ?? '',
+          title: item['title']?.toString() ?? '',
+          body: item['body']?.toString() ?? item['desc']?.toString() ?? '',
+        ),
+  ];
+}
+
+List<BibleReferenceItem> _narrativeRefItems(BibleBlock block) {
+  final raw = block.content['images'] ?? block.content['items'];
+  if (raw is! List) return const [];
+  return [
+    for (final item in raw)
+      if (item is Map)
+        BibleReferenceItem.fromJson(Map<String, dynamic>.from(item)),
+  ];
 }
 
 Color? _parseColor(String? hex) {
@@ -172,14 +402,18 @@ class _TextBlock extends StatelessWidget {
           if (label.isNotEmpty)
             Text(
               label.toUpperCase(),
-              style: AppTypography.label(palette).copyWith(letterSpacing: 1.1),
+              style: AppTypography.mono(palette).copyWith(
+                fontSize: theme.typography.label,
+                letterSpacing: 1.4,
+                color: palette.textTertiary,
+              ),
             ),
           const SizedBox(height: 6),
           Text(
             text.isEmpty ? '—' : text,
             style: AppTypography.bodyMedium(
               palette,
-            ).copyWith(fontSize: theme.typography.body),
+            ).copyWith(fontSize: theme.typography.body, height: 1.45),
           ),
         ],
       );
@@ -188,7 +422,15 @@ class _TextBlock extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (label.isNotEmpty) Text(label, style: AppTypography.label(palette)),
+        if (label.isNotEmpty)
+          Text(
+            label.toUpperCase(),
+            style: AppTypography.mono(palette).copyWith(
+              fontSize: theme.typography.label,
+              letterSpacing: 1.4,
+              color: palette.textTertiary,
+            ),
+          ),
         const SizedBox(height: 6),
         TextFormField(
           initialValue: text,
@@ -225,35 +467,86 @@ class _NarrativeBlock extends StatelessWidget {
     final text = block.content['text']?.toString() ?? '';
     final accent = _parseColor(theme.colors.accent) ?? palette.accent;
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(left: BorderSide(color: accent, width: 3)),
+    final title = block.content['label']?.toString().trim();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: palette.ambientBlue,
+          border: Border.all(color: accent.withValues(alpha: 0.15), width: 0.5),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ColoredBox(color: accent, child: const SizedBox(width: 3)),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.auto_stories_outlined,
+                            color: accent,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            (title == null || title.isEmpty
+                                    ? 'Intención narrativa'
+                                    : title)
+                                .toUpperCase(),
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: accent,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (editing)
+                        TextFormField(
+                          initialValue: text,
+                          maxLines: 5,
+                          style: AppTypography.bodyMedium(palette).copyWith(
+                            fontSize: theme.typography.body,
+                            fontStyle: FontStyle.italic,
+                            height: 1.45,
+                          ),
+                          decoration: InputDecoration(
+                            hintText:
+                                block.content['hint']?.toString() ??
+                                'Intención narrativa…',
+                            border: InputBorder.none,
+                          ),
+                          onChanged: (v) => onChanged?.call(
+                            block.copyWith(
+                              content: {...block.content, 'text': v},
+                            ),
+                          ),
+                        )
+                      else
+                        Text(
+                          text.isEmpty ? 'Sin intención narrativa' : '“$text”',
+                          style: AppTypography.bodyMedium(palette).copyWith(
+                            fontSize: theme.typography.body,
+                            fontStyle: FontStyle.italic,
+                            height: 1.45,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      padding: const EdgeInsets.only(left: 12),
-      child: editing
-          ? TextFormField(
-              initialValue: text,
-              maxLines: 5,
-              style: AppTypography.bodyMedium(
-                palette,
-              ).copyWith(fontSize: theme.typography.body, height: 1.45),
-              decoration: InputDecoration(
-                hintText:
-                    block.content['hint']?.toString() ?? 'Intención narrativa…',
-                border: InputBorder.none,
-              ),
-              onChanged: (v) => onChanged?.call(
-                block.copyWith(content: {...block.content, 'text': v}),
-              ),
-            )
-          : Text(
-              text.isEmpty ? 'Sin intención narrativa' : '“$text”',
-              style: AppTypography.bodyMedium(palette).copyWith(
-                fontSize: theme.typography.body,
-                fontStyle: FontStyle.italic,
-                height: 1.45,
-              ),
-            ),
     );
   }
 }
@@ -263,6 +556,7 @@ class _ImageBlock extends StatelessWidget {
   final BibleTheme theme;
   final int projectId;
   final bool editing;
+  final bool showThirds;
   final ValueChanged<BibleBlock>? onChanged;
 
   const _ImageBlock({
@@ -270,6 +564,7 @@ class _ImageBlock extends StatelessWidget {
     required this.theme,
     required this.projectId,
     required this.editing,
+    this.showThirds = false,
     this.onChanged,
   });
 
@@ -305,14 +600,32 @@ class _ImageBlock extends StatelessWidget {
       );
     }
     final file = File(path);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(theme.shape.radius),
-      child: AspectRatio(
-        aspectRatio: 16 / 9,
-        child: file.existsSync()
-            ? Image.file(file, fit: BoxFit.cover)
-            : const ColoredBox(color: Colors.black26),
-      ),
+    final caption = image.caption ?? block.content['label']?.toString();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(theme.shape.radius),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                file.existsSync()
+                    ? Image.file(file, fit: BoxFit.cover)
+                    : const ColoredBox(color: Colors.black26),
+                if (showThirds)
+                  CustomPaint(painter: BibleThirdsPainter(Colors.white)),
+              ],
+            ),
+          ),
+        ),
+        if (caption != null && caption.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(caption, style: AppTypography.caption(context.palette)),
+          ),
+      ],
     );
   }
 }
@@ -380,6 +693,7 @@ class _MoodboardRefsBlock extends StatelessWidget {
                 _MoodboardTile(
                   image: images[i],
                   theme: theme,
+                  onOpen: () => _openLightbox(context, images, i),
                   onRemove: editing
                       ? () {
                           final next = List<Map<String, dynamic>>.from(images)
@@ -410,7 +724,10 @@ class _MoodboardRefsBlock extends StatelessWidget {
                       ...block.content,
                       'images': [
                         ...images,
-                        {'path': path, if (img.caption != null) 'caption': img.caption},
+                        {
+                          'path': path,
+                          if (img.caption != null) 'caption': img.caption,
+                        },
                       ],
                     },
                   ),
@@ -422,16 +739,49 @@ class _MoodboardRefsBlock extends StatelessWidget {
       ],
     );
   }
+
+  Future<void> _openLightbox(
+    BuildContext context,
+    List<Map<String, dynamic>> images,
+    int index,
+  ) async {
+    final models = <MoodboardImageModel>[];
+    for (var i = 0; i < images.length; i++) {
+      final path = BibleImageContent.fromJson(images[i]).path;
+      if (path == null || path.isEmpty) continue;
+      models.add(
+        MoodboardImageModel(
+          id: -(i + 1),
+          projectId: projectId,
+          imagePath: path,
+          source: 'bible_block',
+          caption: images[i]['caption']?.toString(),
+        ),
+      );
+    }
+    if (models.isEmpty) return;
+    final start = index.clamp(0, models.length - 1);
+    await MoodboardLightbox.show(
+      context: context,
+      images: models,
+      initialIndex: start,
+      metaById: const {},
+      projectId: projectId,
+      onAddToProject: (_) async {},
+    );
+  }
 }
 
 class _MoodboardTile extends StatelessWidget {
   final Map<String, dynamic> image;
   final BibleTheme theme;
+  final VoidCallback? onOpen;
   final VoidCallback? onRemove;
 
   const _MoodboardTile({
     required this.image,
     required this.theme,
+    this.onOpen,
     this.onRemove,
   });
 
@@ -447,20 +797,23 @@ class _MoodboardTile extends StatelessWidget {
         children: [
           Stack(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(theme.shape.radius),
-                child: SizedBox(
-                  width: 120,
-                  height: 80,
-                  child: file != null && file.existsSync()
-                      ? Image.file(file, fit: BoxFit.cover)
-                      : ColoredBox(
-                          color: Colors.black26,
-                          child: Icon(
-                            Icons.image_outlined,
-                            color: context.palette.textTertiary,
+              GestureDetector(
+                onTap: onOpen,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(theme.shape.radius),
+                  child: SizedBox(
+                    width: 120,
+                    height: 80,
+                    child: file != null && file.existsSync()
+                        ? Image.file(file, fit: BoxFit.cover)
+                        : ColoredBox(
+                            color: Colors.black26,
+                            child: Icon(
+                              Icons.image_outlined,
+                              color: context.palette.textTertiary,
+                            ),
                           ),
-                        ),
+                  ),
                 ),
               ),
               if (onRemove != null)
@@ -468,7 +821,11 @@ class _MoodboardTile extends StatelessWidget {
                   right: 0,
                   top: 0,
                   child: IconButton(
-                    icon: const Icon(Icons.close, size: 16, color: Colors.white),
+                    icon: const Icon(
+                      Icons.close,
+                      size: 16,
+                      color: Colors.white,
+                    ),
                     onPressed: onRemove,
                   ),
                 ),
@@ -519,8 +876,15 @@ class _ChipSelectBlock extends StatelessWidget {
       children: [
         for (final chip in chips)
           FilterChip(
-            label: Text(chip.toUpperCase()),
+            label: Text(
+              chip.toUpperCase(),
+              style: AppTypography.mono(palette).copyWith(fontSize: 10),
+            ),
             selected: selected.contains(chip),
+            selectedColor: palette.accent.withValues(alpha: 0.18),
+            side: BorderSide(
+              color: selected.contains(chip) ? palette.accent : palette.border,
+            ),
             onSelected: editing
                 ? (v) {
                     final next = Set<String>.from(selected);
@@ -599,50 +963,61 @@ class _ColorPaletteBlock extends StatelessWidget {
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
+    final swatchColors = colors
+        .map((c) => _parseColor(c['hex']?.toString()) ?? Colors.grey)
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < colors.length; i++)
-          _Swatch(
-            hex: colors[i]['hex']?.toString() ?? '#888888',
-            name: colors[i]['name']?.toString() ?? '',
-            onRemove: editing
-                ? () {
-                    final next = List<Map<String, dynamic>>.from(colors)
-                      ..removeAt(i);
-                    onChanged?.call(
-                      block.copyWith(
-                        content: {...block.content, 'colors': next},
-                      ),
-                    );
-                  }
-                : null,
-            onChanged: editing
-                ? (nextColor) {
-                    final next = List<Map<String, dynamic>>.from(colors);
-                    next[i] = {...next[i], ...nextColor};
-                    onChanged?.call(
-                      block.copyWith(
-                        content: {...block.content, 'colors': next},
-                      ),
-                    );
-                  }
-                : null,
-          ),
-        if (editing)
-          ActionChip(
-            label: const Text('+ Color'),
-            onPressed: () {
-              final next = [
-                ...colors,
-                {'hex': '#2997FF', 'name': 'ACCENT'},
-              ];
-              onChanged?.call(
-                block.copyWith(content: {...block.content, 'colors': next}),
-              );
-            },
-          ),
+        if (swatchColors.isNotEmpty)
+          ColorPaletteStrip(colors: swatchColors, height: 22),
+        if (swatchColors.isNotEmpty) const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (var i = 0; i < colors.length; i++)
+              _Swatch(
+                hex: colors[i]['hex']?.toString() ?? '#888888',
+                name: colors[i]['name']?.toString() ?? '',
+                onRemove: editing
+                    ? () {
+                        final next = List<Map<String, dynamic>>.from(colors)
+                          ..removeAt(i);
+                        onChanged?.call(
+                          block.copyWith(
+                            content: {...block.content, 'colors': next},
+                          ),
+                        );
+                      }
+                    : null,
+                onChanged: editing
+                    ? (nextColor) {
+                        final next = List<Map<String, dynamic>>.from(colors);
+                        next[i] = {...next[i], ...nextColor};
+                        onChanged?.call(
+                          block.copyWith(
+                            content: {...block.content, 'colors': next},
+                          ),
+                        );
+                      }
+                    : null,
+              ),
+            if (editing)
+              ActionChip(
+                label: const Text('+ Color'),
+                onPressed: () {
+                  final next = [
+                    ...colors,
+                    {'hex': '#2997FF', 'name': 'ACCENT'},
+                  ];
+                  onChanged?.call(
+                    block.copyWith(content: {...block.content, 'colors': next}),
+                  );
+                },
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -771,7 +1146,8 @@ class _TelemetryBlock extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: AppTypography.titleMedium(palette).copyWith(
                           color:
-                              _parseColor(theme.colors.accent) ?? palette.accent,
+                              _parseColor(theme.colors.accent) ??
+                              palette.accent,
                           fontSize: theme.typography.h2,
                         ),
                         decoration: const InputDecoration(
@@ -793,7 +1169,8 @@ class _TelemetryBlock extends StatelessWidget {
                         metrics[i]['value']?.toString() ?? '—',
                         style: AppTypography.titleMedium(palette).copyWith(
                           color:
-                              _parseColor(theme.colors.accent) ?? palette.accent,
+                              _parseColor(theme.colors.accent) ??
+                              palette.accent,
                           fontSize: theme.typography.h2,
                         ),
                       ),
@@ -848,6 +1225,102 @@ class _TelemetryBlock extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _CardDeckBlock extends StatelessWidget {
+  final BibleBlock block;
+  final BibleTheme theme;
+  final int projectId;
+  final int? bibleId;
+  final String? sectionId;
+  final bool editing;
+  final ValueChanged<BibleBlock>? onChanged;
+
+  const _CardDeckBlock({
+    required this.block,
+    required this.theme,
+    required this.projectId,
+    this.bibleId,
+    this.sectionId,
+    required this.editing,
+    this.onChanged,
+  });
+
+  String get _kind {
+    final key = block.content['fieldKey']?.toString();
+    return switch (key) {
+      'filmRefs' => NarrativeCardKind.filmRef,
+      'locationLights' => NarrativeCardKind.locationLight,
+      'acts' => 'act',
+      _ => NarrativeCardKind.overview,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final id = bibleId;
+    final section = sectionId ?? 'lighting';
+    if (id != null && id > 0) {
+      return NarrativeDeckBlock(
+        projectId: projectId,
+        bibleId: id,
+        sectionId: section,
+        kind: _kind,
+        title: block.content['label']?.toString() ?? 'Deck',
+        allowAdd: editing,
+        allowDelete: editing,
+      );
+    }
+    final nested = BibleGridLayout.nestedBlocks(block);
+    if (nested.isNotEmpty) {
+      return BibleBlockCompositor(
+        blocks: nested,
+        theme: theme,
+        projectId: projectId,
+        bibleId: bibleId,
+        sectionId: sectionId,
+        editing: editing,
+        onBlockChanged: onChanged,
+      );
+    }
+    return Text(
+      block.content['label']?.toString() ?? 'Deck narrativo',
+      style: AppTypography.bodyMedium(context.palette),
+    );
+  }
+}
+
+class _BehaviorMosaicBlock extends StatelessWidget {
+  final BibleBlock block;
+  final BibleTheme theme;
+  final int projectId;
+  final int? bibleId;
+  final bool editing;
+  final ValueChanged<BibleBlock>? onChanged;
+
+  const _BehaviorMosaicBlock({
+    required this.block,
+    required this.theme,
+    required this.projectId,
+    this.bibleId,
+    required this.editing,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final id = bibleId;
+    if (id != null && id > 0) {
+      return LightingBehaviorMosaicBlock(projectId: projectId, bibleId: id);
+    }
+    return _ImageBlock(
+      block: block,
+      theme: theme,
+      projectId: projectId,
+      editing: editing,
+      onChanged: onChanged,
     );
   }
 }
@@ -963,6 +1436,27 @@ class _LightingDiagramBlock extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Text(label, style: AppTypography.label(palette)),
+          ),
+        if (block.content['imagePath']?.toString().isNotEmpty == true)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SizedBox(
+              height: 140,
+              width: double.infinity,
+              child: Image.file(
+                File(block.content['imagePath'].toString()),
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => ColoredBox(
+                  color: palette.surfaceOverlay,
+                  child: Center(
+                    child: Text(
+                      'Imagen de referencia no disponible',
+                      style: AppTypography.caption(palette),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         Container(
           height: 180,
@@ -1202,18 +1696,53 @@ class _WorkflowPipelineBlock extends StatelessWidget {
 class _DynamicBlocksBlock extends StatelessWidget {
   final BibleBlock block;
   final BibleTheme theme;
+  final int projectId;
+  final int? bibleId;
+  final String? sectionId;
+  final bool editing;
+  final ValueChanged<BibleBlock>? onChanged;
 
-  const _DynamicBlocksBlock({required this.block, required this.theme});
+  const _DynamicBlocksBlock({
+    required this.block,
+    required this.theme,
+    required this.projectId,
+    this.bibleId,
+    this.sectionId,
+    this.editing = false,
+    this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
-    final count = bibleJsonIntOr(block.content['count'], 0);
-    return Text(
-      count > 0
-          ? '$count bloques dinámicos (color / exposure / lighting)'
-          : 'Bloques dinámicos del proyecto',
-      style: AppTypography.bodyMedium(palette),
+    final nested = BibleGridLayout.nestedBlocks(block);
+    if (nested.isEmpty) {
+      final palette = context.palette;
+      final count = bibleJsonIntOr(block.content['count'], 0);
+      return Text(
+        count > 0
+            ? '$count bloques dinámicos (color / exposure / lighting)'
+            : 'Bloques dinámicos del proyecto',
+        style: AppTypography.bodyMedium(palette),
+      );
+    }
+    return BibleBlockCompositor(
+      blocks: nested,
+      theme: theme,
+      projectId: projectId,
+      bibleId: bibleId,
+      sectionId: sectionId,
+      editing: editing,
+      onBlockChanged: onChanged == null
+          ? null
+          : (child) {
+              final next = nested
+                  .map((b) => b.id == child.id ? child : b)
+                  .map((b) => b.toJson())
+                  .toList();
+              onChanged!(
+                block.copyWith(content: {...block.content, 'blocks': next}),
+              );
+            },
     );
   }
 }
@@ -1223,6 +1752,8 @@ class BibleBlockCompositor extends StatelessWidget {
   final List<BibleBlock> blocks;
   final BibleTheme theme;
   final int projectId;
+  final int? bibleId;
+  final String? sectionId;
   final bool editing;
   final String? selectedBlockId;
   final ValueChanged<String>? onSelect;
@@ -1234,6 +1765,8 @@ class BibleBlockCompositor extends StatelessWidget {
     required this.blocks,
     required this.theme,
     required this.projectId,
+    this.bibleId,
+    this.sectionId,
     this.editing = false,
     this.selectedBlockId,
     this.onSelect,
@@ -1276,6 +1809,8 @@ class BibleBlockCompositor extends StatelessWidget {
                       block: block,
                       theme: theme,
                       projectId: projectId,
+                      bibleId: bibleId,
+                      sectionId: sectionId,
                       editing: editing,
                       selected: selectedBlockId == block.id,
                       onSelect: onSelect,
@@ -1289,21 +1824,19 @@ class BibleBlockCompositor extends StatelessWidget {
       );
     }
 
-    // Agrupar por filas smart (row).
-    final byRow = <int, List<BibleBlock>>{};
-    for (final b in blocks) {
-      byRow.putIfAbsent(b.layout.row, () => []).add(b);
-    }
-    final rows = byRow.keys.toList()..sort();
+    // Agrupar por filas smart (row) — misma lógica que el PDF.
+    final rows = BibleGridLayout.rows(blocks);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final row in rows) ...[
           _SmartRow(
-            blocks: byRow[row]!,
+            blocks: row,
             theme: theme,
             projectId: projectId,
+            bibleId: bibleId,
+            sectionId: sectionId,
             editing: editing,
             selectedBlockId: selectedBlockId,
             onSelect: onSelect,
@@ -1320,6 +1853,8 @@ class _SmartRow extends StatelessWidget {
   final List<BibleBlock> blocks;
   final BibleTheme theme;
   final int projectId;
+  final int? bibleId;
+  final String? sectionId;
   final bool editing;
   final String? selectedBlockId;
   final ValueChanged<String>? onSelect;
@@ -1329,6 +1864,8 @@ class _SmartRow extends StatelessWidget {
     required this.blocks,
     required this.theme,
     required this.projectId,
+    this.bibleId,
+    this.sectionId,
     required this.editing,
     this.selectedBlockId,
     this.onSelect,
@@ -1356,6 +1893,8 @@ class _SmartRow extends StatelessWidget {
                   block: b,
                   theme: theme,
                   projectId: projectId,
+                  bibleId: bibleId,
+                  sectionId: sectionId,
                   editing: editing,
                   selected: selectedBlockId == b.id,
                   onSelect: onSelect,
@@ -1375,6 +1914,8 @@ class _SmartRow extends StatelessWidget {
                   block: b,
                   theme: theme,
                   projectId: projectId,
+                  bibleId: bibleId,
+                  sectionId: sectionId,
                   editing: editing,
                   selected: selectedBlockId == b.id,
                   onSelect: onSelect,
@@ -1394,6 +1935,8 @@ class _SelectableBlock extends StatelessWidget {
   final BibleBlock block;
   final BibleTheme theme;
   final int projectId;
+  final int? bibleId;
+  final String? sectionId;
   final bool editing;
   final bool selected;
   final ValueChanged<String>? onSelect;
@@ -1403,6 +1946,8 @@ class _SelectableBlock extends StatelessWidget {
     required this.block,
     required this.theme,
     required this.projectId,
+    this.bibleId,
+    this.sectionId,
     required this.editing,
     required this.selected,
     this.onSelect,
@@ -1426,6 +1971,8 @@ class _SelectableBlock extends StatelessWidget {
           block: block,
           theme: theme,
           projectId: projectId,
+          bibleId: bibleId,
+          sectionId: sectionId,
           editing: editing,
           onChanged: onBlockChanged,
         ),
