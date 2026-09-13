@@ -11,6 +11,8 @@ import 'moodboard_pdf_tiles.dart';
 import '../../../../shared/annotations/annotation_document.dart';
 import '../../../../shared/annotations/annotation_pdf_renderer.dart';
 import '../../bible_block_catalog.dart';
+import '../../v2/bible_block_schemas.dart';
+import '../../v2/layout/bible_grid_layout.dart';
 import '../../v2/model/bible_block.dart';
 import '../../v2/model/bible_image_content.dart';
 import '../model/bible_export_composition.dart';
@@ -175,6 +177,8 @@ class BibleExportPdfRenderer {
         : block.content;
     final primary = BibleImageContent.fromJson(imageJson).path;
     if (primary != null) yield primary;
+    final diagram = block.content['imagePath']?.toString();
+    if (diagram != null && diagram.isNotEmpty) yield diagram;
 
     final candidates =
         block.content['images'] ?? block.content['items'] ?? const [];
@@ -215,14 +219,49 @@ class BibleExportPdfRenderer {
           ),
         ),
         pw.SizedBox(height: 18),
-        ...page.blocks.map(
-          (block) => pw.Padding(
-            padding: const pw.EdgeInsets.only(bottom: 14),
-            child: _buildBlock(block, images, lightingAnnotations),
-          ),
-        ),
+        ..._buildGrid(page.blocks, images, lightingAnnotations),
       ],
     );
+  }
+
+  List<pw.Widget> _buildGrid(
+    List<BibleBlock> blocks,
+    Map<String, Uint8List> images,
+    Map<int, AnnotationDocument> lightingAnnotations,
+  ) {
+    final widgets = <pw.Widget>[];
+    for (final row in BibleGridLayout.rows(blocks)) {
+      if (BibleGridLayout.rowFitsGrid(row)) {
+        widgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 14),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                for (final block in row)
+                  pw.Expanded(
+                    flex: block.layout.colSpan.clamp(1, 12),
+                    child: pw.Padding(
+                      padding: const pw.EdgeInsets.only(right: 8),
+                      child: _buildBlock(block, images, lightingAnnotations),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        for (final block in row) {
+          widgets.add(
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 14),
+              child: _buildBlock(block, images, lightingAnnotations),
+            ),
+          );
+        }
+      }
+    }
+    return widgets;
   }
 
   pw.Widget _buildCover(BibleExportPage page, Map<String, Uint8List> images) {
@@ -271,6 +310,20 @@ class BibleExportPdfRenderer {
     Map<String, Uint8List> images,
     Map<int, AnnotationDocument> lightingAnnotations,
   ) {
+    final subsection = block.content['subsectionKind']?.toString();
+    if (subsection == BibleBlockSchemas.tonePoints ||
+        subsection == BibleBlockSchemas.transitions) {
+      return _pointListBlock(block);
+    }
+    if (subsection == BibleBlockSchemas.visualStrategy) {
+      return _strategyBlock(block);
+    }
+    if (subsection == BibleBlockSchemas.acts) {
+      return _actsBlock(block);
+    }
+    if (subsection == BibleBlockSchemas.narrativeRefs) {
+      return _narrativeRefsBlock(block, images);
+    }
     return switch (block.type) {
       BibleBlockKind.text => _textBlock(block),
       BibleBlockKind.narrative => _narrativeBlock(block),
@@ -285,40 +338,287 @@ class BibleExportPdfRenderer {
       BibleBlockKind.lightingDiagram => _lightingDiagramBlock(
         block,
         lightingAnnotations,
+        images,
       ),
-      BibleBlockKind.dynamicBlocks => _dynamicBlock(block),
+      BibleBlockKind.dynamicBlocks => _dynamicBlock(
+        block,
+        images,
+        lightingAnnotations,
+      ),
     };
   }
 
   pw.Widget _textBlock(BibleBlock block) {
+    final points = BibleBlockSchemas.parsePointList(block.content['points']);
+    if (points.isNotEmpty) return _pointListBlock(block);
+    if (block.content['pillars'] is List) return _strategyBlock(block);
     final label = block.content['label']?.toString() ?? '';
     final text = block.content['text']?.toString() ?? '—';
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        if (label.isNotEmpty) _label(label),
+        if (label.isNotEmpty) _label(label.toUpperCase()),
         if (label.isNotEmpty) pw.SizedBox(height: 4),
         pw.Text(
           text.isEmpty ? '—' : text,
-          style: const pw.TextStyle(fontSize: 11),
+          style: const pw.TextStyle(fontSize: 11, lineSpacing: 2),
         ),
+      ],
+    );
+  }
+
+  pw.Widget _pointListBlock(BibleBlock block) {
+    final label = block.content['label']?.toString() ?? '';
+    final points = BibleBlockSchemas.parsePointList(block.content['points']);
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (label.isNotEmpty) _label(label),
+        if (label.isNotEmpty) pw.SizedBox(height: 6),
+        for (final point in points) ...[
+          pw.Text(
+            point['title']!.isEmpty ? 'Sin título' : point['title']!,
+            style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.Text(
+            point['body'] ?? '',
+            style: const pw.TextStyle(fontSize: 10, lineSpacing: 2),
+          ),
+          pw.SizedBox(height: 6),
+        ],
+      ],
+    );
+  }
+
+  pw.Widget _strategyBlock(BibleBlock block) {
+    final raw = block.content['pillars'];
+    final pillars = <Map<String, String>>[
+      if (raw is List)
+        for (final item in raw)
+          if (item is Map)
+            {
+              'title': item['title']?.toString() ?? '',
+              'body': item['body']?.toString() ?? '',
+            },
+    ];
+    final extras = BibleBlockSchemas.parsePointList(block.content['extras']);
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _label(block.content['label']?.toString() ?? 'Estrategia visual'),
+        pw.SizedBox(height: 6),
+        pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            for (final pillar in pillars)
+              pw.Expanded(
+                child: pw.Padding(
+                  padding: const pw.EdgeInsets.only(right: 8),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        pillar['title'] ?? '',
+                        style: pw.TextStyle(
+                          fontSize: 11,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.Text(
+                        pillar['body'] ?? '',
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+        for (final extra in extras) ...[
+          pw.SizedBox(height: 4),
+          pw.Text(
+            extra['title'] ?? '',
+            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.Text(extra['body'] ?? '', style: const pw.TextStyle(fontSize: 9)),
+        ],
+      ],
+    );
+  }
+
+  pw.Widget _actsBlock(BibleBlock block) {
+    final raw = block.content['acts'];
+    final acts = <Map<String, String>>[
+      if (raw is List)
+        for (final item in raw)
+          if (item is Map)
+            {
+              'phase': item['phase']?.toString() ?? '',
+              'title': item['title']?.toString() ?? '',
+              'body': item['body']?.toString() ?? '',
+            },
+    ];
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _label(
+          block.content['label']?.toString() ?? 'Intención visual por acto',
+        ),
+        pw.SizedBox(height: 8),
+        pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            for (final act in acts)
+              pw.Expanded(
+                child: pw.Padding(
+                  padding: const pw.EdgeInsets.only(right: 8),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        (act['phase'] ?? '').toUpperCase(),
+                        style: pw.TextStyle(
+                          fontSize: 8,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.blue600,
+                        ),
+                      ),
+                      pw.Text(
+                        act['title'] ?? '',
+                        style: pw.TextStyle(
+                          fontSize: 11,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.Text(
+                        act['body'] ?? '',
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _narrativeRefsBlock(
+    BibleBlock block,
+    Map<String, Uint8List> images,
+  ) {
+    final raw = block.content['images'] ?? block.content['items'];
+    final cards = <Map<String, dynamic>>[
+      if (raw is List)
+        for (final item in raw)
+          if (item is Map) Map<String, dynamic>.from(item),
+    ];
+    if (cards.isEmpty) return _placeholder('Sin referencias');
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _label(
+          block.content['label']?.toString() ?? 'Referencias de dirección',
+        ),
+        pw.SizedBox(height: 8),
+        for (final card in cards) ...[
+          pw.Text(
+            card['title']?.toString().isNotEmpty == true
+                ? card['title'].toString()
+                : 'Referencia',
+            style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+          ),
+          if (card['refLabel']?.toString().isNotEmpty == true)
+            pw.Text(
+              card['refLabel'].toString(),
+              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+            ),
+          if (card['body']?.toString().isNotEmpty == true)
+            pw.Text(
+              card['body'].toString(),
+              style: const pw.TextStyle(fontSize: 10),
+            ),
+          if (card['specs'] is List)
+            pw.Wrap(
+              spacing: 8,
+              children: [
+                for (final spec in card['specs'] as List)
+                  if (spec is Map)
+                    pw.Text(
+                      '${spec['label'] ?? ''} ${spec['value'] ?? ''}'.trim(),
+                      style: const pw.TextStyle(fontSize: 8),
+                    ),
+              ],
+            ),
+          pw.SizedBox(height: 8),
+        ],
       ],
     );
   }
 
   pw.Widget _narrativeBlock(BibleBlock block) {
     final text = block.content['text']?.toString().trim() ?? '';
-    if (text.isEmpty) return pw.SizedBox.shrink();
+    final title = block.content['label']?.toString().trim();
+    final tags = BibleBlockSchemas.parseTags(block.content['tags']);
+    if (text.isEmpty && tags.isEmpty) return pw.SizedBox.shrink();
     return pw.Container(
-      padding: const pw.EdgeInsets.only(left: 12, top: 4, bottom: 4),
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(
-          left: pw.BorderSide(color: PdfColors.blue400, width: 3),
-        ),
+      padding: const pw.EdgeInsets.fromLTRB(0, 6, 8, 6),
+      decoration: pw.BoxDecoration(
+        color: PdfColor.fromInt(0x1A2997FF),
+        border: pw.Border.all(color: PdfColors.blue200, width: 0.4),
       ),
-      child: pw.Text(
-        '"$text"',
-        style: const pw.TextStyle(fontSize: 12),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Container(width: 3, color: PdfColors.blue400, height: 36),
+          pw.SizedBox(width: 10),
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  (title == null || title.isEmpty
+                          ? 'INTENCIÓN NARRATIVA'
+                          : title)
+                      .toUpperCase(),
+                  style: pw.TextStyle(
+                    fontSize: 8,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.blue600,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                if (text.isNotEmpty) ...[
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    '"$text"',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontStyle: pw.FontStyle.italic,
+                    ),
+                  ),
+                ],
+                if (tags.isNotEmpty) ...[
+                  pw.SizedBox(height: 6),
+                  pw.Wrap(
+                    spacing: 4,
+                    children: [
+                      for (final tag in tags)
+                        pw.Text(
+                          tag.toUpperCase(),
+                          style: const pw.TextStyle(
+                            fontSize: 8,
+                            color: PdfColors.blue700,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -352,7 +652,8 @@ class BibleExportPdfRenderer {
   }
 
   pw.Widget _moodboardBlock(BibleBlock block, Map<String, Uint8List> images) {
-    final tiles = <({Uint8List bytes, String? caption, List<String> details})>[];
+    final tiles =
+        <({Uint8List bytes, String? caption, List<String> details})>[];
     final candidates =
         block.content['images'] ?? block.content['items'] ?? const [];
     if (candidates is List) {
@@ -436,28 +737,51 @@ class BibleExportPdfRenderer {
 
   pw.Widget _colorPaletteBlock(BibleBlock block) {
     final colors = (block.content['colors'] as List? ?? const [])
-        .whereType<Map>();
-    return pw.Wrap(
-      spacing: 10,
-      runSpacing: 8,
+        .whereType<Map>()
+        .toList();
+    if (colors.isEmpty) return _placeholder('Sin paleta');
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: [
-        for (final color in colors)
-          pw.Column(
+        pw.Container(
+          height: 18,
+          child: pw.Row(
             children: [
-              pw.Container(
-                width: 48,
-                height: 48,
-                color: _pdfColor(color['hex']?.toString()) ?? PdfColors.grey,
-              ),
-              pw.SizedBox(height: 3),
-              pw.Text(
-                color['name']?.toString().isNotEmpty == true
-                    ? color['name'].toString()
-                    : color['hex']?.toString() ?? '',
-                style: const pw.TextStyle(fontSize: 8),
-              ),
+              for (final color in colors)
+                pw.Expanded(
+                  child: pw.Container(
+                    color:
+                        _pdfColor(color['hex']?.toString()) ?? PdfColors.grey,
+                  ),
+                ),
             ],
           ),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          children: [
+            for (final color in colors)
+              pw.Column(
+                children: [
+                  pw.Container(
+                    width: 48,
+                    height: 48,
+                    color:
+                        _pdfColor(color['hex']?.toString()) ?? PdfColors.grey,
+                  ),
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    color['name']?.toString().isNotEmpty == true
+                        ? color['name'].toString()
+                        : color['hex']?.toString() ?? '',
+                    style: const pw.TextStyle(fontSize: 8),
+                  ),
+                ],
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -512,6 +836,7 @@ class BibleExportPdfRenderer {
   pw.Widget _lightingDiagramBlock(
     BibleBlock block,
     Map<int, AnnotationDocument> lightingAnnotations,
+    Map<String, Uint8List> images,
   ) {
     var nodes = block.content['nodes'];
     if (nodes is String) {
@@ -535,6 +860,18 @@ class BibleExportPdfRenderer {
         if (block.content['label']?.toString().isNotEmpty == true)
           _label(block.content['label'].toString()),
         pw.SizedBox(height: 6),
+        if (block.content['imagePath']?.toString().isNotEmpty == true &&
+            images[block.content['imagePath'].toString()] != null)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 8),
+            child: pw.SizedBox(
+              height: 140,
+              child: pw.Image(
+                pw.MemoryImage(images[block.content['imagePath'].toString()]!),
+                fit: pw.BoxFit.cover,
+              ),
+            ),
+          ),
         pw.Container(
           height: 180,
           decoration: pw.BoxDecoration(
@@ -661,23 +998,20 @@ class BibleExportPdfRenderer {
     );
   }
 
-  pw.Widget _dynamicBlock(BibleBlock block) {
-    final items = block.content['blocks'] ?? block.content['items'] ?? const [];
-    if (items is List && items.isNotEmpty) {
+  pw.Widget _dynamicBlock(
+    BibleBlock block,
+    Map<String, Uint8List> images,
+    Map<int, AnnotationDocument> lightingAnnotations,
+  ) {
+    if (block.content['subsectionKind'] == BibleBlockSchemas.acts ||
+        block.content['acts'] is List) {
+      return _actsBlock(block);
+    }
+    final nested = BibleGridLayout.nestedBlocks(block);
+    if (nested.isNotEmpty) {
       return pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          for (final item in items)
-            pw.Padding(
-              padding: const pw.EdgeInsets.only(bottom: 3),
-              child: pw.Text(
-                item is Map
-                    ? (item['title'] ?? item['label'] ?? item['name'] ?? item)
-                          .toString()
-                    : item.toString(),
-              ),
-            ),
-        ],
+        children: _buildGrid(nested, images, lightingAnnotations),
       );
     }
     return _fallbackBlock(block);

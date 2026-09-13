@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../bible_block_catalog.dart';
+import '../bible_block_schemas.dart';
 import '../model/bible_block.dart';
 import '../model/bible_page.dart';
 import '../theme/bible_theme.dart';
@@ -50,63 +51,67 @@ class BibleBlockInspector extends StatelessWidget {
           color: palette.surfaceElevated,
           border: Border(left: BorderSide(color: palette.border)),
         ),
-        child: block == null
-            ? _PageInspector(page: page, palette: palette)
-            : Column(
-                children: [
-                  TabBar(
-                    isScrollable: true,
-                    tabs: const [
-                      Tab(text: 'Content'),
-                      Tab(text: 'Layout'),
-                      Tab(text: 'Style'),
-                      Tab(text: 'Advanced'),
-                    ],
-                  ),
-                  Expanded(
-                    child: TabBarView(
-                      children: [
-                        _BlockInspectorBody(
-                          block: block,
-                          theme: theme,
-                          projectId: projectId,
-                          palette: palette,
-                          onChanged: onBlockChanged,
-                          onDelete: onDelete,
-                          section: _InspectorSection.content,
-                        ),
-                        _BlockInspectorBody(
-                          block: block,
-                          theme: theme,
-                          projectId: projectId,
-                          palette: palette,
-                          onChanged: onBlockChanged,
-                          onDelete: onDelete,
-                          section: _InspectorSection.layout,
-                        ),
-                        _BlockInspectorBody(
-                          block: block,
-                          theme: theme,
-                          projectId: projectId,
-                          palette: palette,
-                          onChanged: onBlockChanged,
-                          onDelete: onDelete,
-                          section: _InspectorSection.style,
-                        ),
-                        _BlockInspectorBody(
-                          block: block,
-                          theme: theme,
-                          projectId: projectId,
-                          palette: palette,
-                          onChanged: onBlockChanged,
-                          onDelete: onDelete,
-                          section: _InspectorSection.advanced,
-                        ),
+        child: Semantics(
+          namesRoute: true,
+          label: 'Inspector de bloque',
+          child: block == null
+              ? _PageInspector(page: page, palette: palette)
+              : Column(
+                  children: [
+                    TabBar(
+                      isScrollable: true,
+                      tabs: const [
+                        Tab(text: 'Content'),
+                        Tab(text: 'Layout'),
+                        Tab(text: 'Style'),
+                        Tab(text: 'Advanced'),
                       ],
                     ),
-                  ),
-                ],
-              ),
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          _BlockInspectorBody(
+                            block: block,
+                            theme: theme,
+                            projectId: projectId,
+                            palette: palette,
+                            onChanged: onBlockChanged,
+                            onDelete: onDelete,
+                            section: _InspectorSection.content,
+                          ),
+                          _BlockInspectorBody(
+                            block: block,
+                            theme: theme,
+                            projectId: projectId,
+                            palette: palette,
+                            onChanged: onBlockChanged,
+                            onDelete: onDelete,
+                            section: _InspectorSection.layout,
+                          ),
+                          _BlockInspectorBody(
+                            block: block,
+                            theme: theme,
+                            projectId: projectId,
+                            palette: palette,
+                            onChanged: onBlockChanged,
+                            onDelete: onDelete,
+                            section: _InspectorSection.style,
+                          ),
+                          _BlockInspectorBody(
+                            block: block,
+                            theme: theme,
+                            projectId: projectId,
+                            palette: palette,
+                            onChanged: onBlockChanged,
+                            onDelete: onDelete,
+                            section: _InspectorSection.advanced,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -197,11 +202,8 @@ class _BlockInspectorBody extends StatelessWidget {
               block.copyWith(layout: block.layout.copyWith(row: v.round())),
             ),
           ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text('Modo', style: AppTypography.bodyMedium(palette)),
-            subtitle: Text(block.layout.mode, style: AppTypography.caption(palette)),
-          ),
+          Text('Modo', style: AppTypography.bodyMedium(palette)),
+          Text(block.layout.mode, style: AppTypography.caption(palette)),
         ],
         _InspectorSection.style => [
           Text('STYLE', style: AppTypography.label(palette)),
@@ -210,8 +212,9 @@ class _BlockInspectorBody extends StatelessWidget {
             value: block.style.radius ?? theme.shape.radius,
             min: 0,
             max: 24,
-            onChanged: (v) =>
-                onChanged(block.copyWith(style: block.style.copyWith(radius: v))),
+            onChanged: (v) => onChanged(
+              block.copyWith(style: block.style.copyWith(radius: v)),
+            ),
           ),
           _SliderRow(
             label: 'Padding',
@@ -284,6 +287,7 @@ class _BlockInspectorBody extends StatelessWidget {
           const SizedBox(height: 16),
           Text('CONTENT', style: AppTypography.label(palette)),
           const SizedBox(height: 8),
+          ..._subsectionEditors(),
           BibleBlockRenderer(
             block: block,
             theme: theme,
@@ -294,6 +298,318 @@ class _BlockInspectorBody extends StatelessWidget {
         ],
       },
     );
+  }
+
+  List<Widget> _subsectionEditors() {
+    final kind = block.content['subsectionKind']?.toString();
+    return switch (kind) {
+      BibleBlockSchemas.narrativeIntent => _tagsEditor(),
+      BibleBlockSchemas.tonePoints ||
+      BibleBlockSchemas.transitions => _pointsEditor(),
+      BibleBlockSchemas.visualStrategy => _pillarsEditor(),
+      BibleBlockSchemas.acts => _actsEditor(),
+      BibleBlockSchemas.narrativeRefs => _refsMetaEditor(),
+      _ => const [],
+    };
+  }
+
+  List<Widget> _tagsEditor() {
+    final tags = BibleBlockSchemas.parseTags(block.content['tags']);
+    return [
+      TextFormField(
+        initialValue: block.content['text']?.toString() ?? '',
+        maxLines: 5,
+        decoration: const InputDecoration(labelText: 'Intención'),
+        onChanged: (v) =>
+            onChanged(block.copyWith(content: {...block.content, 'text': v})),
+      ),
+      const SizedBox(height: 8),
+      TextFormField(
+        initialValue: tags.join(', '),
+        decoration: const InputDecoration(
+          labelText: 'Tags (separados por coma)',
+        ),
+        onChanged: (v) {
+          final next = [
+            for (final part in v.split(','))
+              if (part.trim().isNotEmpty) part.trim(),
+          ];
+          onChanged(block.copyWith(content: {...block.content, 'tags': next}));
+        },
+      ),
+      const SizedBox(height: 12),
+    ];
+  }
+
+  List<Widget> _pointsEditor() {
+    final points = BibleBlockSchemas.parsePointList(block.content['points']);
+    return [
+      for (var i = 0; i < points.length; i++) ...[
+        TextFormField(
+          initialValue: points[i]['title'] ?? '',
+          decoration: InputDecoration(labelText: 'Punto ${i + 1} · título'),
+          onChanged: (v) => _replacePoint(points, i, title: v),
+        ),
+        TextFormField(
+          initialValue: points[i]['body'] ?? '',
+          decoration: InputDecoration(labelText: 'Punto ${i + 1} · cuerpo'),
+          maxLines: 3,
+          onChanged: (v) => _replacePoint(points, i, body: v),
+        ),
+        const SizedBox(height: 8),
+      ],
+      TextButton.icon(
+        onPressed: () => onChanged(
+          block.copyWith(
+            content: {
+              ...block.content,
+              'points': [
+                ...points,
+                {'title': '', 'body': ''},
+              ],
+            },
+          ),
+        ),
+        icon: const Icon(Icons.add),
+        label: const Text('Añadir punto'),
+      ),
+      const SizedBox(height: 12),
+    ];
+  }
+
+  void _replacePoint(
+    List<Map<String, String>> points,
+    int index, {
+    String? title,
+    String? body,
+  }) {
+    final next = [for (final p in points) Map<String, String>.from(p)];
+    next[index] = {
+      'title': title ?? next[index]['title'] ?? '',
+      'body': body ?? next[index]['body'] ?? '',
+    };
+    onChanged(block.copyWith(content: {...block.content, 'points': next}));
+  }
+
+  List<Widget> _pillarsEditor() {
+    final pillars = _pillarMaps();
+    return [
+      for (var i = 0; i < pillars.length; i++) ...[
+        TextFormField(
+          initialValue: pillars[i]['title'] ?? '',
+          decoration: InputDecoration(labelText: 'Pilar ${i + 1} · título'),
+          onChanged: (v) => _replacePillar(pillars, i, title: v),
+        ),
+        TextFormField(
+          initialValue: pillars[i]['body'] ?? '',
+          decoration: InputDecoration(labelText: 'Pilar ${i + 1} · cuerpo'),
+          maxLines: 3,
+          onChanged: (v) => _replacePillar(pillars, i, body: v),
+        ),
+        const SizedBox(height: 8),
+      ],
+      const SizedBox(height: 4),
+    ];
+  }
+
+  List<Map<String, String>> _pillarMaps() {
+    final raw = block.content['pillars'];
+    if (raw is List && raw.isNotEmpty) {
+      return [
+        for (final item in raw)
+          if (item is Map)
+            {
+              'id': item['id']?.toString() ?? '',
+              'title': item['title']?.toString() ?? '',
+              'body': item['body']?.toString() ?? '',
+            },
+      ];
+    }
+    return [
+      {'id': 'camera', 'title': 'Cámara', 'body': ''},
+      {'id': 'blocking', 'title': 'Blocking', 'body': ''},
+      {'id': 'pov', 'title': 'POV', 'body': ''},
+    ];
+  }
+
+  void _replacePillar(
+    List<Map<String, String>> pillars,
+    int index, {
+    String? title,
+    String? body,
+  }) {
+    final next = [for (final p in pillars) Map<String, String>.from(p)];
+    next[index] = {
+      'id': next[index]['id'] ?? '',
+      'title': title ?? next[index]['title'] ?? '',
+      'body': body ?? next[index]['body'] ?? '',
+    };
+    onChanged(block.copyWith(content: {...block.content, 'pillars': next}));
+  }
+
+  List<Widget> _actsEditor() {
+    final acts = _actMaps();
+    return [
+      for (var i = 0; i < acts.length; i++) ...[
+        TextFormField(
+          initialValue: acts[i]['phase'] ?? '',
+          decoration: InputDecoration(labelText: 'Acto ${i + 1} · fase'),
+          onChanged: (v) => _replaceAct(acts, i, phase: v),
+        ),
+        TextFormField(
+          initialValue: acts[i]['title'] ?? '',
+          decoration: InputDecoration(labelText: 'Acto ${i + 1} · título'),
+          onChanged: (v) => _replaceAct(acts, i, title: v),
+        ),
+        TextFormField(
+          initialValue: acts[i]['body'] ?? '',
+          maxLines: 3,
+          decoration: InputDecoration(labelText: 'Acto ${i + 1} · cuerpo'),
+          onChanged: (v) => _replaceAct(acts, i, body: v),
+        ),
+        const SizedBox(height: 8),
+      ],
+    ];
+  }
+
+  List<Map<String, String>> _actMaps() {
+    final raw = block.content['acts'];
+    if (raw is! List || raw.isEmpty) {
+      return [
+        {'phase': 'ACTO I', 'title': '', 'body': ''},
+        {'phase': 'ACTO II', 'title': '', 'body': ''},
+        {'phase': 'ACTO III', 'title': '', 'body': ''},
+      ];
+    }
+    return [
+      for (final item in raw)
+        if (item is Map)
+          {
+            'phase': item['phase']?.toString() ?? '',
+            'title': item['title']?.toString() ?? '',
+            'body': item['body']?.toString() ?? '',
+          },
+    ];
+  }
+
+  void _replaceAct(
+    List<Map<String, String>> acts,
+    int index, {
+    String? phase,
+    String? title,
+    String? body,
+  }) {
+    final next = [for (final a in acts) Map<String, String>.from(a)];
+    next[index] = {
+      'phase': phase ?? next[index]['phase'] ?? '',
+      'title': title ?? next[index]['title'] ?? '',
+      'body': body ?? next[index]['body'] ?? '',
+    };
+    onChanged(block.copyWith(content: {...block.content, 'acts': next}));
+  }
+
+  List<Widget> _refsMetaEditor() {
+    final images = _refMaps();
+    return [
+      for (var i = 0; i < images.length; i++) ...[
+        Text('Referencia ${i + 1}', style: AppTypography.label(palette)),
+        TextFormField(
+          initialValue: images[i]['title'] ?? '',
+          decoration: const InputDecoration(labelText: 'Título narrativo'),
+          onChanged: (v) => _replaceRef(images, i, title: v),
+        ),
+        TextFormField(
+          initialValue: images[i]['body'] ?? '',
+          maxLines: 3,
+          decoration: const InputDecoration(labelText: 'Idea narrativa'),
+          onChanged: (v) => _replaceRef(images, i, body: v),
+        ),
+        TextFormField(
+          initialValue: images[i]['refLabel'] ?? '',
+          decoration: const InputDecoration(labelText: 'Etiqueta (película)'),
+          onChanged: (v) => _replaceRef(images, i, refLabel: v),
+        ),
+        TextFormField(
+          initialValue: images[i]['specs'] ?? '',
+          decoration: const InputDecoration(
+            labelText: 'Specs (LENS=35mm, APERTURE=T5.6)',
+          ),
+          onChanged: (v) => _replaceRef(images, i, specs: v),
+        ),
+        const SizedBox(height: 8),
+      ],
+      if (images.isEmpty)
+        Text(
+          'Añade stills en el bloque; aquí editas la ficha narrativa.',
+          style: AppTypography.caption(palette),
+        ),
+      const SizedBox(height: 12),
+    ];
+  }
+
+  List<Map<String, String>> _refMaps() {
+    final raw = block.content['images'] ?? block.content['items'];
+    if (raw is! List) return const [];
+    return [
+      for (final item in raw)
+        if (item is Map)
+          {
+            'path': item['path']?.toString() ?? '',
+            'moodboardImageId': '${item['moodboardImageId'] ?? ''}',
+            'title': item['title']?.toString() ?? '',
+            'body': item['body']?.toString() ?? '',
+            'refLabel': item['refLabel']?.toString() ?? '',
+            'specs': _specsToLine(item['specs']),
+          },
+    ];
+  }
+
+  String _specsToLine(Object? raw) {
+    if (raw is! List) return '';
+    return [
+      for (final spec in raw)
+        if (spec is Map && (spec['label']?.toString().isNotEmpty ?? false))
+          '${spec['label']}=${spec['value'] ?? ''}',
+    ].join(', ');
+  }
+
+  List<Map<String, String>> _specsFromLine(String raw) {
+    return [
+      for (final part in raw.split(','))
+        if (part.contains('='))
+          {
+            'label': part.split('=').first.trim(),
+            'value': part.split('=').sublist(1).join('=').trim(),
+          },
+    ];
+  }
+
+  void _replaceRef(
+    List<Map<String, String>> images,
+    int index, {
+    String? title,
+    String? body,
+    String? refLabel,
+    String? specs,
+  }) {
+    final current = images[index];
+    final nextItem = <String, dynamic>{
+      if (current['path']!.isNotEmpty) 'path': current['path'],
+      if (current['moodboardImageId']!.isNotEmpty)
+        'moodboardImageId': int.tryParse(current['moodboardImageId']!),
+      'title': title ?? current['title'] ?? '',
+      'body': body ?? current['body'] ?? '',
+      'refLabel': refLabel ?? current['refLabel'] ?? '',
+      'specs': _specsFromLine(specs ?? current['specs'] ?? ''),
+    };
+    final raw = block.content['images'] ?? block.content['items'];
+    final list = [
+      if (raw is List)
+        for (final item in raw)
+          item is Map ? Map<String, dynamic>.from(item) : item,
+    ];
+    if (index < list.length) list[index] = nextItem;
+    onChanged(block.copyWith(content: {...block.content, 'images': list}));
   }
 }
 

@@ -5,6 +5,7 @@ import 'package:iris_dp/features/visual_bible/bible_block_catalog.dart';
 import 'package:iris_dp/features/visual_bible/export/model/bible_export_composition.dart';
 import 'package:iris_dp/features/visual_bible/export/pdf/bible_export_pdf_renderer.dart';
 import 'package:iris_dp/features/visual_bible/v2/model/bible_block.dart';
+import 'package:iris_dp/features/visual_bible/v2/model/bible_block_layout.dart';
 import 'package:iris_dp/features/visual_bible/visual_bible_export_config.dart';
 import 'package:iris_dp/features/visual_bible/visual_bible_model.dart';
 import 'package:iris_dp/shared/annotations/annotation_document.dart';
@@ -348,6 +349,104 @@ void main() {
     expect(text, contains('3200K'));
     expect(text, isNot(contains('Campo de texto')));
   });
+
+  test('respeta colSpan en la misma fila', () async {
+    final page = BibleExportPage(
+      id: 'grid',
+      label: 'Grid',
+      type: BibleExportPageType.generated,
+      blocks: [
+        BibleBlock(
+          id: 'l',
+          type: BibleBlockKind.text,
+          layout: const BibleBlockLayout(row: 0, col: 0, colSpan: 6),
+          content: const {'text': 'COL-A'},
+        ),
+        BibleBlock(
+          id: 'r',
+          type: BibleBlockKind.text,
+          layout: const BibleBlockLayout(row: 0, col: 6, colSpan: 6),
+          content: const {'text': 'COL-B'},
+        ),
+      ],
+    );
+    final bytes = await BibleExportPdfRenderer().buildBytes(
+      composition([page]),
+    );
+    final pdf = sf.PdfDocument(inputBytes: bytes);
+    addTearDown(pdf.dispose);
+    final text = normalized(sf.PdfTextExtractor(pdf).extractText());
+    expect(text, contains('COL-A'));
+    expect(text, contains('COL-B'));
+  });
+
+  test('PDF Dirección pinta listas, actos y refs narrativas', () async {
+    final bytes = await BibleExportPdfRenderer().buildBytes(
+      composition([
+        BibleExportPage(
+          id: 'direction',
+          label: 'Dirección',
+          type: BibleExportPageType.generated,
+          sortOrder: 0,
+          blocks: [
+            const BibleBlock(
+              id: 'tone',
+              type: BibleBlockKind.text,
+              content: {
+                'subsectionKind': 'tonePoints',
+                'label': 'Tono y atmósfera',
+                'points': [
+                  {'title': 'Frío e Industrial', 'body': 'Cian desaturado'},
+                ],
+              },
+            ),
+            const BibleBlock(
+              id: 'acts',
+              type: BibleBlockKind.dynamicBlocks,
+              content: {
+                'subsectionKind': 'acts',
+                'acts': [
+                  {
+                    'phase': 'ACTO I',
+                    'title': 'Orden y Rigidez',
+                    'body': 'Simetría',
+                  },
+                ],
+              },
+            ),
+            const BibleBlock(
+              id: 'refs',
+              type: BibleBlockKind.moodboardRefs,
+              content: {
+                'subsectionKind': 'narrativeRefs',
+                'images': [
+                  {
+                    'title': 'Composición y Espacio Negativo',
+                    'body': 'Tercio inferior',
+                    'refLabel': 'FINCHER / SE7EN',
+                    'specs': [
+                      {'label': 'LENS', 'value': '35mm'},
+                    ],
+                  },
+                ],
+              },
+            ),
+          ],
+        ),
+      ]),
+    );
+    final pdf = sf.PdfDocument(inputBytes: bytes);
+    addTearDown(pdf.dispose);
+    final text = normalized(
+      sf.PdfTextExtractor(pdf).extractText(startPageIndex: 0, endPageIndex: 0),
+    );
+    expect(text, contains('Frío e Industrial'));
+    expect(text, contains('Cian desaturado'));
+    expect(text, contains('Orden y Rigidez'));
+    expect(text, contains('Composición y Espacio Negativo'));
+    expect(text, contains('35mm'));
+    expect(text, isNot(contains('Tercio inferior Tercio inferior')));
+  });
 }
 
 Map<String, dynamic> _livePdfContent(BibleBlockKind kind) => switch (kind) {
@@ -380,5 +479,7 @@ Map<String, dynamic> _livePdfContent(BibleBlockKind kind) => switch (kind) {
       {'type': 'key', 'x': 10, 'y': 10},
     ],
   },
-  BibleBlockKind.dynamicBlocks => {'items': ['x']},
+  BibleBlockKind.dynamicBlocks => {
+    'items': ['x'],
+  },
 };

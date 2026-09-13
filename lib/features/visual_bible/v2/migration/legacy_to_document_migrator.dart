@@ -6,12 +6,12 @@ import '../../bible_block_catalog.dart';
 import '../../bible_blueprint.dart';
 import '../../visual_bible_model.dart';
 import '../model/bible_block.dart';
-import '../model/bible_block_layout.dart';
 import '../model/bible_document.dart';
 import '../model/bible_page.dart';
 import '../migration/freeform_v2_blocks_codec.dart';
 import '../migration/stitch_to_block_bridge.dart';
 import '../layout/page_layout_recipe_registry.dart';
+import '../bible_block_schemas.dart';
 import '../model/bible_page_mode.dart';
 import '../theme/bible_theme.dart';
 
@@ -114,6 +114,7 @@ abstract final class LegacyToDocumentMigrator {
       groups: docGroups,
       pages: pages,
       navigation: {if (lastPageId != null) 'lastPageId': lastPageId},
+      migrationVersion: 1,
       updatedAt: DateTime.now().toUtc(),
     );
   }
@@ -154,11 +155,15 @@ abstract final class LegacyToDocumentMigrator {
         row: row,
         values: values,
       );
-      blocks.add(
-        block.copyWith(
-          content: {...block.content, ...content},
-        ),
-      );
+      final merged = <String, dynamic>{...block.content, ...content};
+      if (section.id == 'direction') {
+        _applyApprovedDirectionFieldMapping(
+          fieldKey: field.key,
+          content: merged,
+          directionData: _parseDirectionData(values),
+        );
+      }
+      blocks.add(block.copyWith(content: merged));
       row += field.size == BibleWidgetSize.small ? 1 : 2;
     }
 
@@ -214,6 +219,56 @@ abstract final class LegacyToDocumentMigrator {
       ('texture', 'textureSettings') => data.imageTexture,
       _ => null,
     };
+  }
+
+  /// Solo los fieldKeys de [BibleBlockSchemas.approvedDirectionLegacyFieldKeys].
+  static void _applyApprovedDirectionFieldMapping({
+    required String fieldKey,
+    required Map<String, dynamic> content,
+    required Map<String, dynamic> directionData,
+  }) {
+    if (fieldKey == 'toneStrategies') {
+      content['subsectionKind'] = BibleBlockSchemas.tonePoints;
+      final points = BibleBlockSchemas.parsePointList(
+        directionData['tonePoints'],
+      );
+      if (points.isNotEmpty) content['points'] = points;
+      return;
+    }
+
+    if (fieldKey == 'transitionLanguage' || fieldKey == 'transitions') {
+      if (fieldKey == 'transitions' &&
+          !directionData.containsKey('transitionLanguage')) {
+        return;
+      }
+      content['subsectionKind'] = BibleBlockSchemas.transitions;
+      final points = BibleBlockSchemas.parsePointList(
+        directionData['transitionLanguage'],
+      );
+      if (points.isNotEmpty) content['points'] = points;
+      return;
+    }
+
+    if (fieldKey == 'emotionTags' || fieldKey == 'narrative') {
+      if (fieldKey == 'narrative' &&
+          !directionData.containsKey('emotionTags')) {
+        return;
+      }
+      content['subsectionKind'] = BibleBlockSchemas.narrativeIntent;
+      final tags = BibleBlockSchemas.parseTags(directionData['emotionTags']);
+      if (tags.isNotEmpty) content['tags'] = tags;
+    }
+  }
+
+  static Map<String, dynamic> _parseDirectionData(Map<String, String> values) {
+    final raw = values['directionData'];
+    if (raw == null || raw.isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    return const {};
   }
 
   static String? _narrativeForSection(String sectionId, VisualBibleData data) {
