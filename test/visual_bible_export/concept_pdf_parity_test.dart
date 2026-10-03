@@ -12,6 +12,7 @@ import 'package:iris_dp/features/visual_bible/visual_bible_model.dart';
 import 'package:iris_dp/features/visual_bible/visual_bible_pdf_service.dart';
 import 'package:iris_dp/shared/visual_bible/bible_section_fields.dart';
 import 'package:iris_dp/shared/visual_bible/bible_stitch_module_registry.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 String _extract(Uint8List bytes) {
@@ -26,6 +27,16 @@ String _extract(Uint8List bytes) {
     document.dispose();
   }
 }
+
+/// PNG 1×1 mínimo válido.
+final _tinyPng = Uint8List.fromList([
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+  0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+  0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+]);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -42,6 +53,7 @@ void main() {
           'colorSymbolism',
           'lightPhilosophy',
           'shadowTreatment',
+          'composition',
           'actNotes',
           'keyFrame',
           'references',
@@ -60,6 +72,7 @@ void main() {
 
   test('el PDF de Concepto lleva los puntos de la pantalla en su orden',
       () async {
+    SharedPreferences.setMockInitialValues({});
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     final projectId = await db.insertProject(
@@ -75,6 +88,15 @@ void main() {
         bibleId: bible.id,
         blockName: 'Acto I',
         dominantColors: jsonEncode(['#0F1C2E', '#F5B841']),
+      ),
+    );
+
+    final out = Directory('build/concept_parity')..createSync(recursive: true);
+    final still = File('${out.path}/still.png')..writeAsBytesSync(_tinyPng);
+    final imageId = await db.into(db.moodboardImages).insert(
+      MoodboardImagesCompanion.insert(
+        projectId: projectId,
+        imagePath: still.path,
       ),
     );
 
@@ -101,7 +123,16 @@ void main() {
           },
         ],
         'lightingMetrics': {'motivation': 'Prácticos visibles'},
+        'masterPalette': [
+          {'hex': '#112233', 'name': 'Noche'},
+        ],
         'shadowTreatment': 'Negros densos que anclan el cuadro',
+        'composition': 'Personaje pequeño en el tercio inferior',
+        'compositionMetrics': {'balance': 'Asimétrico'},
+        'pointImages': {
+          'shadowTreatment': [imageId],
+          'composition': [imageId, 999],
+        },
         'act2Intent': 'Contrastes agresivos',
         'keyFrameTech': '2.39:1 / 21mm / T2.8',
         'keyReferences': [
@@ -109,6 +140,14 @@ void main() {
             'film': 'Blade Runner 2049',
             'dp': 'Roger Deakins',
             'tone': 'Melancolía brutalista',
+          },
+          {
+            'refLabel': 'Good Time · Sean Price Williams',
+            'title': 'Color que aprieta',
+            'kind': 'Color',
+            'why': 'Neones sucios pegados a la piel',
+            'purpose': 'Las noches de la huida',
+            'imageId': imageId,
           },
         ],
       }),
@@ -140,13 +179,13 @@ void main() {
       sectionContentJsonById: bundle.sectionContentJsonById,
       sectionOrder: bundle.sectionOrder,
     );
-    final out = Directory('build/concept_parity')..createSync(recursive: true);
     File('${out.path}/concepto.pdf').writeAsBytesSync(bytes);
 
     final text = _extract(bytes);
     final expected = [
       'Naturalismo estilizado',
-      '#0F1C2E',
+      '#112233',
+      'NOCHE',
       'Azul profundo',
       'Soledad institucional',
       'Nota intercalada',
@@ -154,11 +193,17 @@ void main() {
       'Alto (4:1)',
       'Prácticos visibles',
       'Negros densos que anclan el cuadro',
+      'Personaje pequeño en el tercio inferior',
+      'Asimétrico',
       'El Descenso',
       'Contrastes agresivos',
       '2.39:1 / 21mm / T2.8',
       'Blade Runner 2049',
       'Melancolía brutalista',
+      'COLOR · GOOD TIME',
+      'Color que aprieta',
+      'Neones sucios pegados a la piel',
+      'Las noches de la huida',
     ];
     var cursor = -1;
     for (final piece in expected) {

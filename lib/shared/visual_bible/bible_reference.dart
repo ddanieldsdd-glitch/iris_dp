@@ -9,11 +9,21 @@ const kDirectionReferenceKinds = [
   'Visual',
 ];
 
-/// Referencia cinematográfica de Dirección.
+/// Tipos de referencia visual de Concepto: qué aspecto de la imagen interesa.
+const kConceptReferenceKinds = [
+  'Luz',
+  'Color',
+  'Composición',
+  'Textura',
+  'Atmósfera',
+  'Movimiento',
+];
+
+/// Referencia razonada de la biblia (Dirección, Concepto).
 ///
-/// No es solo una imagen: explica por qué el director cita la obra y para
-/// qué la quiere en la película. Se guarda en `directionData.refsMetadata`.
-class DirectionReference {
+/// No es solo una imagen: explica por qué se cita la obra y para qué se
+/// quiere en la película. Se guarda en el blob de la sección.
+class BibleReference {
   /// Obra y autor («Fincher / Se7en»).
   final String work;
 
@@ -42,7 +52,7 @@ class DirectionReference {
   final String techLabel;
   final String techValue;
 
-  const DirectionReference({
+  const BibleReference({
     this.work = '',
     this.title = '',
     this.kind = '',
@@ -59,16 +69,22 @@ class DirectionReference {
   bool get isEmpty =>
       work.isEmpty && title.isEmpty && why.isEmpty && purpose.isEmpty;
 
-  factory DirectionReference.fromJson(Map<dynamic, dynamic> json) {
+  factory BibleReference.fromJson(Map<dynamic, dynamic> json) {
     String text(String key) => json[key]?.toString().trim() ?? '';
+    String first(List<String> keys) =>
+        keys.map(text).firstWhere((v) => v.isNotEmpty, orElse: () => '');
+    // Fichas antiguas de Concepto: film, dp, director, tone, intent.
+    final credit = [text('dp'), text('director')].where((e) => e.isNotEmpty);
     final rawImage = json['imageId'];
-    return DirectionReference(
-      work: text('refLabel'),
-      title: text('title'),
+    return BibleReference(
+      work: text('refLabel').isNotEmpty
+          ? text('refLabel')
+          : [text('film'), ...credit].where((e) => e.isNotEmpty).join(' · '),
+      title: first(['title', 'film']),
       kind: text('kind'),
       // Las fichas antiguas solo tenían «Notas» (`body`).
-      why: text('why').isNotEmpty ? text('why') : text('body'),
-      purpose: text('purpose'),
+      why: first(['why', 'body', 'tone']),
+      purpose: first(['purpose', 'intent']),
       scene: text('scene'),
       imageId: rawImage is num ? rawImage.toInt() : null,
       legacyPairing: !json.containsKey('imageId'),
@@ -91,15 +107,15 @@ class DirectionReference {
         if (techValue.isNotEmpty) 'tech2Value': techValue,
       };
 
-  static List<DirectionReference> listFrom(Object? raw) => [
+  static List<BibleReference> listFrom(Object? raw) => [
         if (raw is List)
           for (final entry in raw)
-            if (entry is Map) DirectionReference.fromJson(entry),
+            if (entry is Map) BibleReference.fromJson(entry),
       ];
 
   /// Imagen de cada ficha: la vinculada, o la de su posición en las antiguas.
   static List<int?> resolveImages(
-    List<DirectionReference> references,
+    List<BibleReference> references,
     List<int> imageIds,
   ) =>
       [

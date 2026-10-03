@@ -15,9 +15,10 @@ import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
 import '../bible_moodboard_image_target.dart';
 import '../bible_navigation_scope.dart';
+import '../bible_point_images.dart';
 import '../bible_point_panel.dart';
-import '../../../../shared/visual_bible/direction_reference.dart';
-import 'direction_references.dart';
+import '../../../../shared/visual_bible/bible_reference.dart';
+import '../bible_references_deck.dart';
 import 'section_scaffold.dart';
 
 /// Dirección — layout Stitch Visual Bible (glass bento).
@@ -888,6 +889,26 @@ class DirectionSection extends ConsumerWidget {
               ),
             );
 
+        // Imágenes del moodboard que acompañan a un punto, bajo su panel.
+        Widget withImages(String key, Widget card) => data.id <= 0
+            ? card
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  card,
+                  const SizedBox(height: 8),
+                  BiblePointImages(
+                    projectId: projectId,
+                    bibleId: data.id,
+                    sectionId: BibleSectionId.direction,
+                    imageIds: biblePointImageIds(custom, key),
+                    onChanged: (ids) => _updateCustomData(ref, {
+                      'pointImages': biblePointImagesWith(custom, key, ids),
+                    }),
+                  ),
+                ],
+              );
+
         final refsCard = _GlassPanel(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -898,9 +919,13 @@ class DirectionSection extends ConsumerWidget {
                 palette: palette,
               ),
               const SizedBox(height: 16),
-              DirectionReferencesPanel(
+              BibleReferencesDeck(
                 projectId: projectId,
-                references: DirectionReference.listFrom(custom['refsMetadata']),
+                bibleId: data.id,
+                sectionId: BibleSectionId.direction,
+                kinds: kDirectionReferenceKinds,
+                copy: BibleReferencesCopy.direction,
+                references: BibleReference.listFrom(custom['refsMetadata']),
                 onChanged: (next) => _updateCustomData(ref, {
                   'refsMetadata': [for (final r in next) r.toJson()],
                 }),
@@ -933,12 +958,12 @@ class DirectionSection extends ConsumerWidget {
       fieldWidgets: {
         'header': header,
         'narrative': intentCard,
-        'tone': toneCard,
-        'strategies': strategyCard,
-        'acts': actsCard,
+        'tone': withImages('tone', toneCard),
+        'strategies': withImages('strategies', strategyCard),
+        'acts': withImages('acts', actsCard),
         if (data.id > 0) 'references': refsCard,
         'keyFrame': keyFrameCard,
-        'transitions': transitionsCard,
+        'transitions': withImages('transitions', transitionsCard),
       },
     );
       },
