@@ -77,9 +77,22 @@ Principio: la lista de puntos de cada sección (`BibleSectionDefinitions.content
 - [ ] **3.2 Hub con salud.** Total de planos, con planta, con storyboard, con lente, y una siguiente acción.
 - [ ] **3.3 Jornada de rodaje.** `ShootDays` y `ShootDayShots` (plano, orden, estado).
 
-## Fase 4 — Confianza en el dato (objetivo 2)
+## Fase 4 — Material técnico (objetivo 2)
 
-- [ ] Estado de verificación y fuente por ficha de cámara, lente y luz; semáforo en la ficha y en el laboratorio óptico. Revierte la decisión de no persistir fuentes (`BACKLOG.md`); se confirma al llegar.
+Añadida el 2026-10-03. Se hace después de Concepto y antes de las secciones técnicas de la biblia (Cámara, Óptica, Exposición, Formato), para que estas lean datos reales.
+
+Los Excel viven en `Desktop/LISTA DE MATERIAL TECNICO/`:
+
+- **Master** (`IRIS_DP_v1_8_MASTER_AUDITORIA_REGRESION…`, versión más reciente `v17`): libro de reglas. Define estados de dato, resultados de cobertura permitidos, validaciones y el contrato con la app. Manda como contrato y sus datos confirmados tienen prioridad.
+- **Lista v1.8** (`lista_de_material_tecnico_v1_8_IRIS_DP_fase_2_estudio.xlsx`): el volumen. 72 cámaras, 252 modos, 477 ópticas, 104 luces, con estado de verificación.
+
+- [x] **4.0 Almacenamiento marcado como «en desarrollo».** Distintivo en la pestaña y aviso en la calculadora. Tarjetas, tasas de datos y horas de grabación quedan fuera de este plan.
+- [ ] **4.1 Contrato de datos del master (schema 41).** Los diez estados de `77_Estados_Dato` y columnas de estado, confianza y fuente en cámaras, ópticas y luces. En ópticas, además: tipo de proyección, área de imagen, área de iluminación, estados de viñeteo, shading y portholing, y ficha por focal.
+- [ ] **4.2 Exportador e importador.** El script lee los dos libros sin `openpyxl`, aplica las validaciones de `86_Reglas_Validacion` y genera los packs de `assets/catalog/`: una sola fuente, el Excel. El import fusiona en vez de pisar con vacíos, y abrir Equipo deja de reimportar a la fuerza.
+- [ ] **4.3 Modos de sensor.** Cada modo trae también códec, fps máximo y relación de aspecto.
+- [ ] **4.4 Laboratorio óptico según el master.** Cobertura CUBRE / NO CUBRE con confianza, INDETERMINADO si falta el círculo de imagen o el gate, CONFLICTO, NO APLICA. Se elimina el círculo de imagen inventado; la tabla por formato solo se ofrece como estimación rotulada. Panel «¿Por qué?» con entradas, estado y fuente.
+- [ ] **4.5 Pantalla Equipo.** Semáforo por estado, fuente con enlace, campos verificados, ficha por focal y filtro «apto para cálculos».
+- [ ] **4.6 Secciones técnicas de la biblia** (dentro de 1.5). Cámara y sensor, Óptica, Exposición y Formato leen la cámara, el modo y la lente del proyecto en lugar de valores de ejemplo.
 
 ## Fase 5 — Limpieza (se intercala)
 

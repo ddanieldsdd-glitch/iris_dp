@@ -190,10 +190,36 @@ class _StorageCalculatorScreenState
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Estima data rates y espacio en tarjeta según resolución, fps, '
+          'Estima data rates y espacio total según resolución, fps, '
           'códec y duración. Modelo basado en PHFX framesToDataRate.',
           style: AppTypography.caption(palette)
               .copyWith(color: palette.textTertiary),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Container(
+          key: const ValueKey('storage_in_development_notice'),
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: palette.highlightYellow,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: palette.warning.withValues(alpha: 0.5)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.construction, size: 18, color: palette.warning),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'En desarrollo. Las cifras son estimaciones por fórmula: '
+                  'no salen del catálogo de material, no conocen tarjetas '
+                  'ni horas de grabación por medio, y no se guardan en el '
+                  'proyecto.',
+                  style: AppTypography.bodyMedium(palette),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: AppSpacing.lg),
         AppCard(

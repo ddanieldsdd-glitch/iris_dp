@@ -330,12 +330,26 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
           unselectedLabelColor: palette.textSecondary,
           indicatorColor: palette.accent,
           isScrollable: true,
-          tabs: const [
-            Tab(text: 'Cámaras'),
-            Tab(text: 'Ópticas'),
-            Tab(text: 'Luces'),
-            Tab(text: 'Laboratorio óptico'),
-            Tab(text: 'Almacenamiento'),
+          tabs: [
+            const Tab(text: 'Cámaras'),
+            const Tab(text: 'Ópticas'),
+            const Tab(text: 'Luces'),
+            const Tab(text: 'Laboratorio óptico'),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Almacenamiento'),
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.construction,
+                    size: 14,
+                    color: palette.warning,
+                    semanticLabel: 'En desarrollo',
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
