@@ -1,24 +1,38 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../shared/visual_bible/concept_points.dart';
 import '../../../../shared/visual_bible/format_pilot_resolve.dart';
 import '../../bible_section_fields.dart';
-import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
-import '../bible_moodboard_image_target.dart';
+import '../bible_navigation_scope.dart';
+import '../bible_point_panel.dart';
 import '../bible_visual_color_sheet.dart';
 import '../moodboard_strip.dart';
 import 'section_scaffold.dart';
+
+/// Datos propios de Concepto dentro de `contentJson` (`values.conceptData`).
+Map<String, dynamic> _conceptBlob(String? contentJson) {
+  if (contentJson == null || contentJson.isEmpty) return {};
+  try {
+    final decoded = jsonDecode(contentJson);
+    if (decoded is! Map<String, dynamic>) return {};
+    final values = decoded['values'] ?? decoded['_values'];
+    if (values is Map && values['conceptData'] is String) {
+      final blob = jsonDecode(values['conceptData'] as String);
+      if (blob is Map<String, dynamic>) return blob;
+    }
+  } catch (_) {}
+  return {};
+}
 
 /// Concepto de imagen — Stitch Production + Visual Bible (glass bento).
 class ConceptSection extends ConsumerWidget {
@@ -37,20 +51,7 @@ class ConceptSection extends ConsumerWidget {
     required this.onChanged,
   });
 
-  Map<String, dynamic> _getCustomData() {
-    if (sectionContentJson == null) return {};
-    try {
-      final decoded = jsonDecode(sectionContentJson!);
-      if (decoded is Map<String, dynamic> && decoded.containsKey('_values')) {
-        final vals = decoded['_values'] as Map<String, dynamic>;
-        if (vals.containsKey('conceptData')) {
-          return jsonDecode(vals['conceptData'] as String)
-              as Map<String, dynamic>;
-        }
-      }
-    } catch (_) {}
-    return {};
-  }
+  Map<String, dynamic> _getCustomData() => _conceptBlob(sectionContentJson);
 
   Future<void> _updateCustomData(
     WidgetRef ref,
@@ -119,6 +120,8 @@ class ConceptSection extends ConsumerWidget {
           formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
+          editSymbol: _editSymbolDialog,
+          editRef: _editRefDialog,
         ),
         'colorSymbolism': _ConceptStitchModule(
           slot: 'colorSymbolism',
@@ -131,6 +134,8 @@ class ConceptSection extends ConsumerWidget {
           formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
+          editSymbol: _editSymbolDialog,
+          editRef: _editRefDialog,
         ),
         'lightPhilosophy': _ConceptStitchModule(
           slot: 'lightPhilosophy',
@@ -143,6 +148,8 @@ class ConceptSection extends ConsumerWidget {
           formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
+          editSymbol: _editSymbolDialog,
+          editRef: _editRefDialog,
         ),
         'keyFrame': _ConceptStitchModule(
           slot: 'keyFrame',
@@ -155,6 +162,8 @@ class ConceptSection extends ConsumerWidget {
           formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
+          editSymbol: _editSymbolDialog,
+          editRef: _editRefDialog,
         ),
         'shadowTreatment': _ConceptStitchModule(
           slot: 'shadowTreatment',
@@ -167,6 +176,8 @@ class ConceptSection extends ConsumerWidget {
           formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
+          editSymbol: _editSymbolDialog,
+          editRef: _editRefDialog,
         ),
         'actComposition': _ConceptStitchModule(
           slot: 'actComposition',
@@ -179,6 +190,8 @@ class ConceptSection extends ConsumerWidget {
           formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
+          editSymbol: _editSymbolDialog,
+          editRef: _editRefDialog,
         ),
         'actNotes': _ConceptStitchModule(
           slot: 'actNotes',
@@ -191,6 +204,23 @@ class ConceptSection extends ConsumerWidget {
           formatSectionContentJson: formatSectionContentJson,
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
+          editSymbol: _editSymbolDialog,
+          editRef: _editRefDialog,
+        ),
+        if (data.id > 0)
+          'references': _ConceptStitchModule(
+          slot: 'references',
+          data: data,
+          projectId: projectId,
+          palette: palette,
+          db: db,
+          onChanged: onChanged,
+          sectionContentJson: sectionContentJson,
+          formatSectionContentJson: formatSectionContentJson,
+          parseHex: _parseHex,
+          updateCustomData: _updateCustomData,
+          editSymbol: _editSymbolDialog,
+          editRef: _editRefDialog,
         ),
       },
     );
@@ -210,8 +240,10 @@ class ConceptSection extends ConsumerWidget {
       nameHint: 'Nombre poético del color',
       includeMeaning: true,
       initialMeaning: meaning,
+      canDelete: name.isNotEmpty,
     );
-    if (picked == null || picked.delete) return null;
+    if (picked == null) return null;
+    if (picked.delete) return const {'_delete': true};
     return {
       'poeticName': picked.name,
       'hex': picked.hex,
@@ -282,102 +314,6 @@ class ConceptSection extends ConsumerWidget {
   }
 }
 
-class _ConceptIntro extends StatelessWidget {
-  final VisualBibleData data;
-  final BibleChanged onChanged;
-  final String sceneTag;
-  final ValueChanged<String> onSceneTagEdit;
-
-  const _ConceptIntro({
-    required this.data,
-    required this.onChanged,
-    required this.sceneTag,
-    required this.onSceneTagEdit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 12,
-          runSpacing: 8,
-          children: [
-            Text(
-              'Concepto de Imagen',
-              style: AppTypography.displayMedium(palette).copyWith(
-                fontSize: 40,
-                letterSpacing: -0.8,
-              ),
-            ),
-            Material(
-              color: palette.accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(6),
-              child: InkWell(
-                onTap: () async {
-                  final c = TextEditingController(text: sceneTag);
-                  final v = await showDialog<String>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Escena / contexto'),
-                      content: TextField(
-                        controller: c,
-                        autofocus: true,
-                        decoration: const InputDecoration(
-                          hintText: 'SCENE 4A — THE DUNE',
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: const Text('Cancelar'),
-                        ),
-                        FilledButton(
-                          onPressed: () => Navigator.pop(ctx, c.text.trim()),
-                          child: const Text('Guardar'),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (v != null) onSceneTagEdit(v);
-                },
-                borderRadius: BorderRadius.circular(6),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  child: Text(
-                    sceneTag.isEmpty ? '+ ESCENA' : sceneTag.toUpperCase(),
-                    style: AppTypography.mono(palette).copyWith(
-                      fontSize: 12,
-                      color: palette.accent,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        BibleTextField(
-          label: '',
-          hint:
-              'El ADN visual del proyecto. Naturalismo estilizado, contrastes…',
-          maxLines: 3,
-          initialValue: data.conceptNarrativeIntent ?? data.visualConcept ?? '',
-          onChanged: (v) {
-            data.conceptNarrativeIntent = v;
-            data.visualConcept = v;
-            onChanged(data);
-          },
-        ),
-      ],
-    );
-  }
-}
-
 class _GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -392,18 +328,7 @@ class _GlassCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: padding,
-      decoration: BoxDecoration(
-        color: const Color(0xB31A1A1C),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.white.withValues(alpha: 0.05),
-            blurRadius: 0,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
+      decoration: BiblePointPanel.decoration(context.palette),
       child: child,
     );
   }
@@ -424,339 +349,15 @@ class _CardHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, color: palette.accent, size: 20),
+        Icon(icon, color: palette.accent, size: 16),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: AppTypography.titleMedium(palette).copyWith(fontSize: 18),
-        ),
-      ],
-    );
-  }
-}
-
-class _TechScrubRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final AppPalette palette;
-  final ValueChanged<String> onEdit;
-  final bool accent;
-  final bool warn;
-
-  const _TechScrubRow({
-    required this.label,
-    required this.value,
-    required this.palette,
-    required this.onEdit,
-    this.accent = false,
-    this.warn = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = warn
-        ? const Color(0xFFFFB4AB)
-        : accent
-            ? palette.accent
-            : palette.textPrimary;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: () async {
-          final c = TextEditingController(text: value);
-          final v = await showDialog<String>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: Text(label),
-              content: TextField(controller: c, autofocus: true),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancelar'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx, c.text.trim()),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-          if (v != null && v.isNotEmpty) onEdit(v);
-        },
-        child: Container(
-          padding: const EdgeInsets.only(bottom: 10),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: AppTypography.bodyMedium(palette).copyWith(
-                    color: palette.textSecondary,
-                  ),
-                ),
-              ),
-              Text(
-                value,
-                style: AppTypography.mono(palette).copyWith(
-                  color: color,
-                  fontSize: 13,
-                ),
-              ),
-            ],
+        Expanded(
+          child: Text(
+            title.toUpperCase(),
+            style: BiblePointPanel.labelStyle(palette),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _TextureBars extends StatelessWidget {
-  final int level;
-  final AppPalette palette;
-  final ValueChanged<int> onChanged;
-
-  const _TextureBars({
-    required this.level,
-    required this.palette,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 1; i <= 4; i++)
-          Padding(
-            padding: EdgeInsets.only(left: i == 1 ? 0 : 4),
-            child: GestureDetector(
-              onTap: () => onChanged(i),
-              child: Container(
-                width: 28,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: i <= level
-                      ? palette.accent
-                      : palette.surfaceElevated,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-          ),
       ],
-    );
-  }
-}
-
-class _CinematicRefsGrid extends ConsumerWidget {
-  final int projectId;
-  final AppPalette palette;
-  final String keyFrameTitle;
-  final String keyFrameTech;
-  final VoidCallback onEditKeyFrame;
-
-  const _CinematicRefsGrid({
-    required this.projectId,
-    required this.palette,
-    required this.keyFrameTitle,
-    required this.keyFrameTech,
-    required this.onEditKeyFrame,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.watch(databaseProvider);
-    return StreamBuilder<List<MoodboardImage>>(
-      stream: db.watchMoodboardImagesForSection(
-        projectId,
-        BibleSectionId.concept,
-      ),
-      builder: (context, snap) {
-        final images = snap.data ?? [];
-        if (images.isEmpty) {
-          return Text(
-            'Sin referencias aún. Añade frames o asigna en Moodboard.',
-            style: AppTypography.caption(palette).copyWith(
-              color: palette.textTertiary,
-            ),
-          );
-        }
-
-        final thumbs = images.take(3).toList();
-        final hero = images.length > 3 ? images[3] : images.first;
-
-        return Column(
-          children: [
-            LayoutBuilder(
-              builder: (context, c) {
-                final w = c.maxWidth.isFinite
-                    ? c.maxWidth
-                    : MediaQuery.sizeOf(context).width;
-                final cols = w >= 520 ? 3 : 2;
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: thumbs.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: cols,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 16 / 9,
-                  ),
-                  itemBuilder: (context, i) {
-                    final model = MoodboardImageModel.fromRow(thumbs[i]);
-                    final file = File(model.imagePath);
-                    return ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          file.existsSync()
-                              ? Image.file(file, fit: BoxFit.cover)
-                              : ColoredBox(color: palette.surfaceOverlay),
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [
-                                    Color(0xCC131315),
-                                    Colors.transparent,
-                                  ],
-                                ),
-                              ),
-                              child: Text(
-                                (model.filmReference ??
-                                        model.caption ??
-                                        'REF')
-                                    .toUpperCase(),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.label(palette).copyWith(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onEditKeyFrame,
-                borderRadius: BorderRadius.circular(6),
-                child: BibleMoodboardImageTarget(
-                  projectId: projectId,
-                  sectionId: BibleSectionId.concept,
-                  hint: 'Clic aquí → ⌘V para pegar key frame',
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: AspectRatio(
-                      aspectRatio: 21 / 9,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Builder(
-                          builder: (_) {
-                            final model = MoodboardImageModel.fromRow(hero);
-                            final file = File(model.imagePath);
-                            return file.existsSync()
-                                ? Image.file(file, fit: BoxFit.cover)
-                                : ColoredBox(
-                                    color: palette.surfaceOverlay,
-                                    child: Center(
-                                      child: TextButton.icon(
-                                        onPressed: () =>
-                                            MoodboardHelpers.addManualImages(
-                                          db: db,
-                                          projectId: projectId,
-                                          category: MoodboardCategory.framing,
-                                          assignedSections: [
-                                            BibleSectionId.concept,
-                                          ],
-                                        ),
-                                        icon: Icon(
-                                          Icons.add_photo_alternate_outlined,
-                                          color: palette.accent,
-                                        ),
-                                        label: Text(
-                                          'Añadir key frame',
-                                          style:
-                                              TextStyle(color: palette.accent),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                          },
-                        ),
-                        const DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [
-                                Color(0xE6131315),
-                                Color(0x33131315),
-                                Colors.transparent,
-                              ],
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: 20,
-                          right: 20,
-                          bottom: 16,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                keyFrameTitle,
-                                style: AppTypography.titleMedium(palette)
-                                    .copyWith(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                keyFrameTech,
-                                style: AppTypography.mono(palette).copyWith(
-                                  fontSize: 12,
-                                  color: palette.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }
@@ -1096,7 +697,7 @@ class _ReferenceMetaCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xB31A1A1C),
+      color: palette.surfaceOverlay.withValues(alpha: 0.45),
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: onEdit,
@@ -1105,7 +706,7 @@ class _ReferenceMetaCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            border: Border.all(color: palette.borderBright),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1181,6 +782,16 @@ class _ConceptStitchModule extends ConsumerWidget {
   final Color? Function(String?) parseHex;
   final Future<void> Function(WidgetRef ref, Map<String, dynamic> update)
       updateCustomData;
+  final Future<Map<String, dynamic>?> Function(
+    BuildContext context, {
+    required String name,
+    required String meaning,
+    required String hex,
+  }) editSymbol;
+  final Future<Map<String, dynamic>?> Function(
+    BuildContext context,
+    Map<String, dynamic> initial,
+  ) editRef;
 
   const _ConceptStitchModule({
     required this.slot,
@@ -1193,32 +804,19 @@ class _ConceptStitchModule extends ConsumerWidget {
     this.formatSectionContentJson,
     required this.parseHex,
     required this.updateCustomData,
+    required this.editSymbol,
+    required this.editRef,
   });
-
-  Map<String, dynamic> _custom() {
-    if (sectionContentJson == null) return {};
-    try {
-      final decoded = jsonDecode(sectionContentJson!);
-      if (decoded is Map<String, dynamic> && decoded.containsKey('_values')) {
-        final vals = decoded['_values'] as Map<String, dynamic>;
-        if (vals.containsKey('conceptData')) {
-          return jsonDecode(vals['conceptData'] as String)
-              as Map<String, dynamic>;
-        }
-      }
-    } catch (_) {}
-    return {};
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final custom = _custom();
+    final custom = _conceptBlob(sectionContentJson);
     final colorSymbols = (custom['colorSymbols'] as List<dynamic>? ?? [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
     final actTitles = (custom['actTitles'] as Map?)?.cast<String, String>() ??
-        {'1': 'El Orden Frágil', '2': 'El Descenso', '3': 'La Resolución'};
+        kConceptActTitles;
     final actComp =
         (custom['actComposition'] as Map?)?.cast<String, String>() ??
             {
@@ -1229,9 +827,25 @@ class _ConceptStitchModule extends ConsumerWidget {
     final metrics =
         (custom['lightingMetrics'] as Map?)?.cast<String, String>() ??
             {
-              'contrast': data.contrastStyle ?? 'ALTO (4:1)',
-              'motivation': 'PRÁCTICOS VISIBLES',
+              if (data.contrastStyle?.isNotEmpty == true)
+                'contrast': data.contrastStyle!,
             };
+    final keyRefs = (custom['keyReferences'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    Widget addButton(String label, VoidCallback onTap) => Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: onTap,
+            icon: Icon(Icons.add, size: 16, color: palette.textSecondary),
+            label: Text(
+              label.toUpperCase(),
+              style: BiblePointPanel.labelStyle(palette),
+            ),
+          ),
+        );
     final shadowTreatment = custom['shadowTreatment'] as String? ?? '';
     final keyFrameTitle =
         custom['keyFrameTitle'] as String? ?? 'Key Frame Analysis';
@@ -1249,9 +863,10 @@ class _ConceptStitchModule extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Paleta de Color',
-                style: AppTypography.titleMedium(palette).copyWith(fontSize: 20),
+              _CardHeader(
+                icon: Icons.palette_outlined,
+                title: 'Paleta Maestra',
+                palette: palette,
               ),
               const SizedBox(height: 20),
               StreamBuilder<List<VisualBibleColorBlock>>(
@@ -1296,11 +911,48 @@ class _ConceptStitchModule extends ConsumerWidget {
                 palette: palette,
               ),
               const SizedBox(height: 16),
-              for (final sym in colorSymbols)
-                Text(
-                  '${sym['poeticName'] ?? 'Color'} · ${sym['narrativeMeaning'] ?? ''}',
-                  style: AppTypography.bodyMedium(palette),
+              for (var i = 0; i < colorSymbols.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _SymbolCard(
+                    hex: colorSymbols[i]['hex']?.toString() ?? '',
+                    name: colorSymbols[i]['poeticName']?.toString() ?? 'Color',
+                    meaning:
+                        colorSymbols[i]['narrativeMeaning']?.toString() ?? '',
+                    palette: palette,
+                    parseHex: parseHex,
+                    onEdit: () async {
+                      final edited = await editSymbol(
+                        context,
+                        name: colorSymbols[i]['poeticName']?.toString() ?? '',
+                        meaning:
+                            colorSymbols[i]['narrativeMeaning']?.toString() ??
+                                '',
+                        hex: colorSymbols[i]['hex']?.toString() ?? '',
+                      );
+                      if (edited == null) return;
+                      final next = [...colorSymbols];
+                      if (edited['_delete'] == true) {
+                        next.removeAt(i);
+                      } else {
+                        next[i] = edited;
+                      }
+                      await updateCustomData(ref, {'colorSymbols': next});
+                    },
+                  ),
                 ),
+              addButton('Añadir simbología', () async {
+                final added = await editSymbol(
+                  context,
+                  name: '',
+                  meaning: '',
+                  hex: '',
+                );
+                if (added == null || added['_delete'] == true) return;
+                await updateCustomData(ref, {
+                  'colorSymbols': [...colorSymbols, added],
+                });
+              }),
             ],
           ),
         ),
@@ -1326,9 +978,75 @@ class _ConceptStitchModule extends ConsumerWidget {
                 },
               ),
               const SizedBox(height: 12),
-              Text(
-                'Contraste: ${metrics['contrast'] ?? '—'}',
-                style: AppTypography.caption(palette),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final (key, label) in kConceptLightMetrics)
+                    SizedBox(
+                      width: 132,
+                      child: _MetricTile(
+                        label: label,
+                        value: metrics[key] ?? '—',
+                        palette: palette,
+                        onEdit: (v) => updateCustomData(ref, {
+                          'lightingMetrics': {...metrics, key: v},
+                        }),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      'references' => _GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CardHeader(
+                icon: Icons.collections_outlined,
+                title: 'Referencias Clave',
+                palette: palette,
+              ),
+              const SizedBox(height: 16),
+              MoodboardStrip.forSection(
+                projectId: projectId,
+                sectionId: BibleSectionId.concept,
+                showTitle: false,
+                showCaptions: true,
+              ),
+              const SizedBox(height: 12),
+              for (var i = 0; i < keyRefs.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _ReferenceMetaCard(
+                    data: keyRefs[i],
+                    palette: palette,
+                    onEdit: () async {
+                      final edited = await editRef(context, keyRefs[i]);
+                      if (edited == null) return;
+                      final next = [...keyRefs]..[i] = edited;
+                      await updateCustomData(ref, {'keyReferences': next});
+                    },
+                  ),
+                ),
+              Row(
+                children: [
+                  addButton('Añadir ficha', () async {
+                    final added = await editRef(context, const {});
+                    if (added == null) return;
+                    await updateCustomData(ref, {
+                      'keyReferences': [...keyRefs, added],
+                    });
+                  }),
+                  addButton(
+                    'Moodboard',
+                    () => BibleNavigationScope.openMoodboardForSection(
+                      context,
+                      BibleSectionId.concept,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1337,18 +1055,13 @@ class _ConceptStitchModule extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(keyFrameTitle,
-                  style:
-                      AppTypography.titleMedium(palette).copyWith(fontSize: 20)),
+              _CardHeader(
+                icon: Icons.movie_filter_outlined,
+                title: keyFrameTitle,
+                palette: palette,
+              ),
               const SizedBox(height: 8),
               Text(keyFrameTech, style: AppTypography.mono(palette)),
-              const SizedBox(height: 12),
-              MoodboardStrip.forSection(
-                projectId: projectId,
-                sectionId: BibleSectionId.concept,
-                showTitle: false,
-                showCaptions: true,
-              ),
             ],
           ),
         ),
@@ -1356,9 +1069,10 @@ class _ConceptStitchModule extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Tratamiento de Sombras',
-                style: AppTypography.titleMedium(palette).copyWith(fontSize: 20),
+              _CardHeader(
+                icon: Icons.contrast,
+                title: 'Tratamiento de Sombras',
+                palette: palette,
               ),
               const SizedBox(height: 12),
               BibleTextField(
@@ -1375,9 +1089,10 @@ class _ConceptStitchModule extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Composición por Actos',
-                style: AppTypography.titleMedium(palette).copyWith(fontSize: 20),
+              _CardHeader(
+                icon: Icons.grid_view_outlined,
+                title: 'Composición por Actos',
+                palette: palette,
               ),
               const SizedBox(height: 14),
               for (final n in ['1', '2', '3'])
