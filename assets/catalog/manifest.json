@@ -1,6 +1,7 @@
 {
- "version": 7,
+ "version": 8,
  "camerasUrl": "cameras.json",
  "lensesUrl": "lenses.json",
- "lightsUrl": "lights.json"
+ "lightsUrl": "lights.json",
+ "recordingUrl": "recording.json"
 }

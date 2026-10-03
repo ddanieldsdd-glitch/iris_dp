@@ -29,8 +29,12 @@ enum CatalogDataStatus {
         noPublicado || indeterminado || pendiente => CatalogCalcUse.none,
       };
 
+  /// Un dato observado (medido en un ensayo) también entra en cálculos; el
+  /// resultado debe presentarse como procedente de una medición.
   bool get usableInCalculations =>
-      calcUse == CatalogCalcUse.high || calcUse == CatalogCalcUse.medium;
+      calcUse == CatalogCalcUse.high ||
+      calcUse == CatalogCalcUse.medium ||
+      calcUse == CatalogCalcUse.observed;
 
   /// Lee un estado del master o de la lista de material (v1.7 / v1.8).
   /// Lo que no se reconoce queda como [pendiente]: nunca se promociona.

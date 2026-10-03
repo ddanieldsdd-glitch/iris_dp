@@ -1,0 +1,685 @@
+{
+ "cameras": [
+  {
+   "cameraId": "arri_alexa_sxt",
+   "fps": 24,
+   "media": [
+    {
+     "id": "sxrcapturedrive2tb",
+     "name": "SXR Capture Drive 2 TB",
+     "capacityGb": 2000.0,
+     "adapter": "SXR Adapter",
+     "arriraw": true,
+     "prores": true,
+     "proresRaid": true,
+     "interface": "20 Gbit/s",
+     "dock": "CODEX SXR Capture Drive Dock (Thunderbolt 3, hasta 20 Gbit/s; solo macOS + CODEX Platform)",
+     "dataStatus": "CONFIRMADO",
+     "sourceLabel": "ARRI — ALEXA SXT FAQ (medios, adaptadores, RAID ProRes, formatos anamórficos)",
+     "sourceUrl": "https://www.arri.com/en/learn-help/learn-help-camera-system/frequently-asked-questions/alexa-sxt-faq",
+     "note": "Medio de referencia para ARRIRAW Open Gate"
+    },
+    {
+     "id": "sxrcapturedrive1tb",
+     "name": "SXR Capture Drive 1 TB",
+     "capacityGb": 1000.0,
+     "adapter": "SXR Adapter",
+     "arriraw": true,
+     "prores": true,
+     "proresRaid": true,
+     "interface": "20 Gbit/s",
+     "dock": "Idem",
+     "dataStatus": "CONFIRMADO",
+     "sourceLabel": "ARRI — ALEXA SXT FAQ (medios, adaptadores, RAID ProRes, formatos anamórficos)",
+     "sourceUrl": "https://www.arri.com/en/learn-help/learn-help-camera-system/frequently-asked-questions/alexa-sxt-faq"
+    },
+    {
+     "id": "xrcapturedrive512gb",
+     "name": "XR Capture Drive 512 GB",
+     "capacityGb": 512.0,
+     "adapter": "XR Adapter",
+     "arriraw": true,
+     "prores": true,
+     "proresRaid": true,
+     "interface": "6,7 Gbit/s",
+     "dock": "XR Capture Drive Dock (TB o USB 3)",
+     "dataStatus": "CONFIRMADO",
+     "sourceLabel": "ARRI — ALEXA SXT FAQ (medios, adaptadores, RAID ProRes, formatos anamórficos)",
+     "sourceUrl": "https://www.arri.com/en/learn-help/learn-help-camera-system/frequently-asked-questions/alexa-sxt-faq",
+     "note": "Los XR de ALEXA XT funcionan en SXT con XR Adapter"
+    },
+    {
+     "id": "cfast20256gblexar3600x",
+     "name": "CFast 2.0 256 GB (Lexar 3600x)",
+     "capacityGb": 256.0,
+     "adapter": "CFast 2.0 Adapter 2",
+     "arriraw": false,
+     "prores": true,
+     "proresRaid": false,
+     "interface": "—",
+     "dock": "Lector CFast 2.0 USB 3 / Thunderbolt estándar",
+     "dataStatus": "CONFIRMADO",
+     "sourceLabel": "ARRI — ALEXA SXT Studio Technical Data (PDF alojado por AFC)",
+     "sourceUrl": "https://www.afcinema.com/IMG/pdf/3/0/f/arri_group_alexa_sxt_studio_technical_data.pdf",
+     "note": "Requiere SUP 2.0 o posterior (F13). Opción más barata para ProRes"
+    },
+    {
+     "id": "sxspro128gb",
+     "name": "SxS PRO+ 128 GB",
+     "capacityGb": 128.0,
+     "adapter": "SxS Adapter 2",
+     "arriraw": false,
+     "prores": true,
+     "proresRaid": false,
+     "interface": "—",
+     "dock": "Lector SxS",
+     "dataStatus": "CONFIRMADO",
+     "sourceLabel": "ARRI — ALEXA SXT FAQ (medios, adaptadores, RAID ProRes, formatos anamórficos)",
+     "sourceUrl": "https://www.arri.com/en/learn-help/learn-help-camera-system/frequently-asked-questions/alexa-sxt-faq",
+     "note": "No admite ProRes 4444 XQ en 3.2K/4K"
+    },
+    {
+     "id": "sxspropro64gb",
+     "name": "SxS PRO / PRO+ 64 GB",
+     "capacityGb": 64.0,
+     "adapter": "SxS Adapter 2",
+     "arriraw": false,
+     "prores": true,
+     "proresRaid": false,
+     "interface": "—",
+     "dock": "Lector SxS",
+     "dataStatus": "CONFIRMADO",
+     "sourceLabel": "ARRI — ALEXA SXT FAQ (medios, adaptadores, RAID ProRes, formatos anamórficos)",
+     "sourceUrl": "https://www.arri.com/en/learn-help/learn-help-camera-system/frequently-asked-questions/alexa-sxt-faq",
+     "note": "Legacy"
+    }
+   ],
+   "formats": [
+    {
+     "id": "REC-01",
+     "mode": "16:9 ProRes HD",
+     "codec": "422",
+     "rateMbPerSec": 17.0,
+     "gbPerHour": 61.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 65,
+      "sxspro128gb": 123,
+      "cfast20256gblexar3600x": 258,
+      "xrcapturedrive512gb": 242,
+      "sxrcapturedrive1tb": 484,
+      "sxrcapturedrive2tb": 969
+     }
+    },
+    {
+     "id": "REC-02",
+     "mode": "16:9 ProRes HD",
+     "codec": "422 HQ",
+     "rateMbPerSec": 25.0,
+     "gbPerHour": 90.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 43,
+      "sxspro128gb": 82,
+      "cfast20256gblexar3600x": 172,
+      "xrcapturedrive512gb": 162,
+      "sxrcapturedrive1tb": 323,
+      "sxrcapturedrive2tb": 646
+     }
+    },
+    {
+     "id": "REC-03",
+     "mode": "16:9 ProRes HD",
+     "codec": "4444",
+     "rateMbPerSec": 37.0,
+     "gbPerHour": 133.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 29,
+      "sxspro128gb": 55,
+      "cfast20256gblexar3600x": 115,
+      "xrcapturedrive512gb": 108,
+      "sxrcapturedrive1tb": 215,
+      "sxrcapturedrive2tb": 431
+     }
+    },
+    {
+     "id": "REC-04",
+     "mode": "16:9 ProRes HD",
+     "codec": "4444 XQ",
+     "rateMbPerSec": 55.0,
+     "gbPerHour": 198.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 19,
+      "sxspro128gb": 36,
+      "cfast20256gblexar3600x": 77,
+      "xrcapturedrive512gb": 72,
+      "sxrcapturedrive1tb": 144,
+      "sxrcapturedrive2tb": 287
+     }
+    },
+    {
+     "id": "REC-05",
+     "mode": "16:9 ProRes 2K",
+     "codec": "422",
+     "rateMbPerSec": 19.0,
+     "gbPerHour": 68.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 57,
+      "sxspro128gb": 108,
+      "cfast20256gblexar3600x": 226,
+      "xrcapturedrive512gb": 212,
+      "sxrcapturedrive1tb": 424,
+      "sxrcapturedrive2tb": 848
+     }
+    },
+    {
+     "id": "REC-06",
+     "mode": "16:9 ProRes 2K",
+     "codec": "422 HQ",
+     "rateMbPerSec": 28.0,
+     "gbPerHour": 101.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 38,
+      "sxspro128gb": 72,
+      "cfast20256gblexar3600x": 151,
+      "xrcapturedrive512gb": 141,
+      "sxrcapturedrive1tb": 283,
+      "sxrcapturedrive2tb": 565
+     }
+    },
+    {
+     "id": "REC-07",
+     "mode": "16:9 ProRes 2K",
+     "codec": "4444",
+     "rateMbPerSec": 43.0,
+     "gbPerHour": 155.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 25,
+      "sxspro128gb": 48,
+      "cfast20256gblexar3600x": 100,
+      "xrcapturedrive512gb": 94,
+      "sxrcapturedrive1tb": 188,
+      "sxrcapturedrive2tb": 377
+     }
+    },
+    {
+     "id": "REC-08",
+     "mode": "16:9 ProRes 2K",
+     "codec": "4444 XQ",
+     "rateMbPerSec": 64.0,
+     "gbPerHour": 230.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 17,
+      "sxspro128gb": 32,
+      "cfast20256gblexar3600x": 67,
+      "xrcapturedrive512gb": 63,
+      "sxrcapturedrive1tb": 126,
+      "sxrcapturedrive2tb": 251
+     }
+    },
+    {
+     "id": "REC-09",
+     "mode": "16:9 ProRes 3.2K",
+     "codec": "422",
+     "rateMbPerSec": 46.0,
+     "gbPerHour": 166.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 23,
+      "sxspro128gb": 44,
+      "cfast20256gblexar3600x": 93,
+      "xrcapturedrive512gb": 87,
+      "sxrcapturedrive1tb": 174,
+      "sxrcapturedrive2tb": 347
+     }
+    },
+    {
+     "id": "REC-10",
+     "mode": "16:9 ProRes 3.2K",
+     "codec": "422 HQ",
+     "rateMbPerSec": 69.0,
+     "gbPerHour": 248.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 16,
+      "sxspro128gb": 29,
+      "cfast20256gblexar3600x": 62,
+      "xrcapturedrive512gb": 58,
+      "sxrcapturedrive1tb": 116,
+      "sxrcapturedrive2tb": 232
+     }
+    },
+    {
+     "id": "REC-11",
+     "mode": "16:9 ProRes 3.2K",
+     "codec": "4444",
+     "rateMbPerSec": 104.0,
+     "gbPerHour": 374.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 10,
+      "sxspro128gb": 20,
+      "cfast20256gblexar3600x": 41,
+      "xrcapturedrive512gb": 39,
+      "sxrcapturedrive1tb": 77,
+      "sxrcapturedrive2tb": 154
+     }
+    },
+    {
+     "id": "REC-12",
+     "mode": "16:9 ProRes 3.2K",
+     "codec": "4444 XQ",
+     "rateMbPerSec": 158.0,
+     "gbPerHour": 569.0,
+     "minutesByMedia": {
+      "cfast20256gblexar3600x": 27,
+      "xrcapturedrive512gb": 26,
+      "sxrcapturedrive1tb": 51,
+      "sxrcapturedrive2tb": 103
+     }
+    },
+    {
+     "id": "REC-13",
+     "mode": "16:9 ProRes 4K UHD",
+     "codec": "422",
+     "rateMbPerSec": 67.0,
+     "gbPerHour": 241.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 16,
+      "sxspro128gb": 31,
+      "cfast20256gblexar3600x": 64,
+      "xrcapturedrive512gb": 60,
+      "sxrcapturedrive1tb": 121,
+      "sxrcapturedrive2tb": 241
+     }
+    },
+    {
+     "id": "REC-14",
+     "mode": "16:9 ProRes 4K UHD",
+     "codec": "422 HQ",
+     "rateMbPerSec": 99.0,
+     "gbPerHour": 356.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 11,
+      "sxspro128gb": 20,
+      "cfast20256gblexar3600x": 43,
+      "xrcapturedrive512gb": 40,
+      "sxrcapturedrive1tb": 80,
+      "sxrcapturedrive2tb": 161
+     }
+    },
+    {
+     "id": "REC-15",
+     "mode": "16:9 ProRes 4K UHD",
+     "codec": "4444",
+     "rateMbPerSec": 147.0,
+     "gbPerHour": 529.0,
+     "minutesByMedia": {
+      "cfast20256gblexar3600x": 29,
+      "xrcapturedrive512gb": 27,
+      "sxrcapturedrive1tb": 54,
+      "sxrcapturedrive2tb": 107
+     }
+    },
+    {
+     "id": "REC-16",
+     "mode": "16:9 ProRes 4K UHD",
+     "codec": "4444 XQ",
+     "rateMbPerSec": 225.0,
+     "gbPerHour": 810.0,
+     "minutesByMedia": {
+      "cfast20256gblexar3600x": 19,
+      "xrcapturedrive512gb": 18,
+      "sxrcapturedrive1tb": 36,
+      "sxrcapturedrive2tb": 71
+     }
+    },
+    {
+     "id": "REC-17",
+     "mode": "16:9 ARRIRAW 2.8K",
+     "codec": "ARRIRAW",
+     "rateMbPerSec": 175.0,
+     "gbPerHour": 630.0,
+     "minutesByMedia": {
+      "xrcapturedrive512gb": 48,
+      "sxrcapturedrive1tb": 95,
+      "sxrcapturedrive2tb": 190
+     }
+    },
+    {
+     "id": "REC-18",
+     "mode": "16:9 ARRIRAW 3.2K",
+     "codec": "ARRIRAW",
+     "rateMbPerSec": 212.0,
+     "gbPerHour": 763.0,
+     "minutesByMedia": {
+      "xrcapturedrive512gb": 39,
+      "sxrcapturedrive1tb": 79,
+      "sxrcapturedrive2tb": 157
+     }
+    },
+    {
+     "id": "REC-19",
+     "mode": "6:5 ProRes 2K Anamórfico",
+     "codec": "422",
+     "rateMbPerSec": 14.0,
+     "gbPerHour": 50.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 76,
+      "sxspro128gb": 145,
+      "cfast20256gblexar3600x": 304,
+      "xrcapturedrive512gb": 285,
+      "sxrcapturedrive1tb": 569,
+      "sxrcapturedrive2tb": 1138
+     }
+    },
+    {
+     "id": "REC-20",
+     "mode": "6:5 ProRes 2K Anamórfico",
+     "codec": "422 HQ",
+     "rateMbPerSec": 21.0,
+     "gbPerHour": 76.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 51,
+      "sxspro128gb": 96,
+      "cfast20256gblexar3600x": 202,
+      "xrcapturedrive512gb": 189,
+      "sxrcapturedrive1tb": 378,
+      "sxrcapturedrive2tb": 757
+     }
+    },
+    {
+     "id": "REC-21",
+     "mode": "6:5 ProRes 2K Anamórfico",
+     "codec": "4444",
+     "rateMbPerSec": 32.0,
+     "gbPerHour": 115.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 34,
+      "sxspro128gb": 64,
+      "cfast20256gblexar3600x": 135,
+      "xrcapturedrive512gb": 126,
+      "sxrcapturedrive1tb": 253,
+      "sxrcapturedrive2tb": 505
+     }
+    },
+    {
+     "id": "REC-22",
+     "mode": "6:5 ProRes 2K Anamórfico",
+     "codec": "4444 XQ",
+     "rateMbPerSec": 47.0,
+     "gbPerHour": 169.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 23,
+      "sxspro128gb": 43,
+      "cfast20256gblexar3600x": 90,
+      "xrcapturedrive512gb": 84,
+      "sxrcapturedrive1tb": 168,
+      "sxrcapturedrive2tb": 337
+     }
+    },
+    {
+     "id": "REC-23",
+     "mode": "6:5 ProRes 4K Cine Anamórfico",
+     "codec": "422",
+     "rateMbPerSec": 56.0,
+     "gbPerHour": 202.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 19,
+      "sxspro128gb": 36,
+      "cfast20256gblexar3600x": 76,
+      "xrcapturedrive512gb": 71,
+      "sxrcapturedrive1tb": 142,
+      "sxrcapturedrive2tb": 285
+     }
+    },
+    {
+     "id": "REC-24",
+     "mode": "6:5 ProRes 4K Cine Anamórfico",
+     "codec": "422 HQ",
+     "rateMbPerSec": 84.0,
+     "gbPerHour": 302.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 13,
+      "sxspro128gb": 24,
+      "cfast20256gblexar3600x": 51,
+      "xrcapturedrive512gb": 47,
+      "sxrcapturedrive1tb": 95,
+      "sxrcapturedrive2tb": 190
+     }
+    },
+    {
+     "id": "REC-25",
+     "mode": "6:5 ProRes 4K Cine Anamórfico",
+     "codec": "4444",
+     "rateMbPerSec": 125.0,
+     "gbPerHour": 450.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 8,
+      "sxspro128gb": 16,
+      "cfast20256gblexar3600x": 34,
+      "xrcapturedrive512gb": 32,
+      "sxrcapturedrive1tb": 63,
+      "sxrcapturedrive2tb": 126
+     }
+    },
+    {
+     "id": "REC-26",
+     "mode": "6:5 ProRes 4K Cine Anamórfico",
+     "codec": "4444 XQ",
+     "rateMbPerSec": 194.0,
+     "gbPerHour": 698.0,
+     "minutesByMedia": {
+      "cfast20256gblexar3600x": 22,
+      "xrcapturedrive512gb": 21,
+      "sxrcapturedrive1tb": 42,
+      "sxrcapturedrive2tb": 84
+     }
+    },
+    {
+     "id": "REC-27",
+     "mode": "6:5 ARRIRAW 2.6K",
+     "codec": "ARRIRAW",
+     "rateMbPerSec": 211.0,
+     "gbPerHour": 760.0,
+     "minutesByMedia": {
+      "xrcapturedrive512gb": 40,
+      "sxrcapturedrive1tb": 79,
+      "sxrcapturedrive2tb": 158
+     }
+    },
+    {
+     "id": "REC-28",
+     "mode": "4:3 ProRes 2.8K",
+     "codec": "422",
+     "rateMbPerSec": 50.0,
+     "gbPerHour": 180.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 22,
+      "sxspro128gb": 41,
+      "cfast20256gblexar3600x": 86,
+      "xrcapturedrive512gb": 80,
+      "sxrcapturedrive1tb": 161,
+      "sxrcapturedrive2tb": 322
+     }
+    },
+    {
+     "id": "REC-29",
+     "mode": "4:3 ProRes 2.8K",
+     "codec": "422 HQ",
+     "rateMbPerSec": 75.0,
+     "gbPerHour": 270.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 14,
+      "sxspro128gb": 27,
+      "cfast20256gblexar3600x": 57,
+      "xrcapturedrive512gb": 54,
+      "sxrcapturedrive1tb": 107,
+      "sxrcapturedrive2tb": 214
+     }
+    },
+    {
+     "id": "REC-30",
+     "mode": "4:3 ProRes 2.8K",
+     "codec": "4444",
+     "rateMbPerSec": 112.0,
+     "gbPerHour": 403.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 10,
+      "sxspro128gb": 18,
+      "cfast20256gblexar3600x": 38,
+      "xrcapturedrive512gb": 36,
+      "sxrcapturedrive1tb": 71,
+      "sxrcapturedrive2tb": 143
+     }
+    },
+    {
+     "id": "REC-31",
+     "mode": "4:3 ProRes 2.8K",
+     "codec": "4444 XQ",
+     "rateMbPerSec": 171.0,
+     "gbPerHour": 616.0,
+     "minutesByMedia": {
+      "cfast20256gblexar3600x": 25,
+      "xrcapturedrive512gb": 24,
+      "sxrcapturedrive1tb": 48,
+      "sxrcapturedrive2tb": 95
+     }
+    },
+    {
+     "id": "REC-32",
+     "mode": "4:3 ARRIRAW 2.8K",
+     "codec": "ARRIRAW",
+     "rateMbPerSec": 233.0,
+     "gbPerHour": 839.0,
+     "minutesByMedia": {
+      "xrcapturedrive512gb": 36,
+      "sxrcapturedrive1tb": 71,
+      "sxrcapturedrive2tb": 143
+     }
+    },
+    {
+     "id": "REC-33",
+     "mode": "Open Gate ProRes 3.4K",
+     "codec": "422",
+     "rateMbPerSec": 60.0,
+     "gbPerHour": 216.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 18,
+      "sxspro128gb": 34,
+      "cfast20256gblexar3600x": 71,
+      "xrcapturedrive512gb": 67,
+      "sxrcapturedrive1tb": 133,
+      "sxrcapturedrive2tb": 266
+     }
+    },
+    {
+     "id": "REC-34",
+     "mode": "Open Gate ProRes 3.4K",
+     "codec": "422 HQ",
+     "rateMbPerSec": 91.0,
+     "gbPerHour": 328.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 12,
+      "sxspro128gb": 22,
+      "cfast20256gblexar3600x": 47,
+      "xrcapturedrive512gb": 44,
+      "sxrcapturedrive1tb": 89,
+      "sxrcapturedrive2tb": 178
+     }
+    },
+    {
+     "id": "REC-35",
+     "mode": "Open Gate ProRes 3.4K",
+     "codec": "4444",
+     "rateMbPerSec": 133.0,
+     "gbPerHour": 479.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 8,
+      "sxspro128gb": 15,
+      "cfast20256gblexar3600x": 32,
+      "xrcapturedrive512gb": 30,
+      "sxrcapturedrive1tb": 59,
+      "sxrcapturedrive2tb": 118
+     }
+    },
+    {
+     "id": "REC-36",
+     "mode": "Open Gate ProRes 3.4K",
+     "codec": "4444 XQ",
+     "rateMbPerSec": 203.0,
+     "gbPerHour": 731.0,
+     "minutesByMedia": {
+      "cfast20256gblexar3600x": 21,
+      "xrcapturedrive512gb": 20,
+      "sxrcapturedrive1tb": 39,
+      "sxrcapturedrive2tb": 79
+     }
+    },
+    {
+     "id": "REC-37",
+     "mode": "Open Gate ProRes 4K Cine",
+     "codec": "422",
+     "rateMbPerSec": 87.0,
+     "gbPerHour": 313.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 12,
+      "sxspro128gb": 24,
+      "cfast20256gblexar3600x": 49,
+      "xrcapturedrive512gb": 46,
+      "sxrcapturedrive1tb": 93,
+      "sxrcapturedrive2tb": 185
+     }
+    },
+    {
+     "id": "REC-38",
+     "mode": "Open Gate ProRes 4K Cine",
+     "codec": "422 HQ",
+     "rateMbPerSec": 129.0,
+     "gbPerHour": 464.0,
+     "minutesByMedia": {
+      "sxspropro64gb": 8,
+      "sxspro128gb": 16,
+      "cfast20256gblexar3600x": 33,
+      "xrcapturedrive512gb": 31,
+      "sxrcapturedrive1tb": 62,
+      "sxrcapturedrive2tb": 123
+     }
+    },
+    {
+     "id": "REC-39",
+     "mode": "Open Gate ProRes 4K Cine",
+     "codec": "4444",
+     "rateMbPerSec": 194.0,
+     "gbPerHour": 698.0,
+     "minutesByMedia": {
+      "cfast20256gblexar3600x": 22,
+      "xrcapturedrive512gb": 21,
+      "sxrcapturedrive1tb": 41,
+      "sxrcapturedrive2tb": 82
+     }
+    },
+    {
+     "id": "REC-40",
+     "mode": "Open Gate ProRes 4K Cine",
+     "codec": "4444 XQ",
+     "rateMbPerSec": 284.0,
+     "gbPerHour": 1022.0,
+     "minutesByMedia": {
+      "cfast20256gblexar3600x": 15,
+      "xrcapturedrive512gb": 14,
+      "sxrcapturedrive1tb": 27,
+      "sxrcapturedrive2tb": 55
+     }
+    },
+    {
+     "id": "REC-41",
+     "mode": "Open Gate ARRIRAW 3.4K",
+     "codec": "ARRIRAW",
+     "rateMbPerSec": 282.0,
+     "gbPerHour": 1015.0,
+     "minutesByMedia": {
+      "xrcapturedrive512gb": 29,
+      "sxrcapturedrive1tb": 59,
+      "sxrcapturedrive2tb": 118
+     }
+    }
+   ]
+  }
+ ]
+}
