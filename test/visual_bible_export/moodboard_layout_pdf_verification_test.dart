@@ -199,8 +199,11 @@ void main() {
       );
       expect(minimalText.toUpperCase(), contains('MOODBOARD'));
 
+      // La ficha es estrecha y el marcador puede partirse en dos líneas.
       expect(
-        pitchText.contains(moodboardMarkerMetaRich),
+        pitchText
+            .replaceAll(RegExp(r'\s+'), '')
+            .contains(moodboardMarkerMetaRich),
         isTrue,
         reason: 'Pitch rico debe incluir filmReference en ficha',
       );
