@@ -3353,6 +3353,35 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
+  /// Guarda el valor de un punto sin tocar el resto de `values`.
+  Future<void> saveBibleSectionFieldValue(
+    int bibleId,
+    String sectionId,
+    String fieldKey,
+    String? value,
+  ) async {
+    final def =
+        await (select(
+              bibleSectionDefinitions,
+            )..where((d) => d.bibleId.equals(bibleId) & d.id.equals(sectionId)))
+            .getSingleOrNull();
+    if (def == null) return;
+    final fields = BibleSectionFieldsConfig.parse(def.contentJson, sectionId);
+    final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
+    if (value == null || value.trim().isEmpty) {
+      values.remove(fieldKey);
+    } else {
+      values[fieldKey] = value;
+    }
+    await upsertBibleSectionDefinition(
+      def.copyWith(
+        contentJson: Value(
+          BibleSectionFieldsConfig.encode(fields, values: values),
+        ),
+      ),
+    );
+  }
+
   Future<void> saveBibleSectionFields(
     int bibleId,
     String sectionId,

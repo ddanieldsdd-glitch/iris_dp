@@ -21,11 +21,21 @@ Aprobado el 2026-10-03.
 
 ## Referencias de Stitch
 
-Viven fuera del repo, en `Documents/IRIS DP/REFERENCIAS STITCH/`. Una subcarpeta por id de sección, con `code.html` y `screen.png`:
+Viven fuera del repo, en `Documents/IRIS DP/REFERENCIAS STITCH/`. Cada carpeta trae capturas (`.png`) y el código HTML de Stitch (en archivos `.md`):
 
-`direction/` · `concept/` · `camera/` · `optics/` · `exposure/` · `lighting/` · `color_image/` · `format/` · `texture/` · `location/` · `camera_tests/` · `workflow/` · `moodboard/`
+| Carpeta | Sección de la biblia |
+|---|---|
+| `1 concepto de imagen` | Concepto |
+| `2 direccion` | Dirección |
+| `3 camara y sensor`, `6 camara y sensor` | Cámara |
+| `4 iluminacion` | Iluminación |
+| `5 lentes` | Óptica |
+| `7 localizacion` | Localización |
+| `8 textura y grano` | Textura |
+| `editor de imagenes` | Lightbox del moodboard |
+| `pdf export` | PDF de entrega |
 
-Las secciones sin referencia se dejan sin carpeta.
+Sin referencia: Exposición, Color, Formato, Pruebas de cámara, Workflow y Moodboard. Parten de la base compartida.
 
 ## Fase 0 — Preparación
 
@@ -36,7 +46,7 @@ Las secciones sin referencia se dejan sin carpeta.
 Principio: la lista de puntos de cada sección (`BibleSectionDefinitions.contentJson`) es la única fuente de estructura. Pantalla y PDF la recorren en el mismo orden, y cada tipo de punto tiene una vista de pantalla y una de PDF.
 
 - [x] **1.1 Quitar el compositor de export.** Exportar va directo al PDF. Se borran `export/composer/` (menos la vista previa), `export/builder/`, `export/commands/`, `export/model/`, `export/store/` y `export/pdf/bible_export_pdf_renderer.dart`.
-- [ ] **1.2 Base compartida de pantalla.** Panel de cristal y cabecera de sección únicos; una vista genérica por tipo de punto (texto, narrativa, referencias, imagen, bloques, y los nuevos `specs` y `list`) en lugar del aviso «módulo personalizado sin vista dedicada».
+- [x] **1.2 Base compartida de pantalla.** Panel de cristal y cabecera de sección únicos; una vista genérica por tipo de punto (texto, narrativa, referencias, imagen, bloques, y los nuevos `specs` y `list`) en lugar del aviso «módulo personalizado sin vista dedicada».
 - [ ] **1.3 Ampliable por el usuario.** Al añadir un punto se elige tipo, nombre y posición; ocultar sin borrar; restaurar la sección; acceso «Añadir punto» al final de cada sección.
 - [ ] **1.4 Base compartida de PDF y contrato de orden.** `bible_pdf_kit.dart` con un componente por tipo de punto, Inter y JetBrains Mono embebidas, y el PDF recorriendo la lista de puntos del usuario. Test de paridad genérico.
 - **1.5 Sección por sección** (análisis acordado → pantalla → PDF → revisión lado a lado):

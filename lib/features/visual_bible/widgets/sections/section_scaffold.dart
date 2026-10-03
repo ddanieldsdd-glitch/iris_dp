@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -12,7 +14,7 @@ import '../bible_unified_references_panel.dart';
 import '../narrative_bridge_card.dart';
 import '../../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../../bible_section_fields.dart';
-import '../bible_form_widgets.dart';
+import '../bible_generic_point_views.dart';
 
 /// Layout común para secciones técnicas de la biblia.
 ///
@@ -20,7 +22,7 @@ import '../bible_form_widgets.dart';
 /// según el orden y nombres definidos en [sectionContentJson].
 /// El estilo (Cinematic / Technical / Minimalist) se lee y persiste en
 /// [BibleSectionStyleStore].
-class BibleSectionScaffold extends StatefulWidget {
+class BibleSectionScaffold extends ConsumerStatefulWidget {
   final String sectionId;
   final int projectId;
   final VisualBibleData data;
@@ -45,10 +47,11 @@ class BibleSectionScaffold extends StatefulWidget {
   });
 
   @override
-  State<BibleSectionScaffold> createState() => _BibleSectionScaffoldState();
+  ConsumerState<BibleSectionScaffold> createState() =>
+      _BibleSectionScaffoldState();
 }
 
-class _BibleSectionScaffoldState extends State<BibleSectionScaffold> {
+class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
   BibleVisualMode _mode = BibleVisualMode.cinematic;
   bool _styleLoaded = false;
 
@@ -177,6 +180,22 @@ class _BibleSectionScaffoldState extends State<BibleSectionScaffold> {
     );
   }
 
+  Widget _genericPoint(BibleSectionField field) => BibleGenericPointView(
+        key: ValueKey('point_${widget.sectionId}_${field.key}'),
+        field: field,
+        value: BibleSectionFieldsConfig.parseValues(
+          widget.sectionContentJson,
+        )[field.key],
+        onChanged: (value) => ref
+            .read(databaseProvider)
+            .saveBibleSectionFieldValue(
+              widget.data.id,
+              widget.sectionId,
+              field.key,
+              value,
+            ),
+      );
+
   Widget? _buildField(BuildContext context, BibleSectionField field) {
     final override = widget.fieldWidgets[field.key];
     if (override != null) return override;
@@ -210,16 +229,10 @@ class _BibleSectionScaffoldState extends State<BibleSectionScaffold> {
                 ),
               )
             : null,
-      BibleSectionFieldType.text => BibleTextField(
-          label: field.label,
-          hint: field.hint ?? 'Notas orientativas…',
-          maxLines: field.maxLines,
-          initialValue: BibleSectionFieldsConfig.parseValues(
-            widget.sectionContentJson,
-          )[field.key] ??
-              '',
-          onChanged: (_) {},
-        ),
+      BibleSectionFieldType.text ||
+      BibleSectionFieldType.list ||
+      BibleSectionFieldType.specs => _genericPoint(field),
+      // Módulo del catálogo cuyo widget dedicado aún no está conectado.
       BibleSectionFieldType.blocks => _MissingModulePlaceholder(
           sectionId: widget.sectionId,
           fieldKey: field.key,

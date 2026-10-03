@@ -17,6 +17,48 @@ enum BibleSectionFieldType {
   references,
   image,
   blocks,
+
+  /// Lista de puntos. El valor es un array JSON de textos.
+  list,
+
+  /// Pares etiqueta/valor. El valor es un array JSON de `{label, value}`.
+  specs,
+}
+
+/// Codifica el valor de los puntos `list` y `specs` dentro de `values[key]`.
+abstract final class BibleSectionPointValue {
+  static List<String> decodeList(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) return decoded.map((e) => e.toString()).toList();
+    } catch (_) {}
+    return [raw];
+  }
+
+  static String? encodeList(List<String> items) =>
+      items.isEmpty ? null : jsonEncode(items);
+
+  static List<(String, String)> decodeSpecs(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return [
+          for (final e in decoded)
+            if (e is Map)
+              (e['label']?.toString() ?? '', e['value']?.toString() ?? ''),
+        ];
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  static String? encodeSpecs(List<(String, String)> rows) => rows.isEmpty
+      ? null
+      : jsonEncode([
+          for (final (label, value) in rows) {'label': label, 'value': value},
+        ]);
 }
 
 /// Sub-apartado configurable (nombre, orden, hint).
@@ -261,6 +303,8 @@ abstract final class BibleSectionFieldsConfig {
         BibleSectionFieldType.image => 'Imágenes / referencias',
         BibleSectionFieldType.blocks => 'Bloques dinámicos',
         BibleSectionFieldType.text => 'Campo de texto',
+        BibleSectionFieldType.list => 'Lista de puntos',
+        BibleSectionFieldType.specs => 'Datos técnicos',
       };
 
   static String labelFor(
