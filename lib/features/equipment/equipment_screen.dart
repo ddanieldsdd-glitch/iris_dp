@@ -79,7 +79,9 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
 
   Future<void> _ensureCatalog() async {
     final db = ref.read(databaseProvider);
-    final result = await CatalogSyncService(db).importEmbeddedCatalog(force: true);
+    // Solo reimporta si cambió la versión del catálogo embebido: así no se
+    // pisa lo importado después (catálogo oficial o remoto).
+    final result = await CatalogSyncService(db).importEmbeddedCatalog();
     await LukaManifestService(db).recordSyncCheck();
     if (mounted) setState(() => _syncMessage = result.message);
   }

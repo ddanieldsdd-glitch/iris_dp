@@ -123,7 +123,8 @@ class OpticsCalculator {
     'MFT': {'MFT', 'M43'},
   };
 
-  /// Diámetro de círculo de imagen típico según cobertura de formato (datasheets).
+  /// Círculo de imagen típico del formato declarado. Es una estimación: el
+  /// catálogo solo guarda el círculo cuando el fabricante lo publica.
   static double imageCircleForFormat(String formatCoverage) {
     final f = formatCoverage.toUpperCase().trim();
     if (f.contains('LF') || f.contains('LARGE')) return 54.0;
@@ -314,7 +315,7 @@ class OpticsCalculator {
     );
     final circle = imageCircleMm > 0
         ? imageCircleMm
-        : math.max(fullDiag * 1.02, imageCircleForFormat(formatCoverage));
+        : imageCircleForFormat(formatCoverage);
     final covers = circle >= diag * 0.98;
     final portholing = circle < fullDiag * 0.98;
     final coc = customCocMm ?? circleOfConfusionMm(formatCoverage, cropFactor: cropFactor);

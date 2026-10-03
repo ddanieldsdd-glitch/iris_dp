@@ -401,6 +401,9 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(lights, lights.sourceLabel);
         await m.addColumn(lights, lights.sourceUrl);
         await m.addColumn(lights, lights.verifiedAt);
+        // El catálogo v7 trae estado y fuente, y deja de inferir el círculo
+        // de imagen por formato.
+        await _importEmbeddedCatalogIfNeeded();
       }
     },
   );
