@@ -9,6 +9,7 @@ import '../../bible_section_fields.dart';
 import '../../v2/migration/freeform_v2_blocks_codec.dart';
 import '../../v2/theme/bible_theme.dart';
 import '../../v2/widgets/bible_block_compositor.dart';
+import '../bible_add_point.dart';
 import '../bible_generic_point_views.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_unified_references_panel.dart';
@@ -114,6 +115,13 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
     _persist();
   }
 
+  Future<void> _addPoint() async {
+    final point = await showBibleAddPointDialog(context);
+    if (point == null || !mounted) return;
+    setState(() => _fields = [..._fields, point]);
+    _persist();
+  }
+
   List<String> _imagesFor(String fieldKey) {
     final raw = _values[_imagesKey(fieldKey)];
     if (raw == null || raw.isEmpty) return const [];
@@ -201,7 +209,11 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      children: items,
+      children: [
+        ...items,
+        if (items.isNotEmpty) const SizedBox(height: AppSpacing.lg),
+        BibleAddPointTile(onTap: _addPoint),
+      ],
     );
   }
 

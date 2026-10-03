@@ -12,6 +12,7 @@ import '../../../shared/visual_bible/bible_section_ids.dart';
 import '../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../../../shared/visual_bible/bible_subsection_kind_catalog.dart';
 import '../bible_section_fields.dart';
+import 'bible_add_point.dart';
 
 /// Editor de sub-apartados: añadir, quitar, cambiar tipo y reordenar.
 class BibleSectionFieldsEditor extends ConsumerStatefulWidget {
@@ -194,13 +195,10 @@ class _BibleSectionFieldsEditorState
     if (widget.embedded) unawaited(_saveEmbedded());
   }
 
-  void _addField() {
-    final key = BibleSectionFieldsConfig.newFieldKey();
-    setState(() {
-      _fields.add(
-        BibleSectionField(key: key, label: 'Nuevo apartado', maxLines: 4),
-      );
-    });
+  Future<void> _addField() async {
+    final point = await showBibleAddPointDialog(context);
+    if (point == null || !mounted) return;
+    setState(() => _fields.add(point));
     if (widget.embedded) unawaited(_saveEmbedded());
   }
 
@@ -386,10 +384,13 @@ class _BibleSectionFieldsEditorState
                   field.key,
                 );
                 final registryLabel = module?.label;
+                // Un punto propio se pinta con la vista genérica de su tipo.
                 final hasRenderer = BibleStitchModuleRegistry.hasRenderer(
-                  widget.definition.id,
-                  field.key,
-                );
+                      widget.definition.id,
+                      field.key,
+                    ) ||
+                    (module == null &&
+                        field.type != BibleSectionFieldType.blocks);
                 final showFamilyChip =
                     widget.definition.id == BibleSectionId.lighting &&
                         module != null;
@@ -464,7 +465,7 @@ class _BibleSectionFieldsEditorState
           OutlinedButton.icon(
             onPressed: _addField,
             icon: const Icon(Icons.add),
-            label: const Text('Añadir campo personalizado'),
+            label: const Text('Añadir punto propio'),
           ),
           const SizedBox(height: AppSpacing.sm),
           if (widget.embedded)
