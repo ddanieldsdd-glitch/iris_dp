@@ -52,7 +52,7 @@ Principio: la lista de puntos de cada sección (`BibleSectionDefinitions.content
   - [ ] Pendiente: embeber Inter y JetBrains Mono en el PDF (hoy Noto Sans). Hay que añadir los TTF a `assets/fonts/`.
   - [ ] Pendiente: los puntos propios salen al final de su sección; intercalarlos con los puntos dedicados se hace en cada sección de 1.5.
 - **1.5 Sección por sección** (análisis acordado → pantalla → PDF → revisión lado a lado):
-  - [ ] Dirección
+  - [x] Dirección — puntos: intención narrativa, tono y atmósfera, estrategia visual, intención por acto, referencias, transiciones. Key Frame pasa a opcional.
   - [ ] Concepto
   - [ ] Cámara
   - [ ] Óptica

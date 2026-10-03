@@ -11,6 +11,10 @@ class StitchModule {
   final int maxLines;
   final bool required;
   final bool legacyOnly;
+
+  /// Tiene vista propia y se puede añadir, pero no viene por defecto.
+  final bool optional;
+
   /// Kind del catálogo de sub-apartados (nombre + icono reutilizable).
   final BibleSubsectionKindId? subsectionKind;
 
@@ -22,6 +26,7 @@ class StitchModule {
     this.maxLines = 3,
     this.required = false,
     this.legacyOnly = false,
+    this.optional = false,
     this.subsectionKind,
   });
 
@@ -120,14 +125,20 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'toneStrategies', label: 'Tono y estrategias'),
-            StitchModule(key: 'acts', label: 'Arco por actos'),
-            StitchModule(key: 'keyFrame', label: 'Key Frame'),
-            StitchModule(key: 'transitions', label: 'Lenguaje de transiciones'),
+            StitchModule(key: 'tone', label: 'Tono y atmósfera'),
+            StitchModule(key: 'strategies', label: 'Estrategia visual'),
+            StitchModule(key: 'acts', label: 'Intención visual por acto'),
             StitchModule(
               key: 'references',
               label: 'Referencias de dirección',
               type: BibleSectionFieldType.references,
+            ),
+            StitchModule(key: 'transitions', label: 'Lenguaje de transiciones'),
+            StitchModule(key: 'keyFrame', label: 'Key Frame', optional: true),
+            StitchModule(
+              key: 'toneStrategies',
+              label: 'Tono y estrategias (legacy)',
+              legacyOnly: true,
             ),
           ],
         BibleSectionId.camera => const [
@@ -282,7 +293,7 @@ abstract final class BibleStitchModuleRegistry {
   /// Fields por defecto para contentJson (sin legacy-only).
   static List<BibleSectionField> defaultFieldsFor(String sectionId) =>
       modulesFor(sectionId)
-          .where((m) => !m.legacyOnly)
+          .where((m) => !m.legacyOnly && !m.optional)
           .map((m) => m.toField())
           .toList();
 
@@ -362,6 +373,8 @@ abstract final class BibleStitchModuleRegistry {
       const modularSlotKeys = {
         'header',
         'toneStrategies',
+        'tone',
+        'strategies',
         'acts',
         'keyFrame',
         'transitions',
@@ -369,6 +382,19 @@ abstract final class BibleStitchModuleRegistry {
       final hasModular = keys.any(modularSlotKeys.contains);
       if (keys.contains('narrative') && !hasModular && !keys.contains('header')) {
         return defaultFieldsFor(sectionId);
+      }
+      // «Tono y estrategias» era un solo punto; ahora son dos paneles.
+      if (keys.contains('toneStrategies')) {
+        return [
+          for (final field in fields)
+            if (field.key != 'toneStrategies')
+              field
+            else ...[
+              if (!keys.contains('tone')) module(sectionId, 'tone')!.toField(),
+              if (!keys.contains('strategies'))
+                module(sectionId, 'strategies')!.toField(),
+            ],
+        ];
       }
     }
 

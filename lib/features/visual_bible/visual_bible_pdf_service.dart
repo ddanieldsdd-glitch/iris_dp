@@ -324,46 +324,35 @@ class VisualBiblePdfService {
       ),
     );
 
-    if (!isTech &&
-        _sectionAllowed(sections, BibleSectionId.direction) &&
-        (_hasDirectionContent(data) ||
-            _hasCustomContent(
-              BibleSectionId.direction,
-              sectionContentJsonById,
-            ))) {
-      addSection(
-        BibleSectionId.direction,
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => _sectionPage(
-            title: 'DIRECCIÓN',
-            fontBold: fonts.bold,
-            font: fonts.regular,
-            content: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                ..._directionPdfFields(data, fonts.regular),
-                if (data.directionNarrativeIntent?.isNotEmpty == true) ...[
-                  pw.SizedBox(height: 12),
-                  pw.Text(
-                    data.directionNarrativeIntent!,
-                    style: const pw.TextStyle(
-                      fontSize: 11,
-                      color: PdfColors.grey700,
-                    ),
-                  ),
-                ],
-                _customFieldsWidget(
-                  BibleSectionId.direction,
-                  sectionContentJsonById,
-                  fonts,
-                ),
-              ],
-            ),
-          ),
+    if (!isTech && _sectionAllowed(sections, BibleSectionId.direction)) {
+      final directionCells = await _loadMoodboardCells(
+        MoodboardExportGrouper.imagesForSection(
+          moodboard,
+          BibleSectionId.direction,
         ),
+        boardLayout,
       );
+      final directionContent = _directionContent(
+        data,
+        sectionContentJsonById[BibleSectionId.direction],
+        kit,
+        _stillTiles(directionCells, fonts),
+      );
+      if (directionContent.isNotEmpty) {
+        addSection(
+          BibleSectionId.direction,
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader('Dirección'),
+              pw.SizedBox(height: 24),
+              ...directionContent,
+            ],
+          ),
+        );
+      }
     }
 
     if (!isTech &&
@@ -1556,12 +1545,155 @@ class VisualBiblePdfService {
     );
   }
 
-  static bool _hasDirectionContent(VisualBibleData data) =>
-      data.tone?.trim().isNotEmpty == true ||
-      data.creativeIntention?.trim().isNotEmpty == true ||
-      data.stagingApproach?.trim().isNotEmpty == true ||
-      data.pointOfView?.trim().isNotEmpty == true ||
-      data.directionNarrativeIntent?.trim().isNotEmpty == true;
+  /// Dirección: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _directionContent(
+    VisualBibleData data,
+    String? contentJson,
+    BiblePdfKit kit,
+    pw.Widget? stills,
+  ) {
+    final blob = BibleSectionExportReader.parseCustomBlob(
+      BibleSectionExportReader.withoutUserPoints(
+        contentJson,
+        BibleSectionId.direction,
+      ),
+      BibleSectionId.direction,
+    );
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    String text(Object? v) => v?.toString().trim() ?? '';
+    List<(String, String)> pairs(Object? raw) => [
+      if (raw is List)
+        for (final e in raw)
+          if (e is Map)
+            (text(e['title']), text(e['body'] ?? e['desc']))
+          else
+            (text(e), ''),
+    ].where((p) => p.$1.isNotEmpty || p.$2.isNotEmpty).toList();
+
+    final out = <pw.Widget>[];
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.direction,
+    )) {
+      switch (field.key) {
+        case 'header':
+          final scene = text(blob['sceneTag']);
+          if (scene.isNotEmpty) out.add(kit.tagRow([scene]));
+        case 'narrative':
+          final intent = text(data.directionNarrativeIntent);
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+          final legacy = text(data.creativeIntention);
+          if (legacy.isNotEmpty) out.add(kit.textPoint('Intención', legacy));
+          final tags = [
+            if (blob['emotionTags'] is List)
+              for (final t in blob['emotionTags'] as List) text(t),
+          ].where((t) => t.isNotEmpty).toList();
+          if (tags.isNotEmpty) out.add(kit.tagRow(tags));
+        case 'tone':
+          final points = pairs(blob['tonePoints']);
+          final legacy = text(data.tone);
+          if (points.isNotEmpty) {
+            out.add(kit.titledList(field.label, points));
+          } else if (legacy.isNotEmpty) {
+            out.add(kit.textPoint(field.label, legacy));
+          }
+        case 'strategies':
+          final pillars = [
+            (kicker: null, title: 'Cámara', text: text(data.cameraPhilosophy)),
+            (kicker: null, title: 'Blocking', text: text(data.stagingApproach)),
+            (kicker: null, title: 'POV', text: text(data.pointOfView)),
+            for (final (title, body) in pairs(blob['extraStrategies']))
+              (kicker: null, title: title, text: body),
+          ].where((p) => p.text.isNotEmpty).toList();
+          if (pillars.isNotEmpty) {
+            out.add(kit.columnsPoint(field.label, pillars));
+          }
+        case 'acts':
+          // Mismos valores por defecto que muestra la pantalla.
+          const phases = ['ESTABLECIMIENTO', 'DESESTABILIZACIÓN', 'RESOLUCIÓN'];
+          const titles = ['Orden y Rigidez', 'Fragmentación', 'Abstracción'];
+          const numerals = ['I', 'II', 'III'];
+          final acts = [
+            for (var n = 0; n < 3; n++)
+              if (text(blob['act${n + 1}Desc']).isNotEmpty)
+                (
+                  kicker:
+                      'Acto ${numerals[n]}: '
+                      '${blob['act${n + 1}Phase'] ?? phases[n]}',
+                  title: text(blob['act${n + 1}Title'] ?? titles[n]),
+                  text: text(blob['act${n + 1}Desc']),
+                ),
+          ];
+          if (acts.isNotEmpty) out.add(kit.columnsPoint(field.label, acts));
+        case 'references':
+          final cards = [
+            if (blob['refsMetadata'] is List)
+              for (final e in blob['refsMetadata'] as List)
+                if (e is Map)
+                  (
+                    kicker: text(e['refLabel']),
+                    title: text(e['title']),
+                    text: [
+                      text(e['body']),
+                      [
+                        if (text(e['lens']).isNotEmpty)
+                          'Lente ${text(e['lens'])}',
+                        if (text(e['tech2Value']).isNotEmpty)
+                          '${text(e['tech2Label'])} ${text(e['tech2Value'])}'
+                              .trim(),
+                      ].join(' · '),
+                    ].where((l) => l.isNotEmpty).join('\n'),
+                  ),
+          ].where((c) => c.title.isNotEmpty || c.text.isNotEmpty).toList();
+          if (cards.isNotEmpty || stills != null) {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            if (stills != null) {
+              out.add(stills);
+              out.add(pw.SizedBox(height: 10));
+            }
+            if (cards.isNotEmpty) {
+              out.add(kit.columnsPoint('', cards, perRow: 2));
+            }
+          }
+        case 'transitions':
+          final entries = pairs(blob['transitionLanguage']);
+          if (entries.isNotEmpty) out.add(kit.titledList(field.label, entries));
+        case 'keyFrame':
+          final intent = text(blob['keyFrameIntent']);
+          final specs = [
+            if (blob['keyFrame'] is Map)
+              for (final e in (blob['keyFrame'] as Map).entries)
+                (text(e.key), text(e.value)),
+          ].where((r) => r.$2.isNotEmpty).toList();
+          if (intent.isNotEmpty) {
+            out.add(kit.textPoint(field.label, intent));
+            if (specs.isNotEmpty) out.add(kit.specsPoint('', specs));
+          }
+        default:
+          final point = kit.point(field, values[field.key]);
+          if (point != null) out.add(point);
+      }
+    }
+    return out;
+  }
+
+  /// Stills de una sección como rejilla, o `null` si no hay.
+  static pw.Widget? _stillTiles(
+    List<({pw.MemoryImage image, String? caption, List<String> details})> cells,
+    ({pw.Font regular, pw.Font bold}) fonts,
+  ) => cells.isEmpty
+      ? null
+      : pw.Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _moodboardWrapTiles(
+            cells,
+            font: fonts.regular,
+            tileWidth: 120,
+            imageHeight: 80,
+          ),
+        );
 
   static bool _hasAny(Iterable<String?> values) =>
       values.any((value) => value?.trim().isNotEmpty == true);
@@ -1798,37 +1930,6 @@ class VisualBiblePdfService {
           if (value?.trim().isNotEmpty == true) kit.textPoint(label, value!),
       ],
     );
-  }
-
-  static List<pw.Widget> _directionPdfFields(
-    VisualBibleData data,
-    pw.Font font,
-  ) {
-    final fields = <(String, String?)>[
-      ('Tono', data.tone),
-      ('Intención', data.creativeIntention),
-      ('Puesta en escena', data.stagingApproach),
-      ('Punto de vista', data.pointOfView),
-    ];
-    return [
-      for (final (label, value) in fields)
-        if (value?.trim().isNotEmpty == true) ...[
-          pw.Text(
-            label.toUpperCase(),
-            style: pw.TextStyle(
-              font: font,
-              fontSize: 8,
-              color: PdfColors.grey600,
-            ),
-          ),
-          pw.SizedBox(height: 4),
-          pw.Text(
-            value!,
-            style: pw.TextStyle(font: font, fontSize: 12, lineSpacing: 5),
-          ),
-          pw.SizedBox(height: 12),
-        ],
-    ];
   }
 
   static pw.Widget _lightingDiagram(String rawJson) {

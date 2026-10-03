@@ -72,7 +72,7 @@ void main() {
         .where((m) => !m.legacyOnly)
         .map((m) => m.key)
         .toSet();
-    expect(modules, containsAll(['header', 'narrative', 'toneStrategies', 'acts', 'keyFrame', 'transitions', 'references']));
+    expect(modules, containsAll(['header', 'narrative', 'tone', 'strategies', 'acts', 'keyFrame', 'transitions', 'references']));
   });
 
   test('normalizeFields upgrades legacy direction monolith narrative', () {
