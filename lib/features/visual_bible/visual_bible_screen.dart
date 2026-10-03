@@ -4,7 +4,6 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/database/app_database.dart' hide BibleSectionGroup;
 import '../../core/database/app_database.dart' as app_db show BibleSectionGroup;
@@ -27,14 +26,8 @@ import 'bible_preset_service.dart';
 import 'bible_style_guide_sheet.dart';
 import 'bible_tutorial.dart';
 import 'data/visual_bible_repository.dart';
-import 'export/builder/bible_export_composition_builder.dart';
-import 'export/composer/bible_export_composer_screen.dart';
-import 'export/composer/bible_export_pdf_preview_screen.dart';
-import 'export/model/bible_export_composition.dart';
-import 'export/pdf/bible_export_pdf_renderer.dart';
-import 'export/store/bible_export_composition_store.dart';
+import 'export/pdf/bible_export_pdf_preview_screen.dart';
 import 'state/visual_bible_providers.dart';
-import 'v2/persistence/bible_document_store.dart';
 import 'v2/sync/bible_domain_sync_service.dart';
 import 'moodboard_export_layout.dart';
 import 'visual_bible_export_config.dart';
@@ -337,148 +330,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
       preferredDestination: preferredDestination,
     );
     if (config == null || !mounted) return;
-    final useComposer = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Preparar exportación'),
-        content: const Text(
-          'Puedes montar y anotar las páginas antes de generar el PDF, '
-          'o continuar con la exportación clásica.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          OutlinedButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Exportación clásica'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(context, true),
-            icon: const Icon(Icons.dashboard_customize_outlined),
-            label: const Text('Abrir compositor'),
-          ),
-        ],
-      ),
-    );
-    if (useComposer == null || !mounted) return;
-    if (useComposer) {
-      await _openExportComposer(config);
-    } else {
-      await _runExport(config);
-    }
-  }
-
-  Future<void> _openExportComposer(VisualBibleExportConfig config) async {
-    if (_data == null) return;
-    try {
-      final bundle = await _loadExportBundle();
-      final db = ref.read(databaseProvider);
-      final preferences = await SharedPreferences.getInstance();
-      final store = BibleExportCompositionStore(preferences);
-      final compositionId = 'config_${config.id}';
-      final existing = await store.loadLatest(widget.projectId, compositionId);
-      final sourceDocument = await BibleDocumentStore(
-        db,
-      ).loadForBible(bundle.data.id);
-      final builder = BibleExportCompositionBuilder();
-      final sourceHash = BibleDomainSyncService.computeExportSourceHash(
-        data: bundle.data,
-        document: sourceDocument,
-        moodboardCount: bundle.moodboard.length,
-        colorBlockCount: bundle.blocks.length,
-        lightingSetupCount: bundle.lightingSetups.length,
-        cameraTestCount: bundle.cameraTests.length,
-        formatSectionContentJson:
-            bundle.sectionContentJsonById[BibleSectionId.format],
-        cameraSectionContentJson:
-            bundle.sectionContentJsonById[BibleSectionId.camera],
-      );
-      final built = builder.build(
-        projectId: widget.projectId,
-        config: config,
-        bundle: bundle,
-        sourceDocument: sourceDocument,
-        compositionId: compositionId,
-      );
-      final composition =
-          existing != null &&
-              existing.metadata['sourceHash']?.toString() == sourceHash
-          ? existing.copyWith(config: config)
-          : built.copyWith(
-              metadata: {...built.metadata, 'sourceHash': sourceHash},
-            );
-      if (!mounted) return;
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (_) => BibleExportComposerScreen(
-            initialComposition: composition,
-            store: store,
-            database: db,
-            onRequestPdf: _runCompositionExport,
-            loadExportBundle: _loadExportBundle,
-            loadSourceDocument: () => BibleDocumentStore(db).loadForBible(
-              bundle.data.id,
-            ),
-          ),
-        ),
-      );
-    } catch (error) {
-      if (mounted) {
-        AppSnackBar.showError(context, userFriendlyError(error));
-      }
-    }
-  }
-
-  Future<void> _runCompositionExport(BibleExportComposition composition) async {
-    final project = _project;
-    if (project == null) return;
-    try {
-      final db = ref.read(databaseProvider);
-      final bytes = await BibleExportPdfRenderer(
-        database: db,
-      ).buildBytes(composition);
-      final safe = project.name.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
-      final baseName = safe.isEmpty ? 'proyecto' : safe;
-      final filename = '${baseName}_biblia_montada';
-      if (!mounted) return;
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (_) => BibleExportPdfPreviewScreen(
-            bytes: bytes,
-            title: composition.config.name,
-            onConfirm: () async {
-              if (composition.config.destination ==
-                  VisualBibleExportDestination.share) {
-                await GoodNotesExportService.shareForAnnotation(
-                  pdfBytes: bytes,
-                  filename: filename,
-                  documentType: GoodNotesModuleType.visualBible,
-                );
-                if (!mounted) return;
-                Navigator.of(context).pop();
-                AppSnackBar.show(context, 'Montaje listo para compartir');
-                return;
-              }
-              final path = await ExportFileSaver.saveBytes(
-                bytes: bytes,
-                dialogTitle: 'Guardar montaje de Biblia',
-                fileName: filename,
-                extension: 'pdf',
-              );
-              if (!mounted || path == null) return;
-              Navigator.of(context).pop();
-              AppSnackBar.show(context, 'PDF guardado en $path');
-            },
-          ),
-        ),
-      );
-    } catch (error) {
-      if (mounted) {
-        AppSnackBar.showError(context, userFriendlyError(error));
-      }
-    }
+    await _runExport(config);
   }
 
   Future<void> _runExport(VisualBibleExportConfig config) async {

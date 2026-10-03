@@ -85,7 +85,7 @@ WORKING:
 
 * Modo local offline + proyectos/escenas/planos/localizaciones
 * Visual Bible UI clásica + moodboard + anotaciones compartidas
-* Export PDF legacy + compositor híbrido
+* Export PDF legacy (el compositor híbrido se retiró el 2026-10-03)
 * Auth/sesión nube + invitaciones director
 * Sync manual proyectos/contenido/media
 * Equipo: routing cámara/lente + roles A-CAM/B-CAM

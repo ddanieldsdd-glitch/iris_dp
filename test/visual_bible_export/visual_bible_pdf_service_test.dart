@@ -41,7 +41,6 @@ void main() {
         BibleSectionId.location,
         BibleSectionId.exposure,
       },
-      narrativeCards: <NarrativeCardModel>[],
     sectionContentJsonById: {
         BibleSectionId.location: locationContent,
         BibleSectionId.camera: cameraContent,
@@ -71,7 +70,6 @@ void main() {
       cameraTests: const [],
       moodboard: const [],
       includedSections: {BibleSectionId.concept},
-      narrativeCards: <NarrativeCardModel>[],
     sectionContentJsonById: {
         BibleSectionId.concept: conceptContent,
       },

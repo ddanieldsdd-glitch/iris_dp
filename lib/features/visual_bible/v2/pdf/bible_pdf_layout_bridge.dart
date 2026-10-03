@@ -4,8 +4,7 @@ import '../theme/bible_theme.dart';
 
 /// Serializa el layout del canvas v2 (grid 12 / colSpan / rowSpan).
 ///
-/// El PDF de entrega **no** consume este Map: [BibleExportPdfRenderer]
-/// pinta los mismos [BibleBlock] que el editor. Este puente existe para
+/// El PDF de entrega **no** consume este Map. Este puente existe para
 /// tests WYSIWYG (mismo `colSpan`/`rowSpan` que en pantalla).
 abstract final class BiblePdfLayoutBridge {
   static const int gridColumns = 12;

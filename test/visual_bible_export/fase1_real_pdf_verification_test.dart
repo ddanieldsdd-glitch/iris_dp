@@ -7,8 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/database/dao/visual_bible_dao.dart';
 import 'package:iris_dp/features/visual_bible/data/visual_bible_repository.dart';
-import 'package:iris_dp/features/visual_bible/export/builder/bible_export_composition_builder.dart';
-import 'package:iris_dp/features/visual_bible/export/pdf/bible_export_pdf_renderer.dart';
 import 'package:iris_dp/features/visual_bible/visual_bible_export_config.dart';
 import 'package:iris_dp/features/visual_bible/visual_bible_model.dart';
 import 'package:iris_dp/features/visual_bible/visual_bible_pdf_service.dart';
@@ -184,26 +182,9 @@ void main() {
       final classicPath = File('${outDir.path}/classic_export.pdf');
       await classicPath.writeAsBytes(classicBytes);
 
-      final composition = BibleExportCompositionBuilder(
-        idFactory: () => 'fase1-composition',
-        clock: () => now,
-      ).build(
-        projectId: projectId,
-        config: config,
-        bundle: bundle,
-        includeCover: true,
-      );
-      final composerBytes = await BibleExportPdfRenderer(database: db).buildBytes(
-        composition,
-      );
-      final composerPath = File('${outDir.path}/composer_export.pdf');
-      await composerPath.writeAsBytes(composerBytes);
-
       expect(classicPath.existsSync(), isTrue);
-      expect(composerPath.existsSync(), isTrue);
 
       final classicExtracted = await _extractPdfText(classicPath);
-      final composerExtracted = await _extractPdfText(composerPath);
 
       for (final marker in [
         fase1MarkerCameraIso,
@@ -222,24 +203,16 @@ void main() {
           isTrue,
           reason: 'PDF clásico debe contener $marker',
         );
-        expect(
-          composerExtracted.contains(marker),
-          isTrue,
-          reason: 'PDF compositor debe contener $marker',
-        );
       }
 
       expect(classicExtracted.toUpperCase(), contains('LOCALIZACIÓN'));
       expect(classicExtracted.toUpperCase(), contains('ÓPTICA'));
-      expect(composerExtracted, contains('Localización'));
-      expect(composerExtracted, contains('Óptica'));
 
       await File('${outDir.path}/VERIFICATION.txt').writeAsString('''
 PDFs generados para checkpoint Fase 1 (cierre)
 Classic: ${classicPath.absolute.path}
-Composer: ${composerPath.absolute.path}
 
-Marcadores esperados en ambos PDFs:
+Marcadores esperados en el PDF:
 - Cámara: $fase1MarkerCameraIso, $fase1MarkerCameraBit
 - Location: $fase1MarkerLocationWeather, $fase1MarkerLocationCoords, $fase1MarkerLocationGoldenHour
 - Optics: $fase1MarkerOpticsFilter, $fase1MarkerOpticsFocal, $fase1MarkerOpticsMaint, $fase1MarkerOpticsSet, $fase1MarkerOpticsNarrative
