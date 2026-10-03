@@ -52,8 +52,8 @@ class BibleReference {
   /// Escena o momento concreto de la obra.
   final String scene;
 
-  /// Imagen del moodboard vinculada, si la hay.
-  final int? imageId;
+  /// Imágenes del moodboard vinculadas. La primera es la portada.
+  final List<int> imageIds;
 
   /// Fichas antiguas emparejaban imagen y ficha por posición.
   final bool legacyPairing;
@@ -69,15 +69,40 @@ class BibleReference {
     this.why = '',
     this.purpose = '',
     this.scene = '',
-    this.imageId,
+    this.imageIds = const [],
     this.legacyPairing = false,
     this.lens = '',
     this.techLabel = '',
     this.techValue = '',
   });
 
+  /// Portada: la primera imagen vinculada.
+  int? get imageId => imageIds.isEmpty ? null : imageIds.first;
+
   bool get isEmpty =>
       work.isEmpty && title.isEmpty && why.isEmpty && purpose.isEmpty;
+
+  BibleReference copyWith({
+    String? work,
+    String? title,
+    String? kind,
+    String? why,
+    String? purpose,
+    String? scene,
+    List<int>? imageIds,
+  }) =>
+      BibleReference(
+        work: work ?? this.work,
+        title: title ?? this.title,
+        kind: kind ?? this.kind,
+        why: why ?? this.why,
+        purpose: purpose ?? this.purpose,
+        scene: scene ?? this.scene,
+        imageIds: imageIds ?? this.imageIds,
+        lens: lens,
+        techLabel: techLabel,
+        techValue: techValue,
+      );
 
   factory BibleReference.fromJson(Map<dynamic, dynamic> json) {
     String text(String key) => json[key]?.toString().trim() ?? '';
@@ -85,6 +110,7 @@ class BibleReference {
         keys.map(text).firstWhere((v) => v.isNotEmpty, orElse: () => '');
     // Fichas antiguas de Concepto: film, dp, director, tone, intent.
     final credit = [text('dp'), text('director')].where((e) => e.isNotEmpty);
+    final rawImages = json['imageIds'];
     final rawImage = json['imageId'];
     return BibleReference(
       work: text('refLabel').isNotEmpty
@@ -96,8 +122,14 @@ class BibleReference {
       why: first(['why', 'body', 'tone']),
       purpose: first(['purpose', 'intent']),
       scene: text('scene'),
-      imageId: rawImage is num ? rawImage.toInt() : null,
-      legacyPairing: !json.containsKey('imageId'),
+      imageIds: [
+        if (rawImages is List)
+          for (final id in rawImages)
+            if (id is num) id.toInt(),
+        if (rawImages is! List && rawImage is num) rawImage.toInt(),
+      ],
+      legacyPairing:
+          !json.containsKey('imageId') && !json.containsKey('imageIds'),
       lens: text('lens'),
       techLabel: text('tech2Label'),
       techValue: text('tech2Value'),
@@ -111,6 +143,8 @@ class BibleReference {
         'why': why,
         'purpose': purpose,
         'scene': scene,
+        'imageIds': imageIds,
+        // Portada, para versiones que solo leen una imagen.
         'imageId': imageId,
         if (lens.isNotEmpty) 'lens': lens,
         if (techLabel.isNotEmpty) 'tech2Label': techLabel,

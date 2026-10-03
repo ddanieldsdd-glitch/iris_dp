@@ -73,7 +73,7 @@ Añadido el 2026-10-03. La biblia es una maqueta de partida hecha con piezas que
 - [x] **W1. Catálogo único de widgets.** `widgets/catalog/bible_widget_catalog.dart`: texto, lista, datos técnicos, paleta, imágenes y referencias (narrativas, visuales, técnicas). Lo leen las secciones, las pantallas personalizadas y «Añadir punto».
 - [ ] **W2. Marco de punto y complementos.** Menú «⋯» en cada punto: renombrar, ancho, mover, quitar, y añadirle imágenes o una paleta.
 - [x] **W3. Widget de paleta.** `BiblePaletteWidget`: muestras con código y nombre, y extracción desde una imagen del moodboard.
-- [ ] **W4. Referencias.** Varias imágenes por referencia y pantalla de detalle con edición directa.
+- [x] **W4. Referencias.** Varias imágenes por referencia y pantalla de detalle con edición directa.
 - [ ] **W5. Disposición responsiva.** Ancho por punto: completo, medio o tercio.
 - [ ] **W6. PDF.** Cada widget y sus complementos, en cualquier sección.
 - [ ] **W7. Dirección y Concepto sobre el sistema**, y revisión en la app.

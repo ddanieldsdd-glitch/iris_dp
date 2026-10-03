@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -91,7 +92,8 @@ class BibleReferencesCopy {
   );
 }
 
-/// Mazo de referencias razonadas: tarjetas con imagen que abren su detalle.
+/// Mazo de referencias razonadas: tarjetas con imagen que abren su página
+/// de edición.
 class BibleReferencesDeck extends ConsumerWidget {
   final int projectId;
   final int bibleId;
@@ -116,72 +118,51 @@ class BibleReferencesDeck extends ConsumerWidget {
     required this.onOpenMoodboard,
   });
 
-  Future<_ReferenceEdit?> _editDialog(
-    BuildContext context, {
-    required BibleReference initial,
-    required int? imageId,
-    required bool canDelete,
-  }) =>
-      showDialog<_ReferenceEdit>(
-        context: context,
-        builder: (_) => _ReferenceDialog(
+  /// Abre la página de edición de la ficha [index] de [list]. Cada cambio se
+  /// guarda al momento; al volver, una ficha que quedó vacía se descarta.
+  Future<void> _open(
+    BuildContext context,
+    List<BibleReference> list,
+    int index,
+    List<int> imageIds,
+  ) async {
+    var current = [...list];
+    current[index] = current[index].copyWith(imageIds: imageIds);
+    var deleted = false;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => BibleReferenceEditorScreen(
           projectId: projectId,
           bibleId: bibleId,
           sectionId: sectionId,
           kinds: kinds,
           copy: copy,
-          initial: initial,
-          initialImageId: imageId,
-          canDelete: canDelete,
+          initial: current[index],
+          onChanged: (updated) {
+            current = [...current]..[index] = updated;
+            onChanged(current);
+          },
+          onDelete: () {
+            deleted = true;
+            onChanged([...current]..removeAt(index));
+          },
         ),
-      );
-
-  void _apply(_ReferenceEdit? result, int? index) {
-    if (result == null) return;
-    final next = [...references];
-    if (result.delete) {
-      if (index != null) next.removeAt(index);
-    } else if (index != null) {
-      next[index] = result.reference!;
-    } else {
-      next.add(result.reference!);
+      ),
+    );
+    final edited = current[index];
+    if (!deleted && edited.isEmpty && edited.imageIds.isEmpty) {
+      onChanged([...current]..removeAt(index));
     }
-    onChanged(next);
   }
 
-  Future<void> _add(BuildContext context, {int? imageId}) async {
-    _apply(
-      await _editDialog(
-        context,
-        initial: BibleReference(imageId: imageId),
-        imageId: imageId,
-        canDelete: false,
-      ),
-      null,
-    );
-  }
-
-  Future<void> _open(
-    BuildContext context,
-    int index,
-    MoodboardImage? image,
-  ) async {
-    final result = await Navigator.of(context).push<_ReferenceEdit>(
-      MaterialPageRoute(
-        builder: (_) => _ReferenceDetailScreen(
-          reference: references[index],
-          image: image,
-          copy: copy,
-          onEdit: (ctx) => _editDialog(
-            ctx,
-            initial: references[index],
-            imageId: image?.id,
-            canDelete: true,
-          ),
-        ),
-      ),
-    );
-    _apply(result, index);
+  Future<void> _add(BuildContext context, {int? imageId}) {
+    final list = [
+      ...references,
+      BibleReference(imageIds: [if (imageId != null) imageId]),
+    ];
+    return _open(context, list, list.length - 1, [
+      if (imageId != null) imageId,
+    ]);
   }
 
   @override
@@ -206,17 +187,19 @@ class BibleReferencesDeck extends ConsumerWidget {
         ];
         // Las fichas antiguas se emparejan por posición con las imágenes de
         // la sección; las nuevas pueden usar cualquier imagen del proyecto.
-        final linked = [
+        final imagesOf = [
           for (var i = 0; i < references.length; i++)
             references[i].legacyPairing
-                ? (i < sectionIds.length ? sectionIds[i] : null)
-                : (byId.containsKey(references[i].imageId)
-                    ? references[i].imageId
-                    : null),
+                ? [if (i < sectionIds.length) sectionIds[i]]
+                : [
+                    for (final id in references[i].imageIds)
+                      if (byId.containsKey(id)) id,
+                  ],
         ];
+        final used = {for (final ids in imagesOf) ...ids};
         final unlinked = [
           for (final id in sectionIds)
-            if (!linked.contains(id)) byId[id]!,
+            if (!used.contains(id)) byId[id]!,
         ];
 
         return LayoutBuilder(
@@ -224,8 +207,8 @@ class BibleReferencesDeck extends ConsumerWidget {
             final columns = constraints.maxWidth >= 900
                 ? 3
                 : constraints.maxWidth >= 560
-                    ? 2
-                    : 1;
+                ? 2
+                : 1;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -234,9 +217,9 @@ class BibleReferencesDeck extends ConsumerWidget {
                     padding: const EdgeInsets.only(bottom: AppSpacing.md),
                     child: Text(
                       copy.emptyHint,
-                      style: AppTypography.bodyMedium(palette).copyWith(
-                        color: palette.textSecondary,
-                      ),
+                      style: AppTypography.bodyMedium(
+                        palette,
+                      ).copyWith(color: palette.textSecondary),
                     ),
                   ),
                 for (var row = 0; row < references.length; row += columns)
@@ -252,12 +235,16 @@ class BibleReferencesDeck extends ConsumerWidget {
                               child: row + c < references.length
                                   ? _ReferenceCard(
                                       reference: references[row + c],
-                                      image: byId[linked[row + c]],
+                                      cover: imagesOf[row + c].isEmpty
+                                          ? null
+                                          : byId[imagesOf[row + c].first],
+                                      imageCount: imagesOf[row + c].length,
                                       whyLabel: copy.whyLabel,
                                       onTap: () => _open(
                                         context,
+                                        references,
                                         row + c,
-                                        byId[linked[row + c]],
+                                        imagesOf[row + c],
                                       ),
                                     )
                                   : const SizedBox.shrink(),
@@ -326,15 +313,14 @@ class BibleReferencesDeck extends ConsumerWidget {
     IconData icon,
     String label,
     VoidCallback onTap,
-  ) =>
-      TextButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 16, color: palette.textSecondary),
-        label: Text(
-          label.toUpperCase(),
-          style: BiblePointPanel.labelStyle(palette),
-        ),
-      );
+  ) => TextButton.icon(
+    onPressed: onTap,
+    icon: Icon(icon, size: 16, color: palette.textSecondary),
+    label: Text(
+      label.toUpperCase(),
+      style: BiblePointPanel.labelStyle(palette),
+    ),
+  );
 }
 
 class _KindChip extends StatelessWidget {
@@ -353,10 +339,9 @@ class _KindChip extends StatelessWidget {
       ),
       child: Text(
         kind.toUpperCase(),
-        style: BiblePointPanel.labelStyle(palette).copyWith(
-          fontSize: 10,
-          color: Colors.white,
-        ),
+        style: BiblePointPanel.labelStyle(
+          palette,
+        ).copyWith(fontSize: 10, color: Colors.white),
       ),
     );
   }
@@ -365,13 +350,15 @@ class _KindChip extends StatelessWidget {
 /// Tarjeta de referencia: la imagen manda y el título va sobre ella.
 class _ReferenceCard extends StatelessWidget {
   final BibleReference reference;
-  final MoodboardImage? image;
+  final MoodboardImage? cover;
+  final int imageCount;
   final String whyLabel;
   final VoidCallback onTap;
 
   const _ReferenceCard({
     required this.reference,
-    required this.image,
+    required this.cover,
+    required this.imageCount,
     required this.whyLabel,
     required this.onTap,
   });
@@ -379,7 +366,7 @@ class _ReferenceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final file = image == null ? null : File(image!.imagePath);
+    final file = cover == null ? null : File(cover!.imagePath);
     final hasImage = file != null && file.existsSync();
     final label = BiblePointPanel.labelStyle(palette).copyWith(fontSize: 10);
     final title = reference.title.isEmpty
@@ -440,6 +427,36 @@ class _ReferenceCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (imageCount > 1)
+                      Positioned(
+                        top: AppSpacing.sm,
+                        right: AppSpacing.sm,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.photo_library_outlined,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$imageCount',
+                                style: label.copyWith(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     Positioned(
                       left: AppSpacing.md,
                       right: AppSpacing.md,
@@ -502,128 +519,422 @@ class _ReferenceCard extends StatelessWidget {
   }
 }
 
-/// Detalle de una referencia: la imagen grande y el razonamiento completo.
-class _ReferenceDetailScreen extends StatefulWidget {
-  final BibleReference reference;
-  final MoodboardImage? image;
+/// Página de una referencia: se lee y se edita en el mismo sitio.
+///
+/// Carga las imágenes del moodboard y delega en [BibleReferenceEditor].
+class BibleReferenceEditorScreen extends ConsumerWidget {
+  final int projectId;
+  final int bibleId;
+  final String sectionId;
+  final List<String> kinds;
   final BibleReferencesCopy copy;
-  final Future<_ReferenceEdit?> Function(BuildContext context) onEdit;
+  final BibleReference initial;
+  final ValueChanged<BibleReference> onChanged;
+  final VoidCallback onDelete;
 
-  const _ReferenceDetailScreen({
-    required this.reference,
-    required this.image,
+  const BibleReferenceEditorScreen({
+    super.key,
+    required this.projectId,
+    required this.bibleId,
+    required this.sectionId,
+    required this.kinds,
     required this.copy,
-    required this.onEdit,
+    required this.initial,
+    required this.onChanged,
+    required this.onDelete,
   });
 
   @override
-  State<_ReferenceDetailScreen> createState() => _ReferenceDetailScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(databaseProvider);
+    return StreamBuilder<List<MoodboardImage>>(
+      stream: db.watchMoodboardImages(projectId),
+      builder: (context, snap) => BibleReferenceEditor(
+        kinds: kinds,
+        copy: copy,
+        initial: initial,
+        imagePaths: {
+          for (final image in snap.data ?? const <MoodboardImage>[])
+            image.id: image.imagePath,
+        },
+        onChanged: onChanged,
+        onDelete: onDelete,
+        onPickImages: (selected) => showMoodboardImagePicker(
+          context,
+          projectId: projectId,
+          bibleId: bibleId,
+          sectionId: sectionId,
+          selected: selected,
+        ),
+      ),
+    );
+  }
 }
 
-class _ReferenceDetailScreenState extends State<_ReferenceDetailScreen> {
-  Future<void> _edit() async {
-    final result = await widget.onEdit(context);
-    if (result != null && mounted) Navigator.pop(context, result);
+/// Editor de una referencia. No depende de la base de datos: recibe las
+/// rutas de las imágenes y avisa de cada cambio con [onChanged].
+class BibleReferenceEditor extends StatefulWidget {
+  final List<String> kinds;
+  final BibleReferencesCopy copy;
+  final BibleReference initial;
+
+  /// Ruta en disco de cada imagen del moodboard, por id.
+  final Map<int, String> imagePaths;
+  final ValueChanged<BibleReference> onChanged;
+  final VoidCallback onDelete;
+
+  /// Abre el selector de imágenes con las ya elegidas.
+  final Future<List<int>?> Function(List<int> selected) onPickImages;
+
+  const BibleReferenceEditor({
+    super.key,
+    required this.kinds,
+    required this.copy,
+    required this.initial,
+    required this.imagePaths,
+    required this.onChanged,
+    required this.onDelete,
+    required this.onPickImages,
+  });
+
+  @override
+  State<BibleReferenceEditor> createState() => _BibleReferenceEditorState();
+}
+
+class _BibleReferenceEditorState extends State<BibleReferenceEditor> {
+  static const _saveDelay = Duration(milliseconds: 500);
+
+  late final _title = TextEditingController(text: widget.initial.title);
+  late final _work = TextEditingController(text: widget.initial.work);
+  late final _why = TextEditingController(text: widget.initial.why);
+  late final _purpose = TextEditingController(text: widget.initial.purpose);
+  late final _scene = TextEditingController(text: widget.initial.scene);
+  late String _kind = widget.initial.kind;
+  late List<int> _imageIds = [...widget.initial.imageIds];
+  Timer? _debounce;
+  bool _dirty = false;
+  bool _deleted = false;
+
+  BibleReference get _current => widget.initial.copyWith(
+    title: _title.text.trim(),
+    work: _work.text.trim(),
+    kind: _kind,
+    why: _why.text.trim(),
+    purpose: _purpose.text.trim(),
+    scene: _scene.text.trim(),
+    imageIds: _imageIds,
+  );
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    if (_dirty && !_deleted) widget.onChanged(_current);
+    for (final c in [_title, _work, _why, _purpose, _scene]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  /// Guarda tras una pausa al escribir.
+  void _touch() {
+    setState(() => _dirty = true);
+    _debounce?.cancel();
+    _debounce = Timer(_saveDelay, _flush);
+  }
+
+  /// Guarda ya (imágenes, tipo).
+  void _flush() {
+    _debounce?.cancel();
+    widget.onChanged(_current);
+    if (mounted) setState(() => _dirty = false);
+  }
+
+  Future<void> _pickImages() async {
+    final picked = await widget.onPickImages(_imageIds);
+    if (picked == null || !mounted) return;
+    setState(() => _imageIds = picked);
+    _flush();
+  }
+
+  void _setCover(int id) {
+    setState(() => _imageIds = [id, ..._imageIds.where((i) => i != id)]);
+    _flush();
+  }
+
+  void _removeImage(int id) {
+    setState(() => _imageIds = _imageIds.where((i) => i != id).toList());
+    _flush();
+  }
+
+  Future<void> _confirmDelete() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar referencia'),
+        content: const Text(
+          'Se borra la ficha. Las imágenes siguen en el moodboard.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    _deleted = true;
+    _debounce?.cancel();
+    widget.onDelete();
+    Navigator.pop(context);
+  }
+
+  InputDecoration _bare(AppPalette palette, String hint, TextStyle style) =>
+      InputDecoration(
+        hintText: hint,
+        hintStyle: style.copyWith(color: palette.textTertiary),
+        isDense: true,
+        filled: false,
+        contentPadding: EdgeInsets.zero,
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+      );
+
+  Widget _section(
+    AppPalette palette,
+    String label,
+    TextEditingController controller,
+    String hint, {
+    IconData? icon,
+  }) {
+    final style = AppTypography.bodyLarge(palette).copyWith(height: 1.55);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: BiblePointPanel(
+        label: label,
+        icon: icon,
+        child: TextField(
+          controller: controller,
+          minLines: 3,
+          maxLines: null,
+          style: style,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: _bare(palette, hint, style),
+          onChanged: (_) => _touch(),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final reference = widget.reference;
-    final file =
-        widget.image == null ? null : File(widget.image!.imagePath);
+    final copy = widget.copy;
     final label = BiblePointPanel.labelStyle(palette);
+    final existing = [
+      for (final id in _imageIds)
+        if (widget.imagePaths[id] != null) id,
+    ];
+    final cover = existing.isEmpty ? null : widget.imagePaths[existing.first];
+    final titleStyle = AppTypography.displayMedium(
+      palette,
+    ).copyWith(fontSize: 30, height: 1.2);
+    final workStyle = AppTypography.mono(palette).copyWith(fontSize: 13);
 
-    Widget block(String heading, String text) => text.isEmpty
-        ? const SizedBox.shrink()
-        : Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-            child: BiblePointPanel(
-              label: heading,
-              child: Text(
-                text,
-                style: AppTypography.bodyLarge(palette).copyWith(height: 1.55),
+    final gallery = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (cover != null)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(BiblePointPanel.radius),
+            child: InkWell(
+              onTap: () => showBibleImageViewer(context, path: cover),
+              child: Image.file(File(cover), fit: BoxFit.contain),
+            ),
+          )
+        else
+          InkWell(
+            onTap: _pickImages,
+            borderRadius: BorderRadius.circular(BiblePointPanel.radius),
+            child: Container(
+              height: 220,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(BiblePointPanel.radius),
+                border: Border.all(color: palette.border),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.add_photo_alternate_outlined,
+                    size: 32,
+                    color: palette.textSecondary,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text('AÑADIR IMÁGENES', style: label),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Opcional: una referencia puede ser solo texto.',
+                    style: AppTypography.caption(palette),
+                  ),
+                ],
               ),
             ),
-          );
-
-    final text = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (reference.kind.isNotEmpty) ...[
-          _KindChip(reference.kind),
-          const SizedBox(height: AppSpacing.md),
-        ],
-        Text(
-          reference.title.isEmpty ? 'Referencia sin título' : reference.title,
-          style: AppTypography.displayMedium(palette).copyWith(fontSize: 32),
-        ),
-        if (reference.work.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.sm),
-          Text(reference.work.toUpperCase(), style: label),
-        ],
-        const SizedBox(height: AppSpacing.lg),
-        block(widget.copy.whyLabel, reference.why),
-        block(widget.copy.purposeLabel, reference.purpose),
-        block('Momento', reference.scene),
-        if (reference.why.isEmpty && reference.purpose.isEmpty)
-          Text(
-            'Aún no has razonado esta referencia. Pulsa Editar.',
-            style: AppTypography.bodyMedium(palette).copyWith(
-              color: palette.textTertiary,
-            ),
           ),
+        if (existing.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final id in existing)
+                _EditorThumb(
+                  path: widget.imagePaths[id]!,
+                  isCover: id == existing.first,
+                  onTap: () => _setCover(id),
+                  onRemove: () => _removeImage(id),
+                ),
+              InkWell(
+                onTap: _pickImages,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  width: 72 * 16 / 9,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: palette.border),
+                  ),
+                  child: Icon(Icons.add, color: palette.textSecondary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Toca una imagen para ponerla de portada.',
+            style: AppTypography.caption(palette),
+          ),
+        ],
       ],
     );
 
-    final picture = file != null && file.existsSync()
-        ? ClipRRect(
-            borderRadius: BorderRadius.circular(BiblePointPanel.radius),
-            child: InkWell(
-              onTap: () => showBibleImageViewer(context, path: file.path),
-              child: Image.file(file, fit: BoxFit.contain),
+    final fields = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _title,
+          minLines: 1,
+          maxLines: null,
+          style: titleStyle,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: _bare(palette, copy.titleLabel, titleStyle),
+          onChanged: (_) => _touch(),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        TextField(
+          controller: _work,
+          style: workStyle,
+          decoration: _bare(palette, copy.workHint, workStyle),
+          onChanged: (_) => _touch(),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final kind in widget.kinds)
+              ChoiceChip(
+                label: Text(kind),
+                selected: _kind == kind,
+                onSelected: (on) {
+                  setState(() => _kind = on ? kind : '');
+                  _flush();
+                },
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _section(
+          palette,
+          copy.whyLabel,
+          _why,
+          copy.whyHint,
+          icon: Icons.psychology_outlined,
+        ),
+        _section(
+          palette,
+          copy.purposeLabel,
+          _purpose,
+          copy.purposeHint,
+          icon: Icons.flag_outlined,
+        ),
+        BiblePointPanel(
+          label: copy.sceneLabel,
+          icon: Icons.schedule_outlined,
+          child: TextField(
+            controller: _scene,
+            style: AppTypography.bodyLarge(palette),
+            decoration: _bare(
+              palette,
+              copy.sceneHint,
+              AppTypography.bodyLarge(palette),
             ),
-          )
-        : null;
+            onChanged: (_) => _touch(),
+          ),
+        ),
+      ],
+    );
 
     return Scaffold(
       backgroundColor: palette.background,
       appBar: AppBar(
-        title: Text(widget.copy.dialogTitle),
+        title: Text(copy.dialogTitle),
         actions: [
-          TextButton.icon(
-            onPressed: _edit,
-            icon: const Icon(Icons.edit_outlined, size: 16),
-            label: const Text('Editar'),
+          Center(
+            child: Text(
+              _dirty ? 'GUARDANDO…' : 'GUARDADO',
+              style: label.copyWith(
+                color: _dirty ? palette.warning : palette.textTertiary,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          IconButton(
+            tooltip: 'Eliminar referencia',
+            onPressed: _confirmDelete,
+            icon: const Icon(Icons.delete_outline),
           ),
           const SizedBox(width: AppSpacing.sm),
         ],
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 900 && picture != null;
+          final wide = constraints.maxWidth >= 900;
           return SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpacing.xl),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1200),
+                constraints: const BoxConstraints(maxWidth: 1280),
                 child: wide
                     ? Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(flex: 6, child: picture),
+                          Expanded(flex: 6, child: gallery),
                           const SizedBox(width: AppSpacing.xl),
-                          Expanded(flex: 5, child: text),
+                          Expanded(flex: 5, child: fields),
                         ],
                       )
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (picture != null) ...[
-                            picture,
-                            const SizedBox(height: AppSpacing.lg),
-                          ],
-                          text,
+                          gallery,
+                          const SizedBox(height: AppSpacing.lg),
+                          fields,
                         ],
                       ),
               ),
@@ -635,201 +946,71 @@ class _ReferenceDetailScreenState extends State<_ReferenceDetailScreen> {
   }
 }
 
-class _ReferenceEdit {
-  final BibleReference? reference;
-  final bool delete;
+/// Miniatura de la galería del editor: toca para portada, × para quitar.
+class _EditorThumb extends StatelessWidget {
+  final String path;
+  final bool isCover;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
 
-  const _ReferenceEdit.save(this.reference) : delete = false;
-  const _ReferenceEdit.delete()
-      : reference = null,
-        delete = true;
-}
-
-class _ReferenceDialog extends ConsumerStatefulWidget {
-  final int projectId;
-  final int bibleId;
-  final String sectionId;
-  final List<String> kinds;
-  final BibleReferencesCopy copy;
-  final BibleReference initial;
-  final int? initialImageId;
-  final bool canDelete;
-
-  const _ReferenceDialog({
-    required this.projectId,
-    required this.bibleId,
-    required this.sectionId,
-    required this.kinds,
-    required this.copy,
-    required this.initial,
-    required this.initialImageId,
-    required this.canDelete,
+  const _EditorThumb({
+    required this.path,
+    required this.isCover,
+    required this.onTap,
+    required this.onRemove,
   });
-
-  @override
-  ConsumerState<_ReferenceDialog> createState() => _ReferenceDialogState();
-}
-
-class _ReferenceDialogState extends ConsumerState<_ReferenceDialog> {
-  late final _work = TextEditingController(text: widget.initial.work);
-  late final _title = TextEditingController(text: widget.initial.title);
-  late final _why = TextEditingController(text: widget.initial.why);
-  late final _purpose = TextEditingController(text: widget.initial.purpose);
-  late final _scene = TextEditingController(text: widget.initial.scene);
-  late String _kind = widget.initial.kind;
-  late int? _imageId = widget.initialImageId;
-
-  @override
-  void dispose() {
-    for (final c in [_work, _title, _why, _purpose, _scene]) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  void _save() {
-    Navigator.pop(
-      context,
-      _ReferenceEdit.save(
-        BibleReference(
-          work: _work.text.trim(),
-          title: _title.text.trim(),
-          kind: _kind,
-          why: _why.text.trim(),
-          purpose: _purpose.text.trim(),
-          scene: _scene.text.trim(),
-          imageId: _imageId,
-          lens: widget.initial.lens,
-          techLabel: widget.initial.techLabel,
-          techValue: widget.initial.techValue,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pickImage() async {
-    final picked = await showMoodboardImagePicker(
-      context,
-      projectId: widget.projectId,
-      bibleId: widget.bibleId,
-      sectionId: widget.sectionId,
-      selected: [if (_imageId != null) _imageId!],
-      single: true,
-    );
-    if (picked != null) {
-      setState(() => _imageId = picked.isEmpty ? null : picked.first);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final copy = widget.copy;
-    final db = ref.watch(databaseProvider);
-
-    Widget field(
-      TextEditingController controller,
-      String label,
-      String hint, {
-      int maxLines = 1,
-    }) =>
-        Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.md),
-          child: TextField(
-            controller: controller,
-            minLines: maxLines > 1 ? 3 : 1,
-            maxLines: maxLines,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: InputDecoration(
-              labelText: label,
-              hintText: hint,
-              alignLabelWithHint: true,
+    return Stack(
+      children: [
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                width: 2,
+                color: isCover ? palette.accent : Colors.transparent,
+              ),
+            ),
+            child: BibleImageThumb(path: path, height: 72),
+          ),
+        ),
+        if (isCover)
+          Positioned(
+            left: 6,
+            bottom: 6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: palette.accent,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'PORTADA',
+                style: TextStyle(fontSize: 8, color: Colors.white),
+              ),
             ),
           ),
-        );
-
-    return AlertDialog(
-      title: Text(copy.dialogTitle),
-      content: SizedBox(
-        width: 560,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              StreamBuilder<List<MoodboardImage>>(
-                stream: db.watchMoodboardImages(widget.projectId),
-                builder: (context, snap) {
-                  final image = (snap.data ?? const <MoodboardImage>[])
-                      .where((i) => i.id == _imageId)
-                      .firstOrNull;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: Row(
-                      children: [
-                        if (image != null) ...[
-                          BibleImageThumb(path: image.imagePath, height: 72),
-                          const SizedBox(width: AppSpacing.md),
-                        ],
-                        OutlinedButton.icon(
-                          onPressed: _pickImage,
-                          icon: const Icon(Icons.image_outlined, size: 16),
-                          label: Text(
-                            image == null ? 'Elegir imagen' : 'Cambiar imagen',
-                          ),
-                        ),
-                        if (image != null)
-                          TextButton(
-                            onPressed: () => setState(() => _imageId = null),
-                            child: const Text('Quitar'),
-                          ),
-                      ],
-                    ),
-                  );
-                },
+        Positioned(
+          top: 0,
+          right: 0,
+          child: InkWell(
+            onTap: onRemove,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
               ),
-              field(_title, copy.titleLabel, copy.titleHint),
-              field(_work, copy.workLabel, copy.workHint),
-              Text('Tipo de referencia', style: AppTypography.label(palette)),
-              const SizedBox(height: AppSpacing.sm),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: [
-                  for (final kind in widget.kinds)
-                    ChoiceChip(
-                      label: Text(kind),
-                      selected: _kind == kind,
-                      onSelected: (on) =>
-                          setState(() => _kind = on ? kind : ''),
-                    ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              field(_why, copy.whyLabel, copy.whyHint, maxLines: 8),
-              field(
-                _purpose,
-                copy.purposeLabel,
-                copy.purposeHint,
-                maxLines: 8,
-              ),
-              field(_scene, copy.sceneLabel, copy.sceneHint),
-            ],
+              child: const Icon(Icons.close, size: 12, color: Colors.white),
+            ),
           ),
         ),
-      ),
-      actions: [
-        if (widget.canDelete)
-          TextButton(
-            onPressed: () =>
-                Navigator.pop(context, const _ReferenceEdit.delete()),
-            child: Text('Eliminar', style: TextStyle(color: palette.error)),
-          ),
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(onPressed: _save, child: const Text('Guardar')),
       ],
     );
   }
