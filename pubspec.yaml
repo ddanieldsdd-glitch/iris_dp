@@ -86,6 +86,7 @@ flutter:
     - assets/catalog/lenses.json
     - assets/catalog/lights.json
     - assets/catalog/recording.json
+    - assets/catalog/retired.json
     - assets/luka/manifest.json
 
   # An image asset can refer to one or more resolution-specific "variants", see

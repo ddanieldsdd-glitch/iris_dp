@@ -35,9 +35,8 @@ Uint8List _buildCatalogWorkbook({
     'fuente_datos',
   ];
   for (var c = 0; c < camHeaders.length; c++) {
-    cams
-        .cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 0))
-        .value = TextCellValue(camHeaders[c]);
+    cams.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 0)).value =
+        TextCellValue(camHeaders[c]);
   }
   void writeCamRow(int row, List<Object?> values) {
     for (var c = 0; c < values.length; c++) {
@@ -111,7 +110,9 @@ Uint8List _buildCatalogWorkbook({
     for (var c = 0; c < modeHeaders.length; c++) {
       modes
           .cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 0))
-          .value = TextCellValue(modeHeaders[c]);
+          .value = TextCellValue(
+        modeHeaders[c],
+      );
     }
     void writeMode(int row, List<Object?> values) {
       for (var c = 0; c < values.length; c++) {

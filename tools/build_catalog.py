@@ -13,6 +13,7 @@ Entradas:
 Salidas:
   assets/catalog/cameras.json, lenses.json, lights.json, manifest.json
   assets/catalog/recording.json    medios y formatos de grabación por cámara
+  assets/catalog/retired.json      fichas heredadas que la app debe retirar
   docs/catalog/INFORME_CATALOGO.md
 
 Capas, de menor a mayor prioridad: base heredada, lista v1.8, master v17,
@@ -45,7 +46,7 @@ FLUJO = ROOT / "docs/catalog/fuentes/flujo_sxt_superspeed_v2_0.xlsx"
 BASE = ROOT / "tools/catalog_base"
 OUT = ROOT / "assets/catalog"
 REPORT = ROOT / "docs/catalog/INFORME_CATALOGO.md"
-CATALOG_VERSION = 8
+CATALOG_VERSION = 9
 
 MODE_COLUMNS = [
     "camera_external_id", "marca", "modelo", "modo_sensor", "res_x", "res_y",
@@ -206,6 +207,15 @@ FLUJO_CAMERA_IDS = {
     "ursacine12klf": "blackmagic_ursa_cine_12k_lf",
 }
 SXT_ID = "arri_alexa_sxt"
+
+# Fichas heredadas que se retiran del catálogo, con el motivo.
+RETIRED_LENSES = [
+    (
+        re.compile(r"^zeiss_super_speed_mk[123]_\d+$"),
+        "Familia heredada con datos erróneos (T2.8 y focales 16/20/24 mm que no "
+        "existen en Super Speed). La sustituyen «Super Speed MKI» y «Super Speed MKII/III».",
+    ),
+]
 
 
 def flujo_sources(flujo: Workbook) -> dict:
@@ -371,13 +381,13 @@ def apply_flujo_lenses(lenses: dict, flujo: Workbook, sources: dict, report: lis
         focal = integer(row.get("Focal (mm)"))
         if not (text(row.get("ID óptica")) or "").startswith("ZSS-") or focal is None:
             continue
-        version = "mk1" if "MK I" == (text(row.get("Versión según NAPALM")) or "").upper() else "mk2"
-        lid = f"zeiss_super_speed_{version}_{focal}"
-        label = "Mk I" if version == "mk1" else "Mk II"
+        # El set de NAPALM es un juego físico concreto: tiene sus propias
+        # fichas, aparte de las familias genéricas MKI y MKII/III.
+        lid = f"zeiss_super_speed_napalm_{focal}"
         lens = lenses.get(lid)
         if lens is None:
             lens = lenses[lid] = {
-                "externalId": lid, "brand": "ZEISS", "model": f"Super Speed {label} {focal}mm",
+                "externalId": lid, "brand": "ZEISS", "model": "Super Speed MKII (NAPALM)",
                 "formatCoverage": "S35", "vintage": True, "lukaCompatible": False, "isAnamorphic": False,
             }
         lens.pop("squeezeRatio", None)
@@ -392,7 +402,7 @@ def apply_flujo_lenses(lenses: dict, flujo: Workbook, sources: dict, report: lis
             "frontDiameterMm": number(row.get("Diámetro frontal (mm)")),
             "weightKg": number(row.get("Peso NAPALM (kg)")),
             "projectionType": "ESFÉRICA",
-            "series": text(row.get("Set")),
+            "series": "Super Speed MKII (NAPALM)",
         }))
         lens["isAnamorphic"] = False
         lens["specs"] = clean({
@@ -402,6 +412,7 @@ def apply_flujo_lenses(lenses: dict, flujo: Workbook, sources: dict, report: lis
             "circleT16InfinityMm": number(row.get("Círculo T16 infinito (mm)")),
             "circleT16CloseMm": number(row.get("Círculo T16 enfoque mín. (mm)")),
             "irisBlades": integer(row.get("Palas de iris (MKII)")),
+            "version": text(row.get("Versión según NAPALM")),
             "closeFocusAltM": number(row.get("Enfoque mínimo Camaleon (m)")),
             "note": text(row.get("Observación")),
         })
@@ -794,6 +805,17 @@ def build_lenses(lista, master, sources, matrix, report, flujo, flujo_src):
         family_notes += 1
         report.append(f"- Master: `{row.get('Modelo')}` aplicado a {len(members)} ópticas ({', '.join(fields) or 'tipo de proyección'}).")
 
+    retired = []
+    for lid in list(lenses):
+        for pattern, reason in RETIRED_LENSES:
+            if pattern.match(lid):
+                retired.append(lid)
+                del lenses[lid]
+                break
+    if retired:
+        report.append(f"- Retiradas {len(retired)} ópticas heredadas: {RETIRED_LENSES[0][1]}")
+    build_lenses.retired = sorted(retired)
+
     flujo_lenses = apply_flujo_lenses(lenses, flujo, flujo_src, report)
     report.append(f"- Flujo v2.0: {flujo_lenses} ópticas ZEISS Super Speed con círculo de imagen medido (típico y peor caso).")
 
@@ -888,12 +910,14 @@ def main() -> int:
     write_json(OUT / "lenses.json", lenses)
     write_json(OUT / "lights.json", lights)
     write_json(OUT / "recording.json", recording)
+    write_json(OUT / "retired.json", {"lenses": build_lenses.retired})
     write_json(OUT / "manifest.json", {
         "version": CATALOG_VERSION,
         "camerasUrl": "cameras.json",
         "lensesUrl": "lenses.json",
         "lightsUrl": "lights.json",
         "recordingUrl": "recording.json",
+        "retiredUrl": "retired.json",
     })
 
     modes = sum(len(c.get("sensorModes", [])) for c in cameras)
