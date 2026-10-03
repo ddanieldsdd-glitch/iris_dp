@@ -14,6 +14,7 @@ import '../bible_unified_references_panel.dart';
 import '../narrative_bridge_card.dart';
 import '../../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../../bible_section_fields.dart';
+import '../bible_add_point.dart';
 import '../bible_generic_point_views.dart';
 
 /// Layout común para secciones técnicas de la biblia.
@@ -175,8 +176,22 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
             if (i > 0) SizedBox(height: _sectionGap * density),
             items[i],
           ],
+          if (widget.data.id > 0) ...[
+            SizedBox(height: _sectionGap * density),
+            BibleAddPointTile(onTap: () => _addPoint(fields)),
+          ],
         ],
       ),
+    );
+  }
+
+  Future<void> _addPoint(List<BibleSectionField> fields) async {
+    final point = await showBibleAddPointDialog(context);
+    if (point == null || !mounted) return;
+    await ref.read(databaseProvider).saveBibleSectionFields(
+      widget.data.id,
+      widget.sectionId,
+      [...fields, point],
     );
   }
 
