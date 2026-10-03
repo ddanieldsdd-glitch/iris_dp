@@ -16,6 +16,8 @@ import '../bible_form_widgets.dart';
 import '../../../../shared/visual_bible/bible_reference.dart';
 import '../../moodboard_helpers.dart';
 import '../bible_navigation_scope.dart';
+import '../../../../shared/visual_bible/bible_palette.dart';
+import '../bible_palette_widget.dart';
 import '../bible_point_images.dart';
 import '../bible_references_deck.dart';
 import '../bible_point_panel.dart';
@@ -304,70 +306,6 @@ class _CardHeader extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Muestra de la paleta maestra: color, código y nombre.
-class _PaletteSwatch extends StatelessWidget {
-  final Color? color;
-  final String hex;
-  final String name;
-  final AppPalette palette;
-  final VoidCallback onTap;
-
-  const _PaletteSwatch({
-    required Color this.color,
-    required this.hex,
-    required this.name,
-    required this.palette,
-    required this.onTap,
-  });
-
-  const _PaletteSwatch.add({required this.palette, required this.onTap})
-      : color = null,
-        hex = '',
-        name = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final label = BiblePointPanel.labelStyle(palette).copyWith(fontSize: 10);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: SizedBox(
-        width: 96,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 96,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: palette.borderBright),
-              ),
-              child: color == null
-                  ? Center(
-                      child: Icon(Icons.add, color: palette.textSecondary),
-                    )
-                  : null,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              color == null ? 'AÑADIR' : hex.toUpperCase(),
-              style: AppTypography.mono(palette).copyWith(fontSize: 11),
-            ),
-            if (name.isNotEmpty)
-              Text(
-                name.toUpperCase(),
-                style: label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -752,10 +690,9 @@ class _ConceptStitchModule extends ConsumerWidget {
     final composition = custom['composition'] as String? ?? '';
     final compositionMetrics =
         (custom['compositionMetrics'] as Map?)?.cast<String, String>() ?? {};
-    final masterPalette = [
-      for (final e in (custom['masterPalette'] as List? ?? kConceptStarterPalette))
-        if (e is Map) {'hex': '${e['hex'] ?? ''}', 'name': '${e['name'] ?? ''}'},
-    ];
+    final masterPalette = BiblePaletteColor.listFrom(
+      custom['masterPalette'] ?? kConceptStarterPalette,
+    );
     final usesStarterPalette = custom['masterPalette'] == null;
 
     // Imágenes del moodboard que acompañan al texto de un punto.
@@ -771,28 +708,6 @@ class _ConceptStitchModule extends ConsumerWidget {
             }),
           ),
         );
-
-    Future<void> editSwatch(int? index) async {
-      final current = index == null ? null : masterPalette[index];
-      final picked = await BibleVisualColorSheet.show(
-        context,
-        title: 'Color de la paleta',
-        initialName: current?['name'] ?? '',
-        initialColor: parseHex(current?['hex']) ?? const Color(0xFF1B3A4B),
-        nameHint: 'Nombre del color',
-        canDelete: index != null,
-      );
-      if (picked == null) return;
-      final next = [...masterPalette];
-      if (picked.delete) {
-        if (index != null) next.removeAt(index);
-      } else if (index != null) {
-        next[index] = {'hex': picked.hex, 'name': picked.name};
-      } else {
-        next.add({'hex': picked.hex, 'name': picked.name});
-      }
-      await updateCustomData(ref, {'masterPalette': next});
-    }
 
     Widget addButton(String label, VoidCallback onTap) => Align(
           alignment: Alignment.centerLeft,
@@ -828,24 +743,14 @@ class _ConceptStitchModule extends ConsumerWidget {
                 palette: palette,
               ),
               const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 16,
-                children: [
-                  for (var i = 0; i < masterPalette.length; i++)
-                    _PaletteSwatch(
-                      color: parseHex(masterPalette[i]['hex']) ??
-                          palette.surfaceOverlay,
-                      hex: masterPalette[i]['hex'] ?? '',
-                      name: masterPalette[i]['name'] ?? '',
-                      palette: palette,
-                      onTap: () => editSwatch(i),
-                    ),
-                  _PaletteSwatch.add(
-                    palette: palette,
-                    onTap: () => editSwatch(null),
-                  ),
-                ],
+              BiblePaletteWidget(
+                projectId: projectId,
+                bibleId: data.id,
+                sectionId: BibleSectionId.concept,
+                colors: masterPalette,
+                onChanged: (next) => updateCustomData(ref, {
+                  'masterPalette': BiblePaletteColor.toJsonList(next),
+                }),
               ),
               if (usesStarterPalette)
                 Padding(

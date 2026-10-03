@@ -10,7 +10,10 @@ import '../../v2/migration/freeform_v2_blocks_codec.dart';
 import '../../v2/theme/bible_theme.dart';
 import '../../v2/widgets/bible_block_compositor.dart';
 import '../bible_add_point.dart';
-import '../bible_generic_point_views.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/database/database_provider.dart';
+import '../catalog/bible_widget_catalog.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_unified_references_panel.dart';
 import '../block_reference_images.dart';
@@ -20,6 +23,7 @@ import '../narrative_bridge_card.dart';
 /// Si `contentJson` contiene `v2Blocks`, usa el compositor modular.
 class CustomBibleSection extends StatefulWidget {
   final int projectId;
+  final int bibleId;
   final String sectionId;
   final String label;
   final String? contentJson;
@@ -28,6 +32,7 @@ class CustomBibleSection extends StatefulWidget {
   const CustomBibleSection({
     super.key,
     required this.projectId,
+    required this.bibleId,
     required this.sectionId,
     required this.label,
     this.contentJson,
@@ -116,11 +121,33 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
   }
 
   Future<void> _addPoint() async {
-    final point = await showBibleAddPointDialog(context);
-    if (point == null || !mounted) return;
-    setState(() => _fields = [..._fields, point]);
+    final added = await showBibleAddPointDialog(context);
+    if (added == null || !mounted) return;
+    setState(() {
+      _fields = [..._fields, added.field];
+      if (added.initialValue != null) {
+        _values[added.field.key] = added.initialValue!;
+      }
+    });
     _persist();
   }
+
+  Widget _catalogPoint(BibleSectionField field) => Consumer(
+        builder: (context, ref, _) =>
+            BibleWidgetCatalog.build(
+              context,
+              BibleWidgetContext(
+                projectId: widget.projectId,
+                bibleId: widget.bibleId,
+                sectionId: widget.sectionId,
+                field: field,
+                value: _values[field.key],
+                onChanged: (v) => _setPointValue(field.key, v),
+                db: ref.read(databaseProvider),
+              ),
+            ) ??
+            const SizedBox.shrink(),
+      );
 
   List<String> _imagesFor(String fieldKey) {
     final raw = _values[_imagesKey(fieldKey)];
@@ -248,16 +275,14 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
       BibleSectionFieldType.specs => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          BibleGenericPointView(
-            key: ValueKey('point_${widget.sectionId}_${field.key}'),
-            field: field,
-            value: _values[field.key],
-            onChanged: (v) => _setPointValue(field.key, v),
-          ),
+          _catalogPoint(field),
           const SizedBox(height: 8),
           _imageAttachRow(field.key),
         ],
       ),
+      BibleSectionFieldType.palette ||
+      BibleSectionFieldType.gallery ||
+      BibleSectionFieldType.referenceDeck => _catalogPoint(field),
     };
   }
 

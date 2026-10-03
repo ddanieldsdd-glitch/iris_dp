@@ -563,6 +563,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
     if (customDef != null && customDef.template == 'freeform') {
       return CustomBibleSection(
         projectId: widget.projectId,
+        bibleId: bibleId,
         sectionId: customDef.id,
         label: customDef.label,
         contentJson: customDef.contentJson,

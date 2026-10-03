@@ -15,7 +15,7 @@ import '../narrative_bridge_card.dart';
 import '../../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../../bible_section_fields.dart';
 import '../bible_add_point.dart';
-import '../bible_generic_point_views.dart';
+import '../catalog/bible_widget_catalog.dart';
 
 /// Layout común para secciones técnicas de la biblia.
 ///
@@ -186,30 +186,46 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
   }
 
   Future<void> _addPoint(List<BibleSectionField> fields) async {
-    final point = await showBibleAddPointDialog(context);
-    if (point == null || !mounted) return;
-    await ref.read(databaseProvider).saveBibleSectionFields(
-      widget.data.id,
-      widget.sectionId,
-      [...fields, point],
-    );
+    final added = await showBibleAddPointDialog(context);
+    if (added == null || !mounted) return;
+    final db = ref.read(databaseProvider);
+    await db.saveBibleSectionFields(widget.data.id, widget.sectionId, [
+      ...fields,
+      added.field,
+    ]);
+    if (added.initialValue != null) {
+      await db.saveBibleSectionFieldValue(
+        widget.data.id,
+        widget.sectionId,
+        added.field.key,
+        added.initialValue,
+      );
+    }
   }
 
-  Widget _genericPoint(BibleSectionField field) => BibleGenericPointView(
-        key: ValueKey('point_${widget.sectionId}_${field.key}'),
+  /// Widget del catálogo para un punto sin vista propia de la sección.
+  Widget? _catalogPoint(BibleSectionField field) {
+    final db = ref.read(databaseProvider);
+    return BibleWidgetCatalog.build(
+      context,
+      BibleWidgetContext(
+        projectId: widget.projectId,
+        bibleId: widget.data.id,
+        sectionId: widget.sectionId,
         field: field,
         value: BibleSectionFieldsConfig.parseValues(
           widget.sectionContentJson,
         )[field.key],
-        onChanged: (value) => ref
-            .read(databaseProvider)
-            .saveBibleSectionFieldValue(
-              widget.data.id,
-              widget.sectionId,
-              field.key,
-              value,
-            ),
-      );
+        onChanged: (value) => db.saveBibleSectionFieldValue(
+          widget.data.id,
+          widget.sectionId,
+          field.key,
+          value,
+        ),
+        db: db,
+      ),
+    );
+  }
 
   Widget? _buildField(BuildContext context, BibleSectionField field) {
     final override = widget.fieldWidgets[field.key];
@@ -246,7 +262,10 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
             : null,
       BibleSectionFieldType.text ||
       BibleSectionFieldType.list ||
-      BibleSectionFieldType.specs => _genericPoint(field),
+      BibleSectionFieldType.specs ||
+      BibleSectionFieldType.palette ||
+      BibleSectionFieldType.gallery ||
+      BibleSectionFieldType.referenceDeck => _catalogPoint(field),
       // Módulo del catálogo cuyo widget dedicado aún no está conectado.
       BibleSectionFieldType.blocks => _MissingModulePlaceholder(
           sectionId: widget.sectionId,

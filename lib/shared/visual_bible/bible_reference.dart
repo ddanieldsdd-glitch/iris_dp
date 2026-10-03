@@ -19,6 +19,16 @@ const kConceptReferenceKinds = [
   'Movimiento',
 ];
 
+/// Tipos de referencia técnica: qué se quiere reproducir.
+const kTechnicalReferenceKinds = [
+  'Cámara',
+  'Óptica',
+  'Iluminación',
+  'Movimiento',
+  'Color',
+  'Efecto',
+];
+
 /// Referencia razonada de la biblia (Dirección, Concepto).
 ///
 /// No es solo una imagen: explica por qué se cita la obra y para qué se

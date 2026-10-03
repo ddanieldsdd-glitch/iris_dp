@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import '../../../core/database/app_database.dart';
 import '../../../shared/visual_bible/bible_lighting_data.dart';
+import '../../../shared/visual_bible/bible_palette.dart';
+import '../../../shared/visual_bible/bible_reference.dart';
 import '../../../shared/visual_bible/bible_section_fields.dart';
 import '../../../shared/visual_bible/bible_section_ids.dart';
 import '../../../shared/visual_bible/bible_stitch_module_registry.dart';
@@ -299,7 +301,10 @@ abstract final class BibleSectionExportReader {
       BibleStitchModuleRegistry.module(sectionId, field.key) == null &&
       (field.type == BibleSectionFieldType.text ||
           field.type == BibleSectionFieldType.list ||
-          field.type == BibleSectionFieldType.specs);
+          field.type == BibleSectionFieldType.specs ||
+          field.type == BibleSectionFieldType.palette ||
+          field.type == BibleSectionFieldType.referenceDeck ||
+          field.type == BibleSectionFieldType.gallery);
 
   /// Valor de un punto del usuario como texto plano, para listados de filas.
   static String userPointText(BibleUserPoint point) => switch (point.field.type) {
@@ -309,8 +314,41 @@ abstract final class BibleSectionExportReader {
         BibleSectionFieldType.specs => BibleSectionPointValue.decodeSpecs(
             point.value,
           ).map((r) => '${r.$1}: ${r.$2}').join('\n'),
+        BibleSectionFieldType.palette => BiblePaletteColor.listFrom(point.value)
+            .map((c) => c.name.isEmpty ? c.hex : '${c.hex} ${c.name}')
+            .join('\n'),
+        BibleSectionFieldType.referenceDeck => _referenceItems(point.value)
+            .map((r) => [r.title, r.work].where((e) => e.isNotEmpty).join(' — '))
+            .join('\n'),
+        BibleSectionFieldType.gallery => '',
         _ => point.value.trim(),
       };
+
+  /// Fichas de un punto de referencias (`{preset, items}`).
+  static List<BibleReference> referenceItems(String? raw) =>
+      _referenceItems(raw);
+
+  static List<BibleReference> _referenceItems(String? raw) {
+    try {
+      final decoded = jsonDecode(raw ?? '');
+      if (decoded is Map) return BibleReference.listFrom(decoded['items']);
+    } catch (_) {}
+    return const [];
+  }
+
+  /// Rótulos de «por qué» y «para qué» según el preajuste del punto.
+  static (String, String) referenceLabels(String? raw) {
+    var preset = 'visual';
+    try {
+      final decoded = jsonDecode(raw ?? '');
+      if (decoded is Map) preset = decoded['preset']?.toString() ?? preset;
+    } catch (_) {}
+    return switch (preset) {
+      'narrative' => ('Por qué esta referencia', 'Para qué en la película'),
+      'technical' => ('Cómo se hizo', 'Qué necesitamos'),
+      _ => ('Por qué nos gusta', 'Qué llevamos a la película'),
+    };
+  }
 
   /// `contentJson` sin los valores de los puntos del usuario, para los
   /// lectores de blob que caen a `values` cuando no hay blob propio.

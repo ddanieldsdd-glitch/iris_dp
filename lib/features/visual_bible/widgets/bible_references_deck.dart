@@ -56,6 +56,23 @@ class BibleReferencesCopy {
     purposeHint: 'Qué queremos contar o provocar con ella, y dónde',
   );
 
+  static const technical = BibleReferencesCopy(
+    dialogTitle: 'Referencia técnica',
+    emptyHint:
+        'Reúne los planos cuyo resultado técnico quieres reproducir y '
+        'anota cómo se hicieron y qué necesitas para lograrlo.',
+    workLabel: 'Película y equipo',
+    workHint: '1917 · Roger Deakins',
+    titleLabel: 'Qué queremos reproducir',
+    titleHint: 'Plano secuencia con cambio de luz día a noche',
+    whyLabel: 'Cómo se hizo',
+    whyHint: 'Cámara, óptica, luz, soportes, ajustes',
+    purposeLabel: 'Qué necesitamos',
+    purposeHint: 'Equipo, pruebas previas y riesgos',
+    sceneLabel: 'Plano o momento (opcional)',
+    sceneHint: 'La carrera final',
+  );
+
   static const concept = BibleReferencesCopy(
     dialogTitle: 'Referencia visual',
     emptyHint:

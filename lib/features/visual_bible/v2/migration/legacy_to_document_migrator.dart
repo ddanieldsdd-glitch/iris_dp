@@ -189,7 +189,10 @@ abstract final class LegacyToDocumentMigrator {
       BibleSectionFieldType.blocks => BibleBlockKind.dynamicBlocks,
       BibleSectionFieldType.text ||
       BibleSectionFieldType.list ||
-      BibleSectionFieldType.specs => BibleBlockKind.text,
+      BibleSectionFieldType.specs ||
+      BibleSectionFieldType.palette => BibleBlockKind.text,
+      BibleSectionFieldType.gallery ||
+      BibleSectionFieldType.referenceDeck => BibleBlockKind.moodboardRefs,
     };
   }
 
