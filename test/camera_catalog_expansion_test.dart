@@ -1,45 +1,10 @@
-import 'dart:convert';
-
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iris_dp/features/equipment/data/catalog_models.dart';
 
-Future<List<CatalogCameraEntry>> _mergedCameras() async {
-  final baseJson = await rootBundle.loadString('assets/catalog/cameras.json');
-  final expansionJson =
-      await rootBundle.loadString('assets/catalog/cameras_expansion.json');
-  final base = parseCameraCatalog(baseJson);
-  final patches = (jsonDecode(expansionJson) as List<dynamic>)
-      .map((e) => Map<String, dynamic>.from(e as Map))
-      .toList();
-
-  final byId = {for (final c in base) c.externalId: c};
-  for (final patch in patches) {
-    final id = patch['externalId'] as String;
-    final existing = byId[id];
-    if (existing == null) continue;
-    final modes = (patch['sensorModes'] as List<dynamic>?)
-        ?.map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-    if (modes == null || modes.isEmpty) continue;
-    byId[id] = CatalogCameraEntry(
-      externalId: existing.externalId,
-      brand: existing.brand,
-      model: existing.model,
-      sensorWidthMm: existing.sensorWidthMm,
-      sensorHeightMm: existing.sensorHeightMm,
-      mountType: existing.mountType,
-      sensorModes: modes,
-      dynamicRangeStops: existing.dynamicRangeStops,
-      nativeIso: existing.nativeIso,
-      logFormats: existing.logFormats,
-      weightKg: existing.weightKg,
-      vintage: existing.vintage,
-      lukaCompatible: existing.lukaCompatible,
-    );
-  }
-  return byId.values.toList();
-}
+/// El catálogo generado ya trae los modos fusionados por cámara.
+Future<List<CatalogCameraEntry>> _mergedCameras() async =>
+    parseCameraCatalog(await rootBundle.loadString('assets/catalog/cameras.json'));
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

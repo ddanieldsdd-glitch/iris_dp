@@ -1,7 +1,12 @@
 import 'dart:convert';
 
+import 'catalog_data_status.dart';
+
 /// Versión embebida del catálogo IRIS.
-const kEmbeddedCatalogVersion = 6;
+const kEmbeddedCatalogVersion = 7;
+
+CatalogProvenance? _provenance(Map<String, dynamic> json) =>
+    json.containsKey('dataStatus') ? CatalogProvenance.fromJson(json) : null;
 
 class CatalogManifest {
   final int version;
@@ -51,6 +56,10 @@ class CatalogCameraEntry {
   final List<String> rentalTags;
   final bool lukaCompatible;
   final Map<String, dynamic>? lukaProfile;
+  final String? recordingFormats;
+
+  /// Estado y fuente de la ficha; null en packs anteriores al master.
+  final CatalogProvenance? provenance;
 
   const CatalogCameraEntry({
     required this.externalId,
@@ -72,6 +81,8 @@ class CatalogCameraEntry {
     this.rentalTags = const [],
     this.lukaCompatible = false,
     this.lukaProfile,
+    this.recordingFormats,
+    this.provenance,
   });
 
   factory CatalogCameraEntry.fromJson(Map<String, dynamic> json) =>
@@ -101,6 +112,8 @@ class CatalogCameraEntry {
             const [],
         lukaCompatible: json['lukaCompatible'] as bool? ?? false,
         lukaProfile: json['lukaProfile'] as Map<String, dynamic>?,
+        recordingFormats: json['recordingFormats'] as String?,
+        provenance: _provenance(json),
       );
 
   Map<String, dynamic> toJson() => {
@@ -123,6 +136,8 @@ class CatalogCameraEntry {
         if (rentalTags.isNotEmpty) 'rentalTags': rentalTags,
         'lukaCompatible': lukaCompatible,
         if (lukaProfile != null) 'lukaProfile': lukaProfile,
+        if (recordingFormats != null) 'recordingFormats': recordingFormats,
+        ...?provenance?.toJson(),
       };
 }
 
@@ -151,6 +166,19 @@ class CatalogLensEntry {
   final bool lukaCompatible;
   final Map<String, dynamic>? lukaProfile;
 
+  /// ESFÉRICA o ANAMÓRFICA, según el master.
+  final String? projectionType;
+  final double? imageAreaWidthMm;
+  final double? imageAreaHeightMm;
+  final String? illuminationArea;
+  final String? vignettingStatus;
+  final String? shadingStatus;
+  final String? portholingStatus;
+
+  /// Ficha por focal publicada por el fabricante.
+  final Map<String, dynamic>? specs;
+  final CatalogProvenance? provenance;
+
   const CatalogLensEntry({
     required this.externalId,
     required this.brand,
@@ -175,6 +203,15 @@ class CatalogLensEntry {
     this.rentalTags = const [],
     this.lukaCompatible = false,
     this.lukaProfile,
+    this.projectionType,
+    this.imageAreaWidthMm,
+    this.imageAreaHeightMm,
+    this.illuminationArea,
+    this.vignettingStatus,
+    this.shadingStatus,
+    this.portholingStatus,
+    this.specs,
+    this.provenance,
   });
 
   factory CatalogLensEntry.fromJson(Map<String, dynamic> json) =>
@@ -205,6 +242,15 @@ class CatalogLensEntry {
             const [],
         lukaCompatible: json['lukaCompatible'] as bool? ?? false,
         lukaProfile: json['lukaProfile'] as Map<String, dynamic>?,
+        projectionType: json['projectionType'] as String?,
+        imageAreaWidthMm: (json['imageAreaWidthMm'] as num?)?.toDouble(),
+        imageAreaHeightMm: (json['imageAreaHeightMm'] as num?)?.toDouble(),
+        illuminationArea: json['illuminationArea'] as String?,
+        vignettingStatus: json['vignettingStatus'] as String?,
+        shadingStatus: json['shadingStatus'] as String?,
+        portholingStatus: json['portholingStatus'] as String?,
+        specs: (json['specs'] as Map?)?.cast<String, dynamic>(),
+        provenance: _provenance(json),
       );
 
   Map<String, dynamic> toJson() => {
@@ -231,6 +277,15 @@ class CatalogLensEntry {
         if (rentalTags.isNotEmpty) 'rentalTags': rentalTags,
         'lukaCompatible': lukaCompatible,
         if (lukaProfile != null) 'lukaProfile': lukaProfile,
+        if (projectionType != null) 'projectionType': projectionType,
+        if (imageAreaWidthMm != null) 'imageAreaWidthMm': imageAreaWidthMm,
+        if (imageAreaHeightMm != null) 'imageAreaHeightMm': imageAreaHeightMm,
+        if (illuminationArea != null) 'illuminationArea': illuminationArea,
+        if (vignettingStatus != null) 'vignettingStatus': vignettingStatus,
+        if (shadingStatus != null) 'shadingStatus': shadingStatus,
+        if (portholingStatus != null) 'portholingStatus': portholingStatus,
+        if (specs != null) 'specs': specs,
+        ...?provenance?.toJson(),
       };
 }
 
@@ -252,6 +307,7 @@ class CatalogLightEntry {
   final bool vintage;
   final List<String> rentalTags;
   final Map<String, dynamic>? lukaProfile;
+  final CatalogProvenance? provenance;
 
   const CatalogLightEntry({
     required this.externalId,
@@ -271,6 +327,7 @@ class CatalogLightEntry {
     this.vintage = false,
     this.rentalTags = const [],
     this.lukaProfile,
+    this.provenance,
   });
 
   factory CatalogLightEntry.fromJson(Map<String, dynamic> json) =>
@@ -295,6 +352,7 @@ class CatalogLightEntry {
                 .toList() ??
             const [],
         lukaProfile: json['lukaProfile'] as Map<String, dynamic>?,
+        provenance: _provenance(json),
       );
 
   Map<String, dynamic> toJson() => {
@@ -315,6 +373,7 @@ class CatalogLightEntry {
         'vintage': vintage,
         if (rentalTags.isNotEmpty) 'rentalTags': rentalTags,
         if (lukaProfile != null) 'lukaProfile': lukaProfile,
+        ...?provenance?.toJson(),
       };
 }
 

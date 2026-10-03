@@ -81,9 +81,7 @@ flutter:
     - assets/fonts/NotoSans-Bold.ttf
     - assets/catalog/manifest.json
     - assets/catalog/cameras.json
-    - assets/catalog/cameras_expansion.json
     - assets/catalog/lenses.json
-    - assets/catalog/lenses_expansion.json
     - assets/catalog/lights.json
     - assets/luka/manifest.json
 

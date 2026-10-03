@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -306,14 +305,10 @@ class OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
     final lens = _lens;
     final ctx = _sensorContext;
     final format = lens?.formatCoverage ?? 'S35';
-    final fullDiag = math.sqrt(
-      _mode.widthMm * _mode.widthMm + _mode.heightMm * _mode.heightMm,
-    );
-    final imageCircle = lens?.imageCircleMm ??
-        math.max(
-          fullDiag * 1.02,
-          OpticsCalculator.imageCircleForFormat(format),
-        );
+    // Sin círculo publicado se estima por el formato declarado de la lente.
+    // No se ajusta al sensor: una lente S35 no pasa a cubrir LF por ello.
+    final imageCircle =
+        lens?.imageCircleMm ?? OpticsCalculator.imageCircleForFormat(format);
     final previewDesqueeze =
         _anamorphicPreview && (_lens?.isAnamorphic == true || _lensSqueeze > 1.0)
             ? _lensSqueeze

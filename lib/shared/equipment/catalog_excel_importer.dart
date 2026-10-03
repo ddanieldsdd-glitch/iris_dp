@@ -122,7 +122,11 @@ abstract final class CatalogExcelImporter {
       );
     }
 
-    final stats = await upsertCatalogCameras(db, parsed.cameras);
+    final stats = await upsertCatalogCameras(
+      db,
+      parsed.cameras,
+      merge: true,
+    );
     return CatalogExcelImportResult(
       camerasParsed: parsed.cameras.length,
       modesParsed: parsed.modesParsed,
@@ -155,7 +159,7 @@ abstract final class CatalogExcelImporter {
     }
     final modesParsed =
         cameras.fold<int>(0, (sum, c) => sum + c.sensorModes.length);
-    final stats = await upsertCatalogCameras(db, cameras);
+    final stats = await upsertCatalogCameras(db, cameras, merge: true);
     return CatalogExcelImportResult(
       camerasParsed: cameras.length,
       modesParsed: modesParsed,
@@ -181,7 +185,7 @@ abstract final class CatalogExcelImporter {
         errors: ['JSON de ópticas inválido: $e'],
       );
     }
-    final stats = await upsertCatalogLenses(db, lenses);
+    final stats = await upsertCatalogLenses(db, lenses, merge: true);
     return CatalogExcelImportResult(
       camerasParsed: lenses.length,
       modesParsed: 0,
@@ -207,7 +211,7 @@ abstract final class CatalogExcelImporter {
         errors: ['JSON de luces inválido: $e'],
       );
     }
-    final stats = await upsertCatalogLights(db, lights);
+    final stats = await upsertCatalogLights(db, lights, merge: true);
     return CatalogExcelImportResult(
       camerasParsed: lights.length,
       modesParsed: 0,
