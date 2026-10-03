@@ -289,6 +289,8 @@ class _BibleSectionFieldsEditorState
     BibleSectionFieldType.references => Icons.collections_outlined,
     BibleSectionFieldType.image => Icons.image_outlined,
     BibleSectionFieldType.blocks => Icons.view_agenda_outlined,
+    BibleSectionFieldType.list => Icons.format_list_bulleted,
+    BibleSectionFieldType.specs => Icons.tune,
   };
 
   Widget _contentFamilyChip(

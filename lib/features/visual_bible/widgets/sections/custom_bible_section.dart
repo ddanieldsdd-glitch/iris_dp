@@ -9,7 +9,7 @@ import '../../bible_section_fields.dart';
 import '../../v2/migration/freeform_v2_blocks_codec.dart';
 import '../../v2/theme/bible_theme.dart';
 import '../../v2/widgets/bible_block_compositor.dart';
-import '../bible_form_widgets.dart';
+import '../bible_generic_point_views.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_unified_references_panel.dart';
 import '../block_reference_images.dart';
@@ -100,6 +100,17 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
         _values[key] = value.trim();
       }
     });
+    _persist();
+  }
+
+  /// Como [_setValue] pero sin reconstruir: el punto ya muestra su valor y
+  /// puede avisar mientras se desmonta.
+  void _setPointValue(String key, String? value) {
+    if (value == null || value.trim().isEmpty) {
+      _values.remove(key);
+    } else {
+      _values[key] = value;
+    }
     _persist();
   }
 
@@ -220,15 +231,16 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
         ),
       ),
       BibleSectionFieldType.blocks => null,
-      BibleSectionFieldType.text => Column(
+      BibleSectionFieldType.text ||
+      BibleSectionFieldType.list ||
+      BibleSectionFieldType.specs => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          BibleTextField(
-            label: field.label,
-            hint: field.hint ?? '',
-            maxLines: field.maxLines,
-            initialValue: _values[field.key] ?? '',
-            onChanged: (v) => _setValue(field.key, v),
+          BibleGenericPointView(
+            key: ValueKey('point_${widget.sectionId}_${field.key}'),
+            field: field,
+            value: _values[field.key],
+            onChanged: (v) => _setPointValue(field.key, v),
           ),
           const SizedBox(height: 8),
           _imageAttachRow(field.key),
