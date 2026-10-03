@@ -162,17 +162,16 @@ class _VisualBibleV2ScreenState extends ConsumerState<VisualBibleV2Screen> {
         if (history == null) return;
         final previous = history.current;
         final db = ref.read(databaseProvider);
-        final applied = await BibleProfessionalTemplateService.applyProfessionalPackage(
-          db: db,
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-          package: pack,
-          applySampleSeed: examplesMode,
-          includeContent: examplesMode || pack.legacyBundle == null,
-        );
-        _apply(
-          ApplyDocumentCommand(previous: previous, next: applied),
-        );
+        final applied =
+            await BibleProfessionalTemplateService.applyProfessionalPackage(
+              db: db,
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+              package: pack,
+              applySampleSeed: examplesMode,
+              includeContent: examplesMode || pack.legacyBundle == null,
+            );
+        _apply(ApplyDocumentCommand(previous: previous, next: applied));
         if (mounted) {
           AppSnackBar.show(context, 'Plantilla «${pack.name}» aplicada');
         }
@@ -184,9 +183,7 @@ class _VisualBibleV2ScreenState extends ConsumerState<VisualBibleV2Screen> {
     final history = _history;
     if (history == null || history.current.pages.isEmpty) return;
     final db = ref.read(databaseProvider);
-    final applyService = BibleTemplateApplyService(
-      BibleDocumentStore(db),
-    );
+    final applyService = BibleTemplateApplyService(BibleDocumentStore(db));
     final stamp = DateTime.now().millisecondsSinceEpoch;
     final pack = applyService.saveAsPackage(
       document: history.current,
@@ -237,38 +234,47 @@ class _VisualBibleV2ScreenState extends ConsumerState<VisualBibleV2Screen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Row(
               children: [
-                Text(
-                  'BIBLIA MODULAR',
-                  style: AppTypography.label(palette),
-                ),
+                Text('BIBLIA MODULAR', style: AppTypography.label(palette)),
                 const SizedBox(width: 12),
                 Text(_saveStatus, style: AppTypography.caption(palette)),
-                const Spacer(),
-                if (widget.onSwitchToClassic != null)
-                  TextButton.icon(
-                    onPressed: widget.onSwitchToClassic,
-                    icon: const Icon(Icons.undo, size: 16),
-                    label: const Text('Modo clásico'),
+                // Los botones se desplazan en horizontal si no caben.
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    reverse: true,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (widget.onSwitchToClassic != null)
+                          TextButton.icon(
+                            onPressed: widget.onSwitchToClassic,
+                            icon: const Icon(Icons.undo, size: 16),
+                            label: const Text('Modo clásico'),
+                          ),
+                        TextButton(
+                          onPressed: () =>
+                              _openTemplateLibrary(examplesMode: false),
+                          child: const Text('Plantillas'),
+                        ),
+                        TextButton(
+                          onPressed: _saveAsTemplate,
+                          child: const Text('Guardar plantilla'),
+                        ),
+                        if (widget.onExportPdf != null)
+                          TextButton(
+                            onPressed: widget.onExportPdf,
+                            child: const Text('Exportar'),
+                          ),
+                        if (widget.onOpenSettings != null)
+                          IconButton(
+                            tooltip: 'Configuración',
+                            onPressed: widget.onOpenSettings,
+                            icon: const Icon(Icons.settings_outlined),
+                          ),
+                      ],
+                    ),
                   ),
-                TextButton(
-                  onPressed: () => _openTemplateLibrary(examplesMode: false),
-                  child: const Text('Plantillas'),
                 ),
-                TextButton(
-                  onPressed: _saveAsTemplate,
-                  child: const Text('Guardar plantilla'),
-                ),
-                if (widget.onExportPdf != null)
-                  TextButton(
-                    onPressed: widget.onExportPdf,
-                    child: const Text('Exportar'),
-                  ),
-                if (widget.onOpenSettings != null)
-                  IconButton(
-                    tooltip: 'Configuración',
-                    onPressed: widget.onOpenSettings,
-                    icon: const Icon(Icons.settings_outlined),
-                  ),
               ],
             ),
           ),

@@ -52,8 +52,8 @@ Principio: la lista de puntos de cada sección (`BibleSectionDefinitions.content
   - [x] Inter embebida en el PDF, con Noto Sans de respaldo para los glifos que le falten. JetBrains Mono no se usa.
   - [ ] Pendiente: los puntos propios salen al final de su sección; intercalarlos con los puntos dedicados se hace en cada sección de 1.5.
 - **1.5 Sección por sección** (análisis acordado → pantalla → PDF → revisión lado a lado):
-  - [x] Dirección — puntos: intención narrativa, tono y atmósfera, estrategia visual, intención por acto, referencias, transiciones. Key Frame pasa a opcional.
-  - [x] Concepto — puntos: intención narrativa, paleta maestra, simbología de color, filosofía de luz, tratamiento de sombras, intención visual por acto, Key Frame, referencias clave. «Composición por actos» pasa a opcional.
+  - [x] Dirección — puntos: intención narrativa, tono y atmósfera, estrategia visual, intención por acto, referencias, transiciones. Key Frame pasa a opcional. Referencias como fichas con porqué y para qué, con detalle; imágenes del moodboard en tono, estrategia, actos y transiciones.
+  - [x] Concepto — puntos: intención narrativa, paleta maestra propia, simbología de color, filosofía de luz, tratamiento de sombras, composición, intención visual por acto, Key Frame, referencias visuales razonadas. Cada punto admite imágenes del moodboard.
   - [ ] Cámara
   - [ ] Óptica
   - [ ] Exposición

@@ -13,3 +13,20 @@ const kConceptActTitles = {
   '2': 'El Descenso',
   '3': 'La Resolución',
 };
+
+/// Datos de «Composición» en Concepto: clave en `compositionMetrics` y rótulo.
+const kConceptCompositionMetrics = [
+  ('framing', 'Encuadre'),
+  ('balance', 'Equilibrio'),
+  ('depth', 'Profundidad'),
+  ('height', 'Altura de cámara'),
+];
+
+/// Paleta de partida de Concepto, hasta que el usuario define la suya.
+const kConceptStarterPalette = [
+  {'hex': '#0F1C2E', 'name': 'Sombra profunda'},
+  {'hex': '#1B3A4B', 'name': 'Tono medio frío'},
+  {'hex': '#8A7F72', 'name': 'Neutro'},
+  {'hex': '#F5B841', 'name': 'Acento cálido'},
+  {'hex': '#7D6608', 'name': 'Piel subtono'},
+];

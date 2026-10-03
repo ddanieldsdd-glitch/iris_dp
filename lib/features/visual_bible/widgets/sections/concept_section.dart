@@ -13,10 +13,13 @@ import '../../../../shared/visual_bible/format_pilot_resolve.dart';
 import '../../bible_section_fields.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
+import '../../../../shared/visual_bible/bible_reference.dart';
+import '../../moodboard_helpers.dart';
 import '../bible_navigation_scope.dart';
+import '../bible_point_images.dart';
+import '../bible_references_deck.dart';
 import '../bible_point_panel.dart';
 import '../bible_visual_color_sheet.dart';
-import '../moodboard_strip.dart';
 import 'section_scaffold.dart';
 
 /// Datos propios de Concepto dentro de `contentJson` (`values.conceptData`).
@@ -121,7 +124,6 @@ class ConceptSection extends ConsumerWidget {
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
           editSymbol: _editSymbolDialog,
-          editRef: _editRefDialog,
         ),
         'colorSymbolism': _ConceptStitchModule(
           slot: 'colorSymbolism',
@@ -135,7 +137,6 @@ class ConceptSection extends ConsumerWidget {
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
           editSymbol: _editSymbolDialog,
-          editRef: _editRefDialog,
         ),
         'lightPhilosophy': _ConceptStitchModule(
           slot: 'lightPhilosophy',
@@ -149,7 +150,6 @@ class ConceptSection extends ConsumerWidget {
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
           editSymbol: _editSymbolDialog,
-          editRef: _editRefDialog,
         ),
         'keyFrame': _ConceptStitchModule(
           slot: 'keyFrame',
@@ -163,7 +163,6 @@ class ConceptSection extends ConsumerWidget {
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
           editSymbol: _editSymbolDialog,
-          editRef: _editRefDialog,
         ),
         'shadowTreatment': _ConceptStitchModule(
           slot: 'shadowTreatment',
@@ -177,7 +176,6 @@ class ConceptSection extends ConsumerWidget {
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
           editSymbol: _editSymbolDialog,
-          editRef: _editRefDialog,
         ),
         'actComposition': _ConceptStitchModule(
           slot: 'actComposition',
@@ -191,7 +189,6 @@ class ConceptSection extends ConsumerWidget {
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
           editSymbol: _editSymbolDialog,
-          editRef: _editRefDialog,
         ),
         'actNotes': _ConceptStitchModule(
           slot: 'actNotes',
@@ -205,7 +202,19 @@ class ConceptSection extends ConsumerWidget {
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
           editSymbol: _editSymbolDialog,
-          editRef: _editRefDialog,
+        ),
+        'composition': _ConceptStitchModule(
+          slot: 'composition',
+          data: data,
+          projectId: projectId,
+          palette: palette,
+          db: db,
+          onChanged: onChanged,
+          sectionContentJson: sectionContentJson,
+          formatSectionContentJson: formatSectionContentJson,
+          parseHex: _parseHex,
+          updateCustomData: _updateCustomData,
+          editSymbol: _editSymbolDialog,
         ),
         if (data.id > 0)
           'references': _ConceptStitchModule(
@@ -220,7 +229,6 @@ class ConceptSection extends ConsumerWidget {
           parseHex: _parseHex,
           updateCustomData: _updateCustomData,
           editSymbol: _editSymbolDialog,
-          editRef: _editRefDialog,
         ),
       },
     );
@@ -249,68 +257,6 @@ class ConceptSection extends ConsumerWidget {
       'hex': picked.hex,
       'narrativeMeaning': picked.meaning ?? '',
     };
-  }
-
-  Future<Map<String, dynamic>?> _editRefDialog(
-    BuildContext context,
-    Map<String, dynamic> initial,
-  ) async {
-    final film = TextEditingController(text: initial['film']?.toString() ?? '');
-    final dp = TextEditingController(text: initial['dp']?.toString() ?? '');
-    final dir =
-        TextEditingController(text: initial['director']?.toString() ?? '');
-    final tone = TextEditingController(text: initial['tone']?.toString() ?? '');
-    final intent =
-        TextEditingController(text: initial['intent']?.toString() ?? '');
-    return showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Referencia'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: film,
-                decoration: const InputDecoration(labelText: 'Película'),
-              ),
-              TextField(
-                controller: dp,
-                decoration: const InputDecoration(labelText: 'DP'),
-              ),
-              TextField(
-                controller: dir,
-                decoration: const InputDecoration(labelText: 'Director'),
-              ),
-              TextField(
-                controller: tone,
-                decoration: const InputDecoration(labelText: 'Tono'),
-              ),
-              TextField(
-                controller: intent,
-                decoration: const InputDecoration(labelText: 'Intención'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, {
-              'film': film.text.trim(),
-              'dp': dp.text.trim(),
-              'director': dir.text.trim(),
-              'tone': tone.text.trim(),
-              'intent': intent.text.trim(),
-            }),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -358,6 +304,70 @@ class _CardHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Muestra de la paleta maestra: color, código y nombre.
+class _PaletteSwatch extends StatelessWidget {
+  final Color? color;
+  final String hex;
+  final String name;
+  final AppPalette palette;
+  final VoidCallback onTap;
+
+  const _PaletteSwatch({
+    required Color this.color,
+    required this.hex,
+    required this.name,
+    required this.palette,
+    required this.onTap,
+  });
+
+  const _PaletteSwatch.add({required this.palette, required this.onTap})
+      : color = null,
+        hex = '',
+        name = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final label = BiblePointPanel.labelStyle(palette).copyWith(fontSize: 10);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 96,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 96,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: palette.borderBright),
+              ),
+              child: color == null
+                  ? Center(
+                      child: Icon(Icons.add, color: palette.textSecondary),
+                    )
+                  : null,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              color == null ? 'AÑADIR' : hex.toUpperCase(),
+              style: AppTypography.mono(palette).copyWith(fontSize: 11),
+            ),
+            if (name.isNotEmpty)
+              Text(
+                name.toUpperCase(),
+                style: label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -683,92 +693,6 @@ class _ActTimelineItem extends StatelessWidget {
   }
 }
 
-class _ReferenceMetaCard extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final AppPalette palette;
-  final VoidCallback onEdit;
-
-  const _ReferenceMetaCard({
-    required this.data,
-    required this.palette,
-    required this.onEdit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: palette.surfaceOverlay.withValues(alpha: 0.45),
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: onEdit,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: palette.borderBright),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                data['film']?.toString().isNotEmpty == true
-                    ? data['film'].toString()
-                    : 'Referencia',
-                style: AppTypography.titleMedium(palette),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Dir. Fotografía: ${data['dp'] ?? '—'}'
-                '${data['director'] != null && data['director'].toString().isNotEmpty ? ' · Dir: ${data['director']}' : ''}',
-                style: AppTypography.mono(palette).copyWith(
-                  fontSize: 11,
-                  color: palette.textTertiary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _mini('Tono', data['tone']?.toString() ?? '—'),
-                  ),
-                  Expanded(
-                    child:
-                        _mini('Intención', data['intent']?.toString() ?? '—'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _mini(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: AppTypography.label(palette).copyWith(
-            fontSize: 9,
-            color: palette.textTertiary,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: AppTypography.mono(palette).copyWith(
-            fontSize: 11,
-            color: palette.textPrimary,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 /// Módulos Stitch descompuestos para el panel Widgets ↔ pantalla.
 class _ConceptStitchModule extends ConsumerWidget {
   final String slot;
@@ -788,10 +712,6 @@ class _ConceptStitchModule extends ConsumerWidget {
     required String meaning,
     required String hex,
   }) editSymbol;
-  final Future<Map<String, dynamic>?> Function(
-    BuildContext context,
-    Map<String, dynamic> initial,
-  ) editRef;
 
   const _ConceptStitchModule({
     required this.slot,
@@ -805,7 +725,6 @@ class _ConceptStitchModule extends ConsumerWidget {
     required this.parseHex,
     required this.updateCustomData,
     required this.editSymbol,
-    required this.editRef,
   });
 
   @override
@@ -830,10 +749,50 @@ class _ConceptStitchModule extends ConsumerWidget {
               if (data.contrastStyle?.isNotEmpty == true)
                 'contrast': data.contrastStyle!,
             };
-    final keyRefs = (custom['keyReferences'] as List<dynamic>? ?? [])
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
+    final composition = custom['composition'] as String? ?? '';
+    final compositionMetrics =
+        (custom['compositionMetrics'] as Map?)?.cast<String, String>() ?? {};
+    final masterPalette = [
+      for (final e in (custom['masterPalette'] as List? ?? kConceptStarterPalette))
+        if (e is Map) {'hex': '${e['hex'] ?? ''}', 'name': '${e['name'] ?? ''}'},
+    ];
+    final usesStarterPalette = custom['masterPalette'] == null;
+
+    // Imágenes del moodboard que acompañan al texto de un punto.
+    Widget pointImages(String key) => Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: BiblePointImages(
+            projectId: projectId,
+            bibleId: data.id,
+            sectionId: BibleSectionId.concept,
+            imageIds: biblePointImageIds(custom, key),
+            onChanged: (ids) => updateCustomData(ref, {
+              'pointImages': biblePointImagesWith(custom, key, ids),
+            }),
+          ),
+        );
+
+    Future<void> editSwatch(int? index) async {
+      final current = index == null ? null : masterPalette[index];
+      final picked = await BibleVisualColorSheet.show(
+        context,
+        title: 'Color de la paleta',
+        initialName: current?['name'] ?? '',
+        initialColor: parseHex(current?['hex']) ?? const Color(0xFF1B3A4B),
+        nameHint: 'Nombre del color',
+        canDelete: index != null,
+      );
+      if (picked == null) return;
+      final next = [...masterPalette];
+      if (picked.delete) {
+        if (index != null) next.removeAt(index);
+      } else if (index != null) {
+        next[index] = {'hex': picked.hex, 'name': picked.name};
+      } else {
+        next.add({'hex': picked.hex, 'name': picked.name});
+      }
+      await updateCustomData(ref, {'masterPalette': next});
+    }
 
     Widget addButton(String label, VoidCallback onTap) => Align(
           alignment: Alignment.centerLeft,
@@ -868,36 +827,35 @@ class _ConceptStitchModule extends ConsumerWidget {
                 title: 'Paleta Maestra',
                 palette: palette,
               ),
-              const SizedBox(height: 20),
-              StreamBuilder<List<VisualBibleColorBlock>>(
-                stream: db.watchColorBlocksForBible(data.id),
-                builder: (context, snap) {
-                  final blocks =
-                      snap.data?.map(ColorBlockModel.fromRow).toList() ?? [];
-                  if (blocks.isEmpty) {
-                    return Text(
-                      'Define colores en Color e imagen.',
-                      style: AppTypography.bodyMedium(palette),
-                    );
-                  }
-                  return Wrap(
-                    spacing: 10,
-                    runSpacing: 14,
-                    children: [
-                      for (final b in blocks)
-                        for (final c in b.dominantColors.take(3))
-                          Container(
-                            width: 72,
-                            height: 72,
-                            decoration: BoxDecoration(
-                              color: parseHex(c) ?? palette.surfaceOverlay,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                          ),
-                    ],
-                  );
-                },
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 16,
+                children: [
+                  for (var i = 0; i < masterPalette.length; i++)
+                    _PaletteSwatch(
+                      color: parseHex(masterPalette[i]['hex']) ??
+                          palette.surfaceOverlay,
+                      hex: masterPalette[i]['hex'] ?? '',
+                      name: masterPalette[i]['name'] ?? '',
+                      palette: palette,
+                      onTap: () => editSwatch(i),
+                    ),
+                  _PaletteSwatch.add(
+                    palette: palette,
+                    onTap: () => editSwatch(null),
+                  ),
+                ],
               ),
+              if (usesStarterPalette)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    'Paleta de partida. Toca un color para hacerla tuya.',
+                    style: AppTypography.caption(palette),
+                  ),
+                ),
+              pointImages('colorPalette'),
             ],
           ),
         ),
@@ -953,6 +911,7 @@ class _ConceptStitchModule extends ConsumerWidget {
                   'colorSymbols': [...colorSymbols, added],
                 });
               }),
+              pointImages('colorSymbolism'),
             ],
           ),
         ),
@@ -996,6 +955,7 @@ class _ConceptStitchModule extends ConsumerWidget {
                     ),
                 ],
               ),
+              pointImages('lightPhilosophy'),
             ],
           ),
         ),
@@ -1005,48 +965,31 @@ class _ConceptStitchModule extends ConsumerWidget {
             children: [
               _CardHeader(
                 icon: Icons.collections_outlined,
-                title: 'Referencias Clave',
+                title: 'Referencias Visuales',
                 palette: palette,
               ),
               const SizedBox(height: 16),
-              MoodboardStrip.forSection(
+              BibleReferencesDeck(
                 projectId: projectId,
+                bibleId: data.id,
                 sectionId: BibleSectionId.concept,
-                showTitle: false,
-                showCaptions: true,
-              ),
-              const SizedBox(height: 12),
-              for (var i = 0; i < keyRefs.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _ReferenceMetaCard(
-                    data: keyRefs[i],
-                    palette: palette,
-                    onEdit: () async {
-                      final edited = await editRef(context, keyRefs[i]);
-                      if (edited == null) return;
-                      final next = [...keyRefs]..[i] = edited;
-                      await updateCustomData(ref, {'keyReferences': next});
-                    },
-                  ),
+                kinds: kConceptReferenceKinds,
+                copy: BibleReferencesCopy.concept,
+                references: BibleReference.listFrom(custom['keyReferences']),
+                onChanged: (next) => updateCustomData(ref, {
+                  'keyReferences': [for (final r in next) r.toJson()],
+                }),
+                onAddImage: () => MoodboardHelpers.addManualImages(
+                  db: db,
+                  projectId: projectId,
+                  bibleId: data.id,
+                  assignedSections: const [BibleSectionId.concept],
                 ),
-              Row(
-                children: [
-                  addButton('Añadir ficha', () async {
-                    final added = await editRef(context, const {});
-                    if (added == null) return;
-                    await updateCustomData(ref, {
-                      'keyReferences': [...keyRefs, added],
-                    });
-                  }),
-                  addButton(
-                    'Moodboard',
-                    () => BibleNavigationScope.openMoodboardForSection(
+                onOpenMoodboard: () =>
+                    BibleNavigationScope.openMoodboardForSection(
                       context,
                       BibleSectionId.concept,
                     ),
-                  ),
-                ],
               ),
             ],
           ),
@@ -1082,6 +1025,48 @@ class _ConceptStitchModule extends ConsumerWidget {
                 onChanged: (v) =>
                     updateCustomData(ref, {'shadowTreatment': v}),
               ),
+              pointImages('shadowTreatment'),
+            ],
+          ),
+        ),
+      'composition' => _GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CardHeader(
+                icon: Icons.grid_on_outlined,
+                title: 'Composición',
+                palette: palette,
+              ),
+              const SizedBox(height: 12),
+              BibleTextField(
+                label: '',
+                hint: 'Cómo se ordena el cuadro: simetría, espacio negativo, '
+                    'líneas, relación del personaje con el entorno…',
+                maxLines: 5,
+                initialValue: composition,
+                onChanged: (v) => updateCustomData(ref, {'composition': v}),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final (key, label) in kConceptCompositionMetrics)
+                    SizedBox(
+                      width: 132,
+                      child: _MetricTile(
+                        label: label,
+                        value: compositionMetrics[key] ?? '—',
+                        palette: palette,
+                        onEdit: (v) => updateCustomData(ref, {
+                          'compositionMetrics': {...compositionMetrics, key: v},
+                        }),
+                      ),
+                    ),
+                ],
+              ),
+              pointImages('composition'),
             ],
           ),
         ),

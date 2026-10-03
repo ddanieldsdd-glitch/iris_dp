@@ -9,7 +9,7 @@ import '../../core/utils/pdf_export_fonts.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import '../../shared/visual_bible/camera_pilot_resolve.dart';
 import '../../shared/visual_bible/concept_points.dart';
-import '../../shared/visual_bible/direction_reference.dart';
+import '../../shared/visual_bible/bible_reference.dart';
 import '../../shared/visual_bible/format_pilot_resolve.dart';
 import '../../shared/visual_bible/bible_section_fields.dart';
 import 'export/bible_section_export_reader.dart';
@@ -327,18 +327,19 @@ class VisualBiblePdfService {
     );
 
     if (!isTech && _sectionAllowed(sections, BibleSectionId.direction)) {
-      final directionCells = await _loadMoodboardCells(
-        MoodboardExportGrouper.imagesForSection(
-          moodboard,
-          BibleSectionId.direction,
-        ),
+      final directionJson = sectionContentJsonById[BibleSectionId.direction];
+      final directionAssets = await _loadSectionAssets(
+        BibleSectionId.direction,
+        directionJson,
+        moodboard,
         boardLayout,
+        fonts,
       );
       final directionContent = _directionContent(
         data,
-        sectionContentJsonById[BibleSectionId.direction],
+        directionJson,
         kit,
-        _stillTiles(directionCells, fonts),
+        directionAssets,
       );
       if (directionContent.isNotEmpty) {
         addSection(
@@ -358,19 +359,20 @@ class VisualBiblePdfService {
     }
 
     if (!isTech && _sectionAllowed(sections, BibleSectionId.concept)) {
-      final conceptCells = await _loadMoodboardCells(
-        MoodboardExportGrouper.imagesForSection(
-          moodboard,
-          BibleSectionId.concept,
-        ),
+      final conceptJson = sectionContentJsonById[BibleSectionId.concept];
+      final conceptAssets = await _loadSectionAssets(
+        BibleSectionId.concept,
+        conceptJson,
+        moodboard,
         boardLayout,
+        fonts,
       );
       final conceptContent = _conceptContent(
         data,
-        sectionContentJsonById[BibleSectionId.concept],
+        conceptJson,
         colorBlocks,
         kit,
-        _stillTiles(conceptCells, fonts),
+        conceptAssets,
       );
       if (conceptContent.isNotEmpty) {
         addSection(
@@ -1534,15 +1536,10 @@ class VisualBiblePdfService {
     VisualBibleData data,
     String? contentJson,
     BiblePdfKit kit,
-    pw.Widget? stills,
+    _SectionAssets assets,
   ) {
-    final blob = BibleSectionExportReader.parseCustomBlob(
-      BibleSectionExportReader.withoutUserPoints(
-        contentJson,
-        BibleSectionId.direction,
-      ),
-      BibleSectionId.direction,
-    );
+    final blob = assets.blob;
+    final stills = assets.stills;
     final values = BibleSectionFieldsConfig.parseValues(contentJson);
     String text(Object? v) => v?.toString().trim() ?? '';
     List<(String, String)> pairs(Object? raw) => [
@@ -1610,9 +1607,7 @@ class VisualBiblePdfService {
           ];
           if (acts.isNotEmpty) out.add(kit.columnsPoint(field.label, acts));
         case 'references':
-          final references = DirectionReference.listFrom(
-            blob['refsMetadata'],
-          ).where((r) => !r.isEmpty).toList();
+          final references = assets.references;
           if (references.isNotEmpty || stills != null) {
             out.add(kit.label(field.label));
             out.add(pw.SizedBox(height: 6));
@@ -1620,9 +1615,12 @@ class VisualBiblePdfService {
               out.add(stills);
               out.add(pw.SizedBox(height: 10));
             }
-            for (final reference in references) {
+            final linked = assets.imagesFor(references);
+            for (var i = 0; i < references.length; i++) {
+              final reference = references[i];
               out.add(
                 kit.referencePoint(
+                  image: linked[i],
                   kicker: [
                     reference.kind,
                     reference.work,
@@ -1655,6 +1653,9 @@ class VisualBiblePdfService {
           final point = kit.point(field, values[field.key]);
           if (point != null) out.add(point);
       }
+      // Imágenes que acompañan al punto.
+      final strip = assets.pointImages[field.key];
+      if (strip != null && strip.isNotEmpty) out.add(kit.imageStrip(strip));
     }
     return out;
   }
@@ -1665,15 +1666,10 @@ class VisualBiblePdfService {
     String? contentJson,
     List<ColorBlockModel> colorBlocks,
     BiblePdfKit kit,
-    pw.Widget? stills,
+    _SectionAssets assets,
   ) {
-    final blob = BibleSectionExportReader.parseCustomBlob(
-      BibleSectionExportReader.withoutUserPoints(
-        contentJson,
-        BibleSectionId.concept,
-      ),
-      BibleSectionId.concept,
-    );
+    final blob = assets.blob;
+    final stills = assets.stills;
     final values = BibleSectionFieldsConfig.parseValues(contentJson);
     String text(Object? v) => v?.toString().trim() ?? '';
     Map<String, String> strings(Object? raw) => {
@@ -1695,10 +1691,21 @@ class VisualBiblePdfService {
           );
           if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
         case 'colorPalette':
-          final hexes = [
-            for (final block in colorBlocks) ...block.dominantColors.take(3),
+          // Paleta propia de Concepto; si no se ha definido, la de los
+          // bloques de Color e imagen.
+          final own = [
+            if (blob['masterPalette'] is List)
+              for (final e in blob['masterPalette'] as List)
+                if (e is Map && text(e['hex']).isNotEmpty)
+                  (text(e['hex']), text(e['name'])),
           ];
-          if (hexes.isNotEmpty) out.add(kit.swatchRow(field.label, hexes));
+          final colors = own.isNotEmpty
+              ? own
+              : [
+                  for (final block in colorBlocks)
+                    for (final hex in block.dominantColors.take(3)) (hex, ''),
+                ];
+          if (colors.isNotEmpty) out.add(kit.swatchRow(field.label, colors));
         case 'colorSymbolism':
           final symbols = [
             if (blob['colorSymbols'] is List)
@@ -1735,6 +1742,21 @@ class VisualBiblePdfService {
         case 'shadowTreatment':
           final shadows = text(blob['shadowTreatment']);
           if (shadows.isNotEmpty) out.add(kit.textPoint(field.label, shadows));
+        case 'composition':
+          final composition = text(blob['composition']);
+          final metrics = strings(blob['compositionMetrics']);
+          final rows = [
+            for (final (key, label) in kConceptCompositionMetrics)
+              if (metrics[key]?.isNotEmpty == true) (label, metrics[key]!),
+          ];
+          if (composition.isNotEmpty) {
+            out.add(kit.textPoint(field.label, composition));
+          }
+          if (rows.isNotEmpty) {
+            out.add(
+              kit.specsPoint(composition.isEmpty ? field.label : '', rows),
+            );
+          }
         case 'actNotes':
           final titles = {...kConceptActTitles, ...strings(blob['actTitles'])};
           const numerals = ['I', 'II', 'III'];
@@ -1764,42 +1786,113 @@ class VisualBiblePdfService {
             out.add(kit.textPoint(title.isEmpty ? field.label : title, tech));
           }
         case 'references':
-          final cards = [
-            if (blob['keyReferences'] is List)
-              for (final e in blob['keyReferences'] as List)
-                if (e is Map)
-                  (
-                    kicker: [
-                      if (text(e['dp']).isNotEmpty) 'DF ${text(e['dp'])}',
-                      if (text(e['director']).isNotEmpty)
-                        'Dir. ${text(e['director'])}',
-                    ].join(' · '),
-                    title: text(e['film']),
-                    text: [
-                      if (text(e['tone']).isNotEmpty)
-                        'Tono: ${text(e['tone'])}',
-                      if (text(e['intent']).isNotEmpty)
-                        'Intención: ${text(e['intent'])}',
-                    ].join('\n'),
-                  ),
-          ].where((c) => c.title.isNotEmpty || c.text.isNotEmpty).toList();
-          if (cards.isNotEmpty || stills != null) {
+          final references = assets.references;
+          if (references.isNotEmpty || stills != null) {
             out.add(kit.label(field.label));
             out.add(pw.SizedBox(height: 6));
             if (stills != null) {
               out.add(stills);
               out.add(pw.SizedBox(height: 10));
             }
-            if (cards.isNotEmpty) {
-              out.add(kit.columnsPoint('', cards, perRow: 2));
+            final linked = assets.imagesFor(references);
+            for (var i = 0; i < references.length; i++) {
+              final reference = references[i];
+              out.add(
+                kit.referencePoint(
+                  image: linked[i],
+                  kicker: [
+                    reference.kind,
+                    reference.work,
+                  ].where((e) => e.isNotEmpty).join(' · '),
+                  title: reference.title,
+                  sections: [
+                    ('Por qué nos gusta', reference.why),
+                    ('Qué llevamos a la película', reference.purpose),
+                    ('Momento', reference.scene),
+                  ],
+                ),
+              );
             }
           }
         default:
           final point = kit.point(field, values[field.key]);
           if (point != null) out.add(point);
       }
+      // Imágenes que acompañan al punto.
+      final strip = assets.pointImages[field.key];
+      if (strip != null && strip.isNotEmpty) out.add(kit.imageStrip(strip));
     }
     return out;
+  }
+
+  /// Carga lo que Dirección y Concepto necesitan del moodboard: imágenes de
+  /// cada punto, imagen de cada referencia y los stills sin ficha.
+  static Future<_SectionAssets> _loadSectionAssets(
+    String sectionId,
+    String? contentJson,
+    List<MoodboardImageModel> moodboard,
+    MoodboardExportLayout layout,
+    ({pw.Font regular, pw.Font bold}) fonts,
+  ) async {
+    final blob = BibleSectionExportReader.parseCustomBlob(
+      BibleSectionExportReader.withoutUserPoints(contentJson, sectionId),
+      sectionId,
+    );
+    final references = BibleReference.listFrom(
+      blob[sectionId == BibleSectionId.concept
+          ? 'keyReferences'
+          : 'refsMetadata'],
+    ).where((r) => !r.isEmpty).toList();
+    final byId = {for (final image in moodboard) image.id: image};
+    final sectionImages = MoodboardExportGrouper.imagesForSection(
+      moodboard,
+      sectionId,
+    );
+    final sectionIds = sectionImages.map((i) => i.id).toList();
+    final linkedIds = [
+      for (var i = 0; i < references.length; i++)
+        references[i].legacyPairing
+            ? (i < sectionIds.length ? sectionIds[i] : null)
+            : references[i].imageId,
+    ];
+
+    final cache = <int, pw.MemoryImage?>{};
+    Future<pw.MemoryImage?> load(int? id) async {
+      if (id == null || byId[id] == null) return null;
+      if (cache.containsKey(id)) return cache[id];
+      final bytes = await PdfSafeImage.loadFromPathMaxEdge(byId[id]!.imagePath);
+      return cache[id] = bytes == null ? null : pw.MemoryImage(bytes);
+    }
+
+    final referenceImages = <pw.MemoryImage?>[];
+    for (final id in linkedIds) {
+      referenceImages.add(await load(id));
+    }
+    final pointImages = <String, List<pw.MemoryImage>>{};
+    final rawPoints = blob['pointImages'];
+    if (rawPoints is Map) {
+      for (final entry in rawPoints.entries) {
+        final images = <pw.MemoryImage>[];
+        if (entry.value is List) {
+          for (final id in entry.value as List) {
+            final image = await load(id is num ? id.toInt() : null);
+            if (image != null) images.add(image);
+          }
+        }
+        pointImages[entry.key.toString()] = images;
+      }
+    }
+    final unlinked = [
+      for (final image in sectionImages)
+        if (!linkedIds.contains(image.id)) image,
+    ];
+    return _SectionAssets(
+      blob: blob,
+      references: references,
+      referenceImages: referenceImages,
+      pointImages: pointImages,
+      stills: _stillTiles(await _loadMoodboardCells(unlinked, layout), fonts),
+    );
   }
 
   /// Stills de una sección como rejilla, o `null` si no hay.
@@ -2144,4 +2237,28 @@ class VisualBiblePdfService {
       (value & 0xFF) / 255,
     );
   }
+}
+
+/// Recursos de moodboard ya cargados para el PDF de una sección.
+class _SectionAssets {
+  final Map<String, dynamic> blob;
+  final List<BibleReference> references;
+  final List<pw.MemoryImage?> referenceImages;
+  final Map<String, List<pw.MemoryImage>> pointImages;
+
+  /// Stills de la sección que no pertenecen a ninguna ficha.
+  final pw.Widget? stills;
+
+  const _SectionAssets({
+    required this.blob,
+    required this.references,
+    required this.referenceImages,
+    required this.pointImages,
+    required this.stills,
+  });
+
+  List<pw.MemoryImage?> imagesFor(List<BibleReference> list) => [
+    for (var i = 0; i < list.length; i++)
+      i < referenceImages.length ? referenceImages[i] : null,
+  ];
 }

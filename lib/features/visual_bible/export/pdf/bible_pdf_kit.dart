@@ -134,53 +134,59 @@ class BiblePdfKit {
   );
 
   /// Punto de datos técnicos: rótulo y tabla etiqueta/valor.
-  pw.Widget specsPoint(String label, List<(String, String)> rows) => pw.Padding(
-    padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
-    child: pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        this.label(label),
-        pw.SizedBox(height: 4),
-        for (final (name, value) in rows)
-          pw.Container(
-            padding: const pw.EdgeInsets.symmetric(vertical: 4),
-            decoration: const pw.BoxDecoration(
-              border: pw.Border(
-                bottom: pw.BorderSide(color: BiblePdfTokens.rule, width: 0.5),
-              ),
-            ),
-            child: pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Expanded(
-                  flex: 2,
-                  child: pw.Text(
-                    name.toUpperCase(),
-                    style: pw.TextStyle(
-                      font: regular,
-                      fontSize: 8,
-                      letterSpacing: 0.6,
-                      color: BiblePdfTokens.secondary,
+  pw.Widget specsPoint(String label, List<(String, String)> rows) =>
+      pw.Inseparable(
+        child: pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              this.label(label),
+              pw.SizedBox(height: 4),
+              for (final (name, value) in rows)
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                  decoration: const pw.BoxDecoration(
+                    border: pw.Border(
+                      bottom: pw.BorderSide(
+                        color: BiblePdfTokens.rule,
+                        width: 0.5,
+                      ),
                     ),
                   ),
-                ),
-                pw.Expanded(
-                  flex: 3,
-                  child: pw.Text(
-                    value,
-                    style: pw.TextStyle(
-                      font: bold,
-                      fontSize: 10,
-                      color: BiblePdfTokens.ink,
-                    ),
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Expanded(
+                        flex: 2,
+                        child: pw.Text(
+                          name.toUpperCase(),
+                          style: pw.TextStyle(
+                            font: regular,
+                            fontSize: 8,
+                            letterSpacing: 0.6,
+                            color: BiblePdfTokens.secondary,
+                          ),
+                        ),
+                      ),
+                      pw.Expanded(
+                        flex: 3,
+                        child: pw.Text(
+                          value,
+                          style: pw.TextStyle(
+                            font: bold,
+                            fontSize: 10,
+                            color: BiblePdfTokens.ink,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
-      ],
-    ),
-  );
+        ),
+      );
 
   /// Punto con entradas de título y texto (tono, transiciones).
   pw.Widget titledList(String label, List<(String, String)> entries) =>
@@ -211,60 +217,64 @@ class BiblePdfKit {
     for (var i = 0; i < entries.length; i += perRow) {
       rows.add(entries.skip(i).take(perRow).toList());
     }
-    return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          this.label(label),
-          pw.SizedBox(height: 6),
-          for (final row in rows)
-            pw.Padding(
-              padding: const pw.EdgeInsets.only(bottom: 8),
-              child: pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  for (var i = 0; i < perRow; i++)
-                    pw.Expanded(
-                      child: i >= row.length
-                          ? pw.SizedBox()
-                          : pw.Container(
-                              margin: pw.EdgeInsets.only(
-                                right: i == perRow - 1 ? 0 : 10,
-                              ),
-                              padding: const pw.EdgeInsets.only(left: 8),
-                              decoration: const pw.BoxDecoration(
-                                border: pw.Border(
-                                  left: pw.BorderSide(
-                                    color: BiblePdfTokens.rule,
-                                    width: 1.5,
+    // Rótulo y columnas van juntos: no se separan entre páginas.
+    return pw.Inseparable(
+      child: pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            this.label(label),
+            pw.SizedBox(height: 6),
+            for (final row in rows)
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 8),
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < perRow; i++)
+                      pw.Expanded(
+                        child: i >= row.length
+                            ? pw.SizedBox()
+                            : pw.Container(
+                                margin: pw.EdgeInsets.only(
+                                  right: i == perRow - 1 ? 0 : 10,
+                                ),
+                                padding: const pw.EdgeInsets.only(left: 8),
+                                decoration: const pw.BoxDecoration(
+                                  border: pw.Border(
+                                    left: pw.BorderSide(
+                                      color: BiblePdfTokens.rule,
+                                      width: 1.5,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              child: pw.Column(
-                                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                                children: [
-                                  if (row[i].kicker?.isNotEmpty == true) ...[
-                                    pw.Text(
-                                      row[i].kicker!.toUpperCase(),
-                                      style: pw.TextStyle(
-                                        font: regular,
-                                        fontSize: 7,
-                                        letterSpacing: 0.6,
-                                        color: BiblePdfTokens.accent,
+                                child: pw.Column(
+                                  crossAxisAlignment:
+                                      pw.CrossAxisAlignment.start,
+                                  children: [
+                                    if (row[i].kicker?.isNotEmpty == true) ...[
+                                      pw.Text(
+                                        row[i].kicker!.toUpperCase(),
+                                        style: pw.TextStyle(
+                                          font: regular,
+                                          fontSize: 7,
+                                          letterSpacing: 0.6,
+                                          color: BiblePdfTokens.accent,
+                                        ),
                                       ),
-                                    ),
-                                    pw.SizedBox(height: 2),
+                                      pw.SizedBox(height: 2),
+                                    ],
+                                    _titled(row[i].title, row[i].text),
                                   ],
-                                  _titled(row[i].title, row[i].text),
-                                ],
+                                ),
                               ),
-                            ),
-                    ),
-                ],
+                      ),
+                  ],
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -294,21 +304,15 @@ class BiblePdfKit {
     ],
   );
 
-  /// Ficha de referencia: antetítulo, título y apartados con rótulo.
-  /// Los apartados vacíos no se pintan.
+  /// Ficha de referencia: imagen opcional, antetítulo, título y apartados
+  /// con rótulo. Los apartados vacíos no se pintan.
   pw.Widget referencePoint({
     required String kicker,
     required String title,
     required List<(String, String)> sections,
-  }) => pw.Container(
-    margin: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
-    padding: const pw.EdgeInsets.only(left: 10),
-    decoration: const pw.BoxDecoration(
-      border: pw.Border(
-        left: pw.BorderSide(color: BiblePdfTokens.rule, width: 1.5),
-      ),
-    ),
-    child: pw.Column(
+    pw.ImageProvider? image,
+  }) {
+    final text = pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         if (kicker.isNotEmpty) ...[
@@ -332,13 +336,13 @@ class BiblePdfKit {
               color: BiblePdfTokens.ink,
             ),
           ),
-        for (final (heading, text) in sections)
-          if (text.trim().isNotEmpty) ...[
+        for (final (heading, body) in sections)
+          if (body.trim().isNotEmpty) ...[
             pw.SizedBox(height: 6),
             label(heading),
             pw.SizedBox(height: 2),
             pw.Text(
-              text.trim(),
+              body.trim(),
               style: pw.TextStyle(
                 font: regular,
                 fontSize: 10,
@@ -348,42 +352,99 @@ class BiblePdfKit {
             ),
           ],
       ],
-    ),
-  );
+    );
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+      padding: const pw.EdgeInsets.only(left: 10),
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(
+          left: pw.BorderSide(color: BiblePdfTokens.rule, width: 1.5),
+        ),
+      ),
+      child: image == null
+          ? text
+          : pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.ClipRRect(
+                  horizontalRadius: BiblePdfTokens.radius,
+                  verticalRadius: BiblePdfTokens.radius,
+                  child: pw.Image(image, width: 190, fit: pw.BoxFit.contain),
+                ),
+                pw.SizedBox(width: 12),
+                pw.Expanded(child: text),
+              ],
+            ),
+    );
+  }
 
-  /// Muestras de color con su código (paleta).
-  pw.Widget swatchRow(String label, List<String> hexes) => pw.Padding(
-    padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
-    child: pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        this.label(label),
-        pw.SizedBox(height: 6),
-        pw.Wrap(
-          spacing: 8,
-          runSpacing: 8,
+  /// Tira de imágenes que acompañan a un punto.
+  pw.Widget imageStrip(List<pw.ImageProvider> images, {double height = 78}) =>
+      pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+        child: pw.Wrap(
+          spacing: 6,
+          runSpacing: 6,
           children: [
-            for (final hex in hexes)
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  _swatch(hex, 44),
-                  pw.SizedBox(height: 3),
-                  pw.Text(
-                    hex.toUpperCase(),
-                    style: pw.TextStyle(
-                      font: regular,
-                      fontSize: 6.5,
-                      color: BiblePdfTokens.secondary,
-                    ),
-                  ),
-                ],
+            for (final image in images)
+              pw.ClipRRect(
+                horizontalRadius: BiblePdfTokens.radius,
+                verticalRadius: BiblePdfTokens.radius,
+                child: pw.Image(image, height: height, fit: pw.BoxFit.cover),
               ),
           ],
         ),
-      ],
-    ),
-  );
+      );
+
+  /// Muestras de color con su código y nombre (paleta).
+  pw.Widget swatchRow(String label, List<(String hex, String name)> colors) =>
+      pw.Inseparable(
+        child: pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              this.label(label),
+              pw.SizedBox(height: 6),
+              pw.Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final (hex, name) in colors)
+                    pw.SizedBox(
+                      width: 62,
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          _swatch(hex, 62),
+                          pw.SizedBox(height: 3),
+                          pw.Text(
+                            hex.toUpperCase(),
+                            style: pw.TextStyle(
+                              font: regular,
+                              fontSize: 6.5,
+                              color: BiblePdfTokens.secondary,
+                            ),
+                          ),
+                          if (name.isNotEmpty)
+                            pw.Text(
+                              name.toUpperCase(),
+                              style: pw.TextStyle(
+                                font: bold,
+                                fontSize: 6,
+                                letterSpacing: 0.4,
+                                color: BiblePdfTokens.tertiary,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
 
   /// Entradas con muestra de color, título y texto (simbología).
   pw.Widget swatchList(

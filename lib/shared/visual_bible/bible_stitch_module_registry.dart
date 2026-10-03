@@ -61,6 +61,7 @@ abstract final class BibleStitchModuleRegistry {
             StitchModule(key: 'colorSymbolism', label: 'Simbología de color'),
             StitchModule(key: 'lightPhilosophy', label: 'Filosofía de luz'),
             StitchModule(key: 'shadowTreatment', label: 'Tratamiento de sombras'),
+            StitchModule(key: 'composition', label: 'Composición'),
             StitchModule(key: 'actNotes', label: 'Intención visual por acto'),
             StitchModule(key: 'keyFrame', label: 'Key Frame'),
             StitchModule(
@@ -359,6 +360,20 @@ abstract final class BibleStitchModuleRegistry {
       if (hasModular && keys.contains('visualConcept')) {
         return fields.where((f) => f.key != 'visualConcept').toList();
       }
+    }
+
+    // Concepto ganó «Composición»: se añade tras las sombras en biblias que
+    // ya tenían el resto de puntos.
+    if (sectionId == BibleSectionId.concept &&
+        keys.contains('shadowTreatment') &&
+        !keys.contains('composition')) {
+      return [
+        for (final field in fields) ...[
+          field,
+          if (field.key == 'shadowTreatment')
+            module(sectionId, 'composition')!.toField(),
+        ],
+      ];
     }
 
     if (sectionId == BibleSectionId.texture) {
