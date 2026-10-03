@@ -13,7 +13,7 @@ UI (Screens/widgets en `lib/features/*`)
 → State (Riverpod Notifiers/Providers; `setState` OK para UI pura)
 → Services (`lib/core/sync`, `lib/core/cloud`, `lib/core/storage`, `lib/core/update`, feature services)
 → Repositories (parcial: VB, shoot_documents, floor_plan; muchas screens aún tocan DB)
-→ Local DB / Cache (`AppDatabase` Drift schema **40**, SharedPreferences estilos/compositor)
+→ Local DB / Cache (`AppDatabase` Drift schema **41**, SharedPreferences estilos/compositor)
 → Supabase (`cloud_projects`, snapshots, media metadata) + Cloudinary (bytes)
 
 Reglas oficiales: `ARCHITECTURE.md` — `core` ↛ `features` (aún hay excepción en `app_database.dart`); features ↛ features salvo dominio justificado; UI ↛ Drift/Supabase directo (objetivo, no realidad total). Prioridad: estabilidad → mantenibilidad → features → UI.

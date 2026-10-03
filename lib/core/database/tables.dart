@@ -243,8 +243,24 @@ class LocationImages extends Table {
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 }
 
+/// Procedencia de una ficha de catálogo (estado, confianza y fuente), según
+/// el master de material técnico. Añadido en schemaVersion 41.
+mixin CatalogProvenanceColumns on Table {
+  /// Etiqueta de `CatalogDataStatus` (CONFIRMADO, PENDIENTE…).
+  TextColumn get dataStatus => text().nullable()();
+  TextColumn get confidence => text().nullable()();
+
+  /// Array JSON de campos cubiertos por [dataStatus]; null = toda la ficha.
+  TextColumn get verifiedFieldsJson => text().nullable()();
+  TextColumn get sourceLabel => text().nullable()();
+  TextColumn get sourceUrl => text().nullable()();
+
+  /// Fecha ISO 8601 de la verificación.
+  TextColumn get verifiedAt => text().nullable()();
+}
+
 /// Catálogo global de cámaras.
-class Cameras extends Table {
+class Cameras extends Table with CatalogProvenanceColumns {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get brand => text()();
   TextColumn get model => text()();
@@ -275,7 +291,7 @@ class Cameras extends Table {
 }
 
 /// Catálogo global de ópticas.
-class Lenses extends Table {
+class Lenses extends Table with CatalogProvenanceColumns {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get brand => text()();
   TextColumn get model => text()();
@@ -302,10 +318,25 @@ class Lenses extends Table {
       boolean().withDefault(const Constant(false))();
   TextColumn get lukaProfileJson => text().nullable()();
   TextColumn get notes => text().nullable()();
+
+  // Modelo óptico del master (schemaVersion 41). Conceptos que no se mezclan:
+  // círculo de imagen, área de imagen y área de iluminación.
+  /// ESFÉRICA o ANAMÓRFICA.
+  TextColumn get projectionType => text().nullable()();
+  RealColumn get imageAreaWidthMm => real().nullable()();
+  RealColumn get imageAreaHeightMm => real().nullable()();
+  TextColumn get illuminationArea => text().nullable()();
+  TextColumn get vignettingStatus => text().nullable()();
+  TextColumn get shadingStatus => text().nullable()();
+  TextColumn get portholingStatus => text().nullable()();
+
+  /// Ficha por focal publicada por el fabricante (ángulos de visión, pupila
+  /// de entrada, magnificación, distancias mínimas), como mapa JSON.
+  TextColumn get specsJson => text().nullable()();
 }
 
 /// Catálogo global de luces.
-class Lights extends Table {
+class Lights extends Table with CatalogProvenanceColumns {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get brand => text()();
   TextColumn get model => text()();

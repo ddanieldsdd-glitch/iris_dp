@@ -72,7 +72,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 40;
+  int get schemaVersion => 41;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -372,6 +372,35 @@ class AppDatabase extends _$AppDatabase {
       if (from < 40) {
         await m.addColumn(moodboardImages, moodboardImages.assignedCardIds);
         await m.createTable(visualBibleNarrativeCards);
+      }
+      if (from < 41) {
+        // Procedencia del catálogo y modelo óptico del master.
+        await m.addColumn(cameras, cameras.dataStatus);
+        await m.addColumn(cameras, cameras.confidence);
+        await m.addColumn(cameras, cameras.verifiedFieldsJson);
+        await m.addColumn(cameras, cameras.sourceLabel);
+        await m.addColumn(cameras, cameras.sourceUrl);
+        await m.addColumn(cameras, cameras.verifiedAt);
+        await m.addColumn(lenses, lenses.dataStatus);
+        await m.addColumn(lenses, lenses.confidence);
+        await m.addColumn(lenses, lenses.verifiedFieldsJson);
+        await m.addColumn(lenses, lenses.sourceLabel);
+        await m.addColumn(lenses, lenses.sourceUrl);
+        await m.addColumn(lenses, lenses.verifiedAt);
+        await m.addColumn(lenses, lenses.projectionType);
+        await m.addColumn(lenses, lenses.imageAreaWidthMm);
+        await m.addColumn(lenses, lenses.imageAreaHeightMm);
+        await m.addColumn(lenses, lenses.illuminationArea);
+        await m.addColumn(lenses, lenses.vignettingStatus);
+        await m.addColumn(lenses, lenses.shadingStatus);
+        await m.addColumn(lenses, lenses.portholingStatus);
+        await m.addColumn(lenses, lenses.specsJson);
+        await m.addColumn(lights, lights.dataStatus);
+        await m.addColumn(lights, lights.confidence);
+        await m.addColumn(lights, lights.verifiedFieldsJson);
+        await m.addColumn(lights, lights.sourceLabel);
+        await m.addColumn(lights, lights.sourceUrl);
+        await m.addColumn(lights, lights.verifiedAt);
       }
     },
   );
