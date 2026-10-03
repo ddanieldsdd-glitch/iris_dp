@@ -2,9 +2,29 @@ import 'dart:convert';
 
 import '../../../core/database/app_database.dart';
 import '../../../shared/visual_bible/bible_lighting_data.dart';
+import '../../../shared/visual_bible/bible_section_fields.dart';
 import '../../../shared/visual_bible/bible_section_ids.dart';
+import '../../../shared/visual_bible/bible_stitch_module_registry.dart';
 
-/// Entrada aplanada para compositores PDF (clásico y montaje).
+/// Sección de la biblia en el orden en que debe salir en el PDF.
+class BibleExportSectionRef {
+  final String id;
+  final String label;
+
+  /// Pantalla creada por el usuario (plantilla `freeform`).
+  final bool isCustom;
+
+  const BibleExportSectionRef({
+    required this.id,
+    required this.label,
+    this.isCustom = false,
+  });
+}
+
+/// Punto añadido por el usuario, con su valor crudo de `values[key]`.
+typedef BibleUserPoint = ({BibleSectionField field, String value});
+
+/// Entrada aplanada para el PDF.
 class BibleSectionExportEntry {
   final String label;
   final String value;
@@ -260,6 +280,71 @@ abstract final class BibleSectionExportReader {
     } catch (_) {
       return {};
     }
+  }
+
+  /// Puntos que el usuario añadió a una sección estándar, en su orden y
+  /// solo los que tienen contenido.
+  static List<BibleUserPoint> userPoints(String? contentJson, String sectionId) {
+    if (contentJson == null || contentJson.isEmpty) return const [];
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    return [
+      for (final field in BibleSectionFieldsConfig.parse(contentJson, sectionId))
+        if (_isUserPoint(sectionId, field) &&
+            (values[field.key]?.trim().isNotEmpty ?? false))
+          (field: field, value: values[field.key]!),
+    ];
+  }
+
+  static bool _isUserPoint(String sectionId, BibleSectionField field) =>
+      BibleStitchModuleRegistry.module(sectionId, field.key) == null &&
+      (field.type == BibleSectionFieldType.text ||
+          field.type == BibleSectionFieldType.list ||
+          field.type == BibleSectionFieldType.specs);
+
+  /// Valor de un punto del usuario como texto plano, para listados de filas.
+  static String userPointText(BibleUserPoint point) => switch (point.field.type) {
+        BibleSectionFieldType.list => BibleSectionPointValue.decodeList(
+            point.value,
+          ).where((e) => e.trim().isNotEmpty).map((e) => '• $e').join('\n'),
+        BibleSectionFieldType.specs => BibleSectionPointValue.decodeSpecs(
+            point.value,
+          ).map((r) => '${r.$1}: ${r.$2}').join('\n'),
+        _ => point.value.trim(),
+      };
+
+  /// `contentJson` sin los valores de los puntos del usuario, para los
+  /// lectores de blob que caen a `values` cuando no hay blob propio.
+  static String? withoutUserPoints(String? contentJson, String sectionId) {
+    if (contentJson == null || contentJson.isEmpty) return contentJson;
+    final fields = BibleSectionFieldsConfig.parse(contentJson, sectionId);
+    final userKeys = {
+      for (final field in fields)
+        if (_isUserPoint(sectionId, field)) field.key,
+    };
+    if (userKeys.isEmpty) return contentJson;
+    final values = BibleSectionFieldsConfig.parseValues(contentJson)
+      ..removeWhere((key, _) => userKeys.contains(key));
+    return BibleSectionFieldsConfig.encode(fields, values: values);
+  }
+
+  /// Filas del blob de la sección, sin los valores de los puntos del usuario
+  /// (que se pintan aparte, con su tipo).
+  static List<BibleSectionExportEntry> blobRows(
+    String? contentJson,
+    String sectionId,
+  ) {
+    final custom = Map<String, dynamic>.from(
+      parseCustomBlob(contentJson, sectionId),
+    );
+    if (custom.isEmpty) return const [];
+    final userKeys = {
+      for (final field in BibleSectionFieldsConfig.parse(contentJson, sectionId))
+        if (_isUserPoint(sectionId, field)) field.key,
+    };
+    custom.removeWhere(
+      (key, _) => userKeys.contains(key) || key.endsWith('__images'),
+    );
+    return rowsForSection(sectionId, custom);
   }
 
   static bool hasExportableContent(
