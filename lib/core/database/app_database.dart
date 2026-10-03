@@ -2769,6 +2769,17 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// Vuelve a abrir la biblia con el motor clásico. No borra el documento
+  /// V2: queda guardado por si se reactiva.
+  Future<void> setEngineToLegacy(int bibleId) async {
+    await (update(visualBibles)..where((v) => v.id.equals(bibleId))).write(
+      VisualBiblesCompanion(
+        engineVersion: const Value('legacy'),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
   Future<void> clearV2Documents(int bibleId) async {
     await (delete(
       visualBibleDocuments,

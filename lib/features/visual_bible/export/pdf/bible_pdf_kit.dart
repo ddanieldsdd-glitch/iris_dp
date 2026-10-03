@@ -294,6 +294,63 @@ class BiblePdfKit {
     ],
   );
 
+  /// Ficha de referencia: antetítulo, título y apartados con rótulo.
+  /// Los apartados vacíos no se pintan.
+  pw.Widget referencePoint({
+    required String kicker,
+    required String title,
+    required List<(String, String)> sections,
+  }) => pw.Container(
+    margin: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+    padding: const pw.EdgeInsets.only(left: 10),
+    decoration: const pw.BoxDecoration(
+      border: pw.Border(
+        left: pw.BorderSide(color: BiblePdfTokens.rule, width: 1.5),
+      ),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (kicker.isNotEmpty) ...[
+          pw.Text(
+            kicker.toUpperCase(),
+            style: pw.TextStyle(
+              font: regular,
+              fontSize: 7,
+              letterSpacing: 0.6,
+              color: BiblePdfTokens.accent,
+            ),
+          ),
+          pw.SizedBox(height: 2),
+        ],
+        if (title.isNotEmpty)
+          pw.Text(
+            title,
+            style: pw.TextStyle(
+              font: bold,
+              fontSize: 12,
+              color: BiblePdfTokens.ink,
+            ),
+          ),
+        for (final (heading, text) in sections)
+          if (text.trim().isNotEmpty) ...[
+            pw.SizedBox(height: 6),
+            label(heading),
+            pw.SizedBox(height: 2),
+            pw.Text(
+              text.trim(),
+              style: pw.TextStyle(
+                font: regular,
+                fontSize: 10,
+                lineSpacing: 3,
+                color: BiblePdfTokens.secondary,
+              ),
+            ),
+          ],
+      ],
+    ),
+  );
+
   /// Muestras de color con su código (paleta).
   pw.Widget swatchRow(String label, List<String> hexes) => pw.Padding(
     padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),

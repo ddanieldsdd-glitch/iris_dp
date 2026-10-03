@@ -9,6 +9,7 @@ import '../../core/utils/pdf_export_fonts.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import '../../shared/visual_bible/camera_pilot_resolve.dart';
 import '../../shared/visual_bible/concept_points.dart';
+import '../../shared/visual_bible/direction_reference.dart';
 import '../../shared/visual_bible/format_pilot_resolve.dart';
 import '../../shared/visual_bible/bible_section_fields.dart';
 import 'export/bible_section_export_reader.dart';
@@ -1609,34 +1610,31 @@ class VisualBiblePdfService {
           ];
           if (acts.isNotEmpty) out.add(kit.columnsPoint(field.label, acts));
         case 'references':
-          final cards = [
-            if (blob['refsMetadata'] is List)
-              for (final e in blob['refsMetadata'] as List)
-                if (e is Map)
-                  (
-                    kicker: text(e['refLabel']),
-                    title: text(e['title']),
-                    text: [
-                      text(e['body']),
-                      [
-                        if (text(e['lens']).isNotEmpty)
-                          'Lente ${text(e['lens'])}',
-                        if (text(e['tech2Value']).isNotEmpty)
-                          '${text(e['tech2Label'])} ${text(e['tech2Value'])}'
-                              .trim(),
-                      ].join(' · '),
-                    ].where((l) => l.isNotEmpty).join('\n'),
-                  ),
-          ].where((c) => c.title.isNotEmpty || c.text.isNotEmpty).toList();
-          if (cards.isNotEmpty || stills != null) {
+          final references = DirectionReference.listFrom(
+            blob['refsMetadata'],
+          ).where((r) => !r.isEmpty).toList();
+          if (references.isNotEmpty || stills != null) {
             out.add(kit.label(field.label));
             out.add(pw.SizedBox(height: 6));
             if (stills != null) {
               out.add(stills);
               out.add(pw.SizedBox(height: 10));
             }
-            if (cards.isNotEmpty) {
-              out.add(kit.columnsPoint('', cards, perRow: 2));
+            for (final reference in references) {
+              out.add(
+                kit.referencePoint(
+                  kicker: [
+                    reference.kind,
+                    reference.work,
+                  ].where((e) => e.isNotEmpty).join(' · '),
+                  title: reference.title,
+                  sections: [
+                    ('Por qué esta referencia', reference.why),
+                    ('Para qué en la película', reference.purpose),
+                    ('Momento', reference.scene),
+                  ],
+                ),
+              );
             }
           }
         case 'transitions':

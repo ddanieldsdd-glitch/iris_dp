@@ -124,10 +124,10 @@ void main() {
           {
             'refLabel': 'FINCHER / SE7EN',
             'title': 'Espacio negativo',
-            'body': 'Tercio inferior',
-            'lens': '35mm',
-            'tech2Label': 'APERTURE',
-            'tech2Value': 'T5.6',
+            'kind': 'Puesta en escena',
+            'why': 'El entorno pesa más que el personaje',
+            'purpose': 'Que la ciudad oprima a la protagonista',
+            'imageId': null,
           },
         ],
         'transitionLanguage': [
@@ -178,8 +178,10 @@ void main() {
       'Planos largos',
       'Orden y Rigidez',
       'Composiciones simétricas',
+      'PUESTA EN ESCENA',
       'Espacio negativo',
-      'Lente 35mm',
+      'El entorno pesa más que el personaje',
+      'Que la ciudad oprima a la protagonista',
       'Match cuts',
     ];
     var cursor = -1;

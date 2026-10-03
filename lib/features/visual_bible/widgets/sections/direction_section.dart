@@ -16,6 +16,8 @@ import '../bible_form_widgets.dart';
 import '../bible_moodboard_image_target.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_point_panel.dart';
+import '../../../../shared/visual_bible/direction_reference.dart';
+import 'direction_references.dart';
 import 'section_scaffold.dart';
 
 /// Dirección — layout Stitch Visual Bible (glass bento).
@@ -134,15 +136,6 @@ class DirectionSection extends ConsumerWidget {
               'title': e['title']?.toString() ?? '',
               'body': e['body']?.toString() ?? '',
             })
-        .toList();
-  }
-
-  List<Map<String, dynamic>> _refsMeta(Map<String, dynamic> custom) {
-    final raw = custom['refsMetadata'];
-    if (raw is! List) return [];
-    return raw
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
         .toList();
   }
 
@@ -895,22 +888,6 @@ class DirectionSection extends ConsumerWidget {
               ),
             );
 
-        final refsMeta = _refsMeta(custom);
-        Future<void> editRef(int? index) async {
-          final edited = await _editRefMeta(
-            context,
-            index == null ? const {} : refsMeta[index],
-          );
-          if (edited == null) return;
-          final next = [...refsMeta];
-          if (index == null) {
-            next.add(edited);
-          } else {
-            next[index] = edited;
-          }
-          await _updateCustomData(ref, {'refsMetadata': next});
-        }
-
         final refsCard = _GlassPanel(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -921,19 +898,18 @@ class DirectionSection extends ConsumerWidget {
                 palette: palette,
               ),
               const SizedBox(height: 16),
-              _DirectionRefsGrid(
+              DirectionReferencesPanel(
                 projectId: projectId,
-                bibleId: data.id,
-                palette: palette,
-                meta: refsMeta,
+                references: DirectionReference.listFrom(custom['refsMetadata']),
+                onChanged: (next) => _updateCustomData(ref, {
+                  'refsMetadata': [for (final r in next) r.toJson()],
+                }),
                 onAddImage: () => MoodboardHelpers.addManualImages(
                   db: ref.read(databaseProvider),
                   projectId: projectId,
                   bibleId: data.id,
                   assignedSections: const [BibleSectionId.direction],
                 ),
-                onAddMeta: () => editRef(null),
-                onEditMeta: editRef,
                 onOpenMoodboard: () =>
                     BibleNavigationScope.openMoodboardForSection(
                       context,
@@ -1044,82 +1020,6 @@ class DirectionSection extends ConsumerWidget {
     );
   }
 
-  static Future<Map<String, dynamic>?> _editRefMeta(
-    BuildContext context,
-    Map<String, dynamic> initial,
-  ) async {
-    final refLabel =
-        TextEditingController(text: initial['refLabel']?.toString() ?? '');
-    final title =
-        TextEditingController(text: initial['title']?.toString() ?? '');
-    final body =
-        TextEditingController(text: initial['body']?.toString() ?? '');
-    final lens =
-        TextEditingController(text: initial['lens']?.toString() ?? '');
-    final tech2Label =
-        TextEditingController(text: initial['tech2Label']?.toString() ?? 'APERTURE');
-    final tech2Value =
-        TextEditingController(text: initial['tech2Value']?.toString() ?? '');
-    return showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Ficha de referencia'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: refLabel,
-                decoration: const InputDecoration(
-                  labelText: 'REF label (FINCHER / SE7EN)',
-                ),
-              ),
-              TextField(
-                controller: title,
-                decoration: const InputDecoration(labelText: 'Título'),
-              ),
-              TextField(
-                controller: body,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Notas'),
-              ),
-              TextField(
-                controller: lens,
-                decoration: const InputDecoration(labelText: 'Lens'),
-              ),
-              TextField(
-                controller: tech2Label,
-                decoration:
-                    const InputDecoration(labelText: 'Tech 2 label'),
-              ),
-              TextField(
-                controller: tech2Value,
-                decoration:
-                    const InputDecoration(labelText: 'Tech 2 value'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, {
-              'refLabel': refLabel.text.trim(),
-              'title': title.text.trim(),
-              'body': body.text.trim(),
-              'lens': lens.text.trim(),
-              'tech2Label': tech2Label.text.trim(),
-              'tech2Value': tech2Value.text.trim(),
-            }),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _DirectionHeader extends StatelessWidget {
@@ -1737,259 +1637,6 @@ class _KeyFrameAnalysisCard extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _DirectionRefsGrid extends ConsumerWidget {
-  final int projectId;
-  final int bibleId;
-  final AppPalette palette;
-  final List<Map<String, dynamic>> meta;
-  final VoidCallback onAddImage;
-  final VoidCallback onAddMeta;
-  final void Function(int index) onEditMeta;
-  final VoidCallback onOpenMoodboard;
-
-  const _DirectionRefsGrid({
-    required this.projectId,
-    required this.bibleId,
-    required this.palette,
-    required this.meta,
-    required this.onAddImage,
-    required this.onAddMeta,
-    required this.onEditMeta,
-    required this.onOpenMoodboard,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.watch(databaseProvider);
-    return StreamBuilder<List<MoodboardImage>>(
-      stream: db.watchMoodboardImagesForSection(
-        projectId,
-        BibleSectionId.direction,
-      ),
-      builder: (context, snap) {
-        final images = snap.data ?? [];
-        final count = images.isEmpty
-            ? meta.length
-            : (images.length > meta.length ? images.length : meta.length);
-
-        return LayoutBuilder(
-          builder: (context, c) {
-            final cols = c.maxWidth >= 700 ? 2 : 1;
-            return Column(
-              children: [
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: count,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: cols,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 0.95,
-                  ),
-                  itemBuilder: (context, i) {
-                    final img = i < images.length ? images[i] : null;
-                    final m = i < meta.length ? meta[i] : null;
-                    return _RefCard(
-                      image: img,
-                      meta: m,
-                      palette: palette,
-                      onEditMeta: m != null ? () => onEditMeta(i) : onAddMeta,
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 120,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _AddDashedCard(
-                          label: 'Añadir Referencia',
-                          icon: Icons.add_photo_alternate_outlined,
-                          palette: palette,
-                          onTap: onAddImage,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      TextButton(
-                        onPressed: onOpenMoodboard,
-                        child: Text(
-                          'Moodboard',
-                          style: TextStyle(color: palette.accent),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: onAddMeta,
-                        child: Text(
-                          'Ficha',
-                          style: TextStyle(color: palette.accent),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _RefCard extends StatelessWidget {
-  final MoodboardImage? image;
-  final Map<String, dynamic>? meta;
-  final AppPalette palette;
-  final VoidCallback onEditMeta;
-
-  const _RefCard({
-    required this.image,
-    required this.meta,
-    required this.palette,
-    required this.onEditMeta,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final model =
-        image != null ? MoodboardImageModel.fromRow(image!) : null;
-    final file =
-        model != null ? File(model.imagePath) : null;
-    final refLabel = meta?['refLabel']?.toString().isNotEmpty == true
-        ? meta!['refLabel'].toString()
-        : (model?.filmReference ?? 'REF');
-    final title = meta?['title']?.toString().isNotEmpty == true
-        ? meta!['title'].toString()
-        : (model?.caption ?? 'Referencia');
-    final body = meta?['body']?.toString() ?? '';
-    final lens = meta?['lens']?.toString() ?? '—';
-    final tech2Label = meta?['tech2Label']?.toString() ?? 'APERTURE';
-    final tech2Value = meta?['tech2Value']?.toString() ?? '—';
-
-    return _GlassPanel(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            flex: 5,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (file != null && file.existsSync())
-                  Image.file(file, fit: BoxFit.cover)
-                else
-                  ColoredBox(color: palette.surfaceOverlay),
-                Positioned(
-                  right: 12,
-                  bottom: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: palette.background.withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.1),
-                      ),
-                    ),
-                    child: Text(
-                      'REF: ${refLabel.toUpperCase()}',
-                      style: AppTypography.mono(palette).copyWith(
-                        fontSize: 10,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 4,
-            child: InkWell(
-              onTap: onEditMeta,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: AppTypography.titleMedium(palette)
-                          .copyWith(fontSize: 16),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    Expanded(
-                      child: Text(
-                        body.isEmpty ? 'Toca para añadir notas…' : body,
-                        style: AppTypography.bodyMedium(palette).copyWith(
-                          color: palette.textSecondary,
-                          fontSize: 13,
-                        ),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.only(top: 10),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.06),
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          _tech('LENS', lens),
-                          const SizedBox(width: 24),
-                          _tech(tech2Label, tech2Value),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _tech(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: AppTypography.mono(palette).copyWith(
-            fontSize: 10,
-            letterSpacing: 1,
-            color: palette.textTertiary,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: AppTypography.mono(palette).copyWith(
-            fontSize: 13,
-            color: palette.textPrimary,
-          ),
-        ),
-      ],
     );
   }
 }
