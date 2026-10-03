@@ -294,6 +294,84 @@ class BiblePdfKit {
     ],
   );
 
+  /// Muestras de color con su código (paleta).
+  pw.Widget swatchRow(String label, List<String> hexes) => pw.Padding(
+    padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        this.label(label),
+        pw.SizedBox(height: 6),
+        pw.Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final hex in hexes)
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  _swatch(hex, 44),
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    hex.toUpperCase(),
+                    style: pw.TextStyle(
+                      font: regular,
+                      fontSize: 6.5,
+                      color: BiblePdfTokens.secondary,
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  /// Entradas con muestra de color, título y texto (simbología).
+  pw.Widget swatchList(
+    String label,
+    List<({String hex, String title, String text})> entries,
+  ) => pw.Padding(
+    padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        this.label(label),
+        pw.SizedBox(height: 4),
+        for (final entry in entries)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 6),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(top: 2, right: 8),
+                  child: _swatch(entry.hex, 12),
+                ),
+                pw.Expanded(child: _titled(entry.title, entry.text)),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
+
+  pw.Widget _swatch(String hex, double size) {
+    final value = int.tryParse(hex.replaceAll('#', '').trim(), radix: 16);
+    return pw.Container(
+      width: size,
+      height: size,
+      decoration: pw.BoxDecoration(
+        color: value == null
+            ? BiblePdfTokens.panel
+            : PdfColor.fromInt(0xFF000000 | value),
+        borderRadius: pw.BorderRadius.circular(3),
+        border: pw.Border.all(color: BiblePdfTokens.rule, width: 0.5),
+      ),
+    );
+  }
+
   /// Etiquetas cortas en línea (emociones, tags).
   pw.Widget tagRow(List<String> tags) => pw.Padding(
     padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),

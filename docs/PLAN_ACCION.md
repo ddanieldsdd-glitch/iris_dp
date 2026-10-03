@@ -53,7 +53,7 @@ Principio: la lista de puntos de cada sección (`BibleSectionDefinitions.content
   - [ ] Pendiente: los puntos propios salen al final de su sección; intercalarlos con los puntos dedicados se hace en cada sección de 1.5.
 - **1.5 Sección por sección** (análisis acordado → pantalla → PDF → revisión lado a lado):
   - [x] Dirección — puntos: intención narrativa, tono y atmósfera, estrategia visual, intención por acto, referencias, transiciones. Key Frame pasa a opcional.
-  - [ ] Concepto
+  - [x] Concepto — puntos: intención narrativa, paleta maestra, simbología de color, filosofía de luz, tratamiento de sombras, intención visual por acto, Key Frame, referencias clave. «Composición por actos» pasa a opcional.
   - [ ] Cámara
   - [ ] Óptica
   - [ ] Exposición

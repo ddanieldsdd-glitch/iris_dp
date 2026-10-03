@@ -8,6 +8,7 @@ import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/pdf_export_fonts.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import '../../shared/visual_bible/camera_pilot_resolve.dart';
+import '../../shared/visual_bible/concept_points.dart';
 import '../../shared/visual_bible/format_pilot_resolve.dart';
 import '../../shared/visual_bible/bible_section_fields.dart';
 import 'export/bible_section_export_reader.dart';
@@ -355,54 +356,36 @@ class VisualBiblePdfService {
       }
     }
 
-    if (!isTech &&
-        _sectionAllowed(sections, BibleSectionId.concept) &&
-        (data.visualConcept?.trim().isNotEmpty == true ||
-            _hasCustomContent(
-              BibleSectionId.concept,
-              sectionContentJsonById,
-            ))) {
-      addSection(
-        BibleSectionId.concept,
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => _sectionPage(
-            title: 'CONCEPTO DE IMAGEN',
-            fontBold: fonts.bold,
-            font: fonts.regular,
-            content: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                if (data.visualConcept?.trim().isNotEmpty == true)
-                  pw.Text(
-                    data.visualConcept!.trim(),
-                    style: pw.TextStyle(
-                      font: fonts.regular,
-                      fontSize: 13,
-                      lineSpacing: 7,
-                    ),
-                  ),
-                if (data.conceptNarrativeIntent?.isNotEmpty == true) ...[
-                  pw.SizedBox(height: 12),
-                  pw.Text(
-                    data.conceptNarrativeIntent!,
-                    style: const pw.TextStyle(
-                      fontSize: 11,
-                      color: PdfColors.grey700,
-                    ),
-                  ),
-                ],
-                _customFieldsWidget(
-                  BibleSectionId.concept,
-                  sectionContentJsonById,
-                  fonts,
-                ),
-              ],
-            ),
-          ),
+    if (!isTech && _sectionAllowed(sections, BibleSectionId.concept)) {
+      final conceptCells = await _loadMoodboardCells(
+        MoodboardExportGrouper.imagesForSection(
+          moodboard,
+          BibleSectionId.concept,
         ),
+        boardLayout,
       );
+      final conceptContent = _conceptContent(
+        data,
+        sectionContentJsonById[BibleSectionId.concept],
+        colorBlocks,
+        kit,
+        _stillTiles(conceptCells, fonts),
+      );
+      if (conceptContent.isNotEmpty) {
+        addSection(
+          BibleSectionId.concept,
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader('Concepto de imagen'),
+              pw.SizedBox(height: 24),
+              ...conceptContent,
+            ],
+          ),
+        );
+      }
     }
 
     if (!isTech &&
@@ -1669,6 +1652,149 @@ class VisualBiblePdfService {
           if (intent.isNotEmpty) {
             out.add(kit.textPoint(field.label, intent));
             if (specs.isNotEmpty) out.add(kit.specsPoint('', specs));
+          }
+        default:
+          final point = kit.point(field, values[field.key]);
+          if (point != null) out.add(point);
+      }
+    }
+    return out;
+  }
+
+  /// Concepto: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _conceptContent(
+    VisualBibleData data,
+    String? contentJson,
+    List<ColorBlockModel> colorBlocks,
+    BiblePdfKit kit,
+    pw.Widget? stills,
+  ) {
+    final blob = BibleSectionExportReader.parseCustomBlob(
+      BibleSectionExportReader.withoutUserPoints(
+        contentJson,
+        BibleSectionId.concept,
+      ),
+      BibleSectionId.concept,
+    );
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    String text(Object? v) => v?.toString().trim() ?? '';
+    Map<String, String> strings(Object? raw) => {
+      if (raw is Map)
+        for (final e in raw.entries) text(e.key): text(e.value),
+    };
+
+    final out = <pw.Widget>[];
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.concept,
+    )) {
+      switch (field.key) {
+        case 'narrative':
+          final intent = text(
+            data.conceptNarrativeIntent?.trim().isNotEmpty == true
+                ? data.conceptNarrativeIntent
+                : data.visualConcept,
+          );
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+        case 'colorPalette':
+          final hexes = [
+            for (final block in colorBlocks) ...block.dominantColors.take(3),
+          ];
+          if (hexes.isNotEmpty) out.add(kit.swatchRow(field.label, hexes));
+        case 'colorSymbolism':
+          final symbols = [
+            if (blob['colorSymbols'] is List)
+              for (final e in blob['colorSymbols'] as List)
+                if (e is Map)
+                  (
+                    hex: text(e['hex']),
+                    title: text(e['poeticName']),
+                    text: text(e['narrativeMeaning']),
+                  ),
+          ].where((s) => s.title.isNotEmpty || s.text.isNotEmpty).toList();
+          if (symbols.isNotEmpty) {
+            out.add(kit.swatchList(field.label, symbols));
+          }
+        case 'lightPhilosophy':
+          final philosophy = text(data.lightingPhilosophy);
+          final metrics = {
+            if (data.contrastStyle?.trim().isNotEmpty == true)
+              'contrast': data.contrastStyle!.trim(),
+            ...strings(blob['lightingMetrics']),
+          };
+          final rows = [
+            for (final (key, label) in kConceptLightMetrics)
+              if (metrics[key]?.isNotEmpty == true) (label, metrics[key]!),
+          ];
+          if (philosophy.isNotEmpty) {
+            out.add(kit.textPoint(field.label, philosophy));
+          }
+          if (rows.isNotEmpty) {
+            out.add(
+              kit.specsPoint(philosophy.isEmpty ? field.label : '', rows),
+            );
+          }
+        case 'shadowTreatment':
+          final shadows = text(blob['shadowTreatment']);
+          if (shadows.isNotEmpty) out.add(kit.textPoint(field.label, shadows));
+        case 'actNotes':
+          final titles = {...kConceptActTitles, ...strings(blob['actTitles'])};
+          const numerals = ['I', 'II', 'III'];
+          final acts = [
+            for (var n = 1; n <= 3; n++)
+              if (text(blob['act${n}Intent']).isNotEmpty)
+                (
+                  kicker: 'Acto ${numerals[n - 1]}',
+                  title: titles['$n'] ?? '',
+                  text: text(blob['act${n}Intent']),
+                ),
+          ];
+          if (acts.isNotEmpty) out.add(kit.columnsPoint(field.label, acts));
+        case 'actComposition':
+          final composition = strings(blob['actComposition']);
+          const numerals = ['I', 'II', 'III'];
+          final rows = [
+            for (var n = 1; n <= 3; n++)
+              if (composition['$n']?.isNotEmpty == true)
+                ('Acto ${numerals[n - 1]}', composition['$n']!),
+          ];
+          if (rows.isNotEmpty) out.add(kit.specsPoint(field.label, rows));
+        case 'keyFrame':
+          final tech = text(blob['keyFrameTech']);
+          if (tech.isNotEmpty) {
+            final title = text(blob['keyFrameTitle']);
+            out.add(kit.textPoint(title.isEmpty ? field.label : title, tech));
+          }
+        case 'references':
+          final cards = [
+            if (blob['keyReferences'] is List)
+              for (final e in blob['keyReferences'] as List)
+                if (e is Map)
+                  (
+                    kicker: [
+                      if (text(e['dp']).isNotEmpty) 'DF ${text(e['dp'])}',
+                      if (text(e['director']).isNotEmpty)
+                        'Dir. ${text(e['director'])}',
+                    ].join(' · '),
+                    title: text(e['film']),
+                    text: [
+                      if (text(e['tone']).isNotEmpty)
+                        'Tono: ${text(e['tone'])}',
+                      if (text(e['intent']).isNotEmpty)
+                        'Intención: ${text(e['intent'])}',
+                    ].join('\n'),
+                  ),
+          ].where((c) => c.title.isNotEmpty || c.text.isNotEmpty).toList();
+          if (cards.isNotEmpty || stills != null) {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            if (stills != null) {
+              out.add(stills);
+              out.add(pw.SizedBox(height: 10));
+            }
+            if (cards.isNotEmpty) {
+              out.add(kit.columnsPoint('', cards, perRow: 2));
+            }
           }
         default:
           final point = kit.point(field, values[field.key]);
