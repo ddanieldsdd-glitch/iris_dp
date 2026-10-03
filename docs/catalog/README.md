@@ -40,7 +40,7 @@ Orden Claude (P2):
 Reglas:
 
 - Solo actualiza `isCustom=false`
-- No persiste `estado_dato` / auditoría
+- El import actual todavía no guarda `estado_dato` ni fuentes; las columnas existen desde schema 41 y el import las rellenará en el ítem 4.2 de `docs/PLAN_ACCION.md`
 - No toca sync / `cloud_project_snapshots`
 - Roundtrip de **proyecto** sigue en `EquipmentSpreadsheetService` (v0)
 
@@ -48,4 +48,4 @@ Reglas:
 
 1. Excel/JSON de catálogo **gana** sobre expansion embebida al importarse.
 2. Película: JSON estático futuro, sin Drift.
-3. Metadatos de curación: no en Drift.
+3. ~~Metadatos de curación: no en Drift.~~ Revertida el 2026-10-03: estado, confianza y fuente se guardan por ficha (schema 41, `CatalogProvenanceColumns`), con los estados de `77_Estados_Dato` del master (`lib/shared/equipment/catalog_data_status.dart`).

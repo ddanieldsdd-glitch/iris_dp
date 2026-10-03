@@ -9289,6 +9289,72 @@ class $CamerasTable extends Cameras with TableInfo<$CamerasTable, Camera> {
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $CamerasTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _dataStatusMeta = const VerificationMeta(
+    'dataStatus',
+  );
+  @override
+  late final GeneratedColumn<String> dataStatus = GeneratedColumn<String>(
+    'data_status',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _confidenceMeta = const VerificationMeta(
+    'confidence',
+  );
+  @override
+  late final GeneratedColumn<String> confidence = GeneratedColumn<String>(
+    'confidence',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _verifiedFieldsJsonMeta =
+      const VerificationMeta('verifiedFieldsJson');
+  @override
+  late final GeneratedColumn<String> verifiedFieldsJson =
+      GeneratedColumn<String>(
+        'verified_fields_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _sourceLabelMeta = const VerificationMeta(
+    'sourceLabel',
+  );
+  @override
+  late final GeneratedColumn<String> sourceLabel = GeneratedColumn<String>(
+    'source_label',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceUrlMeta = const VerificationMeta(
+    'sourceUrl',
+  );
+  @override
+  late final GeneratedColumn<String> sourceUrl = GeneratedColumn<String>(
+    'source_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _verifiedAtMeta = const VerificationMeta(
+    'verifiedAt',
+  );
+  @override
+  late final GeneratedColumn<String> verifiedAt = GeneratedColumn<String>(
+    'verified_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<int> id = GeneratedColumn<int>(
@@ -9584,6 +9650,12 @@ class $CamerasTable extends Cameras with TableInfo<$CamerasTable, Camera> {
   );
   @override
   List<GeneratedColumn> get $columns => [
+    dataStatus,
+    confidence,
+    verifiedFieldsJson,
+    sourceLabel,
+    sourceUrl,
+    verifiedAt,
     id,
     brand,
     model,
@@ -9623,6 +9695,48 @@ class $CamerasTable extends Cameras with TableInfo<$CamerasTable, Camera> {
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('data_status')) {
+      context.handle(
+        _dataStatusMeta,
+        dataStatus.isAcceptableOrUnknown(data['data_status']!, _dataStatusMeta),
+      );
+    }
+    if (data.containsKey('confidence')) {
+      context.handle(
+        _confidenceMeta,
+        confidence.isAcceptableOrUnknown(data['confidence']!, _confidenceMeta),
+      );
+    }
+    if (data.containsKey('verified_fields_json')) {
+      context.handle(
+        _verifiedFieldsJsonMeta,
+        verifiedFieldsJson.isAcceptableOrUnknown(
+          data['verified_fields_json']!,
+          _verifiedFieldsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_label')) {
+      context.handle(
+        _sourceLabelMeta,
+        sourceLabel.isAcceptableOrUnknown(
+          data['source_label']!,
+          _sourceLabelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_url')) {
+      context.handle(
+        _sourceUrlMeta,
+        sourceUrl.isAcceptableOrUnknown(data['source_url']!, _sourceUrlMeta),
+      );
+    }
+    if (data.containsKey('verified_at')) {
+      context.handle(
+        _verifiedAtMeta,
+        verifiedAt.isAcceptableOrUnknown(data['verified_at']!, _verifiedAtMeta),
+      );
+    }
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     }
@@ -9835,6 +9949,30 @@ class $CamerasTable extends Cameras with TableInfo<$CamerasTable, Camera> {
   Camera map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Camera(
+      dataStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_status'],
+      ),
+      confidence: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}confidence'],
+      ),
+      verifiedFieldsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}verified_fields_json'],
+      ),
+      sourceLabel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_label'],
+      ),
+      sourceUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_url'],
+      ),
+      verifiedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}verified_at'],
+      ),
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}id'],
@@ -9949,6 +10087,17 @@ class $CamerasTable extends Cameras with TableInfo<$CamerasTable, Camera> {
 }
 
 class Camera extends DataClass implements Insertable<Camera> {
+  /// Etiqueta de `CatalogDataStatus` (CONFIRMADO, PENDIENTE…).
+  final String? dataStatus;
+  final String? confidence;
+
+  /// Array JSON de campos cubiertos por [dataStatus]; null = toda la ficha.
+  final String? verifiedFieldsJson;
+  final String? sourceLabel;
+  final String? sourceUrl;
+
+  /// Fecha ISO 8601 de la verificación.
+  final String? verifiedAt;
   final int id;
   final String brand;
   final String model;
@@ -9976,6 +10125,12 @@ class Camera extends DataClass implements Insertable<Camera> {
   final String? lukaProfileJson;
   final String? notes;
   const Camera({
+    this.dataStatus,
+    this.confidence,
+    this.verifiedFieldsJson,
+    this.sourceLabel,
+    this.sourceUrl,
+    this.verifiedAt,
     required this.id,
     required this.brand,
     required this.model,
@@ -10006,6 +10161,24 @@ class Camera extends DataClass implements Insertable<Camera> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (!nullToAbsent || dataStatus != null) {
+      map['data_status'] = Variable<String>(dataStatus);
+    }
+    if (!nullToAbsent || confidence != null) {
+      map['confidence'] = Variable<String>(confidence);
+    }
+    if (!nullToAbsent || verifiedFieldsJson != null) {
+      map['verified_fields_json'] = Variable<String>(verifiedFieldsJson);
+    }
+    if (!nullToAbsent || sourceLabel != null) {
+      map['source_label'] = Variable<String>(sourceLabel);
+    }
+    if (!nullToAbsent || sourceUrl != null) {
+      map['source_url'] = Variable<String>(sourceUrl);
+    }
+    if (!nullToAbsent || verifiedAt != null) {
+      map['verified_at'] = Variable<String>(verifiedAt);
+    }
     map['id'] = Variable<int>(id);
     map['brand'] = Variable<String>(brand);
     map['model'] = Variable<String>(model);
@@ -10075,6 +10248,24 @@ class Camera extends DataClass implements Insertable<Camera> {
 
   CamerasCompanion toCompanion(bool nullToAbsent) {
     return CamerasCompanion(
+      dataStatus: dataStatus == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataStatus),
+      confidence: confidence == null && nullToAbsent
+          ? const Value.absent()
+          : Value(confidence),
+      verifiedFieldsJson: verifiedFieldsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(verifiedFieldsJson),
+      sourceLabel: sourceLabel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceLabel),
+      sourceUrl: sourceUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceUrl),
+      verifiedAt: verifiedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(verifiedAt),
       id: Value(id),
       brand: Value(brand),
       model: Value(model),
@@ -10146,6 +10337,14 @@ class Camera extends DataClass implements Insertable<Camera> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Camera(
+      dataStatus: serializer.fromJson<String?>(json['dataStatus']),
+      confidence: serializer.fromJson<String?>(json['confidence']),
+      verifiedFieldsJson: serializer.fromJson<String?>(
+        json['verifiedFieldsJson'],
+      ),
+      sourceLabel: serializer.fromJson<String?>(json['sourceLabel']),
+      sourceUrl: serializer.fromJson<String?>(json['sourceUrl']),
+      verifiedAt: serializer.fromJson<String?>(json['verifiedAt']),
       id: serializer.fromJson<int>(json['id']),
       brand: serializer.fromJson<String>(json['brand']),
       model: serializer.fromJson<String>(json['model']),
@@ -10182,6 +10381,12 @@ class Camera extends DataClass implements Insertable<Camera> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
+      'dataStatus': serializer.toJson<String?>(dataStatus),
+      'confidence': serializer.toJson<String?>(confidence),
+      'verifiedFieldsJson': serializer.toJson<String?>(verifiedFieldsJson),
+      'sourceLabel': serializer.toJson<String?>(sourceLabel),
+      'sourceUrl': serializer.toJson<String?>(sourceUrl),
+      'verifiedAt': serializer.toJson<String?>(verifiedAt),
       'id': serializer.toJson<int>(id),
       'brand': serializer.toJson<String>(brand),
       'model': serializer.toJson<String>(model),
@@ -10214,6 +10419,12 @@ class Camera extends DataClass implements Insertable<Camera> {
   }
 
   Camera copyWith({
+    Value<String?> dataStatus = const Value.absent(),
+    Value<String?> confidence = const Value.absent(),
+    Value<String?> verifiedFieldsJson = const Value.absent(),
+    Value<String?> sourceLabel = const Value.absent(),
+    Value<String?> sourceUrl = const Value.absent(),
+    Value<String?> verifiedAt = const Value.absent(),
     int? id,
     String? brand,
     String? model,
@@ -10241,6 +10452,14 @@ class Camera extends DataClass implements Insertable<Camera> {
     Value<String?> lukaProfileJson = const Value.absent(),
     Value<String?> notes = const Value.absent(),
   }) => Camera(
+    dataStatus: dataStatus.present ? dataStatus.value : this.dataStatus,
+    confidence: confidence.present ? confidence.value : this.confidence,
+    verifiedFieldsJson: verifiedFieldsJson.present
+        ? verifiedFieldsJson.value
+        : this.verifiedFieldsJson,
+    sourceLabel: sourceLabel.present ? sourceLabel.value : this.sourceLabel,
+    sourceUrl: sourceUrl.present ? sourceUrl.value : this.sourceUrl,
+    verifiedAt: verifiedAt.present ? verifiedAt.value : this.verifiedAt,
     id: id ?? this.id,
     brand: brand ?? this.brand,
     model: model ?? this.model,
@@ -10288,6 +10507,22 @@ class Camera extends DataClass implements Insertable<Camera> {
   );
   Camera copyWithCompanion(CamerasCompanion data) {
     return Camera(
+      dataStatus: data.dataStatus.present
+          ? data.dataStatus.value
+          : this.dataStatus,
+      confidence: data.confidence.present
+          ? data.confidence.value
+          : this.confidence,
+      verifiedFieldsJson: data.verifiedFieldsJson.present
+          ? data.verifiedFieldsJson.value
+          : this.verifiedFieldsJson,
+      sourceLabel: data.sourceLabel.present
+          ? data.sourceLabel.value
+          : this.sourceLabel,
+      sourceUrl: data.sourceUrl.present ? data.sourceUrl.value : this.sourceUrl,
+      verifiedAt: data.verifiedAt.present
+          ? data.verifiedAt.value
+          : this.verifiedAt,
       id: data.id.present ? data.id.value : this.id,
       brand: data.brand.present ? data.brand.value : this.brand,
       model: data.model.present ? data.model.value : this.model,
@@ -10352,6 +10587,12 @@ class Camera extends DataClass implements Insertable<Camera> {
   @override
   String toString() {
     return (StringBuffer('Camera(')
+          ..write('dataStatus: $dataStatus, ')
+          ..write('confidence: $confidence, ')
+          ..write('verifiedFieldsJson: $verifiedFieldsJson, ')
+          ..write('sourceLabel: $sourceLabel, ')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('verifiedAt: $verifiedAt, ')
           ..write('id: $id, ')
           ..write('brand: $brand, ')
           ..write('model: $model, ')
@@ -10384,6 +10625,12 @@ class Camera extends DataClass implements Insertable<Camera> {
 
   @override
   int get hashCode => Object.hashAll([
+    dataStatus,
+    confidence,
+    verifiedFieldsJson,
+    sourceLabel,
+    sourceUrl,
+    verifiedAt,
     id,
     brand,
     model,
@@ -10415,6 +10662,12 @@ class Camera extends DataClass implements Insertable<Camera> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Camera &&
+          other.dataStatus == this.dataStatus &&
+          other.confidence == this.confidence &&
+          other.verifiedFieldsJson == this.verifiedFieldsJson &&
+          other.sourceLabel == this.sourceLabel &&
+          other.sourceUrl == this.sourceUrl &&
+          other.verifiedAt == this.verifiedAt &&
           other.id == this.id &&
           other.brand == this.brand &&
           other.model == this.model &&
@@ -10444,6 +10697,12 @@ class Camera extends DataClass implements Insertable<Camera> {
 }
 
 class CamerasCompanion extends UpdateCompanion<Camera> {
+  final Value<String?> dataStatus;
+  final Value<String?> confidence;
+  final Value<String?> verifiedFieldsJson;
+  final Value<String?> sourceLabel;
+  final Value<String?> sourceUrl;
+  final Value<String?> verifiedAt;
   final Value<int> id;
   final Value<String> brand;
   final Value<String> model;
@@ -10471,6 +10730,12 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
   final Value<String?> lukaProfileJson;
   final Value<String?> notes;
   const CamerasCompanion({
+    this.dataStatus = const Value.absent(),
+    this.confidence = const Value.absent(),
+    this.verifiedFieldsJson = const Value.absent(),
+    this.sourceLabel = const Value.absent(),
+    this.sourceUrl = const Value.absent(),
+    this.verifiedAt = const Value.absent(),
     this.id = const Value.absent(),
     this.brand = const Value.absent(),
     this.model = const Value.absent(),
@@ -10499,6 +10764,12 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
     this.notes = const Value.absent(),
   });
   CamerasCompanion.insert({
+    this.dataStatus = const Value.absent(),
+    this.confidence = const Value.absent(),
+    this.verifiedFieldsJson = const Value.absent(),
+    this.sourceLabel = const Value.absent(),
+    this.sourceUrl = const Value.absent(),
+    this.verifiedAt = const Value.absent(),
     this.id = const Value.absent(),
     required String brand,
     required String model,
@@ -10530,6 +10801,12 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
        sensorWidthMm = Value(sensorWidthMm),
        sensorHeightMm = Value(sensorHeightMm);
   static Insertable<Camera> custom({
+    Expression<String>? dataStatus,
+    Expression<String>? confidence,
+    Expression<String>? verifiedFieldsJson,
+    Expression<String>? sourceLabel,
+    Expression<String>? sourceUrl,
+    Expression<String>? verifiedAt,
     Expression<int>? id,
     Expression<String>? brand,
     Expression<String>? model,
@@ -10558,6 +10835,13 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
     Expression<String>? notes,
   }) {
     return RawValuesInsertable({
+      if (dataStatus != null) 'data_status': dataStatus,
+      if (confidence != null) 'confidence': confidence,
+      if (verifiedFieldsJson != null)
+        'verified_fields_json': verifiedFieldsJson,
+      if (sourceLabel != null) 'source_label': sourceLabel,
+      if (sourceUrl != null) 'source_url': sourceUrl,
+      if (verifiedAt != null) 'verified_at': verifiedAt,
       if (id != null) 'id': id,
       if (brand != null) 'brand': brand,
       if (model != null) 'model': model,
@@ -10589,6 +10873,12 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
   }
 
   CamerasCompanion copyWith({
+    Value<String?>? dataStatus,
+    Value<String?>? confidence,
+    Value<String?>? verifiedFieldsJson,
+    Value<String?>? sourceLabel,
+    Value<String?>? sourceUrl,
+    Value<String?>? verifiedAt,
     Value<int>? id,
     Value<String>? brand,
     Value<String>? model,
@@ -10617,6 +10907,12 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
     Value<String?>? notes,
   }) {
     return CamerasCompanion(
+      dataStatus: dataStatus ?? this.dataStatus,
+      confidence: confidence ?? this.confidence,
+      verifiedFieldsJson: verifiedFieldsJson ?? this.verifiedFieldsJson,
+      sourceLabel: sourceLabel ?? this.sourceLabel,
+      sourceUrl: sourceUrl ?? this.sourceUrl,
+      verifiedAt: verifiedAt ?? this.verifiedAt,
       id: id ?? this.id,
       brand: brand ?? this.brand,
       model: model ?? this.model,
@@ -10650,6 +10946,24 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (dataStatus.present) {
+      map['data_status'] = Variable<String>(dataStatus.value);
+    }
+    if (confidence.present) {
+      map['confidence'] = Variable<String>(confidence.value);
+    }
+    if (verifiedFieldsJson.present) {
+      map['verified_fields_json'] = Variable<String>(verifiedFieldsJson.value);
+    }
+    if (sourceLabel.present) {
+      map['source_label'] = Variable<String>(sourceLabel.value);
+    }
+    if (sourceUrl.present) {
+      map['source_url'] = Variable<String>(sourceUrl.value);
+    }
+    if (verifiedAt.present) {
+      map['verified_at'] = Variable<String>(verifiedAt.value);
+    }
     if (id.present) {
       map['id'] = Variable<int>(id.value);
     }
@@ -10736,6 +11050,12 @@ class CamerasCompanion extends UpdateCompanion<Camera> {
   @override
   String toString() {
     return (StringBuffer('CamerasCompanion(')
+          ..write('dataStatus: $dataStatus, ')
+          ..write('confidence: $confidence, ')
+          ..write('verifiedFieldsJson: $verifiedFieldsJson, ')
+          ..write('sourceLabel: $sourceLabel, ')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('verifiedAt: $verifiedAt, ')
           ..write('id: $id, ')
           ..write('brand: $brand, ')
           ..write('model: $model, ')
@@ -10772,6 +11092,72 @@ class $LensesTable extends Lenses with TableInfo<$LensesTable, Lense> {
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $LensesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _dataStatusMeta = const VerificationMeta(
+    'dataStatus',
+  );
+  @override
+  late final GeneratedColumn<String> dataStatus = GeneratedColumn<String>(
+    'data_status',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _confidenceMeta = const VerificationMeta(
+    'confidence',
+  );
+  @override
+  late final GeneratedColumn<String> confidence = GeneratedColumn<String>(
+    'confidence',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _verifiedFieldsJsonMeta =
+      const VerificationMeta('verifiedFieldsJson');
+  @override
+  late final GeneratedColumn<String> verifiedFieldsJson =
+      GeneratedColumn<String>(
+        'verified_fields_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _sourceLabelMeta = const VerificationMeta(
+    'sourceLabel',
+  );
+  @override
+  late final GeneratedColumn<String> sourceLabel = GeneratedColumn<String>(
+    'source_label',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceUrlMeta = const VerificationMeta(
+    'sourceUrl',
+  );
+  @override
+  late final GeneratedColumn<String> sourceUrl = GeneratedColumn<String>(
+    'source_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _verifiedAtMeta = const VerificationMeta(
+    'verifiedAt',
+  );
+  @override
+  late final GeneratedColumn<String> verifiedAt = GeneratedColumn<String>(
+    'verified_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<int> id = GeneratedColumn<int>(
@@ -11057,8 +11443,103 @@ class $LensesTable extends Lenses with TableInfo<$LensesTable, Lense> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _projectionTypeMeta = const VerificationMeta(
+    'projectionType',
+  );
+  @override
+  late final GeneratedColumn<String> projectionType = GeneratedColumn<String>(
+    'projection_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _imageAreaWidthMmMeta = const VerificationMeta(
+    'imageAreaWidthMm',
+  );
+  @override
+  late final GeneratedColumn<double> imageAreaWidthMm = GeneratedColumn<double>(
+    'image_area_width_mm',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _imageAreaHeightMmMeta = const VerificationMeta(
+    'imageAreaHeightMm',
+  );
+  @override
+  late final GeneratedColumn<double> imageAreaHeightMm =
+      GeneratedColumn<double>(
+        'image_area_height_mm',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _illuminationAreaMeta = const VerificationMeta(
+    'illuminationArea',
+  );
+  @override
+  late final GeneratedColumn<String> illuminationArea = GeneratedColumn<String>(
+    'illumination_area',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _vignettingStatusMeta = const VerificationMeta(
+    'vignettingStatus',
+  );
+  @override
+  late final GeneratedColumn<String> vignettingStatus = GeneratedColumn<String>(
+    'vignetting_status',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _shadingStatusMeta = const VerificationMeta(
+    'shadingStatus',
+  );
+  @override
+  late final GeneratedColumn<String> shadingStatus = GeneratedColumn<String>(
+    'shading_status',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _portholingStatusMeta = const VerificationMeta(
+    'portholingStatus',
+  );
+  @override
+  late final GeneratedColumn<String> portholingStatus = GeneratedColumn<String>(
+    'portholing_status',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _specsJsonMeta = const VerificationMeta(
+    'specsJson',
+  );
+  @override
+  late final GeneratedColumn<String> specsJson = GeneratedColumn<String>(
+    'specs_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
+    dataStatus,
+    confidence,
+    verifiedFieldsJson,
+    sourceLabel,
+    sourceUrl,
+    verifiedAt,
     id,
     brand,
     model,
@@ -11084,6 +11565,14 @@ class $LensesTable extends Lenses with TableInfo<$LensesTable, Lense> {
     lukaCompatible,
     lukaProfileJson,
     notes,
+    projectionType,
+    imageAreaWidthMm,
+    imageAreaHeightMm,
+    illuminationArea,
+    vignettingStatus,
+    shadingStatus,
+    portholingStatus,
+    specsJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -11097,6 +11586,48 @@ class $LensesTable extends Lenses with TableInfo<$LensesTable, Lense> {
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('data_status')) {
+      context.handle(
+        _dataStatusMeta,
+        dataStatus.isAcceptableOrUnknown(data['data_status']!, _dataStatusMeta),
+      );
+    }
+    if (data.containsKey('confidence')) {
+      context.handle(
+        _confidenceMeta,
+        confidence.isAcceptableOrUnknown(data['confidence']!, _confidenceMeta),
+      );
+    }
+    if (data.containsKey('verified_fields_json')) {
+      context.handle(
+        _verifiedFieldsJsonMeta,
+        verifiedFieldsJson.isAcceptableOrUnknown(
+          data['verified_fields_json']!,
+          _verifiedFieldsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_label')) {
+      context.handle(
+        _sourceLabelMeta,
+        sourceLabel.isAcceptableOrUnknown(
+          data['source_label']!,
+          _sourceLabelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_url')) {
+      context.handle(
+        _sourceUrlMeta,
+        sourceUrl.isAcceptableOrUnknown(data['source_url']!, _sourceUrlMeta),
+      );
+    }
+    if (data.containsKey('verified_at')) {
+      context.handle(
+        _verifiedAtMeta,
+        verifiedAt.isAcceptableOrUnknown(data['verified_at']!, _verifiedAtMeta),
+      );
+    }
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     }
@@ -11290,6 +11821,75 @@ class $LensesTable extends Lenses with TableInfo<$LensesTable, Lense> {
         notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
       );
     }
+    if (data.containsKey('projection_type')) {
+      context.handle(
+        _projectionTypeMeta,
+        projectionType.isAcceptableOrUnknown(
+          data['projection_type']!,
+          _projectionTypeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('image_area_width_mm')) {
+      context.handle(
+        _imageAreaWidthMmMeta,
+        imageAreaWidthMm.isAcceptableOrUnknown(
+          data['image_area_width_mm']!,
+          _imageAreaWidthMmMeta,
+        ),
+      );
+    }
+    if (data.containsKey('image_area_height_mm')) {
+      context.handle(
+        _imageAreaHeightMmMeta,
+        imageAreaHeightMm.isAcceptableOrUnknown(
+          data['image_area_height_mm']!,
+          _imageAreaHeightMmMeta,
+        ),
+      );
+    }
+    if (data.containsKey('illumination_area')) {
+      context.handle(
+        _illuminationAreaMeta,
+        illuminationArea.isAcceptableOrUnknown(
+          data['illumination_area']!,
+          _illuminationAreaMeta,
+        ),
+      );
+    }
+    if (data.containsKey('vignetting_status')) {
+      context.handle(
+        _vignettingStatusMeta,
+        vignettingStatus.isAcceptableOrUnknown(
+          data['vignetting_status']!,
+          _vignettingStatusMeta,
+        ),
+      );
+    }
+    if (data.containsKey('shading_status')) {
+      context.handle(
+        _shadingStatusMeta,
+        shadingStatus.isAcceptableOrUnknown(
+          data['shading_status']!,
+          _shadingStatusMeta,
+        ),
+      );
+    }
+    if (data.containsKey('portholing_status')) {
+      context.handle(
+        _portholingStatusMeta,
+        portholingStatus.isAcceptableOrUnknown(
+          data['portholing_status']!,
+          _portholingStatusMeta,
+        ),
+      );
+    }
+    if (data.containsKey('specs_json')) {
+      context.handle(
+        _specsJsonMeta,
+        specsJson.isAcceptableOrUnknown(data['specs_json']!, _specsJsonMeta),
+      );
+    }
     return context;
   }
 
@@ -11299,6 +11899,30 @@ class $LensesTable extends Lenses with TableInfo<$LensesTable, Lense> {
   Lense map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Lense(
+      dataStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_status'],
+      ),
+      confidence: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}confidence'],
+      ),
+      verifiedFieldsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}verified_fields_json'],
+      ),
+      sourceLabel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_label'],
+      ),
+      sourceUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_url'],
+      ),
+      verifiedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}verified_at'],
+      ),
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}id'],
@@ -11399,6 +12023,38 @@ class $LensesTable extends Lenses with TableInfo<$LensesTable, Lense> {
         DriftSqlType.string,
         data['${effectivePrefix}notes'],
       ),
+      projectionType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}projection_type'],
+      ),
+      imageAreaWidthMm: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}image_area_width_mm'],
+      ),
+      imageAreaHeightMm: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}image_area_height_mm'],
+      ),
+      illuminationArea: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}illumination_area'],
+      ),
+      vignettingStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}vignetting_status'],
+      ),
+      shadingStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}shading_status'],
+      ),
+      portholingStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}portholing_status'],
+      ),
+      specsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}specs_json'],
+      ),
     );
   }
 
@@ -11409,6 +12065,17 @@ class $LensesTable extends Lenses with TableInfo<$LensesTable, Lense> {
 }
 
 class Lense extends DataClass implements Insertable<Lense> {
+  /// Etiqueta de `CatalogDataStatus` (CONFIRMADO, PENDIENTE…).
+  final String? dataStatus;
+  final String? confidence;
+
+  /// Array JSON de campos cubiertos por [dataStatus]; null = toda la ficha.
+  final String? verifiedFieldsJson;
+  final String? sourceLabel;
+  final String? sourceUrl;
+
+  /// Fecha ISO 8601 de la verificación.
+  final String? verifiedAt;
   final int id;
   final String brand;
   final String model;
@@ -11434,7 +12101,26 @@ class Lense extends DataClass implements Insertable<Lense> {
   final bool lukaCompatible;
   final String? lukaProfileJson;
   final String? notes;
+
+  /// ESFÉRICA o ANAMÓRFICA.
+  final String? projectionType;
+  final double? imageAreaWidthMm;
+  final double? imageAreaHeightMm;
+  final String? illuminationArea;
+  final String? vignettingStatus;
+  final String? shadingStatus;
+  final String? portholingStatus;
+
+  /// Ficha por focal publicada por el fabricante (ángulos de visión, pupila
+  /// de entrada, magnificación, distancias mínimas), como mapa JSON.
+  final String? specsJson;
   const Lense({
+    this.dataStatus,
+    this.confidence,
+    this.verifiedFieldsJson,
+    this.sourceLabel,
+    this.sourceUrl,
+    this.verifiedAt,
     required this.id,
     required this.brand,
     required this.model,
@@ -11460,10 +12146,36 @@ class Lense extends DataClass implements Insertable<Lense> {
     required this.lukaCompatible,
     this.lukaProfileJson,
     this.notes,
+    this.projectionType,
+    this.imageAreaWidthMm,
+    this.imageAreaHeightMm,
+    this.illuminationArea,
+    this.vignettingStatus,
+    this.shadingStatus,
+    this.portholingStatus,
+    this.specsJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (!nullToAbsent || dataStatus != null) {
+      map['data_status'] = Variable<String>(dataStatus);
+    }
+    if (!nullToAbsent || confidence != null) {
+      map['confidence'] = Variable<String>(confidence);
+    }
+    if (!nullToAbsent || verifiedFieldsJson != null) {
+      map['verified_fields_json'] = Variable<String>(verifiedFieldsJson);
+    }
+    if (!nullToAbsent || sourceLabel != null) {
+      map['source_label'] = Variable<String>(sourceLabel);
+    }
+    if (!nullToAbsent || sourceUrl != null) {
+      map['source_url'] = Variable<String>(sourceUrl);
+    }
+    if (!nullToAbsent || verifiedAt != null) {
+      map['verified_at'] = Variable<String>(verifiedAt);
+    }
     map['id'] = Variable<int>(id);
     map['brand'] = Variable<String>(brand);
     map['model'] = Variable<String>(model);
@@ -11519,11 +12231,53 @@ class Lense extends DataClass implements Insertable<Lense> {
     if (!nullToAbsent || notes != null) {
       map['notes'] = Variable<String>(notes);
     }
+    if (!nullToAbsent || projectionType != null) {
+      map['projection_type'] = Variable<String>(projectionType);
+    }
+    if (!nullToAbsent || imageAreaWidthMm != null) {
+      map['image_area_width_mm'] = Variable<double>(imageAreaWidthMm);
+    }
+    if (!nullToAbsent || imageAreaHeightMm != null) {
+      map['image_area_height_mm'] = Variable<double>(imageAreaHeightMm);
+    }
+    if (!nullToAbsent || illuminationArea != null) {
+      map['illumination_area'] = Variable<String>(illuminationArea);
+    }
+    if (!nullToAbsent || vignettingStatus != null) {
+      map['vignetting_status'] = Variable<String>(vignettingStatus);
+    }
+    if (!nullToAbsent || shadingStatus != null) {
+      map['shading_status'] = Variable<String>(shadingStatus);
+    }
+    if (!nullToAbsent || portholingStatus != null) {
+      map['portholing_status'] = Variable<String>(portholingStatus);
+    }
+    if (!nullToAbsent || specsJson != null) {
+      map['specs_json'] = Variable<String>(specsJson);
+    }
     return map;
   }
 
   LensesCompanion toCompanion(bool nullToAbsent) {
     return LensesCompanion(
+      dataStatus: dataStatus == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataStatus),
+      confidence: confidence == null && nullToAbsent
+          ? const Value.absent()
+          : Value(confidence),
+      verifiedFieldsJson: verifiedFieldsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(verifiedFieldsJson),
+      sourceLabel: sourceLabel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceLabel),
+      sourceUrl: sourceUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceUrl),
+      verifiedAt: verifiedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(verifiedAt),
       id: Value(id),
       brand: Value(brand),
       model: Value(model),
@@ -11579,6 +12333,30 @@ class Lense extends DataClass implements Insertable<Lense> {
       notes: notes == null && nullToAbsent
           ? const Value.absent()
           : Value(notes),
+      projectionType: projectionType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(projectionType),
+      imageAreaWidthMm: imageAreaWidthMm == null && nullToAbsent
+          ? const Value.absent()
+          : Value(imageAreaWidthMm),
+      imageAreaHeightMm: imageAreaHeightMm == null && nullToAbsent
+          ? const Value.absent()
+          : Value(imageAreaHeightMm),
+      illuminationArea: illuminationArea == null && nullToAbsent
+          ? const Value.absent()
+          : Value(illuminationArea),
+      vignettingStatus: vignettingStatus == null && nullToAbsent
+          ? const Value.absent()
+          : Value(vignettingStatus),
+      shadingStatus: shadingStatus == null && nullToAbsent
+          ? const Value.absent()
+          : Value(shadingStatus),
+      portholingStatus: portholingStatus == null && nullToAbsent
+          ? const Value.absent()
+          : Value(portholingStatus),
+      specsJson: specsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(specsJson),
     );
   }
 
@@ -11588,6 +12366,14 @@ class Lense extends DataClass implements Insertable<Lense> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Lense(
+      dataStatus: serializer.fromJson<String?>(json['dataStatus']),
+      confidence: serializer.fromJson<String?>(json['confidence']),
+      verifiedFieldsJson: serializer.fromJson<String?>(
+        json['verifiedFieldsJson'],
+      ),
+      sourceLabel: serializer.fromJson<String?>(json['sourceLabel']),
+      sourceUrl: serializer.fromJson<String?>(json['sourceUrl']),
+      verifiedAt: serializer.fromJson<String?>(json['verifiedAt']),
       id: serializer.fromJson<int>(json['id']),
       brand: serializer.fromJson<String>(json['brand']),
       model: serializer.fromJson<String>(json['model']),
@@ -11613,12 +12399,28 @@ class Lense extends DataClass implements Insertable<Lense> {
       lukaCompatible: serializer.fromJson<bool>(json['lukaCompatible']),
       lukaProfileJson: serializer.fromJson<String?>(json['lukaProfileJson']),
       notes: serializer.fromJson<String?>(json['notes']),
+      projectionType: serializer.fromJson<String?>(json['projectionType']),
+      imageAreaWidthMm: serializer.fromJson<double?>(json['imageAreaWidthMm']),
+      imageAreaHeightMm: serializer.fromJson<double?>(
+        json['imageAreaHeightMm'],
+      ),
+      illuminationArea: serializer.fromJson<String?>(json['illuminationArea']),
+      vignettingStatus: serializer.fromJson<String?>(json['vignettingStatus']),
+      shadingStatus: serializer.fromJson<String?>(json['shadingStatus']),
+      portholingStatus: serializer.fromJson<String?>(json['portholingStatus']),
+      specsJson: serializer.fromJson<String?>(json['specsJson']),
     );
   }
   @override
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
+      'dataStatus': serializer.toJson<String?>(dataStatus),
+      'confidence': serializer.toJson<String?>(confidence),
+      'verifiedFieldsJson': serializer.toJson<String?>(verifiedFieldsJson),
+      'sourceLabel': serializer.toJson<String?>(sourceLabel),
+      'sourceUrl': serializer.toJson<String?>(sourceUrl),
+      'verifiedAt': serializer.toJson<String?>(verifiedAt),
       'id': serializer.toJson<int>(id),
       'brand': serializer.toJson<String>(brand),
       'model': serializer.toJson<String>(model),
@@ -11644,10 +12446,24 @@ class Lense extends DataClass implements Insertable<Lense> {
       'lukaCompatible': serializer.toJson<bool>(lukaCompatible),
       'lukaProfileJson': serializer.toJson<String?>(lukaProfileJson),
       'notes': serializer.toJson<String?>(notes),
+      'projectionType': serializer.toJson<String?>(projectionType),
+      'imageAreaWidthMm': serializer.toJson<double?>(imageAreaWidthMm),
+      'imageAreaHeightMm': serializer.toJson<double?>(imageAreaHeightMm),
+      'illuminationArea': serializer.toJson<String?>(illuminationArea),
+      'vignettingStatus': serializer.toJson<String?>(vignettingStatus),
+      'shadingStatus': serializer.toJson<String?>(shadingStatus),
+      'portholingStatus': serializer.toJson<String?>(portholingStatus),
+      'specsJson': serializer.toJson<String?>(specsJson),
     };
   }
 
   Lense copyWith({
+    Value<String?> dataStatus = const Value.absent(),
+    Value<String?> confidence = const Value.absent(),
+    Value<String?> verifiedFieldsJson = const Value.absent(),
+    Value<String?> sourceLabel = const Value.absent(),
+    Value<String?> sourceUrl = const Value.absent(),
+    Value<String?> verifiedAt = const Value.absent(),
     int? id,
     String? brand,
     String? model,
@@ -11673,7 +12489,23 @@ class Lense extends DataClass implements Insertable<Lense> {
     bool? lukaCompatible,
     Value<String?> lukaProfileJson = const Value.absent(),
     Value<String?> notes = const Value.absent(),
+    Value<String?> projectionType = const Value.absent(),
+    Value<double?> imageAreaWidthMm = const Value.absent(),
+    Value<double?> imageAreaHeightMm = const Value.absent(),
+    Value<String?> illuminationArea = const Value.absent(),
+    Value<String?> vignettingStatus = const Value.absent(),
+    Value<String?> shadingStatus = const Value.absent(),
+    Value<String?> portholingStatus = const Value.absent(),
+    Value<String?> specsJson = const Value.absent(),
   }) => Lense(
+    dataStatus: dataStatus.present ? dataStatus.value : this.dataStatus,
+    confidence: confidence.present ? confidence.value : this.confidence,
+    verifiedFieldsJson: verifiedFieldsJson.present
+        ? verifiedFieldsJson.value
+        : this.verifiedFieldsJson,
+    sourceLabel: sourceLabel.present ? sourceLabel.value : this.sourceLabel,
+    sourceUrl: sourceUrl.present ? sourceUrl.value : this.sourceUrl,
+    verifiedAt: verifiedAt.present ? verifiedAt.value : this.verifiedAt,
     id: id ?? this.id,
     brand: brand ?? this.brand,
     model: model ?? this.model,
@@ -11711,9 +12543,47 @@ class Lense extends DataClass implements Insertable<Lense> {
         ? lukaProfileJson.value
         : this.lukaProfileJson,
     notes: notes.present ? notes.value : this.notes,
+    projectionType: projectionType.present
+        ? projectionType.value
+        : this.projectionType,
+    imageAreaWidthMm: imageAreaWidthMm.present
+        ? imageAreaWidthMm.value
+        : this.imageAreaWidthMm,
+    imageAreaHeightMm: imageAreaHeightMm.present
+        ? imageAreaHeightMm.value
+        : this.imageAreaHeightMm,
+    illuminationArea: illuminationArea.present
+        ? illuminationArea.value
+        : this.illuminationArea,
+    vignettingStatus: vignettingStatus.present
+        ? vignettingStatus.value
+        : this.vignettingStatus,
+    shadingStatus: shadingStatus.present
+        ? shadingStatus.value
+        : this.shadingStatus,
+    portholingStatus: portholingStatus.present
+        ? portholingStatus.value
+        : this.portholingStatus,
+    specsJson: specsJson.present ? specsJson.value : this.specsJson,
   );
   Lense copyWithCompanion(LensesCompanion data) {
     return Lense(
+      dataStatus: data.dataStatus.present
+          ? data.dataStatus.value
+          : this.dataStatus,
+      confidence: data.confidence.present
+          ? data.confidence.value
+          : this.confidence,
+      verifiedFieldsJson: data.verifiedFieldsJson.present
+          ? data.verifiedFieldsJson.value
+          : this.verifiedFieldsJson,
+      sourceLabel: data.sourceLabel.present
+          ? data.sourceLabel.value
+          : this.sourceLabel,
+      sourceUrl: data.sourceUrl.present ? data.sourceUrl.value : this.sourceUrl,
+      verifiedAt: data.verifiedAt.present
+          ? data.verifiedAt.value
+          : this.verifiedAt,
       id: data.id.present ? data.id.value : this.id,
       brand: data.brand.present ? data.brand.value : this.brand,
       model: data.model.present ? data.model.value : this.model,
@@ -11765,12 +12635,40 @@ class Lense extends DataClass implements Insertable<Lense> {
           ? data.lukaProfileJson.value
           : this.lukaProfileJson,
       notes: data.notes.present ? data.notes.value : this.notes,
+      projectionType: data.projectionType.present
+          ? data.projectionType.value
+          : this.projectionType,
+      imageAreaWidthMm: data.imageAreaWidthMm.present
+          ? data.imageAreaWidthMm.value
+          : this.imageAreaWidthMm,
+      imageAreaHeightMm: data.imageAreaHeightMm.present
+          ? data.imageAreaHeightMm.value
+          : this.imageAreaHeightMm,
+      illuminationArea: data.illuminationArea.present
+          ? data.illuminationArea.value
+          : this.illuminationArea,
+      vignettingStatus: data.vignettingStatus.present
+          ? data.vignettingStatus.value
+          : this.vignettingStatus,
+      shadingStatus: data.shadingStatus.present
+          ? data.shadingStatus.value
+          : this.shadingStatus,
+      portholingStatus: data.portholingStatus.present
+          ? data.portholingStatus.value
+          : this.portholingStatus,
+      specsJson: data.specsJson.present ? data.specsJson.value : this.specsJson,
     );
   }
 
   @override
   String toString() {
     return (StringBuffer('Lense(')
+          ..write('dataStatus: $dataStatus, ')
+          ..write('confidence: $confidence, ')
+          ..write('verifiedFieldsJson: $verifiedFieldsJson, ')
+          ..write('sourceLabel: $sourceLabel, ')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('verifiedAt: $verifiedAt, ')
           ..write('id: $id, ')
           ..write('brand: $brand, ')
           ..write('model: $model, ')
@@ -11795,13 +12693,27 @@ class Lense extends DataClass implements Insertable<Lense> {
           ..write('rentalTagsJson: $rentalTagsJson, ')
           ..write('lukaCompatible: $lukaCompatible, ')
           ..write('lukaProfileJson: $lukaProfileJson, ')
-          ..write('notes: $notes')
+          ..write('notes: $notes, ')
+          ..write('projectionType: $projectionType, ')
+          ..write('imageAreaWidthMm: $imageAreaWidthMm, ')
+          ..write('imageAreaHeightMm: $imageAreaHeightMm, ')
+          ..write('illuminationArea: $illuminationArea, ')
+          ..write('vignettingStatus: $vignettingStatus, ')
+          ..write('shadingStatus: $shadingStatus, ')
+          ..write('portholingStatus: $portholingStatus, ')
+          ..write('specsJson: $specsJson')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hashAll([
+    dataStatus,
+    confidence,
+    verifiedFieldsJson,
+    sourceLabel,
+    sourceUrl,
+    verifiedAt,
     id,
     brand,
     model,
@@ -11827,11 +12739,25 @@ class Lense extends DataClass implements Insertable<Lense> {
     lukaCompatible,
     lukaProfileJson,
     notes,
+    projectionType,
+    imageAreaWidthMm,
+    imageAreaHeightMm,
+    illuminationArea,
+    vignettingStatus,
+    shadingStatus,
+    portholingStatus,
+    specsJson,
   ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Lense &&
+          other.dataStatus == this.dataStatus &&
+          other.confidence == this.confidence &&
+          other.verifiedFieldsJson == this.verifiedFieldsJson &&
+          other.sourceLabel == this.sourceLabel &&
+          other.sourceUrl == this.sourceUrl &&
+          other.verifiedAt == this.verifiedAt &&
           other.id == this.id &&
           other.brand == this.brand &&
           other.model == this.model &&
@@ -11856,10 +12782,24 @@ class Lense extends DataClass implements Insertable<Lense> {
           other.rentalTagsJson == this.rentalTagsJson &&
           other.lukaCompatible == this.lukaCompatible &&
           other.lukaProfileJson == this.lukaProfileJson &&
-          other.notes == this.notes);
+          other.notes == this.notes &&
+          other.projectionType == this.projectionType &&
+          other.imageAreaWidthMm == this.imageAreaWidthMm &&
+          other.imageAreaHeightMm == this.imageAreaHeightMm &&
+          other.illuminationArea == this.illuminationArea &&
+          other.vignettingStatus == this.vignettingStatus &&
+          other.shadingStatus == this.shadingStatus &&
+          other.portholingStatus == this.portholingStatus &&
+          other.specsJson == this.specsJson);
 }
 
 class LensesCompanion extends UpdateCompanion<Lense> {
+  final Value<String?> dataStatus;
+  final Value<String?> confidence;
+  final Value<String?> verifiedFieldsJson;
+  final Value<String?> sourceLabel;
+  final Value<String?> sourceUrl;
+  final Value<String?> verifiedAt;
   final Value<int> id;
   final Value<String> brand;
   final Value<String> model;
@@ -11885,7 +12825,21 @@ class LensesCompanion extends UpdateCompanion<Lense> {
   final Value<bool> lukaCompatible;
   final Value<String?> lukaProfileJson;
   final Value<String?> notes;
+  final Value<String?> projectionType;
+  final Value<double?> imageAreaWidthMm;
+  final Value<double?> imageAreaHeightMm;
+  final Value<String?> illuminationArea;
+  final Value<String?> vignettingStatus;
+  final Value<String?> shadingStatus;
+  final Value<String?> portholingStatus;
+  final Value<String?> specsJson;
   const LensesCompanion({
+    this.dataStatus = const Value.absent(),
+    this.confidence = const Value.absent(),
+    this.verifiedFieldsJson = const Value.absent(),
+    this.sourceLabel = const Value.absent(),
+    this.sourceUrl = const Value.absent(),
+    this.verifiedAt = const Value.absent(),
     this.id = const Value.absent(),
     this.brand = const Value.absent(),
     this.model = const Value.absent(),
@@ -11911,8 +12865,22 @@ class LensesCompanion extends UpdateCompanion<Lense> {
     this.lukaCompatible = const Value.absent(),
     this.lukaProfileJson = const Value.absent(),
     this.notes = const Value.absent(),
+    this.projectionType = const Value.absent(),
+    this.imageAreaWidthMm = const Value.absent(),
+    this.imageAreaHeightMm = const Value.absent(),
+    this.illuminationArea = const Value.absent(),
+    this.vignettingStatus = const Value.absent(),
+    this.shadingStatus = const Value.absent(),
+    this.portholingStatus = const Value.absent(),
+    this.specsJson = const Value.absent(),
   });
   LensesCompanion.insert({
+    this.dataStatus = const Value.absent(),
+    this.confidence = const Value.absent(),
+    this.verifiedFieldsJson = const Value.absent(),
+    this.sourceLabel = const Value.absent(),
+    this.sourceUrl = const Value.absent(),
+    this.verifiedAt = const Value.absent(),
     this.id = const Value.absent(),
     required String brand,
     required String model,
@@ -11938,12 +12906,26 @@ class LensesCompanion extends UpdateCompanion<Lense> {
     this.lukaCompatible = const Value.absent(),
     this.lukaProfileJson = const Value.absent(),
     this.notes = const Value.absent(),
+    this.projectionType = const Value.absent(),
+    this.imageAreaWidthMm = const Value.absent(),
+    this.imageAreaHeightMm = const Value.absent(),
+    this.illuminationArea = const Value.absent(),
+    this.vignettingStatus = const Value.absent(),
+    this.shadingStatus = const Value.absent(),
+    this.portholingStatus = const Value.absent(),
+    this.specsJson = const Value.absent(),
   }) : brand = Value(brand),
        model = Value(model),
        focalLength = Value(focalLength),
        minTStop = Value(minTStop),
        formatCoverage = Value(formatCoverage);
   static Insertable<Lense> custom({
+    Expression<String>? dataStatus,
+    Expression<String>? confidence,
+    Expression<String>? verifiedFieldsJson,
+    Expression<String>? sourceLabel,
+    Expression<String>? sourceUrl,
+    Expression<String>? verifiedAt,
     Expression<int>? id,
     Expression<String>? brand,
     Expression<String>? model,
@@ -11969,8 +12951,23 @@ class LensesCompanion extends UpdateCompanion<Lense> {
     Expression<bool>? lukaCompatible,
     Expression<String>? lukaProfileJson,
     Expression<String>? notes,
+    Expression<String>? projectionType,
+    Expression<double>? imageAreaWidthMm,
+    Expression<double>? imageAreaHeightMm,
+    Expression<String>? illuminationArea,
+    Expression<String>? vignettingStatus,
+    Expression<String>? shadingStatus,
+    Expression<String>? portholingStatus,
+    Expression<String>? specsJson,
   }) {
     return RawValuesInsertable({
+      if (dataStatus != null) 'data_status': dataStatus,
+      if (confidence != null) 'confidence': confidence,
+      if (verifiedFieldsJson != null)
+        'verified_fields_json': verifiedFieldsJson,
+      if (sourceLabel != null) 'source_label': sourceLabel,
+      if (sourceUrl != null) 'source_url': sourceUrl,
+      if (verifiedAt != null) 'verified_at': verifiedAt,
       if (id != null) 'id': id,
       if (brand != null) 'brand': brand,
       if (model != null) 'model': model,
@@ -11996,10 +12993,24 @@ class LensesCompanion extends UpdateCompanion<Lense> {
       if (lukaCompatible != null) 'luka_compatible': lukaCompatible,
       if (lukaProfileJson != null) 'luka_profile_json': lukaProfileJson,
       if (notes != null) 'notes': notes,
+      if (projectionType != null) 'projection_type': projectionType,
+      if (imageAreaWidthMm != null) 'image_area_width_mm': imageAreaWidthMm,
+      if (imageAreaHeightMm != null) 'image_area_height_mm': imageAreaHeightMm,
+      if (illuminationArea != null) 'illumination_area': illuminationArea,
+      if (vignettingStatus != null) 'vignetting_status': vignettingStatus,
+      if (shadingStatus != null) 'shading_status': shadingStatus,
+      if (portholingStatus != null) 'portholing_status': portholingStatus,
+      if (specsJson != null) 'specs_json': specsJson,
     });
   }
 
   LensesCompanion copyWith({
+    Value<String?>? dataStatus,
+    Value<String?>? confidence,
+    Value<String?>? verifiedFieldsJson,
+    Value<String?>? sourceLabel,
+    Value<String?>? sourceUrl,
+    Value<String?>? verifiedAt,
     Value<int>? id,
     Value<String>? brand,
     Value<String>? model,
@@ -12025,8 +13036,22 @@ class LensesCompanion extends UpdateCompanion<Lense> {
     Value<bool>? lukaCompatible,
     Value<String?>? lukaProfileJson,
     Value<String?>? notes,
+    Value<String?>? projectionType,
+    Value<double?>? imageAreaWidthMm,
+    Value<double?>? imageAreaHeightMm,
+    Value<String?>? illuminationArea,
+    Value<String?>? vignettingStatus,
+    Value<String?>? shadingStatus,
+    Value<String?>? portholingStatus,
+    Value<String?>? specsJson,
   }) {
     return LensesCompanion(
+      dataStatus: dataStatus ?? this.dataStatus,
+      confidence: confidence ?? this.confidence,
+      verifiedFieldsJson: verifiedFieldsJson ?? this.verifiedFieldsJson,
+      sourceLabel: sourceLabel ?? this.sourceLabel,
+      sourceUrl: sourceUrl ?? this.sourceUrl,
+      verifiedAt: verifiedAt ?? this.verifiedAt,
       id: id ?? this.id,
       brand: brand ?? this.brand,
       model: model ?? this.model,
@@ -12052,12 +13077,38 @@ class LensesCompanion extends UpdateCompanion<Lense> {
       lukaCompatible: lukaCompatible ?? this.lukaCompatible,
       lukaProfileJson: lukaProfileJson ?? this.lukaProfileJson,
       notes: notes ?? this.notes,
+      projectionType: projectionType ?? this.projectionType,
+      imageAreaWidthMm: imageAreaWidthMm ?? this.imageAreaWidthMm,
+      imageAreaHeightMm: imageAreaHeightMm ?? this.imageAreaHeightMm,
+      illuminationArea: illuminationArea ?? this.illuminationArea,
+      vignettingStatus: vignettingStatus ?? this.vignettingStatus,
+      shadingStatus: shadingStatus ?? this.shadingStatus,
+      portholingStatus: portholingStatus ?? this.portholingStatus,
+      specsJson: specsJson ?? this.specsJson,
     );
   }
 
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (dataStatus.present) {
+      map['data_status'] = Variable<String>(dataStatus.value);
+    }
+    if (confidence.present) {
+      map['confidence'] = Variable<String>(confidence.value);
+    }
+    if (verifiedFieldsJson.present) {
+      map['verified_fields_json'] = Variable<String>(verifiedFieldsJson.value);
+    }
+    if (sourceLabel.present) {
+      map['source_label'] = Variable<String>(sourceLabel.value);
+    }
+    if (sourceUrl.present) {
+      map['source_url'] = Variable<String>(sourceUrl.value);
+    }
+    if (verifiedAt.present) {
+      map['verified_at'] = Variable<String>(verifiedAt.value);
+    }
     if (id.present) {
       map['id'] = Variable<int>(id.value);
     }
@@ -12133,12 +13184,42 @@ class LensesCompanion extends UpdateCompanion<Lense> {
     if (notes.present) {
       map['notes'] = Variable<String>(notes.value);
     }
+    if (projectionType.present) {
+      map['projection_type'] = Variable<String>(projectionType.value);
+    }
+    if (imageAreaWidthMm.present) {
+      map['image_area_width_mm'] = Variable<double>(imageAreaWidthMm.value);
+    }
+    if (imageAreaHeightMm.present) {
+      map['image_area_height_mm'] = Variable<double>(imageAreaHeightMm.value);
+    }
+    if (illuminationArea.present) {
+      map['illumination_area'] = Variable<String>(illuminationArea.value);
+    }
+    if (vignettingStatus.present) {
+      map['vignetting_status'] = Variable<String>(vignettingStatus.value);
+    }
+    if (shadingStatus.present) {
+      map['shading_status'] = Variable<String>(shadingStatus.value);
+    }
+    if (portholingStatus.present) {
+      map['portholing_status'] = Variable<String>(portholingStatus.value);
+    }
+    if (specsJson.present) {
+      map['specs_json'] = Variable<String>(specsJson.value);
+    }
     return map;
   }
 
   @override
   String toString() {
     return (StringBuffer('LensesCompanion(')
+          ..write('dataStatus: $dataStatus, ')
+          ..write('confidence: $confidence, ')
+          ..write('verifiedFieldsJson: $verifiedFieldsJson, ')
+          ..write('sourceLabel: $sourceLabel, ')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('verifiedAt: $verifiedAt, ')
           ..write('id: $id, ')
           ..write('brand: $brand, ')
           ..write('model: $model, ')
@@ -12163,7 +13244,15 @@ class LensesCompanion extends UpdateCompanion<Lense> {
           ..write('rentalTagsJson: $rentalTagsJson, ')
           ..write('lukaCompatible: $lukaCompatible, ')
           ..write('lukaProfileJson: $lukaProfileJson, ')
-          ..write('notes: $notes')
+          ..write('notes: $notes, ')
+          ..write('projectionType: $projectionType, ')
+          ..write('imageAreaWidthMm: $imageAreaWidthMm, ')
+          ..write('imageAreaHeightMm: $imageAreaHeightMm, ')
+          ..write('illuminationArea: $illuminationArea, ')
+          ..write('vignettingStatus: $vignettingStatus, ')
+          ..write('shadingStatus: $shadingStatus, ')
+          ..write('portholingStatus: $portholingStatus, ')
+          ..write('specsJson: $specsJson')
           ..write(')'))
         .toString();
   }
@@ -12174,6 +13263,72 @@ class $LightsTable extends Lights with TableInfo<$LightsTable, Light> {
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $LightsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _dataStatusMeta = const VerificationMeta(
+    'dataStatus',
+  );
+  @override
+  late final GeneratedColumn<String> dataStatus = GeneratedColumn<String>(
+    'data_status',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _confidenceMeta = const VerificationMeta(
+    'confidence',
+  );
+  @override
+  late final GeneratedColumn<String> confidence = GeneratedColumn<String>(
+    'confidence',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _verifiedFieldsJsonMeta =
+      const VerificationMeta('verifiedFieldsJson');
+  @override
+  late final GeneratedColumn<String> verifiedFieldsJson =
+      GeneratedColumn<String>(
+        'verified_fields_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _sourceLabelMeta = const VerificationMeta(
+    'sourceLabel',
+  );
+  @override
+  late final GeneratedColumn<String> sourceLabel = GeneratedColumn<String>(
+    'source_label',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceUrlMeta = const VerificationMeta(
+    'sourceUrl',
+  );
+  @override
+  late final GeneratedColumn<String> sourceUrl = GeneratedColumn<String>(
+    'source_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _verifiedAtMeta = const VerificationMeta(
+    'verifiedAt',
+  );
+  @override
+  late final GeneratedColumn<String> verifiedAt = GeneratedColumn<String>(
+    'verified_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<int> id = GeneratedColumn<int>(
@@ -12429,6 +13584,12 @@ class $LightsTable extends Lights with TableInfo<$LightsTable, Light> {
   );
   @override
   List<GeneratedColumn> get $columns => [
+    dataStatus,
+    confidence,
+    verifiedFieldsJson,
+    sourceLabel,
+    sourceUrl,
+    verifiedAt,
     id,
     brand,
     model,
@@ -12465,6 +13626,48 @@ class $LightsTable extends Lights with TableInfo<$LightsTable, Light> {
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('data_status')) {
+      context.handle(
+        _dataStatusMeta,
+        dataStatus.isAcceptableOrUnknown(data['data_status']!, _dataStatusMeta),
+      );
+    }
+    if (data.containsKey('confidence')) {
+      context.handle(
+        _confidenceMeta,
+        confidence.isAcceptableOrUnknown(data['confidence']!, _confidenceMeta),
+      );
+    }
+    if (data.containsKey('verified_fields_json')) {
+      context.handle(
+        _verifiedFieldsJsonMeta,
+        verifiedFieldsJson.isAcceptableOrUnknown(
+          data['verified_fields_json']!,
+          _verifiedFieldsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_label')) {
+      context.handle(
+        _sourceLabelMeta,
+        sourceLabel.isAcceptableOrUnknown(
+          data['source_label']!,
+          _sourceLabelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_url')) {
+      context.handle(
+        _sourceUrlMeta,
+        sourceUrl.isAcceptableOrUnknown(data['source_url']!, _sourceUrlMeta),
+      );
+    }
+    if (data.containsKey('verified_at')) {
+      context.handle(
+        _verifiedAtMeta,
+        verifiedAt.isAcceptableOrUnknown(data['verified_at']!, _verifiedAtMeta),
+      );
+    }
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     }
@@ -12654,6 +13857,30 @@ class $LightsTable extends Lights with TableInfo<$LightsTable, Light> {
   Light map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Light(
+      dataStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_status'],
+      ),
+      confidence: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}confidence'],
+      ),
+      verifiedFieldsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}verified_fields_json'],
+      ),
+      sourceLabel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_label'],
+      ),
+      sourceUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_url'],
+      ),
+      verifiedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}verified_at'],
+      ),
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}id'],
@@ -12756,6 +13983,17 @@ class $LightsTable extends Lights with TableInfo<$LightsTable, Light> {
 }
 
 class Light extends DataClass implements Insertable<Light> {
+  /// Etiqueta de `CatalogDataStatus` (CONFIRMADO, PENDIENTE…).
+  final String? dataStatus;
+  final String? confidence;
+
+  /// Array JSON de campos cubiertos por [dataStatus]; null = toda la ficha.
+  final String? verifiedFieldsJson;
+  final String? sourceLabel;
+  final String? sourceUrl;
+
+  /// Fecha ISO 8601 de la verificación.
+  final String? verifiedAt;
   final int id;
   final String brand;
   final String model;
@@ -12780,6 +14018,12 @@ class Light extends DataClass implements Insertable<Light> {
   final String? lukaProfileJson;
   final String? notes;
   const Light({
+    this.dataStatus,
+    this.confidence,
+    this.verifiedFieldsJson,
+    this.sourceLabel,
+    this.sourceUrl,
+    this.verifiedAt,
     required this.id,
     required this.brand,
     required this.model,
@@ -12807,6 +14051,24 @@ class Light extends DataClass implements Insertable<Light> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (!nullToAbsent || dataStatus != null) {
+      map['data_status'] = Variable<String>(dataStatus);
+    }
+    if (!nullToAbsent || confidence != null) {
+      map['confidence'] = Variable<String>(confidence);
+    }
+    if (!nullToAbsent || verifiedFieldsJson != null) {
+      map['verified_fields_json'] = Variable<String>(verifiedFieldsJson);
+    }
+    if (!nullToAbsent || sourceLabel != null) {
+      map['source_label'] = Variable<String>(sourceLabel);
+    }
+    if (!nullToAbsent || sourceUrl != null) {
+      map['source_url'] = Variable<String>(sourceUrl);
+    }
+    if (!nullToAbsent || verifiedAt != null) {
+      map['verified_at'] = Variable<String>(verifiedAt);
+    }
     map['id'] = Variable<int>(id);
     map['brand'] = Variable<String>(brand);
     map['model'] = Variable<String>(model);
@@ -12863,6 +14125,24 @@ class Light extends DataClass implements Insertable<Light> {
 
   LightsCompanion toCompanion(bool nullToAbsent) {
     return LightsCompanion(
+      dataStatus: dataStatus == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataStatus),
+      confidence: confidence == null && nullToAbsent
+          ? const Value.absent()
+          : Value(confidence),
+      verifiedFieldsJson: verifiedFieldsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(verifiedFieldsJson),
+      sourceLabel: sourceLabel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceLabel),
+      sourceUrl: sourceUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceUrl),
+      verifiedAt: verifiedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(verifiedAt),
       id: Value(id),
       brand: Value(brand),
       model: Value(model),
@@ -12918,6 +14198,14 @@ class Light extends DataClass implements Insertable<Light> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Light(
+      dataStatus: serializer.fromJson<String?>(json['dataStatus']),
+      confidence: serializer.fromJson<String?>(json['confidence']),
+      verifiedFieldsJson: serializer.fromJson<String?>(
+        json['verifiedFieldsJson'],
+      ),
+      sourceLabel: serializer.fromJson<String?>(json['sourceLabel']),
+      sourceUrl: serializer.fromJson<String?>(json['sourceUrl']),
+      verifiedAt: serializer.fromJson<String?>(json['verifiedAt']),
       id: serializer.fromJson<int>(json['id']),
       brand: serializer.fromJson<String>(json['brand']),
       model: serializer.fromJson<String>(json['model']),
@@ -12949,6 +14237,12 @@ class Light extends DataClass implements Insertable<Light> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
+      'dataStatus': serializer.toJson<String?>(dataStatus),
+      'confidence': serializer.toJson<String?>(confidence),
+      'verifiedFieldsJson': serializer.toJson<String?>(verifiedFieldsJson),
+      'sourceLabel': serializer.toJson<String?>(sourceLabel),
+      'sourceUrl': serializer.toJson<String?>(sourceUrl),
+      'verifiedAt': serializer.toJson<String?>(verifiedAt),
       'id': serializer.toJson<int>(id),
       'brand': serializer.toJson<String>(brand),
       'model': serializer.toJson<String>(model),
@@ -12978,6 +14272,12 @@ class Light extends DataClass implements Insertable<Light> {
   }
 
   Light copyWith({
+    Value<String?> dataStatus = const Value.absent(),
+    Value<String?> confidence = const Value.absent(),
+    Value<String?> verifiedFieldsJson = const Value.absent(),
+    Value<String?> sourceLabel = const Value.absent(),
+    Value<String?> sourceUrl = const Value.absent(),
+    Value<String?> verifiedAt = const Value.absent(),
     int? id,
     String? brand,
     String? model,
@@ -13002,6 +14302,14 @@ class Light extends DataClass implements Insertable<Light> {
     Value<String?> lukaProfileJson = const Value.absent(),
     Value<String?> notes = const Value.absent(),
   }) => Light(
+    dataStatus: dataStatus.present ? dataStatus.value : this.dataStatus,
+    confidence: confidence.present ? confidence.value : this.confidence,
+    verifiedFieldsJson: verifiedFieldsJson.present
+        ? verifiedFieldsJson.value
+        : this.verifiedFieldsJson,
+    sourceLabel: sourceLabel.present ? sourceLabel.value : this.sourceLabel,
+    sourceUrl: sourceUrl.present ? sourceUrl.value : this.sourceUrl,
+    verifiedAt: verifiedAt.present ? verifiedAt.value : this.verifiedAt,
     id: id ?? this.id,
     brand: brand ?? this.brand,
     model: model ?? this.model,
@@ -13040,6 +14348,22 @@ class Light extends DataClass implements Insertable<Light> {
   );
   Light copyWithCompanion(LightsCompanion data) {
     return Light(
+      dataStatus: data.dataStatus.present
+          ? data.dataStatus.value
+          : this.dataStatus,
+      confidence: data.confidence.present
+          ? data.confidence.value
+          : this.confidence,
+      verifiedFieldsJson: data.verifiedFieldsJson.present
+          ? data.verifiedFieldsJson.value
+          : this.verifiedFieldsJson,
+      sourceLabel: data.sourceLabel.present
+          ? data.sourceLabel.value
+          : this.sourceLabel,
+      sourceUrl: data.sourceUrl.present ? data.sourceUrl.value : this.sourceUrl,
+      verifiedAt: data.verifiedAt.present
+          ? data.verifiedAt.value
+          : this.verifiedAt,
       id: data.id.present ? data.id.value : this.id,
       brand: data.brand.present ? data.brand.value : this.brand,
       model: data.model.present ? data.model.value : this.model,
@@ -13093,6 +14417,12 @@ class Light extends DataClass implements Insertable<Light> {
   @override
   String toString() {
     return (StringBuffer('Light(')
+          ..write('dataStatus: $dataStatus, ')
+          ..write('confidence: $confidence, ')
+          ..write('verifiedFieldsJson: $verifiedFieldsJson, ')
+          ..write('sourceLabel: $sourceLabel, ')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('verifiedAt: $verifiedAt, ')
           ..write('id: $id, ')
           ..write('brand: $brand, ')
           ..write('model: $model, ')
@@ -13122,6 +14452,12 @@ class Light extends DataClass implements Insertable<Light> {
 
   @override
   int get hashCode => Object.hashAll([
+    dataStatus,
+    confidence,
+    verifiedFieldsJson,
+    sourceLabel,
+    sourceUrl,
+    verifiedAt,
     id,
     brand,
     model,
@@ -13150,6 +14486,12 @@ class Light extends DataClass implements Insertable<Light> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Light &&
+          other.dataStatus == this.dataStatus &&
+          other.confidence == this.confidence &&
+          other.verifiedFieldsJson == this.verifiedFieldsJson &&
+          other.sourceLabel == this.sourceLabel &&
+          other.sourceUrl == this.sourceUrl &&
+          other.verifiedAt == this.verifiedAt &&
           other.id == this.id &&
           other.brand == this.brand &&
           other.model == this.model &&
@@ -13176,6 +14518,12 @@ class Light extends DataClass implements Insertable<Light> {
 }
 
 class LightsCompanion extends UpdateCompanion<Light> {
+  final Value<String?> dataStatus;
+  final Value<String?> confidence;
+  final Value<String?> verifiedFieldsJson;
+  final Value<String?> sourceLabel;
+  final Value<String?> sourceUrl;
+  final Value<String?> verifiedAt;
   final Value<int> id;
   final Value<String> brand;
   final Value<String> model;
@@ -13200,6 +14548,12 @@ class LightsCompanion extends UpdateCompanion<Light> {
   final Value<String?> lukaProfileJson;
   final Value<String?> notes;
   const LightsCompanion({
+    this.dataStatus = const Value.absent(),
+    this.confidence = const Value.absent(),
+    this.verifiedFieldsJson = const Value.absent(),
+    this.sourceLabel = const Value.absent(),
+    this.sourceUrl = const Value.absent(),
+    this.verifiedAt = const Value.absent(),
     this.id = const Value.absent(),
     this.brand = const Value.absent(),
     this.model = const Value.absent(),
@@ -13225,6 +14579,12 @@ class LightsCompanion extends UpdateCompanion<Light> {
     this.notes = const Value.absent(),
   });
   LightsCompanion.insert({
+    this.dataStatus = const Value.absent(),
+    this.confidence = const Value.absent(),
+    this.verifiedFieldsJson = const Value.absent(),
+    this.sourceLabel = const Value.absent(),
+    this.sourceUrl = const Value.absent(),
+    this.verifiedAt = const Value.absent(),
     this.id = const Value.absent(),
     required String brand,
     required String model,
@@ -13255,6 +14615,12 @@ class LightsCompanion extends UpdateCompanion<Light> {
        colorTempMin = Value(colorTempMin),
        colorTempMax = Value(colorTempMax);
   static Insertable<Light> custom({
+    Expression<String>? dataStatus,
+    Expression<String>? confidence,
+    Expression<String>? verifiedFieldsJson,
+    Expression<String>? sourceLabel,
+    Expression<String>? sourceUrl,
+    Expression<String>? verifiedAt,
     Expression<int>? id,
     Expression<String>? brand,
     Expression<String>? model,
@@ -13280,6 +14646,13 @@ class LightsCompanion extends UpdateCompanion<Light> {
     Expression<String>? notes,
   }) {
     return RawValuesInsertable({
+      if (dataStatus != null) 'data_status': dataStatus,
+      if (confidence != null) 'confidence': confidence,
+      if (verifiedFieldsJson != null)
+        'verified_fields_json': verifiedFieldsJson,
+      if (sourceLabel != null) 'source_label': sourceLabel,
+      if (sourceUrl != null) 'source_url': sourceUrl,
+      if (verifiedAt != null) 'verified_at': verifiedAt,
       if (id != null) 'id': id,
       if (brand != null) 'brand': brand,
       if (model != null) 'model': model,
@@ -13308,6 +14681,12 @@ class LightsCompanion extends UpdateCompanion<Light> {
   }
 
   LightsCompanion copyWith({
+    Value<String?>? dataStatus,
+    Value<String?>? confidence,
+    Value<String?>? verifiedFieldsJson,
+    Value<String?>? sourceLabel,
+    Value<String?>? sourceUrl,
+    Value<String?>? verifiedAt,
     Value<int>? id,
     Value<String>? brand,
     Value<String>? model,
@@ -13333,6 +14712,12 @@ class LightsCompanion extends UpdateCompanion<Light> {
     Value<String?>? notes,
   }) {
     return LightsCompanion(
+      dataStatus: dataStatus ?? this.dataStatus,
+      confidence: confidence ?? this.confidence,
+      verifiedFieldsJson: verifiedFieldsJson ?? this.verifiedFieldsJson,
+      sourceLabel: sourceLabel ?? this.sourceLabel,
+      sourceUrl: sourceUrl ?? this.sourceUrl,
+      verifiedAt: verifiedAt ?? this.verifiedAt,
       id: id ?? this.id,
       brand: brand ?? this.brand,
       model: model ?? this.model,
@@ -13363,6 +14748,24 @@ class LightsCompanion extends UpdateCompanion<Light> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (dataStatus.present) {
+      map['data_status'] = Variable<String>(dataStatus.value);
+    }
+    if (confidence.present) {
+      map['confidence'] = Variable<String>(confidence.value);
+    }
+    if (verifiedFieldsJson.present) {
+      map['verified_fields_json'] = Variable<String>(verifiedFieldsJson.value);
+    }
+    if (sourceLabel.present) {
+      map['source_label'] = Variable<String>(sourceLabel.value);
+    }
+    if (sourceUrl.present) {
+      map['source_url'] = Variable<String>(sourceUrl.value);
+    }
+    if (verifiedAt.present) {
+      map['verified_at'] = Variable<String>(verifiedAt.value);
+    }
     if (id.present) {
       map['id'] = Variable<int>(id.value);
     }
@@ -13440,6 +14843,12 @@ class LightsCompanion extends UpdateCompanion<Light> {
   @override
   String toString() {
     return (StringBuffer('LightsCompanion(')
+          ..write('dataStatus: $dataStatus, ')
+          ..write('confidence: $confidence, ')
+          ..write('verifiedFieldsJson: $verifiedFieldsJson, ')
+          ..write('sourceLabel: $sourceLabel, ')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('verifiedAt: $verifiedAt, ')
           ..write('id: $id, ')
           ..write('brand: $brand, ')
           ..write('model: $model, ')
@@ -40444,6 +41853,12 @@ typedef $$SiteImagesTableProcessedTableManager =
     >;
 typedef $$CamerasTableCreateCompanionBuilder =
     CamerasCompanion Function({
+      Value<String?> dataStatus,
+      Value<String?> confidence,
+      Value<String?> verifiedFieldsJson,
+      Value<String?> sourceLabel,
+      Value<String?> sourceUrl,
+      Value<String?> verifiedAt,
       Value<int> id,
       required String brand,
       required String model,
@@ -40473,6 +41888,12 @@ typedef $$CamerasTableCreateCompanionBuilder =
     });
 typedef $$CamerasTableUpdateCompanionBuilder =
     CamerasCompanion Function({
+      Value<String?> dataStatus,
+      Value<String?> confidence,
+      Value<String?> verifiedFieldsJson,
+      Value<String?> sourceLabel,
+      Value<String?> sourceUrl,
+      Value<String?> verifiedAt,
       Value<int> id,
       Value<String> brand,
       Value<String> model,
@@ -40554,6 +41975,36 @@ class $$CamerasTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnFilters<String> get dataStatus => $composableBuilder(
+    column: $table.dataStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get verifiedFieldsJson => $composableBuilder(
+    column: $table.verifiedFieldsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceLabel => $composableBuilder(
+    column: $table.sourceLabel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get verifiedAt => $composableBuilder(
+    column: $table.verifiedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
@@ -40744,6 +42195,36 @@ class $$CamerasTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnOrderings<String> get dataStatus => $composableBuilder(
+    column: $table.dataStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get verifiedFieldsJson => $composableBuilder(
+    column: $table.verifiedFieldsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceLabel => $composableBuilder(
+    column: $table.sourceLabel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get verifiedAt => $composableBuilder(
+    column: $table.verifiedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
@@ -40884,6 +42365,34 @@ class $$CamerasTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  GeneratedColumn<String> get dataStatus => $composableBuilder(
+    column: $table.dataStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get verifiedFieldsJson => $composableBuilder(
+    column: $table.verifiedFieldsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceLabel => $composableBuilder(
+    column: $table.sourceLabel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceUrl =>
+      $composableBuilder(column: $table.sourceUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get verifiedAt => $composableBuilder(
+    column: $table.verifiedAt,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
@@ -41073,6 +42582,12 @@ class $$CamerasTableTableManager
               $$CamerasTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
+                Value<String?> dataStatus = const Value.absent(),
+                Value<String?> confidence = const Value.absent(),
+                Value<String?> verifiedFieldsJson = const Value.absent(),
+                Value<String?> sourceLabel = const Value.absent(),
+                Value<String?> sourceUrl = const Value.absent(),
+                Value<String?> verifiedAt = const Value.absent(),
                 Value<int> id = const Value.absent(),
                 Value<String> brand = const Value.absent(),
                 Value<String> model = const Value.absent(),
@@ -41100,6 +42615,12 @@ class $$CamerasTableTableManager
                 Value<String?> lukaProfileJson = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
               }) => CamerasCompanion(
+                dataStatus: dataStatus,
+                confidence: confidence,
+                verifiedFieldsJson: verifiedFieldsJson,
+                sourceLabel: sourceLabel,
+                sourceUrl: sourceUrl,
+                verifiedAt: verifiedAt,
                 id: id,
                 brand: brand,
                 model: model,
@@ -41129,6 +42650,12 @@ class $$CamerasTableTableManager
               ),
           createCompanionCallback:
               ({
+                Value<String?> dataStatus = const Value.absent(),
+                Value<String?> confidence = const Value.absent(),
+                Value<String?> verifiedFieldsJson = const Value.absent(),
+                Value<String?> sourceLabel = const Value.absent(),
+                Value<String?> sourceUrl = const Value.absent(),
+                Value<String?> verifiedAt = const Value.absent(),
                 Value<int> id = const Value.absent(),
                 required String brand,
                 required String model,
@@ -41156,6 +42683,12 @@ class $$CamerasTableTableManager
                 Value<String?> lukaProfileJson = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
               }) => CamerasCompanion.insert(
+                dataStatus: dataStatus,
+                confidence: confidence,
+                verifiedFieldsJson: verifiedFieldsJson,
+                sourceLabel: sourceLabel,
+                sourceUrl: sourceUrl,
+                verifiedAt: verifiedAt,
                 id: id,
                 brand: brand,
                 model: model,
@@ -41268,6 +42801,12 @@ typedef $$CamerasTableProcessedTableManager =
     >;
 typedef $$LensesTableCreateCompanionBuilder =
     LensesCompanion Function({
+      Value<String?> dataStatus,
+      Value<String?> confidence,
+      Value<String?> verifiedFieldsJson,
+      Value<String?> sourceLabel,
+      Value<String?> sourceUrl,
+      Value<String?> verifiedAt,
       Value<int> id,
       required String brand,
       required String model,
@@ -41293,9 +42832,23 @@ typedef $$LensesTableCreateCompanionBuilder =
       Value<bool> lukaCompatible,
       Value<String?> lukaProfileJson,
       Value<String?> notes,
+      Value<String?> projectionType,
+      Value<double?> imageAreaWidthMm,
+      Value<double?> imageAreaHeightMm,
+      Value<String?> illuminationArea,
+      Value<String?> vignettingStatus,
+      Value<String?> shadingStatus,
+      Value<String?> portholingStatus,
+      Value<String?> specsJson,
     });
 typedef $$LensesTableUpdateCompanionBuilder =
     LensesCompanion Function({
+      Value<String?> dataStatus,
+      Value<String?> confidence,
+      Value<String?> verifiedFieldsJson,
+      Value<String?> sourceLabel,
+      Value<String?> sourceUrl,
+      Value<String?> verifiedAt,
       Value<int> id,
       Value<String> brand,
       Value<String> model,
@@ -41321,6 +42874,14 @@ typedef $$LensesTableUpdateCompanionBuilder =
       Value<bool> lukaCompatible,
       Value<String?> lukaProfileJson,
       Value<String?> notes,
+      Value<String?> projectionType,
+      Value<double?> imageAreaWidthMm,
+      Value<double?> imageAreaHeightMm,
+      Value<String?> illuminationArea,
+      Value<String?> vignettingStatus,
+      Value<String?> shadingStatus,
+      Value<String?> portholingStatus,
+      Value<String?> specsJson,
     });
 
 final class $$LensesTableReferences
@@ -41376,6 +42937,36 @@ class $$LensesTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnFilters<String> get dataStatus => $composableBuilder(
+    column: $table.dataStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get verifiedFieldsJson => $composableBuilder(
+    column: $table.verifiedFieldsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceLabel => $composableBuilder(
+    column: $table.sourceLabel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get verifiedAt => $composableBuilder(
+    column: $table.verifiedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
@@ -41501,6 +43092,46 @@ class $$LensesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get projectionType => $composableBuilder(
+    column: $table.projectionType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get imageAreaWidthMm => $composableBuilder(
+    column: $table.imageAreaWidthMm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get imageAreaHeightMm => $composableBuilder(
+    column: $table.imageAreaHeightMm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get illuminationArea => $composableBuilder(
+    column: $table.illuminationArea,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get vignettingStatus => $composableBuilder(
+    column: $table.vignettingStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get shadingStatus => $composableBuilder(
+    column: $table.shadingStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get portholingStatus => $composableBuilder(
+    column: $table.portholingStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get specsJson => $composableBuilder(
+    column: $table.specsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
   Expression<bool> visualBiblesRefs(
     Expression<bool> Function($$VisualBiblesTableFilterComposer f) f,
   ) {
@@ -41561,6 +43192,36 @@ class $$LensesTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnOrderings<String> get dataStatus => $composableBuilder(
+    column: $table.dataStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get verifiedFieldsJson => $composableBuilder(
+    column: $table.verifiedFieldsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceLabel => $composableBuilder(
+    column: $table.sourceLabel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get verifiedAt => $composableBuilder(
+    column: $table.verifiedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
@@ -41685,6 +43346,46 @@ class $$LensesTableOrderingComposer
     column: $table.notes,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get projectionType => $composableBuilder(
+    column: $table.projectionType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get imageAreaWidthMm => $composableBuilder(
+    column: $table.imageAreaWidthMm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get imageAreaHeightMm => $composableBuilder(
+    column: $table.imageAreaHeightMm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get illuminationArea => $composableBuilder(
+    column: $table.illuminationArea,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get vignettingStatus => $composableBuilder(
+    column: $table.vignettingStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get shadingStatus => $composableBuilder(
+    column: $table.shadingStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get portholingStatus => $composableBuilder(
+    column: $table.portholingStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get specsJson => $composableBuilder(
+    column: $table.specsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$LensesTableAnnotationComposer
@@ -41696,6 +43397,34 @@ class $$LensesTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  GeneratedColumn<String> get dataStatus => $composableBuilder(
+    column: $table.dataStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get verifiedFieldsJson => $composableBuilder(
+    column: $table.verifiedFieldsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceLabel => $composableBuilder(
+    column: $table.sourceLabel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceUrl =>
+      $composableBuilder(column: $table.sourceUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get verifiedAt => $composableBuilder(
+    column: $table.verifiedAt,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
@@ -41797,6 +43526,44 @@ class $$LensesTableAnnotationComposer
   GeneratedColumn<String> get notes =>
       $composableBuilder(column: $table.notes, builder: (column) => column);
 
+  GeneratedColumn<String> get projectionType => $composableBuilder(
+    column: $table.projectionType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get imageAreaWidthMm => $composableBuilder(
+    column: $table.imageAreaWidthMm,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get imageAreaHeightMm => $composableBuilder(
+    column: $table.imageAreaHeightMm,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get illuminationArea => $composableBuilder(
+    column: $table.illuminationArea,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get vignettingStatus => $composableBuilder(
+    column: $table.vignettingStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get shadingStatus => $composableBuilder(
+    column: $table.shadingStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get portholingStatus => $composableBuilder(
+    column: $table.portholingStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get specsJson =>
+      $composableBuilder(column: $table.specsJson, builder: (column) => column);
+
   Expression<T> visualBiblesRefs<T extends Object>(
     Expression<T> Function($$VisualBiblesTableAnnotationComposer a) f,
   ) {
@@ -41876,6 +43643,12 @@ class $$LensesTableTableManager
               $$LensesTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
+                Value<String?> dataStatus = const Value.absent(),
+                Value<String?> confidence = const Value.absent(),
+                Value<String?> verifiedFieldsJson = const Value.absent(),
+                Value<String?> sourceLabel = const Value.absent(),
+                Value<String?> sourceUrl = const Value.absent(),
+                Value<String?> verifiedAt = const Value.absent(),
                 Value<int> id = const Value.absent(),
                 Value<String> brand = const Value.absent(),
                 Value<String> model = const Value.absent(),
@@ -41901,7 +43674,21 @@ class $$LensesTableTableManager
                 Value<bool> lukaCompatible = const Value.absent(),
                 Value<String?> lukaProfileJson = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
+                Value<String?> projectionType = const Value.absent(),
+                Value<double?> imageAreaWidthMm = const Value.absent(),
+                Value<double?> imageAreaHeightMm = const Value.absent(),
+                Value<String?> illuminationArea = const Value.absent(),
+                Value<String?> vignettingStatus = const Value.absent(),
+                Value<String?> shadingStatus = const Value.absent(),
+                Value<String?> portholingStatus = const Value.absent(),
+                Value<String?> specsJson = const Value.absent(),
               }) => LensesCompanion(
+                dataStatus: dataStatus,
+                confidence: confidence,
+                verifiedFieldsJson: verifiedFieldsJson,
+                sourceLabel: sourceLabel,
+                sourceUrl: sourceUrl,
+                verifiedAt: verifiedAt,
                 id: id,
                 brand: brand,
                 model: model,
@@ -41927,9 +43714,23 @@ class $$LensesTableTableManager
                 lukaCompatible: lukaCompatible,
                 lukaProfileJson: lukaProfileJson,
                 notes: notes,
+                projectionType: projectionType,
+                imageAreaWidthMm: imageAreaWidthMm,
+                imageAreaHeightMm: imageAreaHeightMm,
+                illuminationArea: illuminationArea,
+                vignettingStatus: vignettingStatus,
+                shadingStatus: shadingStatus,
+                portholingStatus: portholingStatus,
+                specsJson: specsJson,
               ),
           createCompanionCallback:
               ({
+                Value<String?> dataStatus = const Value.absent(),
+                Value<String?> confidence = const Value.absent(),
+                Value<String?> verifiedFieldsJson = const Value.absent(),
+                Value<String?> sourceLabel = const Value.absent(),
+                Value<String?> sourceUrl = const Value.absent(),
+                Value<String?> verifiedAt = const Value.absent(),
                 Value<int> id = const Value.absent(),
                 required String brand,
                 required String model,
@@ -41955,7 +43756,21 @@ class $$LensesTableTableManager
                 Value<bool> lukaCompatible = const Value.absent(),
                 Value<String?> lukaProfileJson = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
+                Value<String?> projectionType = const Value.absent(),
+                Value<double?> imageAreaWidthMm = const Value.absent(),
+                Value<double?> imageAreaHeightMm = const Value.absent(),
+                Value<String?> illuminationArea = const Value.absent(),
+                Value<String?> vignettingStatus = const Value.absent(),
+                Value<String?> shadingStatus = const Value.absent(),
+                Value<String?> portholingStatus = const Value.absent(),
+                Value<String?> specsJson = const Value.absent(),
               }) => LensesCompanion.insert(
+                dataStatus: dataStatus,
+                confidence: confidence,
+                verifiedFieldsJson: verifiedFieldsJson,
+                sourceLabel: sourceLabel,
+                sourceUrl: sourceUrl,
+                verifiedAt: verifiedAt,
                 id: id,
                 brand: brand,
                 model: model,
@@ -41981,6 +43796,14 @@ class $$LensesTableTableManager
                 lukaCompatible: lukaCompatible,
                 lukaProfileJson: lukaProfileJson,
                 notes: notes,
+                projectionType: projectionType,
+                imageAreaWidthMm: imageAreaWidthMm,
+                imageAreaHeightMm: imageAreaHeightMm,
+                illuminationArea: illuminationArea,
+                vignettingStatus: vignettingStatus,
+                shadingStatus: shadingStatus,
+                portholingStatus: portholingStatus,
+                specsJson: specsJson,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -42065,6 +43888,12 @@ typedef $$LensesTableProcessedTableManager =
     >;
 typedef $$LightsTableCreateCompanionBuilder =
     LightsCompanion Function({
+      Value<String?> dataStatus,
+      Value<String?> confidence,
+      Value<String?> verifiedFieldsJson,
+      Value<String?> sourceLabel,
+      Value<String?> sourceUrl,
+      Value<String?> verifiedAt,
       Value<int> id,
       required String brand,
       required String model,
@@ -42091,6 +43920,12 @@ typedef $$LightsTableCreateCompanionBuilder =
     });
 typedef $$LightsTableUpdateCompanionBuilder =
     LightsCompanion Function({
+      Value<String?> dataStatus,
+      Value<String?> confidence,
+      Value<String?> verifiedFieldsJson,
+      Value<String?> sourceLabel,
+      Value<String?> sourceUrl,
+      Value<String?> verifiedAt,
       Value<int> id,
       Value<String> brand,
       Value<String> model,
@@ -42125,6 +43960,36 @@ class $$LightsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnFilters<String> get dataStatus => $composableBuilder(
+    column: $table.dataStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get verifiedFieldsJson => $composableBuilder(
+    column: $table.verifiedFieldsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceLabel => $composableBuilder(
+    column: $table.sourceLabel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get verifiedAt => $composableBuilder(
+    column: $table.verifiedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
@@ -42250,6 +44115,36 @@ class $$LightsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnOrderings<String> get dataStatus => $composableBuilder(
+    column: $table.dataStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get verifiedFieldsJson => $composableBuilder(
+    column: $table.verifiedFieldsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceLabel => $composableBuilder(
+    column: $table.sourceLabel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get verifiedAt => $composableBuilder(
+    column: $table.verifiedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
@@ -42375,6 +44270,34 @@ class $$LightsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  GeneratedColumn<String> get dataStatus => $composableBuilder(
+    column: $table.dataStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get verifiedFieldsJson => $composableBuilder(
+    column: $table.verifiedFieldsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceLabel => $composableBuilder(
+    column: $table.sourceLabel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceUrl =>
+      $composableBuilder(column: $table.sourceUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get verifiedAt => $composableBuilder(
+    column: $table.verifiedAt,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
@@ -42497,6 +44420,12 @@ class $$LightsTableTableManager
               $$LightsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
+                Value<String?> dataStatus = const Value.absent(),
+                Value<String?> confidence = const Value.absent(),
+                Value<String?> verifiedFieldsJson = const Value.absent(),
+                Value<String?> sourceLabel = const Value.absent(),
+                Value<String?> sourceUrl = const Value.absent(),
+                Value<String?> verifiedAt = const Value.absent(),
                 Value<int> id = const Value.absent(),
                 Value<String> brand = const Value.absent(),
                 Value<String> model = const Value.absent(),
@@ -42521,6 +44450,12 @@ class $$LightsTableTableManager
                 Value<String?> lukaProfileJson = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
               }) => LightsCompanion(
+                dataStatus: dataStatus,
+                confidence: confidence,
+                verifiedFieldsJson: verifiedFieldsJson,
+                sourceLabel: sourceLabel,
+                sourceUrl: sourceUrl,
+                verifiedAt: verifiedAt,
                 id: id,
                 brand: brand,
                 model: model,
@@ -42547,6 +44482,12 @@ class $$LightsTableTableManager
               ),
           createCompanionCallback:
               ({
+                Value<String?> dataStatus = const Value.absent(),
+                Value<String?> confidence = const Value.absent(),
+                Value<String?> verifiedFieldsJson = const Value.absent(),
+                Value<String?> sourceLabel = const Value.absent(),
+                Value<String?> sourceUrl = const Value.absent(),
+                Value<String?> verifiedAt = const Value.absent(),
                 Value<int> id = const Value.absent(),
                 required String brand,
                 required String model,
@@ -42571,6 +44512,12 @@ class $$LightsTableTableManager
                 Value<String?> lukaProfileJson = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
               }) => LightsCompanion.insert(
+                dataStatus: dataStatus,
+                confidence: confidence,
+                verifiedFieldsJson: verifiedFieldsJson,
+                sourceLabel: sourceLabel,
+                sourceUrl: sourceUrl,
+                verifiedAt: verifiedAt,
                 id: id,
                 brand: brand,
                 model: model,

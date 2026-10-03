@@ -85,7 +85,7 @@ Los chips de rol en Equipo/Format/Optics Lab (`project_camera_roster_bar`, badge
 **Decisiones cerradas:**
 1. **`Modos_Cámara`:** → `sensorModesJson`; Excel/JSON **gana** sobre expansion embebida.
 2. **`Película`:** aplazada (JSON estático futuro, sin Drift).
-3. **`estado_dato` / Auditoría / Fuentes:** no persistir en Drift.
+3. ~~**`estado_dato` / Auditoría / Fuentes:** no persistir en Drift.~~ Revertida el 2026-10-03 (Fase 4 de `docs/PLAN_ACCION.md`): se guardan por ficha desde schema 41.
 
 **Pendiente:** rellenar gates faltantes en Excel; resto cascada (ver sección arriba).
 
