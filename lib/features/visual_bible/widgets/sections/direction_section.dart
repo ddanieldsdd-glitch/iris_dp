@@ -14,6 +14,8 @@ import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
 import '../bible_moodboard_image_target.dart';
+import '../bible_navigation_scope.dart';
+import '../bible_point_panel.dart';
 import 'section_scaffold.dart';
 
 /// Dirección — layout Stitch Visual Bible (glass bento).
@@ -893,6 +895,55 @@ class DirectionSection extends ConsumerWidget {
               ),
             );
 
+        final refsMeta = _refsMeta(custom);
+        Future<void> editRef(int? index) async {
+          final edited = await _editRefMeta(
+            context,
+            index == null ? const {} : refsMeta[index],
+          );
+          if (edited == null) return;
+          final next = [...refsMeta];
+          if (index == null) {
+            next.add(edited);
+          } else {
+            next[index] = edited;
+          }
+          await _updateCustomData(ref, {'refsMetadata': next});
+        }
+
+        final refsCard = _GlassPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _TechLabel(
+                icon: Icons.collections_outlined,
+                label: 'Referencias de Dirección',
+                palette: palette,
+              ),
+              const SizedBox(height: 16),
+              _DirectionRefsGrid(
+                projectId: projectId,
+                bibleId: data.id,
+                palette: palette,
+                meta: refsMeta,
+                onAddImage: () => MoodboardHelpers.addManualImages(
+                  db: ref.read(databaseProvider),
+                  projectId: projectId,
+                  bibleId: data.id,
+                  assignedSections: const [BibleSectionId.direction],
+                ),
+                onAddMeta: () => editRef(null),
+                onEditMeta: editRef,
+                onOpenMoodboard: () =>
+                    BibleNavigationScope.openMoodboardForSection(
+                      context,
+                      BibleSectionId.direction,
+                    ),
+              ),
+            ],
+          ),
+        );
+
         return BibleSectionScaffold(
       sectionId: BibleSectionId.direction,
       projectId: projectId,
@@ -906,15 +957,10 @@ class DirectionSection extends ConsumerWidget {
       fieldWidgets: {
         'header': header,
         'narrative': intentCard,
-        'toneStrategies': Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            toneCard,
-            const SizedBox(height: 16),
-            strategyCard,
-          ],
-        ),
+        'tone': toneCard,
+        'strategies': strategyCard,
         'acts': actsCard,
+        if (data.id > 0) 'references': refsCard,
         'keyFrame': keyFrameCard,
         'transitions': transitionsCard,
       },
@@ -1162,18 +1208,8 @@ class _GlassPanel extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: padding,
-      decoration: BoxDecoration(
-        color: const Color(0xB31A1A1C),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.white.withValues(alpha: 0.08),
-            blurRadius: 0,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
+      clipBehavior: Clip.antiAlias,
+      decoration: BiblePointPanel.decoration(context.palette),
       child: child,
     );
   }
@@ -1196,14 +1232,7 @@ class _TechLabel extends StatelessWidget {
       children: [
         Icon(icon, size: 16, color: palette.accent),
         const SizedBox(width: 8),
-        Text(
-          label.toUpperCase(),
-          style: AppTypography.mono(palette).copyWith(
-            fontSize: 11,
-            letterSpacing: 1.2,
-            color: palette.accent,
-          ),
-        ),
+        Text(label.toUpperCase(), style: BiblePointPanel.labelStyle(palette)),
       ],
     );
   }
@@ -1224,10 +1253,10 @@ class _EmotionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = danger ? const Color(0xFFFFB4AB) : const Color(0xFFBBC7DF);
+    final fg = danger ? palette.error : palette.textSecondary;
     final bg = danger
-        ? const Color(0x3393000A)
-        : const Color(0x333E495E);
+        ? palette.highlightRed
+        : palette.surfaceOverlay;
     return InputChip(
       label: Text(
         label.toUpperCase(),
@@ -1866,7 +1895,7 @@ class _RefCard extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xCC131315),
+                      color: palette.background.withValues(alpha: 0.8),
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
                         color: Colors.white.withValues(alpha: 0.1),
