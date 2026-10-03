@@ -7,13 +7,16 @@ Uso (desde la raíz del repo):
 Entradas:
   docs/catalog/fuentes/lista_material_tecnico_v1_8.xlsx   volumen de datos
   docs/catalog/fuentes/master_auditoria_v17.xlsx          reglas + datos contrastados
+  docs/catalog/fuentes/flujo_sxt_superspeed_v2_0.xlsx     v2.0: cámaras, gates, SXT, Super Speed
   tools/catalog_base/*.json                               catálogo heredado (base)
 
 Salidas:
   assets/catalog/cameras.json, lenses.json, lights.json, manifest.json
+  assets/catalog/recording.json    medios y formatos de grabación por cámara
   docs/catalog/INFORME_CATALOGO.md
 
-Capas, de menor a mayor prioridad: base heredada, lista v1.8, master.
+Capas, de menor a mayor prioridad: base heredada, lista v1.8, master v17,
+flujo v2.0.
 Reglas del master que se aplican aquí:
   - El círculo de imagen solo se guarda si la fuente lo publica. El de la base
     estaba inferido por formato y se descarta.
@@ -38,10 +41,11 @@ from xlsx_reader import Workbook  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 LISTA = ROOT / "docs/catalog/fuentes/lista_material_tecnico_v1_8.xlsx"
 MASTER = ROOT / "docs/catalog/fuentes/master_auditoria_v17.xlsx"
+FLUJO = ROOT / "docs/catalog/fuentes/flujo_sxt_superspeed_v2_0.xlsx"
 BASE = ROOT / "tools/catalog_base"
 OUT = ROOT / "assets/catalog"
 REPORT = ROOT / "docs/catalog/INFORME_CATALOGO.md"
-CATALOG_VERSION = 7
+CATALOG_VERSION = 8
 
 MODE_COLUMNS = [
     "camera_external_id", "marca", "modelo", "modo_sensor", "res_x", "res_y",
@@ -192,6 +196,287 @@ def merge_provenance(target: dict, incoming: dict) -> None:
         target["sourceLabel"] = "; ".join(dict.fromkeys(labels))
 
 
+# ── flujo v2.0 ──────────────────────────────────────────────────────────────
+
+# Ids que ya usaba la lista v1.8 en `Modos_Cámara` para estas cámaras.
+FLUJO_CAMERA_IDS = {
+    "alexa35xtreme": "arri_alexa35_xtreme",
+    "pyxis6kpl": "blackmagic_pyxis_6k_pl",
+    "ursacine17k65": "blackmagic_ursa_cine_17k_65",
+    "ursacine12klf": "blackmagic_ursa_cine_12k_lf",
+}
+SXT_ID = "arri_alexa_sxt"
+
+
+def flujo_sources(flujo: Workbook) -> dict:
+    return {
+        text(row.get("ID")): {"label": text(row.get("Descripción")), "url": text(row.get("URL"))}
+        for row in flujo.records("12_Fuentes")
+        if text(row.get("ID")) and text(row.get("URL"))
+    }
+
+
+def flujo_status(raw) -> str:
+    """Estado del flujo v2.0 traducido a los estados del master."""
+    value = (text(raw) or "").upper()
+    if value.startswith("CONFIRMADO") or value.startswith("DISCREPANCIA MENOR"):
+        return "CONFIRMADO"
+    if value.startswith("CALCULADO"):
+        return "CALCULADO"
+    if value.startswith("CONTRASTE"):
+        # «Medido por terceros»: es una observación, no una especificación.
+        return "OBSERVADO"
+    return "PENDIENTE"
+
+
+def flujo_provenance(status_raw, source_ids, sources, fields, date=None) -> dict:
+    ids = [s.strip() for s in (text(source_ids) or "").split(";") if s.strip()]
+    known = [sources[i] for i in ids if i in sources]
+    status = flujo_status(status_raw)
+    return clean({
+        "dataStatus": status,
+        "confidence": "ALTA" if status == "CONFIRMADO" else "MEDIA",
+        "verifiedFields": list(fields),
+        "sourceLabel": "; ".join(s["label"] for s in known) or None,
+        "sourceUrl": known[0]["url"] if known else None,
+        "verifiedAt": text(date),
+    })
+
+
+def mm_pair(value):
+    """«28,25 x 18,17 mm» → (28.25, 18.17)."""
+    found = re.findall(r"\d+(?:[.,]\d+)?", str(value or ""))
+    return (float(found[0].replace(",", ".")), float(found[1].replace(",", "."))) if len(found) >= 2 else (None, None)
+
+
+def add_flujo_cameras(cameras: dict, flujo: Workbook, sources: dict, report: list) -> int:
+    added = 0
+    by_model = {norm(c.get("model")): cid for cid, c in cameras.items()}
+    for row in flujo.records("08_Camaras_Faltantes"):
+        model = text(row.get("Modelo (nombre exacto en Modos_Cámara)"))
+        width, height = number(row.get("Sensor W (mm)")), number(row.get("Sensor H (mm)"))
+        if not (model and width and height):
+            continue
+        cid = FLUJO_CAMERA_IDS.get(norm(model)) or by_model.get(norm(model))
+        if cid is None:
+            cid = f"{norm(row.get('Fabricante'))}_{norm(model)}"
+        camera = cameras.get(cid)
+        if camera is None:
+            camera = cameras[cid] = {"externalId": cid, "sensorModes": [], "vintage": False, "lukaCompatible": False}
+            added += 1
+        brand = text(row.get("Fabricante")) or ""
+        camera.update(clean({
+            "brand": "Blackmagic" if brand.startswith("Blackmagic") else brand,
+            "model": model,
+            "sensorWidthMm": width,
+            "sensorHeightMm": height,
+            "mountType": (text(row.get("Montura")) or "").split(" ")[0].strip(";") or None,
+            "pixelPitchUm": number(row.get("Pitch (µm)")),
+        }))
+        merge_provenance(camera, flujo_provenance(
+            row.get("Estado"), row.get("Fuente"), sources,
+            ["sensor_ancho_mm", "sensor_alto_mm", "mount"], row.get("Fecha consulta"),
+        ))
+    # ALEXA SXT: ficha de cámara.
+    sxt = cameras.get(SXT_ID)
+    if sxt is not None:
+        params = {text(r.get("Parámetro")): r for r in flujo.records("13_SXT_Camara")}
+        size = params.get("Tamaño total (Open Gate)")
+        if size:
+            w, h = mm_pair(size.get("Valor"))
+            if w and h:
+                sxt["sensorWidthMm"], sxt["sensorHeightMm"] = w, h
+        pitch = params.get("Pitch (tamaño de photosite)")
+        if pitch:
+            sxt["pixelPitchUm"] = number(str(pitch.get("Valor")).replace(",", "."))
+        if params.get("Montura de serie"):
+            sxt["mountType"] = "PL"
+        if params.get("Códecs"):
+            sxt["recordingFormats"] = text(params["Códecs"].get("Valor"))
+        merge_provenance(sxt, flujo_provenance(
+            "CONFIRMADO", "F07; F09", sources, ["sensor_ancho_mm", "sensor_alto_mm", "mount"],
+        ))
+    return added
+
+
+def apply_flujo_modes(cameras: dict, flujo: Workbook, sources: dict, report: list) -> int:
+    by_model = {norm(c.get("model")): cid for cid, c in cameras.items()}
+    count = 0
+    for row in flujo.records("09_Gates_Modos"):
+        name = text(row.get("Modo"))
+        width, height = number(row.get("Gate W final (mm)")), number(row.get("Gate H final (mm)"))
+        if not (text(row.get("ID modo")) and name and width and height):
+            continue
+        cid = FLUJO_CAMERA_IDS.get(norm(row.get("Cámara"))) or by_model.get(norm(row.get("Cámara")))
+        if cid not in cameras:
+            report.append(f"- Flujo v2.0: modo de una cámara sin ficha: {row.get('Cámara')} · {name}")
+            continue
+        src = sources.get((text(row.get("Fuente")) or "").split(";")[0].strip(), {})
+        status = flujo_status(row.get("Estado"))
+        if status == "PENDIENTE":
+            report.append(f"- Gate pendiente de confirmar: `{cid}` · {name} ({text(row.get('Estado'))})")
+        merge_mode(cameras[cid]["sensorModes"], clean({
+            "name": name,
+            "widthMm": width,
+            "heightMm": height,
+            "maxWidthPx": integer(row.get("Ancho (px)")),
+            "maxHeightPx": integer(row.get("Alto (px)")),
+            "cropFactor": 1.0,
+            "readout": text(row.get("Tipo de lectura")),
+            "gateMethod": text(row.get("Método")),
+            "dataStatus": status,
+            "sourceLabel": src.get("label"),
+            "sourceUrl": src.get("url"),
+            "note": text(row.get("Observación")),
+        }), cid, report)
+        count += 1
+
+    # ALEXA SXT: sus 14 formatos sustituyen a los modos heredados.
+    sxt = cameras.get(SXT_ID)
+    sxt_modes = []
+    for row in flujo.records("14_SXT_Modos"):
+        if not (text(row.get("ID modo")) or "").startswith("SXT-"):
+            continue
+        width = number(row.get("Gate W publicado (mm)")) or number(row.get("Gate W calc (mm)"))
+        height = number(row.get("Gate H publicado (mm)")) or number(row.get("Gate H calc (mm)"))
+        src = sources.get((text(row.get("Fuente")) or "").split(";")[0].strip(), {})
+        sxt_modes.append(clean({
+            "name": f"{text(row.get('Modo de sensor'))} · {text(row.get('Formato de grabación'))}",
+            "sensorMode": text(row.get("Modo de sensor")),
+            "widthMm": width,
+            "heightMm": height,
+            "cropFactor": 1.0,
+            "maxWidthPx": integer(row.get("Grabación W (px)")),
+            "maxHeightPx": integer(row.get("Grabación H (px)")),
+            "sensorAreaWidthPx": integer(row.get("Área sensor W (px)")),
+            "sensorAreaHeightPx": integer(row.get("Área sensor H (px)")),
+            "codec": text(row.get("Familia")),
+            "fpsMax": number(row.get("FPS máx.")),
+            "sphericalOk": text(row.get("Apto óptica esférica")),
+            "recommendedUse": text(row.get("Uso recomendado (ARRI)")),
+            "dataStatus": flujo_status(row.get("Estado")),
+            "sourceLabel": src.get("label"),
+            "sourceUrl": src.get("url"),
+            "note": text(row.get("Observación")),
+        }))
+    if sxt is not None and sxt_modes:
+        sxt["sensorModes"] = sxt_modes
+        count += len(sxt_modes)
+    return count
+
+
+def apply_flujo_lenses(lenses: dict, flujo: Workbook, sources: dict, report: list) -> int:
+    count = 0
+    for row in flujo.records("17_Opticas_SuperSpeed"):
+        focal = integer(row.get("Focal (mm)"))
+        if not (text(row.get("ID óptica")) or "").startswith("ZSS-") or focal is None:
+            continue
+        version = "mk1" if "MK I" == (text(row.get("Versión según NAPALM")) or "").upper() else "mk2"
+        lid = f"zeiss_super_speed_{version}_{focal}"
+        label = "Mk I" if version == "mk1" else "Mk II"
+        lens = lenses.get(lid)
+        if lens is None:
+            lens = lenses[lid] = {
+                "externalId": lid, "brand": "ZEISS", "model": f"Super Speed {label} {focal}mm",
+                "formatCoverage": "S35", "vintage": True, "lukaCompatible": False, "isAnamorphic": False,
+            }
+        lens.pop("squeezeRatio", None)
+        lens.update(clean({
+            "focalLength": float(focal),
+            "focalMin": float(focal),
+            "focalMax": float(focal),
+            "minTStop": number(row.get("T máx.")),
+            "mountType": text(row.get("Montura")),
+            "imageCircleMm": number(row.get("Círculo típico (mm)")),
+            "closeFocusM": number(row.get("Enfoque mínimo NAPALM (m)")),
+            "frontDiameterMm": number(row.get("Diámetro frontal (mm)")),
+            "weightKg": number(row.get("Peso NAPALM (kg)")),
+            "projectionType": "ESFÉRICA",
+            "series": text(row.get("Set")),
+        }))
+        lens["isAnamorphic"] = False
+        lens["specs"] = clean({
+            "imageCircleWorstMm": number(row.get("Círculo peor caso (mm)")),
+            "circleT13InfinityMm": number(row.get("Círculo T1.3 infinito (mm)")),
+            "circleT13CloseMm": number(row.get("Círculo T1.3 enfoque mín. (mm)")),
+            "circleT16InfinityMm": number(row.get("Círculo T16 infinito (mm)")),
+            "circleT16CloseMm": number(row.get("Círculo T16 enfoque mín. (mm)")),
+            "irisBlades": integer(row.get("Palas de iris (MKII)")),
+            "closeFocusAltM": number(row.get("Enfoque mínimo Camaleon (m)")),
+            "note": text(row.get("Observación")),
+        })
+        for key in ("dataStatus", "confidence", "verifiedFields", "sourceLabel", "sourceUrl", "verifiedAt"):
+            lens.pop(key, None)
+        lens.update(flujo_provenance(
+            row.get("Estado"), row.get("Fuente"), sources,
+            ["image_circle_mm", "distancia_focal", "t_stop_min", "mount", "min_focus_m", "front_diameter_mm", "peso_g"],
+        ))
+        count += 1
+    return count
+
+
+def build_recording(flujo: Workbook, sources: dict) -> dict:
+    """Medios y formatos de grabación con sus tasas y tiempos (ALEXA SXT)."""
+    rows = flujo.rows("15_SXT_Almacenamiento")
+    media, formats, header = [], [], None
+    media_columns = {}
+    for row in rows[1:]:
+        cells = list(row) + [None] * 12
+        first = text(cells[0])
+        if first is None:
+            continue
+        if first == "ID formato":
+            header = [text(c) for c in cells]
+            continue
+        if header is None:
+            capacity = number(cells[1])
+            if capacity is None:
+                continue
+            src = sources.get((text(cells[8]) or "").split(";")[0].strip(), {})
+            media.append(clean({
+                "id": norm(first),
+                "name": first,
+                "capacityGb": capacity,
+                "adapter": text(cells[2]),
+                "arriraw": (text(cells[3]) or "").lower().startswith("s"),
+                "prores": (text(cells[4]) or "").lower().startswith("s"),
+                "proresRaid": (text(cells[5]) or "").lower().startswith("s"),
+                "interface": text(cells[6]),
+                "dock": text(cells[7]),
+                "dataStatus": flujo_status(cells[9]),
+                "sourceLabel": src.get("label"),
+                "sourceUrl": src.get("url"),
+                "note": text(cells[10]),
+            }))
+            continue
+        if not first.startswith("REC-"):
+            continue
+        if not media_columns:
+            # Las columnas de tiempos se emparejan con los medios por capacidad.
+            for index, title in enumerate(header):
+                size = number(title) if title and "GB" in title or title and "TB" in title else None
+                if size is None:
+                    continue
+                gb = size * 1000 if "TB" in title else size
+                match = next((m for m in media if m["capacityGb"] == gb), None)
+                if match:
+                    media_columns[index] = match["id"]
+        minutes = {}
+        for index, media_id in media_columns.items():
+            value = cells[index]
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                minutes[media_id] = int(round(value * 1440))
+        formats.append(clean({
+            "id": first,
+            "mode": text(cells[1]),
+            "codec": text(cells[2]),
+            "rateMbPerSec": number(cells[9]),
+            "gbPerHour": number(cells[11]),
+            "minutesByMedia": minutes,
+        }))
+    return {"cameras": [{"cameraId": SXT_ID, "fps": 24, "media": media, "formats": formats}]} if formats else {"cameras": []}
+
+
 # ── modos de sensor ─────────────────────────────────────────────────────────
 
 def read_mode_rows(lista: Workbook, report: list) -> list:
@@ -269,7 +554,7 @@ def merge_mode(modes: list, incoming: dict, camera_id: str, report: list) -> Non
 
 # ── cámaras ─────────────────────────────────────────────────────────────────
 
-def build_cameras(lista, master, sources, matrix, report):
+def build_cameras(lista, master, sources, matrix, report, flujo, flujo_src):
     cameras = {c["externalId"]: dict(c) for c in load_base("cameras.json")}
     for patch in load_base("cameras_expansion.json"):
         if patch["externalId"] in cameras and patch.get("sensorModes"):
@@ -305,6 +590,8 @@ def build_cameras(lista, master, sources, matrix, report):
         for key in ("dataStatus", "confidence", "verifiedFields", "sourceLabel", "sourceUrl", "verifiedAt"):
             camera.pop(key, None)
         camera.update(provenance(row, matrix))
+
+    added += add_flujo_cameras(cameras, flujo, flujo_src, report)
 
     by_label = {norm(f"{c.get('brand')}{c.get('model')}"): cid for cid, c in cameras.items()}
     by_model = {norm(c.get("model")): cid for cid, c in cameras.items()}
@@ -342,12 +629,14 @@ def build_cameras(lista, master, sources, matrix, report):
         merge_mode(cameras[cid]["sensorModes"], mode, cid, report)
         confirmed += 1
 
+    flujo_modes = apply_flujo_modes(cameras, flujo, flujo_src, report)
+
     out = []
     for camera in cameras.values():
         if not camera.get("sensorModes"):
             camera.pop("sensorModes", None)
         out.append(clean(camera))
-    report.insert(0, f"- Cámaras: {len(out)} ({added} nuevas de la lista). Modos leídos de la lista: {listed}. Modos confirmados por el master: {confirmed}.")
+    report.insert(0, f"- Cámaras: {len(out)} ({added} nuevas respecto a la base). Modos leídos de la lista: {listed}. Modos confirmados por el master: {confirmed}. Modos del flujo v2.0: {flujo_modes}.")
     return out
 
 
@@ -369,7 +658,7 @@ def coverage_label(value, fallback):
     return label
 
 
-def build_lenses(lista, master, sources, matrix, report):
+def build_lenses(lista, master, sources, matrix, report, flujo, flujo_src):
     lenses = {l["externalId"]: dict(l) for l in load_base("lenses.json")}
     for lens in load_base("lenses_expansion.json"):
         lenses[lens["externalId"]] = dict(lens)
@@ -505,11 +794,14 @@ def build_lenses(lista, master, sources, matrix, report):
         family_notes += 1
         report.append(f"- Master: `{row.get('Modelo')}` aplicado a {len(members)} ópticas ({', '.join(fields) or 'tipo de proyección'}).")
 
+    flujo_lenses = apply_flujo_lenses(lenses, flujo, flujo_src, report)
+    report.append(f"- Flujo v2.0: {flujo_lenses} ópticas ZEISS Super Speed con círculo de imagen medido (típico y peor caso).")
+
     out = [clean(l) for l in lenses.values()]
     with_circle = sum(1 for l in out if l.get("imageCircleMm"))
     report.insert(1, (
         f"- Ópticas: {len(out)} ({added} nuevas de la lista). Con círculo de imagen publicado: {with_circle} "
-        f"({published} de la lista, el resto del master). Círculos inferidos descartados de la base: {inferred}."
+        f"({published} de la lista; el resto, del master y del flujo v2.0). Círculos inferidos descartados de la base: {inferred}."
     ))
     report.insert(2, (
         f"- Squeeze descartado en {dropped_squeeze} ópticas esféricas (VAL-002). "
@@ -568,7 +860,7 @@ def status_table(name, items) -> list:
     counts = {}
     for item in items:
         counts[item.get("dataStatus", "PENDIENTE")] = counts.get(item.get("dataStatus", "PENDIENTE"), 0) + 1
-    usable = sum(v for k, v in counts.items() if k in ("CONFIRMADO", "CONTRASTADO", "SECUNDARIO", "CALCULADO"))
+    usable = sum(v for k, v in counts.items() if k in ("CONFIRMADO", "CONTRASTADO", "SECUNDARIO", "CALCULADO", "OBSERVADO"))
     cells = ", ".join(f"{k} {v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1]))
     return [f"| {name} | {len(items)} | {usable} | {cells} |"]
 
@@ -578,26 +870,30 @@ def write_json(path: Path, data) -> None:
 
 
 def main() -> int:
-    lista, master = Workbook(LISTA), Workbook(MASTER)
+    lista, master, flujo = Workbook(LISTA), Workbook(MASTER), Workbook(FLUJO)
     sources = master_sources(master)
+    flujo_src = flujo_sources(flujo)
     matrix = {}
     for entry in lista.records("01_Matriz_Verificacion"):
         matrix.setdefault(text(entry.get("material_id")), []).append(entry)
 
     notes: list = []
-    cameras = build_cameras(lista, master, sources, matrix, notes)
-    lenses = build_lenses(lista, master, sources, matrix, notes)
+    cameras = build_cameras(lista, master, sources, matrix, notes, flujo, flujo_src)
+    lenses = build_lenses(lista, master, sources, matrix, notes, flujo, flujo_src)
+    recording = build_recording(flujo, flujo_src)
     lights = build_lights(lista, matrix, notes)
 
     OUT.mkdir(parents=True, exist_ok=True)
     write_json(OUT / "cameras.json", cameras)
     write_json(OUT / "lenses.json", lenses)
     write_json(OUT / "lights.json", lights)
+    write_json(OUT / "recording.json", recording)
     write_json(OUT / "manifest.json", {
         "version": CATALOG_VERSION,
         "camerasUrl": "cameras.json",
         "lensesUrl": "lenses.json",
         "lightsUrl": "lights.json",
+        "recordingUrl": "recording.json",
     })
 
     modes = sum(len(c.get("sensorModes", [])) for c in cameras)
@@ -608,6 +904,11 @@ def main() -> int:
         "Generado por `tools/build_catalog.py`. No editar a mano.",
         "",
         f"Versión del catálogo: {CATALOG_VERSION}. Modos de sensor en total: {modes}.",
+        "",
+        "Grabación: " + "; ".join(
+            f"`{c['cameraId']}` con {len(c['media'])} medios y {len(c['formats'])} formatos"
+            for c in recording["cameras"]
+        ) + ".",
         "",
         "## Resumen",
         "",

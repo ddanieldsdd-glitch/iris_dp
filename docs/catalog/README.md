@@ -17,6 +17,7 @@ Capas, de menor a mayor prioridad:
 | Base heredada | `tools/catalog_base/*.json` | Fichas y modos de sensor previos (PHFX). Sin estado ni fuente |
 | Lista v1.8 | `fuentes/lista_material_tecnico_v1_8.xlsx` | Volumen: cámaras, modos, ópticas, luces y su verificación |
 | Master v17 | `fuentes/master_auditoria_v17.xlsx` | Reglas y datos contrastados; ganan a la lista |
+| Flujo v2.0 | `fuentes/flujo_sxt_superspeed_v2_0.xlsx` | Cámaras que faltaban, gates por modo, ALEXA SXT (ficha, formatos, medios y tiempos) y ZEISS Super Speed con círculo medido. Gana a todo lo anterior |
 
 Reglas del master que aplica el generador:
 
@@ -24,6 +25,8 @@ Reglas del master que aplica el generador:
 - El squeeze solo aplica a ópticas anamórficas.
 - Un modo de sensor sin gate no entra en el catálogo.
 - Toda ficha lleva estado y fuente. Lo que la lista marca como verificado contra una fuente pero no ha pasado su auditoría queda como SECUNDARIO.
+
+Además de cámaras, ópticas y luces, genera `assets/catalog/recording.json`: medios y formatos de grabación por cámara, con tasa de datos y minutos por medio.
 
 El resultado y las incidencias de cada generación quedan en [`INFORME_CATALOGO.md`](INFORME_CATALOGO.md).
 

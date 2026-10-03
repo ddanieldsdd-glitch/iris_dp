@@ -13,6 +13,7 @@ import '../../core/widgets/app_card.dart';
 import '../optics_lab/optics_calculator.dart';
 import '../optics_lab/sensor_mode_utils.dart';
 import '../visual_bible/widgets/bible_form_widgets.dart';
+import 'recording_plan_card.dart';
 import 'storage_calculator.dart';
 import 'storage_codec_catalog.dart';
 import 'storage_resolution_catalog.dart';
@@ -211,14 +212,25 @@ class _StorageCalculatorScreenState
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  'En desarrollo. Las cifras son estimaciones por fórmula: '
-                  'no salen del catálogo de material, no conocen tarjetas '
-                  'ni horas de grabación por medio, y no se guardan en el '
-                  'proyecto.',
+                  'En desarrollo. Para las cámaras con medios y formatos en '
+                  'el catálogo (hoy, ALEXA SXT) el plan de abajo usa los '
+                  'tiempos del fabricante. La calculadora general sigue '
+                  'siendo una estimación por fórmula, y nada de esto se '
+                  'guarda todavía en el proyecto.',
                   style: AppTypography.bodyMedium(palette),
                 ),
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        StreamBuilder<List<Camera>>(
+          stream: db.watchAllCameras(),
+          builder: (context, snap) => RecordingPlanCard(
+            cameraNames: {
+              for (final c in snap.data ?? const <Camera>[])
+                if (c.externalId != null) c.externalId!: '${c.brand} ${c.model}',
+            },
           ),
         ),
         const SizedBox(height: AppSpacing.lg),

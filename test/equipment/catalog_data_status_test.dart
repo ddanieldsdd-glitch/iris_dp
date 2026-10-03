@@ -52,6 +52,7 @@ void main() {
       CatalogDataStatus.contrastado,
       CatalogDataStatus.secundario,
       CatalogDataStatus.calculado,
+      CatalogDataStatus.observado,
     };
     for (final status in CatalogDataStatus.values) {
       expect(

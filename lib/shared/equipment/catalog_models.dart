@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'catalog_data_status.dart';
 
 /// Versión embebida del catálogo IRIS.
-const kEmbeddedCatalogVersion = 7;
+const kEmbeddedCatalogVersion = 8;
 
 CatalogProvenance? _provenance(Map<String, dynamic> json) =>
     json.containsKey('dataStatus') ? CatalogProvenance.fromJson(json) : null;
