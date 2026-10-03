@@ -312,6 +312,35 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
     }
   }
 
+  Future<void> _switchToClassic() async {
+    final data = _data;
+    if (data == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Volver al modo clásico'),
+        content: const Text(
+          'La biblia se abrirá con las secciones clásicas (Dirección, '
+          'Concepto, Cámara…). Lo que hayas montado en la biblia modular '
+          'no se borra, pero deja de mostrarse y no sale en el PDF.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Volver al clásico'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await ref.read(databaseProvider).setEngineToLegacy(data.id);
+    await _reloadBible();
+  }
+
   Future<VisualBibleExportBundle> _loadExportBundle() async {
     return ref
         .read(visualBibleRepositoryProvider)
@@ -1041,6 +1070,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                     bibleId: _data!.id,
                     legacyData: _data,
                     onExportPdf: _exportPdf,
+                    onSwitchToClassic: _switchToClassic,
                   )
                 : StreamBuilder<VisualBible?>(
                     stream: repo.watchBible(widget.projectId),

@@ -33,6 +33,9 @@ class VisualBibleV2Screen extends ConsumerStatefulWidget {
   final VoidCallback? onExportPdf;
   final VoidCallback? onOpenSettings;
 
+  /// Vuelve al motor clásico, que es el editor de referencia.
+  final VoidCallback? onSwitchToClassic;
+
   const VisualBibleV2Screen({
     super.key,
     required this.projectId,
@@ -40,6 +43,7 @@ class VisualBibleV2Screen extends ConsumerStatefulWidget {
     this.legacyData,
     this.onExportPdf,
     this.onOpenSettings,
+    this.onSwitchToClassic,
   });
 
   @override
@@ -240,6 +244,12 @@ class _VisualBibleV2ScreenState extends ConsumerState<VisualBibleV2Screen> {
                 const SizedBox(width: 12),
                 Text(_saveStatus, style: AppTypography.caption(palette)),
                 const Spacer(),
+                if (widget.onSwitchToClassic != null)
+                  TextButton.icon(
+                    onPressed: widget.onSwitchToClassic,
+                    icon: const Icon(Icons.undo, size: 16),
+                    label: const Text('Modo clásico'),
+                  ),
                 TextButton(
                   onPressed: () => _openTemplateLibrary(examplesMode: false),
                   child: const Text('Plantillas'),
