@@ -22,6 +22,31 @@ String? _lensNotesJson(CatalogLensEntry e) {
 }
 
 /// Importa el catálogo embebido o desde assets JSON.
+/// Borra del catálogo las ópticas oficiales retiradas.
+///
+/// No toca las custom ni las que algún proyecto tiene asignadas o como
+/// lente principal de su biblia. Devuelve cuántas se borraron.
+Future<int> retireCatalogLenses(AppDatabase db, List<String> externalIds) async {
+  var removed = 0;
+  for (final externalId in externalIds) {
+    final lens = await db.getLensByExternalId(externalId);
+    if (lens == null || lens.isCustom) continue;
+    final assigned = await (db.select(db.projectEquipment)
+          ..where(
+            (e) =>
+                e.equipmentType.equals('lens') & e.equipmentId.equals(lens.id),
+          ))
+        .get();
+    final primary = await (db.select(db.visualBibles)
+          ..where((b) => b.primaryLensId.equals(lens.id)))
+        .get();
+    if (assigned.isNotEmpty || primary.isNotEmpty) continue;
+    await db.deleteLens(lens.id);
+    removed++;
+  }
+  return removed;
+}
+
 Future<void> importEmbeddedCatalog(
   AppDatabase db, {
   bool force = false,
@@ -53,6 +78,16 @@ Future<void> importEmbeddedCatalog(
   await _upsertCameras(db, cameras);
   await _upsertLenses(db, lenses);
   await upsertCatalogLights(db, lights);
+  try {
+    final retired = jsonDecode(
+      await rootBundle.loadString('assets/catalog/retired.json'),
+    );
+    if (retired is Map && retired['lenses'] is List) {
+      await retireCatalogLenses(db, [
+        for (final id in retired['lenses'] as List) id.toString(),
+      ]);
+    }
+  } catch (_) {}
 
   await db.upsertCatalogSyncMeta(
     CatalogSyncMetaCompanion(

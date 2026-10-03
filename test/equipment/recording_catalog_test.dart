@@ -111,22 +111,43 @@ void main() {
     }
   });
 
-  test('Super Speed: círculo típico y peor caso, medidos por terceros', () {
-    for (final (id, typical, worst) in [
-      ('zeiss_super_speed_mk2_18', 33.0, 32.0),
-      ('zeiss_super_speed_mk1_25', 37.0, 36.0),
-      ('zeiss_super_speed_mk1_35', 37.0, 36.0),
-      ('zeiss_super_speed_mk1_50', 41.0, 40.0),
-      ('zeiss_super_speed_mk2_85', 60.0, 54.0),
+  test('set NAPALM: cinco focales T1.3 con círculo típico y peor caso', () {
+    final napalm = lenses
+        .where((l) => l.externalId.startsWith('zeiss_super_speed_napalm_'))
+        .toList();
+    expect(napalm.map((l) => l.focalLength), [18, 25, 35, 50, 85]);
+    expect(napalm.map((l) => l.series).toSet(), {'Super Speed MKII (NAPALM)'});
+    for (final (focal, typical, worst) in [
+      (18, 33.0, 32.0),
+      (25, 37.0, 36.0),
+      (35, 37.0, 36.0),
+      (50, 41.0, 40.0),
+      (85, 60.0, 54.0),
     ]) {
-      final lens = lenses.singleWhere((l) => l.externalId == id);
-      expect(lens.imageCircleMm, typical, reason: id);
-      expect(lens.specs?['imageCircleWorstMm'], worst, reason: id);
+      final lens = napalm.singleWhere((l) => l.focalLength == focal);
+      expect(lens.imageCircleMm, typical, reason: '$focal mm');
+      expect(lens.specs?['imageCircleWorstMm'], worst, reason: '$focal mm');
       expect(lens.minTStop, 1.3);
       expect(lens.isAnamorphic, isFalse);
       expect(lens.squeezeRatio, isNull);
       expect(lens.provenance!.status, CatalogDataStatus.observado);
       expect(lens.provenance!.status.usableInCalculations, isTrue);
+    }
+  });
+
+  test('todas las Super Speed tienen su apertura real', () {
+    final superSpeeds = lenses.where(
+      (l) => l.model.toLowerCase().contains('super speed'),
+    );
+    expect(superSpeeds, isNotEmpty);
+    for (final lens in superSpeeds) {
+      final expected =
+          lens.model.contains('MKI') && !lens.model.contains('MKII')
+          ? 1.4
+          : 1.3;
+      expect(lens.minTStop, expected, reason: lens.externalId);
+      // La familia heredada tenía focales que no existen en Super Speed.
+      expect([18, 25, 35, 50, 65, 85], contains(lens.focalLength));
     }
   });
 }

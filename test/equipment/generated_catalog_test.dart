@@ -32,7 +32,7 @@ void main() {
 
   test('todas las fichas se leen, con identidad única y estado', () {
     expect(cameras.length, greaterThanOrEqualTo(72));
-    expect(lenses.length, greaterThanOrEqualTo(440));
+    expect(lenses.length, greaterThanOrEqualTo(430));
     expect(lights.length, greaterThanOrEqualTo(100));
     for (final ids in [
       cameras.map((c) => c.externalId),
@@ -77,8 +77,7 @@ void main() {
     }
   });
 
-  test('Signature Prime: círculo contrastado y ficha por focal del master',
-      () {
+  test('Signature Prime: círculo contrastado y ficha por focal del master', () {
     final sig47 = lens('arri_signature_47');
     expect(sig47.imageCircleMm, 46.3);
     expect(sig47.projectionType, 'ESFÉRICA');
@@ -109,8 +108,7 @@ void main() {
       addTearDown(db.close);
     });
 
-    test('el catálogo generado guarda estado, fuente y ficha óptica',
-        () async {
+    test('el catálogo generado guarda estado, fuente y ficha óptica', () async {
       await upsertCatalogLenses(db, lenses);
       final row = (await db.getLensByExternalId('arri_signature_47'))!;
       expect(row.imageCircleMm, 46.3);
@@ -126,31 +124,67 @@ void main() {
       expect(provenance.verifiedFields, contains('image_circle_mm'));
     });
 
-    test('reemplazar limpia un círculo inferido; fusionar no pisa con vacíos',
-        () async {
-      const id = 'prueba_lente';
-      CatalogLensEntry entry({double? circle, String? mount}) =>
-          CatalogLensEntry(
-            externalId: id,
-            brand: 'Prueba',
-            model: 'Lente 50mm',
-            focalLength: 50,
-            minTStop: 2,
-            formatCoverage: 'S35',
-            imageCircleMm: circle,
-            mountType: mount,
+    test('retirar borra la óptica oficial, salvo custom o asignada', () async {
+      CatalogLensEntry entry(String id) => CatalogLensEntry(
+        externalId: id,
+        brand: 'Prueba',
+        model: id,
+        focalLength: 50,
+        minTStop: 2,
+        formatCoverage: 'S35',
+      );
+      await upsertCatalogLenses(db, [entry('libre'), entry('asignada')]);
+      final projectId = await db.insertProject(
+        ProjectsCompanion.insert(name: 'Retiro'),
+      );
+      final assigned = (await db.getLensByExternalId('asignada'))!;
+      await db
+          .into(db.projectEquipment)
+          .insert(
+            ProjectEquipmentCompanion.insert(
+              projectId: projectId,
+              equipmentType: 'lens',
+              equipmentId: assigned.id,
+            ),
           );
 
-      await upsertCatalogLenses(db, [entry(circle: 31.2, mount: 'PL')]);
-      await upsertCatalogLenses(db, [entry()], merge: true);
-      var row = (await db.getLensByExternalId(id))!;
-      expect(row.imageCircleMm, 31.2);
-      expect(row.mountType, 'PL');
-
-      await upsertCatalogLenses(db, [entry(mount: 'LPL')]);
-      row = (await db.getLensByExternalId(id))!;
-      expect(row.imageCircleMm, isNull);
-      expect(row.mountType, 'LPL');
+      final removed = await retireCatalogLenses(db, [
+        'libre',
+        'asignada',
+        'no_existe',
+      ]);
+      expect(removed, 1);
+      expect(await db.getLensByExternalId('libre'), isNull);
+      expect(await db.getLensByExternalId('asignada'), isNotNull);
     });
+
+    test(
+      'reemplazar limpia un círculo inferido; fusionar no pisa con vacíos',
+      () async {
+        const id = 'prueba_lente';
+        CatalogLensEntry entry({double? circle, String? mount}) =>
+            CatalogLensEntry(
+              externalId: id,
+              brand: 'Prueba',
+              model: 'Lente 50mm',
+              focalLength: 50,
+              minTStop: 2,
+              formatCoverage: 'S35',
+              imageCircleMm: circle,
+              mountType: mount,
+            );
+
+        await upsertCatalogLenses(db, [entry(circle: 31.2, mount: 'PL')]);
+        await upsertCatalogLenses(db, [entry()], merge: true);
+        var row = (await db.getLensByExternalId(id))!;
+        expect(row.imageCircleMm, 31.2);
+        expect(row.mountType, 'PL');
+
+        await upsertCatalogLenses(db, [entry(mount: 'LPL')]);
+        row = (await db.getLensByExternalId(id))!;
+        expect(row.imageCircleMm, isNull);
+        expect(row.mountType, 'LPL');
+      },
+    );
   });
 }

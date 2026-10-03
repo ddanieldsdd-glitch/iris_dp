@@ -2,14 +2,14 @@
 
 Generado por `tools/build_catalog.py`. No editar a mano.
 
-Versión del catálogo: 8. Modos de sensor en total: 675.
+Versión del catálogo: 9. Modos de sensor en total: 675.
 
 Grabación: `arri_alexa_sxt` con 6 medios y 41 formatos.
 
 ## Resumen
 
 - Cámaras: 75 (5 nuevas respecto a la base). Modos leídos de la lista: 59. Modos confirmados por el master: 5. Modos del flujo v2.0: 72.
-- Ópticas: 446 (62 nuevas de la lista). Con círculo de imagen publicado: 71 (48 de la lista; el resto, del master y del flujo v2.0). Círculos inferidos descartados de la base: 382.
+- Ópticas: 431 (62 nuevas de la lista). Con círculo de imagen publicado: 71 (48 de la lista; el resto, del master y del flujo v2.0). Círculos inferidos descartados de la base: 382.
 - Squeeze descartado en 56 ópticas esféricas (VAL-002). 59 anamórficas no traen squeeze en la lista; conservan el de la base, sin verificar. Fichas por focal del master: 16. Familias del master aplicadas: 2. 35 ópticas marcadas `es_custom` en la lista no entran en el catálogo oficial.
 - Luces: 103 (13 nuevas de la lista).
 
@@ -18,7 +18,7 @@ Grabación: `arri_alexa_sxt` con 6 medios y 41 formatos.
 | Tipo | Fichas | Aptas para cálculos | Por estado |
 |---|---|---|---|
 | Cámaras | 75 | 11 | PENDIENTE 63, CONFIRMADO 10, CONFLICTO 1, SECUNDARIO 1 |
-| Ópticas | 446 | 105 | PENDIENTE 341, SECUNDARIO 62, CONTRASTADO 24, CONFIRMADO 14, OBSERVADO 5 |
+| Ópticas | 431 | 105 | PENDIENTE 326, SECUNDARIO 62, CONTRASTADO 24, CONFIRMADO 14, OBSERVADO 5 |
 | Luces | 103 | 1 | PENDIENTE 102, CONFIRMADO 1 |
 
 ## Incidencias
@@ -55,4 +55,5 @@ Grabación: `arri_alexa_sxt` con 6 medios y 41 formatos.
 - Master: `Signature Prime` aplicado a 18 ópticas (image_circle_mm).
 - Master: `Master Anamorphic` aplicado a 6 ópticas (squeeze).
 - Master: `Anamorphic Ultra Wide Zoom` está en estado PARTIAL y no se aplica.
+- Retiradas 18 ópticas heredadas: Familia heredada con datos erróneos (T2.8 y focales 16/20/24 mm que no existen en Super Speed). La sustituyen «Super Speed MKI» y «Super Speed MKII/III».
 - Flujo v2.0: 5 ópticas ZEISS Super Speed con círculo de imagen medido (típico y peor caso).

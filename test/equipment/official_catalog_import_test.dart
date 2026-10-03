@@ -15,17 +15,11 @@ void main() {
       OfficialCatalogJsonKind.cameras,
     );
     expect(
-      classifyOfficialCatalogJson(
-        fileName: 'lenses_v1_7.json',
-        jsonStr: '[]',
-      ),
+      classifyOfficialCatalogJson(fileName: 'lenses_v1_7.json', jsonStr: '[]'),
       OfficialCatalogJsonKind.lenses,
     );
     expect(
-      classifyOfficialCatalogJson(
-        fileName: 'lights_v1_7.json',
-        jsonStr: '[]',
-      ),
+      classifyOfficialCatalogJson(fileName: 'lights_v1_7.json', jsonStr: '[]'),
       OfficialCatalogJsonKind.lights,
     );
     expect(
@@ -51,28 +45,43 @@ void main() {
     );
   });
 
-  test('importOfficialCatalogJsonFiles importa packs v1.7 de docs/catalog', () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
+  test(
+    'importOfficialCatalogJsonFiles importa packs v1.7 de docs/catalog',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
 
-    final cameras = File('docs/catalog/cameras_modos_v1_7.json');
-    final lenses = File('docs/catalog/lenses_v1_7.json');
-    final lights = File('docs/catalog/lights_v1_7.json');
-    expect(cameras.existsSync(), isTrue);
-    expect(lenses.existsSync(), isTrue);
-    expect(lights.existsSync(), isTrue);
+      final cameras = File('docs/catalog/cameras_modos_v1_7.json');
+      final lenses = File('docs/catalog/lenses_v1_7.json');
+      final lights = File('docs/catalog/lights_v1_7.json');
+      expect(cameras.existsSync(), isTrue);
+      expect(lenses.existsSync(), isTrue);
+      expect(lights.existsSync(), isTrue);
 
-    final summary = await importOfficialCatalogJsonFiles(db, [
-      (name: cameras.uri.pathSegments.last, content: cameras.readAsStringSync()),
-      (name: lenses.uri.pathSegments.last, content: lenses.readAsStringSync()),
-      (name: lights.uri.pathSegments.last, content: lights.readAsStringSync()),
-    ]);
+      final summary = await importOfficialCatalogJsonFiles(db, [
+        (
+          name: cameras.uri.pathSegments.last,
+          content: cameras.readAsStringSync(),
+        ),
+        (
+          name: lenses.uri.pathSegments.last,
+          content: lenses.readAsStringSync(),
+        ),
+        (
+          name: lights.uri.pathSegments.last,
+          content: lights.readAsStringSync(),
+        ),
+      ]);
 
-    expect(summary.ok, isTrue);
-    expect(summary.camerasUpserted, greaterThan(0));
-    expect(summary.lensesUpserted, greaterThan(0));
-    expect(summary.lightsUpserted, greaterThan(0));
-    expect(summary.modesParsed, greaterThan(0));
-    expect(summary.importedKinds, containsAll(['cameras', 'lenses', 'lights']));
-  });
+      expect(summary.ok, isTrue);
+      expect(summary.camerasUpserted, greaterThan(0));
+      expect(summary.lensesUpserted, greaterThan(0));
+      expect(summary.lightsUpserted, greaterThan(0));
+      expect(summary.modesParsed, greaterThan(0));
+      expect(
+        summary.importedKinds,
+        containsAll(['cameras', 'lenses', 'lights']),
+      );
+    },
+  );
 }
