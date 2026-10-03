@@ -101,8 +101,7 @@ class VisualBibleRepository {
         for (final model in moodboardModels)
           model.copyWith(meta: moodboardMeta[model.id] ?? model.meta),
       ],
-      narrativeCards:
-          narrativeRows.map(NarrativeCardModel.fromRow).toList(),
+      narrativeCards: narrativeRows.map(NarrativeCardModel.fromRow).toList(),
       sectionContentJsonById: {
         for (final row in sectionRows) row.id: row.contentJson,
       },
