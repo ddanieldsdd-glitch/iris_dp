@@ -1,14 +1,16 @@
 # Biblia v2 y compositor — guía rápida
 
+> **2026-10-03:** V2 está congelado y el compositor de export se retira. Plan vigente: `docs/PLAN_ACCION.md`. Este documento queda como referencia del código existente.
+
 ## Experiencia por defecto (usuarios)
 
 La app usa el **motor clásico** Group → Section. El motor v2 y el compositor PDF existen como infraestructura paralela; v2 no aparece en la UI pública salvo activación explícita del flag interno.
 
 ## Activar motor v2 (experimental)
 
-1. Abre **Biblia → Configuración**.
-2. Activa **Motor modular v2 (experimental)** (`bible_engine_v2`, default **off**).
-3. Los datos legacy **no se borran**; el documento v2 vive en Drift `visual_bible_documents`.
+Hoy no hay forma de activarlo desde la UI: el switch **Motor modular v2 (experimental)** (`BibleEngineV2ToggleCard`) no está montado en Configuración. La biblia abre V2 solo si `VisualBibles.engineVersion == 'v2'`, y nada en la app promueve una biblia a ese valor.
+
+Los datos legacy **no se borran**; el documento v2 vive en Drift `visual_bible_documents`.
 
 ## Compositor PDF (recomendado para entregas)
 
@@ -23,7 +25,7 @@ Archivos clave: `lib/features/visual_bible/export/`.
 
 ## Desactivar v2
 
-- Switch en Configuración o **Modo clásico** en la barra del editor v2.
+- No aplica mientras V2 no sea alcanzable desde la UI.
 - Snapshots y documento v2 quedan en Drift para reactivar.
 
 ## Árbol `lib/features/visual_bible/v2/`
@@ -53,7 +55,7 @@ Persistencia: `ProjectAnnotationDocuments` (sync bundle v4).
 
 - **Lightbox:** catálogo cinematográfico editable por proyecto + marcadores «Aparece en la biblia».
 - **Servicio central:** `MoodboardCatalogService` (catálogo + placement).
-- **Meta por imagen:** `MoodboardReferenceMetaStore` (SharedPreferences).
+- **Meta por imagen:** `MoodboardReferenceMetaStore` (Drift `MoodboardImages.metaJson`).
 
 ## Política
 

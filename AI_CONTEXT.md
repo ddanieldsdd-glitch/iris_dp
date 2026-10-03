@@ -13,7 +13,7 @@ UI (Screens/widgets en `lib/features/*`)
 → State (Riverpod Notifiers/Providers; `setState` OK para UI pura)
 → Services (`lib/core/sync`, `lib/core/cloud`, `lib/core/storage`, `lib/core/update`, feature services)
 → Repositories (parcial: VB, shoot_documents, floor_plan; muchas screens aún tocan DB)
-→ Local DB / Cache (`AppDatabase` Drift schema **38**, SharedPreferences estilos/compositor)
+→ Local DB / Cache (`AppDatabase` Drift schema **40**, SharedPreferences estilos/compositor)
 → Supabase (`cloud_projects`, snapshots, media metadata) + Cloudinary (bytes)
 
 Reglas oficiales: `ARCHITECTURE.md` — `core` ↛ `features` (aún hay excepción en `app_database.dart`); features ↛ features salvo dominio justificado; UI ↛ Drift/Supabase directo (objetivo, no realidad total). Prioridad: estabilidad → mantenibilidad → features → UI.
@@ -98,7 +98,7 @@ PARTIAL:
 
 * Migración arquitectura (repos pocos; screens→DB aún frecuentes)
 * `core`↛`features` (violación residual DB↔v2 codec)
-* Bible engine v2 (código vivo; flag UI off)
+* Bible engine v2 (congelado desde 2026-10-03; sin entrada en la UI; ver `docs/PLAN_ACCION.md`)
 * Dual-write legacy (presets aún escriben columnas Format)
 * Unificación modos sensor Format ↔ Optics Lab PHFX
 * Import Excel catálogo v1.1 (bloqueado a decisiones)

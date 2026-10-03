@@ -3,6 +3,8 @@
 Fecha: 2026-08-08 (actualizado tras compositor PDF y cierre de auditoría)  
 Principio: **no destructivo** — legacy vivo; v2 y compositor como capas paralelas.
 
+> **2026-10-03:** el motor clásico es la referencia del producto. V2 queda congelado y el compositor de export se retira (ítem 1.1). Plan vigente: `docs/PLAN_ACCION.md`.
+
 ## 1. Jerarquía operativa
 
 ```
@@ -47,7 +49,7 @@ La Biblia fuente **no se altera** al montar ni exportar; solo la entrega.
 |-------|-----|
 | `MoodboardAssociation` | Reglas visibilidad por `assignedSections` |
 | `MoodboardCatalogService` | Catálogo editable por proyecto + sugerencia de pantallas |
-| `MoodboardReferenceMetaStore` | Meta cinematográfica por imagen (SharedPreferences) |
+| `MoodboardReferenceMetaStore` | Meta cinematográfica por imagen (Drift `MoodboardImages.metaJson`, schema 39; migración lazy desde SharedPreferences). No viaja en el bundle v4 |
 | `MoodboardSectionAssignField` | Marcadores de pantalla (chips) |
 | Lightbox `_SidePanel` | Catálogo + «Aparece en la biblia» + sugerir desde catálogo |
 | `BibleReferencesPanel` | Paste/drop en sección → sync `assignedSections` |
@@ -88,7 +90,7 @@ Tests: `test/visual_bible_sync_test.dart`.
 - **Onboarding biblia vacía:** `BibleStartScreen`, `structureInitialized`, bibliotecas pantallas/plantillas
 - **Personalizar Biblia:** textos unificados sidebar / quick adjust / master config
 - **Responsive iPad:** sidebar, AppBar, compositor
-- **v2 oculto** en UI pública; flag `bible_engine_v2` default off
+- **v2 oculto** en UI pública. El motor lo decide la columna Drift `VisualBibles.engineVersion`; el flag `bible_engine_v2` solo lo lee `BibleV2Host`, que no está montado en ninguna pantalla
 
 ## 9. Tests relevantes
 
