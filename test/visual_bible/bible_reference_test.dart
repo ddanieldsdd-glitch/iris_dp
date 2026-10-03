@@ -24,12 +24,13 @@ void main() {
       why: 'El decorado oprime al personaje',
       purpose: 'Que la ciudad sea un antagonista',
       scene: 'La llegada al piso',
-      imageId: 12,
+      imageIds: [12, 7],
     );
     final copy = BibleReference.fromJson(original.toJson());
     expect(copy.kind, 'Puesta en escena');
     expect(copy.purpose, 'Que la ciudad sea un antagonista');
-    expect(copy.imageId, 12);
+    expect(copy.imageIds, [12, 7]);
+    expect(copy.imageId, 12, reason: 'la portada es la primera');
     expect(copy.legacyPairing, isFalse);
   });
 
@@ -37,9 +38,9 @@ void main() {
       () {
     final references = [
       BibleReference.fromJson({'title': 'Antigua'}),
-      const BibleReference(title: 'Con imagen', imageId: 30),
+      const BibleReference(title: 'Con imagen', imageIds: [30]),
       const BibleReference(title: 'Solo emoción'),
-      const BibleReference(title: 'Imagen borrada', imageId: 99),
+      const BibleReference(title: 'Imagen borrada', imageIds: [99]),
     ];
     expect(BibleReference.resolveImages(references, [10, 20, 30]), [
       10,
@@ -60,6 +61,15 @@ void main() {
     expect(reference.title, 'Blade Runner 2049');
     expect(reference.why, 'Melancolía brutalista');
     expect(reference.purpose, 'Aislamiento del sujeto');
+  });
+
+  test('una ficha guardada con una sola imagen se lee como lista', () {
+    final reference = BibleReference.fromJson({'title': 'Una', 'imageId': 5});
+    expect(reference.imageIds, [5]);
+    expect(reference.legacyPairing, isFalse);
+    // Y al guardar sigue llevando la portada para versiones anteriores.
+    expect(reference.toJson()['imageId'], 5);
+    expect(reference.toJson()['imageIds'], [5]);
   });
 
   test('una ficha sin contenido se considera vacía', () {
