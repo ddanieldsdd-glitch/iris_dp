@@ -49,7 +49,7 @@ Principio: la lista de puntos de cada sección (`BibleSectionDefinitions.content
 - [x] **1.2 Base compartida de pantalla.** Panel de cristal y cabecera de sección únicos; una vista genérica por tipo de punto (texto, narrativa, referencias, imagen, bloques, y los nuevos `specs` y `list`) en lugar del aviso «módulo personalizado sin vista dedicada».
 - [x] **1.3 Ampliable por el usuario.** Al añadir un punto se elige tipo, nombre y posición; ocultar sin borrar; restaurar la sección; acceso «Añadir punto» al final de cada sección.
 - [x] **1.4 Base compartida de PDF y contrato de orden.** `bible_pdf_kit.dart` con un componente por tipo de punto. El PDF sigue el orden de secciones de la biblia, incluye los puntos propios del usuario y las pantallas personalizadas. Test de paridad en `test/visual_bible_export/bible_pdf_parity_test.dart`.
-  - [ ] Pendiente: embeber Inter y JetBrains Mono en el PDF (hoy Noto Sans). Hay que añadir los TTF a `assets/fonts/`.
+  - [x] Inter embebida en el PDF, con Noto Sans de respaldo para los glifos que le falten. JetBrains Mono no se usa.
   - [ ] Pendiente: los puntos propios salen al final de su sección; intercalarlos con los puntos dedicados se hace en cada sección de 1.5.
 - **1.5 Sección por sección** (análisis acordado → pantalla → PDF → revisión lado a lado):
   - [x] Dirección — puntos: intención narrativa, tono y atmósfera, estrategia visual, intención por acto, referencias, transiciones. Key Frame pasa a opcional.
