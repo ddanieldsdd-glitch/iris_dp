@@ -9,9 +9,12 @@ import '../../core/utils/pdf_export_fonts.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import '../../shared/visual_bible/camera_pilot_resolve.dart';
 import '../../shared/visual_bible/format_pilot_resolve.dart';
+import '../../shared/visual_bible/bible_section_fields.dart';
 import 'export/bible_section_export_reader.dart';
+import 'export/pdf/bible_pdf_kit.dart';
 import 'export/pdf/moodboard_pdf_tiles.dart';
 import 'moodboard_export_grouper.dart';
+import 'v2/migration/freeform_v2_blocks_codec.dart';
 import 'moodboard_export_layout.dart';
 import 'visual_bible_model.dart';
 
@@ -41,8 +44,10 @@ class VisualBiblePdfService {
     String? primaryCameraLabel,
     MoodboardExportLayout moodboardLayout = MoodboardExportLayout.defaults,
     bool includeAllMoodboardImages = false,
+    List<BibleExportSectionRef> sectionOrder = const [],
   }) async {
     final doc = await buildDocument(
+      sectionOrder: sectionOrder,
       mode: mode,
       projectName: projectName,
       director: director,
@@ -85,11 +90,8 @@ class VisualBiblePdfService {
   }
 
   static List<pw.Widget> _moodboardWrapTiles(
-    List<({
-      pw.MemoryImage image,
-      String? caption,
-      List<String> details,
-    })> cells, {
+    List<({pw.MemoryImage image, String? caption, List<String> details})>
+    cells, {
     required pw.Font font,
     double? tileWidth = 175,
     double imageHeight = 120,
@@ -112,22 +114,14 @@ class VisualBiblePdfService {
   }
 
   static Future<
-      List<
-          ({
-            pw.MemoryImage image,
-            String? caption,
-            List<String> details,
-          })>> _loadMoodboardCells(
+    List<({pw.MemoryImage image, String? caption, List<String> details})>
+  >
+  _loadMoodboardCells(
     List<MoodboardImageModel> images,
     MoodboardExportLayout layout,
   ) async {
     final cells =
-        <
-            ({
-              pw.MemoryImage image,
-              String? caption,
-              List<String> details,
-            })>[];
+        <({pw.MemoryImage image, String? caption, List<String> details})>[];
     for (final img in images) {
       final bytes = await PdfSafeImage.loadFromPathMaxEdge(img.imagePath);
       if (bytes == null) continue;
@@ -162,27 +156,19 @@ class VisualBiblePdfService {
       : BibleSectionId.label(sectionKey);
 
   static List<
-      MapEntry<
-          String,
-          List<({
-            MoodboardImageModel img,
-            pw.MemoryImage? image,
-          })>>> orderedPitchRefsEntries(
-    Map<
-        String,
-        List<({
-          MoodboardImageModel img,
-          pw.MemoryImage? image,
-        })>> refsBySection,
+    MapEntry<String, List<({MoodboardImageModel img, pw.MemoryImage? image})>>
+  >
+  orderedPitchRefsEntries(
+    Map<String, List<({MoodboardImageModel img, pw.MemoryImage? image})>>
+    refsBySection,
   ) {
     final ordered =
         <
-            MapEntry<
-                String,
-                List<({
-                  MoodboardImageModel img,
-                  pw.MemoryImage? image,
-                })>>>[];
+          MapEntry<
+            String,
+            List<({MoodboardImageModel img, pw.MemoryImage? image})>
+          >
+        >[];
     for (final sid in BibleSectionId.all) {
       final items = refsBySection[sid];
       if (items == null || items.isEmpty) continue;
@@ -221,16 +207,10 @@ class VisualBiblePdfService {
   }
 
   static List<
-      MapEntry<
-          String,
-          List<({
-            MoodboardImageModel img,
-            pw.MemoryImage? image,
-          })>>> orderedPitchRefsLocationGroups(
-    List<({
-      MoodboardImageModel img,
-      pw.MemoryImage? image,
-    })> items,
+    MapEntry<String, List<({MoodboardImageModel img, pw.MemoryImage? image})>>
+  >
+  orderedPitchRefsLocationGroups(
+    List<({MoodboardImageModel img, pw.MemoryImage? image})> items,
   ) {
     final groups =
         <String, List<({MoodboardImageModel img, pw.MemoryImage? image})>>{};
@@ -244,9 +224,7 @@ class VisualBiblePdfService {
       if (b == pitchRefsLocationUnassignedKey) return -1;
       return a.compareTo(b);
     });
-    return [
-      for (final key in keys) MapEntry(key, groups[key]!),
-    ];
+    return [for (final key in keys) MapEntry(key, groups[key]!)];
   }
 
   static Future<pw.Document> buildDocument({
@@ -264,20 +242,27 @@ class VisualBiblePdfService {
     String? primaryCameraLabel,
     MoodboardExportLayout moodboardLayout = MoodboardExportLayout.defaults,
     bool includeAllMoodboardImages = false,
+    List<BibleExportSectionRef> sectionOrder = const [],
   }) async {
     final isPitch = mode == VisualBibleExportMode.pitch;
     final isTech = mode == VisualBibleExportMode.techScout;
     final sections = includedSections;
-    final boardLayout =
-        (!isPitch && !isTech) || includeAllMoodboardImages
-            ? moodboardLayout.copyWith(maxImagesFlat: 0, maxImagesPerFacet: 0)
-            : moodboardLayout;
+    final boardLayout = (!isPitch && !isTech) || includeAllMoodboardImages
+        ? moodboardLayout.copyWith(maxImagesFlat: 0, maxImagesPerFacet: 0)
+        : moodboardLayout;
     final fonts = await PdfExportFonts.load();
     final theme = PdfExportFonts.theme(
       regular: fonts.regular,
       bold: fonts.bold,
     );
     final doc = pw.Document();
+    final kit = BiblePdfKit(regular: fonts.regular, bold: fonts.bold);
+
+    // Las páginas se guardan por sección y se vuelcan al final en el orden
+    // de la biblia.
+    final pagesBySection = <String, List<pw.Page>>{};
+    void addSection(String sectionId, pw.Page page) =>
+        (pagesBySection[sectionId] ??= []).add(page);
 
     final coverLabel = isPitch
         ? 'PITCH DECK — BIBLIA DE FOTOGRAFÍA'
@@ -346,7 +331,8 @@ class VisualBiblePdfService {
               BibleSectionId.direction,
               sectionContentJsonById,
             ))) {
-      doc.addPage(
+      addSection(
+        BibleSectionId.direction,
         pw.Page(
           theme: theme,
           pageFormat: PdfPageFormat.a4,
@@ -383,8 +369,12 @@ class VisualBiblePdfService {
     if (!isTech &&
         _sectionAllowed(sections, BibleSectionId.concept) &&
         (data.visualConcept?.trim().isNotEmpty == true ||
-            _hasCustomContent(BibleSectionId.concept, sectionContentJsonById))) {
-      doc.addPage(
+            _hasCustomContent(
+              BibleSectionId.concept,
+              sectionContentJsonById,
+            ))) {
+      addSection(
+        BibleSectionId.concept,
         pw.Page(
           theme: theme,
           pageFormat: PdfPageFormat.a4,
@@ -433,7 +423,8 @@ class VisualBiblePdfService {
               BibleSectionId.colorImage,
               sectionContentJsonById,
             ))) {
-      doc.addPage(
+      addSection(
+        BibleSectionId.colorImage,
         pw.MultiPage(
           theme: theme,
           pageFormat: PdfPageFormat.a4,
@@ -506,8 +497,12 @@ class VisualBiblePdfService {
         _sectionAllowed(sections, BibleSectionId.lighting) &&
         (data.lightingPhilosophy?.isNotEmpty == true ||
             lightingSetups.isNotEmpty ||
-            _hasCustomContent(BibleSectionId.lighting, sectionContentJsonById))) {
-      doc.addPage(
+            _hasCustomContent(
+              BibleSectionId.lighting,
+              sectionContentJsonById,
+            ))) {
+      addSection(
+        BibleSectionId.lighting,
         pw.Page(
           theme: theme,
           pageFormat: PdfPageFormat.a4,
@@ -592,7 +587,10 @@ class VisualBiblePdfService {
             data.shadowBehavior != null ||
             data.nativeIso != null ||
             data.recordingFormat != null ||
-            _hasCustomContent(BibleSectionId.exposure, sectionContentJsonById) ||
+            _hasCustomContent(
+              BibleSectionId.exposure,
+              sectionContentJsonById,
+            ) ||
             MoodboardExportGrouper.imagesForSection(
               moodboard,
               BibleSectionId.exposure,
@@ -604,7 +602,8 @@ class VisualBiblePdfService {
         ),
         boardLayout,
       );
-      doc.addPage(
+      addSection(
+        BibleSectionId.exposure,
         pw.Page(
           theme: theme,
           pageFormat: PdfPageFormat.a4,
@@ -654,14 +653,19 @@ class VisualBiblePdfService {
 
     if (!isPitch && _sectionAllowed(sections, BibleSectionId.camera)) {
       final cameraBlob = CameraPilotResolve.parseBlob(
-        sectionContentJsonById[BibleSectionId.camera],
+        BibleSectionExportReader.withoutUserPoints(
+          sectionContentJsonById[BibleSectionId.camera],
+          BibleSectionId.camera,
+        ),
       );
       if (CameraPilotResolve.hasExportablePilotContent(
-        data,
-        cameraBlob,
-        primaryCameraLabel: primaryCameraLabel,
-      )) {
-        doc.addPage(
+            data,
+            cameraBlob,
+            primaryCameraLabel: primaryCameraLabel,
+          ) ||
+          _hasUserPoints(BibleSectionId.camera, sectionContentJsonById)) {
+        addSection(
+          BibleSectionId.camera,
           pw.Page(
             theme: theme,
             pageFormat: PdfPageFormat.a4,
@@ -676,6 +680,10 @@ class VisualBiblePdfService {
                   primaryCameraLabel: primaryCameraLabel,
                 ),
                 ...CameraPilotResolve.customRowsForPdf(cameraBlob),
+                ..._userPointRows(
+                  BibleSectionId.camera,
+                  sectionContentJsonById,
+                ),
               ], fonts),
             ),
           ),
@@ -685,10 +693,7 @@ class VisualBiblePdfService {
 
     if (!isPitch && _sectionAllowed(sections, BibleSectionId.location)) {
       final locationStills = moodboard.where(_isLocationStill).toList();
-      if (_hasCustomContent(
-            BibleSectionId.location,
-            sectionContentJsonById,
-          ) ||
+      if (_hasCustomContent(BibleSectionId.location, sectionContentJsonById) ||
           locationStills.isNotEmpty) {
         final locationCells = await _loadMoodboardCells(
           locationStills,
@@ -698,7 +703,8 @@ class VisualBiblePdfService {
           sectionContentJsonById[BibleSectionId.location],
           BibleSectionId.location,
         );
-        doc.addPage(
+        addSection(
+          BibleSectionId.location,
           pw.Page(
             theme: theme,
             pageFormat: PdfPageFormat.a4,
@@ -720,10 +726,15 @@ class VisualBiblePdfService {
 
     if (!isPitch && _sectionAllowed(sections, BibleSectionId.format)) {
       final formatBlob = FormatPilotResolve.parseBlob(
-        sectionContentJsonById[BibleSectionId.format],
+        BibleSectionExportReader.withoutUserPoints(
+          sectionContentJsonById[BibleSectionId.format],
+          BibleSectionId.format,
+        ),
       );
-      if (FormatPilotResolve.hasExportablePilotContent(data, formatBlob)) {
-        doc.addPage(
+      if (FormatPilotResolve.hasExportablePilotContent(data, formatBlob) ||
+          _hasUserPoints(BibleSectionId.format, sectionContentJsonById)) {
+        addSection(
+          BibleSectionId.format,
           pw.Page(
             theme: theme,
             pageFormat: PdfPageFormat.a4,
@@ -738,7 +749,10 @@ class VisualBiblePdfService {
                 ),
                 (
                   'Justificación',
-                  FormatPilotResolve.legacyJustificationForPdf(formatBlob, data),
+                  FormatPilotResolve.legacyJustificationForPdf(
+                    formatBlob,
+                    data,
+                  ),
                 ),
                 (
                   'Intención narrativa',
@@ -751,6 +765,10 @@ class VisualBiblePdfService {
                 ),
                 ('Resolución de entrega', data.deliveryResolution),
                 ...FormatPilotResolve.customRowsForPdf(formatBlob),
+                ..._userPointRows(
+                  BibleSectionId.format,
+                  sectionContentJsonById,
+                ),
               ], fonts),
             ),
           ),
@@ -761,12 +779,12 @@ class VisualBiblePdfService {
     if (!isPitch &&
         _sectionAllowed(sections, BibleSectionId.texture) &&
         (_hasAny([
-          data.imageTexture,
-          data.grainLevel,
-          data.diffusionNotes,
-          data.textureNarrativeIntent,
-          data.filtrationNotes,
-        ]) ||
+              data.imageTexture,
+              data.grainLevel,
+              data.diffusionNotes,
+              data.textureNarrativeIntent,
+              data.filtrationNotes,
+            ]) ||
             _hasCustomContent(BibleSectionId.texture, sectionContentJsonById) ||
             MoodboardExportGrouper.imagesForSection(
               moodboard,
@@ -779,7 +797,8 @@ class VisualBiblePdfService {
         ),
         boardLayout,
       );
-      doc.addPage(
+      addSection(
+        BibleSectionId.texture,
         pw.Page(
           theme: theme,
           pageFormat: PdfPageFormat.a4,
@@ -812,14 +831,18 @@ class VisualBiblePdfService {
     if (!isPitch &&
         _sectionAllowed(sections, BibleSectionId.workflow) &&
         (_hasAny([
-          data.workflowPipeline,
-          data.codec,
-          data.deliveryColorSpace,
-          data.resolutionNotes,
-          data.frameRateNotes,
-        ]) ||
-            _hasCustomContent(BibleSectionId.workflow, sectionContentJsonById))) {
-      doc.addPage(
+              data.workflowPipeline,
+              data.codec,
+              data.deliveryColorSpace,
+              data.resolutionNotes,
+              data.frameRateNotes,
+            ]) ||
+            _hasCustomContent(
+              BibleSectionId.workflow,
+              sectionContentJsonById,
+            ))) {
+      addSection(
+        BibleSectionId.workflow,
         pw.Page(
           theme: theme,
           pageFormat: PdfPageFormat.a4,
@@ -848,8 +871,9 @@ class VisualBiblePdfService {
         _sectionAllowed(sections, BibleSectionId.moodboard) &&
         moodboard.isNotEmpty) {
       final groups = MoodboardExportGrouper.group(moodboard, boardLayout);
-      final detailLimit =
-          boardLayout.density == MoodboardExportDensity.rich ? 4 : 2;
+      final detailLimit = boardLayout.density == MoodboardExportDensity.rich
+          ? 4
+          : 2;
       final pageChildren = <pw.Widget>[];
 
       if (boardLayout.grouping == MoodboardExportGrouping.flat) {
@@ -904,8 +928,7 @@ class VisualBiblePdfService {
             pw.SizedBox(height: 20),
           ]);
         }
-        if (boardLayout.includeUnclassified &&
-            groups.unclassified.isNotEmpty) {
+        if (boardLayout.includeUnclassified && groups.unclassified.isNotEmpty) {
           final cells = await _loadMoodboardCells(
             groups.unclassified,
             boardLayout,
@@ -931,7 +954,8 @@ class VisualBiblePdfService {
       }
 
       if (pageChildren.isNotEmpty) {
-        doc.addPage(
+        addSection(
+          BibleSectionId.moodboard,
           pw.MultiPage(
             theme: theme,
             pageFormat: PdfPageFormat.a4.landscape,
@@ -944,7 +968,8 @@ class VisualBiblePdfService {
     if (!isPitch &&
         _sectionAllowed(sections, BibleSectionId.cameraTests) &&
         cameraTests.isNotEmpty) {
-      doc.addPage(
+      addSection(
+        BibleSectionId.cameraTests,
         pw.Page(
           theme: theme,
           pageFormat: PdfPageFormat.a4,
@@ -981,12 +1006,13 @@ class VisualBiblePdfService {
         final memory = bytes != null ? pw.MemoryImage(bytes) : null;
         final item = (img: img, image: memory);
         if (assigned.isEmpty) {
-          refsBySection.putIfAbsent(pitchRefsUnclassifiedKey, () => []).add(
-            item,
-          );
+          refsBySection
+              .putIfAbsent(pitchRefsUnclassifiedKey, () => [])
+              .add(item);
           continue;
         }
-        final includeFilteredAsUnclassified = includeAllMoodboardImages &&
+        final includeFilteredAsUnclassified =
+            includeAllMoodboardImages &&
             _sectionAllowed(sections, BibleSectionId.moodboard);
         var addedToAllowedSection = false;
         for (final sid in assigned) {
@@ -999,16 +1025,17 @@ class VisualBiblePdfService {
           addedToAllowedSection = true;
         }
         if (!addedToAllowedSection && includeFilteredAsUnclassified) {
-          refsBySection.putIfAbsent(pitchRefsUnclassifiedKey, () => []).add(
-            item,
-          );
+          refsBySection
+              .putIfAbsent(pitchRefsUnclassifiedKey, () => [])
+              .add(item);
         }
       }
       if (refsBySection.isNotEmpty) {
         final pitchDetailLimit =
             moodboardLayout.density == MoodboardExportDensity.rich ? 4 : 2;
         final orderedRefs = orderedPitchRefsEntries(refsBySection);
-        doc.addPage(
+        addSection(
+          BibleSectionId.moodboard,
           pw.MultiPage(
             theme: theme,
             pageFormat: PdfPageFormat.a4,
@@ -1021,8 +1048,9 @@ class VisualBiblePdfService {
                 ),
                 pw.SizedBox(height: 8),
                 if (entry.key == BibleSectionId.location)
-                  for (final locGroup
-                      in orderedPitchRefsLocationGroups(entry.value)) ...[
+                  for (final locGroup in orderedPitchRefsLocationGroups(
+                    entry.value,
+                  )) ...[
                     pw.Text(
                       pitchRefsLocationGroupLabel(
                         locGroup.key,
@@ -1090,17 +1118,19 @@ class VisualBiblePdfService {
 
     if (!isPitch &&
         _sectionAllowed(sections, BibleSectionId.optics) &&
-        BibleSectionExportReader.hasOpticsExportContent(
-          data.opticsConfigJson,
-          narrativeIntent: data.opticsNarrativeIntent,
-          lensPhilosophy: data.lensPhilosophy,
-        )) {
+        (BibleSectionExportReader.hasOpticsExportContent(
+              data.opticsConfigJson,
+              narrativeIntent: data.opticsNarrativeIntent,
+              lensPhilosophy: data.lensPhilosophy,
+            ) ||
+            _hasUserPoints(BibleSectionId.optics, sectionContentJsonById))) {
       final opticsRows = BibleSectionExportReader.rowsFromOpticsConfigJson(
         data.opticsConfigJson,
         narrativeIntent: data.opticsNarrativeIntent,
         lensPhilosophy: data.lensPhilosophy,
       );
-      doc.addPage(
+      addSection(
+        BibleSectionId.optics,
         pw.Page(
           theme: theme,
           pageFormat: PdfPageFormat.a4,
@@ -1108,16 +1138,124 @@ class VisualBiblePdfService {
             title: 'ÓPTICA',
             fontBold: fonts.bold,
             font: fonts.regular,
-            content: _textFieldsContent(
-              opticsRows.map((row) => (row.label, row.value)).toList(),
-              fonts,
-            ),
+            content: _textFieldsContent([
+              ...opticsRows.map((row) => (row.label, row.value)),
+              ..._userPointRows(BibleSectionId.optics, sectionContentJsonById),
+            ], fonts),
           ),
         ),
       );
     }
 
+    // Pantallas creadas por el usuario. El selector de secciones del export
+    // no las lista, así que salen siempre en el PDF completo.
+    for (final section in sectionOrder) {
+      if (!section.isCustom || isPitch || isTech) continue;
+      final children = await _customSectionContent(
+        section,
+        sectionContentJsonById[section.id],
+        kit,
+      );
+      if (children.isEmpty) continue;
+      addSection(
+        section.id,
+        pw.MultiPage(
+          theme: theme,
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+          build: (_) => [
+            kit.sectionHeader(section.label),
+            pw.SizedBox(height: 24),
+            ...children,
+          ],
+        ),
+      );
+    }
+
+    // Vuelca en el orden de la biblia; lo que no esté en ese orden conserva
+    // el orden histórico al final.
+    for (final id in [
+      ...sectionOrder.map((s) => s.id),
+      ..._defaultSectionOrder,
+    ]) {
+      pagesBySection.remove(id)?.forEach(doc.addPage);
+    }
+    for (final pages in pagesBySection.values) {
+      pages.forEach(doc.addPage);
+    }
+
     return doc;
+  }
+
+  /// Orden del PDF cuando no se pasa el de la biblia.
+  static const _defaultSectionOrder = [
+    BibleSectionId.direction,
+    BibleSectionId.concept,
+    BibleSectionId.colorImage,
+    BibleSectionId.lighting,
+    BibleSectionId.exposure,
+    BibleSectionId.camera,
+    BibleSectionId.location,
+    BibleSectionId.format,
+    BibleSectionId.texture,
+    BibleSectionId.workflow,
+    BibleSectionId.moodboard,
+    BibleSectionId.cameraTests,
+    BibleSectionId.optics,
+  ];
+
+  /// Puntos de una pantalla personalizada, en el orden del usuario.
+  static Future<List<pw.Widget>> _customSectionContent(
+    BibleExportSectionRef section,
+    String? contentJson,
+    BiblePdfKit kit,
+  ) async {
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final out = <pw.Widget>[];
+
+    Future<void> addImages(Iterable<String> paths) async {
+      final images = <pw.MemoryImage>[];
+      for (final path in paths) {
+        final bytes = await PdfSafeImage.loadFromPathMaxEdge(path);
+        if (bytes != null) images.add(pw.MemoryImage(bytes));
+      }
+      if (images.isNotEmpty) out.add(kit.imageRow(images));
+    }
+
+    // Las pantallas nuevas guardan su contenido como bloques modulares.
+    for (final block in FreeformV2BlocksCodec.parseBlocks(contentJson)) {
+      final content = block.content;
+      final title = (content['title'] ?? content['label'] ?? '')
+          .toString()
+          .trim();
+      final body = (content['body'] ?? content['text'] ?? '').toString().trim();
+      if (body.isNotEmpty) out.add(kit.textPoint(title, body));
+      final path = content['imagePath'] ?? content['path'];
+      final list = content['images'] ?? content['items'];
+      await addImages([
+        if (path is String && path.isNotEmpty) path,
+        if (list is List)
+          for (final item in list)
+            if (item is String)
+              item
+            else if (item is Map && item['path'] is String)
+              item['path'] as String,
+      ]);
+    }
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      section.id,
+    )) {
+      final point = kit.point(field, values[field.key]);
+      if (point != null) out.add(point);
+
+      try {
+        final raw = values['${field.key}__images'];
+        final decoded = raw == null ? null : jsonDecode(raw);
+        if (decoded is List) await addImages(decoded.whereType<String>());
+      } catch (_) {}
+    }
+    return out;
   }
 
   static Future<pw.Document> buildFullDocument({
@@ -1429,12 +1567,7 @@ class VisualBiblePdfService {
       values.any((value) => value?.trim().isNotEmpty == true);
 
   static List<pw.Widget> _stillStrip(
-    List<
-        ({
-          pw.MemoryImage image,
-          String? caption,
-          List<String> details,
-        })> cells,
+    List<({pw.MemoryImage image, String? caption, List<String> details})> cells,
     ({pw.Font regular, pw.Font bold}) fonts,
   ) {
     if (cells.isEmpty) return const [];
@@ -1472,11 +1605,9 @@ class VisualBiblePdfService {
   static pw.Widget _locationPageContent({
     required Map<String, dynamic> blob,
     required List<
-        ({
-          pw.MemoryImage image,
-          String? caption,
-          List<String> details,
-        })> cells,
+      ({pw.MemoryImage image, String? caption, List<String> details})
+    >
+    cells,
     required List<MoodboardImageModel> stills,
     required ({pw.Font regular, pw.Font bold}) fonts,
   }) {
@@ -1498,7 +1629,11 @@ class VisualBiblePdfService {
           (label, blob[key].toString().trim()),
     ];
     final hero = cells.isEmpty ? null : cells.first;
-    final rest = cells.length <= 1 ? const <({pw.MemoryImage image, String? caption, List<String> details})>[] : cells.sublist(1);
+    final rest = cells.length <= 1
+        ? const <
+            ({pw.MemoryImage image, String? caption, List<String> details})
+          >[]
+        : cells.sublist(1);
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -1541,10 +1676,7 @@ class VisualBiblePdfService {
                     children: [
                       pw.Text(
                         value,
-                        style: pw.TextStyle(
-                          font: fonts.bold,
-                          fontSize: 11,
-                        ),
+                        style: pw.TextStyle(font: fonts.bold, fontSize: 11),
                       ),
                       pw.Text(
                         label.toUpperCase(),
@@ -1579,29 +1711,47 @@ class VisualBiblePdfService {
     );
   }
 
+  static bool _hasUserPoints(
+    String sectionId,
+    Map<String, String?> sectionContentJsonById,
+  ) => BibleSectionExportReader.userPoints(
+    sectionContentJsonById[sectionId],
+    sectionId,
+  ).isNotEmpty;
+
+  static List<(String, String?)> _userPointRows(
+    String sectionId,
+    Map<String, String?> sectionContentJsonById,
+  ) => [
+    for (final point in BibleSectionExportReader.userPoints(
+      sectionContentJsonById[sectionId],
+      sectionId,
+    ))
+      (point.field.label, BibleSectionExportReader.userPointText(point)),
+  ];
+
   static bool _hasCustomContent(
     String sectionId,
     Map<String, String?> sectionContentJsonById,
-  ) {
-    final custom = BibleSectionExportReader.parseCustomBlob(
-      sectionContentJsonById[sectionId],
-      sectionId,
-    );
-    return BibleSectionExportReader.hasExportableContent(sectionId, custom);
-  }
+  ) =>
+      BibleSectionExportReader.blobRows(
+        sectionContentJsonById[sectionId],
+        sectionId,
+      ).isNotEmpty ||
+      _hasUserPoints(sectionId, sectionContentJsonById);
 
+  /// Filas del blob de la sección seguidas de los puntos del usuario.
   static List<(String, String?)> _customFieldRows(
     String sectionId,
     Map<String, String?> sectionContentJsonById,
-  ) {
-    final custom = BibleSectionExportReader.parseCustomBlob(
+  ) => [
+    for (final row in BibleSectionExportReader.blobRows(
       sectionContentJsonById[sectionId],
       sectionId,
-    );
-    return BibleSectionExportReader.rowsForSection(sectionId, custom)
-        .map((row) => (row.label, row.value))
-        .toList();
-  }
+    ))
+      (row.label, row.value),
+    ..._userPointRows(sectionId, sectionContentJsonById),
+  ];
 
   static pw.Widget _customFieldsWidget(
     String sectionId,
@@ -1609,13 +1759,29 @@ class VisualBiblePdfService {
     ({pw.Font regular, pw.Font bold}) fonts, {
     bool leadingSpacing = true,
   }) {
-    final rows = _customFieldRows(sectionId, sectionContentJsonById);
-    if (rows.isEmpty) return pw.SizedBox();
+    final kit = BiblePdfKit(regular: fonts.regular, bold: fonts.bold);
+    final contentJson = sectionContentJsonById[sectionId];
+    final blobRows = [
+      for (final row in BibleSectionExportReader.blobRows(
+        contentJson,
+        sectionId,
+      ))
+        (row.label, row.value as String?),
+    ];
+    final points = [
+      for (final point in BibleSectionExportReader.userPoints(
+        contentJson,
+        sectionId,
+      ))
+        kit.point(point.field, point.value),
+    ].whereType<pw.Widget>().toList();
+    if (blobRows.isEmpty && points.isEmpty) return pw.SizedBox();
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         if (leadingSpacing) pw.SizedBox(height: 12),
-        _textFieldsContent(rows, fonts),
+        if (blobRows.isNotEmpty) _textFieldsContent(blobRows, fonts),
+        ...points,
       ],
     );
   }
@@ -1624,31 +1790,12 @@ class VisualBiblePdfService {
     List<(String, String?)> fields,
     ({pw.Font regular, pw.Font bold}) fonts,
   ) {
+    final kit = BiblePdfKit(regular: fonts.regular, bold: fonts.bold);
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         for (final (label, value) in fields)
-          if (value?.trim().isNotEmpty == true) ...[
-            pw.Text(
-              label.toUpperCase(),
-              style: pw.TextStyle(
-                font: fonts.bold,
-                fontSize: 8,
-                color: PdfColors.grey600,
-                letterSpacing: 1,
-              ),
-            ),
-            pw.SizedBox(height: 4),
-            pw.Text(
-              value!,
-              style: pw.TextStyle(
-                font: fonts.regular,
-                fontSize: 11,
-                lineSpacing: 4,
-              ),
-            ),
-            pw.SizedBox(height: 14),
-          ],
+          if (value?.trim().isNotEmpty == true) kit.textPoint(label, value!),
       ],
     );
   }
@@ -1739,29 +1886,7 @@ class VisualBiblePdfService {
     String label,
     String value,
     ({pw.Font regular, pw.Font bold}) fonts,
-  ) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: pw.BoxDecoration(
-        color: const PdfColor.fromInt(0xFFF2F2F7),
-        borderRadius: pw.BorderRadius.circular(6),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text(
-            label.toUpperCase(),
-            style: pw.TextStyle(
-              font: fonts.regular,
-              fontSize: 7,
-              color: PdfColors.grey600,
-            ),
-          ),
-          pw.Text(value, style: pw.TextStyle(font: fonts.bold, fontSize: 11)),
-        ],
-      ),
-    );
-  }
+  ) => BiblePdfKit(regular: fonts.regular, bold: fonts.bold).chip(label, value);
 
   static pw.Widget _sectionPage({
     required String title,
@@ -1782,28 +1907,8 @@ class VisualBiblePdfService {
     );
   }
 
-  static pw.Widget _sectionHeader(String title, pw.Font fontBold) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Container(
-          height: 3,
-          width: 32,
-          color: const PdfColor.fromInt(0xFF0A84FF),
-        ),
-        pw.SizedBox(height: 8),
-        pw.Text(
-          title,
-          style: pw.TextStyle(
-            font: fontBold,
-            fontSize: 11,
-            letterSpacing: 3,
-            color: const PdfColor.fromInt(0xFF8E8E93),
-          ),
-        ),
-      ],
-    );
-  }
+  static pw.Widget _sectionHeader(String title, pw.Font fontBold) =>
+      BiblePdfKit(regular: fontBold, bold: fontBold).sectionHeader(title);
 
   static PdfColor _hexToPdf(String hex) {
     final clean = hex.replaceAll('#', '');

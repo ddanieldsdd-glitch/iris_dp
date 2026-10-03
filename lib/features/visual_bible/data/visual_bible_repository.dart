@@ -1,7 +1,7 @@
 import '../../../core/database/app_database.dart';
 import '../../../core/database/dao/visual_bible_dao.dart';
 import '../../../core/templates/user_template_service.dart';
-import '../../../shared/visual_bible/bible_section_ids.dart';
+import '../export/bible_section_export_reader.dart';
 import '../moodboard_reference_meta.dart';
 import '../visual_bible_model.dart';
 
@@ -15,6 +15,9 @@ typedef VisualBibleExportBundle = ({
   List<MoodboardImageModel> moodboard,
   List<NarrativeCardModel> narrativeCards,
   Map<String, String?> sectionContentJsonById,
+
+  /// Secciones visibles en el orden de la barra lateral de la biblia.
+  List<BibleExportSectionRef> sectionOrder,
   String? primaryCameraLabel,
 });
 
@@ -78,6 +81,19 @@ class VisualBibleRepository {
     final testRows = await _dao.watchCameraTests(bible.id).first;
     final moodRows = await _dao.watchMoodboardImages(projectId).first;
     final sectionRows = await _dao.watchSectionDefinitions(bible.id).first;
+    final groupRows = await _dao.database
+        .watchBibleSectionGroups(bible.id)
+        .first;
+    final groupOrder = {
+      for (var i = 0; i < groupRows.length; i++) groupRows[i].id: i,
+    };
+    final orderedSections = sectionRows.where((row) => !row.isHidden).toList()
+      ..sort((a, b) {
+        final byGroup = (groupOrder[a.groupId] ?? groupRows.length).compareTo(
+          groupOrder[b.groupId] ?? groupRows.length,
+        );
+        return byGroup != 0 ? byGroup : a.sortOrder.compareTo(b.sortOrder);
+      });
     final narrativeRows = await _dao.database
         .watchNarrativeCardsForSection(bible.id, BibleSectionId.lighting)
         .first;
@@ -101,11 +117,18 @@ class VisualBibleRepository {
         for (final model in moodboardModels)
           model.copyWith(meta: moodboardMeta[model.id] ?? model.meta),
       ],
-      narrativeCards:
-          narrativeRows.map(NarrativeCardModel.fromRow).toList(),
+      narrativeCards: narrativeRows.map(NarrativeCardModel.fromRow).toList(),
       sectionContentJsonById: {
         for (final row in sectionRows) row.id: row.contentJson,
       },
+      sectionOrder: [
+        for (final row in orderedSections)
+          BibleExportSectionRef(
+            id: row.id,
+            label: row.label,
+            isCustom: row.template == 'freeform',
+          ),
+      ],
       primaryCameraLabel: primaryCameraLabel,
     );
   }

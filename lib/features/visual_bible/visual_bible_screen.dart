@@ -360,6 +360,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
               moodboard: bundle.moodboard,
               includedSections: config.sections,
               sectionContentJsonById: bundle.sectionContentJsonById,
+              sectionOrder: bundle.sectionOrder,
               primaryCameraLabel: bundle.primaryCameraLabel,
               moodboardLayout: config.resolvedMoodboardLayout,
               includeAllMoodboardImages: config.includeAllMoodboardImages,
@@ -920,6 +921,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                         cameraTests: bundle.cameraTests,
                         moodboard: bundle.moodboard,
                         sectionContentJsonById: bundle.sectionContentJsonById,
+                        sectionOrder: bundle.sectionOrder,
                         primaryCameraLabel: bundle.primaryCameraLabel,
                         moodboardLayout:
                             last?.moodboardLayout ?? MoodboardExportLayout.defaults,
