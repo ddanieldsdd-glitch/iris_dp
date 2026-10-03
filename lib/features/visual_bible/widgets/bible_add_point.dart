@@ -3,32 +3,17 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/visual_bible/bible_section_fields.dart';
-import 'bible_generic_point_views.dart';
+import '../../../core/theme/app_typography.dart';
+import 'catalog/bible_widget_catalog.dart';
 import 'bible_point_panel.dart';
 
-/// Tipos que el usuario puede elegir al añadir un punto propio.
-const kBibleUserPointTypes = [
-  BibleSectionFieldType.text,
-  BibleSectionFieldType.list,
-  BibleSectionFieldType.specs,
-  BibleSectionFieldType.references,
-];
+/// Punto recién creado: el campo y, si el widget lo necesita, su valor
+/// inicial.
+typedef BibleAddedPoint = ({BibleSectionField field, String? initialValue});
 
-String _userPointTypeLabel(BibleSectionFieldType type) => switch (type) {
-      BibleSectionFieldType.list => 'Lista',
-      BibleSectionFieldType.specs => 'Datos técnicos',
-      BibleSectionFieldType.references => 'Referencias',
-      _ => 'Texto',
-    };
-
-IconData _userPointTypeIcon(BibleSectionFieldType type) =>
-    type == BibleSectionFieldType.references
-        ? Icons.collections_outlined
-        : BibleGenericPointView.iconFor(type);
-
-/// Pide nombre y tipo para un punto nuevo. Devuelve `null` si se cancela.
-Future<BibleSectionField?> showBibleAddPointDialog(BuildContext context) {
-  return showDialog<BibleSectionField>(
+/// Pide nombre y widget para un punto nuevo. Devuelve `null` si se cancela.
+Future<BibleAddedPoint?> showBibleAddPointDialog(BuildContext context) {
+  return showDialog<BibleAddedPoint>(
     context: context,
     builder: (_) => const _AddPointDialog(),
   );
@@ -43,7 +28,7 @@ class _AddPointDialog extends StatefulWidget {
 
 class _AddPointDialogState extends State<_AddPointDialog> {
   final _name = TextEditingController();
-  var _type = BibleSectionFieldType.text;
+  var _entry = BibleWidgetCatalog.entries.first;
 
   @override
   void dispose() {
@@ -52,59 +37,98 @@ class _AddPointDialogState extends State<_AddPointDialog> {
   }
 
   void _submit() {
-    final label = _name.text.trim();
-    if (label.isEmpty) return;
-    Navigator.pop(
-      context,
-      BibleSectionField(
+    // Sin nombre, el punto toma el del widget.
+    final label = _name.text.trim().isEmpty ? _entry.label : _name.text.trim();
+    Navigator.pop<BibleAddedPoint>(context, (
+      field: BibleSectionField(
         key: BibleSectionFieldsConfig.newFieldKey(),
         label: label,
-        type: _type,
+        type: _entry.type,
       ),
-    );
+      initialValue: _entry.initialValue,
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return AlertDialog(
       title: const Text('Añadir punto'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _name,
-            autofocus: true,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(hintText: 'Nombre del punto'),
-            onChanged: (_) => setState(() {}),
-            onSubmitted: (_) => _submit(),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final type in kBibleUserPointTypes)
-                ChoiceChip(
-                  avatar: Icon(_userPointTypeIcon(type), size: 16),
-                  label: Text(_userPointTypeLabel(type)),
-                  selected: _type == type,
-                  onSelected: (_) => setState(() => _type = type),
+              TextField(
+                controller: _name,
+                autofocus: true,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  labelText: 'Nombre del punto',
+                  hintText: _entry.label,
+                ),
+                onSubmitted: (_) => _submit(),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              for (final entry in BibleWidgetCatalog.entries)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Material(
+                    color: entry == _entry
+                        ? palette.accentMuted
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => setState(() => _entry = entry),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              entry.icon,
+                              size: 20,
+                              color: entry == _entry
+                                  ? palette.accent
+                                  : palette.textSecondary,
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    entry.label,
+                                    style: AppTypography.bodyLarge(palette),
+                                  ),
+                                  Text(
+                                    entry.description,
+                                    style: AppTypography.caption(palette),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
             ],
           ),
-        ],
+        ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancelar'),
         ),
-        FilledButton(
-          onPressed: _name.text.trim().isEmpty ? null : _submit,
-          child: const Text('Añadir'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Añadir')),
       ],
     );
   }

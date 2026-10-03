@@ -23,6 +23,15 @@ enum BibleSectionFieldType {
 
   /// Pares etiqueta/valor. El valor es un array JSON de `{label, value}`.
   specs,
+
+  /// Paleta de color. El valor es un array JSON de `{hex, name}`.
+  palette,
+
+  /// Imágenes del moodboard. El valor es un array JSON de ids.
+  gallery,
+
+  /// Referencias razonadas. El valor es `{preset, items}` en JSON.
+  referenceDeck,
 }
 
 /// Codifica el valor de los puntos `list` y `specs` dentro de `values[key]`.
@@ -305,6 +314,9 @@ abstract final class BibleSectionFieldsConfig {
         BibleSectionFieldType.text => 'Campo de texto',
         BibleSectionFieldType.list => 'Lista de puntos',
         BibleSectionFieldType.specs => 'Datos técnicos',
+        BibleSectionFieldType.palette => 'Paleta de color',
+        BibleSectionFieldType.gallery => 'Imágenes',
+        BibleSectionFieldType.referenceDeck => 'Referencias razonadas',
       };
 
   static String labelFor(

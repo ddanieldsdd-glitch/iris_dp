@@ -1,7 +1,9 @@
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../../../../shared/visual_bible/bible_palette.dart';
 import '../../../../shared/visual_bible/bible_section_fields.dart';
+import '../bible_section_export_reader.dart';
 
 /// Tokens visuales del PDF de la biblia. Claro e imprimible.
 abstract final class BiblePdfTokens {
@@ -549,6 +551,40 @@ class BiblePdfKit {
             .where((r) => r.$1.trim().isNotEmpty || r.$2.trim().isNotEmpty)
             .toList();
         return rows.isEmpty ? null : specsPoint(field.label, rows);
+      case BibleSectionFieldType.palette:
+        final colors = BiblePaletteColor.listFrom(raw);
+        return colors.isEmpty
+            ? null
+            : swatchRow(field.label, [for (final c in colors) (c.hex, c.name)]);
+      case BibleSectionFieldType.referenceDeck:
+        final items = BibleSectionExportReader.referenceItems(
+          raw,
+        ).where((r) => !r.isEmpty).toList();
+        if (items.isEmpty) return null;
+        final (why, purpose) = BibleSectionExportReader.referenceLabels(raw);
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            label(field.label),
+            pw.SizedBox(height: 6),
+            for (final item in items)
+              referencePoint(
+                kicker: [
+                  item.kind,
+                  item.work,
+                ].where((e) => e.isNotEmpty).join(' · '),
+                title: item.title,
+                sections: [
+                  (why, item.why),
+                  (purpose, item.purpose),
+                  ('Momento', item.scene),
+                ],
+              ),
+          ],
+        );
+      case BibleSectionFieldType.gallery:
+        // Las imágenes necesitan carga asíncrona: se pintan aparte.
+        return null;
       default:
         return textPoint(field.label, raw.trim());
     }

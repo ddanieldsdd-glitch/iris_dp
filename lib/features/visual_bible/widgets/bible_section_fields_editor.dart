@@ -196,10 +196,23 @@ class _BibleSectionFieldsEditorState
   }
 
   Future<void> _addField() async {
-    final point = await showBibleAddPointDialog(context);
-    if (point == null || !mounted) return;
-    setState(() => _fields.add(point));
-    if (widget.embedded) unawaited(_saveEmbedded());
+    final added = await showBibleAddPointDialog(context);
+    if (added == null || !mounted) return;
+    setState(() => _fields.add(added.field));
+    final db = ref.read(databaseProvider);
+    await db.saveBibleSectionFields(
+      widget.bibleId,
+      widget.definition.id,
+      _fields,
+    );
+    if (added.initialValue != null) {
+      await db.saveBibleSectionFieldValue(
+        widget.bibleId,
+        widget.definition.id,
+        added.field.key,
+        added.initialValue,
+      );
+    }
   }
 
   Future<void> _applyStylePack() async {
@@ -289,6 +302,9 @@ class _BibleSectionFieldsEditorState
     BibleSectionFieldType.blocks => Icons.view_agenda_outlined,
     BibleSectionFieldType.list => Icons.format_list_bulleted,
     BibleSectionFieldType.specs => Icons.tune,
+    BibleSectionFieldType.palette => Icons.palette_outlined,
+    BibleSectionFieldType.gallery => Icons.photo_library_outlined,
+    BibleSectionFieldType.referenceDeck => Icons.collections_outlined,
   };
 
   Widget _contentFamilyChip(

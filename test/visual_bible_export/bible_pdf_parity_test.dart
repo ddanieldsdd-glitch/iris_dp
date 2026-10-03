@@ -152,6 +152,64 @@ void main() {
     expect(text, isNot(contains('{"label"')));
   });
 
+  test(
+    'paleta y referencias añadidas a cualquier sección salen en el PDF',
+    () async {
+      await addPoint(
+        BibleSectionId.exposure,
+        const BibleSectionField(
+          key: 'field_paleta',
+          label: 'Paleta de noche',
+          type: BibleSectionFieldType.palette,
+        ),
+        jsonEncode([
+          {'hex': '#0B1D2A', 'name': 'Azul petróleo'},
+        ]),
+      );
+      await addPoint(
+        BibleSectionId.exposure,
+        const BibleSectionField(
+          key: 'field_refs',
+          label: 'Referencias de exposición',
+          type: BibleSectionFieldType.referenceDeck,
+        ),
+        jsonEncode({
+          'preset': 'technical',
+          'items': [
+            {
+              'title': 'Subexposición controlada',
+              'refLabel': 'Se7en · Darius Khondji',
+              'kind': 'Iluminación',
+              'why': 'Dos pasos por debajo con relleno mínimo',
+              'purpose': 'Probar el ruido a ISO 1600',
+              'imageId': null,
+            },
+          ],
+        }),
+      );
+
+      final text = _extract(await export());
+      final expected = [
+        'PALETA DE NOCHE',
+        '#0B1D2A',
+        'AZUL PETRÓLEO',
+        'REFERENCIAS DE EXPOSICIÓN',
+        'ILUMINACIÓN · SE7EN',
+        'Subexposición controlada',
+        'CÓMO SE HIZO',
+        'Dos pasos por debajo con relleno mínimo',
+        'QUÉ NECESITAMOS',
+        'Probar el ruido a ISO 1600',
+      ];
+      var cursor = -1;
+      for (final piece in expected) {
+        final at = text.indexOf(piece, cursor + 1);
+        expect(at, greaterThan(cursor), reason: '«$piece» falta o va antes');
+        cursor = at;
+      }
+    },
+  );
+
   test('las secciones salen en el orden de la biblia', () async {
     for (final sectionId in [
       BibleSectionId.direction,
