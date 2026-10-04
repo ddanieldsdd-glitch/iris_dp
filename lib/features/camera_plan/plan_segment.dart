@@ -161,6 +161,10 @@ class PlanSegment {
   }
 }
 
+/// Escala de partida de una planta sin calibrar: 2 cm por unidad, que deja
+/// un actor en unos 60 cm de ancho y el lienzo en 32 × 24 m.
+const double defaultMetersPerUnit = 0.02;
+
 /// Escribe una distancia del lienzo en metros.
 String formatMeters(double units, double metersPerUnit) {
   final m = units * metersPerUnit;

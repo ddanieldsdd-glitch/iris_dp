@@ -29,6 +29,7 @@ import 'floor_plan_scope.dart';
 import 'light_beam.dart';
 import 'plan_data.dart' show kLightSetupColors;
 import 'plan_gear_list.dart';
+import 'plan_light_controls.dart';
 import 'plan_palette.dart';
 import 'plan_segment.dart';
 import 'plan_target.dart';
@@ -119,10 +120,6 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   @override
   ConsumerState<CameraPlanEditor> createState() => _CameraPlanEditorState();
 }
-
-/// Escala de partida de una planta sin calibrar: 2 cm por unidad, que deja
-/// un actor en unos 60 cm de ancho y el lienzo en 32 × 24 m.
-const double defaultMetersPerUnit = 0.02;
 
 class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Encuadre actual del lienzo, para los tests.
@@ -3364,14 +3361,9 @@ class _ElementPanelState extends State<_ElementPanel> {
                       5,
                       360,
                     ),
-                    _beamSlider(
-                      'Alcance',
-                      '${beam.reach.round()}',
-                      LightBeam.reachKey,
-                      beam.reach,
-                      40,
-                      900,
-                      step: 10,
+                    PlanLightControls(
+                      element: element,
+                      onUpdate: widget.onUpdate,
                     ),
                     const SizedBox(height: AppSpacing.sm),
                   ],

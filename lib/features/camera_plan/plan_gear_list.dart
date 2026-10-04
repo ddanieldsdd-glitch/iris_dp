@@ -7,6 +7,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_snackbar.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
+import 'light/plan_light.dart';
 import 'light_beam.dart';
 
 /// Una línea de la lista de material: cantidad y descripción.
@@ -26,19 +27,25 @@ class GearList {
   final List<GearLine> grip;
   final List<GearLine> cameras;
 
+  /// Difusiones, redes y gelatinas puestas en los aparatos.
+  final List<GearLine> filters;
+
   const GearList({
+    this.filters = const [],
     this.lights = const [],
     this.grip = const [],
     this.cameras = const [],
   });
 
-  bool get isEmpty => lights.isEmpty && grip.isEmpty && cameras.isEmpty;
+  bool get isEmpty =>
+      lights.isEmpty && grip.isEmpty && cameras.isEmpty && filters.isEmpty;
 
   /// Agrupa los elementos iguales y los cuenta.
   factory GearList.from(Iterable<PlanElement> elements) {
     final lights = <String, int>{};
     final grip = <String, int>{};
     final cameras = <String, int>{};
+    final filters = <String, int>{};
     void add(Map<String, int> map, String key) =>
         map.update(key, (n) => n + 1, ifAbsent: () => 1);
 
@@ -48,6 +55,12 @@ class GearList {
           final name =
               (el.props['name'] as String?) ?? el.lightType?.label ?? 'Luz';
           add(LightBeam.emits(el.lightType) ? lights : grip, name);
+          for (final m in PlanLight.of(el)?.modifiers ?? const []) {
+            add(
+              filters,
+              m.reference == null ? m.name : '${m.name} (${m.reference})',
+            );
+          }
         case ElementType.camera:
           add(
             cameras,
@@ -69,6 +82,7 @@ class GearList {
       lights: lines(lights),
       grip: lines(grip),
       cameras: lines(cameras),
+      filters: lines(filters),
     );
   }
 
@@ -86,6 +100,7 @@ class GearList {
 
     section('LUCES', lights);
     section('GRIP', grip);
+    section('DIFUSIÓN Y GELATINAS', filters);
     section('CÁMARA', cameras);
     return buffer.toString().trimRight();
   }
@@ -152,6 +167,7 @@ class PlanGearListPanel extends StatelessWidget {
                     children: [
                       section('LUCES', gear.lights),
                       section('GRIP', gear.grip),
+                      section('DIFUSIÓN Y GELATINAS', gear.filters),
                       section('CÁMARA', gear.cameras),
                     ],
                   ),

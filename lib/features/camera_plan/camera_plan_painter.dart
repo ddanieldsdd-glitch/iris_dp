@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
+import 'light/plan_light.dart';
 import 'light_beam.dart';
 import 'light_symbols.dart';
 import 'plan_segment.dart';
@@ -662,17 +663,26 @@ class CameraPlanPainter extends CustomPainter {
         (el.props['name'] as String?) ?? el.lightType?.label ?? el.label;
     if (base == null || base.isEmpty) return;
     final beam = LightBeam.of(el);
-    final name = beam == null
+    final light = PlanLight.of(el);
+    final filters = light == null
+        ? ''
+        : light.modifiers.map((m) => m.name).join(' + ');
+    final name = beam == null || light == null
         ? base
         : beam.off
         ? '$base\napagada'
-        : '$base\n${beam.cct.round()}K · ${beam.intensity.round()}%';
+        : [
+            base,
+            if (filters.isNotEmpty) filters,
+            '${(light.source.cct / 50).round() * 50}K · '
+                '${beam.intensity.round()}%',
+          ].join('\n');
     _drawLabelBelow(
       canvas,
       name,
       _CanvasColors.inkSecondary,
       yOffset: 20,
-      maxWidth: 72,
+      maxWidth: 110,
     );
   }
 
@@ -812,44 +822,60 @@ class CameraPlanPainter extends CustomPainter {
     }
   }
 
-  /// Haz de una luz encendida: un cono degradado con su apertura, alcance,
-  /// intensidad y color.
+  /// Lux por debajo de los cuales el haz deja de dibujarse.
+  static const double _beamFloorLux = 20;
+
+  /// Haz de una luz encendida, calculado: llega hasta donde la luz baja de
+  /// [_beamFloorLux] y se apaga con el cuadrado de la distancia. Más vatios,
+  /// menos difusión o un haz más cerrado lo alargan.
   void _drawBeam(Canvas canvas, PlanElement el) {
-    final beam = LightBeam.of(el);
-    if (beam == null || beam.off || beam.intensity <= 0) return;
+    final light = PlanLight.of(el);
+    if (light == null || light.source.candela <= 0) return;
+    final source = light.source;
+    final mpu = metersPerUnit ?? defaultMetersPerUnit;
+    final reachM = source.distanceFor(_beamFloorLux).clamp(0.3, 60.0);
+    final reach = reachM / mpu;
+    final color = LightBeam.colorForCct(source.cct);
+
+    // Brillo según los stops que quedan por encima del suelo del haz.
+    double alphaAt(double fraction) {
+      final lux = source.illuminance(math.max(reachM * fraction, 0.05));
+      final stops =
+          math.log(math.max(lux, _beamFloorLux) / _beamFloorLux) / math.ln2;
+      return math.pow((stops / 16).clamp(0.0, 1.0), 1.7).toDouble() * 0.5;
+    }
+
+    const fractions = [0.0, 0.05, 0.12, 0.25, 0.5, 1.0];
+    Paint glow(double strength) => Paint()
+      ..blendMode = BlendMode.plus
+      ..shader = ui.Gradient.radial(Offset.zero, reach, [
+        for (final f in fractions)
+          color.withValues(alpha: alphaAt(f) * strength),
+      ], fractions);
 
     canvas.save();
     canvas.translate(el.position.dx, el.position.dy);
     canvas.rotate(el.rotation * math.pi / 180);
-
-    final strength = beam.intensity / 100;
-    final paint = Paint()
-      ..blendMode = BlendMode.plus
-      ..shader = ui.Gradient.radial(
-        Offset.zero,
-        beam.reach,
-        [
-          beam.color.withValues(alpha: 0.50 * strength),
-          beam.color.withValues(alpha: 0.16 * strength),
-          beam.color.withValues(alpha: 0),
-        ],
-        const [0, 0.55, 1],
-      );
-
-    if (beam.spread >= 359) {
-      canvas.drawCircle(Offset.zero, beam.reach, paint);
+    if (source.isOmni) {
+      canvas.drawCircle(Offset.zero, reach, glow(1));
     } else {
-      final sweep = beam.spread * math.pi / 180;
-      final path = Path()
-        ..moveTo(0, 0)
-        ..arcTo(
-          Rect.fromCircle(center: Offset.zero, radius: beam.reach),
-          -math.pi / 2 - sweep / 2,
-          sweep,
-          false,
-        )
-        ..close();
-      canvas.drawPath(path, paint);
+      Path wedge(double degrees) {
+        final sweep = math.min(degrees, 340) * math.pi / 180;
+        return Path()
+          ..moveTo(0, 0)
+          ..arcTo(
+            Rect.fromCircle(center: Offset.zero, radius: reach),
+            -math.pi / 2 - sweep / 2,
+            sweep,
+            false,
+          )
+          ..close();
+      }
+
+      // El haz, hasta donde queda la mitad de la luz, y el derrame, más
+      // ancho y más tenue.
+      canvas.drawPath(wedge(source.beamDeg * 1.7), glow(0.3));
+      canvas.drawPath(wedge(source.beamDeg), glow(0.7));
     }
     canvas.restore();
   }

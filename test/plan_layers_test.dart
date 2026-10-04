@@ -456,6 +456,25 @@ void main() {
         PlanElement(id: 0, type: ElementType.wall, position: Offset.zero),
       ]);
       expect(gear.lights.map((l) => '$l'), ['2× HMI', '1× Titan Tube']);
+      expect(gear.filters, isEmpty);
+      final filtered = GearList.from([
+        light(
+          LightType.hmi,
+          props: {
+            'modifiers': ['white-full', 'cto-half'],
+          },
+        ),
+        light(
+          LightType.hmi,
+          props: {
+            'modifiers': ['white-full'],
+          },
+        ),
+      ]);
+      expect(filtered.filters.map((l) => '$l'), [
+        '2× Difusión blanca (Rosco 3026 · 216)',
+        '1× ½ CTO (Rosco 3408)',
+      ]);
       expect(gear.grip.map((l) => '$l'), ['1× Flag/Solid']);
       expect(gear.cameras.map((l) => '$l'), ['1× Cámara A · 35mm · DOLLY']);
       expect(
