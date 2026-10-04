@@ -19,8 +19,6 @@ import '../../bible_blueprint_service.dart';
 import '../../bible_preset_bundle.dart';
 import '../../bible_preset_service.dart';
 import '../../bible_section_style_store.dart';
-import '../../bible_style_showcase.dart';
-import '../../../../shared/visual_bible/bible_section_fields.dart';
 import '../../../../shared/visual_bible/bible_section_ids.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_section_fields_editor.dart';
@@ -49,7 +47,6 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
   String _pdfPreset = 'gallery';
   bool _loading = true;
   String? _expandedSectionId;
-  Map<String, BibleSectionStyle> _styles = {};
 
   @override
   void initState() {
@@ -66,12 +63,10 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
     );
     final blueprint = await BibleConfigStore.loadBlueprint(widget.projectId);
     final pdf = await BibleConfigStore.loadPdfPreset(widget.projectId);
-    final styles = await BibleSectionStyleStore.loadAll(widget.projectId);
     if (!mounted) return;
     setState(() {
       _blueprint = blueprint;
       _pdfPreset = pdf;
-      _styles = styles;
       _loading = false;
     });
     if (repaired > 0 && mounted) {
@@ -98,11 +93,9 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
       projectId: widget.projectId,
       type: type,
     );
-    final styles = await BibleSectionStyleStore.loadAll(widget.projectId);
     if (!mounted) return;
     setState(() {
       _blueprint = type;
-      _styles = styles;
     });
     AppSnackBar.show(
       context,
@@ -137,7 +130,6 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
                 final body = _MainColumn(
                   palette: palette,
                   blueprint: _blueprint,
-                  styles: _styles,
                   groups: groups,
                   defs: defs,
                   expandedSectionId: _expandedSectionId,
@@ -153,14 +145,6 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
                     sectionId: def.id,
                     hidden: hidden,
                   ),
-                  onStyleChanged: (def, style) async {
-                    await BibleSectionStyleStore.save(
-                      widget.projectId,
-                      def.id,
-                      style,
-                    );
-                    setState(() => _styles = {..._styles, def.id: style});
-                  },
                   onReorder: (groupId, orderedIds) =>
                       db.reorderBibleSectionsInGroup(
                         widget.bibleId,
@@ -175,7 +159,6 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
                   ),
                   onDelete: (def) => _deleteSection(def),
                   onAddSection: (groupId) => _addCustomSection(groupId),
-                  onInstallExamples: () => _installStyleExamples(),
                   onSaveTemplate: () => _saveTemplate(),
                   onRestoreBuiltin: () async {
                     await db.resetBibleSectionLayoutToBuiltin(widget.bibleId);
@@ -289,21 +272,6 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
     }
   }
 
-  Future<void> _installStyleExamples() async {
-    final created = await BibleStyleShowcase.install(
-      db: ref.read(databaseProvider),
-      bibleId: widget.bibleId,
-      projectId: widget.projectId,
-    );
-    if (!mounted) return;
-    AppSnackBar.show(
-      context,
-      created > 0
-          ? 'Añadidas $created pantallas de ejemplo (Cinematic / Technical / Minimalist)'
-          : 'Ejemplos de estilo actualizados',
-    );
-  }
-
   Future<void> _renameSection(BibleSectionDefinition def) async {
     final label = await _prompt(context, 'Renombrar sección', def.label);
     if (label == null || label.isEmpty) return;
@@ -313,54 +281,16 @@ class _MasterConfigSectionState extends ConsumerState<MasterConfigSection> {
   }
 
   Future<void> _addCustomSection(String groupId) async {
-    final label = await _prompt(context, 'Nueva sección', '');
+    final label = await _prompt(context, 'Nueva pantalla', '');
     if (label == null || label.isEmpty) return;
-    if (!mounted) return;
-    final style = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ListTile(title: Text('Plantilla de partida')),
-            ListTile(
-              title: const Text('Cinematic'),
-              onTap: () => Navigator.pop(ctx, 'cinematic'),
-            ),
-            ListTile(
-              title: const Text('Technical'),
-              onTap: () => Navigator.pop(ctx, 'technical'),
-            ),
-            ListTile(
-              title: const Text('Minimalist'),
-              onTap: () => Navigator.pop(ctx, 'minimalist'),
-            ),
-          ],
-        ),
-      ),
-    );
-    final styleKey = style ?? 'cinematic';
-    final fields = BibleSectionFieldsConfig.packForStyle(
-      styleKey,
-      sectionLabel: label,
-    );
-    final sectionId = await ref
+    await ref
         .read(databaseProvider)
         .insertCustomBibleSection(
           bibleId: widget.bibleId,
           groupId: groupId,
           label: label,
-          contentJson: BibleSectionFieldsConfig.encode(fields),
         );
-    await BibleSectionStyleStore.save(
-      widget.projectId,
-      sectionId,
-      BibleSectionStyle.values.firstWhere(
-        (e) => e.name == styleKey,
-        orElse: () => BibleSectionStyle.cinematic,
-      ),
-    );
-    if (mounted) AppSnackBar.show(context, 'Sección «$label» creada');
+    if (mounted) AppSnackBar.show(context, 'Pantalla «$label» creada');
   }
 
   Future<void> _saveTemplate() async {
@@ -418,7 +348,6 @@ class _MainColumn {
   _MainColumn({
     required this.palette,
     required this.blueprint,
-    required this.styles,
     required this.groups,
     required this.defs,
     required this.expandedSectionId,
@@ -426,20 +355,17 @@ class _MainColumn {
     required this.onBlueprint,
     required this.onExpandSection,
     required this.onToggleHidden,
-    required this.onStyleChanged,
     required this.onReorder,
     required this.onRename,
     required this.onEditFields,
     required this.onDelete,
     required this.onAddSection,
-    required this.onInstallExamples,
     required this.onSaveTemplate,
     required this.onRestoreBuiltin,
   });
 
   final AppPalette palette;
   final BibleBlueprintType blueprint;
-  final Map<String, BibleSectionStyle> styles;
   final List<app_db.BibleSectionGroup> groups;
   final List<BibleSectionDefinition> defs;
   final String? expandedSectionId;
@@ -447,13 +373,11 @@ class _MainColumn {
   final ValueChanged<BibleBlueprintType> onBlueprint;
   final ValueChanged<String> onExpandSection;
   final void Function(BibleSectionDefinition, bool) onToggleHidden;
-  final void Function(BibleSectionDefinition, BibleSectionStyle) onStyleChanged;
   final void Function(String groupId, List<String> orderedIds) onReorder;
   final ValueChanged<BibleSectionDefinition> onRename;
   final ValueChanged<BibleSectionDefinition> onEditFields;
   final ValueChanged<BibleSectionDefinition> onDelete;
   final ValueChanged<String> onAddSection;
-  final VoidCallback onInstallExamples;
   final VoidCallback onSaveTemplate;
   final VoidCallback onRestoreBuiltin;
 
@@ -550,11 +474,6 @@ class _MainColumn {
                     ),
                   ),
                   OutlinedButton.icon(
-                    onPressed: onInstallExamples,
-                    icon: const Icon(Icons.auto_awesome_outlined, size: 16),
-                    label: const Text('Ejemplos de estilo'),
-                  ),
-                  OutlinedButton.icon(
                     onPressed: onSaveTemplate,
                     icon: const Icon(Icons.save_outlined, size: 16),
                     label: const Text('Guardar plantilla'),
@@ -593,12 +512,10 @@ class _MainColumn {
                   ),
                   _SectionReorderList(
                     defs: defs.where((d) => d.groupId == group.id).toList(),
-                    styles: styles,
                     blueprint: blueprint,
                     expandedSectionId: expandedSectionId,
                     onExpand: onExpandSection,
                     onToggleHidden: onToggleHidden,
-                    onStyleChanged: onStyleChanged,
                     onReorder: (ids) => onReorder(group.id, ids),
                     onRename: onRename,
                     onEditFields: onEditFields,
@@ -754,12 +671,10 @@ class _BlueprintCard extends StatelessWidget {
 class _SectionReorderList extends StatelessWidget {
   const _SectionReorderList({
     required this.defs,
-    required this.styles,
     required this.blueprint,
     required this.expandedSectionId,
     required this.onExpand,
     required this.onToggleHidden,
-    required this.onStyleChanged,
     required this.onReorder,
     required this.onRename,
     required this.onEditFields,
@@ -767,12 +682,10 @@ class _SectionReorderList extends StatelessWidget {
   });
 
   final List<BibleSectionDefinition> defs;
-  final Map<String, BibleSectionStyle> styles;
   final BibleBlueprintType blueprint;
   final String? expandedSectionId;
   final ValueChanged<String> onExpand;
   final void Function(BibleSectionDefinition, bool) onToggleHidden;
-  final void Function(BibleSectionDefinition, BibleSectionStyle) onStyleChanged;
   final ValueChanged<List<String>> onReorder;
   final ValueChanged<BibleSectionDefinition> onRename;
   final ValueChanged<BibleSectionDefinition> onEditFields;
@@ -795,8 +708,6 @@ class _SectionReorderList extends StatelessWidget {
       },
       itemBuilder: (context, index) {
         final def = visible[index];
-        final style =
-            styles[def.id] ?? defaultStyleForSection(def.id, blueprint);
         final dimmed = def.isHidden;
         final recommended = BibleBlueprintPacks.blocksFor(def.id, blueprint);
         final rendererLabel = BibleSectionRenderer.label(def.template);
@@ -858,85 +769,8 @@ class _SectionReorderList extends StatelessWidget {
                           ],
                         ),
                       ),
-                      Text(
-                        'PRESET',
-                        style: TextStyle(
-                          fontSize: 9,
-                          letterSpacing: 0.8,
-                          fontWeight: FontWeight.w700,
-                          color: palette.textTertiary,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      PopupMenuButton<BibleSectionStyle>(
-                        initialValue: style,
-                        onSelected: (s) {
-                          if (!s.isAvailable) return;
-                          onStyleChanged(def, s);
-                        },
-                        itemBuilder: (_) => [
-                          for (final s in BibleSectionStyle.values)
-                            PopupMenuItem(
-                              value: s,
-                              enabled: s.isAvailable,
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                      color: s.dotColor,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(s.availabilityLabel),
-                                ],
-                              ),
-                            ),
-                        ],
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: palette.surfaceOverlay,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: palette.border),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 7,
-                                height: 7,
-                                decoration: BoxDecoration(
-                                  color: style.dotColor,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                style.label,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontFamily: 'monospace',
-                                  color: palette.textPrimary,
-                                ),
-                              ),
-                              Icon(
-                                Icons.expand_more,
-                                size: 14,
-                                color: palette.textTertiary,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
                       IconButton(
-                        tooltip: 'Sub-apartados',
+                        tooltip: 'Puntos',
                         icon: Icon(
                           Icons.list_alt,
                           size: 18,
@@ -1122,35 +956,6 @@ class _TemplateVault extends ConsumerWidget {
           ),
           const SizedBox(height: 10),
         ],
-        const SizedBox(height: 10),
-        _VaultCard(
-          title: 'Ejemplos de estilo · solo Cinematic',
-          subtitle:
-              'Technical y Minimalist llegan próximamente. '
-              'Por ahora se mantiene el ejemplo cinematic.',
-          accent: true,
-          actionLabel: 'Añadir',
-          onAction: () async {
-            final created = await BibleStyleShowcase.install(
-              db: db,
-              bibleId: bibleId,
-              projectId: projectId,
-            );
-            if (context.mounted) {
-              AppSnackBar.show(
-                context,
-                created > 0
-                    ? 'Ejemplos instalados ($created nuevas)'
-                    : 'Ejemplos actualizados',
-              );
-            }
-          },
-        ),
-        const SizedBox(height: 10),
-        for (final spec in BibleStyleShowcase.specs) ...[
-          _StyleExampleHint(spec: spec),
-          const SizedBox(height: 8),
-        ],
         const SizedBox(height: 8),
         _VaultCard(
           title: 'Base IRIS (vacía)',
@@ -1262,57 +1067,6 @@ class _TemplateVault extends ConsumerWidget {
           label: const Text('Editor de estructura'),
         ),
       ],
-    );
-  }
-}
-
-class _StyleExampleHint extends StatelessWidget {
-  const _StyleExampleHint({required this.spec});
-
-  final BibleShowcaseSpec spec;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: palette.surfaceElevated,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: palette.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            margin: const EdgeInsets.only(top: 4),
-            decoration: BoxDecoration(
-              color: spec.style.dotColor,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  spec.style.label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: palette.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(spec.description, style: AppTypography.caption(palette)),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

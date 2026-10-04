@@ -8,8 +8,6 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../shared/visual_bible/bible_section_ids.dart';
-import '../bible_blueprint.dart';
-import '../bible_section_style_store.dart';
 import '../bible_tutorial.dart';
 import '../moodboard_helpers.dart';
 import 'bible_section_fields_editor.dart';
@@ -40,49 +38,6 @@ class BibleQuickAdjustPanel extends ConsumerStatefulWidget {
 }
 
 class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
-  BibleSectionStyle? _style;
-  bool _loadingStyle = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadStyle();
-  }
-
-  @override
-  void didUpdateWidget(BibleQuickAdjustPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.sectionId != widget.sectionId ||
-        oldWidget.projectId != widget.projectId) {
-      _loadStyle();
-    }
-  }
-
-  Future<void> _loadStyle() async {
-    setState(() => _loadingStyle = true);
-    final style = await BibleSectionStyleStore.load(
-      widget.projectId,
-      widget.sectionId,
-    );
-    if (!mounted) return;
-    setState(() {
-      _style = style;
-      _loadingStyle = false;
-    });
-  }
-
-  Future<void> _setStyle(BibleSectionStyle style) async {
-    setState(() => _style = style);
-    await BibleSectionStyleStore.save(
-      widget.projectId,
-      widget.sectionId,
-      style,
-    );
-    if (mounted) {
-      AppSnackBar.show(context, 'Densidad «${style.label}» aplicada');
-    }
-  }
-
   Future<void> _importMoodboard(MoodboardSourceKind kind) async {
     final db = ref.read(databaseProvider);
     switch (kind) {
@@ -108,7 +63,7 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
         if (mounted) {
           AppSnackBar.show(
             context,
-            'Integración pendiente — usa Biblioteca IRIS o carpeta local',
+            'Integración pendiente: usa la Biblioteca IRIS o una carpeta local',
           );
         }
     }
@@ -177,11 +132,13 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
             ],
             Expanded(
               child: ListView(
-                padding: EdgeInsets.all(widget.embedded ? AppSpacing.md : AppSpacing.lg),
+                padding: EdgeInsets.all(
+                  widget.embedded ? AppSpacing.md : AppSpacing.lg,
+                ),
                 children: [
                   if (isMoodboard) ...[
                     Text(
-                      'VISUAL SOURCES',
+                      'FUENTES DE IMÁGENES',
                       style: AppTypography.mono(palette).copyWith(
                         fontSize: 10,
                         letterSpacing: 1.1,
@@ -190,7 +147,7 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Importa stills sin ocupar el canvas del moodboard.',
+                      'Añade imágenes al moodboard desde aquí.',
                       style: AppTypography.caption(
                         palette,
                       ).copyWith(color: palette.textTertiary),
@@ -201,7 +158,7 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
                         Padding(
                           padding: const EdgeInsets.only(top: 8, bottom: 4),
                           child: Text(
-                            'Integrations',
+                            'Integraciones',
                             style: AppTypography.caption(
                               palette,
                             ).copyWith(color: palette.textTertiary),
@@ -234,74 +191,26 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    Divider(color: palette.border),
-                    const SizedBox(height: 16),
                   ],
-                  if (!isSettings) ...[
-                    Text(
-                      'ESTILO DE PANTALLA',
-                      style: AppTypography.mono(palette).copyWith(
-                        fontSize: 10,
-                        letterSpacing: 1.1,
-                        color: palette.textSecondary,
-                      ),
+                  if (def != null && !isSettings && !widget.embedded) ...[
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        BibleSectionFieldsEditor.show(
+                          context,
+                          bibleId: widget.bibleId,
+                          definition: def,
+                        );
+                      },
+                      icon: const Icon(Icons.view_agenda_outlined, size: 18),
+                      label: const Text('Editar puntos'),
                     ),
-                    const SizedBox(height: 10),
-                    if (_loadingStyle)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Center(
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      )
-                    else
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final s in BibleSectionStyle.values)
-                            ChoiceChip(
-                              label: Text(s.label),
-                              selected: _style == s,
-                              onSelected: (_) => _setStyle(s),
-                              selectedColor: palette.accent.withValues(
-                                alpha: 0.2,
-                              ),
-                              labelStyle: TextStyle(
-                                color: _style == s
-                                    ? palette.accent
-                                    : palette.textSecondary,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                            ),
-                        ],
-                      ),
-                    const SizedBox(height: 20),
-                    if (def != null && !widget.embedded) ...[
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          BibleSectionFieldsEditor.show(
-                            context,
-                            bibleId: widget.bibleId,
-                            definition: def,
-                          );
-                        },
-                        icon: const Icon(Icons.view_agenda_outlined, size: 18),
-                        label: const Text('Editar sub-apartados'),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
+                    const SizedBox(height: 12),
                   ],
                   if (!widget.embedded) ...[
                     FilledButton.tonalIcon(
                       onPressed: widget.onOpenMasterConfig,
                       icon: const Icon(Icons.settings_outlined, size: 18),
-                      label: const Text('Estructura y plantillas'),
+                      label: const Text('Configuración de la biblia'),
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
@@ -315,13 +224,6 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
                       label: const Text('Ver tutorial de la Biblia'),
                     ),
                   ],
-                  const SizedBox(height: 8),
-                  Text(
-                    'Todas las opciones pertenecen al mismo sistema de personalización.',
-                    style: AppTypography.caption(
-                      palette,
-                    ).copyWith(color: palette.textTertiary),
-                  ),
                 ],
               ),
             ),
