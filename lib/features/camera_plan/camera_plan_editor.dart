@@ -144,6 +144,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   bool _loading = true;
   bool _isRotating = false;
   bool _isDraggingPathPoint = false;
+
+  /// Algo se ha movido en el arrastre en curso y hay que guardarlo.
+  bool _dragDirty = false;
+
+  /// Elemento que se está arrastrando. Si no hay, el arrastre mueve el lienzo.
+  PlanElement? _dragging;
   int? _selectedPathIndex;
   Shot? _shot;
   Scene? _scene;
@@ -981,6 +987,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       );
     }
 
+    await db.touchProjectContent(widget.projectId);
+
     if (el.type == ElementType.camera && _shot != null) {
       await db.updateShot(
         _shot!.copyWith(
@@ -1094,7 +1102,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final el = _selected;
     if (el == null) return;
     if (el.layer == PlanLayer.shot && el.id > 0) {
-      await ref.read(databaseProvider).deleteCameraPlanElement(el.id);
+      final db = ref.read(databaseProvider);
+      await db.deleteCameraPlanElement(el.id);
+      await db.touchProjectContent(widget.projectId);
     }
     setState(() {
       _elements.remove(el);
@@ -1211,6 +1221,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _isRotating = false;
     _isDraggingPathPoint = false;
     final tapped = _elementAt(canvasPos);
+    _dragging = tapped;
     if (tapped != null) {
       setState(() {
         _selected = tapped;
@@ -1230,6 +1241,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     }
     final delta = d.delta / _scale;
     if (_selected != null &&
+        (_isDraggingPathPoint || _isRotating || _dragging != null)) {
+      _dragDirty = true;
+    }
+    if (_selected != null &&
         _isDraggingPathPoint &&
         _selectedPathIndex != null) {
       setState(() {
@@ -1238,8 +1253,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     } else if (_selected != null && _isRotating) {
       final canvasPos = _toCanvasCoords(d.localPosition);
       setState(() => _updateRotation(_selected!, canvasPos));
-    } else if (_selected != null) {
-      setState(() => _selected!.position += delta);
+    } else if (_dragging != null) {
+      setState(() => _dragging!.position += delta);
     } else {
       setState(() => _canvasOffset += d.delta);
     }
@@ -1258,8 +1273,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       }
       return;
     }
-    if (_selected != null &&
-        (_isRotating || _isDraggingPathPoint || d.primaryVelocity != null)) {
+    // Se guarda siempre que algo se haya movido, se suelte como se suelte.
+    final moved = _dragDirty;
+    _dragDirty = false;
+    _dragging = null;
+    if (_selected != null && moved) {
       await _persistElement(_selected!);
     }
     _isRotating = false;

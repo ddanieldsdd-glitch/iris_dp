@@ -129,6 +129,10 @@ class FloorPlanRepository {
     int shotId,
     List<PlanElement> elements,
   ) async {
+    final shot = await (db.select(
+      db.shots,
+    )..where((s) => s.id.equals(shotId))).getSingleOrNull();
+    if (shot != null) await db.touchProjectContent(shot.projectId);
     final existing = await db.getCameraPlanElementsForShot(shotId);
     for (final row in existing) {
       await db.deleteCameraPlanElement(row.id);

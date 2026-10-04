@@ -296,6 +296,65 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     });
 
+    testWidgets('soltar con inercia también guarda, y marca el proyecto '
+        'como modificado', (tester) async {
+      await seed(
+        tester,
+        siteJson: '{"version":2,"elements":[${element('wall', 300, 300)}]}',
+      );
+      await tester.runAsync(
+        () => (db.update(db.projects)..where((p) => p.id.equals(projectId)))
+            .write(
+              ProjectsCompanion(contentSyncUpdatedAt: Value(DateTime(2020))),
+            ),
+      );
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.site(
+            projectId: projectId,
+            siteId: siteId,
+            siteName: 'Hospital',
+          ),
+        ),
+      );
+      await settle(tester);
+
+      final canvas = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is CameraPlanPainter,
+      );
+      final origin = tester.getTopLeft(canvas);
+      await tester.flingFrom(
+        origin + const Offset(300, 300),
+        const Offset(160, 0),
+        2000,
+      );
+      await settle(tester);
+
+      final site = await tester.runAsync(() => db.getSiteById(siteId));
+      final moved = FloorPlanJson.decode(site!.floorPlanJson).single;
+      expect(moved.position.dx, greaterThan(400));
+
+      final after = await tester.runAsync(() => db.getProject(projectId));
+      expect(after!.contentSyncUpdatedAt!.year, greaterThan(2020));
+
+      // Arrastrar en vacío mueve el lienzo, no lo último seleccionado.
+      await tester.dragFrom(
+        origin + const Offset(900, 600),
+        const Offset(-80, -40),
+      );
+      await settle(tester);
+      final same = await tester.runAsync(() => db.getSiteById(siteId));
+      expect(
+        FloorPlanJson.decode(same!.floorPlanJson).single.position,
+        moved.position,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
     testWidgets('«Ordenar capas» pasa la luz a un esquema y la cámara al '
         'plano', (tester) async {
       await seed(

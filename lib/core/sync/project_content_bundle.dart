@@ -839,7 +839,7 @@ class ProjectContentBundle {
     final siteKeyToId = <String, int>{};
     for (final row in bundle['locationSites'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
-      final id = await db.insertSite(
+      final id = await db.into(db.locationSites).insert(
         LocationSitesCompanion.insert(
           projectId: projectId,
           name: m['name'] as String,
@@ -875,7 +875,7 @@ class ProjectContentBundle {
     for (final row in bundle['locationBasePlans'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final siteKey = m['siteKey'] as String?;
-      final id = await db.insertLocation(
+      final id = await db.into(db.locationBasePlans).insert(
         LocationBasePlansCompanion.insert(
           projectId: projectId,
           siteId: Value(siteKey != null ? siteKeyToId[siteKey] : null),
@@ -901,7 +901,7 @@ class ProjectContentBundle {
       final m = Map<String, dynamic>.from(row as Map);
       final siteKey = m['siteKey'] as String?;
       final setKey = m['setKey'] as String?;
-      final id = await db.insertLightSetup(
+      final id = await db.into(db.lightSetups).insert(
         LightSetupsCompanion.insert(
           projectId: projectId,
           locationSiteId: Value(siteKey != null ? siteKeyToId[siteKey] : null),

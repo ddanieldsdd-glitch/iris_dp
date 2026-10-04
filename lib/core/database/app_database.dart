@@ -1422,13 +1422,23 @@ class AppDatabase extends _$AppDatabase {
   Future<LocationSite?> getSiteById(int id) =>
       (select(locationSites)..where((s) => s.id.equals(id))).getSingleOrNull();
 
-  Future<int> insertSite(LocationSitesCompanion site) =>
-      into(locationSites).insert(site);
+  // Localizaciones, sets y plantas marcan el proyecto como modificado: sin
+  // eso, la sincronización puede dar por más reciente la copia de la nube y
+  // pisar lo local.
+  Future<int> insertSite(LocationSitesCompanion site) async {
+    final id = await into(locationSites).insert(site);
+    await touchProjectContent(site.projectId.value);
+    return id;
+  }
 
-  Future<bool> updateSite(LocationSite site) =>
-      update(locationSites).replace(site);
+  Future<bool> updateSite(LocationSite site) async {
+    final ok = await update(locationSites).replace(site);
+    await touchProjectContent(site.projectId);
+    return ok;
+  }
 
   Future<void> deleteSite(int id) async {
+    final projectId = (await getSiteById(id))?.projectId;
     await transaction(() async {
       await (update(locationBasePlans)..where((l) => l.siteId.equals(id)))
           .write(const LocationBasePlansCompanion(siteId: Value(null)));
@@ -1437,6 +1447,7 @@ class AppDatabase extends _$AppDatabase {
           .write(const LightSetupsCompanion(locationSiteId: Value(null)));
       await (delete(locationSites)..where((s) => s.id.equals(id))).go();
     });
+    if (projectId != null) await touchProjectContent(projectId);
   }
 
   Stream<List<LocationBasePlan>> watchSetsForSite(int siteId) =>
@@ -1702,13 +1713,20 @@ class AppDatabase extends _$AppDatabase {
     return {for (final l in list) l.id: l};
   }
 
-  Future<int> insertLocation(LocationBasePlansCompanion loc) =>
-      into(locationBasePlans).insert(loc);
+  Future<int> insertLocation(LocationBasePlansCompanion loc) async {
+    final id = await into(locationBasePlans).insert(loc);
+    await touchProjectContent(loc.projectId.value);
+    return id;
+  }
 
-  Future<bool> updateLocation(LocationBasePlan loc) =>
-      update(locationBasePlans).replace(loc);
+  Future<bool> updateLocation(LocationBasePlan loc) async {
+    final ok = await update(locationBasePlans).replace(loc);
+    await touchProjectContent(loc.projectId);
+    return ok;
+  }
 
   Future<void> deleteLocation(int id) async {
+    final projectId = (await getLocationById(id))?.projectId;
     await transaction(() async {
       await (update(scenes)..where((s) => s.locationId.equals(id))).write(
         const ScenesCompanion(locationId: Value(null)),
@@ -1717,11 +1735,11 @@ class AppDatabase extends _$AppDatabase {
         locationImages,
       )..where((i) => i.locationId.equals(id))).go();
       // Los esquemas de luz del set pasan a plantas libres.
-      await (update(lightSetups)
-            ..where((s) => s.locationBasePlanId.equals(id)))
+      await (update(lightSetups)..where((s) => s.locationBasePlanId.equals(id)))
           .write(const LightSetupsCompanion(locationBasePlanId: Value(null)));
       await (delete(locationBasePlans)..where((l) => l.id.equals(id))).go();
     });
+    if (projectId != null) await touchProjectContent(projectId);
   }
 
   Future<int> deleteLocationAndUnlink(
@@ -2127,27 +2145,54 @@ class AppDatabase extends _$AppDatabase {
   Future<LightSetup?> getLightSetupById(int id) =>
       (select(lightSetups)..where((s) => s.id.equals(id))).getSingleOrNull();
 
-  Future<int> insertLightSetup(LightSetupsCompanion row) =>
-      into(lightSetups).insert(row);
+  Future<int> insertLightSetup(LightSetupsCompanion row) async {
+    final id = await into(lightSetups).insert(row);
+    await touchProjectContent(row.projectId.value);
+    return id;
+  }
 
-  Future<void> updateLightSetup(LightSetup row) =>
-      update(lightSetups).replace(row);
+  Future<void> updateLightSetup(LightSetup row) async {
+    await update(lightSetups).replace(row);
+    await touchProjectContent(row.projectId);
+  }
 
   /// Borra el esquema. Los planos y las fichas de la biblia que lo usaban
   /// se quedan sin esquema; no se borran.
   Future<void> deleteLightSetup(int id) async {
+    final projectId = (await getLightSetupById(id))?.projectId;
     await (update(shots)..where((s) => s.lightSetupId.equals(id))).write(
       const ShotsCompanion(lightSetupId: Value(null)),
     );
     await (update(lightingSetups)..where((s) => s.planSetupId.equals(id)))
         .write(const LightingSetupsCompanion(planSetupId: Value(null)));
     await (delete(lightSetups)..where((s) => s.id.equals(id))).go();
+    if (projectId != null) await touchProjectContent(projectId);
   }
 
-  Future<void> assignLightSetupToShot(int shotId, int? setupId) =>
-      (update(shots)..where((s) => s.id.equals(shotId))).write(
-        ShotsCompanion(lightSetupId: Value(setupId)),
-      );
+  Future<void> assignLightSetupToShot(int shotId, int? setupId) async {
+    await (update(shots)..where((s) => s.id.equals(shotId))).write(
+      ShotsCompanion(lightSetupId: Value(setupId)),
+    );
+    final shot = await (select(
+      shots,
+    )..where((s) => s.id.equals(shotId))).getSingleOrNull();
+    if (shot != null) await touchProjectContent(shot.projectId);
+  }
+
+  /// Elementos de planta de todos los planos del proyecto.
+  Stream<List<CameraPlanElement>> watchCameraPlanElementsForProject(
+    int projectId,
+  ) {
+    final query =
+        select(cameraPlanElements).join([
+            innerJoin(shots, shots.id.equalsExp(cameraPlanElements.shotId)),
+          ])
+          ..where(shots.projectId.equals(projectId))
+          ..orderBy([OrderingTerm.asc(cameraPlanElements.sortOrder)]);
+    return query.watch().map(
+      (rows) => rows.map((r) => r.readTable(cameraPlanElements)).toList(),
+    );
+  }
 
   Future<bool> shotHasCameraPlan(int shotId) async {
     final rows = await getCameraPlanElementsForShot(shotId);
@@ -2427,7 +2472,7 @@ class AppDatabase extends _$AppDatabase {
         if (bible?.primaryCameraId == null) {
           final firstId =
               await _firstAssignedEquipmentId(projectId, 'camera') ??
-                  equipmentId;
+              equipmentId;
           await syncBiblePrimaryCamera(projectId, firstId);
         }
         break;
@@ -2457,11 +2502,7 @@ class AppDatabase extends _$AppDatabase {
           await syncBiblePrimaryCamera(projectId, next);
         } else {
           await (update(visualBibles)..where((v) => v.id.equals(bible.id)))
-              .write(
-            const VisualBiblesCompanion(
-              primaryCameraId: Value(null),
-            ),
-          );
+              .write(const VisualBiblesCompanion(primaryCameraId: Value(null)));
         }
       case 'lens':
         if (bible.primaryLensId != equipmentId) return;
@@ -2470,11 +2511,7 @@ class AppDatabase extends _$AppDatabase {
           await syncBiblePrimaryLens(projectId, next);
         } else {
           await (update(visualBibles)..where((v) => v.id.equals(bible.id)))
-              .write(
-            const VisualBiblesCompanion(
-              primaryLensId: Value(null),
-            ),
-          );
+              .write(const VisualBiblesCompanion(primaryLensId: Value(null)));
         }
     }
   }
@@ -2484,15 +2521,16 @@ class AppDatabase extends _$AppDatabase {
     String equipmentType,
   ) async {
     final assigned =
-        await (select(projectEquipment)..where(
-              (e) =>
-                  e.projectId.equals(projectId) &
-                  e.equipmentType.equals(equipmentType),
-            )
-            ..orderBy([
-              (e) => OrderingTerm.asc(e.sortOrder),
-              (e) => OrderingTerm.asc(e.id),
-            ]))
+        await (select(projectEquipment)
+              ..where(
+                (e) =>
+                    e.projectId.equals(projectId) &
+                    e.equipmentType.equals(equipmentType),
+              )
+              ..orderBy([
+                (e) => OrderingTerm.asc(e.sortOrder),
+                (e) => OrderingTerm.asc(e.id),
+              ]))
             .get();
     if (assigned.isEmpty) return null;
     return assigned.first.equipmentId;
@@ -2531,10 +2569,11 @@ class AppDatabase extends _$AppDatabase {
   ) async {
     final bible = await getVisualBibleForProject(projectId);
     if (bible == null) return;
-    final def = await (select(bibleSectionDefinitions)
-          ..where((d) => d.bibleId.equals(bible.id))
-          ..where((d) => d.id.equals(BibleSectionId.format)))
-        .getSingleOrNull();
+    final def =
+        await (select(bibleSectionDefinitions)
+              ..where((d) => d.bibleId.equals(bible.id))
+              ..where((d) => d.id.equals(BibleSectionId.format)))
+            .getSingleOrNull();
     if (def == null) return;
 
     final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
@@ -2566,10 +2605,11 @@ class AppDatabase extends _$AppDatabase {
   ) async {
     final bible = await getVisualBibleForProject(projectId);
     if (bible == null) return;
-    final def = await (select(bibleSectionDefinitions)
-          ..where((d) => d.bibleId.equals(bible.id))
-          ..where((d) => d.id.equals(BibleSectionId.format)))
-        .getSingleOrNull();
+    final def =
+        await (select(bibleSectionDefinitions)
+              ..where((d) => d.bibleId.equals(bible.id))
+              ..where((d) => d.id.equals(BibleSectionId.format)))
+            .getSingleOrNull();
     if (def == null) return;
 
     final fields = BibleSectionFieldsConfig.parse(
@@ -3005,17 +3045,16 @@ class AppDatabase extends _$AppDatabase {
             .get();
     if (groups.isEmpty) return;
     final groupIds = {for (final g in groups) g.id};
-    final present =
-        (await (select(
-              bibleSectionDefinitions,
-            )..where((d) => d.bibleId.equals(bibleId))).get())
-            .map((d) => d.id)
-            .toSet();
+    final present = (await (select(
+      bibleSectionDefinitions,
+    )..where((d) => d.bibleId.equals(bibleId))).get()).map((d) => d.id).toSet();
     for (final def in previous.values) {
       if (present.contains(def.id)) continue;
       await into(bibleSectionDefinitions).insert(
         def.copyWith(
-          groupId: groupIds.contains(def.groupId) ? def.groupId : groups.last.id,
+          groupId: groupIds.contains(def.groupId)
+              ? def.groupId
+              : groups.last.id,
           isHidden: true,
           sortOrder: def.sortOrder + 1000,
         ),
@@ -3092,8 +3131,7 @@ class AppDatabase extends _$AppDatabase {
   }) {
     final query = select(visualBibleNarrativeCards)
       ..where((c) {
-        final base =
-            c.bibleId.equals(bibleId) & c.sectionId.equals(sectionId);
+        final base = c.bibleId.equals(bibleId) & c.sectionId.equals(sectionId);
         if (kind != null) return base & c.kind.equals(kind);
         return base;
       })
@@ -3101,9 +3139,9 @@ class AppDatabase extends _$AppDatabase {
     return query.watch();
   }
 
-  Future<VisualBibleNarrativeCard?> getNarrativeCard(int id) =>
-      (select(visualBibleNarrativeCards)..where((c) => c.id.equals(id)))
-          .getSingleOrNull();
+  Future<VisualBibleNarrativeCard?> getNarrativeCard(int id) => (select(
+    visualBibleNarrativeCards,
+  )..where((c) => c.id.equals(id))).getSingleOrNull();
 
   Future<VisualBibleNarrativeCard?> getNarrativeCardForLocationLight(
     int bibleId,
@@ -3134,14 +3172,13 @@ class AppDatabase extends _$AppDatabase {
       ids.remove(id);
       await (update(moodboardImages)..where((m) => m.id.equals(img.id))).write(
         MoodboardImagesCompanion(
-          assignedCardIds: Value(
-            ids.isEmpty ? null : jsonEncode(ids),
-          ),
+          assignedCardIds: Value(ids.isEmpty ? null : jsonEncode(ids)),
         ),
       );
     }
-    await (delete(visualBibleNarrativeCards)..where((c) => c.id.equals(id)))
-        .go();
+    await (delete(
+      visualBibleNarrativeCards,
+    )..where((c) => c.id.equals(id))).go();
   }
 
   Stream<List<MoodboardImage>> watchMoodboardImagesForCard(
@@ -3151,8 +3188,9 @@ class AppDatabase extends _$AppDatabase {
     return watchMoodboardImages(projectId).map((rows) {
       return rows
           .where(
-            (row) => MoodboardAssociation.decodeCardIds(row.assignedCardIds)
-                .contains(cardId),
+            (row) => MoodboardAssociation.decodeCardIds(
+              row.assignedCardIds,
+            ).contains(cardId),
           )
           .toList();
     });
@@ -3163,9 +3201,9 @@ class AppDatabase extends _$AppDatabase {
     required int cardId,
     String? sectionId,
   }) async {
-    final row = await (select(moodboardImages)
-          ..where((m) => m.id.equals(imageId)))
-        .getSingleOrNull();
+    final row = await (select(
+      moodboardImages,
+    )..where((m) => m.id.equals(imageId))).getSingleOrNull();
     if (row == null) return;
     final cardIds = MoodboardAssociation.decodeCardIds(row.assignedCardIds);
     if (!cardIds.contains(cardId)) cardIds.add(cardId);
@@ -3187,17 +3225,15 @@ class AppDatabase extends _$AppDatabase {
     required int imageId,
     required int cardId,
   }) async {
-    final row = await (select(moodboardImages)
-          ..where((m) => m.id.equals(imageId)))
-        .getSingleOrNull();
+    final row = await (select(
+      moodboardImages,
+    )..where((m) => m.id.equals(imageId))).getSingleOrNull();
     if (row == null) return;
     final cardIds = MoodboardAssociation.decodeCardIds(row.assignedCardIds);
     cardIds.remove(cardId);
     await (update(moodboardImages)..where((m) => m.id.equals(imageId))).write(
       MoodboardImagesCompanion(
-        assignedCardIds: Value(
-          cardIds.isEmpty ? null : jsonEncode(cardIds),
-        ),
+        assignedCardIds: Value(cardIds.isEmpty ? null : jsonEncode(cardIds)),
       ),
     );
   }
@@ -3538,7 +3574,8 @@ class AppDatabase extends _$AppDatabase {
         isBuiltIn: const Value(false),
         template: Value(template),
         contentJson: Value(
-          contentJson ?? BibleSectionFieldsConfig.customScreenStarterJson(label),
+          contentJson ??
+              BibleSectionFieldsConfig.customScreenStarterJson(label),
         ),
       ),
     );
@@ -3749,15 +3786,17 @@ class AppDatabase extends _$AppDatabase {
   ) async {
     await (update(moodboardImages)..where((m) => m.id.equals(imageId))).write(
       MoodboardImagesCompanion(
-        metaJson: metaJson == null ? const Value(null) : Value(jsonEncode(metaJson)),
+        metaJson: metaJson == null
+            ? const Value(null)
+            : Value(jsonEncode(metaJson)),
       ),
     );
   }
 
   Future<Map<String, dynamic>?> getMoodboardImageMeta(int imageId) async {
-    final row = await (select(moodboardImages)
-          ..where((m) => m.id.equals(imageId)))
-        .getSingleOrNull();
+    final row = await (select(
+      moodboardImages,
+    )..where((m) => m.id.equals(imageId))).getSingleOrNull();
     final raw = row?.metaJson;
     if (raw == null || raw.trim().isEmpty) return null;
     try {
