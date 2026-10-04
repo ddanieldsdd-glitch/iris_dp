@@ -99,7 +99,11 @@ class PlanElement {
     ElementType.actor => label ?? 'Actor',
     ElementType.light => lightType?.label ?? 'Luz',
     ElementType.prop => propType?.label ?? 'Prop',
-    ElementType.wall => architectureType?.label ?? 'Pared',
+    ElementType.wall => switch (props['kind']) {
+      'street' => 'Calle',
+      'relief' => 'Relieve',
+      _ => architectureType?.label ?? 'Pared',
+    },
   };
 
   static PlanElement fromDb(

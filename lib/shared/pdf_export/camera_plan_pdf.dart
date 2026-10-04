@@ -10,6 +10,7 @@ import '../../features/camera_plan/camera_plan_constants.dart';
 import '../../features/camera_plan/camera_plan_element_model.dart';
 import '../../features/camera_plan/camera_plan_grouping.dart';
 import '../../features/camera_plan/floor_plan_repository.dart';
+import '../../features/camera_plan/plan_segment.dart';
 
 /// Representación cenital vectorial de una planta de cámara.
 ///
@@ -131,7 +132,25 @@ abstract final class CameraPlanPdfDiagram {
         case ElementType.prop:
           _drawProp(canvas, centerX, centerY, rotation);
         case ElementType.wall:
-          _drawWall(canvas, centerX, centerY, rotation);
+          if (PlanSegment.isSegment(element)) {
+            // Tramo punto a punto: se traza por puntos para seguir la curva.
+            final street = PlanSegment.kind(element) == PlanSegment.kindStreet;
+            canvas
+              ..setStrokeColor(street ? PdfColors.grey400 : PdfColors.grey900)
+              ..setLineWidth(street ? 6 : 2.5)
+              ..setLineCap(PdfLineCap.round);
+            const steps = 16;
+            var from = PlanSegment.pointAt(element, 0);
+            for (var i = 1; i <= steps; i++) {
+              final to = PlanSegment.pointAt(element, i / steps);
+              canvas
+                ..drawLine(x(from.dx), y(from.dy), x(to.dx), y(to.dy))
+                ..strokePath();
+              from = to;
+            }
+          } else {
+            _drawWall(canvas, centerX, centerY, rotation);
+          }
       }
     }
   }

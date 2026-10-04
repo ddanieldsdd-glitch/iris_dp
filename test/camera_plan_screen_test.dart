@@ -12,7 +12,9 @@ import 'package:iris_dp/features/camera_plan/camera_plan_editor.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_painter.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_json.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_screen.dart';
+import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_repository.dart';
+import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 
 void main() {
   late AppDatabase db;
@@ -492,6 +494,165 @@ void main() {
       expect(zone.width, greaterThan(200));
       expect(zone.height, greaterThan(120));
       expect(find.text('Marcar zona'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('paredes punto a punto, deshacer, rehacer, duplicar y '
+        'borrar', (tester) async {
+      await seed(tester, siteJson: '{"version":2,"elements":[]}');
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.set(
+            projectId: projectId,
+            setId: setId,
+            setName: 'Urgencias',
+          ),
+        ),
+      );
+      await settle(tester);
+
+      Future<List<PlanElement>> setElements() async {
+        final set = await tester.runAsync(() => db.getLocationById(setId));
+        return FloorPlanJson.decode(set!.floorPlanJson);
+      }
+
+      // Herramienta Pared: tres toques encadenan dos tramos.
+      await tester.tap(find.text('Pared').first);
+      await settle(tester);
+      final canvas = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is CameraPlanPainter,
+      );
+      final origin = tester.getTopLeft(canvas);
+      for (final point in const [
+        Offset(200, 200),
+        Offset(500, 200),
+        Offset(500, 400),
+      ]) {
+        await tester.tapAt(origin + point);
+        await settle(tester);
+      }
+      var walls = await setElements();
+      expect(walls, hasLength(2));
+      expect(walls.every(PlanSegment.isSegment), isTrue);
+      expect(PlanSegment.start(walls[0]), const Offset(200, 200));
+      expect(PlanSegment.end(walls[0]), const Offset(500, 200));
+      // El segundo empieza donde acaba el primero.
+      expect(PlanSegment.start(walls[1]), PlanSegment.end(walls[0]));
+      expect(PlanSegment.end(walls[1]), const Offset(500, 400));
+
+      await tester.tap(find.text('Terminar'));
+      await settle(tester);
+
+      // Deshacer quita el último tramo; rehacer lo devuelve.
+      await tester.tap(find.byTooltip('Deshacer'));
+      await settle(tester);
+      expect(await setElements(), hasLength(1));
+      await tester.tap(find.byTooltip('Rehacer'));
+      await settle(tester);
+      expect(await setElements(), hasLength(2));
+
+      // Seleccionar el primer tramo, duplicarlo y borrar la copia.
+      await tester.tapAt(origin + const Offset(350, 200));
+      await settle(tester);
+      expect(find.textContaining('Longitud: 6.00 m'), findsOneWidget);
+      await tester.tap(find.text('Duplicar'));
+      await settle(tester);
+      walls = await setElements();
+      expect(walls, hasLength(3));
+      expect(PlanSegment.start(walls[2]), const Offset(230, 230));
+      await tester.tap(find.text('Eliminar'));
+      await settle(tester);
+      expect(await setElements(), hasLength(2));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('la zona del set se mueve y se redimensiona con asas', (
+      tester,
+    ) async {
+      await seed(tester, siteJson: '{"version":2,"elements":[]}');
+      await tester.runAsync(() async {
+        final set = (await db.getLocationById(setId))!;
+        await db.updateLocation(
+          set.copyWith(
+            sitePlacementJson: Value(
+              SetZone.encode(const Rect.fromLTWH(200, 200, 300, 200)),
+            ),
+          ),
+        );
+      });
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.site(
+            projectId: projectId,
+            siteId: siteId,
+            siteName: 'Hospital',
+          ),
+        ),
+      );
+      await settle(tester);
+      // Desde el plano maestro no hay set activo: la zona se ajusta desde el
+      // set.
+      expect(find.byTooltip('Zona del set'), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.set(
+            projectId: projectId,
+            setId: setId,
+            setName: 'Urgencias',
+          ),
+        ),
+      );
+      await settle(tester);
+      await tester.tap(find.byTooltip('Zona del set'));
+      await settle(tester);
+      await tester.tap(find.text('Mover o redimensionar la zona'));
+      await settle(tester);
+
+      final state = tester.state(find.byType(CameraPlanEditor));
+      // ignore: avoid_dynamic_calls
+      final view =
+          (state as dynamic).debugView as ({Offset offset, double scale});
+      Offset onScreen(Offset p) =>
+          tester.getTopLeft(
+            find.byWidgetPredicate(
+              (w) => w is CustomPaint && w.painter is CameraPlanPainter,
+            ),
+          ) +
+          view.offset +
+          p * view.scale;
+
+      // Arrastrar la esquina inferior derecha la agranda.
+      await tester.dragFrom(
+        onScreen(const Offset(500, 400)),
+        Offset(100 * view.scale, 100 * view.scale),
+      );
+      await settle(tester);
+      // Arrastrar el interior la mueve.
+      await tester.dragFrom(
+        onScreen(const Offset(350, 350)),
+        Offset(50 * view.scale, 0),
+      );
+      await settle(tester);
+      await tester.tap(find.text('Listo'));
+      await settle(tester);
+
+      final set = await tester.runAsync(() => db.getLocationById(setId));
+      final zone = SetZone.decode(set!.sitePlacementJson)!;
+      expect(zone.width, closeTo(400, 25));
+      expect(zone.height, closeTo(300, 25));
+      expect(zone.left, closeTo(250, 25));
+      expect(zone.top, closeTo(200, 25));
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

@@ -8,6 +8,7 @@ import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light_beam.dart';
 import 'light_symbols.dart';
+import 'plan_segment.dart';
 
 /// Colores del lienzo: fondo oscuro, como en un plató a oscuras, para que
 /// los haces de luz se lean.
@@ -48,6 +49,22 @@ class CameraPlanPainter extends CustomPainter {
 
   /// Zonas de los sets sobre el plano maestro.
   final List<PlanZone> zones;
+
+  /// Otros elementos seleccionados a la vez (selección múltiple).
+  final Set<PlanElement> alsoSelected;
+
+  /// Tramo que se está dibujando.
+  final ({Offset from, Offset to, String kind})? segmentPreview;
+
+  /// Medida en curso.
+  final ({Offset from, Offset to})? measure;
+
+  /// Zona con asas en las esquinas, mientras se ajusta.
+  final Rect? zoneHandles;
+
+  /// Metros por unidad del lienzo; con él se rotulan longitudes y se pinta
+  /// la barra de escala. `null` = sin rótulos de medida.
+  final double? metersPerUnit;
   final PlanElement? selectedElement;
   final int? selectedPathIndex;
   final double scale;
@@ -64,6 +81,11 @@ class CameraPlanPainter extends CustomPainter {
     this.inheritedOpacity = 0.55,
     this.showGrid = true,
     this.zones = const [],
+    this.alsoSelected = const {},
+    this.segmentPreview,
+    this.measure,
+    this.zoneHandles,
+    this.metersPerUnit,
     this.selectedElement,
     this.selectedPathIndex,
     this.scale = 1.0,
@@ -117,11 +139,220 @@ class CameraPlanPainter extends CustomPainter {
       );
     }
 
-    for (final el in elements) {
-      _drawElement(canvas, el, selected: el.id == selectedElement?.id);
+    // Calles y relieve debajo; paredes y lo demás encima.
+    final ordered = [
+      ...elements.where(
+        (e) =>
+            PlanSegment.isSegment(e) &&
+            PlanSegment.kind(e) != PlanSegment.kindWall,
+      ),
+      ...elements.where(
+        (e) =>
+            !PlanSegment.isSegment(e) ||
+            PlanSegment.kind(e) == PlanSegment.kindWall,
+      ),
+    ];
+    for (final el in ordered) {
+      _drawElement(
+        canvas,
+        el,
+        selected: el.id == selectedElement?.id,
+        ringed: alsoSelected.contains(el),
+      );
     }
 
+    _drawOverlays(canvas);
     canvas.restore();
+
+    if (metersPerUnit != null) _drawScaleBar(canvas, size);
+  }
+
+  /// Tramo en curso, medida y asas de la zona.
+  void _drawOverlays(Canvas canvas) {
+    final preview = segmentPreview;
+    if (preview != null) {
+      final ghost = PlanSegment.create(
+        start: preview.from,
+        end: preview.to,
+        kind: preview.kind,
+      );
+      canvas.saveLayer(null, Paint()..color = const Color(0x99FFFFFF));
+      _drawSegment(canvas, ghost, selected: false);
+      canvas.restore();
+      _drawLengthLabel(
+        canvas,
+        (preview.from + preview.to) / 2,
+        (preview.to - preview.from).distance,
+      );
+    }
+
+    final m = measure;
+    if (m != null) {
+      final paint = Paint()
+        ..color = _CanvasColors.accent
+        ..strokeWidth = 1.5 / scale;
+      canvas.drawLine(m.from, m.to, paint);
+      for (final p in [m.from, m.to]) {
+        canvas.drawCircle(p, 4 / scale, Paint()..color = _CanvasColors.accent);
+      }
+      _drawLengthLabel(
+        canvas,
+        (m.from + m.to) / 2,
+        (m.to - m.from).distance,
+        color: _CanvasColors.accent,
+      );
+    }
+
+    final zone = zoneHandles;
+    if (zone != null) {
+      for (final corner in [
+        zone.topLeft,
+        zone.topRight,
+        zone.bottomRight,
+        zone.bottomLeft,
+      ]) {
+        canvas.drawCircle(corner, 7 / scale, Paint()..color = Colors.white);
+        canvas.drawCircle(
+          corner,
+          7 / scale,
+          Paint()
+            ..color = _CanvasColors.accent
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2 / scale,
+        );
+      }
+    }
+  }
+
+  void _drawLengthLabel(
+    Canvas canvas,
+    Offset at,
+    double units, {
+    Color color = _CanvasColors.ink,
+  }) {
+    final mpu = metersPerUnit;
+    if (mpu == null || units < 1) return;
+    final tp = TextPainter(
+      text: TextSpan(
+        text: formatMeters(units, mpu),
+        style: TextStyle(
+          color: color,
+          fontSize: 12 / scale,
+          fontWeight: FontWeight.w600,
+          backgroundColor: _CanvasColors.background.withValues(alpha: 0.8),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, at + Offset(-tp.width / 2, -tp.height - 6 / scale));
+  }
+
+  /// Barra de escala, abajo a la izquierda, con una longitud redonda.
+  void _drawScaleBar(Canvas canvas, Size size) {
+    final mpu = metersPerUnit!;
+    const candidates = [0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0];
+    var meters = candidates.last;
+    for (final c in candidates) {
+      if (c / mpu * scale >= 70) {
+        meters = c;
+        break;
+      }
+    }
+    final width = meters / mpu * scale;
+    final origin = Offset(16, size.height - 18);
+    final paint = Paint()
+      ..color = _CanvasColors.inkSecondary
+      ..strokeWidth = 1.5;
+    canvas.drawLine(origin, origin + Offset(width, 0), paint);
+    canvas.drawLine(origin + const Offset(0, -5), origin, paint);
+    canvas.drawLine(
+      origin + Offset(width, -5),
+      origin + Offset(width, 0),
+      paint,
+    );
+    final label = meters < 1
+        ? '${(meters * 100).round()} cm'
+        : '${meters.round()} m';
+    final tp = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(color: _CanvasColors.inkSecondary, fontSize: 11),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, origin + const Offset(4, -18));
+  }
+
+  /// Pared, calle o relieve dibujados punto a punto.
+  void _drawSegment(Canvas canvas, PlanElement el, {required bool selected}) {
+    final path = PlanSegment.path(el);
+    switch (PlanSegment.kind(el)) {
+      case PlanSegment.kindStreet:
+        canvas.drawPath(
+          path,
+          Paint()
+            ..color = const Color(0xFF3A3A44)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 64
+            ..strokeCap = StrokeCap.butt,
+        );
+        _drawDashedPath(
+          canvas,
+          path,
+          Paint()
+            ..color = _CanvasColors.inkTertiary
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5,
+        );
+      case PlanSegment.kindRelief:
+        _drawDashedPath(
+          canvas,
+          path,
+          Paint()
+            ..color = const Color(0xFFB08968)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        );
+      default:
+        canvas.drawPath(
+          path,
+          Paint()
+            ..color = _CanvasColors.ink
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 6
+            ..strokeCap = StrokeCap.round,
+        );
+    }
+
+    if (!selected) return;
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = _CanvasColors.accent.withValues(alpha: 0.9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2 / scale,
+    );
+    void handle(Offset at, {bool hollow = false}) {
+      canvas.drawCircle(
+        at,
+        6 / scale,
+        Paint()
+          ..color = hollow ? _CanvasColors.background : _CanvasColors.accent,
+      );
+      canvas.drawCircle(
+        at,
+        6 / scale,
+        Paint()
+          ..color = hollow ? _CanvasColors.accent : Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5 / scale,
+      );
+    }
+
+    handle(PlanSegment.start(el));
+    handle(PlanSegment.end(el));
+    handle(PlanSegment.midpoint(el), hollow: true);
+    _drawLengthLabel(canvas, PlanSegment.midpoint(el), PlanSegment.length(el));
   }
 
   void _drawCanvasBackground(Canvas canvas, Size size) {
@@ -329,7 +560,26 @@ class CameraPlanPainter extends CustomPainter {
     canvas.drawPath(path, paint..style = PaintingStyle.fill);
   }
 
-  void _drawElement(Canvas canvas, PlanElement el, {bool selected = false}) {
+  void _drawElement(
+    Canvas canvas,
+    PlanElement el, {
+    bool selected = false,
+    bool ringed = false,
+  }) {
+    if (PlanSegment.isSegment(el)) {
+      _drawSegment(canvas, el, selected: selected || ringed);
+      return;
+    }
+    if (ringed && !selected) {
+      canvas.drawCircle(
+        el.position,
+        30,
+        Paint()
+          ..color = _CanvasColors.accent.withValues(alpha: 0.6)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+    }
     canvas.save();
     canvas.translate(el.position.dx, el.position.dy);
     canvas.rotate(el.rotation * math.pi / 180);
@@ -681,6 +931,43 @@ class CameraPlanPainter extends CustomPainter {
           const Rect.fromLTWH(-20, -8, 12, 16),
           paint..style = PaintingStyle.fill,
         );
+      case PropType.tree:
+        canvas.drawCircle(
+          Offset.zero,
+          22,
+          Paint()..color = const Color(0xFF2E7D32).withValues(alpha: 0.35),
+        );
+        canvas.drawCircle(
+          Offset.zero,
+          22,
+          paint..color = const Color(0xFF66BB6A),
+        );
+        canvas.drawCircle(
+          Offset.zero,
+          3,
+          Paint()..color = const Color(0xFF8D6E63),
+        );
+      case PropType.rock:
+        final rock = Path()
+          ..moveTo(-16, 6)
+          ..lineTo(-8, -10)
+          ..lineTo(6, -12)
+          ..lineTo(16, 0)
+          ..lineTo(10, 10)
+          ..lineTo(-10, 12)
+          ..close();
+        canvas.drawPath(
+          rock,
+          Paint()..color = const Color(0xFF6B6B76).withValues(alpha: 0.5),
+        );
+        canvas.drawPath(rock, paint);
+      case PropType.vehicle:
+        final body = RRect.fromRectAndRadius(
+          const Rect.fromLTWH(-18, -38, 36, 76),
+          const Radius.circular(8),
+        );
+        canvas.drawRRect(body, paint);
+        canvas.drawRect(const Rect.fromLTWH(-14, -20, 28, 12), paint);
       case PropType.rectangle:
       case null:
         canvas.drawRect(const Rect.fromLTWH(-12, -12, 24, 24), paint);
@@ -810,6 +1097,11 @@ class CameraPlanPainter extends CustomPainter {
       old.inheritedOpacity != inheritedOpacity ||
       old.showGrid != showGrid ||
       old.zones != zones ||
+      old.alsoSelected != alsoSelected ||
+      old.segmentPreview != segmentPreview ||
+      old.measure != measure ||
+      old.zoneHandles != zoneHandles ||
+      old.metersPerUnit != metersPerUnit ||
       old.selectedElement?.id != selectedElement?.id ||
       old.selectedPathIndex != selectedPathIndex ||
       old.scale != scale ||

@@ -183,6 +183,9 @@ class PlanElementCompat {
         PropType.chair => '/Engine/BasicShapes/Cylinder',
         PropType.sofa => '/Engine/BasicShapes/Cube',
         PropType.bed => '/Engine/BasicShapes/Cube',
+        PropType.tree ||
+        PropType.rock ||
+        PropType.vehicle ||
         PropType.rectangle || null => defaultUnrealMesh,
       };
 
@@ -191,6 +194,9 @@ class PlanElementCompat {
         PropType.chair => 'furniture_chair',
         PropType.sofa => 'furniture_sofa',
         PropType.bed => 'furniture_bed',
+        PropType.tree => 'nature_tree',
+        PropType.rock => 'nature_rock',
+        PropType.vehicle => 'vehicle_car',
         PropType.rectangle || null => 'prop_generic',
       };
 

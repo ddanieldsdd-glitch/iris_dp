@@ -15,6 +15,7 @@ import 'package:iris_dp/features/camera_plan/floor_plan_repository.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_scope.dart';
 import 'package:iris_dp/features/camera_plan/light_beam.dart';
 import 'package:iris_dp/features/camera_plan/plan_gear_list.dart';
+import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 
 const _wallV1 =
     '{"version":1,"elements":[{"type":"wall","x":100,"y":100,"rotation":0,'
@@ -463,6 +464,76 @@ void main() {
         'CÁMARA\n  1× Cámara A · 35mm · DOLLY',
       );
       expect(GearList.from(const []).isEmpty, isTrue);
+    });
+  });
+
+  group('tramos punto a punto', () {
+    test('un tramo recto mide lo que separa sus extremos', () {
+      final wall = PlanSegment.create(
+        start: const Offset(100, 100),
+        end: const Offset(400, 500),
+      );
+      expect(PlanSegment.isSegment(wall), isTrue);
+      expect(PlanSegment.length(wall), 500);
+      expect(PlanSegment.kind(wall), PlanSegment.kindWall);
+      expect(formatMeters(500, 0.02), '10.0 m');
+      expect(formatMeters(300, 0.02), '6.00 m');
+    });
+
+    test('mover el elemento mueve el tramo entero', () {
+      final wall = PlanSegment.create(
+        start: const Offset(100, 100),
+        end: const Offset(300, 100),
+      );
+      wall.position += const Offset(50, 20);
+      expect(PlanSegment.end(wall), const Offset(350, 120));
+    });
+
+    test('mover un extremo deja el otro en su sitio', () {
+      final wall = PlanSegment.create(
+        start: const Offset(100, 100),
+        end: const Offset(300, 100),
+      );
+      PlanSegment.setStart(wall, const Offset(100, 200));
+      expect(PlanSegment.start(wall), const Offset(100, 200));
+      expect(PlanSegment.end(wall), const Offset(300, 100));
+    });
+
+    test('curvar hace pasar el centro por el punto y alarga el tramo', () {
+      final wall = PlanSegment.create(
+        start: const Offset(0, 0),
+        end: const Offset(200, 0),
+      );
+      PlanSegment.bendThrough(wall, const Offset(100, 50));
+      final mid = PlanSegment.midpoint(wall);
+      expect(mid.dx, closeTo(100, 0.001));
+      expect(mid.dy.abs(), closeTo(50, 0.001));
+      expect(PlanSegment.pointAt(wall, 0.5), mid);
+      expect(PlanSegment.length(wall), greaterThan(200));
+      // Casi recto vuelve a recto.
+      PlanSegment.bendThrough(wall, const Offset(100, 1));
+      expect(PlanSegment.curve(wall), 0);
+    });
+
+    test('la distancia a un tramo sirve para seleccionarlo', () {
+      final wall = PlanSegment.create(
+        start: const Offset(0, 0),
+        end: const Offset(200, 0),
+      );
+      expect(PlanSegment.distanceTo(wall, const Offset(100, 6)), 6);
+      expect(PlanSegment.distanceTo(wall, const Offset(260, 0)), 60);
+    });
+
+    test('calle y relieve se guardan con su tipo', () {
+      final street = PlanSegment.create(
+        start: Offset.zero,
+        end: const Offset(100, 0),
+        kind: PlanSegment.kindStreet,
+      );
+      final back = FloorPlanJson.decode(FloorPlanJson.encode([street])).single;
+      expect(PlanSegment.isSegment(back), isTrue);
+      expect(PlanSegment.kind(back), PlanSegment.kindStreet);
+      expect(back.displayLabel, 'Calle');
     });
   });
 }

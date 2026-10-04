@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
+import 'plan_segment.dart';
 
 /// Miniatura de una planta, pintada con el mismo painter del editor y
 /// encuadrada a lo que contiene.
@@ -59,6 +60,11 @@ class PlanThumbnail extends StatelessWidget {
           bounds = bounds.expandToInclude(
             Rect.fromCircle(center: el.position, radius: 1),
           );
+          if (PlanSegment.isSegment(el)) {
+            bounds = bounds.expandToInclude(
+              Rect.fromCircle(center: PlanSegment.end(el), radius: 1),
+            );
+          }
           for (final p in el.pathPoints) {
             bounds = bounds.expandToInclude(
               Rect.fromCircle(center: p, radius: 1),

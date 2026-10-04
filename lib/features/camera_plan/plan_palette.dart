@@ -7,9 +7,45 @@ import 'camera_plan_constants.dart';
 import 'light_beam.dart';
 import 'light_symbols.dart';
 
+/// Herramienta activa del lienzo.
+enum PlanTool {
+  /// Seleccionar, mover y girar.
+  select,
+  wall,
+  street,
+  relief,
+  measure,
+}
+
+extension PlanToolInfo on PlanTool {
+  String get label => switch (this) {
+    PlanTool.select => 'Mover',
+    PlanTool.wall => 'Pared',
+    PlanTool.street => 'Calle',
+    PlanTool.relief => 'Relieve',
+    PlanTool.measure => 'Medir',
+  };
+
+  IconData get icon => switch (this) {
+    PlanTool.select => Icons.near_me_outlined,
+    PlanTool.wall => Icons.horizontal_rule,
+    PlanTool.street => Icons.add_road,
+    PlanTool.relief => Icons.terrain_outlined,
+    PlanTool.measure => Icons.straighten,
+  };
+
+  /// Las herramientas que dibujan un tramo punto a punto.
+  bool get drawsSegment =>
+      this == PlanTool.wall ||
+      this == PlanTool.street ||
+      this == PlanTool.relief;
+}
+
 /// Paleta fija de la planta: lo que se puede añadir, siempre a la vista.
 /// Tocar un elemento lo coloca en el centro de lo que se está viendo.
 class PlanPalette extends StatelessWidget {
+  final PlanTool tool;
+  final ValueChanged<PlanTool> onTool;
   final VoidCallback onAddCamera;
   final VoidCallback onAddActor;
   final ValueChanged<LightType> onAddLight;
@@ -22,6 +58,8 @@ class PlanPalette extends StatelessWidget {
 
   const PlanPalette({
     super.key,
+    required this.tool,
+    required this.onTool,
     required this.onAddCamera,
     required this.onAddActor,
     required this.onAddLight,
@@ -73,6 +111,17 @@ class PlanPalette extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(10, 0, 10, AppSpacing.lg),
         children: [
+          header('HERRAMIENTAS'),
+          grid([
+            for (final t in PlanTool.values)
+              _PaletteButton(
+                icon: Icon(t.icon, size: 16),
+                label: t.label,
+                selected: t == tool,
+                tooltip: t.label,
+                onTap: () => onTool(t),
+              ),
+          ]),
           header('SUJETOS'),
           grid([
             _PaletteButton(
@@ -143,8 +192,12 @@ class _PaletteButton extends StatelessWidget {
   final Widget icon;
   final String label;
   final VoidCallback onTap;
+  final bool selected;
+  final String? tooltip;
 
   const _PaletteButton({
+    this.selected = false,
+    this.tooltip,
     required this.icon,
     required this.label,
     required this.onTap,
@@ -154,10 +207,12 @@ class _PaletteButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return Tooltip(
-      message: 'Añadir $label',
+      message: tooltip ?? 'Añadir $label',
       waitDuration: const Duration(milliseconds: 600),
       child: Material(
-        color: palette.surfaceElevated,
+        color: selected
+            ? palette.accent.withValues(alpha: 0.28)
+            : palette.surfaceElevated,
         borderRadius: BorderRadius.circular(8),
         clipBehavior: Clip.antiAlias,
         child: InkWell(

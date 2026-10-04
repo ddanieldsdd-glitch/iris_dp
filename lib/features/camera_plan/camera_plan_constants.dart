@@ -106,6 +106,9 @@ enum PropType {
   rectangle,
   sofa,
   bed,
+  tree,
+  rock,
+  vehicle,
 }
 
 enum ArchitectureType {
@@ -127,6 +130,9 @@ extension PropTypeCodec on PropType {
         PropType.rectangle => 'Rectángulo',
         PropType.sofa => 'Sofá',
         PropType.bed => 'Cama',
+        PropType.tree => 'Árbol',
+        PropType.rock => 'Roca',
+        PropType.vehicle => 'Vehículo',
       };
 
   IconData get icon => switch (this) {
@@ -135,6 +141,9 @@ extension PropTypeCodec on PropType {
         PropType.rectangle => Icons.crop_square,
         PropType.sofa => Icons.weekend_outlined,
         PropType.bed => Icons.bed_outlined,
+        PropType.tree => Icons.park_outlined,
+        PropType.rock => Icons.landscape_outlined,
+        PropType.vehicle => Icons.directions_car_outlined,
       };
 
   static PropType? fromLabel(String? value) {

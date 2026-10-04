@@ -4,7 +4,9 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:drift/drift.dart' show Value, OrderingTerm;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
@@ -28,6 +30,7 @@ import 'light_beam.dart';
 import 'plan_data.dart' show kLightSetupColors;
 import 'plan_gear_list.dart';
 import 'plan_palette.dart';
+import 'plan_segment.dart';
 import 'plan_target.dart';
 import '../locations/location_scan_service.dart';
 import 'plan_element_compat.dart';
@@ -117,7 +120,16 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   ConsumerState<CameraPlanEditor> createState() => _CameraPlanEditorState();
 }
 
+/// Escala de partida de una planta sin calibrar: 2 cm por unidad, que deja
+/// un actor en unos 60 cm de ancho y el lienzo en 32 × 24 m.
+const double defaultMetersPerUnit = 0.02;
+
 class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
+  /// Encuadre actual del lienzo, para los tests.
+  @visibleForTesting
+  ({Offset offset, double scale}) get debugView =>
+      (offset: _canvasOffset, scale: _scale);
+
   static const _annotationDocumentSize = Size(1600, 1200);
 
   final List<PlanElement> _elements = [];
@@ -140,6 +152,39 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Size _canvasSize = Size.zero;
   int _setupShotCount = 0;
   Color _setupColor = kLightSetupColors.first;
+
+  // Herramientas.
+  PlanTool _tool = PlanTool.select;
+
+  /// Primer punto del tramo que se está dibujando y dónde está el cursor.
+  Offset? _segmentStart;
+  Offset? _segmentHover;
+  ({Offset from, Offset to})? _measure;
+
+  /// Asa del tramo seleccionado que se arrastra: 0 inicio, 1 final, 2 curva.
+  int? _segmentHandle;
+
+  /// Imán: lo que se mueve o se dibuja se ajusta a la rejilla y a los
+  /// extremos de otros tramos.
+  bool _snap = true;
+
+  /// Selección múltiple (con Mayús); incluye a `_selected`.
+  final Set<PlanElement> _multi = {};
+
+  // Deshacer y rehacer: fotos de las capas, de antes de cada cambio.
+  final List<Map<PlanLayer, String>> _undoStack = [];
+  final List<Map<PlanLayer, String>> _redoStack = [];
+  Map<PlanLayer, String> _lastSaved = {};
+
+  // Ajuste de la zona del set con asas.
+  Rect? _zoneEditRect;
+
+  /// Esquina que se arrastra (0–3) o -1 si se mueve la zona entera.
+  int? _zoneGrip;
+
+  /// Metros que mide una unidad del lienzo.
+  double _metersPerUnit = defaultMetersPerUnit;
+  final FocusNode _canvasFocus = FocusNode(debugLabel: 'planta');
   int _setShotCount = 0;
   final AnnotationCanvasController _annotationController =
       AnnotationCanvasController();
@@ -194,6 +239,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   @override
   void dispose() {
     _annotationController.dispose();
+    _canvasFocus.dispose();
     super.dispose();
   }
 
@@ -415,6 +461,21 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         ..addAll(elements);
       _selected = null;
       _selectedPathIndex = null;
+      _multi.clear();
+      _segmentStart = null;
+      _segmentHover = null;
+      _zoneEditRect = null;
+      _undoStack.clear();
+      _redoStack.clear();
+      _metersPerUnit =
+          FloorPlanJson.decodeDocument(
+            linkedSite?.floorPlanJson,
+          ).metersPerUnit ??
+          FloorPlanJson.decodeDocument(
+            linkedSet?.floorPlanJson,
+          ).metersPerUnit ??
+          FloorPlanJson.decodeDocument(lightSetup?.planJson).metersPerUnit ??
+          defaultMetersPerUnit;
       _lightSetup = lightSetup;
       _zones = zones;
       if (_setZone == null && setZone != null) _pendingFit = setZone;
@@ -433,6 +494,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _backgroundOpacity = bgOpacity;
       _loading = false;
     });
+    _lastSaved = _snapshot();
   }
 
   Future<void> _saveAnnotations(AnnotationDocument document) => ref
@@ -953,9 +1015,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     );
   }
 
-  Future<void> _persistElement(PlanElement el, {int? sortOrder}) async {
+  Future<void> _persistElement(
+    PlanElement el, {
+    int? sortOrder,
+    bool commit = true,
+  }) async {
     if (el.layer != PlanLayer.shot) {
       await _saveLayer(el.layer);
+      if (commit) _commitHistory();
       return;
     }
     final shotId = _shot?.id;
@@ -1021,26 +1088,247 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         db.shots,
       )..where((s) => s.id.equals(shotId))).getSingleOrNull());
     }
+    if (commit) _commitHistory();
   }
 
   Future<void> _persistAllElements() async {
     for (final layer in PlanLayer.values) {
       await _saveLayer(layer);
     }
+    _commitHistory();
   }
 
-  Future<void> _addElement(PlanElement el) async {
+  // ── Deshacer y rehacer ────────────────────────────────────────────────────
+
+  /// Foto de las capas tal como están ahora.
+  Map<PlanLayer, String> _snapshot() => {
+    for (final layer in PlanLayer.values)
+      if (_hasLayer(layer)) layer: FloorPlanJson.encode(_layerElements(layer)),
+  };
+
+  bool _sameSnapshot(Map<PlanLayer, String> a, Map<PlanLayer, String> b) =>
+      a.length == b.length && a.keys.every((k) => a[k] == b[k]);
+
+  /// Tras guardar un cambio, apila el estado anterior para poder deshacerlo.
+  void _commitHistory() {
+    final current = _snapshot();
+    if (_sameSnapshot(current, _lastSaved)) return;
+    _undoStack.add(_lastSaved);
+    if (_undoStack.length > 60) _undoStack.removeAt(0);
+    _redoStack.clear();
+    _lastSaved = current;
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _restore(Map<PlanLayer, String> snapshot) async {
+    final restored = <PlanElement>[];
+    for (final layer in PlanLayer.values) {
+      if (!_hasLayer(layer)) continue;
+      // Una capa que no existía en la foto se queda como está.
+      final json = snapshot[layer];
+      final list = json == null
+          ? _layerElements(layer)
+          : FloorPlanJson.decode(json);
+      for (final el in list) {
+        el.layer = layer;
+        el.id = layer == PlanLayer.shot ? 0 : --_tempId;
+        restored.add(el);
+      }
+    }
+    setState(() {
+      _elements
+        ..clear()
+        ..addAll(restored);
+      _selected = null;
+      _selectedPathIndex = null;
+      _multi.clear();
+    });
+    for (final layer in PlanLayer.values) {
+      await _saveLayer(layer);
+    }
+    _lastSaved = _snapshot();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _undo() async {
+    if (_undoStack.isEmpty) return;
+    _redoStack.add(_snapshot());
+    await _restore(_undoStack.removeLast());
+  }
+
+  Future<void> _redo() async {
+    if (_redoStack.isEmpty) return;
+    _undoStack.add(_snapshot());
+    await _restore(_redoStack.removeLast());
+  }
+
+  // ── Selección ─────────────────────────────────────────────────────────────
+
+  /// Lo seleccionado: varios con Mayús, o el único elemento activo.
+  List<PlanElement> get _selection =>
+      _multi.isNotEmpty ? _multi.toList() : [if (_selected != null) _selected!];
+
+  void _select(PlanElement? el, {bool add = false}) {
+    setState(() {
+      _selectedPathIndex = null;
+      if (add && el != null) {
+        if (_multi.isEmpty && _selected != null) _multi.add(_selected!);
+        if (!_multi.remove(el)) _multi.add(el);
+        _selected = _multi.isEmpty ? null : _multi.last;
+        if (_multi.length < 2) _multi.clear();
+      } else {
+        _multi.clear();
+        _selected = el;
+      }
+    });
+  }
+
+  /// Guarda varios elementos, cada uno en su capa.
+  Future<void> _persistMany(Iterable<PlanElement> elements) async {
+    final layers = <PlanLayer>{};
+    for (final el in elements) {
+      if (el.layer == PlanLayer.shot) {
+        await _persistElement(el, commit: false);
+      } else {
+        layers.add(el.layer);
+      }
+    }
+    for (final layer in layers) {
+      await _saveLayer(layer);
+    }
+    _commitHistory();
+  }
+
+  /// Copia lo seleccionado, un poco desplazado y en su misma capa.
+  Future<void> _duplicateSelection() async {
+    final originals = _selection;
+    if (originals.isEmpty) return;
+    final copies = <PlanElement>[];
+    for (final original in originals) {
+      final copy = FloorPlanJson.decode(
+        FloorPlanJson.encode([original]),
+      ).single;
+      copy
+        ..layer = original.layer
+        ..id = original.layer == PlanLayer.shot ? 0 : --_tempId
+        ..position = original.position + const Offset(30, 30)
+        ..pathPoints = [
+          for (final p in original.pathPoints) p + const Offset(30, 30),
+        ];
+      copies.add(copy);
+    }
+    setState(() {
+      _elements.addAll(copies);
+      _multi
+        ..clear()
+        ..addAll(copies.length > 1 ? copies : const []);
+      _selected = copies.last;
+      _selectedPathIndex = null;
+    });
+    await _persistMany(copies);
+  }
+
+  // ── Imán ──────────────────────────────────────────────────────────────────
+
+  static const double _gridStep = 10;
+
+  Offset _snapToGrid(Offset p) => _snap
+      ? Offset(
+          (p.dx / _gridStep).round() * _gridStep,
+          (p.dy / _gridStep).round() * _gridStep,
+        )
+      : p;
+
+  /// Punto para un tramo: se pega a los extremos de otros tramos y, si no
+  /// hay ninguno cerca, a la rejilla.
+  Offset _snapSegmentPoint(Offset p, {PlanElement? except}) {
+    if (_snap) {
+      final reach = 14 / _scale;
+      for (final el in _visibleElements) {
+        if (el == except || !PlanSegment.isSegment(el)) continue;
+        for (final corner in [PlanSegment.start(el), PlanSegment.end(el)]) {
+          if ((corner - p).distance <= reach) return corner;
+        }
+      }
+    }
+    return _snapToGrid(p);
+  }
+
+  void _setTool(PlanTool tool) {
+    setState(() {
+      _tool = tool;
+      _segmentStart = null;
+      _segmentHover = null;
+      _measure = null;
+      if (tool != PlanTool.select) {
+        _selected = null;
+        _selectedPathIndex = null;
+        _multi.clear();
+      }
+    });
+  }
+
+  String get _segmentKind => switch (_tool) {
+    PlanTool.street => PlanSegment.kindStreet,
+    PlanTool.relief => PlanSegment.kindRelief,
+    _ => PlanSegment.kindWall,
+  };
+
+  Future<void> _addSegment(Offset from, Offset to) async {
+    if ((to - from).distance < 8) return;
+    await _addElement(
+      PlanSegment.create(start: from, end: to, kind: _segmentKind),
+      keepPosition: true,
+      select: false,
+    );
+  }
+
+  // ── Ajuste de la zona del set ─────────────────────────────────────────────
+
+  void _startZoneEdit() {
+    final zone = _setZone;
+    if (zone == null) return;
+    setState(() {
+      _zoneEditRect = zone;
+      _selected = null;
+      _multi.clear();
+      _tool = PlanTool.select;
+    });
+  }
+
+  Future<void> _finishZoneEdit() async {
+    final rect = _zoneEditRect;
+    setState(() => _zoneEditRect = null);
+    if (rect != null && rect != _setZone) await _saveZone(rect);
+  }
+
+  static List<Offset> _corners(Rect r) => [
+    r.topLeft,
+    r.topRight,
+    r.bottomRight,
+    r.bottomLeft,
+  ];
+
+  Future<void> _addElement(
+    PlanElement el, {
+    bool keepPosition = false,
+    bool select = true,
+  }) async {
     final layer = await _layerForNew(el.type);
     if (!mounted) return;
     el.layer = layer;
     if (layer != PlanLayer.shot) el.id = --_tempId;
-    // Lo nuevo aparece en lo que se está viendo.
-    final same = _elements.where((e) => e.type == el.type).length;
-    el.position = _viewCenter + Offset(same % 5 * 36.0, same % 5 * 24.0);
+    if (!keepPosition) {
+      // Lo nuevo aparece en lo que se está viendo.
+      final same = _elements.where((e) => e.type == el.type).length;
+      el.position = _snapToGrid(
+        _viewCenter + Offset(same % 5 * 36.0, same % 5 * 24.0),
+      );
+    }
     _hiddenLayers.remove(layer);
     setState(() => _elements.add(el));
     await _persistElement(el);
-    setState(() => _selected = el);
+    if (select && mounted) _select(el);
   }
 
   Future<void> _addCamera() async {
@@ -1152,19 +1440,28 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   Future<void> _deleteSelected() async {
-    final el = _selected;
-    if (el == null) return;
-    if (el.layer == PlanLayer.shot && el.id > 0) {
-      final db = ref.read(databaseProvider);
-      await db.deleteCameraPlanElement(el.id);
-      await db.touchProjectContent(widget.projectId);
+    final doomed = _selection;
+    if (doomed.isEmpty) return;
+    final db = ref.read(databaseProvider);
+    final layers = <PlanLayer>{};
+    for (final el in doomed) {
+      if (el.layer == PlanLayer.shot) {
+        if (el.id > 0) await db.deleteCameraPlanElement(el.id);
+      } else {
+        layers.add(el.layer);
+      }
     }
     setState(() {
-      _elements.remove(el);
+      _elements.removeWhere(doomed.contains);
       _selected = null;
       _selectedPathIndex = null;
+      _multi.clear();
     });
-    if (el.layer != PlanLayer.shot) await _saveLayer(el.layer);
+    for (final layer in layers) {
+      await _saveLayer(layer);
+    }
+    await db.touchProjectContent(widget.projectId);
+    _commitHistory();
   }
 
   Offset _toCanvasCoords(Offset localPos) {
@@ -1172,16 +1469,35 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   PlanElement? _elementAt(Offset canvasPos) {
+    final slack = 1 / math.min(1.0, _scale);
     for (final el in _visibleElements.reversed) {
-      if ((el.position - canvasPos).distance < 28 / math.min(1.0, _scale)) {
-        return el;
-      }
+      if (PlanSegment.isSegment(el)) continue;
+      if ((el.position - canvasPos).distance < 28 * slack) return el;
+    }
+    // Los tramos, después: lo que está encima de una pared se coge antes.
+    for (final el in _visibleElements.reversed) {
+      if (!PlanSegment.isSegment(el)) continue;
+      final reach = PlanSegment.kind(el) == PlanSegment.kindStreet ? 30 : 10;
+      if (PlanSegment.distanceTo(el, canvasPos) < reach * slack) return el;
     }
     return null;
   }
 
+  /// Asa del tramo seleccionado bajo el cursor: 0 inicio, 1 final, 2 curva.
+  int? _segmentHandleAt(Offset canvasPos) {
+    final el = _selected;
+    if (el == null || !PlanSegment.isSegment(el) || _multi.isNotEmpty) {
+      return null;
+    }
+    final reach = 12 / _scale;
+    if ((PlanSegment.start(el) - canvasPos).distance < reach) return 0;
+    if ((PlanSegment.end(el) - canvasPos).distance < reach) return 1;
+    if ((PlanSegment.midpoint(el) - canvasPos).distance < reach) return 2;
+    return null;
+  }
+
   bool _hitRotationHandle(Offset canvasPos) {
-    if (_selected == null) return false;
+    if (_selected == null || PlanSegment.isSegment(_selected!)) return false;
     final handle = CameraPlanPainter.rotationHandleWorld(_selected!);
     return (canvasPos - handle).distance < 14 / _scale;
   }
@@ -1245,12 +1561,35 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       CameraPlanPainter.pathPointAt(camera, canvasPos, scale: _scale);
 
   void _onPanStart(DragStartDetails d) {
+    _canvasFocus.requestFocus();
     final canvasPos = _toCanvasCoords(d.localPosition);
     if (_zoneMode) {
       setState(() {
         _zoneStart = canvasPos;
         _zoneDraft = Rect.fromPoints(canvasPos, canvasPos);
       });
+      return;
+    }
+    final zoneEdit = _zoneEditRect;
+    if (zoneEdit != null) {
+      final reach = 16 / _scale;
+      final corners = _corners(zoneEdit);
+      _zoneGrip = null;
+      for (var i = 0; i < corners.length; i++) {
+        if ((corners[i] - canvasPos).distance < reach) _zoneGrip = i;
+      }
+      if (_zoneGrip == null && zoneEdit.contains(canvasPos)) _zoneGrip = -1;
+      return;
+    }
+    if (_tool.drawsSegment) {
+      setState(() {
+        _segmentStart ??= _snapSegmentPoint(canvasPos);
+        _segmentHover = _segmentStart;
+      });
+      return;
+    }
+    if (_tool == PlanTool.measure) {
+      setState(() => _measure = (from: canvasPos, to: canvasPos));
       return;
     }
     for (final el in _elements.reversed) {
@@ -1266,6 +1605,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         return;
       }
     }
+    _segmentHandle = _segmentHandleAt(canvasPos);
+    if (_segmentHandle != null) return;
     if (_selected != null && _hitRotationHandle(canvasPos)) {
       _isRotating = true;
       _isDraggingPathPoint = false;
@@ -1275,39 +1616,96 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _isDraggingPathPoint = false;
     final tapped = _elementAt(canvasPos);
     _dragging = tapped;
-    if (tapped != null) {
-      setState(() {
-        _selected = tapped;
-        _selectedPathIndex = null;
-      });
-    }
+    if (tapped != null && !_multi.contains(tapped)) _select(tapped);
   }
 
   void _onPanUpdate(DragUpdateDetails d) {
+    final canvasPos = _toCanvasCoords(d.localPosition);
     if (_zoneMode) {
       final start = _zoneStart;
       if (start == null) return;
+      setState(() => _zoneDraft = Rect.fromPoints(start, canvasPos));
+      return;
+    }
+    final zoneEdit = _zoneEditRect;
+    if (zoneEdit != null) {
+      final grip = _zoneGrip;
+      if (grip == null) {
+        setState(() => _canvasOffset += d.delta);
+        return;
+      }
+      final delta = d.delta / _scale;
       setState(() {
-        _zoneDraft = Rect.fromPoints(start, _toCanvasCoords(d.localPosition));
+        if (grip == -1) {
+          _zoneEditRect = zoneEdit.shift(delta);
+        } else {
+          // La esquina contraria se queda fija.
+          final fixed = _corners(zoneEdit)[(grip + 2) % 4];
+          final next = Rect.fromPoints(fixed, _snapToGrid(canvasPos));
+          if (next.width > 40 && next.height > 40) {
+            _zoneEditRect = next;
+            // Tras cruzar la esquina fija, se sigue cogiendo la misma mano.
+            _zoneGrip = _corners(next).indexWhere(
+              (c) =>
+                  (c - fixed).distance > 1 &&
+                  c.dx != fixed.dx &&
+                  c.dy != fixed.dy,
+            );
+          }
+        }
       });
       return;
     }
+    if (_tool.drawsSegment) {
+      setState(() => _segmentHover = _snapSegmentPoint(canvasPos));
+      return;
+    }
+    if (_tool == PlanTool.measure) {
+      final m = _measure;
+      if (m != null) setState(() => _measure = (from: m.from, to: canvasPos));
+      return;
+    }
+
     final delta = d.delta / _scale;
-    if (_selected != null &&
+    final selected = _selected;
+    final handle = _segmentHandle;
+    if (selected != null && handle != null) {
+      _dragDirty = true;
+      setState(() {
+        switch (handle) {
+          case 0:
+            PlanSegment.setStart(
+              selected,
+              _snapSegmentPoint(canvasPos, except: selected),
+            );
+          case 1:
+            PlanSegment.setEnd(
+              selected,
+              _snapSegmentPoint(canvasPos, except: selected),
+            );
+          default:
+            PlanSegment.bendThrough(selected, canvasPos);
+        }
+      });
+      return;
+    }
+    if (selected != null &&
         (_isDraggingPathPoint || _isRotating || _dragging != null)) {
       _dragDirty = true;
     }
-    if (_selected != null &&
+    if (selected != null &&
         _isDraggingPathPoint &&
         _selectedPathIndex != null) {
-      setState(() {
-        _selected!.pathPoints[_selectedPathIndex!] += delta;
-      });
-    } else if (_selected != null && _isRotating) {
-      final canvasPos = _toCanvasCoords(d.localPosition);
-      setState(() => _updateRotation(_selected!, canvasPos));
+      setState(() => selected.pathPoints[_selectedPathIndex!] += delta);
+    } else if (selected != null && _isRotating) {
+      setState(() => _updateRotation(selected, canvasPos));
     } else if (_dragging != null) {
-      setState(() => _dragging!.position += delta);
+      setState(() {
+        for (final el in _multi.contains(_dragging) ? _multi : {_dragging!}) {
+          el.position += delta;
+          el.pathPoints = [for (final p in el.pathPoints) p + delta];
+        }
+      });
     } else {
       setState(() => _canvasOffset += d.delta);
     }
@@ -1326,20 +1724,79 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       }
       return;
     }
+    if (_zoneEditRect != null) {
+      _zoneGrip = null;
+      return;
+    }
+    if (_tool.drawsSegment) {
+      // Arrastrar dibuja un tramo; tocar punto a punto los encadena.
+      final from = _segmentStart;
+      final to = _segmentHover;
+      setState(() {
+        _segmentStart = null;
+        _segmentHover = null;
+      });
+      if (from != null && to != null) await _addSegment(from, to);
+      return;
+    }
+    if (_tool == PlanTool.measure) return;
+
     // Se guarda siempre que algo se haya movido, se suelte como se suelte.
     final moved = _dragDirty;
+    final dragged = _dragging;
+    final wasHandle = _segmentHandle != null;
     _dragDirty = false;
     _dragging = null;
-    if (_selected != null && moved) {
-      await _persistElement(_selected!);
-    }
+    _segmentHandle = null;
     _isRotating = false;
     _isDraggingPathPoint = false;
+    if (!moved || _selected == null) return;
+
+    if (dragged != null && !wasHandle) {
+      final group = _multi.contains(dragged) ? _multi.toList() : [dragged];
+      // El imán coloca lo que se ha movido sobre la rejilla.
+      final anchor = group.first;
+      final shift = _snapToGrid(anchor.position) - anchor.position;
+      if (shift != Offset.zero) {
+        setState(() {
+          for (final el in group) {
+            el.position += shift;
+            el.pathPoints = [for (final p in el.pathPoints) p + shift];
+          }
+        });
+      }
+      await _persistMany(group);
+    } else {
+      await _persistElement(_selected!);
+    }
   }
 
   void _onTapCanvas(TapDownDetails d) {
-    if (_zoneMode) return;
+    _canvasFocus.requestFocus();
+    if (_zoneMode || _zoneEditRect != null) return;
     final canvasPos = _toCanvasCoords(d.localPosition);
+    if (_tool.drawsSegment) {
+      final point = _snapSegmentPoint(canvasPos);
+      final from = _segmentStart;
+      if (from == null) {
+        setState(() {
+          _segmentStart = point;
+          _segmentHover = point;
+        });
+      } else {
+        // Encadena: el final de este tramo es el inicio del siguiente.
+        setState(() {
+          _segmentStart = point;
+          _segmentHover = point;
+        });
+        _addSegment(from, point);
+      }
+      return;
+    }
+    if (_tool == PlanTool.measure) {
+      setState(() => _measure = null);
+      return;
+    }
     for (final el in _elements.reversed) {
       if (el.type != ElementType.camera) continue;
       final pathIdx = _pathPointIndexAt(el, canvasPos);
@@ -1351,14 +1808,22 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         return;
       }
     }
-    final el = _elementAt(canvasPos);
-    setState(() {
-      _selected = el;
-      _selectedPathIndex = null;
-    });
+    if (_segmentHandleAt(canvasPos) != null) return;
+    _select(
+      _elementAt(canvasPos),
+      add: HardwareKeyboard.instance.isShiftPressed,
+    );
   }
 
   void _onDoubleTapCanvas(TapDownDetails d) {
+    if (_tool.drawsSegment) {
+      // Doble toque: termina la cadena de tramos.
+      setState(() {
+        _segmentStart = null;
+        _segmentHover = null;
+      });
+      return;
+    }
     if (_selected?.type != ElementType.camera) return;
     final canvasPos = _toCanvasCoords(d.localPosition);
     if (_elementAt(canvasPos) != null) return;
@@ -1367,6 +1832,47 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       return;
     }
     _addPathPointAt(canvasPos);
+  }
+
+  /// Atajos del lienzo. Solo valen con el foco en él, para no pisar lo que
+  /// se escribe en los paneles.
+  Map<ShortcutActivator, VoidCallback> get _shortcuts => {
+    const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): _undo,
+    const SingleActivator(LogicalKeyboardKey.keyZ, control: true): _undo,
+    const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
+        _redo,
+    const SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true):
+        _redo,
+    const SingleActivator(LogicalKeyboardKey.keyD, meta: true):
+        _duplicateSelection,
+    const SingleActivator(LogicalKeyboardKey.keyD, control: true):
+        _duplicateSelection,
+    const SingleActivator(LogicalKeyboardKey.delete): _deleteSelected,
+    const SingleActivator(LogicalKeyboardKey.backspace): _deleteSelected,
+    const SingleActivator(LogicalKeyboardKey.escape): _cancel,
+    const SingleActivator(LogicalKeyboardKey.keyV): () =>
+        _setTool(PlanTool.select),
+    const SingleActivator(LogicalKeyboardKey.keyW): () =>
+        _setTool(PlanTool.wall),
+    const SingleActivator(LogicalKeyboardKey.keyM): () =>
+        _setTool(PlanTool.measure),
+  };
+
+  /// Esc: suelta lo que se esté haciendo.
+  void _cancel() {
+    if (_zoneEditRect != null) {
+      setState(() => _zoneEditRect = null);
+    } else if (_segmentStart != null || _measure != null) {
+      setState(() {
+        _segmentStart = null;
+        _segmentHover = null;
+        _measure = null;
+      });
+    } else if (_tool != PlanTool.select) {
+      _setTool(PlanTool.select);
+    } else {
+      _select(null);
+    }
   }
 
   void _zoomBy(double delta) {
@@ -1475,6 +1981,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                   switch (action) {
                     case 'fit':
                       _fitTo(_setZone!);
+                    case 'adjust':
+                      _startZoneEdit();
                     case 'redraw':
                       setState(() {
                         _zoneMode = true;
@@ -1486,6 +1994,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 },
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'fit', child: Text('Encuadrar el set')),
+                  PopupMenuItem(
+                    value: 'adjust',
+                    child: Text('Mover o redimensionar la zona'),
+                  ),
                   PopupMenuItem(
                     value: 'redraw',
                     child: Text('Volver a marcar la zona'),
@@ -1575,6 +2087,26 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             }),
           ),
           IconButton(
+            tooltip: 'Deshacer',
+            icon: const Icon(Icons.undo),
+            color: palette.textSecondary,
+            onPressed: _undoStack.isEmpty ? null : _undo,
+          ),
+          IconButton(
+            tooltip: 'Rehacer',
+            icon: const Icon(Icons.redo),
+            color: palette.textSecondary,
+            onPressed: _redoStack.isEmpty ? null : _redo,
+          ),
+          IconButton(
+            tooltip: _snap ? 'Imán activado' : 'Imán desactivado',
+            icon: Icon(
+              Icons.grid_goldenratio,
+              color: _snap ? palette.accent : palette.textTertiary,
+            ),
+            onPressed: () => setState(() => _snap = !_snap),
+          ),
+          IconButton(
             tooltip: 'Guardar',
             icon: Icon(Icons.save_outlined, color: palette.textSecondary),
             onPressed: _saveCurrentPlan,
@@ -1605,6 +2137,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               children: [
                 if (_wide && !_annotationMode)
                   PlanPalette(
+                    tool: _tool,
+                    onTool: _setTool,
                     onAddCamera: _addCamera,
                     onAddActor: () => _addActor(_nextActorColor),
                     onAddLight: _addLight,
@@ -1621,7 +2155,36 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                   child: Column(
                     children: [
                       _buildLayerBar(palette),
-                      if (_zoneMode)
+                      if (_zoneEditRect != null)
+                        _Notice(
+                          palette: palette,
+                          icon: Icons.crop_free,
+                          text:
+                              'Arrastra las esquinas para cambiar el tamaño '
+                              'de la zona, o el interior para moverla.',
+                          actionLabel: 'Listo',
+                          onAction: _finishZoneEdit,
+                        )
+                      else if (_tool.drawsSegment)
+                        _Notice(
+                          palette: palette,
+                          icon: _tool.icon,
+                          text:
+                              '${_tool.label}: toca punto a punto para '
+                              'encadenar tramos, o arrastra para uno solo. '
+                              'Doble toque o Esc para terminar.',
+                          actionLabel: 'Terminar',
+                          onAction: () => _setTool(PlanTool.select),
+                        )
+                      else if (_tool == PlanTool.measure)
+                        _Notice(
+                          palette: palette,
+                          icon: Icons.straighten,
+                          text: 'Medir: arrastra entre dos puntos.',
+                          actionLabel: 'Terminar',
+                          onAction: () => _setTool(PlanTool.select),
+                        )
+                      else if (_zoneMode)
                         _Notice(
                           palette: palette,
                           icon: Icons.crop_free,
@@ -1680,46 +2243,113 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                       children: [
                                         IgnorePointer(
                                           ignoring: _annotationMode,
-                                          child: GestureDetector(
-                                            onPanStart: _onPanStart,
-                                            onPanUpdate: _onPanUpdate,
-                                            onPanEnd: _onPanEnd,
-                                            onTapDown: _onTapCanvas,
-                                            onDoubleTapDown: _onDoubleTapCanvas,
-                                            child: CustomPaint(
-                                              size: Size(
-                                                constraints.maxWidth,
-                                                constraints.maxHeight,
-                                              ),
-                                              painter: CameraPlanPainter(
-                                                elements: _visibleElements,
-                                                zones: [
-                                                  ..._zones,
-                                                  if (_zoneDraft != null)
-                                                    PlanZone(
-                                                      rect: _zoneDraft!,
-                                                      color: _sceneColor,
-                                                      label:
-                                                          _linkedSet
-                                                              ?.locationName ??
-                                                          '',
-                                                      active: true,
+                                          child: CallbackShortcuts(
+                                            bindings: _shortcuts,
+                                            child: Focus(
+                                              focusNode: _canvasFocus,
+                                              autofocus: true,
+                                              child: MouseRegion(
+                                                cursor: _tool == PlanTool.select
+                                                    ? MouseCursor.defer
+                                                    : SystemMouseCursors
+                                                          .precise,
+                                                onHover: (e) {
+                                                  if (_tool.drawsSegment &&
+                                                      _segmentStart != null) {
+                                                    setState(
+                                                      () => _segmentHover =
+                                                          _snapSegmentPoint(
+                                                            _toCanvasCoords(
+                                                              e.localPosition,
+                                                            ),
+                                                          ),
+                                                    );
+                                                  }
+                                                },
+                                                child: GestureDetector(
+                                                  // El arrastre empieza donde se tocó, no donde se
+                                                  // reconoció: si no, las asas pequeñas se escapan
+                                                  // en pantalla táctil.
+                                                  dragStartBehavior:
+                                                      DragStartBehavior.down,
+                                                  onPanStart: _onPanStart,
+                                                  onPanUpdate: _onPanUpdate,
+                                                  onPanEnd: _onPanEnd,
+                                                  onTapDown: _onTapCanvas,
+                                                  onDoubleTapDown:
+                                                      _onDoubleTapCanvas,
+                                                  child: CustomPaint(
+                                                    size: Size(
+                                                      constraints.maxWidth,
+                                                      constraints.maxHeight,
                                                     ),
-                                                ],
-                                                selectedElement: _selected,
-                                                selectedPathIndex:
-                                                    _selectedPathIndex,
-                                                scale: _scale,
-                                                offset: _canvasOffset,
-                                                palette: palette,
-                                                backgroundImage:
-                                                    _backgroundImage,
-                                                backgroundRect: _backgroundRect,
-                                                backgroundOpacity:
-                                                    _backgroundOpacity,
-                                              ),
-                                              child: Container(
-                                                color: Colors.transparent,
+                                                    painter: CameraPlanPainter(
+                                                      elements:
+                                                          _visibleElements,
+                                                      zones: [
+                                                        for (final zone
+                                                            in _zones)
+                                                          if (zone.active &&
+                                                              _zoneEditRect !=
+                                                                  null)
+                                                            PlanZone(
+                                                              rect:
+                                                                  _zoneEditRect!,
+                                                              color: zone.color,
+                                                              label: zone.label,
+                                                              active: true,
+                                                            )
+                                                          else
+                                                            zone,
+                                                        if (_zoneDraft != null)
+                                                          PlanZone(
+                                                            rect: _zoneDraft!,
+                                                            color: _sceneColor,
+                                                            label:
+                                                                _linkedSet
+                                                                    ?.locationName ??
+                                                                '',
+                                                            active: true,
+                                                          ),
+                                                      ],
+                                                      alsoSelected: _multi,
+                                                      segmentPreview:
+                                                          _segmentStart !=
+                                                                  null &&
+                                                              _segmentHover !=
+                                                                  null
+                                                          ? (
+                                                              from:
+                                                                  _segmentStart!,
+                                                              to: _segmentHover!,
+                                                              kind:
+                                                                  _segmentKind,
+                                                            )
+                                                          : null,
+                                                      measure: _measure,
+                                                      zoneHandles:
+                                                          _zoneEditRect,
+                                                      metersPerUnit:
+                                                          _metersPerUnit,
+                                                      selectedElement:
+                                                          _selected,
+                                                      selectedPathIndex:
+                                                          _selectedPathIndex,
+                                                      scale: _scale,
+                                                      offset: _canvasOffset,
+                                                      palette: palette,
+                                                      backgroundImage:
+                                                          _backgroundImage,
+                                                      backgroundRect:
+                                                          _backgroundRect,
+                                                      backgroundOpacity:
+                                                          _backgroundOpacity,
+                                                    ),
+                                                    child: Container(
+                                                      color: Colors.transparent,
+                                                    ),
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -1772,6 +2402,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   await _persistElement(el);
                                 },
                                 onDelete: _deleteSelected,
+                                onDuplicate: _duplicateSelection,
+                                selectionCount: _selection.length,
+                                lengthLabel: PlanSegment.isSegment(_selected!)
+                                    ? formatMeters(
+                                        PlanSegment.length(_selected!),
+                                        _metersPerUnit,
+                                      )
+                                    : null,
                               )
                             else if (_wide)
                               Container(
@@ -2532,6 +3170,13 @@ class _ElementPanel extends StatefulWidget {
   final VoidCallback? onClearPath;
   final VoidCallback onUpdate;
   final VoidCallback onDelete;
+  final VoidCallback onDuplicate;
+
+  /// Cuántos elementos hay seleccionados a la vez.
+  final int selectionCount;
+
+  /// Longitud en metros, si es un tramo.
+  final String? lengthLabel;
 
   const _ElementPanel({
     required this.palette,
@@ -2546,6 +3191,9 @@ class _ElementPanel extends StatefulWidget {
     this.onClearPath,
     required this.onUpdate,
     required this.onDelete,
+    required this.onDuplicate,
+    this.selectionCount = 1,
+    this.lengthLabel,
   });
 
   @override
@@ -2727,37 +3375,44 @@ class _ElementPanelState extends State<_ElementPanel> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                   ],
-                  Text('Rotación', style: AppTypography.caption(palette)),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Slider(
-                          value: element.rotation,
-                          min: 0,
-                          max: 360,
-                          divisions: 360,
-                          label: '${element.rotation.round()}°',
-                          onChanged: (v) {
-                            element.rotation = v;
-                            widget.onUpdate();
-                          },
+                  if (widget.lengthLabel != null)
+                    Text(
+                      'Longitud: ${widget.lengthLabel}',
+                      style: AppTypography.bodyMedium(palette),
+                    )
+                  else ...[
+                    Text('Rotación', style: AppTypography.caption(palette)),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Slider(
+                            value: element.rotation,
+                            min: 0,
+                            max: 360,
+                            divisions: 360,
+                            label: '${element.rotation.round()}°',
+                            onChanged: (v) {
+                              element.rotation = v;
+                              widget.onUpdate();
+                            },
+                          ),
                         ),
-                      ),
-                      SizedBox(
-                        width: 40,
-                        child: Text(
-                          '${element.rotation.round()}°',
-                          style: AppTypography.caption(palette),
+                        SizedBox(
+                          width: 40,
+                          child: Text(
+                            '${element.rotation.round()}°',
+                            style: AppTypography.caption(palette),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    'Arrastra el asa azul en el canvas para rotar',
-                    style: AppTypography.caption(
-                      palette,
-                    ).copyWith(color: palette.textTertiary, fontSize: 10),
-                  ),
+                      ],
+                    ),
+                    Text(
+                      'Arrastra el asa azul en el canvas para rotar',
+                      style: AppTypography.caption(
+                        palette,
+                      ).copyWith(color: palette.textTertiary, fontSize: 10),
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.md),
                   if (element.type == ElementType.camera) ...[
                     Text('Lente', style: AppTypography.caption(palette)),
@@ -2889,6 +3544,33 @@ class _ElementPanelState extends State<_ElementPanel> {
                           .toList(),
                     ),
                   ],
+                ],
+              ),
+            ),
+          ),
+          if (widget.selectionCount > 1)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                '${widget.selectionCount} elementos seleccionados: duplicar '
+                'y eliminar se aplican a todos.',
+                style: AppTypography.caption(palette),
+              ),
+            ),
+          GestureDetector(
+            onTap: widget.onDuplicate,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  Icon(Icons.copy_outlined, color: palette.accent, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Duplicar',
+                    style: AppTypography.bodyMedium(
+                      palette,
+                    ).copyWith(color: palette.accent),
+                  ),
                 ],
               ),
             ),
