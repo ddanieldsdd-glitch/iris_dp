@@ -108,7 +108,7 @@ class _NarrativeCardDetailPageState
     if (mounted) {
       AppSnackBar.show(
         context,
-        'Vuelve a la biblia y abre Configuración → Estructura y plantillas.',
+        'Vuelve a la biblia y abre su configuración.',
       );
     }
   }

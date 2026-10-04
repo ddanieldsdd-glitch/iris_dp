@@ -5,17 +5,15 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../master_config/master_config_section.dart';
 
-/// Configuración de la biblia: Master Config (Stitch) + plantillas.
+/// Configuración de la biblia: pantallas y plantillas.
 class BibleSettingsSection extends StatelessWidget {
   final int bibleId;
   final int projectId;
-  final VoidCallback? onStructureReset;
 
   const BibleSettingsSection({
     super.key,
     required this.bibleId,
     required this.projectId,
-    this.onStructureReset,
   });
 
   @override
@@ -27,7 +25,7 @@ class BibleSettingsSection extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
           child: Text(
-            'La biblia se está inicializando. Vuelve a abrir esta sección en un momento.',
+            'La biblia se está inicializando. Vuelve a abrir esta pantalla en un momento.',
             textAlign: TextAlign.center,
             style: AppTypography.bodyMedium(palette),
           ),
@@ -38,7 +36,6 @@ class BibleSettingsSection extends StatelessWidget {
     return MasterConfigSection(
       bibleId: bibleId,
       projectId: projectId,
-      onStructureReset: onStructureReset,
     );
   }
 }

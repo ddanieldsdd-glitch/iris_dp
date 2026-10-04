@@ -206,6 +206,75 @@ abstract final class BibleSectionFieldsConfig {
           if (isUserPoint(sectionId, field)) field,
       ];
 
+  /// Pone en una pantalla los puntos de una plantilla sin perder lo escrito.
+  ///
+  /// Los puntos son los de [templateJson] (los de fábrica si es nulo) y,
+  /// detrás, los que el usuario añadió en [currentJson]. Los valores son los
+  /// de [currentJson]: de la plantilla solo se toma el tipo de las fichas de
+  /// referencias, nunca su contenido.
+  static String? applyStructure({
+    required String sectionId,
+    required String? templateJson,
+    required String? currentJson,
+  }) {
+    if (templateJson == null && currentJson == null) return null;
+
+    final templateFields = parse(templateJson, sectionId);
+    final templateKeys = {for (final f in templateFields) f.key};
+    final fields = [
+      ...templateFields,
+      if (currentJson != null)
+        for (final f in parse(currentJson, sectionId))
+          if (isUserPoint(sectionId, f) && !templateKeys.contains(f.key)) f,
+    ];
+
+    final templateValues = parseValues(templateJson);
+    final values = <String, String>{
+      for (final f in templateFields)
+        if (f.type == BibleSectionFieldType.referenceDeck)
+          f.key: _emptyDeck(templateValues[f.key]),
+      ...parseValues(currentJson),
+    };
+
+    // Se conserva cualquier otra clave del contenido actual (p. ej. los
+    // bloques de una pantalla personalizada antigua).
+    final result = <String, dynamic>{};
+    if (currentJson != null && currentJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(currentJson);
+        if (decoded is Map) result.addAll(Map<String, dynamic>.from(decoded));
+      } catch (_) {}
+    }
+    result[_layoutVersionKey] = layoutVersion;
+    result[_fieldsKey] = [for (final f in fields) f.toJson()];
+    if (values.isEmpty) {
+      result.remove(_valuesKey);
+    } else {
+      result[_valuesKey] = values;
+    }
+    return jsonEncode(result);
+  }
+
+  /// Los puntos de una pantalla sin lo escrito en ellos: lo que se guarda en
+  /// una plantilla.
+  static String? structureOnly(String sectionId, String? contentJson) =>
+      applyStructure(
+        sectionId: sectionId,
+        templateJson: contentJson,
+        currentJson: null,
+      );
+
+  static String _emptyDeck(String? raw) {
+    Object? preset;
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) preset = decoded['preset'];
+      } catch (_) {}
+    }
+    return jsonEncode({'preset': preset ?? 'visual', 'items': const []});
+  }
+
   /// Contenido con el que nace una pantalla personalizada: intención
   /// narrativa, un texto y referencias visuales razonadas.
   static String customScreenStarterJson(String label) => encode(

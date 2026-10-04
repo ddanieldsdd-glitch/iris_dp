@@ -59,7 +59,11 @@ abstract final class BiblePresetService {
               isBuiltIn: s.isBuiltIn,
               isHidden: s.isHidden,
               template: s.template,
-              contentJson: s.contentJson,
+              // Una plantilla lleva los puntos, no lo escrito en ellos.
+              contentJson: BibleSectionFieldsConfig.structureOnly(
+                s.id,
+                s.contentJson,
+              ),
             ),
           )
           .toList(),
@@ -73,7 +77,7 @@ abstract final class BiblePresetService {
       layout: layout,
       sectionStyles: styles,
       exportDefaults: export,
-      includes: const ['Layout', 'Estilos', 'Blueprint', 'Export'],
+      includes: const ['Pantallas', 'Puntos'],
     );
 
     return UserTemplateService.upsertRaw(

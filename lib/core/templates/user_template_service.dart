@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart' show OrderingTerm, Value;
 import 'package:uuid/uuid.dart';
 
+import '../../shared/visual_bible/bible_section_fields.dart';
 import '../database/app_database.dart';
 import 'user_template_models.dart';
 import 'user_template_preferences.dart';
@@ -69,7 +70,10 @@ abstract final class UserTemplateService {
               isBuiltIn: s.isBuiltIn,
               isHidden: s.isHidden,
               template: s.template,
-              contentJson: s.contentJson,
+              contentJson: BibleSectionFieldsConfig.structureOnly(
+                s.id,
+                s.contentJson,
+              ),
             ),
           )
           .toList(),

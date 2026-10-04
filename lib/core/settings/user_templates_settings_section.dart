@@ -199,7 +199,8 @@ class _UserTemplatesSettingsSectionState
                 if (bibleTemplates.isEmpty && shootTemplates.isEmpty) {
                   return Text(
                     'Aún no hay plantillas guardadas. Créalas desde '
-                    '«Editar estructura» en la biblia o desde un documento de rodaje.',
+                    '«Guardar como plantilla», en la configuración de la biblia, o '
+                    'desde un documento de rodaje.',
                     style: AppTypography.caption(palette),
                   );
                 }

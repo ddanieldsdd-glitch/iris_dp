@@ -86,8 +86,8 @@ Añadido el 2026-10-04. Regla: **Biblia → Pantallas → Puntos.** Un punto tie
 - [x] **C2. «Restablecer pantalla».** Vuelven los puntos de fábrica y los del usuario quedan al final. No borra contenido.
 - [x] **C3. Estilos fuera de la interfaz.** Sin selector Cinematic / Technical / Minimalist en ningún sitio. Una pantalla personalizada nueva nace con tres puntos: intención narrativa, contenido y referencias visuales.
 - [x] **C4. Panel «Ajustes de pantalla»** con dos pestañas: Puntos y Pantallas. En Moodboard, «Puntos» muestra las fuentes de imágenes.
-- [ ] **C5. Configuración general** con dos bloques: Pantallas y Plantillas. Cada acción existe una vez y confirma.
-- [ ] **C6. Vocabulario y textos.** Sin «Stitch», «módulo», «sub-apartado», «campo», «bloque» ni «preset»; todo en castellano.
+- [x] **C5. Configuración general** con dos bloques: Pantallas y Plantillas. Cada acción existe una vez y confirma. Una plantilla guarda pantallas y puntos, no lo escrito; aplicarla o restablecer la estructura conserva el contenido, deja ocultas las pantallas que sobran y los puntos del usuario al final.
+- [x] **C6. Vocabulario y textos** de la configuración, el panel, el tutorial y la ayuda de plantillas: sin «Stitch», «módulo», «sub-apartado» ni «Template Vault»; en castellano. Los textos propios de cada pantalla («bloque de color», «preset» de grano) se revisan al rehacer esa pantalla en 1.5.
 - **C7. Garantías** (repartidas): tipo fijo y borrado de valores [x]; «Composición» ya no se reinserta sola [x]; todo widget del catálogo sale en el PDF [ ]; las pantallas personalizadas no nacen con bloques V2 [x].
 
 ## Fase 2 — Sync fiable (objetivos 1 y 3)

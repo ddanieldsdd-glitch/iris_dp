@@ -103,7 +103,7 @@ class MoodboardSourcesSidebar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
             child: Text(
-              'Visual Sources',
+              'Fuentes de imágenes',
               style: AppTypography.titleMedium(palette),
             ),
           ),
@@ -114,7 +114,7 @@ class MoodboardSourcesSidebar extends StatelessWidget {
               children: [
                 for (final item in kMoodboardSources) ...[
                   if (item.kind == MoodboardSourceKind.shotDeck)
-                    _SectionLabel(text: 'Integrations', palette: palette),
+                    _SectionLabel(text: 'Integraciones', palette: palette),
                   if (item.kind == MoodboardSourceKind.personalLibrary)
                     _SectionLabel(text: 'Local', palette: palette),
                   _SourceRow(

@@ -211,9 +211,7 @@ class _MissingModulePlaceholder extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              known
-                  ? '$label — renderer Stitch pendiente de conectar'
-                  : '$label — módulo personalizado sin vista dedicada',
+              '$label: este punto todavía no tiene vista.',
               style: AppTypography.caption(palette),
             ),
           ),
