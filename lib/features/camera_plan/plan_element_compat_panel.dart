@@ -64,27 +64,27 @@ class PlanElementCompatPanel extends ConsumerWidget {
                     const SizedBox(height: 12),
                     switch (element.type) {
                       ElementType.camera => _CameraSection(
-                          palette: palette,
-                          element: element,
-                          cameras: cameras,
-                          lenses: lenses,
-                          catalog: catalog,
-                          onChanged: onChanged,
-                        ),
+                        palette: palette,
+                        element: element,
+                        cameras: cameras,
+                        lenses: lenses,
+                        catalog: catalog,
+                        onChanged: onChanged,
+                      ),
                       ElementType.light => _LightSection(
-                          palette: palette,
-                          element: element,
-                          catalog: catalog,
-                          cameras: cameras,
-                          lenses: lenses,
-                          onChanged: onChanged,
-                        ),
+                        palette: palette,
+                        element: element,
+                        catalog: catalog,
+                        cameras: cameras,
+                        lenses: lenses,
+                        onChanged: onChanged,
+                      ),
                       ElementType.prop || ElementType.wall => _PropSection(
-                          palette: palette,
-                          element: element,
-                          profile: profile,
-                          onChanged: onChanged,
-                        ),
+                        palette: palette,
+                        element: element,
+                        profile: profile,
+                        onChanged: onChanged,
+                      ),
                       ElementType.actor => _ActorSection(palette: palette),
                     },
                   ],
@@ -147,9 +147,7 @@ class _CompatBadges extends StatelessWidget {
       decoration: BoxDecoration(
         color: active ? color.withValues(alpha: 0.18) : palette.surfaceElevated,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: active ? color : palette.divider,
-        ),
+        border: Border.all(color: active ? color : palette.divider),
       ),
       child: Text(
         label,
@@ -190,13 +188,19 @@ class _CameraSection extends StatelessWidget {
         DropdownButtonFormField<int?>(
           isExpanded: true,
           initialValue: element.externalMapping.catalogCameraId,
-          decoration: const InputDecoration(isDense: true, hintText: 'Opcional'),
+          decoration: const InputDecoration(
+            isDense: true,
+            hintText: 'Opcional',
+          ),
           items: [
             const DropdownMenuItem<int?>(value: null, child: Text('—')),
             for (final c in cameras)
               DropdownMenuItem(
                 value: c.id,
-                child: Text('${c.brand} ${c.model}', overflow: TextOverflow.ellipsis),
+                child: Text(
+                  '${c.brand} ${c.model}',
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
           ],
           onChanged: (id) {
@@ -210,7 +214,10 @@ class _CameraSection extends StatelessWidget {
         DropdownButtonFormField<int?>(
           isExpanded: true,
           initialValue: element.externalMapping.catalogLensId,
-          decoration: const InputDecoration(isDense: true, hintText: 'Opcional'),
+          decoration: const InputDecoration(
+            isDense: true,
+            hintText: 'Opcional',
+          ),
           items: [
             const DropdownMenuItem<int?>(value: null, child: Text('—')),
             for (final l in lenses)
@@ -236,7 +243,10 @@ class _CameraSection extends StatelessWidget {
         const SizedBox(height: 4),
         DropdownButtonFormField<String>(
           isExpanded: true,
-          initialValue: kStabilizationPresets.contains(element.stabilization?.toUpperCase())
+          initialValue:
+              kStabilizationPresets.contains(
+                element.stabilization?.toUpperCase(),
+              )
               ? element.stabilization!.toUpperCase()
               : 'STEADY',
           decoration: const InputDecoration(isDense: true),
@@ -262,7 +272,9 @@ class _CameraSection extends StatelessWidget {
           },
           child: Text(
             'Auto-vincular catálogo',
-            style: AppTypography.caption(palette).copyWith(color: palette.accent),
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.accent),
           ),
         ),
       ],
@@ -322,7 +334,10 @@ class _LightSection extends StatelessWidget {
         DropdownButtonFormField<int?>(
           isExpanded: true,
           initialValue: element.externalMapping.catalogLightId,
-          decoration: const InputDecoration(isDense: true, hintText: 'Opcional'),
+          decoration: const InputDecoration(
+            isDense: true,
+            hintText: 'Opcional',
+          ),
           items: [
             const DropdownMenuItem<int?>(value: null, child: Text('—')),
             for (final l in catalog)
@@ -410,10 +425,9 @@ class _PropSection extends StatelessWidget {
         Text('Mesh Unreal', style: AppTypography.caption(palette)),
         Text(
           profile.unrealMeshPath ?? PlanElementCompat.defaultUnrealMesh,
-          style: AppTypography.caption(palette).copyWith(
-            color: palette.textSecondary,
-            fontSize: 10,
-          ),
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textSecondary, fontSize: 10),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
@@ -421,10 +435,9 @@ class _PropSection extends StatelessWidget {
         Text('Tipo Cine Tracer', style: AppTypography.caption(palette)),
         Text(
           profile.cinetracerType,
-          style: AppTypography.caption(palette).copyWith(
-            color: palette.accent,
-            fontSize: 10,
-          ),
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.accent, fontSize: 10),
         ),
       ],
     );
@@ -440,10 +453,9 @@ class _ActorSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       'Marcador compatible con MetaHuman / placeholder en Unreal y actor en Cine Tracer.',
-      style: AppTypography.caption(palette).copyWith(
-        color: palette.textSecondary,
-        fontSize: 10,
-      ),
+      style: AppTypography.caption(
+        palette,
+      ).copyWith(color: palette.textSecondary, fontSize: 10),
     );
   }
 }

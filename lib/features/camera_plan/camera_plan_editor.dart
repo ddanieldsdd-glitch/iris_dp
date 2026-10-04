@@ -23,6 +23,7 @@ import 'camera_plan_painter.dart';
 import 'camera_plan_scene_badge.dart';
 import 'floor_plan_repository.dart';
 import 'floor_plan_scope.dart';
+import 'plan_target.dart';
 import '../locations/location_scan_service.dart';
 import 'plan_element_compat.dart';
 import 'plan_element_compat_panel.dart';
@@ -39,6 +40,10 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   final int? lightSetupId;
   final int? shotId;
 
+  /// En la pantalla de trabajo, abrir otra planta cambia la que se ve en
+  /// lugar de apilar una pantalla nueva.
+  final void Function(PlanTarget target)? onNavigate;
+
   const CameraPlanEditor({
     super.key,
     required this.projectId,
@@ -48,6 +53,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     this.setId,
     this.lightSetupId,
     this.shotId,
+    this.onNavigate,
   });
 
   /// Plano maestro de localización.
@@ -56,6 +62,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required this.projectId,
     required int this.siteId,
     required String siteName,
+    this.onNavigate,
   }) : label = siteName,
        scope = FloorPlanScope.site,
        setId = null,
@@ -68,6 +75,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required this.projectId,
     required int this.setId,
     required String setName,
+    this.onNavigate,
   }) : label = setName,
        scope = FloorPlanScope.set,
        siteId = null,
@@ -80,6 +88,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required this.projectId,
     required int this.lightSetupId,
     required String setupName,
+    this.onNavigate,
   }) : label = setupName,
        scope = FloorPlanScope.lightSetup,
        siteId = null,
@@ -92,6 +101,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required this.projectId,
     required int this.shotId,
     required String shotLabel,
+    this.onNavigate,
   }) : label = shotLabel,
        scope = FloorPlanScope.shot,
        siteId = null,
@@ -186,9 +196,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     LocationSite? linkedSite;
     Color sceneColor = sceneDisplayColor(null);
 
-    final sites = await db.watchSitesForProject(widget.projectId).first;
-    final allSets = await db.watchLocationsForProject(widget.projectId).first;
-    final allScenes = await db.watchScenesForProject(widget.projectId).first;
+    final sites = await (db.select(
+      db.locationSites,
+    )..where((s) => s.projectId.equals(widget.projectId))).get();
+    final allSets = await (db.select(
+      db.locationBasePlans,
+    )..where((s) => s.projectId.equals(widget.projectId))).get();
+    final allScenes = await (db.select(
+      db.scenes,
+    )..where((s) => s.projectId.equals(widget.projectId))).get();
     final colors = ProjectColorScheme.resolve(
       sites: sites,
       sets: allSets,
@@ -320,7 +336,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
             .get();
     final sets = await db.getLocationsMapForProject(widget.projectId);
-    final sites = await db.watchSitesForProject(widget.projectId).first;
+    final sites = await (db.select(
+      db.locationSites,
+    )..where((s) => s.projectId.equals(widget.projectId))).get();
     final allSets = sets.values.toList();
     final colors = ProjectColorScheme.resolve(
       sites: sites,
@@ -360,6 +378,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   void _jumpToShot(CameraPlanNavTarget target) {
     if (target.shotId == widget.shotId) return;
+    if (widget.onNavigate != null) {
+      widget.onNavigate!(PlanTarget.shot(target.shotId, target.label));
+      return;
+    }
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (_) => CameraPlanEditor.shot(
@@ -475,6 +497,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Future<void> _openLightSetup() async {
     final setup = _lightSetup;
     if (setup == null) return;
+    if (widget.onNavigate != null) {
+      widget.onNavigate!(PlanTarget.lightSetup(setup.id, setup.name));
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => CameraPlanEditor.lightSetup(
@@ -1210,13 +1236,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     );
   }
 }
-
-/// Estado de un esquema de luz, como se enseña al usuario.
-String lightSetupStatusLabel(String status) => switch (status) {
-  'definitivo' => 'Definitivo',
-  'en_desarrollo' => 'En desarrollo',
-  _ => 'Boceto',
-};
 
 /// Franja del plano con el esquema de luz que usa.
 class _LightSetupBar extends StatelessWidget {

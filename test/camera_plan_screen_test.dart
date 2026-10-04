@@ -3,7 +3,6 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/database/database_provider.dart';
@@ -114,6 +113,23 @@ void main() {
     expect(find.text('Setup A'), findsOneWidget);
     expect(find.text('Plantas libres'), findsOneWidget);
     expect(find.text('Esquema de luz'), findsWidgets);
+    expect(find.text('Entorno'), findsOneWidget);
+    expect(find.text('Boceto'), findsWidgets);
+    expect(tester.takeException(), isNull);
+
+    // Tocar una miniatura abre la pantalla de trabajo en esa planta.
+    await tester.tap(find.text('Setup A'));
+    await settle(tester);
+    expect(find.text('Esquema de luz · Cabaña'), findsOneWidget);
+    expect(find.text('Plano del set'), findsOneWidget);
+    expect(find.text('Esquema siguiente'), findsNothing);
+    expect(find.byTooltip('Esquema siguiente'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    // Desde el navegador se cambia de planta sin volver al mapa.
+    await tester.tap(find.text('Plano del set'));
+    await settle(tester);
+    expect(find.text('Plano de set'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -154,7 +170,6 @@ void main() {
       await db.assignLightSetupToShot(shotId, setup.id);
     });
 
-    GoogleFonts.config.allowRuntimeFetching = false;
     await tester.pumpWidget(
       host(
         CameraPlanEditor.shot(
@@ -164,13 +179,7 @@ void main() {
         ),
       ),
     );
-    // La carga del editor espera a streams de Drift: necesita tiempo real.
-    for (var i = 0; i < 10; i++) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 20)),
-      );
-      await tester.pump(const Duration(milliseconds: 50));
-    }
+    await settle(tester);
 
     expect(find.text('Noche · Boceto'), findsOneWidget);
     expect(find.text('Editar luz'), findsOneWidget);
