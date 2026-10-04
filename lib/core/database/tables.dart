@@ -107,6 +107,9 @@ class Shots extends Table {
   IntColumn get scriptAnchorIndex => integer().nullable()();
   BoolColumn get autoNumbering => boolean().withDefault(const Constant(true))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  // Esquema de luz que usa el plano (schemaVersion 42).
+  IntColumn get lightSetupId =>
+      integer().nullable().references(LightSetups, #id)();
 }
 
 /// Documento de rodaje (Plani, jornada, referencia en set).
@@ -174,6 +177,31 @@ class CameraPlanElements extends Table {
   TextColumn get lukaFixtureId => text().nullable()();
   TextColumn get externalMappingJson => text().nullable()();
   // Vínculos LUKA / Unreal / Cine Tracer (catálogo, mesh, tipo CT)
+  TextColumn get propsJson => text().nullable()();
+  // Propiedades por tipo: haz, intensidad, focal… (schemaVersion 42)
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+}
+
+/// Esquema de luz de la planta. Pertenece a un set, a una localización o a
+/// ninguno (planta libre). Los planos lo comparten con `Shots.lightSetupId`.
+/// Añadido en schemaVersion 42.
+class LightSetups extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  IntColumn get locationSiteId =>
+      integer().nullable().references(LocationSites, #id)();
+  IntColumn get locationBasePlanId =>
+      integer().nullable().references(LocationBasePlans, #id)();
+  TextColumn get name => text()();
+  TextColumn get status => text().withDefault(const Constant('boceto'))();
+  // boceto | en_desarrollo | definitivo
+  TextColumn get origin => text().withDefault(const Constant('planta'))();
+  // planta | biblia | blush
+  TextColumn get category => text().nullable()();
+  TextColumn get planJson => text().nullable()();
+  // Luces, grip y ambiente (FloorPlanJson v2)
+  TextColumn get sketchJson => text().nullable()();
+  TextColumn get sketchImagePath => text().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 }
 
@@ -226,6 +254,8 @@ class LocationBasePlans extends Table {
   TextColumn get notes => text().nullable()();
   TextColumn get model3dPath => text().nullable()();
   TextColumn get floorPlanJson => text().nullable()();
+  TextColumn get sitePlacementJson => text().nullable()();
+  // Zona del plano de la localización que ocupa el set (schemaVersion 42)
   TextColumn get scanPath => text().nullable()();
   TextColumn get scanSource => text().nullable()();
   TextColumn get scanMetadataJson => text().nullable()();
@@ -574,6 +604,9 @@ class LightingSetups extends Table {
       integer().nullable().references(LocationBasePlans, #id)();
   IntColumn get locationSiteId =>
       integer().nullable().references(LocationSites, #id)();
+  IntColumn get planSetupId =>
+      integer().nullable().references(LightSetups, #id)();
+  // Esquema de la planta que desarrolla este boceto (schemaVersion 42)
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 }
 

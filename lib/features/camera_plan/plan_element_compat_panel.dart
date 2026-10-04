@@ -188,6 +188,7 @@ class _CameraSection extends StatelessWidget {
         Text('Cámara (catálogo)', style: AppTypography.caption(palette)),
         const SizedBox(height: 4),
         DropdownButtonFormField<int?>(
+          isExpanded: true,
           initialValue: element.externalMapping.catalogCameraId,
           decoration: const InputDecoration(isDense: true, hintText: 'Opcional'),
           items: [
@@ -207,6 +208,7 @@ class _CameraSection extends StatelessWidget {
         Text('Óptica (catálogo)', style: AppTypography.caption(palette)),
         const SizedBox(height: 4),
         DropdownButtonFormField<int?>(
+          isExpanded: true,
           initialValue: element.externalMapping.catalogLensId,
           decoration: const InputDecoration(isDense: true, hintText: 'Opcional'),
           items: [
@@ -233,6 +235,7 @@ class _CameraSection extends StatelessWidget {
         Text('Movimiento', style: AppTypography.caption(palette)),
         const SizedBox(height: 4),
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: kStabilizationPresets.contains(element.stabilization?.toUpperCase())
               ? element.stabilization!.toUpperCase()
               : 'STEADY',
@@ -292,6 +295,7 @@ class _LightSection extends StatelessWidget {
         Text('Tipo simbólico', style: AppTypography.caption(palette)),
         const SizedBox(height: 4),
         DropdownButtonFormField<LightType?>(
+          isExpanded: true,
           initialValue: element.lightType,
           decoration: const InputDecoration(isDense: true),
           items: [
@@ -316,6 +320,7 @@ class _LightSection extends StatelessWidget {
         Text('Equipo (catálogo)', style: AppTypography.caption(palette)),
         const SizedBox(height: 4),
         DropdownButtonFormField<int?>(
+          isExpanded: true,
           initialValue: element.externalMapping.catalogLightId,
           decoration: const InputDecoration(isDense: true, hintText: 'Opcional'),
           items: [
@@ -368,6 +373,7 @@ class _PropSection extends StatelessWidget {
           Text('Tipo de prop', style: AppTypography.caption(palette)),
           const SizedBox(height: 4),
           DropdownButtonFormField<PropType?>(
+            isExpanded: true,
             initialValue: element.propType,
             decoration: const InputDecoration(isDense: true),
             items: [
@@ -386,6 +392,7 @@ class _PropSection extends StatelessWidget {
           Text('Arquitectura', style: AppTypography.caption(palette)),
           const SizedBox(height: 4),
           DropdownButtonFormField<ArchitectureType?>(
+            isExpanded: true,
             initialValue: element.architectureType,
             decoration: const InputDecoration(isDense: true),
             items: [

@@ -9,6 +9,7 @@ import '../../shared/annotations/annotation_pdf_renderer.dart';
 import '../../features/camera_plan/camera_plan_constants.dart';
 import '../../features/camera_plan/camera_plan_element_model.dart';
 import '../../features/camera_plan/camera_plan_grouping.dart';
+import '../../features/camera_plan/floor_plan_repository.dart';
 
 /// Representación cenital vectorial de una planta de cámara.
 ///
@@ -317,12 +318,9 @@ class CameraPlanPdfExporter {
       }
 
       for (final shot in shots) {
-        final rows = await db.getCameraPlanElementsForShot(shot.id);
-        final elements = <PlanElement>[];
-        for (final row in rows) {
-          final paths = await db.getPathPointsForElement(row.id);
-          elements.add(PlanElement.fromDb(row, pathRows: paths));
-        }
+        final elements = await FloorPlanRepository(
+          db,
+        ).resolvedElementsForShot(shot);
         final annotationRow = await db.getProjectAnnotationDocument(
           projectId: project.id,
           targetType: 'camera_plan_shot',

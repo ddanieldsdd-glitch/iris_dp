@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -25,6 +26,7 @@ import 'floor_plan_json.dart';
 import 'floor_plan_map_tile.dart';
 import 'floor_plan_repository.dart';
 import 'floor_plan_scope.dart';
+import 'light_setup_strip.dart';
 
 enum _ContentIndexMode { location, script }
 
@@ -54,8 +56,20 @@ class CameraPlanScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: palette.surface,
-        title: Text('Plantas de cámara', style: AppTypography.titleLarge(palette)),
+        title: Text(
+          'Plantas de cámara',
+          style: AppTypography.titleLarge(palette),
+        ),
         actions: [
+          PopupMenuButton<String>(
+            tooltip: 'Nuevo',
+            icon: Icon(Icons.add, color: palette.textSecondary),
+            onSelected: (action) => _onNew(context, ref, projectId, action),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'site', child: Text('Nueva localización')),
+              PopupMenuItem(value: 'free', child: Text('Nueva planta libre')),
+            ],
+          ),
           GoodNotesPdfActions(
             projectId: projectId,
             moduleType: GoodNotesModuleType.plantaCamara,
@@ -82,31 +96,6 @@ class CameraPlanScreen extends ConsumerWidget {
           }
 
           final scenes = sceneSnap.data!;
-          if (scenes.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.grid_on_outlined,
-                        size: 48, color: palette.textTertiary),
-                    const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      'Sin escenas todavía.',
-                      style: AppTypography.titleMedium(palette),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Importa el guion o añade escenas desde el guion técnico.',
-                      style: AppTypography.bodyMedium(palette),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
 
           return StreamBuilder<List<LocationSite>>(
             stream: db.watchSitesForProject(projectId),
@@ -142,6 +131,41 @@ class CameraPlanScreen extends ConsumerWidget {
         },
       ),
     );
+  }
+}
+
+Future<void> _onNew(
+  BuildContext context,
+  WidgetRef ref,
+  int projectId,
+  String action,
+) async {
+  final db = ref.read(databaseProvider);
+  switch (action) {
+    case 'site':
+      final name = await askPlanName(
+        context,
+        title: 'Nueva localización',
+        hint: 'Bosque, hospital, casa de Gala…',
+      );
+      if (name == null) return;
+      await db.insertSite(
+        LocationSitesCompanion.insert(projectId: projectId, name: name),
+      );
+    case 'free':
+      final setup = await FloorPlanRepository(
+        db,
+      ).createLightSetup(projectId: projectId);
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => CameraPlanEditor.lightSetup(
+            projectId: setup.projectId,
+            lightSetupId: setup.id,
+            setupName: setup.name,
+          ),
+        ),
+      );
   }
 }
 
@@ -215,8 +239,11 @@ class _CameraPlanBodyState extends State<_CameraPlanBody> {
       return ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.all(AppSpacing.lg),
-        itemCount: widget.hierarchy.length,
+        itemCount: widget.hierarchy.length + 1,
         itemBuilder: (context, i) {
+          if (i == widget.hierarchy.length) {
+            return _FreePlansSection(projectId: widget.projectId);
+          }
           final block = widget.hierarchy[i];
           final locationKey = cameraPlanLocationKey(
             siteId: block.siteId,
@@ -388,10 +415,8 @@ class _PlanSummaryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locationCount = hierarchy.length;
-    final sceneCount =
-        hierarchy.fold<int>(0, (sum, h) => sum + h.sceneCount);
-    final setCount =
-        hierarchy.fold<int>(0, (sum, h) => sum + h.sets.length);
+    final sceneCount = hierarchy.fold<int>(0, (sum, h) => sum + h.sceneCount);
+    final setCount = hierarchy.fold<int>(0, (sum, h) => sum + h.sets.length);
     final sitesById = {for (final s in sites) s.id: s};
     final setsById = {for (final s in sets) s.id: s};
     final scriptScenes = scenesInScriptOrder(scenes);
@@ -400,8 +425,7 @@ class _PlanSummaryPanel extends StatelessWidget {
         ? ListView.separated(
             controller: scrollController,
             itemCount: hierarchy.length,
-            separatorBuilder: (_, __) =>
-                const SizedBox(height: AppSpacing.md),
+            separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
             itemBuilder: (context, i) {
               final block = hierarchy[i];
               final base = colors.siteColor(
@@ -424,8 +448,7 @@ class _PlanSummaryPanel extends StatelessWidget {
         : ListView.separated(
             controller: scrollController,
             itemCount: scriptScenes.length,
-            separatorBuilder: (_, __) =>
-                const SizedBox(height: AppSpacing.xs),
+            separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.xs),
             itemBuilder: (context, i) {
               final scene = scriptScenes[i];
               final site = scene.locationSiteId != null
@@ -434,11 +457,13 @@ class _PlanSummaryPanel extends StatelessWidget {
               final set = scene.locationId != null
                   ? setsById[scene.locationId]
                   : null;
-              final siteName = site?.name ??
+              final siteName =
+                  site?.name ??
                   (scene.locationPureName.trim().isNotEmpty
                       ? scene.locationPureName.trim()
                       : 'Sin localización');
-              final setName = set?.locationName ??
+              final setName =
+                  set?.locationName ??
                   (scene.locationPureName.trim().isNotEmpty
                       ? scene.locationPureName.trim()
                       : 'Sin set');
@@ -461,7 +486,10 @@ class _PlanSummaryPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Jerarquía de planos', style: AppTypography.titleMedium(palette)),
+                Text(
+                  'Jerarquía de planos',
+                  style: AppTypography.titleMedium(palette),
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   'Maestro → Set → Plano',
@@ -595,9 +623,9 @@ class _NavLocationBlock extends StatelessWidget {
                   children: [
                     Text(
                       hierarchy.siteName,
-                      style: AppTypography.titleMedium(palette).copyWith(
-                        color: locationBase,
-                      ),
+                      style: AppTypography.titleMedium(
+                        palette,
+                      ).copyWith(color: locationBase),
                     ),
                     Text(
                       '$setCount set${setCount == 1 ? '' : 's'} · '
@@ -632,9 +660,9 @@ class _NavLocationBlock extends StatelessWidget {
             padding: const EdgeInsets.only(left: AppSpacing.lg),
             child: Text(
               'Sin set',
-              style: AppTypography.caption(palette).copyWith(
-                color: locationBase.withValues(alpha: 0.75),
-              ),
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: locationBase.withValues(alpha: 0.75)),
             ),
           ),
           ...hierarchy.unassignedScenes.map(
@@ -671,7 +699,10 @@ class _NavSetBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(left: AppSpacing.lg, bottom: AppSpacing.xs),
+      padding: const EdgeInsets.only(
+        left: AppSpacing.lg,
+        bottom: AppSpacing.xs,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -692,27 +723,27 @@ class _NavSetBlock extends StatelessWidget {
                 Expanded(
                   child: Text(
                     setNode.set.locationName,
-                    style: AppTypography.bodyMedium(palette).copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: setColor,
-                    ),
+                    style: AppTypography.bodyMedium(
+                      palette,
+                    ).copyWith(fontWeight: FontWeight.w600, color: setColor),
                   ),
                 ),
                 Text(
                   '${setNode.scenes.length}',
                   style: AppTypography.caption(palette),
                 ),
-                Icon(Icons.chevron_right, size: 16, color: palette.textTertiary),
+                Icon(
+                  Icons.chevron_right,
+                  size: 16,
+                  color: palette.textTertiary,
+                ),
               ],
             ),
           ),
           if (setNode.scenes.isEmpty)
             Padding(
               padding: const EdgeInsets.only(left: 18, top: 2),
-              child: Text(
-                'Sin escenas',
-                style: AppTypography.caption(palette),
-              ),
+              child: Text('Sin escenas', style: AppTypography.caption(palette)),
             )
           else
             ...setNode.scenes.map(
@@ -760,11 +791,7 @@ class _NavSceneRow extends StatelessWidget {
         onTap: onTap,
         child: Row(
           children: [
-            SceneNumberBadge(
-              sceneNumber: scene.number,
-              color: color,
-              size: 22,
-            ),
+            SceneNumberBadge(sceneNumber: scene.number, color: color, size: 22),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
@@ -813,11 +840,7 @@ class _NavScriptSceneRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SceneNumberBadge(
-            sceneNumber: scene.number,
-            color: color,
-            size: 26,
-          ),
+          SceneNumberBadge(sceneNumber: scene.number, color: color, size: 26),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
@@ -896,9 +919,7 @@ class _SummaryRow extends StatelessWidget {
       children: [
         Icon(icon, size: 18, color: palette.accent),
         const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Text(label, style: AppTypography.bodyMedium(palette)),
-        ),
+        Expanded(child: Text(label, style: AppTypography.bodyMedium(palette))),
         Text(value, style: AppTypography.titleMedium(palette)),
       ],
     );
@@ -931,11 +952,13 @@ class _ScriptOrderSceneSection extends StatelessWidget {
         ? sitesById[scene.locationSiteId]
         : null;
     final set = scene.locationId != null ? setsById[scene.locationId] : null;
-    final siteName = site?.name ??
+    final siteName =
+        site?.name ??
         (scene.locationPureName.trim().isNotEmpty
             ? scene.locationPureName.trim()
             : 'Sin localización');
-    final setName = set?.locationName ??
+    final setName =
+        set?.locationName ??
         (scene.locationPureName.trim().isNotEmpty
             ? scene.locationPureName.trim()
             : 'Sin set');
@@ -1000,11 +1023,11 @@ class _LocationHierarchySection extends ConsumerWidget {
   });
 
   Color get _locationBase => colors.siteColor(
-        hierarchy.siteId,
-        orphanSiteKey: hierarchy.siteId == null
-            ? hierarchy.siteName.toLowerCase()
-            : null,
-      );
+    hierarchy.siteId,
+    orphanSiteKey: hierarchy.siteId == null
+        ? hierarchy.siteName.toLowerCase()
+        : null,
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1046,8 +1069,11 @@ class _LocationHierarchySection extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                Icon(Icons.location_city_outlined,
-                    size: 18, color: palette.textSecondary),
+                Icon(
+                  Icons.location_city_outlined,
+                  size: 18,
+                  color: palette.textSecondary,
+                ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
@@ -1059,6 +1085,29 @@ class _LocationHierarchySection extends ConsumerWidget {
                   '${hierarchy.sceneCount} esc.',
                   style: AppTypography.caption(palette),
                 ),
+                if (hierarchy.siteId != null)
+                  TextButton.icon(
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Set'),
+                    onPressed: () async {
+                      final name = await askPlanName(
+                        context,
+                        title: 'Nuevo set en ${hierarchy.siteName}',
+                        hint: 'Cocina, río, pasillo…',
+                      );
+                      if (name == null) return;
+                      await ref
+                          .read(databaseProvider)
+                          .insertLocation(
+                            LocationBasePlansCompanion.insert(
+                              projectId: projectId,
+                              siteId: Value(hierarchy.siteId),
+                              locationName: name,
+                              sortOrder: Value(hierarchy.sets.length),
+                            ),
+                          );
+                    },
+                  ),
               ],
             ),
           ),
@@ -1089,6 +1138,20 @@ class _LocationHierarchySection extends ConsumerWidget {
                 },
               ),
             ),
+          if (hierarchy.siteId != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.sm,
+                0,
+                AppSpacing.md,
+              ),
+              child: LightSetupStrip(
+                projectId: projectId,
+                siteId: hierarchy.siteId,
+                accentColor: locationBase,
+              ),
+            ),
           ...List.generate(hierarchy.sets.length, (i) {
             final setNode = hierarchy.sets[i];
             final setColor = colors.setColor(setNode.set);
@@ -1113,9 +1176,9 @@ class _LocationHierarchySection extends ConsumerWidget {
               ),
               child: Text(
                 'Escenas sin set',
-                style: AppTypography.label(palette).copyWith(
-                  color: locationBase.withValues(alpha: 0.8),
-                ),
+                style: AppTypography.label(
+                  palette,
+                ).copyWith(color: locationBase.withValues(alpha: 0.8)),
               ),
             ),
             ...hierarchy.unassignedScenes.map(
@@ -1128,6 +1191,35 @@ class _LocationHierarchySection extends ConsumerWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Plantas sin localización ni escenas.
+class _FreePlansSection extends StatelessWidget {
+  final int projectId;
+
+  const _FreePlansSection({required this.projectId});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Plantas libres', style: AppTypography.titleMedium(palette)),
+          const SizedBox(height: 4),
+          Text(
+            'Esquemas de luz sin localización ni escenas. '
+            'Sirven para bocetar antes de tener guion.',
+            style: AppTypography.caption(palette),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          LightSetupStrip(projectId: projectId, accentColor: palette.accent),
         ],
       ),
     );
@@ -1180,9 +1272,7 @@ class _SetSection extends ConsumerWidget {
             decoration: BoxDecoration(
               color: setColor.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(8),
-              border: Border(
-                left: BorderSide(color: setColor, width: 3),
-              ),
+              border: Border(left: BorderSide(color: setColor, width: 3)),
             ),
             child: Row(
               children: [
@@ -1198,9 +1288,9 @@ class _SetSection extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     setNode.set.locationName,
-                    style: AppTypography.titleMedium(palette).copyWith(
-                      color: setColor,
-                    ),
+                    style: AppTypography.titleMedium(
+                      palette,
+                    ).copyWith(color: setColor),
                   ),
                 ),
                 Text(
@@ -1217,8 +1307,7 @@ class _SetSection extends ConsumerWidget {
                       builder: (context, setupSnap) {
                         final count = (setupSnap.data ?? [])
                             .where(
-                              (s) =>
-                                  s.locationBasePlanId == setNode.set.id,
+                              (s) => s.locationBasePlanId == setNode.set.id,
                             )
                             .length;
                         if (count == 0) return const SizedBox.shrink();
@@ -1269,6 +1358,14 @@ class _SetSection extends ConsumerWidget {
                 ),
               );
             },
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: LightSetupStrip(
+              projectId: projectId,
+              setId: setNode.set.id,
+              accentColor: setColor,
+            ),
           ),
           if (setNode.scenes.isEmpty)
             Padding(
@@ -1441,10 +1538,7 @@ class _ShotTile extends ConsumerWidget {
         final hasPlan = elementCount > 0;
 
         return Padding(
-          padding: const EdgeInsets.only(
-            left: 44,
-            bottom: AppSpacing.sm,
-          ),
+          padding: const EdgeInsets.only(left: 44, bottom: AppSpacing.sm),
           child: AppCard(
             onTap: () {
               Navigator.of(context).push(
@@ -1499,7 +1593,9 @@ class _ShotTile extends ConsumerWidget {
                             ? '$elementCount elemento${elementCount == 1 ? '' : 's'}'
                             : 'Heredará del set al abrir',
                         style: AppTypography.caption(palette).copyWith(
-                          color: hasPlan ? palette.accent : palette.textTertiary,
+                          color: hasPlan
+                              ? palette.accent
+                              : palette.textTertiary,
                         ),
                       ),
                     ],

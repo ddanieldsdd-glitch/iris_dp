@@ -10,7 +10,9 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../core/database/app_database.dart';
 import '../../core/utils/scene_format.dart';
 import '../../core/utils/shot_technical_options.dart';
+import '../../features/camera_plan/camera_plan_constants.dart';
 import '../../features/camera_plan/camera_plan_grouping.dart';
+import '../../features/camera_plan/floor_plan_repository.dart';
 import '../../features/storyboard/storyboard_export_helpers.dart';
 import '../../features/storyboard/storyboard_export_style.dart';
 import '../../features/storyboard/storyboard_group_export_options.dart';
@@ -966,13 +968,12 @@ class StoryboardPdfExporter {
 
   static Future<String> _cameraPlanSummary(Shot shot, AppDatabase? db) async {
     if (db == null) return '';
-    final rows = await db.getCameraPlanElementsForShot(shot.id);
-    if (rows.isEmpty) return '';
-    final parts = rows.map((el) {
+    final layers = await FloorPlanRepository(db).layersForShot(shot);
+    final parts = [...layers.light, ...layers.shot].map((el) {
       final label = el.label?.trim().isNotEmpty == true
           ? el.label!
-          : el.type;
-      return '$label (${el.type})';
+          : el.type.dbValue;
+      return '$label (${el.type.dbValue})';
     });
     return parts.join(' · ');
   }

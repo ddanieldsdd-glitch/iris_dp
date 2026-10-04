@@ -15,6 +15,8 @@ import 'storyboard_export_style.dart';
 import 'storyboard_image_palette.dart';
 import 'storyboard_shot_export_meta.dart';
 import 'storyboard_shot_image_exporter.dart';
+import '../camera_plan/camera_plan_constants.dart';
+import '../camera_plan/floor_plan_repository.dart';
 
 /// PDF de plano único estilo Artemis (S2 Detail / S3 Shot Plan).
 class StoryboardShotSheetPdf {
@@ -378,10 +380,13 @@ class StoryboardShotSheetPdf {
 
   static Future<String> _cameraPlanSummary(Shot shot, AppDatabase? db) async {
     if (db == null) return '';
-    final rows = await db.getCameraPlanElementsForShot(shot.id);
-    if (rows.isEmpty) return '';
-    return rows
-        .map((el) => el.label?.trim().isNotEmpty == true ? el.label! : el.type)
+    final layers = await FloorPlanRepository(db).layersForShot(shot);
+    return [...layers.light, ...layers.shot]
+        .map(
+          (el) => el.label?.trim().isNotEmpty == true
+              ? el.label!
+              : el.type.dbValue,
+        )
         .join(' · ');
   }
 }

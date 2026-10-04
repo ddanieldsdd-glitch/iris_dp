@@ -28,10 +28,11 @@ class FloorPlanMapTile extends StatelessWidget {
   });
 
   IconData get _icon => switch (scope) {
-        FloorPlanScope.site => Icons.map_outlined,
-        FloorPlanScope.set => Icons.layers_outlined,
-        FloorPlanScope.shot => Icons.grid_on_outlined,
-      };
+    FloorPlanScope.site => Icons.map_outlined,
+    FloorPlanScope.set => Icons.layers_outlined,
+    FloorPlanScope.lightSetup => Icons.wb_incandescent_outlined,
+    FloorPlanScope.shot => Icons.grid_on_outlined,
+  };
 
   String get _levelLabel => scope.title;
 
@@ -85,8 +86,8 @@ class FloorPlanMapTile extends StatelessWidget {
                   Text(
                     hasPlan
                         ? elementCount != null
-                            ? '$elementCount elemento${elementCount == 1 ? '' : 's'}'
-                            : 'Plano creado'
+                              ? '$elementCount elemento${elementCount == 1 ? '' : 's'}'
+                              : 'Plano creado'
                         : 'Sin plano — pulsa para crear',
                     style: AppTypography.caption(palette).copyWith(
                       color: hasPlan ? palette.accent : palette.textTertiary,

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 
@@ -23,6 +25,9 @@ class PlanElement {
   Color actorColor;
   List<Offset> pathPoints;
 
+  /// Propiedades por tipo (haz, intensidad, temperatura de color, focal…).
+  Map<String, dynamic> props;
+
   PlanElement({
     required this.id,
     required this.type,
@@ -39,9 +44,11 @@ class PlanElement {
     PlanElementExternalMapping? externalMapping,
     Color? actorColor,
     List<Offset>? pathPoints,
-  })  : externalMapping = externalMapping ?? PlanElementExternalMapping(),
-        actorColor = actorColor ?? kActorColors.first,
-        pathPoints = pathPoints ?? [];
+    Map<String, dynamic>? props,
+  }) : externalMapping = externalMapping ?? PlanElementExternalMapping(),
+       actorColor = actorColor ?? kActorColors.first,
+       pathPoints = pathPoints ?? [],
+       props = props ?? {};
 
   String get cameraLabel => '$cameraLetter-$cameraNumber';
 
@@ -51,19 +58,29 @@ class PlanElement {
   ArchitectureType? get architectureType =>
       type == ElementType.wall ? ArchitectureTypeCodec.fromLabel(label) : null;
 
+  static Map<String, dynamic> decodeProps(String? json) {
+    if (json == null || json.isEmpty) return {};
+    try {
+      return Map<String, dynamic>.from(jsonDecode(json) as Map);
+    } catch (_) {
+      return {};
+    }
+  }
+
   String get displayLabel => switch (type) {
-        ElementType.camera => cameraLabel,
-        ElementType.actor => label ?? 'Actor',
-        ElementType.light => lightType?.label ?? 'Luz',
-        ElementType.prop => propType?.label ?? 'Prop',
-        ElementType.wall => architectureType?.label ?? 'Pared',
-      };
+    ElementType.camera => cameraLabel,
+    ElementType.actor => label ?? 'Actor',
+    ElementType.light => lightType?.label ?? 'Luz',
+    ElementType.prop => propType?.label ?? 'Prop',
+    ElementType.wall => architectureType?.label ?? 'Pared',
+  };
 
   static PlanElement fromDb(
     CameraPlanElement row, {
     List<CameraPathPoint> pathRows = const [],
   }) {
-    final sorted = [...pathRows]..sort((a, b) => a.pointNumber.compareTo(b.pointNumber));
+    final sorted = [...pathRows]
+      ..sort((a, b) => a.pointNumber.compareTo(b.pointNumber));
     return PlanElement(
       id: row.id,
       type: ElementTypeCodec.fromDb(row.type),
@@ -77,10 +94,12 @@ class PlanElement {
       lightType: LightTypeLabel.fromDb(row.lightType),
       lukaCompatible: row.lukaCompatible,
       lukaFixtureId: row.lukaFixtureId,
-      externalMapping:
-          PlanElementExternalMapping.fromJson(row.externalMappingJson),
+      externalMapping: PlanElementExternalMapping.fromJson(
+        row.externalMappingJson,
+      ),
       actorColor: colorFromHex(row.color) ?? kActorColors.first,
       pathPoints: sorted.map((p) => Offset(p.x, p.y)).toList(),
+      props: decodeProps(row.propsJson),
     );
   }
 
@@ -104,6 +123,7 @@ class PlanElement {
       externalMappingJson: externalMapping.isEmpty
           ? const Value.absent()
           : Value(externalMapping.encode()),
+      propsJson: Value(props.isEmpty ? null : jsonEncode(props)),
       sortOrder: Value(sortOrder),
     );
   }

@@ -12,12 +12,30 @@ Aprobado el 2026-10-03.
 - **La biblia es ampliable por el usuario:** puede añadir puntos a una sección.
 - **El PDF respeta cada pantalla:** mismos puntos y mismo orden, adaptado a PDF. No es una captura.
 - **Se quita el compositor de export.** El PDF no se reordena después.
+- **La planta de luz y cámara va por capas, por referencia y sin copias** (2026-10-04). La localización solo lleva el entorno (paredes, puertas, ventanas, calles, árboles, relieve, props). El set toma el entorno de su localización. El esquema de luz es libre y se comparte: los planos que lo usan aparecen bajo él. El plano solo lleva cámara y actores.
+- **La biblia es la fase inicial de la luz.** Un boceto de luz hecho en la biblia aparece en la planta como «boceto», catalogable, para desarrollarlo después.
+- **Blush es inspiración, no molde.** Se importan los archivos del usuario; no se copia su aspecto ni su catálogo.
 
 ## Cómo trabajamos
 
 - Un ítem = una rama y un PR a `main`, pequeño y revisable.
 - Cada PR pasa `flutter analyze` y `flutter test`.
 - Cada ítem declara a qué objetivo de producto sirve (1 proyecto único, 2 decisión fotográfica, 3 look entregable, 4 set y colaboración).
+
+## Fase P — Planta de luz y cámara (prioritaria) (objetivos 2 y 4)
+
+Añadida el 2026-10-04. **Va por delante de todo lo pendiente de las fases 1 a 5.**
+
+Cuatro capas: entorno (localización) → set → esquema de luz → cámara (plano). Cada capa ve las anteriores por referencia. Un esquema de luz tiene estado (boceto, en desarrollo, definitivo) y origen (planta, biblia, Blush), y puede ser libre, sin localización ni escenas.
+
+- [ ] **P1. Modelo por capas y plantas sin escenas (schema 42).** Tabla `LightSetups`; `Shots.lightSetupId`; `LightingSetups.planSetupId`; `LocationBasePlans.sitePlacementJson`; `CameraPlanElements.propsJson`. Formato v2 del plano con escala, fondo y propiedades por elemento; la v1 se sigue leyendo. Migración con test: las luces de cada plano pasan a esquemas compartidos por set, los diagramas de la biblia pasan a esquemas «boceto», y se quitan del plano las paredes copiadas del set. El bundle de sync lleva lo nuevo. La pantalla deja de exigir escenas.
+- [ ] **P2. Mapa global y pantalla de trabajo.** El mapa es la entrada y es visual: cada localización con la miniatura de su entorno, sus sets y, en cada set, sus esquemas de luz con estado, origen y número de planos; bloque aparte para plantas libres; filtros y «Nuevo» e «Importar» a mano. Al tocar una miniatura se entra en la pantalla de trabajo: lienzo, propiedades y lista de material, y un navegador plegable para cambiar de set, esquema, plano o localización sin volver al mapa.
+- [ ] **P3. Editor base.** `camera_plan_editor.dart` partido en lienzo, herramientas y paneles. Escala en metros, rejilla, cotas y medir. Paredes punto a punto, rectas y curvas. Deshacer y rehacer, duplicar, selección múltiple, imanes, capas con visibilidad y bloqueo. El set marca su zona sobre el plano de la localización.
+- [ ] **P4. Luz desarrollada.** Haz con apertura y alcance, intensidad, temperatura de color, encendida o apagada. Modificadores y grip (difusión, bandera, rebote, negro, gel). Luces desde el catálogo. Cámara con cono según focal y sensor. Posición A → B. Lista de material y consumo por esquema. Ambiente día o noche.
+- [ ] **P5. Boceto e importación de plano.** Dibujar con Apple Pencil, foto del papel (`image_picker`) o imagen de archivo. Calibrado de escala con dos puntos y una distancia; mover, girar y opacidad del fondo. PDF como fondo queda para después.
+- [ ] **P6. Biblia.** La ficha de setup de Iluminación muestra el esquema de la planta, con «Bocetar aquí» y «Abrir en planta». Se retira `LightingDiagramEditor`. El PDF de la biblia pinta el mismo esquema.
+- [ ] **P7. Importador de Blush.** Una escena de Blush pasa a set y sus setups a esquemas; las paredes repetidas se unifican en la base. Test con el proyecto demo.
+- [ ] **P8. PDF de plantas.** Una página por esquema con base, luz, lista de material y los planos que lo usan; después, la planta de cada plano.
 
 ## Referencias de Stitch
 

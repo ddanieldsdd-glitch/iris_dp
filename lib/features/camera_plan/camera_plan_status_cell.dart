@@ -70,13 +70,16 @@ class CameraPlanStatusCell extends ConsumerWidget {
               icon: inheritable
                   ? Icons.layers_outlined
                   : Icons.grid_on_outlined,
-              iconColor: inheritable ? palette.highlightYellow : palette.textTertiary,
-              borderColor:
-                  inheritable ? palette.highlightYellow : palette.divider,
+              iconColor: inheritable
+                  ? palette.highlightYellow
+                  : palette.textTertiary,
+              borderColor: inheritable
+                  ? palette.highlightYellow
+                  : palette.divider,
               background: inheritable
                   ? palette.highlightYellow.withValues(alpha: 0.12)
                   : palette.surfaceOverlay.withValues(alpha: 0.4),
-              caption: inheritable ? 'Heredar' : 'Vacío',
+              caption: inheritable ? 'Base' : 'Vacío',
             );
           },
         );

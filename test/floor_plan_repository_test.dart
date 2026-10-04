@@ -20,15 +20,12 @@ void main() {
     await db.close();
   });
 
-  test('hereda planta del set al plano vacío', () async {
+  test('el plano vacío ve la planta del set', () async {
     final projectId = await db.insertProject(
       ProjectsCompanion.insert(name: 'Jerarquía'),
     );
     final siteId = await db.insertSite(
-      LocationSitesCompanion.insert(
-        projectId: projectId,
-        name: 'Bosque',
-      ),
+      LocationSitesCompanion.insert(projectId: projectId, name: 'Bosque'),
     );
     final setId = await db.insertLocation(
       LocationBasePlansCompanion.insert(
@@ -54,26 +51,23 @@ void main() {
       ),
     );
     final shotId = await db.insertShot(
-      ShotsCompanion.insert(
-        sceneId: sceneId,
-        projectId: projectId,
-        number: 1,
-      ),
+      ShotsCompanion.insert(sceneId: sceneId, projectId: projectId, number: 1),
     );
 
-    final scene = await (db.select(db.scenes)
-          ..where((s) => s.id.equals(sceneId)))
-        .getSingle();
+    final shot = await (db.select(
+      db.shots,
+    )..where((s) => s.id.equals(shotId))).getSingle();
 
-    final seeded = await repo.seedShotFromSceneTemplate(shotId, scene);
-    expect(seeded, isTrue);
+    // El plano ve la planta del set por referencia, sin copiarla.
+    final layers = await repo.layersForShot(shot);
+    expect(layers.set, hasLength(1));
+    expect(layers.set.first.type, ElementType.wall);
 
-    final elements = await repo.loadElements(
+    final own = await repo.loadElements(
       scope: FloorPlanScope.shot,
       shotId: shotId,
     );
-    expect(elements, hasLength(1));
-    expect(elements.first.type, ElementType.wall);
+    expect(own, isEmpty);
   });
 
   test('resolveTemplateJsonForScene prefiere set sobre sitio', () async {
@@ -110,9 +104,9 @@ void main() {
         locationId: Value(setId),
       ),
     );
-    final scene = await (db.select(db.scenes)
-          ..where((s) => s.id.equals(sceneId)))
-        .getSingle();
+    final scene = await (db.select(
+      db.scenes,
+    )..where((s) => s.id.equals(sceneId))).getSingle();
 
     final json = await repo.resolveTemplateJsonForScene(scene);
     expect(json, contains('"prop"'));

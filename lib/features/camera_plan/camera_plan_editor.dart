@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -35,6 +36,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   final FloorPlanScope scope;
   final int? siteId;
   final int? setId;
+  final int? lightSetupId;
   final int? shotId;
 
   const CameraPlanEditor({
@@ -44,6 +46,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     this.scope = FloorPlanScope.shot,
     this.siteId,
     this.setId,
+    this.lightSetupId,
     this.shotId,
   });
 
@@ -56,6 +59,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   }) : label = siteName,
        scope = FloorPlanScope.site,
        setId = null,
+       lightSetupId = null,
        shotId = null;
 
   /// Plano base del set de rodaje.
@@ -67,6 +71,19 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   }) : label = setName,
        scope = FloorPlanScope.set,
        siteId = null,
+       lightSetupId = null,
+       shotId = null;
+
+  /// Esquema de luz compartido entre planos.
+  const CameraPlanEditor.lightSetup({
+    super.key,
+    required this.projectId,
+    required int this.lightSetupId,
+    required String setupName,
+  }) : label = setupName,
+       scope = FloorPlanScope.lightSetup,
+       siteId = null,
+       setId = null,
        shotId = null;
 
   /// Planta de cámara de un plano concreto.
@@ -78,7 +95,8 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   }) : label = shotLabel,
        scope = FloorPlanScope.shot,
        siteId = null,
-       setId = null;
+       setId = null,
+       lightSetupId = null;
 
   @override
   ConsumerState<CameraPlanEditor> createState() => _CameraPlanEditorState();
@@ -88,6 +106,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   static const _annotationDocumentSize = Size(1600, 1200);
 
   final List<PlanElement> _elements = [];
+  List<PlanElement> _inherited = const [];
+  LightSetup? _lightSetup;
   final AnnotationCanvasController _annotationController =
       AnnotationCanvasController();
   PlanElement? _selected;
@@ -103,7 +123,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   LocationSite? _linkedSite;
   List<CameraPlanNavTarget> _navTargets = [];
   Color _sceneColor = const Color(0xFF94A3B8);
-  bool _canInheritTemplate = false;
   ui.Image? _backgroundImage;
   Rect? _backgroundRect;
   double _backgroundOpacity = 0.85;
@@ -117,10 +136,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   String get _annotationTargetType => switch (widget.scope) {
     FloorPlanScope.site => 'camera_plan_site',
     FloorPlanScope.set => 'camera_plan_set',
+    FloorPlanScope.lightSetup => 'camera_plan_light_setup',
     FloorPlanScope.shot => 'camera_plan_shot',
   };
   String get _annotationTargetId {
-    final id = widget.siteId ?? widget.setId ?? widget.shotId;
+    final id =
+        widget.siteId ?? widget.setId ?? widget.lightSetupId ?? widget.shotId;
     return id?.toString() ?? '${widget.scope.name}:${widget.label}';
   }
 
@@ -143,8 +164,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       scope: widget.scope,
       siteId: widget.siteId,
       setId: widget.setId,
+      lightSetupId: widget.lightSetupId,
       shotId: widget.shotId,
     );
+    final inherited = await _repo.inheritedLayers(
+      scope: widget.scope,
+      setId: widget.setId,
+      lightSetupId: widget.lightSetupId,
+      shotId: widget.shotId,
+    );
+    var lightSetup = inherited.lightSetup;
     final annotationRow = await db.getProjectAnnotationDocument(
       projectId: widget.projectId,
       targetType: _annotationTargetType,
@@ -156,7 +185,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     LocationBasePlan? linkedSet;
     LocationSite? linkedSite;
     Color sceneColor = sceneDisplayColor(null);
-    var canInherit = false;
 
     final sites = await db.watchSitesForProject(widget.projectId).first;
     final allSets = await db.watchLocationsForProject(widget.projectId).first;
@@ -186,9 +214,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             linkedSite = await db.getSiteById(linkedSet!.siteId!);
           }
           sceneColor = colors.sceneColor(scene);
-          if (elements.isEmpty) {
-            canInherit = await _repo.resolveTemplateJsonForScene(scene) != null;
-          }
         }
       }
     } else if (widget.scope == FloorPlanScope.set && widget.setId != null) {
@@ -197,6 +222,19 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         linkedSite = await db.getSiteById(linkedSet!.siteId!);
       }
       sceneColor = colors.setColor(linkedSet!);
+    } else if (widget.scope == FloorPlanScope.lightSetup &&
+        widget.lightSetupId != null) {
+      lightSetup = await db.getLightSetupById(widget.lightSetupId!);
+      if (lightSetup?.locationBasePlanId != null) {
+        linkedSet = await db.getLocationById(lightSetup!.locationBasePlanId!);
+      }
+      final setupSiteId = lightSetup?.locationSiteId ?? linkedSet?.siteId;
+      if (setupSiteId != null) {
+        linkedSite = await db.getSiteById(setupSiteId);
+      }
+      sceneColor = linkedSet != null
+          ? colors.setColor(linkedSet)
+          : colors.siteColor(linkedSite?.id);
     } else if (widget.scope == FloorPlanScope.site && widget.siteId != null) {
       linkedSite = await db.getSiteById(widget.siteId!);
       sceneColor = colors.siteColor(widget.siteId);
@@ -213,6 +251,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final scopeKind = switch (widget.scope) {
       FloorPlanScope.site => FloorPlanScopeKind.site,
       FloorPlanScope.set => FloorPlanScopeKind.set,
+      FloorPlanScope.lightSetup ||
       FloorPlanScope.shot => FloorPlanScopeKind.shot,
     };
     final bgMeta = await scanService.resolveFloorPlanBackground(
@@ -245,24 +284,23 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _elements
         ..clear()
         ..addAll(elements);
+      _inherited = [
+        ...inherited.environment,
+        ...inherited.set,
+        ...inherited.light,
+      ];
+      _lightSetup = lightSetup;
       _shot = shot;
       _scene = scene;
       _linkedSet = linkedSet;
       _linkedSite = linkedSite;
       _sceneColor = sceneColor;
       _navTargets = navTargets;
-      _canInheritTemplate = canInherit;
       _backgroundImage = bgImage;
       _backgroundRect = bgRect;
       _backgroundOpacity = bgOpacity;
       _loading = false;
     });
-
-    if (_canInheritTemplate && elements.isEmpty && _isShotMode) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _offerInheritTemplate();
-      });
-    }
   }
 
   Future<void> _saveAnnotations(AnnotationDocument document) => ref
@@ -274,47 +312,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         documentJson: document.encode(),
         documentSchemaVersion: document.schemaVersion,
       );
-
-  Future<void> _offerInheritTemplate() async {
-    if (!_canInheritTemplate || _elements.isNotEmpty || !_isShotMode) return;
-    final palette = context.palette;
-    final inherit = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: palette.surfaceElevated,
-        title: Text(
-          'Heredar planta',
-          style: AppTypography.titleMedium(palette),
-        ),
-        content: Text(
-          'Este plano está vacío. ¿Quieres copiar la planta del set o '
-          'localización vinculada como punto de partida?',
-          style: AppTypography.bodyMedium(palette),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(
-              'Empezar vacío',
-              style: AppTypography.bodyMedium(palette),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              'Heredar',
-              style: AppTypography.bodyMedium(
-                palette,
-              ).copyWith(color: palette.accent),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (inherit == true && mounted) {
-      await _inheritFromTemplate();
-    }
-  }
 
   Future<List<CameraPlanNavTarget>> _loadNavTargets(AppDatabase db) async {
     final scenes =
@@ -380,50 +377,114 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       elements: _elements,
       siteId: widget.siteId,
       setId: widget.setId,
+      lightSetupId: widget.lightSetupId,
       shotId: widget.shotId,
     );
     if (!mounted) return;
-    _showSnack('Plano guardado.');
+    _showSnack('Planta guardada.');
   }
 
-  Future<void> _inheritFromTemplate() async {
-    if (!_isShotMode || _scene == null || widget.shotId == null) return;
-    final ok = await _repo.seedShotFromSceneTemplate(widget.shotId!, _scene!);
+  /// Elige el esquema de luz que usa este plano.
+  Future<void> _chooseLightSetup() async {
+    final scene = _scene;
+    final shot = _shot;
+    if (scene == null || shot == null) return;
+    final palette = context.palette;
+    final setups = await _repo.lightSetupsForScene(scene);
     if (!mounted) return;
-    if (!ok) {
-      _showSnack('No hay plano de set ni maestro para heredar.');
-      return;
+
+    const none = -1;
+    const create = -2;
+    final choice = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: palette.surface,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Esquema de luz del plano',
+                  style: AppTypography.titleMedium(palette),
+                ),
+              ),
+              for (final setup in setups)
+                ListTile(
+                  leading: Icon(
+                    setup.id == shot.lightSetupId
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    color: palette.accent,
+                  ),
+                  title: Text(
+                    setup.name,
+                    style: AppTypography.bodyLarge(palette),
+                  ),
+                  subtitle: Text(
+                    lightSetupStatusLabel(setup.status),
+                    style: AppTypography.caption(palette),
+                  ),
+                  onTap: () => Navigator.pop(ctx, setup.id),
+                ),
+              ListTile(
+                leading: Icon(Icons.add, color: palette.accent),
+                title: Text(
+                  'Nuevo esquema de luz',
+                  style: AppTypography.bodyLarge(palette),
+                ),
+                onTap: () => Navigator.pop(ctx, create),
+              ),
+              if (shot.lightSetupId != null)
+                ListTile(
+                  leading: Icon(Icons.link_off, color: palette.textSecondary),
+                  title: Text(
+                    'Sin esquema de luz',
+                    style: AppTypography.bodyLarge(palette),
+                  ),
+                  onTap: () => Navigator.pop(ctx, none),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+
+    final db = ref.read(databaseProvider);
+    int? setupId;
+    if (choice == create) {
+      final created = await _repo.createLightSetup(
+        projectId: widget.projectId,
+        setId: scene.locationId,
+        siteId: scene.locationId == null ? scene.locationSiteId : null,
+      );
+      setupId = created.id;
+    } else if (choice != none) {
+      setupId = choice;
     }
+    await db.assignLightSetupToShot(shot.id, setupId);
     await _load();
-    _showSnack('Planta heredada del set/localización.');
   }
 
-  Future<void> _saveAsSetPlan() async {
-    if (_linkedSet == null) {
-      _showSnack('Esta escena no tiene set vinculado.');
-      return;
-    }
-    await _repo.saveElements(
-      scope: FloorPlanScope.set,
-      elements: _elements,
-      setId: _linkedSet!.id,
+  Future<void> _openLightSetup() async {
+    final setup = _lightSetup;
+    if (setup == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CameraPlanEditor.lightSetup(
+          projectId: widget.projectId,
+          lightSetupId: setup.id,
+          setupName: setup.name,
+        ),
+      ),
     );
-    if (!mounted) return;
-    _showSnack('Planta guardada en set «${_linkedSet!.locationName}».');
-  }
-
-  Future<void> _saveAsSitePlan() async {
-    if (_linkedSite == null) {
-      _showSnack('Esta escena no tiene localización vinculada.');
-      return;
-    }
-    await _repo.saveElements(
-      scope: FloorPlanScope.site,
-      elements: _elements,
-      siteId: _linkedSite!.id,
-    );
-    if (!mounted) return;
-    _showSnack('Planta guardada en localización «${_linkedSite!.name}».');
+    if (mounted) await _load();
   }
 
   void _showSnack(String message) {
@@ -554,77 +615,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     );
   }
 
-  void _showSaveMenu() {
-    if (!_isShotMode) {
-      _saveCurrentPlan();
-      return;
-    }
-    final palette = context.palette;
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: palette.surface,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Guardar planta',
-                style: AppTypography.titleMedium(palette),
-              ),
-            ),
-            if (_linkedSet != null)
-              ListTile(
-                leading: Icon(Icons.layers_outlined, color: palette.accent),
-                title: Text(
-                  'Planta de set',
-                  style: AppTypography.bodyLarge(palette),
-                ),
-                subtitle: Text(
-                  _linkedSet!.locationName,
-                  style: AppTypography.caption(palette),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _saveAsSetPlan();
-                },
-              ),
-            if (_linkedSite != null)
-              ListTile(
-                leading: Icon(
-                  Icons.location_city_outlined,
-                  color: palette.accent,
-                ),
-                title: Text(
-                  'Planta de localización',
-                  style: AppTypography.bodyLarge(palette),
-                ),
-                subtitle: Text(
-                  _linkedSite!.name,
-                  style: AppTypography.caption(palette),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _saveAsSitePlan();
-                },
-              ),
-            if (_linkedSet == null && _linkedSite == null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Text(
-                  'Vincula la escena a un set o localización para guardar la planta allí.',
-                  style: AppTypography.bodyMedium(palette),
-                ),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _persistElement(PlanElement el, {int? sortOrder}) async {
     if (!_isShotMode) {
       await _repo.saveElements(
@@ -632,6 +622,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         elements: _elements,
         siteId: widget.siteId,
         setId: widget.setId,
+        lightSetupId: widget.lightSetupId,
       );
       return;
     }
@@ -672,6 +663,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           externalMappingJson: el.externalMapping.isEmpty
               ? null
               : el.externalMapping.encode(),
+          propsJson: el.props.isEmpty ? null : jsonEncode(el.props),
           sortOrder: order,
         ),
       );
@@ -701,6 +693,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         elements: _elements,
         siteId: widget.siteId,
         setId: widget.setId,
+        lightSetupId: widget.lightSetupId,
       );
       return;
     }
@@ -1054,7 +1047,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.scope.title,
+                    [
+                      widget.scope.title,
+                      if (widget.scope == FloorPlanScope.lightSetup)
+                        _linkedSet?.locationName ??
+                            _linkedSite?.name ??
+                            'Planta libre',
+                    ].join(' · '),
                     style: AppTypography.caption(
                       palette,
                     ).copyWith(color: palette.accent),
@@ -1100,40 +1099,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                if (_canInheritTemplate && _elements.isEmpty)
-                  Material(
-                    color: palette.accent.withValues(alpha: 0.12),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.layers_outlined,
-                            color: palette.accent,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Este plano está vacío. Hereda la planta del set o localización.',
-                              style: AppTypography.bodyMedium(palette),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: _inheritFromTemplate,
-                            child: Text(
-                              'Heredar',
-                              style: AppTypography.label(
-                                palette,
-                              ).copyWith(color: palette.accent),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                if (_isShotMode)
+                  _LightSetupBar(
+                    palette: palette,
+                    setup: _lightSetup,
+                    onChoose: _chooseLightSetup,
+                    onOpen: _lightSetup != null ? _openLightSetup : null,
                   ),
                 Expanded(
                   child: Row(
@@ -1159,6 +1130,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                       ),
                                       painter: CameraPlanPainter(
                                         elements: _elements,
+                                        inheritedElements: _inherited,
                                         selectedElement: _selected,
                                         selectedPathIndex: _selectedPathIndex,
                                         scale: _scale,
@@ -1230,11 +1202,82 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                   palette: palette,
                   onAdd: _showAddMenu,
                   onScenes: _showSceneNavigator,
-                  onSave: _showSaveMenu,
+                  onSave: _saveCurrentPlan,
                   showScenes: _isShotMode,
                 ),
               ],
             ),
+    );
+  }
+}
+
+/// Estado de un esquema de luz, como se enseña al usuario.
+String lightSetupStatusLabel(String status) => switch (status) {
+  'definitivo' => 'Definitivo',
+  'en_desarrollo' => 'En desarrollo',
+  _ => 'Boceto',
+};
+
+/// Franja del plano con el esquema de luz que usa.
+class _LightSetupBar extends StatelessWidget {
+  final AppPalette palette;
+  final LightSetup? setup;
+  final VoidCallback onChoose;
+  final VoidCallback? onOpen;
+
+  const _LightSetupBar({
+    required this.palette,
+    required this.setup,
+    required this.onChoose,
+    this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: palette.surface,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(
+          children: [
+            Icon(
+              Icons.wb_incandescent_outlined,
+              color: palette.accent,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                setup == null
+                    ? 'Sin esquema de luz'
+                    : '${setup!.name} · ${lightSetupStatusLabel(setup!.status)}',
+                style: AppTypography.bodyMedium(palette),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (onOpen != null)
+              TextButton(
+                onPressed: onOpen,
+                child: Text(
+                  'Editar luz',
+                  style: AppTypography.label(
+                    palette,
+                  ).copyWith(color: palette.accent),
+                ),
+              ),
+            TextButton(
+              onPressed: onChoose,
+              child: Text(
+                setup == null ? 'Elegir' : 'Cambiar',
+                style: AppTypography.label(
+                  palette,
+                ).copyWith(color: palette.accent),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

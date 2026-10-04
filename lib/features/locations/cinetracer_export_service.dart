@@ -9,6 +9,7 @@ import '../camera_plan/camera_plan_constants.dart';
 import '../camera_plan/camera_plan_element_model.dart';
 import '../camera_plan/camera_plan_grouping.dart';
 import '../camera_plan/floor_plan_json.dart';
+import '../camera_plan/floor_plan_repository.dart';
 import '../camera_plan/plan_element_compat.dart';
 import '../luka_export/unreal_coords.dart';
 
@@ -44,12 +45,8 @@ class CineTracerExportService {
       final sceneProps = <Map<String, dynamic>>[];
 
       for (final shot in shots) {
-        final rows = await db.getCameraPlanElementsForShot(shot.id);
-        final elements = <PlanElement>[];
-        for (final row in rows) {
-          final pathRows = await db.getPathPointsForElement(row.id);
-          elements.add(PlanElement.fromDb(row, pathRows: pathRows));
-        }
+        final layers = await FloorPlanRepository(db).layersForShot(shot);
+        final elements = <PlanElement>[...layers.light, ...layers.shot];
 
         for (final el in elements) {
           final block = _elementBlock(

@@ -16,6 +16,7 @@ import '../../shared/visual_bible/sensor_mode_cascade.dart';
 import '../templates/user_template_models.dart';
 import 'seed_data.dart';
 import '../../shared/equipment/catalog_importer.dart';
+import 'plan_layer_migration.dart';
 import 'tables.dart';
 
 part 'app_database.g.dart';
@@ -31,6 +32,7 @@ part 'app_database.g.dart';
     ShotReferences,
     CameraPlanElements,
     CameraPathPoints,
+    LightSetups,
     LocationSites,
     LocationBasePlans,
     LocationImages,
@@ -71,7 +73,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 41;
+  int get schemaVersion => 42;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -404,6 +406,18 @@ class AppDatabase extends _$AppDatabase {
         // de imagen por formato.
         await _importEmbeddedCatalogIfNeeded();
       }
+      if (from < 42) {
+        // Planta por capas: esquemas de luz compartidos entre planos.
+        await m.createTable(lightSetups);
+        await m.addColumn(shots, shots.lightSetupId);
+        await m.addColumn(cameraPlanElements, cameraPlanElements.propsJson);
+        await m.addColumn(
+          locationBasePlans,
+          locationBasePlans.sitePlacementJson,
+        );
+        await m.addColumn(lightingSetups, lightingSetups.planSetupId);
+        await PlanLayerMigration(this).run();
+      }
     },
   );
 
@@ -556,6 +570,15 @@ class AppDatabase extends _$AppDatabase {
       }
       await (delete(shots)..where((s) => s.projectId.equals(id))).go();
       await (delete(scenes)..where((s) => s.projectId.equals(id))).go();
+      await (update(lightingSetups)..where(
+            (s) => s.planSetupId.isInQuery(
+              selectOnly(lightSetups)
+                ..addColumns([lightSetups.id])
+                ..where(lightSetups.projectId.equals(id)),
+            ),
+          ))
+          .write(const LightingSetupsCompanion(planSetupId: Value(null)));
+      await (delete(lightSetups)..where((s) => s.projectId.equals(id))).go();
       await (delete(
         projectEquipment,
       )..where((e) => e.projectId.equals(id))).go();
@@ -666,6 +689,7 @@ class AppDatabase extends _$AppDatabase {
       }
       await (delete(shots)..where((s) => s.projectId.equals(id))).go();
       await (delete(scenes)..where((s) => s.projectId.equals(id))).go();
+      await (delete(lightSetups)..where((s) => s.projectId.equals(id))).go();
       await (delete(
         projectEquipment,
       )..where((e) => e.projectId.equals(id))).go();
@@ -833,6 +857,7 @@ class AppDatabase extends _$AppDatabase {
           notes: Value(set.notes),
           model3dPath: Value(set.model3dPath),
           floorPlanJson: Value(set.floorPlanJson),
+          sitePlacementJson: Value(set.sitePlacementJson),
           scanPath: Value(set.scanPath),
           scanSource: Value(set.scanSource),
           scanMetadataJson: Value(set.scanMetadataJson),
@@ -864,6 +889,33 @@ class AppDatabase extends _$AppDatabase {
           );
         }
       }
+    }
+
+    final lightSetupIdMap = <int, int>{};
+    for (final setup in await getLightSetupsForProject(sourceId)) {
+      lightSetupIdMap[setup.id] = await insertLightSetup(
+        LightSetupsCompanion.insert(
+          projectId: newId,
+          locationSiteId: Value(
+            setup.locationSiteId != null
+                ? siteIdMap[setup.locationSiteId!]
+                : null,
+          ),
+          locationBasePlanId: Value(
+            setup.locationBasePlanId != null
+                ? setIdMap[setup.locationBasePlanId!]
+                : null,
+          ),
+          name: setup.name,
+          status: Value(setup.status),
+          origin: Value(setup.origin),
+          category: Value(setup.category),
+          planJson: Value(setup.planJson),
+          sketchJson: Value(setup.sketchJson),
+          sketchImagePath: Value(setup.sketchImagePath),
+          sortOrder: Value(setup.sortOrder),
+        ),
+      );
     }
 
     final sceneIdMap = <int, int>{};
@@ -927,6 +979,11 @@ class AppDatabase extends _$AppDatabase {
             notesHighlight: Value(shot.notesHighlight),
             referenceImagePath: Value(refPath ?? shot.referenceImagePath),
             sortOrder: Value(shot.sortOrder),
+            lightSetupId: Value(
+              shot.lightSetupId != null
+                  ? lightSetupIdMap[shot.lightSetupId!]
+                  : null,
+            ),
           ),
         );
 
@@ -963,6 +1020,7 @@ class AppDatabase extends _$AppDatabase {
           lukaCompatible: Value(el.lukaCompatible),
           lukaFixtureId: Value(el.lukaFixtureId),
           externalMappingJson: Value(el.externalMappingJson),
+          propsJson: Value(el.propsJson),
           sortOrder: Value(el.sortOrder),
         ),
       );
@@ -1374,6 +1432,9 @@ class AppDatabase extends _$AppDatabase {
     await transaction(() async {
       await (update(locationBasePlans)..where((l) => l.siteId.equals(id)))
           .write(const LocationBasePlansCompanion(siteId: Value(null)));
+      // Los esquemas de luz de la localización pasan a plantas libres.
+      await (update(lightSetups)..where((s) => s.locationSiteId.equals(id)))
+          .write(const LightSetupsCompanion(locationSiteId: Value(null)));
       await (delete(locationSites)..where((s) => s.id.equals(id))).go();
     });
   }
@@ -1655,6 +1716,10 @@ class AppDatabase extends _$AppDatabase {
       await (delete(
         locationImages,
       )..where((i) => i.locationId.equals(id))).go();
+      // Los esquemas de luz del set pasan a plantas libres.
+      await (update(lightSetups)
+            ..where((s) => s.locationBasePlanId.equals(id)))
+          .write(const LightSetupsCompanion(locationBasePlanId: Value(null)));
       await (delete(locationBasePlans)..where((l) => l.id.equals(id))).go();
     });
   }
@@ -2039,6 +2104,50 @@ class AppDatabase extends _$AppDatabase {
     if (site == null) return;
     await updateSite(site.copyWith(floorPlanJson: Value(json)));
   }
+
+  // ── Esquemas de luz de la planta ──────────────
+  Stream<List<LightSetup>> watchLightSetupsForProject(int projectId) =>
+      (select(lightSetups)
+            ..where((s) => s.projectId.equals(projectId))
+            ..orderBy([
+              (s) => OrderingTerm.asc(s.sortOrder),
+              (s) => OrderingTerm.asc(s.id),
+            ]))
+          .watch();
+
+  Future<List<LightSetup>> getLightSetupsForProject(int projectId) =>
+      (select(lightSetups)
+            ..where((s) => s.projectId.equals(projectId))
+            ..orderBy([
+              (s) => OrderingTerm.asc(s.sortOrder),
+              (s) => OrderingTerm.asc(s.id),
+            ]))
+          .get();
+
+  Future<LightSetup?> getLightSetupById(int id) =>
+      (select(lightSetups)..where((s) => s.id.equals(id))).getSingleOrNull();
+
+  Future<int> insertLightSetup(LightSetupsCompanion row) =>
+      into(lightSetups).insert(row);
+
+  Future<void> updateLightSetup(LightSetup row) =>
+      update(lightSetups).replace(row);
+
+  /// Borra el esquema. Los planos y las fichas de la biblia que lo usaban
+  /// se quedan sin esquema; no se borran.
+  Future<void> deleteLightSetup(int id) async {
+    await (update(shots)..where((s) => s.lightSetupId.equals(id))).write(
+      const ShotsCompanion(lightSetupId: Value(null)),
+    );
+    await (update(lightingSetups)..where((s) => s.planSetupId.equals(id)))
+        .write(const LightingSetupsCompanion(planSetupId: Value(null)));
+    await (delete(lightSetups)..where((s) => s.id.equals(id))).go();
+  }
+
+  Future<void> assignLightSetupToShot(int shotId, int? setupId) =>
+      (update(shots)..where((s) => s.id.equals(shotId))).write(
+        ShotsCompanion(lightSetupId: Value(setupId)),
+      );
 
   Future<bool> shotHasCameraPlan(int shotId) async {
     final rows = await getCameraPlanElementsForShot(shotId);

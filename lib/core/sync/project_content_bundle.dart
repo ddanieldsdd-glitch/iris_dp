@@ -230,6 +230,7 @@ class ProjectContentBundle {
           'lukaCompatible': el.lukaCompatible,
           'lukaFixtureId': el.lukaFixtureId,
           'externalMappingJson': el.externalMappingJson,
+          'propsJson': el.propsJson,
           'sortOrder': el.sortOrder,
         });
         final points = await db.getPathPointsForElement(el.id);
@@ -391,6 +392,7 @@ class ProjectContentBundle {
           'setupName': setup.setupName,
           'narrativeNote': setup.narrativeNote,
           'diagramJson': setup.diagramJson,
+          'planSetupId': setup.planSetupId,
           'gelNotes': setup.gelNotes,
           'practicalMotivation': setup.practicalMotivation,
           'referenceImagePath': setup.referenceImagePath,
@@ -438,6 +440,18 @@ class ProjectContentBundle {
       db.opticsLabSamples,
     )..where((o) => o.projectId.equals(projectId))).get();
 
+    final lightSetupRows = await db.getLightSetupsForProject(projectId);
+    final lightSetupKeyById = {
+      for (var i = 0; i < lightSetupRows.length; i++)
+        lightSetupRows[i].id: 'lightSetup:$i',
+    };
+    for (final row in lightingSetups) {
+      final planSetupId = row.remove('planSetupId') as int?;
+      row['planSetupKey'] = planSetupId != null
+          ? lightSetupKeyById[planSetupId]
+          : null;
+    }
+
     return {
       'version': bundleVersion,
       'exportedAt': DateTime.now().toIso8601String(),
@@ -483,9 +497,31 @@ class ProjectContentBundle {
               'notes': s.notes,
               'model3dPath': s.model3dPath,
               'floorPlanJson': s.floorPlanJson,
+              'sitePlacementJson': s.sitePlacementJson,
               'scanPath': s.scanPath,
               'scanSource': s.scanSource,
               'scanMetadataJson': s.scanMetadataJson,
+              'sortOrder': s.sortOrder,
+            },
+          )
+          .toList(),
+      'lightSetups': lightSetupRows
+          .map(
+            (s) => {
+              'lightSetupKey': lightSetupKeyById[s.id],
+              'siteKey': s.locationSiteId != null
+                  ? siteKeyById[s.locationSiteId!]
+                  : null,
+              'setKey': s.locationBasePlanId != null
+                  ? setKeyById[s.locationBasePlanId!]
+                  : null,
+              'name': s.name,
+              'status': s.status,
+              'origin': s.origin,
+              'category': s.category,
+              'planJson': s.planJson,
+              'sketchJson': s.sketchJson,
+              'sketchImagePath': s.sketchImagePath,
               'sortOrder': s.sortOrder,
             },
           )
@@ -535,6 +571,9 @@ class ProjectContentBundle {
           'durationSeconds': shot.durationSeconds,
           'scriptAnchorIndex': shot.scriptAnchorIndex,
           'sortOrder': shot.sortOrder,
+          'lightSetupKey': shot.lightSetupId != null
+              ? lightSetupKeyById[shot.lightSetupId!]
+              : null,
         };
       }).toList(),
       'shotReferences': shotReferences,
@@ -762,6 +801,7 @@ class ProjectContentBundle {
         hasRows('shots') ||
         hasRows('locationSites') ||
         hasRows('locationBasePlans') ||
+        hasRows('lightSetups') ||
         hasRows('shootDocuments') ||
         hasRows('visualBibles') ||
         hasRows('lookBibles') ||
@@ -846,6 +886,7 @@ class ProjectContentBundle {
           notes: Value(m['notes'] as String?),
           model3dPath: Value(m['model3dPath'] as String?),
           floorPlanJson: Value(m['floorPlanJson'] as String?),
+          sitePlacementJson: Value(m['sitePlacementJson'] as String?),
           scanPath: Value(m['scanPath'] as String?),
           scanSource: Value(m['scanSource'] as String?),
           scanMetadataJson: Value(m['scanMetadataJson'] as String?),
@@ -853,6 +894,31 @@ class ProjectContentBundle {
         ),
       );
       setKeyToId[m['setKey'] as String] = id;
+    }
+
+    final lightSetupKeyToId = <String, int>{};
+    for (final row in bundle['lightSetups'] as List? ?? []) {
+      final m = Map<String, dynamic>.from(row as Map);
+      final siteKey = m['siteKey'] as String?;
+      final setKey = m['setKey'] as String?;
+      final id = await db.insertLightSetup(
+        LightSetupsCompanion.insert(
+          projectId: projectId,
+          locationSiteId: Value(siteKey != null ? siteKeyToId[siteKey] : null),
+          locationBasePlanId: Value(
+            setKey != null ? setKeyToId[setKey] : null,
+          ),
+          name: m['name'] as String,
+          status: Value(m['status'] as String? ?? 'boceto'),
+          origin: Value(m['origin'] as String? ?? 'planta'),
+          category: Value(m['category'] as String?),
+          planJson: Value(m['planJson'] as String?),
+          sketchJson: Value(m['sketchJson'] as String?),
+          sketchImagePath: Value(m['sketchImagePath'] as String?),
+          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+        ),
+      );
+      lightSetupKeyToId[m['lightSetupKey'] as String] = id;
     }
 
     for (final row in bundle['locationImages'] as List? ?? []) {
@@ -929,6 +995,7 @@ class ProjectContentBundle {
               durationSeconds: Value(bundleInt(m['durationSeconds'])),
               scriptAnchorIndex: Value(bundleInt(m['scriptAnchorIndex'])),
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+              lightSetupId: Value(lightSetupKeyToId[m['lightSetupKey']]),
             ),
           );
       shotKeyToId[m['shotKey'] as String] = id;
@@ -971,6 +1038,7 @@ class ProjectContentBundle {
           lukaCompatible: Value(m['lukaCompatible'] as bool? ?? false),
           lukaFixtureId: Value(m['lukaFixtureId'] as String?),
           externalMappingJson: Value(m['externalMappingJson'] as String?),
+          propsJson: Value(m['propsJson'] as String?),
           sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
         ),
       );
@@ -1329,6 +1397,7 @@ class ProjectContentBundle {
               gelNotes: Value(m['gelNotes'] as String?),
               practicalMotivation: Value(m['practicalMotivation'] as String?),
               referenceImagePath: Value(m['referenceImagePath'] as String?),
+              planSetupId: Value(lightSetupKeyToId[m['planSetupKey']]),
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
             ),
           );

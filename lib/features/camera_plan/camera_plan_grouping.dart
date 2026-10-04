@@ -23,7 +23,8 @@ class CameraPlanHierarchy {
   });
 
   int get sceneCount =>
-      sets.fold<int>(0, (n, s) => n + s.scenes.length) + unassignedScenes.length;
+      sets.fold<int>(0, (n, s) => n + s.scenes.length) +
+      unassignedScenes.length;
 }
 
 class SetPlanNode {
@@ -34,8 +35,7 @@ class SetPlanNode {
 
   String? get floorPlanJson => set.floorPlanJson;
 
-  bool get hasPlan =>
-      floorPlanJson != null && floorPlanJson!.isNotEmpty;
+  bool get hasPlan => floorPlanJson != null && floorPlanJson!.isNotEmpty;
 }
 
 List<CameraPlanHierarchy> buildCameraPlanHierarchy({
@@ -61,7 +61,8 @@ List<CameraPlanHierarchy> buildCameraPlanHierarchy({
     final site = scene.locationSiteId != null
         ? sitesById[scene.locationSiteId]
         : null;
-    final siteName = site?.name ??
+    final siteName =
+        site?.name ??
         (scene.locationPureName.trim().isNotEmpty
             ? scene.locationPureName.trim()
             : 'Sin localización');
@@ -71,18 +72,31 @@ List<CameraPlanHierarchy> buildCameraPlanHierarchy({
     siteScenes[key]!.add(scene);
   }
 
+  // Las localizaciones sin escenas también tienen planta.
+  for (final site in sites) {
+    final key = site.id.toString();
+    if (siteScenes.containsKey(key)) continue;
+    siteScenes[key] = [];
+    orderedKeys.add(key);
+  }
+
   return orderedKeys.map((key) {
     final groupScenes = siteScenes[key]!;
-    final first = groupScenes.first;
-    final site = first.locationSiteId != null
+    final first = groupScenes.isEmpty ? null : groupScenes.first;
+    final site = first == null
+        ? sitesById[int.parse(key)]
+        : first.locationSiteId != null
         ? sitesById[first.locationSiteId]
         : null;
-    final siteName = site?.name ??
-        (first.locationPureName.trim().isNotEmpty
+    final siteName =
+        site?.name ??
+        (first != null && first.locationPureName.trim().isNotEmpty
             ? first.locationPureName.trim()
             : 'Sin localización');
 
-    final siteSets = site != null ? (setsBySite[site.id] ?? []) : <LocationBasePlan>[];
+    final siteSets = site != null
+        ? (setsBySite[site.id] ?? [])
+        : <LocationBasePlan>[];
     final scenesBySet = <int?, List<Scene>>{};
     for (final scene in groupScenes) {
       scenesBySet.putIfAbsent(scene.locationId, () => []).add(scene);
@@ -134,8 +148,10 @@ List<Scene> scenesInScriptOrder(List<Scene> scenes) {
 }
 
 /// Clave estable para anclar scroll a una localización.
-String cameraPlanLocationKey({required int? siteId, required String siteName}) =>
-    siteId?.toString() ?? siteName.trim().toLowerCase();
+String cameraPlanLocationKey({
+  required int? siteId,
+  required String siteName,
+}) => siteId?.toString() ?? siteName.trim().toLowerCase();
 
 class NavLocationGroup {
   final String siteName;
@@ -149,7 +165,9 @@ class NavLocationGroup {
   });
 }
 
-List<NavLocationGroup> groupNavTargetsBySite(List<CameraPlanNavTarget> targets) {
+List<NavLocationGroup> groupNavTargetsBySite(
+  List<CameraPlanNavTarget> targets,
+) {
   final orderedKeys = <String>[];
   final groups = <String, NavLocationGroup>{};
 

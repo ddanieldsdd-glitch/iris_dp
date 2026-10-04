@@ -20,6 +20,9 @@ class _CanvasColors {
 
 class CameraPlanPainter extends CustomPainter {
   final List<PlanElement> elements;
+
+  /// Capas heredadas: se ven atenuadas y no se editan.
+  final List<PlanElement> inheritedElements;
   final PlanElement? selectedElement;
   final int? selectedPathIndex;
   final double scale;
@@ -32,6 +35,7 @@ class CameraPlanPainter extends CustomPainter {
   CameraPlanPainter({
     required this.elements,
     required this.palette,
+    this.inheritedElements = const [],
     this.selectedElement,
     this.selectedPathIndex,
     this.scale = 1.0,
@@ -51,6 +55,17 @@ class CameraPlanPainter extends CustomPainter {
 
     _drawBackgroundImage(canvas);
     _drawGrid(canvas, size);
+
+    if (inheritedElements.isNotEmpty) {
+      canvas.saveLayer(
+        null,
+        Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.55),
+      );
+      for (final el in inheritedElements) {
+        _drawElement(canvas, el);
+      }
+      canvas.restore();
+    }
 
     for (final el in elements.where((e) => e.type == ElementType.camera)) {
       final isSelected = el.id == selectedElement?.id;
@@ -81,7 +96,8 @@ class CameraPlanPainter extends CustomPainter {
     final rect = backgroundRect;
     if (image == null || rect == null) return;
 
-    final paint = Paint()..color = Colors.white.withValues(alpha: backgroundOpacity);
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: backgroundOpacity);
     canvas.drawImageRect(
       image,
       Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
@@ -281,7 +297,8 @@ class CameraPlanPainter extends CustomPainter {
       case ElementType.camera:
         final camColor = cameraColorForLetter(el.cameraLetter);
         final labelText =
-            '${el.cameraLabel}\n${el.stabilization ?? ''} ${el.lens ?? ''}'.trim();
+            '${el.cameraLabel}\n${el.stabilization ?? ''} ${el.lens ?? ''}'
+                .trim();
         if (labelText.isNotEmpty) {
           _drawLabelBelow(canvas, labelText, camColor, yOffset: 28);
         }
@@ -337,11 +354,7 @@ class CameraPlanPainter extends CustomPainter {
         ..color = color.withValues(alpha: 0.5)
         ..strokeWidth = 1.5,
     );
-    canvas.drawCircle(
-      handleOffset,
-      7,
-      Paint()..color = color,
-    );
+    canvas.drawCircle(handleOffset, 7, Paint()..color = color);
     canvas.drawCircle(
       handleOffset,
       7,
@@ -362,11 +375,7 @@ class CameraPlanPainter extends CustomPainter {
     canvas.drawLine(const Offset(0, -14), const Offset(-28, -48), fovPaint);
     canvas.drawLine(const Offset(0, -14), const Offset(28, -48), fovPaint);
 
-    canvas.drawCircle(
-      Offset.zero,
-      16,
-      Paint()..color = Colors.white,
-    );
+    canvas.drawCircle(Offset.zero, 16, Paint()..color = Colors.white);
     canvas.drawCircle(
       Offset.zero,
       16,
@@ -381,10 +390,7 @@ class CameraPlanPainter extends CustomPainter {
       ..lineTo(-7, 6)
       ..lineTo(7, 6)
       ..close();
-    canvas.drawPath(
-      body,
-      Paint()..color = camColor.withValues(alpha: 0.9),
-    );
+    canvas.drawPath(body, Paint()..color = camColor.withValues(alpha: 0.9));
 
     final tp = TextPainter(
       text: TextSpan(
@@ -451,7 +457,11 @@ class CameraPlanPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = LightSymbolColors.strokeWidth,
       );
-      canvas.drawCircle(Offset.zero, 6, Paint()..color = LightSymbolColors.fill);
+      canvas.drawCircle(
+        Offset.zero,
+        6,
+        Paint()..color = LightSymbolColors.fill,
+      );
     }
     if (el.lukaCompatible) {
       final badge = TextPainter(
@@ -496,7 +506,10 @@ class CameraPlanPainter extends CustomPainter {
         canvas.drawLine(const Offset(18, -8), const Offset(18, -14), paint);
       case PropType.bed:
         canvas.drawRect(const Rect.fromLTWH(-20, -8, 40, 16), paint);
-        canvas.drawRect(const Rect.fromLTWH(-20, -8, 12, 16), paint..style = PaintingStyle.fill);
+        canvas.drawRect(
+          const Rect.fromLTWH(-20, -8, 12, 16),
+          paint..style = PaintingStyle.fill,
+        );
       case PropType.rectangle:
       case null:
         canvas.drawRect(const Rect.fromLTWH(-12, -12, 24, 24), paint);
@@ -527,7 +540,11 @@ class CameraPlanPainter extends CustomPainter {
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1,
         );
-        canvas.drawLine(const Offset(0, -8), const Offset(0, 8), wallPaint..strokeWidth = 1);
+        canvas.drawLine(
+          const Offset(0, -8),
+          const Offset(0, 8),
+          wallPaint..strokeWidth = 1,
+        );
       case ArchitectureType.doorOpen:
         canvas.drawLine(const Offset(-30, 0), const Offset(30, 0), wallPaint);
         canvas.drawArc(
@@ -540,7 +557,11 @@ class CameraPlanPainter extends CustomPainter {
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.5,
         );
-        canvas.drawLine(const Offset(-20, 0), const Offset(-20, -20), wallPaint..strokeWidth = 2);
+        canvas.drawLine(
+          const Offset(-20, 0),
+          const Offset(-20, -20),
+          wallPaint..strokeWidth = 2,
+        );
       case ArchitectureType.doorClosed:
         canvas.drawLine(const Offset(-30, 0), const Offset(30, 0), wallPaint);
         canvas.drawRect(
@@ -614,6 +635,7 @@ class CameraPlanPainter extends CustomPainter {
   @override
   bool shouldRepaint(CameraPlanPainter old) =>
       old.elements != elements ||
+      old.inheritedElements != inheritedElements ||
       old.selectedElement?.id != selectedElement?.id ||
       old.selectedPathIndex != selectedPathIndex ||
       old.scale != scale ||

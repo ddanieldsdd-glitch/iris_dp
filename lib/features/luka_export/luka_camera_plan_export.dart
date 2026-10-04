@@ -134,14 +134,9 @@ class LukaCameraPlanExporter {
     Scene scene,
     FloorPlanRepository repo,
   ) async {
-    final rows = await db.getCameraPlanElementsForShot(shot.id);
-    if (rows.isNotEmpty) {
-      final elements = <PlanElement>[];
-      for (final row in rows) {
-        final pathRows = await db.getPathPointsForElement(row.id);
-        elements.add(PlanElement.fromDb(row, pathRows: pathRows));
-      }
-      return (elements: elements, source: 'shot');
+    final layers = await repo.layersForShot(shot);
+    if (layers.shot.isNotEmpty || layers.light.isNotEmpty) {
+      return (elements: layers.all, source: 'shot');
     }
 
     if (scene.locationId != null) {
