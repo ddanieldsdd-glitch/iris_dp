@@ -6,22 +6,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
-import '../../core/utils/project_color_scheme.dart';
-import '../../core/utils/scene_format.dart';
-import '../../core/widgets/app_card.dart';
-import '../../core/widgets/scene_meta_display.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
 import '../../shared/pdf_export/camera_plan_pdf.dart';
 import 'camera_plan_grouping.dart';
-import 'camera_plan_scene_badge.dart';
 import 'floor_plan_repository.dart';
 import 'light_setup_actions.dart';
 import 'plan_data.dart';
 import 'plan_global_map.dart';
+import 'plan_shot_card.dart';
 import 'plan_target.dart';
 import 'plan_workspace_screen.dart';
 
@@ -138,10 +133,7 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
             data: data,
             onOpen: _open,
           ),
-          _PlanView.script => _ScriptOrderList(
-            projectId: projectId,
-            data: data,
-          ),
+          _PlanView.script => _ScriptOrderList(data: data, onOpen: _open),
         },
       ),
     );
@@ -150,10 +142,10 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
 
 /// Todos los planos, escena a escena, en el orden del guion.
 class _ScriptOrderList extends StatelessWidget {
-  final int projectId;
   final PlanProjectData data;
+  final void Function(PlanTarget target) onOpen;
 
-  const _ScriptOrderList({required this.projectId, required this.data});
+  const _ScriptOrderList({required this.data, required this.onOpen});
 
   @override
   Widget build(BuildContext context) {
@@ -172,312 +164,17 @@ class _ScriptOrderList extends StatelessWidget {
         ),
       );
     }
-    final sitesById = {for (final s in data.sites) s.id: s};
-    final setsById = {for (final s in data.sets) s.id: s};
-    final wide = AppLayout.isWide(context);
-
-    return ListView.separated(
+    return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      itemCount: scenes.length,
-      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.lg),
-      itemBuilder: (context, i) => _ScriptOrderSceneSection(
-        scene: scenes[i],
-        sitesById: sitesById,
-        setsById: setsById,
-        colors: data.colors,
-        projectId: projectId,
-        wide: wide,
-      ),
-    );
-  }
-}
-
-class _ScriptOrderSceneSection extends StatelessWidget {
-  final Scene scene;
-  final Map<int, LocationSite> sitesById;
-  final Map<int, LocationBasePlan> setsById;
-  final ProjectColorScheme colors;
-  final int projectId;
-  final bool wide;
-
-  const _ScriptOrderSceneSection({
-    required this.scene,
-    required this.sitesById,
-    required this.setsById,
-    required this.colors,
-    required this.projectId,
-    required this.wide,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final site = scene.locationSiteId != null
-        ? sitesById[scene.locationSiteId]
-        : null;
-    final set = scene.locationId != null ? setsById[scene.locationId] : null;
-    final siteName =
-        site?.name ??
-        (scene.locationPureName.trim().isNotEmpty
-            ? scene.locationPureName.trim()
-            : 'Sin localización');
-    final setName =
-        set?.locationName ??
-        (scene.locationPureName.trim().isNotEmpty
-            ? scene.locationPureName.trim()
-            : 'Sin set');
-    final sceneColor = colors.sceneColor(scene);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: sceneColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                '$siteName · $setName',
-                style: AppTypography.caption(palette).copyWith(
-                  color: sceneColor.withValues(alpha: 0.85),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        _SceneSection(
-          scene: scene,
-          projectId: projectId,
-          colors: colors,
-          wide: wide,
-          flatLayout: true,
-        ),
-      ],
-    );
-  }
-}
-
-class _SceneSection extends ConsumerWidget {
-  final Scene scene;
-  final int projectId;
-  final ProjectColorScheme colors;
-  final bool wide;
-  final bool flatLayout;
-
-  const _SceneSection({
-    required this.scene,
-    required this.projectId,
-    required this.colors,
-    required this.wide,
-    this.flatLayout = false,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.watch(databaseProvider);
-    final palette = context.palette;
-    final location = locationFromCanonical(scene.locationCanonical);
-    final sceneColor = colors.sceneColor(scene);
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: flatLayout ? 0 : AppSpacing.md,
-        bottom: AppSpacing.md,
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        decoration: BoxDecoration(
-          color: sceneColor.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: sceneColor.withValues(alpha: 0.18)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SceneHeaderRow(
-              sceneNumber: scene.number,
-              sceneColor: sceneColor,
-              title: scene.name.isNotEmpty
-                  ? scene.name
-                  : formatSceneTitle(
-                      number: scene.number,
-                      intExt: scene.intExt,
-                      dayNight: scene.dayNight,
-                      location: location,
-                    ),
-              subtitleWidget: SceneMetaDisplay(
-                intExt: scene.intExt,
-                dayNight: scene.dayNight,
-                location: location,
-                style: AppTypography.caption(palette),
-              ),
-              palette: palette,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            StreamBuilder<List<Shot>>(
-              stream: db.watchShotsForScene(scene.id),
-              builder: (context, shotSnap) {
-                final shots = shotSnap.data ?? [];
-                if (shots.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 44),
-                    child: Text(
-                      'Sin planos en esta escena.',
-                      style: AppTypography.bodyMedium(palette),
-                    ),
-                  );
-                }
-
-                final tiles = shots
-                    .map(
-                      (s) => _ShotTile(
-                        shot: s,
-                        scene: scene,
-                        projectId: projectId,
-                        sceneColor: sceneColor,
-                        wide: wide,
-                      ),
-                    )
-                    .toList();
-
-                if (wide) {
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 44),
-                    child: Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: tiles
-                          .map((t) => SizedBox(width: 360, child: t))
-                          .toList(),
-                    ),
-                  );
-                }
-
-                return Column(children: tiles);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ShotTile extends ConsumerWidget {
-  final Shot shot;
-  final Scene scene;
-  final int projectId;
-  final Color sceneColor;
-  final bool wide;
-
-  const _ShotTile({
-    required this.shot,
-    required this.scene,
-    required this.projectId,
-    required this.sceneColor,
-    required this.wide,
-  });
-
-  String get _label => 'Esc ${scene.number} · Plano ${shot.number}';
-
-  String get _subtitle {
-    final parts = <String>[
-      if (shot.framing?.isNotEmpty == true) shot.framing!,
-      if (shot.lens?.isNotEmpty == true) shot.lens!,
-      if (shot.movement?.isNotEmpty == true) shot.movement!,
-    ];
-    return parts.isEmpty ? 'Sin datos técnicos' : parts.join(' · ');
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.watch(databaseProvider);
-    final palette = context.palette;
-
-    return StreamBuilder<List<CameraPlanElement>>(
-      stream: db.watchCameraPlanElementsForShot(shot.id),
-      builder: (context, planSnap) {
-        final elementCount = planSnap.data?.length ?? 0;
-        final hasPlan = elementCount > 0;
-
-        return Padding(
-          padding: const EdgeInsets.only(left: 44, bottom: AppSpacing.sm),
-          child: AppCard(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => PlanWorkspaceScreen(
-                    projectId: projectId,
-                    initial: PlanTarget.shot(shot.id, _label),
-                  ),
-                ),
-              );
-            },
-            child: Row(
-              children: [
-                SceneNumberBadge(
-                  sceneNumber: scene.number,
-                  color: sceneColor,
-                  size: 36,
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: hasPlan
-                        ? palette.accent.withValues(alpha: 0.15)
-                        : palette.surfaceOverlay.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: hasPlan ? palette.accent : palette.divider,
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.grid_on_outlined,
-                    color: hasPlan ? palette.accent : palette.textTertiary,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Plano ${shot.number}',
-                        style: AppTypography.titleMedium(palette),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(_subtitle, style: AppTypography.bodyMedium(palette)),
-                      Text(
-                        hasPlan
-                            ? '$elementCount elemento${elementCount == 1 ? '' : 's'}'
-                            : 'Heredará del set al abrir',
-                        style: AppTypography.caption(palette).copyWith(
-                          color: hasPlan
-                              ? palette.accent
-                              : palette.textTertiary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right, color: palette.textTertiary),
-              ],
-            ),
+        for (final scene in scenes)
+          PlanSceneBlock(
+            scene: scene,
+            data: data,
+            onOpen: onOpen,
+            showLocation: true,
           ),
-        );
-      },
+      ],
     );
   }
 }

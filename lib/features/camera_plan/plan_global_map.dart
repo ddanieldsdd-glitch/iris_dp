@@ -10,6 +10,7 @@ import '../../core/theme/app_typography.dart';
 import 'floor_plan_repository.dart';
 import 'light_setup_actions.dart';
 import 'plan_data.dart';
+import 'plan_shot_card.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
 
@@ -33,15 +34,11 @@ class PlanGlobalMap extends ConsumerStatefulWidget {
 }
 
 class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
-  /// `null` = todos los estados.
-  String? _status;
-
   /// `null` = todas las localizaciones.
   int? _siteId;
 
   PlanProjectData get _data => widget.data;
 
-  bool _visible(LightSetup setup) => _status == null || setup.status == _status;
 
   Future<void> _newSetup({int? setId, int? siteId}) async {
     final setup = await FloorPlanRepository(ref.read(databaseProvider))
@@ -81,19 +78,22 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
         .toList();
     final showExtras = _siteId == null;
     final orphanSets = showExtras ? _data.orphanSets : <LocationBasePlan>[];
+    final looseScenes = showExtras
+        ? _data.scenesWithoutLocation
+        : const <Scene>[];
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        _Filters(
-          sites: _data.sites,
-          siteId: _siteId,
-          status: _status,
-          onSite: (id) => setState(() => _siteId = id),
-          onStatus: (s) => setState(() => _status = s),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        if (_data.isEmpty)
+        if (_data.sites.length > 1) ...[
+          _Filters(
+            sites: _data.sites,
+            siteId: _siteId,
+            onSite: (id) => setState(() => _siteId = id),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+        if (_data.isEmpty && _data.scenes.isEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.xl),
             child: Text(
@@ -108,7 +108,29 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
             color: palette.textTertiary,
             icon: Icons.layers_outlined,
             title: 'Sets sin localización',
-            children: [for (final set in orphanSets) _setRow(set)],
+            children: [
+              for (final (i, set) in orphanSets.indexed)
+                _TreeBranch(
+                  color: palette.textTertiary,
+                  last: i == orphanSets.length - 1,
+                  child: _setSection(set),
+                ),
+            ],
+          ),
+        if (looseScenes.isNotEmpty)
+          _Block(
+            color: palette.textTertiary,
+            icon: Icons.help_outline,
+            title: 'Sin localización',
+            subtitle: 'Escenas que aún no tienen localización ni set.',
+            children: [
+              for (final scene in looseScenes)
+                PlanSceneBlock(
+                  scene: scene,
+                  data: _data,
+                  onOpen: widget.onOpen,
+                ),
+            ],
           ),
         if (showExtras)
           _Block(
@@ -119,13 +141,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
                 'Esquemas de luz sin localización ni escenas, '
                 'para bocetar antes de tener guion.',
             children: [
-              _CardRow(
-                children: [
-                  for (final setup in _data.freeSetups.where(_visible))
-                    _setupColumn(setup, palette.accent, focus: null),
-                  _AddCard(label: 'Planta libre', onTap: () => _newSetup()),
-                ],
-              ),
+              _setupLegend(_data.freeSetups, onAdd: () => _newSetup()),
             ],
           ),
       ],
@@ -136,12 +152,35 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
     final palette = context.palette;
     final color = _data.colors.siteColor(site.id);
     final sets = _data.setsOfSite(site.id);
-    final siteSetups = _data.setupsOfSite(site.id).where(_visible).toList();
-    final setupCount =
-        _data.setupsOfSite(site.id).length +
-        sets.fold<int>(0, (n, s) => n + _data.setupsOfSet(s.id).length);
-    final environment = _data.environmentOf(site.id);
-    final zones = _data.zonesOfSite(site.id);
+    final siteSetups = _data.setupsOfSite(site.id);
+    final withoutSet = _data.scenesOfSiteWithoutSet(site.id);
+    final sceneCount =
+        withoutSet.length +
+        sets.fold<int>(0, (n, s) => n + _data.scenesOfSet(s.id).length);
+    final branches = <Widget>[
+      for (final set in sets) _setSection(set),
+      if (withoutSet.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Sin set',
+                style: AppTypography.titleMedium(
+                  palette,
+                ).copyWith(color: palette.textSecondary),
+              ),
+              for (final scene in withoutSet)
+                PlanSceneBlock(
+                  scene: scene,
+                  data: _data,
+                  onOpen: widget.onOpen,
+                ),
+            ],
+          ),
+        ),
+    ];
 
     return _Block(
       color: color,
@@ -149,272 +188,311 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
       title: site.name,
       subtitle:
           '${sets.length} set${sets.length == 1 ? '' : 's'} · '
-          '$setupCount esquema${setupCount == 1 ? '' : 's'} de luz',
-      action: TextButton.icon(
-        icon: const Icon(Icons.add, size: 16),
-        label: const Text('Set'),
-        onPressed: () => _newSet(site),
+          '$sceneCount escena${sceneCount == 1 ? '' : 's'}',
+      action: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextButton.icon(
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Set'),
+            onPressed: () => _newSet(site),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          _MiniPlan(
+            label: 'Plano maestro',
+            color: color,
+            width: 132,
+            height: 88,
+            thumbnail: PlanThumbnail(
+              elements: _data.environmentOf(site.id),
+              zones: _data.zonesOfSite(site.id),
+              emptyIcon: Icons.map_outlined,
+            ),
+            onTap: () => widget.onOpen(PlanTarget.site(site.id, site.name)),
+          ),
+        ],
       ),
       children: [
-        Wrap(
-          spacing: AppSpacing.lg,
-          runSpacing: AppSpacing.md,
-          children: [
-            _PlanCard(
-              width: 300,
-              thumbHeight: 200,
-              color: color,
-              kind: 'Plano maestro',
-              title: site.name,
-              details: [
-                environment.isEmpty
-                    ? 'Sin dibujar'
-                    : '${environment.length} elementos',
-                '${zones.length} de ${sets.length} sets con zona',
-              ].join(' · '),
-              thumbnail: PlanThumbnail(
-                elements: environment,
-                zones: zones,
-                emptyIcon: Icons.map_outlined,
-              ),
-              onTap: () => widget.onOpen(PlanTarget.site(site.id, site.name)),
-            ),
-            if (siteSetups.isNotEmpty)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Luz general de la localización',
-                    style: AppTypography.caption(palette),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Wrap(
-                    spacing: AppSpacing.md,
-                    runSpacing: AppSpacing.md,
-                    children: [
-                      for (final setup in siteSetups)
-                        _setupColumn(setup, color, focus: null),
-                    ],
-                  ),
-                ],
-              ),
-          ],
-        ),
-        for (final (i, set) in sets.indexed)
+        if (siteSetups.isNotEmpty)
+          _setupLegend(
+            siteSetups,
+            label: 'Luz general',
+            onAdd: () => _newSetup(siteId: site.id),
+          ),
+        for (final (i, branch) in branches.indexed)
           _TreeBranch(
             color: color,
-            last: i == sets.length - 1,
-            child: _setRow(set),
+            last: i == branches.length - 1,
+            child: branch,
           ),
       ],
     );
   }
 
-  Widget _setRow(LocationBasePlan set) {
+  /// Un set: su plano, la leyenda de sus esquemas de luz y sus escenas.
+  Widget _setSection(LocationBasePlan set) {
     final palette = context.palette;
     final color = _data.colors.setColor(set);
-    final own = _data.ownOfSet(set);
-    final zone = _data.zoneOf(set);
     final scenes = _data.scenesOfSet(set.id);
-    final shots = _data.shotsOfScenes(scenes);
-    final withoutSetup = shots.where((s) => s.lightSetupId == null).toList();
+    final shotCount = _data.shotsOfScenes(scenes).length;
 
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    set.locationName,
+                    style: AppTypography.titleMedium(
+                      palette,
+                    ).copyWith(color: color),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    '${scenes.length} esc. · '
+                    '$shotCount plano${shotCount == 1 ? '' : 's'}',
+                    style: AppTypography.caption(palette),
+                  ),
+                ],
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Flexible(
-                child: Text(
-                  set.locationName,
-                  style: AppTypography.titleMedium(
-                    palette,
-                  ).copyWith(color: color),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Text(
-                '${scenes.length} esc. · '
-                '${shots.length} plano${shots.length == 1 ? '' : 's'}',
-                style: AppTypography.caption(palette),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _PlanCard(
+              _MiniPlan(
+                label: 'Set',
                 color: color,
-                kind: 'Set',
-                title: set.locationName,
-                details: zone == null
-                    ? 'Sin zona marcada'
-                    : own.isEmpty
-                    ? 'Zona del plano maestro'
-                    : '${own.length} elementos propios',
                 thumbnail: PlanThumbnail(
-                  elements: own,
+                  elements: _data.ownOfSet(set),
                   inherited: _data.environmentOf(set.siteId),
-                  focus: zone,
+                  focus: _data.zoneOf(set),
                   emptyIcon: Icons.layers_outlined,
                 ),
                 onTap: () =>
                     widget.onOpen(PlanTarget.set(set.id, set.locationName)),
               ),
-              Padding(
-                padding: const EdgeInsets.only(top: _thumbHeight / 2 - 12),
-                child: Icon(Icons.arrow_right_alt, color: palette.textTertiary),
-              ),
-              Expanded(
-                child: Wrap(
-                  spacing: AppSpacing.md,
-                  runSpacing: AppSpacing.md,
-                  children: [
-                    for (final setup
-                        in _data.setupsOfSet(set.id).where(_visible))
-                      _setupColumn(setup, color, focus: zone),
-                    _AddCard(
-                      label: 'Esquema de luz',
-                      onTap: () => _newSetup(setId: set.id),
-                    ),
-                  ],
-                ),
+              _setupLegend(
+                _data.setupsOfSet(set.id),
+                onAdd: () => _newSetup(setId: set.id),
               ),
             ],
           ),
-          if (withoutSetup.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _ShotChips(
-              label: 'Sin esquema de luz',
-              shots: withoutSetup,
-              data: _data,
-              onOpen: widget.onOpen,
+          if (scenes.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: Text(
+                'Sin escenas en este set.',
+                style: AppTypography.bodyMedium(palette),
+              ),
             ),
-          ],
+          for (final scene in scenes)
+            PlanSceneBlock(scene: scene, data: _data, onOpen: widget.onOpen),
         ],
       ),
     );
   }
 
-  /// Un esquema de luz con los planos que lo usan debajo.
-  Widget _setupColumn(LightSetup setup, Color color, {required Rect? focus}) {
-    final shots = _data.shotsOfSetup(setup.id);
-    final origin = lightSetupOriginLabel(setup.origin);
-    return SizedBox(
-      width: _cardWidth,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _PlanCard(
-            color: color,
-            kind: lightSetupStatusLabel(setup.status),
-            kindIcon: setup.status == 'boceto'
-                ? Icons.draw_outlined
-                : Icons.wb_incandescent_outlined,
-            title: setup.name,
-            details: [
-              if (origin.isNotEmpty) origin,
-              if (setup.category?.isNotEmpty == true) setup.category!,
-              '${shots.length} plano${shots.length == 1 ? '' : 's'}',
-            ].join(' · '),
-            thumbnail: PlanThumbnail(
-              elements: _data.ownOfSetup(setup),
-              inherited: _data.inheritedOfSetup(setup),
-              inheritedOpacity: 0.22,
-              focus: focus,
-              emptyIcon: Icons.wb_incandescent_outlined,
-            ),
-            trailing: LightSetupMenuButton(
-              setup: setup,
-              shotCount: shots.length,
-            ),
+  /// Leyenda «Luz»: una pastilla por esquema, con su color.
+  Widget _setupLegend(
+    List<LightSetup> setups, {
+    String label = 'Luz',
+    required VoidCallback onAdd,
+  }) {
+    final palette = context.palette;
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text('$label:', style: AppTypography.caption(palette)),
+        for (final setup in setups)
+          _SetupChip(
+            setup: setup,
+            color: _data.setupColor(setup),
+            shotCount: _data.shotsOfSetup(setup.id).length,
             onTap: () =>
                 widget.onOpen(PlanTarget.lightSetup(setup.id, setup.name)),
           ),
-          if (shots.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            _ShotChips(shots: shots, data: _data, onOpen: widget.onOpen),
-          ],
-        ],
-      ),
+        IconButton(
+          tooltip: 'Nuevo esquema de luz',
+          visualDensity: VisualDensity.compact,
+          icon: Icon(Icons.add, size: 18, color: palette.accent),
+          onPressed: onAdd,
+        ),
+      ],
     );
   }
 }
 
-/// Planos como pastillas: tocar uno lo abre con su set y su luz.
-class _ShotChips extends StatelessWidget {
-  final String? label;
-  final List<Shot> shots;
-  final PlanProjectData data;
-  final void Function(PlanTarget target) onOpen;
+/// Pastilla de un esquema de luz en la leyenda de su set.
+class _SetupChip extends StatelessWidget {
+  final LightSetup setup;
+  final Color color;
+  final int shotCount;
+  final VoidCallback onTap;
 
-  const _ShotChips({
-    required this.shots,
-    required this.data,
-    required this.onOpen,
-    this.label,
+  const _SetupChip({
+    required this.setup,
+    required this.color,
+    required this.shotCount,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        if (label != null)
-          Text('$label:', style: AppTypography.caption(palette)),
-        for (final shot in shots)
-          Tooltip(
-            message: data.shotLabel(shot),
-            child: Material(
-              color: palette.surfaceOverlay,
-              borderRadius: BorderRadius.circular(6),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () =>
-                    onOpen(PlanTarget.shot(shot.id, data.shotLabel(shot))),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.videocam_outlined,
-                        size: 13,
-                        color: palette.textSecondary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${data.scene(shot.sceneId)?.number ?? '–'}'
-                        '·${shot.number}',
-                        style: AppTypography.caption(
-                          palette,
-                        ).copyWith(color: palette.textPrimary),
-                      ),
-                    ],
-                  ),
+    final origin = lightSetupOriginLabel(setup.origin);
+    return Material(
+      color: color.withValues(alpha: 0.16),
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(3),
                 ),
               ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(setup.name, style: AppTypography.label(palette)),
+                  Text(
+                    [
+                      lightSetupStatusLabel(setup.status),
+                      if (origin.isNotEmpty) origin,
+                      if (setup.category?.isNotEmpty == true) setup.category!,
+                      '$shotCount plano${shotCount == 1 ? '' : 's'}',
+                    ].join(' · '),
+                    style: AppTypography.caption(palette),
+                  ),
+                ],
+              ),
+              LightSetupMenuButton(setup: setup, shotCount: shotCount),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Miniatura pequeña de un plano maestro o de un set, con su rótulo.
+class _MiniPlan extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Widget thumbnail;
+  final VoidCallback onTap;
+  final double width;
+  final double height;
+
+  const _MiniPlan({
+    required this.label,
+    required this.color,
+    required this.thumbnail,
+    required this.onTap,
+    this.width = 96,
+    this.height = 64,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Abrir $label'.toLowerCase().replaceFirst('a', 'A'),
+      child: Material(
+        borderRadius: BorderRadius.circular(8),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: width,
+            height: height,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                thumbnail,
+                Positioned(
+                  left: 4,
+                  top: 4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-      ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Filters extends StatelessWidget {
+  final List<LocationSite> sites;
+  final int? siteId;
+  final ValueChanged<int?> onSite;
+
+  const _Filters({
+    required this.sites,
+    required this.siteId,
+    required this.onSite,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: DropdownButton<int?>(
+        value: siteId,
+        underline: const SizedBox.shrink(),
+        items: [
+          const DropdownMenuItem<int?>(
+            value: null,
+            child: Text('Todas las localizaciones'),
+          ),
+          for (final site in sites)
+            DropdownMenuItem<int?>(value: site.id, child: Text(site.name)),
+        ],
+        onChanged: onSite,
+      ),
     );
   }
 }
@@ -484,60 +562,6 @@ class _BranchPainter extends CustomPainter {
       old.color != color || old.last != last;
 }
 
-class _Filters extends StatelessWidget {
-  final List<LocationSite> sites;
-  final int? siteId;
-  final String? status;
-  final ValueChanged<int?> onSite;
-  final ValueChanged<String?> onStatus;
-
-  const _Filters({
-    required this.sites,
-    required this.siteId,
-    required this.status,
-    required this.onSite,
-    required this.onStatus,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        ChoiceChip(
-          label: const Text('Todos'),
-          selected: status == null,
-          onSelected: (_) => onStatus(null),
-        ),
-        for (final s in kLightSetupStatuses)
-          ChoiceChip(
-            label: Text(lightSetupStatusLabel(s)),
-            selected: status == s,
-            onSelected: (_) => onStatus(status == s ? null : s),
-          ),
-        if (sites.length > 1) ...[
-          const SizedBox(width: AppSpacing.md),
-          DropdownButton<int?>(
-            value: siteId,
-            underline: const SizedBox.shrink(),
-            items: [
-              const DropdownMenuItem<int?>(
-                value: null,
-                child: Text('Todas las localizaciones'),
-              ),
-              for (final site in sites)
-                DropdownMenuItem<int?>(value: site.id, child: Text(site.name)),
-            ],
-            onChanged: onSite,
-          ),
-        ],
-      ],
-    );
-  }
-}
-
 /// Bloque de una localización (o de plantas libres) en el mapa.
 class _Block extends StatelessWidget {
   final Color color;
@@ -590,184 +614,6 @@ class _Block extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           ...children,
         ],
-      ),
-    );
-  }
-}
-
-class _CardRow extends StatelessWidget {
-  final List<Widget> children;
-
-  const _CardRow({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.md,
-      runSpacing: AppSpacing.md,
-      children: children,
-    );
-  }
-}
-
-const double _cardWidth = 190;
-const double _thumbHeight = 130;
-
-/// Tarjeta con la miniatura de una planta.
-class _PlanCard extends StatelessWidget {
-  final Color color;
-  final String kind;
-  final IconData? kindIcon;
-  final String title;
-  final String details;
-  final Widget thumbnail;
-  final Widget? trailing;
-  final VoidCallback onTap;
-  final double width;
-  final double thumbHeight;
-
-  const _PlanCard({
-    this.width = _cardWidth,
-    this.thumbHeight = _thumbHeight,
-    required this.color,
-    required this.kind,
-    required this.title,
-    required this.details,
-    required this.thumbnail,
-    required this.onTap,
-    this.kindIcon,
-    this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return SizedBox(
-      width: width,
-      child: Material(
-        color: palette.surfaceElevated,
-        borderRadius: BorderRadius.circular(10),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                height: thumbHeight,
-                width: double.infinity,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    thumbnail,
-                    Positioned(
-                      left: 8,
-                      top: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (kindIcon != null) ...[
-                              Icon(kindIcon, size: 12, color: Colors.white),
-                              const SizedBox(width: 4),
-                            ],
-                            Text(
-                              kind,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: AppSpacing.md),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.sm,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              style: AppTypography.label(palette),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              details,
-                              style: AppTypography.caption(palette),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    trailing ?? const SizedBox(width: AppSpacing.md),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AddCard extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-
-  const _AddCard({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return SizedBox(
-      width: 120,
-      height: _thumbHeight,
-      child: Material(
-        color: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: BorderSide(color: palette.border),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.add, color: palette.accent),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: AppTypography.caption(palette),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -115,9 +115,9 @@ void main() {
     expect(find.text('Cabaña'), findsWidgets);
     expect(find.text('Setup A'), findsOneWidget);
     expect(find.text('Plantas libres'), findsOneWidget);
-    expect(find.text('Esquema de luz'), findsWidgets);
     expect(find.text('Plano maestro'), findsOneWidget);
-    expect(find.text('Boceto'), findsWidgets);
+    expect(find.textContaining('Boceto'), findsWidgets);
+    expect(find.text('Sin escenas en este set.'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     // Tocar una miniatura abre la pantalla de trabajo en esa planta.
@@ -348,6 +348,42 @@ void main() {
         FloorPlanJson.decode(same!.floorPlanJson).single.position,
         moved.position,
       );
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('el inicio enseña localización, set, escena y plano, y la '
+        'etiqueta cambia el esquema', (tester) async {
+      await seed(
+        tester,
+        siteJson: '{"version":2,"elements":[${element('wall', 300, 300)}]}',
+      );
+      await tester.pumpWidget(host(CameraPlanScreen(projectId: projectId)));
+      await settle(tester);
+
+      expect(find.text('Hospital'), findsWidgets);
+      expect(find.text('Urgencias'), findsWidgets);
+      expect(find.text('Escena 1'), findsOneWidget);
+      expect(find.text('P1'), findsOneWidget);
+      expect(find.text('Sin luz'), findsOneWidget);
+
+      await tester.tap(find.text('Sin luz'));
+      await settle(tester);
+      await tester.tap(find.text('Nuevo esquema'));
+      await settle(tester);
+
+      final shot = await tester.runAsync(
+        () => (db.select(
+          db.shots,
+        )..where((s) => s.id.equals(shotId))).getSingle(),
+      );
+      expect(shot!.lightSetupId, isNotNull);
+      // En la leyenda del set y en la etiqueta del plano.
+      expect(find.text('Setup A'), findsNWidgets(2));
+      expect(find.text('Sin luz'), findsNothing);
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

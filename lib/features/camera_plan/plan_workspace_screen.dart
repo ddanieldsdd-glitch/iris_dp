@@ -300,10 +300,7 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
     final site = _data.site(siteId);
     if (site == null) return const [];
     final color = _data.colors.siteColor(site.id);
-    final looseShots = _data
-        .shotsOfScenes(_data.scenesOfSiteWithoutSet(site.id))
-        .where((s) => s.lightSetupId == null)
-        .toList();
+    final withoutSet = _data.scenesOfSiteWithoutSet(site.id);
 
     return [
       _planRow(
@@ -317,31 +314,22 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
           emptyIcon: Icons.map_outlined,
         ),
       ),
-      for (final setup in _data.setupsOfSite(site.id))
-        ..._setupItems(setup, color),
+      for (final setup in _data.setupsOfSite(site.id)) _setupRow(setup),
       for (final set in _data.setsOfSite(site.id)) ..._setItems(set),
-      if (looseShots.isNotEmpty) ...[
-        _header('Planos sin set', color),
-        for (final shot in looseShots) _shotRow(shot, indent: 1),
+      if (withoutSet.isNotEmpty) ...[
+        _header('Sin set', color),
+        for (final scene in withoutSet) ..._sceneItems(scene),
       ],
     ];
   }
 
-  List<Widget> _freeItems() {
-    final palette = context.palette;
-    return [
-      for (final setup in _data.freeSetups)
-        ..._setupItems(setup, palette.accent),
-      for (final set in _data.orphanSets) ..._setItems(set),
-    ];
-  }
+  List<Widget> _freeItems() => [
+    for (final setup in _data.freeSetups) _setupRow(setup),
+    for (final set in _data.orphanSets) ..._setItems(set),
+  ];
 
   List<Widget> _setItems(LocationBasePlan set) {
     final color = _data.colors.setColor(set);
-    final withoutSetup = _data
-        .shotsOfScenes(_data.scenesOfSet(set.id))
-        .where((s) => s.lightSetupId == null)
-        .toList();
     return [
       _header(set.locationName, color),
       _planRow(
@@ -356,21 +344,31 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
           emptyIcon: Icons.layers_outlined,
         ),
       ),
-      for (final setup in _data.setupsOfSet(set.id))
-        ..._setupItems(setup, color),
-      if (withoutSetup.isNotEmpty) ...[
-        _subHeader('Planos sin esquema de luz'),
-        for (final shot in withoutSetup) _shotRow(shot, indent: 1),
-      ],
+      for (final setup in _data.setupsOfSet(set.id)) _setupRow(setup),
+      for (final scene in _data.scenesOfSet(set.id)) ..._sceneItems(scene),
     ];
   }
 
-  List<Widget> _setupItems(LightSetup setup, Color color) => [
-    _planRow(
+  /// Una escena y sus planos, cada uno con el color de su esquema de luz.
+  List<Widget> _sceneItems(Scene scene) => [
+    _subHeader(
+      scene.name.isNotEmpty
+          ? 'Esc ${scene.number} · ${scene.name}'
+          : 'Esc ${scene.number}',
+    ),
+    for (final shot in _data.shotsOfScene(scene.id)) _shotRow(shot, indent: 1),
+  ];
+
+  Widget _setupRow(LightSetup setup) {
+    final shots = _data.shotsOfSetup(setup.id).length;
+    return _planRow(
       target: PlanTarget.lightSetup(setup.id, setup.name),
       title: setup.name,
-      subtitle: lightSetupStatusLabel(setup.status),
-      color: color,
+      subtitle:
+          '${lightSetupStatusLabel(setup.status)} · '
+          '$shots plano${shots == 1 ? '' : 's'}',
+      color: _data.setupColor(setup),
+      swatch: true,
       thumbnail: PlanThumbnail(
         elements: _data.ownOfSetup(setup),
         inherited: _data.inheritedOfSetup(setup),
@@ -378,9 +376,8 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
         focus: _data.zoneOf(_data.set(setup.locationBasePlanId)),
         emptyIcon: Icons.wb_incandescent_outlined,
       ),
-    ),
-    for (final shot in _data.shotsOfSetup(setup.id)) _shotRow(shot, indent: 2),
-  ];
+    );
+  }
 
   Widget _header(String text, Color color) {
     final palette = context.palette;
@@ -425,6 +422,7 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
     required String subtitle,
     required Color color,
     required Widget thumbnail,
+    bool swatch = false,
   }) {
     final palette = context.palette;
     final selected = target == widget.target;
@@ -444,6 +442,17 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
                 child: SizedBox(width: 56, height: 40, child: thumbnail),
               ),
               const SizedBox(width: AppSpacing.sm),
+              if (swatch) ...[
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -474,6 +483,7 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
     final palette = context.palette;
     final target = PlanTarget.shot(shot.id, _data.shotLabel(shot));
     final selected = target == widget.target;
+    final setup = _data.setup(shot.lightSetupId);
     final details = [
       if (shot.framing?.isNotEmpty == true) shot.framing!,
       if (shot.lens?.isNotEmpty == true) shot.lens!,
@@ -493,19 +503,33 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.videocam_outlined,
-                size: 16,
-                color: palette.textSecondary,
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: setup != null
+                      ? _data.setupColor(setup)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(3),
+                  border: setup == null
+                      ? Border.all(color: palette.textTertiary)
+                      : null,
+                ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  details.isEmpty ? target.label : '${target.label} · $details',
+                  details.isEmpty
+                      ? 'Plano ${shot.number}'
+                      : 'Plano ${shot.number} · $details',
                   style: AppTypography.bodyMedium(palette),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+              ),
+              Text(
+                setup?.name ?? 'sin luz',
+                style: AppTypography.caption(palette),
               ),
             ],
           ),

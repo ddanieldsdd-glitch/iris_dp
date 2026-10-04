@@ -9,6 +9,16 @@ import 'camera_plan_painter.dart';
 import 'camera_plan_grouping.dart';
 import 'floor_plan_json.dart';
 
+/// Colores de los esquemas de luz, por orden dentro de su set.
+const kLightSetupColors = [
+  Color(0xFFFFB300),
+  Color(0xFF26C6DA),
+  Color(0xFFEC407A),
+  Color(0xFF9CCC65),
+  Color(0xFFAB47BC),
+  Color(0xFFFF7043),
+];
+
 /// Todo lo que hace falta para pintar las plantas de un proyecto: el mapa
 /// global y el navegador de la pantalla de trabajo leen de aquí.
 class PlanProjectData {
@@ -17,6 +27,9 @@ class PlanProjectData {
   final List<LightSetup> setups;
   final List<Scene> scenes;
   final List<Shot> shots;
+
+  /// Elementos de planta de todos los planos.
+  final List<CameraPlanElement> elementRows;
   final ProjectColorScheme colors;
 
   PlanProjectData({
@@ -25,6 +38,7 @@ class PlanProjectData {
     required this.setups,
     required this.scenes,
     required this.shots,
+    this.elementRows = const [],
   }) : colors = ProjectColorScheme.resolve(
          sites: sites,
          sets: sets,
@@ -113,6 +127,74 @@ class PlanProjectData {
         : 'Esc $number · Plano ${shot.number}';
   }
 
+  // ── Esquema de cada plano ─────────────────────────────────────────────────
+
+  LightSetup? setup(int? id) {
+    for (final s in setups) {
+      if (s.id == id) return s;
+    }
+    return null;
+  }
+
+  /// Esquemas con el mismo dueño (set, localización o ninguno).
+  List<LightSetup> siblingsOf(LightSetup setup) => setups
+      .where(
+        (s) =>
+            s.locationBasePlanId == setup.locationBasePlanId &&
+            s.locationSiteId == setup.locationSiteId,
+      )
+      .toList();
+
+  /// Color de un esquema: fijo por su orden dentro de su set. Es el mismo
+  /// en la leyenda del set, en la etiqueta del plano y en el editor.
+  Color setupColor(LightSetup setup) {
+    final index = siblingsOf(setup).indexWhere((s) => s.id == setup.id);
+    return kLightSetupColors[(index < 0 ? 0 : index) %
+        kLightSetupColors.length];
+  }
+
+  /// Esquemas que puede usar una escena: los de su set, los generales de su
+  /// localización y las plantas libres.
+  List<LightSetup> setupsForScene(Scene scene) {
+    final siteId = scene.locationSiteId ?? set(scene.locationId)?.siteId;
+    return setups.where((s) {
+      if (s.locationBasePlanId != null) {
+        return s.locationBasePlanId == scene.locationId;
+      }
+      if (s.locationSiteId != null) return s.locationSiteId == siteId;
+      return true;
+    }).toList();
+  }
+
+  List<Shot> shotsOfScene(int sceneId) =>
+      shots.where((s) => s.sceneId == sceneId).toList()
+        ..sort((a, b) => a.number.compareTo(b.number));
+
+  /// Escenas sin localización ni set conocidos.
+  List<Scene> get scenesWithoutLocation => scenesInScriptOrder(
+    scenes
+        .where(
+          (s) => site(s.locationSiteId) == null && set(s.locationId) == null,
+        )
+        .toList(),
+  );
+
+  /// Lo propio de un plano: cámaras y actores.
+  List<PlanElement> ownOfShot(Shot shot) => [
+    for (final row in elementRows)
+      if (row.shotId == shot.id) PlanElement.fromDb(row),
+  ];
+
+  /// Lo que se ve debajo de un plano, sin la luz: entorno y set.
+  List<PlanElement> baseOfShot(Shot shot) {
+    final sc = scene(shot.sceneId);
+    final owner = set(sc?.locationId);
+    return [
+      ...environmentOf(sc?.locationSiteId ?? owner?.siteId),
+      if (owner != null) ...ownOfSet(owner),
+    ];
+  }
+
   // ── Zonas de los sets ─────────────────────────────────────────────────────
 
   Rect? zoneOf(LocationBasePlan? set) => SetZone.decode(set?.sitePlacementJson);
@@ -175,25 +257,31 @@ class PlanDataBuilder extends ConsumerWidget {
             stream: db.watchScenesForProject(projectId),
             builder: (context, scenes) => StreamBuilder<List<Shot>>(
               stream: db.watchShotsForProject(projectId),
-              builder: (context, shots) {
-                if (!sites.hasData ||
-                    !sets.hasData ||
-                    !setups.hasData ||
-                    !scenes.hasData ||
-                    !shots.hasData) {
-                  return loading();
-                }
-                return builder(
-                  context,
-                  PlanProjectData(
-                    sites: sites.data!,
-                    sets: sets.data!,
-                    setups: setups.data!,
-                    scenes: scenes.data!,
-                    shots: shots.data!,
+              builder: (context, shots) =>
+                  StreamBuilder<List<CameraPlanElement>>(
+                    stream: db.watchCameraPlanElementsForProject(projectId),
+                    builder: (context, elements) {
+                      if (!sites.hasData ||
+                          !sets.hasData ||
+                          !setups.hasData ||
+                          !scenes.hasData ||
+                          !shots.hasData ||
+                          !elements.hasData) {
+                        return loading();
+                      }
+                      return builder(
+                        context,
+                        PlanProjectData(
+                          sites: sites.data!,
+                          sets: sets.data!,
+                          setups: setups.data!,
+                          scenes: scenes.data!,
+                          shots: shots.data!,
+                          elementRows: elements.data!,
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
             ),
           ),
         ),
