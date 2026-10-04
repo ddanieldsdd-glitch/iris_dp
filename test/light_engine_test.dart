@@ -4,9 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/light/exposure.dart';
+import 'package:iris_dp/features/camera_plan/light/light_scene.dart';
 import 'package:iris_dp/features/camera_plan/light/modifiers.dart';
 import 'package:iris_dp/features/camera_plan/light/photometry.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
+import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 
 void main() {
   group('caída de la luz', () {
@@ -275,6 +277,154 @@ void main() {
         0,
       );
       expect(PlanLight.of(light(LightType.flag)), isNull);
+    });
+  });
+
+  group('paredes y ventanas', () {
+    var id = 0;
+    PlanElement hmi(double x, double y, double rotation) => PlanElement(
+      id: --id,
+      type: ElementType.light,
+      position: Offset(x, y),
+      rotation: rotation,
+      lightType: LightType.hmi,
+      props: {'intensity': 100},
+    );
+    PlanElement piece(
+      ArchitectureType type,
+      double x,
+      double y, {
+      double rotation = 90,
+      Map<String, dynamic>? props,
+    }) => PlanElement(
+      id: --id,
+      type: ElementType.wall,
+      position: Offset(x, y),
+      rotation: rotation,
+      label: type.dbValue,
+      props: props,
+    );
+    // Una luz en (100, 300) que mira a la derecha, y una pared vertical en
+    // x = 400 que va de y = 0 a y = 600.
+    PlanElement wall() => PlanSegment.create(
+      start: const Offset(400, 0),
+      end: const Offset(400, 600),
+    )..id = --id;
+    LightScene scene(List<PlanElement> elements) =>
+        LightScene.from(elements, metersPerUnit: 0.02);
+
+    const behind = Offset(700, 300);
+    const before = Offset(300, 300);
+
+    test('sin nada en medio, la luz llega', () {
+      final open = scene([hmi(100, 300, 90)]);
+      expect(open.luxAt(behind), greaterThan(100));
+      expect(open.contributionsAt(behind), hasLength(1));
+    });
+
+    test('una pared corta la luz', () {
+      final walled = scene([hmi(100, 300, 90), wall()]);
+      expect(walled.luxAt(behind), 0);
+      // Delante de la pared sigue llegando.
+      expect(walled.luxAt(before), greaterThan(100));
+    });
+
+    test('una ventana en la pared la deja pasar, menos lo que quita el '
+        'cristal', () {
+      final open = scene([hmi(100, 300, 90)]).luxAt(behind);
+      final windowed = scene([
+        hmi(100, 300, 90),
+        wall(),
+        piece(ArchitectureType.window, 400, 300),
+      ]);
+      expect(windowed.luxAt(behind), closeTo(open * 0.9, open * 0.001));
+      // Fuera del hueco de la ventana, la pared sigue cortando.
+      expect(windowed.luxAt(const Offset(700, 560)), 0);
+    });
+
+    test('una ventana con difusión quita los stops de la tela', () {
+      final plain = scene([
+        hmi(100, 300, 90),
+        wall(),
+        piece(ArchitectureType.window, 400, 300),
+      ]).luxAt(behind);
+      final diffused = scene([
+        hmi(100, 300, 90),
+        wall(),
+        piece(
+          ArchitectureType.window,
+          400,
+          300,
+          props: {
+            'modifiers': ['grid-half'],
+          },
+        ),
+      ]).luxAt(behind);
+      expect(stopsBetweenLux(plain, diffused), closeTo(1, 1e-6));
+    });
+
+    test('puerta abierta y abertura dejan pasar todo; cerrada, nada', () {
+      final open = scene([hmi(100, 300, 90)]).luxAt(behind);
+      for (final type in [
+        ArchitectureType.doorOpen,
+        ArchitectureType.opening,
+      ]) {
+        final lux = scene([
+          hmi(100, 300, 90),
+          wall(),
+          piece(type, 400, 300),
+        ]).luxAt(behind);
+        expect(lux, closeTo(open, open * 0.001), reason: type.name);
+      }
+      expect(
+        scene([
+          hmi(100, 300, 90),
+          wall(),
+          piece(ArchitectureType.doorClosed, 400, 300),
+        ]).luxAt(behind),
+        0,
+      );
+    });
+
+    test('una pared curva también corta', () {
+      final curved = wall()..props['curve'] = 60.0;
+      expect(scene([hmi(100, 300, 90), curved]).luxAt(behind), 0);
+    });
+
+    test('una bandera corta la luz que tiene detrás', () {
+      final flag = PlanElement(
+        id: --id,
+        type: ElementType.light,
+        position: const Offset(250, 300),
+        rotation: 90,
+        lightType: LightType.flag,
+      );
+      final flagged = scene([hmi(100, 300, 90), flag]);
+      expect(flagged.luxAt(behind), 0);
+      // A un lado de la bandera, la luz pasa.
+      expect(flagged.luxAt(const Offset(700, 520)), greaterThan(0));
+    });
+
+    test('el área visible se recorta en la pared', () {
+      final walled = scene([hmi(100, 300, 90), wall()]);
+      final area = walled.visibleArea(const Offset(100, 300), 2000);
+      expect(area.contains(before), isTrue);
+      expect(area.contains(behind), isFalse);
+      expect(
+        walled.reachAlong(const Offset(100, 300), const Offset(1, 0), 2000),
+        300,
+      );
+    });
+
+    test('varias luces se suman y se ordenan de más a menos', () {
+      final two = scene([hmi(100, 300, 90), hmi(1300, 300, 270)]);
+      final parts = two.contributionsAt(before);
+      expect(parts, hasLength(2));
+      expect(parts.first.lux, greaterThan(parts.last.lux));
+      expect(
+        two.luxAt(before),
+        closeTo(parts.first.lux + parts.last.lux, 1e-6),
+      );
     });
   });
 }

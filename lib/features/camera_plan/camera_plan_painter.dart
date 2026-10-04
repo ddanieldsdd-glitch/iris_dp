@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
+import 'light/light_scene.dart';
 import 'light/plan_light.dart';
 import 'light_beam.dart';
 import 'light_symbols.dart';
@@ -124,6 +125,14 @@ class CameraPlanPainter extends CustomPainter {
       }
       canvas.restore();
     }
+
+    // Lo que corta la luz: paredes, puertas cerradas y banderas de todas
+    // las capas.
+    _lightScene = LightScene(
+      lights: const [],
+      blockers: LightScene.blockersOf([...inheritedElements, ...elements]),
+      metersPerUnit: metersPerUnit ?? defaultMetersPerUnit,
+    );
 
     // Los haces van debajo de todo lo demás.
     for (final el in elements) {
@@ -822,6 +831,9 @@ class CameraPlanPainter extends CustomPainter {
     }
   }
 
+  /// La planta vista por la luz, para recortar los haces con las paredes.
+  LightScene? _lightScene;
+
   /// Lux por debajo de los cuales el haz deja de dibujarse.
   static const double _beamFloorLux = 20;
 
@@ -854,6 +866,12 @@ class CameraPlanPainter extends CustomPainter {
       ], fractions);
 
     canvas.save();
+    // Las paredes cortan el haz; las ventanas y las puertas abiertas lo
+    // dejan pasar.
+    final scene = _lightScene;
+    if (scene != null && scene.blockers.isNotEmpty) {
+      canvas.clipPath(scene.visibleArea(el.position, reach));
+    }
     canvas.translate(el.position.dx, el.position.dy);
     canvas.rotate(el.rotation * math.pi / 180);
     if (source.isOmni) {
