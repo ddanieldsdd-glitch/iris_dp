@@ -186,7 +186,11 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
   }
 
   Future<void> _addPoint(List<BibleSectionField> fields) async {
-    final added = await showBibleAddPointDialog(context);
+    final added = await showBibleAddPointDialog(
+      context,
+      sectionId: widget.sectionId,
+      fields: fields,
+    );
     if (added == null || !mounted) return;
     final db = ref.read(databaseProvider);
     await db.saveBibleSectionFields(widget.data.id, widget.sectionId, [

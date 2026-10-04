@@ -3425,18 +3425,26 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// Guarda la lista de puntos de una pantalla. Los valores de
+  /// [dropValueKeys] se borran: son puntos que el usuario ha eliminado.
   Future<void> saveBibleSectionFields(
     int bibleId,
     String sectionId,
-    List<BibleSectionField> fields,
-  ) async {
+    List<BibleSectionField> fields, {
+    Set<String> dropValueKeys = const {},
+  }) async {
     final def =
         await (select(
               bibleSectionDefinitions,
             )..where((d) => d.bibleId.equals(bibleId) & d.id.equals(sectionId)))
             .getSingleOrNull();
     if (def == null) return;
-    final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
+    final values = BibleSectionFieldsConfig.parseValues(def.contentJson)
+      ..removeWhere(
+        (key, _) =>
+            dropValueKeys.contains(key) ||
+            dropValueKeys.any((dropped) => key == '${dropped}__images'),
+      );
     await upsertBibleSectionDefinition(
       def.copyWith(
         contentJson: Value(

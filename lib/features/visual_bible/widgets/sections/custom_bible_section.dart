@@ -121,7 +121,15 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
   }
 
   Future<void> _addPoint() async {
-    final added = await showBibleAddPointDialog(context);
+    // Una pantalla personalizada no tiene puntos de fábrica: solo widgets.
+    final added = await showBibleAddPointDialog(
+      context,
+      sectionId: widget.sectionId,
+      fields: [
+        ..._fields,
+        ...BibleSectionFieldsConfig.defaultsFor(widget.sectionId),
+      ],
+    );
     if (added == null || !mounted) return;
     setState(() {
       _fields = [..._fields, added.field];
