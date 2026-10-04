@@ -84,11 +84,11 @@ Añadido el 2026-10-04. Regla: **Biblia → Pantallas → Puntos.** Un punto tie
 
 - [x] **C1. Un solo «Añadir punto» y tipo fijo.** El diálogo tiene dos grupos: «De esta pantalla» (puntos propios que no están puestos) y «Widgets». Desaparecen «Añadir módulo Stitch» y «Cambiar tipo». Quitar un punto pide confirmación: uno del usuario se borra con su contenido; uno de la pantalla lo conserva.
 - [x] **C2. «Restablecer pantalla».** Vuelven los puntos de fábrica y los del usuario quedan al final. No borra contenido.
-- [ ] **C3. Estilos fuera de la interfaz.** Sin selector Cinematic / Technical / Minimalist en ningún sitio.
-- [ ] **C4. Panel «Ajustes de pantalla»** con dos pestañas: Puntos y Pantallas.
+- [x] **C3. Estilos fuera de la interfaz.** Sin selector Cinematic / Technical / Minimalist en ningún sitio. Una pantalla personalizada nueva nace con tres puntos: intención narrativa, contenido y referencias visuales.
+- [x] **C4. Panel «Ajustes de pantalla»** con dos pestañas: Puntos y Pantallas. En Moodboard, «Puntos» muestra las fuentes de imágenes.
 - [ ] **C5. Configuración general** con dos bloques: Pantallas y Plantillas. Cada acción existe una vez y confirma.
 - [ ] **C6. Vocabulario y textos.** Sin «Stitch», «módulo», «sub-apartado», «campo», «bloque» ni «preset»; todo en castellano.
-- **C7. Garantías** (repartidas): tipo fijo y borrado de valores [x]; «Composición» ya no se reinserta sola [x]; todo widget del catálogo sale en el PDF [ ]; las pantallas personalizadas no nacen con bloques V2 [ ].
+- **C7. Garantías** (repartidas): tipo fijo y borrado de valores [x]; «Composición» ya no se reinserta sola [x]; todo widget del catálogo sale en el PDF [ ]; las pantallas personalizadas no nacen con bloques V2 [x].
 
 ## Fase 2 — Sync fiable (objetivos 1 y 3)
 

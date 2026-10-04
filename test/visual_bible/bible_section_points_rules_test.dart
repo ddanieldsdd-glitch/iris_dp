@@ -176,4 +176,37 @@ void main() {
       );
     });
   });
+
+  group('pantalla personalizada nueva', () {
+    late AppDatabase db;
+
+    setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
+    tearDown(() => db.close());
+
+    test('nace con tres puntos y sin bloques V2', () async {
+      final projectId = await db
+          .into(db.projects)
+          .insert(ProjectsCompanion.insert(name: 'Pantallas'));
+      final bibleId = await db
+          .into(db.visualBibles)
+          .insert(VisualBiblesCompanion.insert(projectId: projectId));
+
+      final id = await db.insertCustomBibleSection(
+        bibleId: bibleId,
+        groupId: 'narrative',
+        label: 'Vestuario',
+      );
+      final def = await (db.select(
+        db.bibleSectionDefinitions,
+      )..where((d) => d.id.equals(id))).getSingle();
+
+      expect(def.contentJson, isNot(contains('v2Blocks')));
+      final fields = BibleSectionFieldsConfig.parse(def.contentJson, id);
+      expect(fields.map((f) => f.type), [
+        BibleSectionFieldType.narrative,
+        BibleSectionFieldType.text,
+        BibleSectionFieldType.referenceDeck,
+      ]);
+    });
+  });
 }

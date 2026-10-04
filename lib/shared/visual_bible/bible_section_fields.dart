@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'bible_section_ids.dart';
 import 'bible_stitch_module_registry.dart';
 
 int _parseMaxLines(dynamic value) {
@@ -206,6 +205,27 @@ abstract final class BibleSectionFieldsConfig {
         for (final field in current)
           if (isUserPoint(sectionId, field)) field,
       ];
+
+  /// Contenido con el que nace una pantalla personalizada: intención
+  /// narrativa, un texto y referencias visuales razonadas.
+  static String customScreenStarterJson(String label) => encode(
+        [
+          BibleSectionField(
+            key: 'narrative',
+            label: 'Intención narrativa',
+            hint: 'Qué aporta «$label» a la película…',
+            maxLines: 4,
+            type: BibleSectionFieldType.narrative,
+          ),
+          const BibleSectionField(key: 'body', label: 'Contenido', maxLines: 8),
+          const BibleSectionField(
+            key: 'field_references',
+            label: 'Referencias visuales',
+            type: BibleSectionFieldType.referenceDeck,
+          ),
+        ],
+        values: {'field_references': '{"preset":"visual","items":[]}'},
+      );
 
   /// Campos por defecto para secciones personalizadas (libres).
   static List<BibleSectionField> freeformDefaults(String sectionLabel) => [

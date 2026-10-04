@@ -14,10 +14,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_snackbar.dart';
-import '../../../shared/visual_bible/bible_section_fields.dart';
 import '../../../shared/visual_bible/bible_section_ids.dart';
-import '../bible_blueprint.dart';
-import '../bible_section_style_store.dart';
 import 'bible_navigation_scope.dart';
 import 'bible_section_fields_editor.dart';
 
@@ -185,54 +182,15 @@ class _BibleStructureEditorState extends ConsumerState<BibleStructureEditor> {
   }
 
   Future<void> _addCustomSection(BuildContext context, String groupId) async {
-    final label = await _promptLabel(context, 'Nueva sección', '');
+    final label = await _promptLabel(context, 'Nueva pantalla', '');
     if (label == null || label.isEmpty) return;
-    if (!context.mounted) return;
-    final style = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ListTile(title: Text('Plantilla de partida')),
-            ListTile(
-              title: const Text('Cinematic'),
-              onTap: () => Navigator.pop(ctx, 'cinematic'),
-            ),
-            ListTile(
-              title: const Text('Technical'),
-              onTap: () => Navigator.pop(ctx, 'technical'),
-            ),
-            ListTile(
-              title: const Text('Minimalist'),
-              onTap: () => Navigator.pop(ctx, 'minimalist'),
-            ),
-          ],
-        ),
-      ),
-    );
-    final styleKey = style ?? 'cinematic';
-    final fields = BibleSectionFieldsConfig.packForStyle(
-      styleKey,
-      sectionLabel: label,
-    );
-    final db = ref.read(databaseProvider);
-    final sectionId = await db.insertCustomBibleSection(
+    await ref.read(databaseProvider).insertCustomBibleSection(
       bibleId: widget.bibleId,
       groupId: groupId,
       label: label,
-      contentJson: BibleSectionFieldsConfig.encode(fields),
-    );
-    await BibleSectionStyleStore.save(
-      widget.projectId,
-      sectionId,
-      BibleSectionStyle.values.firstWhere(
-        (e) => e.name == styleKey,
-        orElse: () => BibleSectionStyle.cinematic,
-      ),
     );
     if (context.mounted) {
-      AppSnackBar.show(context, 'Sección «$label» creada');
+      AppSnackBar.show(context, 'Pantalla «$label» creada');
     }
   }
 

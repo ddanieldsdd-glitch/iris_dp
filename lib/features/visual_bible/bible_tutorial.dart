@@ -64,21 +64,21 @@ class _BibleTutorialDialogState extends State<_BibleTutorialDialog> {
       Icons.auto_stories_outlined,
     ),
     (
-      'Estilos Cinematic / Technical / Minimalist',
-      'Cada pantalla puede cambiar de densidad y look. Abre Ajustes de pantalla '
-          '(icono tune o panel derecho) y elige el estilo sin salir de la sección.',
+      'Puntos de cada pantalla',
+      'Cada pantalla está hecha de puntos. Abre Ajustes de pantalla (panel '
+          'derecho), pestaña Puntos, para ordenarlos, añadir otros o quitarlos.',
       Icons.tune,
     ),
     (
-      'Estructuras y plantillas',
-      'En el panel derecho → pestaña Estructura reordenas pantallas en vivo. '
-          'Para plantillas completas usa Estructura y plantillas (modo avanzado).',
+      'Pantallas de la biblia',
+      'En la pestaña Pantallas ordenas las pantallas de la biblia. Para '
+          'plantillas completas, abre Configuración de la biblia.',
       Icons.dashboard_customize_outlined,
     ),
     (
-      'Moodboard y Visual Sources',
-      'Las imágenes ocupan todo el canvas del moodboard. Importa stills con + '
-          'o desde Ajustes de pantalla → Fuentes visuales cuando estés en Moodboard.',
+      'Moodboard y fuentes de imágenes',
+      'Las imágenes ocupan todo el lienzo del moodboard. Añádelas con + o '
+          'desde Ajustes de pantalla cuando estés en Moodboard.',
       Icons.collections_outlined,
     ),
     (

@@ -91,7 +91,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _livePanelOpen = false;
   double _livePanelWidth = 320;
-  BibleLivePanelTab _livePanelTab = BibleLivePanelTab.style;
+  BibleLivePanelTab _livePanelTab = BibleLivePanelTab.points;
   final _history = BibleEditHistory();
   VisualBibleData? _historyBaseline;
   bool _needsOnboarding = false;
@@ -151,12 +151,12 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
       if (!mounted) return;
       switch (step) {
         case 1:
-          _openLivePanel(tab: BibleLivePanelTab.style);
+          _openLivePanel();
         case 2:
-          _openLivePanel(tab: BibleLivePanelTab.structure);
+          _openLivePanel(tab: BibleLivePanelTab.screens);
         case 3:
           setState(() => _activeSection = BibleSectionId.moodboard);
-          _openLivePanel(tab: BibleLivePanelTab.style);
+          _openLivePanel();
         default:
           break;
       }
@@ -709,7 +709,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
     };
   }
 
-  void _openLivePanel({BibleLivePanelTab tab = BibleLivePanelTab.style}) {
+  void _openLivePanel({BibleLivePanelTab tab = BibleLivePanelTab.points}) {
     final bibleId = _data?.id ?? 0;
     if (bibleId <= 0) {
       AppSnackBar.show(
@@ -730,7 +730,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
     unawaited(BibleLiveCustomizePanel.saveOpen(widget.projectId, false));
   }
 
-  void _toggleLivePanel({BibleLivePanelTab tab = BibleLivePanelTab.style}) {
+  void _toggleLivePanel({BibleLivePanelTab tab = BibleLivePanelTab.points}) {
     if (_livePanelOpen) {
       _closeLivePanel();
     } else {

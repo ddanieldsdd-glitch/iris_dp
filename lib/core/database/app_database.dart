@@ -13,7 +13,6 @@ import '../../shared/visual_bible/bible_layout.dart' as bible_layout;
 import '../../shared/visual_bible/bible_section_ids.dart';
 import '../../shared/visual_bible/narrative_card_kind.dart';
 import '../../shared/visual_bible/sensor_mode_cascade.dart';
-import '../../features/visual_bible/v2/migration/freeform_v2_blocks_codec.dart';
 import '../templates/user_template_models.dart';
 import 'seed_data.dart';
 import '../../shared/equipment/catalog_importer.dart';
@@ -3363,8 +3362,7 @@ class AppDatabase extends _$AppDatabase {
         isBuiltIn: const Value(false),
         template: Value(template),
         contentJson: Value(
-          contentJson ??
-              FreeformV2BlocksCodec.starterContentJson(label),
+          contentJson ?? BibleSectionFieldsConfig.customScreenStarterJson(label),
         ),
       ),
     );
