@@ -75,9 +75,10 @@ Añadido el 2026-10-03. La biblia es una maqueta de partida hecha con piezas que
 - [x] **W3. Widget de paleta.** `BiblePaletteWidget`: muestras con código y nombre, y extracción desde una imagen del moodboard.
 - [x] **W4. Referencias.** Varias imágenes por referencia y pantalla de detalle con edición directa.
 - [ ] **W5. Disposición responsiva.** Ancho por punto: completo, medio o tercio.
-- [ ] **W6. PDF.** Cada widget y sus complementos, en cualquier sección.
+- [ ] **W6. PDF.** Cada widget y sus complementos, en cualquier sección. Hecho para actos, paletas e «Imágenes»; faltan las imágenes de las referencias añadidas por el usuario.
 - **W7. Dirección y Concepto sobre el sistema**, y revisión en la app.
   - [x] **W7a. Widgets específicos y catálogo por familias.** Widgets nuevos: división por actos, pilares, puntos con título, etiquetas, paleta maestra, paleta compacta y simbología de color. El catálogo se agrupa en familias (Texto, Narrativa y estructura, Color, Imagen, Referencias, Datos) y cada pantalla propone primero los suyos. Un punto guarda con qué widget se pinta (`BibleSectionField.widget`). Todos salen en el PDF.
+  - [x] **W7a-2. Actos con imagen y paletas compuestas.** «División por actos» tiene vista propia (tarjeta con imagen, número, fase y línea de progreso) y cada acto lleva sus imágenes. «Paleta maestra» y «Simbología de color» combinan paleta, imágenes y texto; el menú «⋯» del punto elige qué se muestra sin borrar lo oculto. En el PDF salen las imágenes de actos, paletas y del widget «Imágenes».
   - [ ] **W7b. Los puntos de fábrica de Dirección y Concepto pasan a pintarse con esos widgets** (hoy tienen vista propia y solo se nombran por el widget al que equivalen), con migración de su contenido.
 
 ### 1.7 Configuración coherente

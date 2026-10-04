@@ -15,36 +15,26 @@ enum BibleCardsLayout {
   columns,
 }
 
-/// Tarjetas con título y desarrollo, reutilizables en cualquier pantalla.
-///
-/// Con [acts], cada tarjeta es un acto: se numera sola y lleva una fase.
+/// Tarjetas con título y desarrollo, reutilizables en cualquier pantalla:
+/// pilares en columnas o puntos con título en lista.
 class BibleCardsWidget extends StatelessWidget {
   final List<BibleCard> cards;
   final ValueChanged<List<BibleCard>> onChanged;
   final BibleCardsLayout layout;
-  final bool acts;
 
   const BibleCardsWidget({
     super.key,
     required this.cards,
     required this.onChanged,
     this.layout = BibleCardsLayout.list,
-    this.acts = false,
   });
-
-  String get _itemName => acts ? 'acto' : 'tarjeta';
 
   Future<void> _edit(BuildContext context, int? index) async {
     final result = await showDialog<_CardEdit>(
       context: context,
       builder: (_) => _CardDialog(
-        title: index == null
-            ? 'Añadir $_itemName'
-            : acts
-            ? 'Acto ${index + 1}'
-            : 'Editar tarjeta',
+        title: index == null ? 'Añadir tarjeta' : 'Editar tarjeta',
         card: index == null ? const BibleCard() : cards[index],
-        withPhase: acts,
         canDelete: index != null,
         canMoveBack: index != null && index > 0,
         canMoveForward: index != null && index < cards.length - 1,
@@ -72,15 +62,11 @@ class BibleCardsWidget extends StatelessWidget {
     onChanged(next);
   }
 
-  String _kicker(int index) {
-    if (!acts) return cards[index].kicker;
-    final phase = cards[index].kicker.trim();
-    return phase.isEmpty ? 'ACTO ${index + 1}' : 'ACTO ${index + 1} · $phase';
-  }
+  String _kicker(int index) => cards[index].kicker;
 
   @override
   Widget build(BuildContext context) {
-    final addLabel = 'AÑADIR ${_itemName.toUpperCase()}';
+    const addLabel = 'AÑADIR TARJETA';
     if (layout == BibleCardsLayout.list) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -101,8 +87,7 @@ class BibleCardsWidget extends StatelessWidget {
         final width = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
-        final wide = acts ? 3 : 4;
-        final columns = width >= 720 ? wide : (width >= 480 ? 2 : 1);
+        final columns = width >= 720 ? 4 : (width >= 480 ? 2 : 1);
         const gap = AppSpacing.md;
         final cardWidth = (width - gap * (columns - 1)) / columns;
         return Wrap(
@@ -283,7 +268,6 @@ typedef _CardEdit = ({BibleCard card, _CardAction action});
 class _CardDialog extends StatefulWidget {
   final String title;
   final BibleCard card;
-  final bool withPhase;
   final bool canDelete;
   final bool canMoveBack;
   final bool canMoveForward;
@@ -291,7 +275,6 @@ class _CardDialog extends StatefulWidget {
   const _CardDialog({
     required this.title,
     required this.card,
-    required this.withPhase,
     required this.canDelete,
     required this.canMoveBack,
     required this.canMoveForward,
@@ -302,21 +285,18 @@ class _CardDialog extends StatefulWidget {
 }
 
 class _CardDialogState extends State<_CardDialog> {
-  late final _phase = TextEditingController(text: widget.card.kicker);
   late final _title = TextEditingController(text: widget.card.title);
   late final _body = TextEditingController(text: widget.card.body);
 
   @override
   void dispose() {
-    _phase.dispose();
     _title.dispose();
     _body.dispose();
     super.dispose();
   }
 
   void _close(_CardAction action) => Navigator.pop<_CardEdit>(context, (
-    card: BibleCard(
-      kicker: _phase.text.trim(),
+    card: widget.card.copyWith(
       title: _title.text.trim(),
       body: _body.text.trim(),
     ),
@@ -348,15 +328,6 @@ class _CardDialogState extends State<_CardDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (widget.withPhase)
-              TextField(
-                controller: _phase,
-                textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(
-                  labelText: 'Fase',
-                  hintText: 'Establecimiento, desestabilización, resolución…',
-                ),
-              ),
             TextField(
               controller: _title,
               autofocus: true,

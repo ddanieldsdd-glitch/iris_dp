@@ -27,7 +27,145 @@ class BiblePdfKit {
   final pw.Font regular;
   final pw.Font bold;
 
-  const BiblePdfKit({required this.regular, required this.bold});
+  /// Imágenes del moodboard ya cargadas, por id, para los puntos que las
+  /// llevan (actos, paletas, tiras de imágenes).
+  final Map<int, pw.ImageProvider> images;
+
+  const BiblePdfKit({
+    required this.regular,
+    required this.bold,
+    this.images = const {},
+  });
+
+  List<pw.ImageProvider> _loaded(Iterable<int> ids) => [
+    for (final id in ids)
+      if (images[id] != null) images[id]!,
+  ];
+
+  /// División por actos: una columna por acto, con su imagen encima.
+  pw.Widget actsPoint(String label, List<BibleCard> acts) {
+    const perRow = 3;
+    final rows = <List<int>>[];
+    for (var i = 0; i < acts.length; i += perRow) {
+      rows.add([for (var j = i; j < acts.length && j < i + perRow; j++) j]);
+    }
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          this.label(label),
+          pw.SizedBox(height: 6),
+          for (final row in rows)
+            pw.Inseparable(
+              child: pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 10),
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < perRow; i++)
+                      pw.Expanded(
+                        child: i >= row.length
+                            ? pw.SizedBox()
+                            : pw.Padding(
+                                padding: pw.EdgeInsets.only(
+                                  right: i == perRow - 1 ? 0 : 10,
+                                ),
+                                child: _act(row[i] + 1, acts[row[i]]),
+                              ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _act(int number, BibleCard act) {
+    final image = _loaded(act.imageIds).firstOrNull;
+    final phase = act.kicker.trim();
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (image != null) ...[
+          pw.ClipRRect(
+            horizontalRadius: BiblePdfTokens.radius,
+            verticalRadius: BiblePdfTokens.radius,
+            child: pw.AspectRatio(
+              aspectRatio: 16 / 9,
+              child: pw.Image(image, fit: pw.BoxFit.cover),
+            ),
+          ),
+          pw.SizedBox(height: 5),
+        ],
+        pw.Container(height: 1.5, color: BiblePdfTokens.accent),
+        pw.SizedBox(height: 4),
+        pw.Text(
+          (phase.isEmpty ? 'Acto $number' : 'Acto $number · $phase')
+              .toUpperCase(),
+          style: pw.TextStyle(
+            font: bold,
+            fontSize: 7,
+            letterSpacing: 0.6,
+            color: BiblePdfTokens.accent,
+          ),
+        ),
+        pw.SizedBox(height: 2),
+        _titled(act.title, act.body),
+      ],
+    );
+  }
+
+  /// Punto de paleta: lo que esté marcado para mostrarse, en el orden de la
+  /// pantalla (imágenes, paleta, texto).
+  pw.Widget? _palettePoint(BibleSectionField field, String raw) {
+    final value = BiblePaletteValue.decode(raw);
+    final shots = value.shows(BiblePalettePart.images)
+        ? _loaded(value.imageIds)
+        : const <pw.ImageProvider>[];
+    final colors = value.shows(BiblePalettePart.palette)
+        ? value.colors
+        : const <BiblePaletteColor>[];
+    final text = value.shows(BiblePalettePart.text) ? value.text.trim() : '';
+    if (shots.isEmpty && colors.isEmpty && text.isEmpty) return null;
+
+    // Una simbología lleva el significado de cada color.
+    final symbolism =
+        field.widget == 'palette_symbolism' ||
+        colors.any((c) => c.note.trim().isNotEmpty);
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (shots.isNotEmpty) ...[
+          label(field.label),
+          pw.SizedBox(height: 6),
+          imageStrip(shots, height: 96),
+        ],
+        if (colors.isNotEmpty)
+          symbolism
+              ? swatchList(shots.isEmpty ? field.label : 'Colores', [
+                  for (final c in colors)
+                    (
+                      hex: c.hex,
+                      title: c.name.isEmpty ? c.hex : c.name,
+                      text: c.note,
+                    ),
+                ])
+              : swatchRow(shots.isEmpty ? field.label : 'Paleta', [
+                  for (final c in colors) (c.hex, c.name),
+                ]),
+        if (text.isNotEmpty)
+          shots.isEmpty && colors.isEmpty
+              ? textPoint(field.label, text)
+              : pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+                  child: pw.Text(text, style: body),
+                ),
+      ],
+    );
+  }
 
   pw.TextStyle get body => pw.TextStyle(
     font: regular,
@@ -553,17 +691,7 @@ class BiblePdfKit {
             .toList();
         return rows.isEmpty ? null : specsPoint(field.label, rows);
       case BibleSectionFieldType.palette:
-        final colors = BiblePaletteColor.listFrom(raw);
-        if (colors.isEmpty) return null;
-        // Una simbología lleva el significado de cada color.
-        if (field.widget == 'palette_symbolism' ||
-            colors.any((c) => c.note.trim().isNotEmpty)) {
-          return swatchList(field.label, [
-            for (final c in colors)
-              (hex: c.hex, title: c.name.isEmpty ? c.hex : c.name, text: c.note),
-          ]);
-        }
-        return swatchRow(field.label, [for (final c in colors) (c.hex, c.name)]);
+        return _palettePoint(field, raw);
       case BibleSectionFieldType.cards:
         final cards = BibleCard.listFrom(raw).where((c) => !c.isEmpty).toList();
         if (cards.isEmpty) return null;
@@ -576,18 +704,9 @@ class BiblePdfKit {
           for (final c in cards) (c.title, c.body),
         ]);
       case BibleSectionFieldType.acts:
-        final all = BibleCard.listFrom(raw);
-        if (all.every((c) => c.isEmpty)) return null;
-        return columnsPoint(field.label, [
-          for (var i = 0; i < all.length; i++)
-            (
-              kicker: all[i].kicker.trim().isEmpty
-                  ? 'Acto ${i + 1}'
-                  : 'Acto ${i + 1} · ${all[i].kicker.trim()}',
-              title: all[i].title,
-              text: all[i].body,
-            ),
-        ]);
+        final acts = BibleCard.listFrom(raw);
+        if (acts.every((c) => c.isEmpty)) return null;
+        return actsPoint(field.label, acts);
       case BibleSectionFieldType.tags:
         final tags = BibleSectionPointValue.decodeList(
           raw,
@@ -624,8 +743,19 @@ class BiblePdfKit {
           ],
         );
       case BibleSectionFieldType.gallery:
-        // Las imágenes necesitan carga asíncrona: se pintan aparte.
-        return null;
+        final shots = _loaded([
+          for (final id in BibleSectionPointValue.decodeList(raw))
+            if (int.tryParse(id) != null) int.parse(id),
+        ]);
+        if (shots.isEmpty) return null;
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            label(field.label),
+            pw.SizedBox(height: 6),
+            imageStrip(shots, height: 96),
+          ],
+        );
       default:
         return textPoint(field.label, raw.trim());
     }

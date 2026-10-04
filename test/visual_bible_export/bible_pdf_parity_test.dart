@@ -297,6 +297,50 @@ void main() {
     expect(text, isNot(contains('{"')));
   });
 
+  test('una paleta saca solo lo que está marcado para mostrarse', () async {
+    await addPoint(
+      BibleSectionId.exposure,
+      const BibleSectionField(
+        key: 'field_maestra',
+        label: 'Paleta del invierno',
+        type: BibleSectionFieldType.palette,
+        widget: 'palette_master',
+      ),
+      jsonEncode({
+        'colors': [
+          {'hex': '#0B1D2A', 'name': 'Azul petróleo'},
+        ],
+        'text': 'El frío gana terreno acto a acto',
+        'show': ['text'],
+      }),
+    );
+    await addPoint(
+      BibleSectionId.exposure,
+      const BibleSectionField(
+        key: 'field_simbolos',
+        label: 'Simbología',
+        type: BibleSectionFieldType.palette,
+        widget: 'palette_symbolism',
+      ),
+      jsonEncode({
+        'colors': [
+          {'hex': '#8A1C1C', 'name': 'Rojo óxido', 'note': 'La culpa'},
+        ],
+        'text': 'El rojo solo aparece cuando miente',
+        'show': ['palette', 'text'],
+      }),
+    );
+
+    final text = _extract(await export());
+    expect(text, contains('PALETA DEL INVIERNO'));
+    expect(text, contains('El frío gana terreno acto a acto'));
+    // La paleta está oculta: sus muestras no salen, pero no se han borrado.
+    expect(text, isNot(contains('#0B1D2A')));
+    expect(text, contains('La culpa'));
+    expect(text, contains('El rojo solo aparece cuando miente'));
+    expect(text, isNot(contains('"show"')));
+  });
+
   test('las secciones salen en el orden de la biblia', () async {
     for (final sectionId in [
       BibleSectionId.direction,

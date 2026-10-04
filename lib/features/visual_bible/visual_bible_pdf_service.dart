@@ -258,7 +258,11 @@ class VisualBiblePdfService {
       bold: fonts.bold,
     );
     final doc = pw.Document();
-    final kit = BiblePdfKit(regular: fonts.regular, bold: fonts.bold);
+    _userPointImages = await _loadUserPointImages(
+      sectionContentJsonById,
+      moodboard,
+    );
+    final kit = _kit(fonts);
 
     // Las páginas se guardan por sección y se vuelcan al final en el orden
     // de la biblia.
@@ -1827,6 +1831,38 @@ class VisualBiblePdfService {
 
   /// Carga lo que Dirección y Concepto necesitan del moodboard: imágenes de
   /// cada punto, imagen de cada referencia y los stills sin ficha.
+  /// Imágenes de los puntos del usuario del documento en curso.
+  static Map<int, pw.MemoryImage> _userPointImages = const {};
+
+  static BiblePdfKit _kit(({pw.Font regular, pw.Font bold}) fonts) =>
+      BiblePdfKit(
+        regular: fonts.regular,
+        bold: fonts.bold,
+        images: _userPointImages,
+      );
+
+  /// Carga una vez las imágenes que usan los puntos del usuario (actos,
+  /// paletas y tiras de imágenes) de todas las pantallas.
+  static Future<Map<int, pw.MemoryImage>> _loadUserPointImages(
+    Map<String, String?> sectionContentJsonById,
+    List<MoodboardImageModel> moodboard,
+  ) async {
+    final ids = <int>{
+      for (final entry in sectionContentJsonById.entries)
+        ...BibleSectionExportReader.userPointImageIds(entry.value, entry.key),
+    };
+    if (ids.isEmpty) return const {};
+    final byId = {for (final image in moodboard) image.id: image};
+    final loaded = <int, pw.MemoryImage>{};
+    for (final id in ids) {
+      final image = byId[id];
+      if (image == null) continue;
+      final bytes = await PdfSafeImage.loadFromPathMaxEdge(image.imagePath);
+      if (bytes != null) loaded[id] = pw.MemoryImage(bytes);
+    }
+    return loaded;
+  }
+
   static Future<_SectionAssets> _loadSectionAssets(
     String sectionId,
     String? contentJson,
@@ -2108,7 +2144,7 @@ class VisualBiblePdfService {
     ({pw.Font regular, pw.Font bold}) fonts, {
     bool leadingSpacing = true,
   }) {
-    final kit = BiblePdfKit(regular: fonts.regular, bold: fonts.bold);
+    final kit = _kit(fonts);
     final contentJson = sectionContentJsonById[sectionId];
     final blobRows = [
       for (final row in BibleSectionExportReader.blobRows(

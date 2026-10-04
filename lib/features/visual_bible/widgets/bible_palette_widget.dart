@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -25,6 +27,9 @@ class BiblePaletteWidget extends ConsumerWidget {
   /// Lado de cada muestra.
   final double swatchSize;
 
+  /// Imágenes del propio punto: «Extraer de una imagen» propone la primera.
+  final List<int> preferredImageIds;
+
   const BiblePaletteWidget({
     super.key,
     required this.projectId,
@@ -33,6 +38,7 @@ class BiblePaletteWidget extends ConsumerWidget {
     required this.colors,
     required this.onChanged,
     this.swatchSize = 96,
+    this.preferredImageIds = const [],
   });
 
   Future<void> _edit(BuildContext context, int? index) async {
@@ -68,7 +74,7 @@ class BiblePaletteWidget extends ConsumerWidget {
       projectId: projectId,
       bibleId: bibleId,
       sectionId: sectionId,
-      selected: const [],
+      selected: preferredImageIds.take(1).toList(),
       single: true,
     );
     if (picked == null || picked.isEmpty || !context.mounted) return;
@@ -410,6 +416,186 @@ class BiblePaletteSymbolismWidget extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Punto de paleta completo: la paleta y, si se quiere, imágenes que la
+/// representan y un texto que la desarrolla. El menú «⋯» elige qué se ve;
+/// ocultar una parte no borra su contenido.
+class BiblePalettePoint extends StatelessWidget {
+  final int projectId;
+  final int bibleId;
+  final String sectionId;
+  final String label;
+  final IconData icon;
+
+  /// Simbología: cada color con su significado, en lugar de muestras.
+  final bool symbolism;
+  final double swatchSize;
+  final BiblePaletteValue value;
+  final ValueChanged<BiblePaletteValue> onChanged;
+
+  const BiblePalettePoint({
+    super.key,
+    required this.projectId,
+    required this.bibleId,
+    required this.sectionId,
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.onChanged,
+    this.symbolism = false,
+    this.swatchSize = 112,
+  });
+
+  static const _partLabels = {
+    BiblePalettePart.palette: 'Paleta',
+    BiblePalettePart.images: 'Imágenes',
+    BiblePalettePart.text: 'Texto',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final parts = <Widget>[
+      if (value.shows(BiblePalettePart.images))
+        BiblePointImages(
+          projectId: projectId,
+          bibleId: bibleId,
+          sectionId: sectionId,
+          imageIds: value.imageIds,
+          height: 150,
+          onChanged: (ids) => onChanged(value.copyWith(imageIds: ids)),
+        ),
+      if (value.shows(BiblePalettePart.palette))
+        symbolism
+            ? BiblePaletteSymbolismWidget(
+                colors: value.colors,
+                onChanged: (colors) => onChanged(value.copyWith(colors: colors)),
+              )
+            : BiblePaletteWidget(
+                projectId: projectId,
+                bibleId: bibleId,
+                sectionId: sectionId,
+                swatchSize: swatchSize,
+                preferredImageIds: value.imageIds,
+                colors: value.colors,
+                onChanged: (colors) => onChanged(value.copyWith(colors: colors)),
+              ),
+      if (value.shows(BiblePalettePart.text))
+        _PaletteText(
+          text: value.text,
+          hint: symbolism
+              ? 'Qué cuenta el color en esta película y por qué…'
+              : 'Por qué esta paleta: qué expresa y cómo evoluciona…',
+          onChanged: (text) => onChanged(value.copyWith(text: text)),
+        ),
+    ];
+
+    return BiblePointPanel(
+      label: label,
+      icon: icon,
+      trailing: PopupMenuButton<BiblePalettePart>(
+        tooltip: 'Qué se muestra',
+        padding: EdgeInsets.zero,
+        icon: Icon(Icons.more_horiz, size: 18, color: palette.textSecondary),
+        onSelected: (part) => onChanged(value.toggled(part)),
+        itemBuilder: (_) => [
+          for (final part in BiblePalettePart.values)
+            CheckedPopupMenuItem(
+              value: part,
+              checked: value.shows(part),
+              // La última parte visible no se puede ocultar.
+              enabled: !(value.shows(part) && value.show.length == 1),
+              child: Text(_partLabels[part]!),
+            ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < parts.length; i++) ...[
+            if (i > 0) const SizedBox(height: AppSpacing.lg),
+            parts[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Texto de desarrollo con guardado automático.
+class _PaletteText extends StatefulWidget {
+  final String text;
+  final String hint;
+  final ValueChanged<String> onChanged;
+
+  const _PaletteText({
+    required this.text,
+    required this.hint,
+    required this.onChanged,
+  });
+
+  @override
+  State<_PaletteText> createState() => _PaletteTextState();
+}
+
+class _PaletteTextState extends State<_PaletteText> {
+  late final _controller = TextEditingController(text: widget.text);
+  final _focus = FocusNode();
+  Timer? _debounce;
+
+  @override
+  void didUpdateWidget(_PaletteText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Solo se refresca desde fuera cuando no se está escribiendo.
+    if (!_focus.hasFocus && widget.text != _controller.text) {
+      _controller.text = widget.text;
+    }
+  }
+
+  void _flush() {
+    if (_debounce?.isActive ?? false) {
+      _debounce!.cancel();
+      widget.onChanged(_controller.text);
+    }
+  }
+
+  @override
+  void dispose() {
+    _flush();
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return TextField(
+      controller: _controller,
+      focusNode: _focus,
+      minLines: 3,
+      maxLines: null,
+      textCapitalization: TextCapitalization.sentences,
+      style: AppTypography.bodyMedium(palette).copyWith(height: 1.5),
+      decoration: InputDecoration(
+        hintText: widget.hint,
+        border: InputBorder.none,
+        isDense: true,
+      ),
+      onChanged: (text) {
+        _debounce?.cancel();
+        _debounce = Timer(
+          const Duration(milliseconds: 500),
+          () => widget.onChanged(text),
+        );
+      },
+      onTapOutside: (_) {
+        _flush();
+        _focus.unfocus();
+      },
     );
   }
 }
