@@ -9,6 +9,7 @@ import '../../../../shared/visual_bible/bible_section_fields.dart';
 import '../../../../shared/visual_bible/bible_section_ids.dart';
 import '../../moodboard_helpers.dart';
 import '../../../../core/database/app_database.dart';
+import '../bible_acts_widget.dart';
 import '../bible_cards_widget.dart';
 import '../bible_generic_point_views.dart';
 import '../bible_navigation_scope.dart';
@@ -187,8 +188,10 @@ abstract final class BibleWidgetCatalog {
       type: BibleSectionFieldType.acts,
       category: BibleWidgetCategory.structure,
       label: 'División por actos',
-      description: 'Una columna por acto: fase, título e intención.',
-      icon: Icons.view_column_outlined,
+      description:
+          'Los actos de la película, cada uno con su imagen, su fase y su '
+          'intención.',
+      icon: Icons.movie_filter_outlined,
       screens: _narrativeScreens,
       build: _acts,
     ),
@@ -221,7 +224,8 @@ abstract final class BibleWidgetCatalog {
       category: BibleWidgetCategory.color,
       label: 'Paleta maestra',
       description:
-          'Muestras grandes con nombre y código; se extrae de una imagen.',
+          'Muestras grandes con nombre y código. Puede llevar imágenes y '
+          'un texto que la desarrolle.',
       icon: Icons.palette_outlined,
       screens: {BibleSectionId.concept},
       build: _paletteMaster,
@@ -240,7 +244,9 @@ abstract final class BibleWidgetCatalog {
       type: BibleSectionFieldType.palette,
       category: BibleWidgetCategory.color,
       label: 'Simbología de color',
-      description: 'Cada color con lo que significa en la película.',
+      description:
+          'Cada color con lo que significa. Puede llevar imágenes y un '
+          'texto que lo desarrolle.',
       icon: Icons.color_lens_outlined,
       screens: {BibleSectionId.concept},
       build: _paletteSymbolism,
@@ -363,35 +369,39 @@ abstract final class BibleWidgetCatalog {
       );
 
   static Widget _paletteMaster(BuildContext context, BibleWidgetContext ctx) =>
-      _palette(ctx, swatchSize: 112);
-
-  static Widget _paletteCompact(
-    BuildContext context,
-    BibleWidgetContext ctx,
-  ) => _palette(ctx, swatchSize: 56);
-
-  static Widget _palette(BibleWidgetContext ctx, {required double swatchSize}) =>
-      BiblePointPanel(
-        label: ctx.field.label,
-        icon: Icons.palette_outlined,
-        child: BiblePaletteWidget(
-          projectId: ctx.projectId,
-          bibleId: ctx.bibleId,
-          sectionId: ctx.sectionId,
-          swatchSize: swatchSize,
-          colors: BiblePaletteColor.listFrom(ctx.value),
-          onChanged: (colors) =>
-              ctx.onChanged(BiblePaletteColor.encode(colors)),
-        ),
-      );
+      _palettePoint(ctx, icon: Icons.palette_outlined);
 
   static Widget _paletteSymbolism(
     BuildContext context,
     BibleWidgetContext ctx,
+  ) => _palettePoint(ctx, icon: Icons.color_lens_outlined, symbolism: true);
+
+  static Widget _palettePoint(
+    BibleWidgetContext ctx, {
+    required IconData icon,
+    bool symbolism = false,
+  }) => BiblePalettePoint(
+    projectId: ctx.projectId,
+    bibleId: ctx.bibleId,
+    sectionId: ctx.sectionId,
+    label: ctx.field.label,
+    icon: icon,
+    symbolism: symbolism,
+    value: BiblePaletteValue.decode(ctx.value),
+    onChanged: (value) => ctx.onChanged(value.encode()),
+  );
+
+  static Widget _paletteCompact(
+    BuildContext context,
+    BibleWidgetContext ctx,
   ) => BiblePointPanel(
     label: ctx.field.label,
-    icon: Icons.color_lens_outlined,
-    child: BiblePaletteSymbolismWidget(
+    icon: Icons.gradient_outlined,
+    child: BiblePaletteWidget(
+      projectId: ctx.projectId,
+      bibleId: ctx.bibleId,
+      sectionId: ctx.sectionId,
+      swatchSize: 56,
       colors: BiblePaletteColor.listFrom(ctx.value),
       onChanged: (colors) => ctx.onChanged(BiblePaletteColor.encode(colors)),
     ),
@@ -401,14 +411,12 @@ abstract final class BibleWidgetCatalog {
     BibleWidgetContext ctx, {
     required IconData icon,
     required BibleCardsLayout layout,
-    bool acts = false,
   }) => BiblePointPanel(
     label: ctx.field.label,
     icon: icon,
     child: BibleCardsWidget(
       cards: BibleCard.listFrom(ctx.value),
       layout: layout,
-      acts: acts,
       onChanged: (cards) => ctx.onChanged(BibleCard.encode(cards)),
     ),
   );
@@ -428,11 +436,16 @@ abstract final class BibleWidgetCatalog {
       );
 
   static Widget _acts(BuildContext context, BibleWidgetContext ctx) =>
-      _cardsPoint(
-        ctx,
-        icon: Icons.view_column_outlined,
-        layout: BibleCardsLayout.columns,
-        acts: true,
+      BiblePointPanel(
+        label: ctx.field.label,
+        icon: Icons.movie_filter_outlined,
+        child: BibleActsWidget(
+          projectId: ctx.projectId,
+          bibleId: ctx.bibleId,
+          sectionId: ctx.sectionId,
+          acts: BibleCard.listFrom(ctx.value),
+          onChanged: (acts) => ctx.onChanged(BibleCard.encode(acts)),
+        ),
       );
 
   static Widget _tags(BuildContext context, BibleWidgetContext ctx) =>

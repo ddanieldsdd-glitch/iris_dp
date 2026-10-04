@@ -298,6 +298,25 @@ abstract final class BibleSectionExportReader {
     ];
   }
 
+  /// Ids de las imágenes del moodboard que usan los puntos del usuario de
+  /// una pantalla (actos, paletas con imágenes y tiras de imágenes).
+  static Set<int> userPointImageIds(String? contentJson, String sectionId) => {
+    for (final point in userPoints(contentJson, sectionId))
+      ...switch (point.field.type) {
+        BibleSectionFieldType.acts => [
+          for (final act in BibleCard.listFrom(point.value)) ...act.imageIds,
+        ],
+        BibleSectionFieldType.palette => BiblePaletteValue.decode(
+          point.value,
+        ).imageIds,
+        BibleSectionFieldType.gallery => [
+          for (final id in BibleSectionPointValue.decodeList(point.value))
+            if (int.tryParse(id) != null) int.parse(id),
+        ],
+        _ => const <int>[],
+      },
+  };
+
   static bool _isUserPoint(String sectionId, BibleSectionField field) =>
       BibleStitchModuleRegistry.module(sectionId, field.key) == null &&
       (field.type == BibleSectionFieldType.text ||
@@ -318,9 +337,7 @@ abstract final class BibleSectionExportReader {
         BibleSectionFieldType.specs => BibleSectionPointValue.decodeSpecs(
             point.value,
           ).map((r) => '${r.$1}: ${r.$2}').join('\n'),
-        BibleSectionFieldType.palette => BiblePaletteColor.listFrom(point.value)
-            .map((c) => c.name.isEmpty ? c.hex : '${c.hex} ${c.name}')
-            .join('\n'),
+        BibleSectionFieldType.palette => _paletteText(point.value),
         BibleSectionFieldType.referenceDeck => _referenceItems(point.value)
             .map((r) => [r.title, r.work].where((e) => e.isNotEmpty).join(' — '))
             .join('\n'),
@@ -339,6 +356,21 @@ abstract final class BibleSectionExportReader {
           ).join(' · '),
         _ => point.value.trim(),
       };
+
+  static String _paletteText(String raw) {
+    final value = BiblePaletteValue.decode(raw);
+    return [
+      if (value.shows(BiblePalettePart.palette))
+        for (final c in value.colors)
+          [
+            c.hex,
+            if (c.name.isNotEmpty) c.name,
+            if (c.note.isNotEmpty) '— ${c.note}',
+          ].join(' '),
+      if (value.shows(BiblePalettePart.text) && value.text.trim().isNotEmpty)
+        value.text.trim(),
+    ].join('\n');
+  }
 
   /// Fichas de un punto de referencias (`{preset, items}`).
   static List<BibleReference> referenceItems(String? raw) =>

@@ -12,37 +12,6 @@ void main() {
     ),
   );
 
-  testWidgets('los actos se numeran y se pueden añadir', (tester) async {
-    var cards = const [
-      BibleCard(kicker: 'CALMA', title: 'Orden', body: 'Planos fijos'),
-      BibleCard(title: 'Ruptura'),
-    ];
-    await pump(
-      tester,
-      StatefulBuilder(
-        builder: (context, setState) => BibleCardsWidget(
-          cards: cards,
-          acts: true,
-          layout: BibleCardsLayout.columns,
-          onChanged: (next) => setState(() => cards = next),
-        ),
-      ),
-    );
-
-    expect(find.text('ACTO 1 · CALMA'), findsOneWidget);
-    expect(find.text('ACTO 2'), findsOneWidget);
-
-    await tester.tap(find.text('AÑADIR ACTO'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, 'Título'), 'Cierre');
-    await tester.tap(find.text('Guardar'));
-    await tester.pumpAndSettle();
-
-    expect(cards.length, 3);
-    expect(cards.last.title, 'Cierre');
-    expect(find.text('ACTO 3'), findsOneWidget);
-  });
-
   testWidgets('una tarjeta se puede mover y eliminar', (tester) async {
     var cards = const [BibleCard(title: 'Cámara'), BibleCard(title: 'POV')];
     await pump(
