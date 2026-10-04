@@ -38,15 +38,16 @@ void main() {
     tester,
   ) async {
     final result = await open(tester);
-    await tester.ensureVisible(find.text('Paleta de color'));
-    await tester.tap(find.text('Paleta de color'));
+    await tester.ensureVisible(find.text('Paleta maestra'));
+    await tester.tap(find.text('Paleta maestra'));
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Añadir'));
     await tester.pumpAndSettle();
 
     final added = result();
-    expect(added!.field.label, 'Paleta de color');
+    expect(added!.field.label, 'Paleta maestra');
     expect(added.field.type, BibleSectionFieldType.palette);
+    expect(added.field.widget, 'palette_master');
     expect(added.initialValue, isNull);
   });
 
@@ -55,6 +56,7 @@ void main() {
   ) async {
     final result = await open(tester);
     await tester.enterText(find.byType(TextField), 'Notas del foquista');
+    await tester.ensureVisible(find.text('Datos técnicos'));
     await tester.tap(find.text('Datos técnicos'));
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Añadir'));
@@ -93,7 +95,7 @@ void main() {
   testWidgets('ofrece los puntos de la pantalla que no están puestos', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.physicalSize = const Size(900, 2600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     // Dirección sin «Tono y atmósfera».
@@ -107,7 +109,10 @@ void main() {
     );
 
     expect(find.text('DE ESTA PANTALLA'), findsOneWidget);
-    expect(find.text('WIDGETS'), findsOneWidget);
+    expect(find.text('RECOMENDADOS PARA ESTA PANTALLA'), findsOneWidget);
+    // Lo recomendado no se repite en su familia.
+    expect(find.text('División por actos'), findsOneWidget);
+    expect(find.text('COLOR'), findsOneWidget);
     expect(find.text('Key Frame'), findsOneWidget, reason: 'punto opcional');
 
     await tester.tap(find.text('Tono y atmósfera'));
@@ -125,7 +130,7 @@ void main() {
   testWidgets('con todos los puntos puestos solo ofrece widgets', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.physicalSize = const Size(900, 2600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await open(
@@ -134,6 +139,7 @@ void main() {
       fields: BibleSectionFieldsConfig.defaultsFor(BibleSectionId.workflow),
     );
     expect(find.text('DE ESTA PANTALLA'), findsNothing);
-    expect(find.text('Paleta de color'), findsOneWidget);
+    expect(find.text('RECOMENDADOS PARA ESTA PANTALLA'), findsNothing);
+    expect(find.text('Paleta compacta'), findsOneWidget);
   });
 }

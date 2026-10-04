@@ -15,6 +15,10 @@ class StitchModule {
   /// Tiene vista propia y se puede añadir, pero no viene por defecto.
   final bool optional;
 
+  /// Widget del catálogo al que equivale este punto (`BibleWidgetCatalog`),
+  /// para nombrarlo por lo que es: actos, pilares, paleta maestra…
+  final String? widgetId;
+
   /// Kind del catálogo de sub-apartados (nombre + icono reutilizable).
   final BibleSubsectionKindId? subsectionKind;
 
@@ -27,6 +31,7 @@ class StitchModule {
     this.required = false,
     this.legacyOnly = false,
     this.optional = false,
+    this.widgetId,
     this.subsectionKind,
   });
 
@@ -57,12 +62,24 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'colorPalette', label: 'Paleta maestra'),
-            StitchModule(key: 'colorSymbolism', label: 'Simbología de color'),
+            StitchModule(
+              key: 'colorPalette',
+              label: 'Paleta maestra',
+              widgetId: 'palette_master',
+            ),
+            StitchModule(
+              key: 'colorSymbolism',
+              label: 'Simbología de color',
+              widgetId: 'palette_symbolism',
+            ),
             StitchModule(key: 'lightPhilosophy', label: 'Filosofía de luz'),
             StitchModule(key: 'shadowTreatment', label: 'Tratamiento de sombras'),
             StitchModule(key: 'composition', label: 'Composición'),
-            StitchModule(key: 'actNotes', label: 'Intención visual por acto'),
+            StitchModule(
+              key: 'actNotes',
+              label: 'Intención visual por acto',
+              widgetId: 'acts',
+            ),
             StitchModule(key: 'keyFrame', label: 'Key Frame'),
             StitchModule(
               key: 'references',
@@ -130,15 +147,31 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'tone', label: 'Tono y atmósfera'),
-            StitchModule(key: 'strategies', label: 'Estrategia visual'),
-            StitchModule(key: 'acts', label: 'Intención visual por acto'),
+            StitchModule(
+              key: 'tone',
+              label: 'Tono y atmósfera',
+              widgetId: 'cards',
+            ),
+            StitchModule(
+              key: 'strategies',
+              label: 'Estrategia visual',
+              widgetId: 'cards_pillars',
+            ),
+            StitchModule(
+              key: 'acts',
+              label: 'Intención visual por acto',
+              widgetId: 'acts',
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias de dirección',
               type: BibleSectionFieldType.references,
             ),
-            StitchModule(key: 'transitions', label: 'Lenguaje de transiciones'),
+            StitchModule(
+              key: 'transitions',
+              label: 'Lenguaje de transiciones',
+              widgetId: 'cards',
+            ),
             StitchModule(key: 'keyFrame', label: 'Key Frame', optional: true),
             StitchModule(
               key: 'toneStrategies',

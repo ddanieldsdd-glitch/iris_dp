@@ -76,7 +76,9 @@ Añadido el 2026-10-03. La biblia es una maqueta de partida hecha con piezas que
 - [x] **W4. Referencias.** Varias imágenes por referencia y pantalla de detalle con edición directa.
 - [ ] **W5. Disposición responsiva.** Ancho por punto: completo, medio o tercio.
 - [ ] **W6. PDF.** Cada widget y sus complementos, en cualquier sección.
-- [ ] **W7. Dirección y Concepto sobre el sistema**, y revisión en la app.
+- **W7. Dirección y Concepto sobre el sistema**, y revisión en la app.
+  - [x] **W7a. Widgets específicos y catálogo por familias.** Widgets nuevos: división por actos, pilares, puntos con título, etiquetas, paleta maestra, paleta compacta y simbología de color. El catálogo se agrupa en familias (Texto, Narrativa y estructura, Color, Imagen, Referencias, Datos) y cada pantalla propone primero los suyos. Un punto guarda con qué widget se pinta (`BibleSectionField.widget`). Todos salen en el PDF.
+  - [ ] **W7b. Los puntos de fábrica de Dirección y Concepto pasan a pintarse con esos widgets** (hoy tienen vista propia y solo se nombran por el widget al que equivalen), con migración de su contenido.
 
 ### 1.7 Configuración coherente
 

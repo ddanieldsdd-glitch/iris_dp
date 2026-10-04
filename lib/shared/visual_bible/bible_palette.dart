@@ -1,19 +1,30 @@
 import 'dart:convert';
 
-/// Color de una paleta de la biblia: código y nombre opcional.
+/// Color de una paleta de la biblia: código, nombre y, en una simbología,
+/// lo que significa.
 class BiblePaletteColor {
   final String hex;
   final String name;
+  final String note;
 
-  const BiblePaletteColor({required this.hex, this.name = ''});
+  const BiblePaletteColor({
+    required this.hex,
+    this.name = '',
+    this.note = '',
+  });
 
   factory BiblePaletteColor.fromJson(Map<dynamic, dynamic> json) =>
       BiblePaletteColor(
         hex: json['hex']?.toString() ?? '',
         name: json['name']?.toString() ?? '',
+        note: json['note']?.toString() ?? '',
       );
 
-  Map<String, dynamic> toJson() => {'hex': hex, 'name': name};
+  Map<String, dynamic> toJson() => {
+    'hex': hex,
+    'name': name,
+    if (note.isNotEmpty) 'note': note,
+  };
 
   /// Lee una paleta desde una lista ya decodificada o desde su JSON.
   static List<BiblePaletteColor> listFrom(Object? raw) {

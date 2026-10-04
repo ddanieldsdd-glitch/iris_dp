@@ -290,6 +290,9 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
       ),
       BibleSectionFieldType.palette ||
       BibleSectionFieldType.gallery ||
+      BibleSectionFieldType.cards ||
+      BibleSectionFieldType.acts ||
+      BibleSectionFieldType.tags ||
       BibleSectionFieldType.referenceDeck => _catalogPoint(field),
     };
   }
