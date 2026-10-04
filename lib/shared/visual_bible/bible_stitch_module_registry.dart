@@ -343,8 +343,9 @@ abstract final class BibleStitchModuleRegistry {
   /// Normaliza fields legacy (monolitos) a slots actuales cuando aplica.
   static List<BibleSectionField> normalizeFields(
     String sectionId,
-    List<BibleSectionField> fields,
-  ) {
+    List<BibleSectionField> fields, {
+    int layoutVersion = 1,
+  }) {
     final keys = fields.map((f) => f.key).toSet();
     final modularKeys = modulesFor(sectionId)
         .where((m) => !m.legacyOnly)
@@ -362,9 +363,11 @@ abstract final class BibleStitchModuleRegistry {
       }
     }
 
-    // Concepto ganó «Composición»: se añade tras las sombras en biblias que
-    // ya tenían el resto de puntos.
-    if (sectionId == BibleSectionId.concept &&
+    // Concepto ganó «Composición» en la versión 2: se añade una sola vez, tras
+    // las sombras, en biblias guardadas antes. Si el usuario la quita después,
+    // no vuelve.
+    if (layoutVersion < 2 &&
+        sectionId == BibleSectionId.concept &&
         keys.contains('shadowTreatment') &&
         !keys.contains('composition')) {
       return [

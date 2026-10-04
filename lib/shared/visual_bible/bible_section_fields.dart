@@ -127,6 +127,12 @@ class BibleSectionField {
 abstract final class BibleSectionFieldsConfig {
   static const _fieldsKey = 'fields';
   static const _valuesKey = 'values';
+  static const _layoutVersionKey = 'layoutVersion';
+
+  /// Versión de la lista de puntos. Las migraciones que añaden puntos de
+  /// fábrica solo se aplican a contenidos guardados con una versión menor,
+  /// para no reinsertar lo que el usuario quitó.
+  static const layoutVersion = 2;
 
   static List<BibleSectionField> defaultsFor(String sectionId) =>
       BibleStitchModuleRegistry.defaultFieldsFor(sectionId);
@@ -151,7 +157,12 @@ abstract final class BibleSectionFieldsConfig {
           .whereType<Map<String, dynamic>>()
           .map(BibleSectionField.fromJson)
           .toList();
-      return BibleStitchModuleRegistry.normalizeFields(sectionId, parsed);
+      final version = decoded[_layoutVersionKey];
+      return BibleStitchModuleRegistry.normalizeFields(
+        sectionId,
+        parsed,
+        layoutVersion: version is num ? version.toInt() : 1,
+      );
     } catch (_) {
       return defaultsFor(sectionId);
     }
@@ -175,9 +186,26 @@ abstract final class BibleSectionFieldsConfig {
     Map<String, String>? values,
   }) =>
       jsonEncode({
+        _layoutVersionKey: layoutVersion,
         _fieldsKey: fields.map((f) => f.toJson()).toList(),
         if (values != null && values.isNotEmpty) _valuesKey: values,
       });
+
+  /// Puntos que el usuario añadió: los que no son propios de la pantalla.
+  static bool isUserPoint(String sectionId, BibleSectionField field) =>
+      BibleStitchModuleRegistry.module(sectionId, field.key) == null;
+
+  /// «Restablecer pantalla»: los puntos de fábrica en su orden original y,
+  /// detrás, los que añadió el usuario, en el orden en que estaban.
+  static List<BibleSectionField> resetKeepingUserPoints(
+    String sectionId,
+    List<BibleSectionField> current,
+  ) =>
+      [
+        ...defaultsFor(sectionId),
+        for (final field in current)
+          if (isUserPoint(sectionId, field)) field,
+      ];
 
   /// Campos por defecto para secciones personalizadas (libres).
   static List<BibleSectionField> freeformDefaults(String sectionLabel) => [

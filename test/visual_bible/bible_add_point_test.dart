@@ -4,9 +4,14 @@ import 'package:iris_dp/core/theme/app_theme.dart';
 import 'package:iris_dp/features/visual_bible/widgets/bible_add_point.dart';
 import 'package:iris_dp/features/visual_bible/widgets/catalog/bible_widget_catalog.dart';
 import 'package:iris_dp/shared/visual_bible/bible_section_fields.dart';
+import 'package:iris_dp/shared/visual_bible/bible_section_ids.dart';
 
 void main() {
-  Future<BibleAddedPoint? Function()> open(WidgetTester tester) async {
+  Future<BibleAddedPoint? Function()> open(
+    WidgetTester tester, {
+    String sectionId = 'custom_1',
+    List<BibleSectionField>? fields,
+  }) async {
     BibleAddedPoint? result;
     await tester.pumpWidget(
       MaterialApp(
@@ -14,8 +19,11 @@ void main() {
         home: Scaffold(
           body: Builder(
             builder: (context) => BibleAddPointTile(
-              onTap: () async =>
-                  result = await showBibleAddPointDialog(context),
+              onTap: () async => result = await showBibleAddPointDialog(
+                context,
+                sectionId: sectionId,
+                fields: fields ?? const [],
+              ),
             ),
           ),
         ),
@@ -30,6 +38,7 @@ void main() {
     tester,
   ) async {
     final result = await open(tester);
+    await tester.ensureVisible(find.text('Paleta de color'));
     await tester.tap(find.text('Paleta de color'));
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Añadir'));
@@ -79,5 +88,52 @@ void main() {
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
     expect(result(), isNull);
+  });
+
+  testWidgets('ofrece los puntos de la pantalla que no están puestos', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    // Dirección sin «Tono y atmósfera».
+    final fields = BibleSectionFieldsConfig.defaultsFor(
+      BibleSectionId.direction,
+    ).where((f) => f.key != 'tone').toList();
+    final result = await open(
+      tester,
+      sectionId: BibleSectionId.direction,
+      fields: fields,
+    );
+
+    expect(find.text('DE ESTA PANTALLA'), findsOneWidget);
+    expect(find.text('WIDGETS'), findsOneWidget);
+    expect(find.text('Key Frame'), findsOneWidget, reason: 'punto opcional');
+
+    await tester.tap(find.text('Tono y atmósfera'));
+    await tester.pump();
+    // Un punto de la pantalla no pide nombre: conserva el suyo y su clave.
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.widgetWithText(FilledButton, 'Añadir'));
+    await tester.pumpAndSettle();
+
+    final added = result()!;
+    expect(added.field.key, 'tone');
+    expect(added.initialValue, isNull);
+  });
+
+  testWidgets('con todos los puntos puestos solo ofrece widgets', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await open(
+      tester,
+      sectionId: BibleSectionId.workflow,
+      fields: BibleSectionFieldsConfig.defaultsFor(BibleSectionId.workflow),
+    );
+    expect(find.text('DE ESTA PANTALLA'), findsNothing);
+    expect(find.text('Paleta de color'), findsOneWidget);
   });
 }

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,16 +6,20 @@ import '../../../core/database/database_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../shared/visual_bible/bible_section_ids.dart';
 import '../../../shared/visual_bible/bible_stitch_module_registry.dart';
-import '../../../shared/visual_bible/bible_subsection_kind_catalog.dart';
 import '../bible_section_fields.dart';
 import 'bible_add_point.dart';
+import 'catalog/bible_widget_catalog.dart';
 
-/// Editor de sub-apartados: añadir, quitar, cambiar tipo y reordenar.
+/// Puntos de una pantalla de la biblia: orden, nombre, añadir y quitar.
+///
+/// Cada cambio se guarda al momento. El tipo de un punto se fija al crearlo
+/// y no se puede cambiar: así la pantalla y el PDF no se desajustan.
 class BibleSectionFieldsEditor extends ConsumerStatefulWidget {
   final int bibleId;
   final BibleSectionDefinition definition;
+
+  /// Dentro del panel lateral, sin cabecera propia.
   final bool embedded;
 
   const BibleSectionFieldsEditor({
@@ -56,6 +58,15 @@ class _BibleSectionFieldsEditorState
     extends ConsumerState<BibleSectionFieldsEditor> {
   late List<BibleSectionField> _fields;
 
+  String get _sectionId => widget.definition.id;
+
+  /// Las pantallas personalizadas no tienen puntos de fábrica.
+  bool get _hasFactoryPoints => !_sectionId.startsWith('custom_');
+
+  bool _isUserPoint(BibleSectionField field) =>
+      !_hasFactoryPoints ||
+      BibleSectionFieldsConfig.isUserPoint(_sectionId, field);
+
   @override
   void initState() {
     super.initState();
@@ -65,7 +76,7 @@ class _BibleSectionFieldsEditorState
   void _reloadFields() {
     _fields = BibleSectionFieldsConfig.parse(
       widget.definition.contentJson,
-      widget.definition.id,
+      _sectionId,
     );
   }
 
@@ -78,27 +89,27 @@ class _BibleSectionFieldsEditorState
     }
   }
 
-  Future<void> _save() async {
-    await ref
-        .read(databaseProvider)
-        .saveBibleSectionFields(widget.bibleId, widget.definition.id, _fields);
-    if (mounted && !widget.embedded) Navigator.pop(context);
-  }
+  Future<void> _save({Set<String> dropValueKeys = const {}}) => ref
+      .read(databaseProvider)
+      .saveBibleSectionFields(
+        widget.bibleId,
+        _sectionId,
+        _fields,
+        dropValueKeys: dropValueKeys,
+      );
 
-  Future<void> _saveEmbedded() async {
-    await ref
-        .read(databaseProvider)
-        .saveBibleSectionFields(widget.bibleId, widget.definition.id, _fields);
-  }
-
-  Future<void> _renameField(int index) async {
+  Future<void> _rename(int index) async {
     final field = _fields[index];
     final controller = TextEditingController(text: field.label);
     final label = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Renombrar sub-apartado'),
-        content: TextField(controller: controller, autofocus: true),
+        title: const Text('Renombrar punto'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -111,118 +122,49 @@ class _BibleSectionFieldsEditorState
         ],
       ),
     );
-    if (label == null || label.isEmpty) return;
-    setState(() {
-      _fields[index] = field.copyWith(label: label);
-    });
-    if (widget.embedded) unawaited(_saveEmbedded());
+    if (label == null || label.isEmpty || !mounted) return;
+    setState(() => _fields[index] = field.copyWith(label: label));
+    await _save();
   }
 
-  Future<void> _changeType(int index) async {
-    final field = _fields[index];
-    final picked = await showModalBottomSheet<BibleSectionFieldType>(
-      context: context,
-      backgroundColor: context.palette.surfaceElevated,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Text(
-                'Tipo de sub-apartado',
-                style: AppTypography.titleMedium(context.palette),
-              ),
-            ),
-            for (final type in BibleSectionFieldType.values)
-              ListTile(
-                leading: Icon(_iconForType(type)),
-                title: Text(BibleSectionFieldsConfig.labelForType(type)),
-                selected: field.type == type,
-                onTap: () => Navigator.pop(ctx, type),
-              ),
-          ],
-        ),
-      ),
+  Future<void> _add() async {
+    final added = await showBibleAddPointDialog(
+      context,
+      sectionId: _sectionId,
+      // En una pantalla personalizada solo se ofrecen widgets.
+      fields: _hasFactoryPoints
+          ? _fields
+          : [..._fields, ...BibleSectionFieldsConfig.defaultsFor(_sectionId)],
     );
-    if (picked == null) return;
-    setState(() {
-      _fields[index] = field.copyWith(type: picked);
-    });
-    if (widget.embedded) unawaited(_saveEmbedded());
-  }
-
-  Future<void> _addRegistryModule() async {
-    final missing = BibleStitchModuleRegistry.missingModules(
-      widget.definition.id,
-      _fields,
-    );
-    if (missing.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Todos los módulos Stitch ya están en la lista')),
-        );
-      }
-      return;
-    }
-    final picked = await showModalBottomSheet<StitchModule>(
-      context: context,
-      backgroundColor: context.palette.surfaceElevated,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Text(
-                'Añadir módulo Stitch',
-                style: AppTypography.titleMedium(context.palette),
-              ),
-            ),
-            for (final module in missing)
-              ListTile(
-                leading: Icon(_iconForType(module.type)),
-                title: Text(module.label),
-                subtitle: Text(module.key),
-                onTap: () => Navigator.pop(ctx, module),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (picked == null) return;
-    setState(() => _fields.add(picked.toField()));
-    if (widget.embedded) unawaited(_saveEmbedded());
-  }
-
-  Future<void> _addField() async {
-    final added = await showBibleAddPointDialog(context);
     if (added == null || !mounted) return;
     setState(() => _fields.add(added.field));
-    final db = ref.read(databaseProvider);
-    await db.saveBibleSectionFields(
-      widget.bibleId,
-      widget.definition.id,
-      _fields,
-    );
+    await _save();
     if (added.initialValue != null) {
-      await db.saveBibleSectionFieldValue(
-        widget.bibleId,
-        widget.definition.id,
-        added.field.key,
-        added.initialValue,
-      );
+      await ref
+          .read(databaseProvider)
+          .saveBibleSectionFieldValue(
+            widget.bibleId,
+            _sectionId,
+            added.field.key,
+            added.initialValue,
+          );
     }
   }
 
-  Future<void> _applyStylePack() async {
-    final confirm = await showDialog<bool>(
+  Future<void> _remove(int index) async {
+    final field = _fields[index];
+    final own = _isUserPoint(field);
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Restaurar módulos Stitch'),
-        content: const Text(
-          '¿Restaurar los módulos estándar de esta pantalla? '
-          'Se conservan tus textos e imágenes guardados en valores.',
+        title: Text('Quitar «${field.label}»'),
+        content: Text(
+          own
+              ? 'Es un punto que añadiste tú. Se borra con su contenido y '
+                    'no se puede recuperar.'
+              : 'Es un punto propio de esta pantalla. Deja de mostrarse y de '
+                    'salir en el PDF, pero su contenido se conserva: puedes '
+                    'volver a añadirlo desde «Añadir punto».',
         ),
         actions: [
           TextButton(
@@ -231,130 +173,77 @@ class _BibleSectionFieldsEditorState
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Restaurar'),
+            child: Text(own ? 'Borrar punto' : 'Quitar'),
           ),
         ],
       ),
     );
-    if (confirm != true) return;
-
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: context.palette.surfaceElevated,
-      builder: (ctx) {
-        final palette = context.palette;
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Text(
-                  'Densidad visual (opcional)',
-                  style: AppTypography.titleMedium(palette),
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.movie_filter_outlined),
-                title: const Text('Cinematic'),
-                subtitle: const Text('Layout Stitch completo'),
-                onTap: () => Navigator.pop(ctx, 'cinematic'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.settings_outlined),
-                title: const Text('Technical'),
-                subtitle: const Text('Layout Stitch completo'),
-                onTap: () => Navigator.pop(ctx, 'technical'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.crop_square_outlined),
-                title: const Text('Minimalist'),
-                subtitle: const Text('Layout Stitch completo'),
-                onTap: () => Navigator.pop(ctx, 'minimalist'),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
-    );
-    if (picked == null) return;
-    setState(() {
-      _fields = BibleSectionFieldsConfig.packForStyle(
-        picked,
-        sectionLabel: widget.definition.label,
-        sectionId: widget.definition.id,
-      );
-    });
-    if (widget.embedded) unawaited(_saveEmbedded());
-  }
-
-  void _removeField(int index) {
+    if (confirmed != true || !mounted) return;
     setState(() => _fields.removeAt(index));
-    if (widget.embedded) unawaited(_saveEmbedded());
+    await _save(dropValueKeys: own ? {field.key} : const {});
   }
 
-  IconData _iconForType(BibleSectionFieldType type) => switch (type) {
-    BibleSectionFieldType.text => Icons.notes_outlined,
-    BibleSectionFieldType.narrative => Icons.auto_stories_outlined,
-    BibleSectionFieldType.references => Icons.collections_outlined,
-    BibleSectionFieldType.image => Icons.image_outlined,
-    BibleSectionFieldType.blocks => Icons.view_agenda_outlined,
-    BibleSectionFieldType.list => Icons.format_list_bulleted,
-    BibleSectionFieldType.specs => Icons.tune,
-    BibleSectionFieldType.palette => Icons.palette_outlined,
-    BibleSectionFieldType.gallery => Icons.photo_library_outlined,
-    BibleSectionFieldType.referenceDeck => Icons.collections_outlined,
-  };
-
-  Widget _contentFamilyChip(
-    AppPalette palette,
-    BibleWidgetContentFamily family,
-  ) {
-    final isCinematic = family == BibleWidgetContentFamily.cinematic;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: isCinematic
-            ? palette.accent.withValues(alpha: 0.12)
-            : palette.surfaceOverlay.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isCinematic
-              ? palette.accent.withValues(alpha: 0.35)
-              : palette.border,
+  Future<void> _reset() async {
+    final next = BibleSectionFieldsConfig.resetKeepingUserPoints(
+      _sectionId,
+      _fields,
+    );
+    final present = _fields.map((f) => f.key).toSet();
+    final returning = [
+      for (final field in next)
+        if (!present.contains(field.key)) field.label,
+    ];
+    final own = _fields.where(_isUserPoint).length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restablecer pantalla'),
+        content: Text(
+          [
+            'Los puntos de la pantalla vuelven a su orden y nombre originales.',
+            if (returning.isNotEmpty)
+              'Vuelven a mostrarse: ${returning.join(', ')}.',
+            if (own > 0)
+              own == 1
+                  ? 'El punto que añadiste se conserva, al final.'
+                  : 'Los $own puntos que añadiste se conservan, al final.',
+            'No se borra ningún contenido.',
+          ].join('\n\n'),
         ),
-      ),
-      child: Text(
-        family.label,
-        style: AppTypography.mono(palette).copyWith(
-          fontSize: 9,
-          letterSpacing: 0.4,
-          color: isCinematic ? palette.accent : palette.textSecondary,
-        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Restablecer'),
+          ),
+        ],
       ),
     );
+    if (confirmed != true || !mounted) return;
+    setState(() => _fields = next);
+    await _save();
   }
 
-  String _fieldSubtitle(
-    BibleSectionField field,
-    bool hasRenderer,
-    AppPalette palette,
-  ) {
-    final module = BibleStitchModuleRegistry.module(
-      widget.definition.id,
-      field.key,
-    );
-    final kindLabel = module?.catalogKind.label ??
-        BibleSubsectionKindCatalog.fromFieldType(field.type).label;
-    final typeLabel = BibleSectionFieldsConfig.labelForType(field.type);
-  final rendererNote = hasRenderer
-        ? typeLabel
-        : '$typeLabel · sin renderer Stitch';
-    if (widget.definition.id == BibleSectionId.lighting && module != null) {
-      return '$kindLabel · $rendererNote';
+  /// Qué es el punto, para el subtítulo de su fila.
+  String _kindLabel(BibleSectionField field) {
+    if (!_isUserPoint(field)) return 'Punto de la pantalla';
+    return BibleWidgetCatalog.forType(field.type)?.label ??
+        BibleSectionFieldsConfig.labelForType(field.type);
+  }
+
+  IconData _icon(BibleSectionField field) {
+    if (_isUserPoint(field)) {
+      final entry = BibleWidgetCatalog.forType(field.type);
+      if (entry != null) return entry.icon;
     }
-    return rendererNote;
+    return BibleStitchModuleRegistry.module(
+          _sectionId,
+          field.key,
+        )?.catalogKind.icon ??
+        Icons.article_outlined;
   }
 
   @override
@@ -364,141 +253,95 @@ class _BibleSectionFieldsEditorState
     return Material(
       color: palette.surfaceElevated,
       child: Padding(
-      padding: EdgeInsets.all(widget.embedded ? AppSpacing.md : AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (!widget.embedded) ...[
+        padding: EdgeInsets.all(
+          widget.embedded ? AppSpacing.md : AppSpacing.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!widget.embedded) ...[
+              Text(
+                'Puntos · ${widget.definition.label}',
+                style: AppTypography.titleMedium(palette),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
             Text(
-              'Sub-apartados · ${widget.definition.label}',
-              style: AppTypography.titleMedium(palette),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Añade campos de texto, imágenes o referencias moodboard en cualquier '
-              'orden. Por ejemplo, convierte «Referencias cinematográficas» en '
-              'imágenes.',
+              'Arrastra para ordenar. El orden es el de la pantalla y el del '
+              'PDF.',
               style: AppTypography.caption(palette),
             ),
-            const SizedBox(height: AppSpacing.md),
-          ],
-          Expanded(
-            child: ReorderableListView.builder(
-              itemCount: _fields.length,
-              onReorderItem: (oldIndex, newIndex) {
-                setState(() {
-                  if (newIndex > oldIndex) newIndex--;
-                  final item = _fields.removeAt(oldIndex);
-                  _fields.insert(newIndex, item);
-                });
-                if (widget.embedded) unawaited(_saveEmbedded());
-              },
-              itemBuilder: (context, index) {
-                final field = _fields[index];
-                final module = BibleStitchModuleRegistry.module(
-                  widget.definition.id,
-                  field.key,
-                );
-                final registryLabel = module?.label;
-                // Un punto propio se pinta con la vista genérica de su tipo.
-                final hasRenderer = BibleStitchModuleRegistry.hasRenderer(
-                      widget.definition.id,
-                      field.key,
-                    ) ||
-                    (module == null &&
-                        field.type != BibleSectionFieldType.blocks);
-                final showFamilyChip =
-                    widget.definition.id == BibleSectionId.lighting &&
-                        module != null;
-                return Material(
-                  key: ValueKey(field.key),
-                  color: palette.surfaceElevated,
-                  child: ListTile(
-                  leading: Icon(
-                    module?.catalogKind.icon ?? _iconForType(field.type),
-                  ),
-                  title: Text(registryLabel ?? field.label),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (showFamilyChip) ...[
-                        const SizedBox(height: 4),
-                        _contentFamilyChip(palette, module!.contentFamily),
-                        const SizedBox(height: 4),
-                      ],
-                      Text(
-                        _fieldSubtitle(field, hasRenderer, palette),
-                        style: AppTypography.caption(palette).copyWith(
-                          color: hasRenderer ? null : palette.warning,
-                        ),
+            const SizedBox(height: AppSpacing.sm),
+            Expanded(
+              child: ReorderableListView.builder(
+                itemCount: _fields.length,
+                onReorderItem: (oldIndex, newIndex) {
+                  setState(() {
+                    if (newIndex > oldIndex) newIndex--;
+                    final item = _fields.removeAt(oldIndex);
+                    _fields.insert(newIndex, item);
+                  });
+                  _save();
+                },
+                itemBuilder: (context, index) {
+                  final field = _fields[index];
+                  return Material(
+                    key: ValueKey(field.key),
+                    color: palette.surfaceElevated,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(_icon(field), size: 20),
+                      title: Text(field.label),
+                      subtitle: Text(
+                        _kindLabel(field),
+                        style: AppTypography.caption(palette),
                       ),
-                    ],
-                  ),
-                  trailing: SizedBox(
-                    width: 144,
-                    child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.category_outlined, size: 18),
-                        tooltip: 'Cambiar tipo',
-                        onPressed: () => _changeType(index),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            tooltip: 'Renombrar',
+                            onPressed: () => _rename(index),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            tooltip: 'Quitar',
+                            onPressed: () => _remove(index),
+                          ),
+                          // Deja sitio al asa de arrastre de la lista.
+                          const SizedBox(width: 28),
+                        ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        tooltip: 'Renombrar',
-                        onPressed: () => _renameField(index),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.delete_outline,
-                          size: 18,
-                          color: palette.error,
-                        ),
-                        tooltip: 'Eliminar',
-                        onPressed: () => _removeField(index),
-                      ),
-                    ],
-                  ),
-                  ),
-                ),
-                );
-              },
-            ),
-          ),
-          OutlinedButton.icon(
-            onPressed: _applyStylePack,
-            icon: const Icon(Icons.auto_awesome_outlined),
-            label: const Text('Restaurar módulos Stitch'),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          OutlinedButton.icon(
-            onPressed: _addRegistryModule,
-            icon: const Icon(Icons.view_module_outlined),
-            label: const Text('Añadir módulo Stitch'),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          OutlinedButton.icon(
-            onPressed: _addField,
-            icon: const Icon(Icons.add),
-            label: const Text('Añadir punto propio'),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          if (widget.embedded)
-            Text(
-              'Los cambios se aplican al instante en la pantalla.',
-              style: AppTypography.caption(palette).copyWith(
-                color: palette.textTertiary,
+                    ),
+                  );
+                },
               ),
-            )
-          else
-            FilledButton(
-              onPressed: _save,
-              child: const Text('Guardar sub-apartados'),
             ),
-        ],
+            const SizedBox(height: AppSpacing.sm),
+            FilledButton.icon(
+              onPressed: _add,
+              icon: const Icon(Icons.add),
+              label: const Text('Añadir punto'),
+            ),
+            if (_hasFactoryPoints) ...[
+              const SizedBox(height: AppSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: _reset,
+                icon: const Icon(Icons.restart_alt),
+                label: const Text('Restablecer pantalla'),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Los cambios se guardan al instante.',
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: palette.textTertiary),
+            ),
+          ],
+        ),
       ),
-    ),
     );
   }
 }
