@@ -261,11 +261,7 @@ class _StructureTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          child: BibleStructureEditor(
-            bibleId: bibleId,
-            projectId: projectId,
-            compact: true,
-          ),
+          child: BibleStructureEditor(bibleId: bibleId),
         ),
         Padding(
           padding: const EdgeInsets.all(AppSpacing.md),

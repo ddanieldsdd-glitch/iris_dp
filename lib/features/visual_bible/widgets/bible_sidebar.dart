@@ -126,7 +126,7 @@ class BibleSidebar extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
                       child: Tooltip(
-                        message: 'Estructura y plantillas',
+                        message: 'Configuración de la biblia',
                         child: Icon(
                           Icons.account_tree_outlined,
                           size: 16,

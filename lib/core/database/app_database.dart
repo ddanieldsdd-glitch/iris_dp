@@ -2788,18 +2788,15 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _markBibleStructureInitialized(int bibleId) =>
       initializeEmptyBible(bibleId);
 
-  /// Aplica una plantilla de estructura de biblia (grupos + secciones).
+  /// Aplica una plantilla de estructura sin perder contenido: lo escrito en
+  /// las pantallas que coinciden se conserva, y las que la plantilla no tiene
+  /// quedan ocultas.
   Future<void> applyBibleLayoutTemplate(
     int bibleId,
     BibleLayoutTemplatePayload layout,
   ) async {
     await transaction(() async {
-      await (delete(
-        bibleSectionDefinitions,
-      )..where((d) => d.bibleId.equals(bibleId))).go();
-      await (delete(
-        bibleSectionGroups,
-      )..where((g) => g.bibleId.equals(bibleId))).go();
+      final previous = await _takeBibleSections(bibleId);
 
       for (final group in layout.groups) {
         await into(bibleSectionGroups).insert(
@@ -2825,26 +2822,96 @@ class AppDatabase extends _$AppDatabase {
             isBuiltIn: Value(section.isBuiltIn),
             isHidden: Value(section.isHidden),
             template: Value(section.template),
-            contentJson: Value(section.contentJson),
+            contentJson: Value(
+              BibleSectionFieldsConfig.applyStructure(
+                sectionId: section.id,
+                templateJson: section.contentJson,
+                currentJson: previous[section.id]?.contentJson,
+              ),
+            ),
           ),
         );
       }
+      await _keepLeftoverBibleSections(bibleId, previous);
       await _markBibleStructureInitialized(bibleId);
     });
   }
 
-  /// Restaura la estructura built-in de la biblia (plantilla IRIS base).
+  /// Restaura la estructura built-in de la biblia (plantilla IRIS base) sin
+  /// perder contenido: lo escrito se conserva y las pantallas personalizadas
+  /// quedan ocultas.
   Future<void> resetBibleSectionLayoutToBuiltin(int bibleId) async {
-    await transaction(() async {
-      await (delete(
-        bibleSectionDefinitions,
-      )..where((d) => d.bibleId.equals(bibleId))).go();
-      await (delete(
-        bibleSectionGroups,
-      )..where((g) => g.bibleId.equals(bibleId))).go();
-    });
+    final previous = await transaction(() => _takeBibleSections(bibleId));
     await _seedBibleSectionLayout(bibleId);
+    await transaction(() async {
+      final seeded = await (select(
+        bibleSectionDefinitions,
+      )..where((d) => d.bibleId.equals(bibleId))).get();
+      for (final def in seeded) {
+        final before = previous[def.id];
+        if (before?.contentJson == null) continue;
+        await upsertBibleSectionDefinition(
+          def.copyWith(
+            contentJson: Value(
+              BibleSectionFieldsConfig.applyStructure(
+                sectionId: def.id,
+                templateJson: def.contentJson,
+                currentJson: before!.contentJson,
+              ),
+            ),
+          ),
+        );
+      }
+      await _keepLeftoverBibleSections(bibleId, previous);
+    });
     await _markBibleStructureInitialized(bibleId);
+  }
+
+  /// Vacía la estructura de la biblia y devuelve las pantallas que había.
+  Future<Map<String, BibleSectionDefinition>> _takeBibleSections(
+    int bibleId,
+  ) async {
+    final previous = await (select(
+      bibleSectionDefinitions,
+    )..where((d) => d.bibleId.equals(bibleId))).get();
+    await (delete(
+      bibleSectionDefinitions,
+    )..where((d) => d.bibleId.equals(bibleId))).go();
+    await (delete(
+      bibleSectionGroups,
+    )..where((g) => g.bibleId.equals(bibleId))).go();
+    return {for (final def in previous) def.id: def};
+  }
+
+  /// Las pantallas de [previous] que ya no están vuelven ocultas, al final
+  /// de su grupo (o del último, si su grupo ha desaparecido).
+  Future<void> _keepLeftoverBibleSections(
+    int bibleId,
+    Map<String, BibleSectionDefinition> previous,
+  ) async {
+    final groups =
+        await (select(bibleSectionGroups)
+              ..where((g) => g.bibleId.equals(bibleId))
+              ..orderBy([(g) => OrderingTerm.asc(g.sortOrder)]))
+            .get();
+    if (groups.isEmpty) return;
+    final groupIds = {for (final g in groups) g.id};
+    final present =
+        (await (select(
+              bibleSectionDefinitions,
+            )..where((d) => d.bibleId.equals(bibleId))).get())
+            .map((d) => d.id)
+            .toSet();
+    for (final def in previous.values) {
+      if (present.contains(def.id)) continue;
+      await into(bibleSectionDefinitions).insert(
+        def.copyWith(
+          groupId: groupIds.contains(def.groupId) ? def.groupId : groups.last.id,
+          isHidden: true,
+          sortOrder: def.sortOrder + 1000,
+        ),
+      );
+    }
   }
 
   Future<void> setBibleSectionHidden({

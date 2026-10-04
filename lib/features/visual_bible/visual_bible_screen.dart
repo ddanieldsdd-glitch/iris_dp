@@ -174,14 +174,6 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
     });
   }
 
-  void _onStructureReset() {
-    if (!mounted) return;
-    setState(() {
-      _needsOnboarding = true;
-      _data?.structureInitialized = false;
-    });
-  }
-
   Future<void> _reloadBible() async {
     final result = await ref
         .read(visualBibleRepositoryProvider)
@@ -703,7 +695,6 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
       BibleSectionId.settings => BibleSettingsSection(
         bibleId: bibleId,
         projectId: widget.projectId,
-        onStructureReset: _onStructureReset,
       ),
       _ => const SizedBox.shrink(),
     };
@@ -763,7 +754,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
           isCustom
               ? '¿Eliminar «${def.label}» de forma permanente?'
               : '¿Ocultar «${def.label}» de esta biblia?\n'
-                    'Podrás volver a mostrarla desde Personalizar Biblia.',
+                    'Podrás volver a mostrarla desde la configuración de la biblia.',
         ),
         actions: [
           TextButton(

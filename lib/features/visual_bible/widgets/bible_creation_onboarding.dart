@@ -84,7 +84,7 @@ class BibleCreationOnboarding extends StatelessWidget {
                           icon: Icons.add_box_outlined,
                           title: 'Desde cero',
                           description:
-                              'Crea cada pantalla y bloque manualmente.',
+                              'Crea cada pantalla y sus puntos a mano.',
                           actionLabel: 'Crear vacía',
                           onPressed: onStartFromScratch,
                         ),
