@@ -5,6 +5,7 @@ import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/utils/project_color_scheme.dart';
 import 'camera_plan_element_model.dart';
+import 'camera_plan_painter.dart';
 import 'camera_plan_grouping.dart';
 import 'floor_plan_json.dart';
 
@@ -111,6 +112,21 @@ class PlanProjectData {
         ? 'Plano ${shot.number}'
         : 'Esc $number · Plano ${shot.number}';
   }
+
+  // ── Zonas de los sets ─────────────────────────────────────────────────────
+
+  Rect? zoneOf(LocationBasePlan? set) => SetZone.decode(set?.sitePlacementJson);
+
+  /// Zonas marcadas sobre el plano maestro de una localización.
+  List<PlanZone> zonesOfSite(int siteId) => [
+    for (final set in setsOfSite(siteId))
+      if (zoneOf(set) case final rect?)
+        PlanZone(
+          rect: rect,
+          color: colors.setColor(set),
+          label: set.locationName,
+        ),
+  ];
 
   // ── Capas, para miniaturas ────────────────────────────────────────────────
 

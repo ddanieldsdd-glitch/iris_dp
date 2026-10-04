@@ -18,11 +18,33 @@ class _CanvasColors {
   static const accent = Color(0xFF007AFF);
 }
 
+/// Zona de un set sobre el plano maestro de la localización.
+class PlanZone {
+  final Rect rect;
+  final Color color;
+  final String label;
+
+  /// La del set que se está viendo.
+  final bool active;
+
+  const PlanZone({
+    required this.rect,
+    required this.color,
+    required this.label,
+    this.active = false,
+  });
+}
+
 class CameraPlanPainter extends CustomPainter {
   final List<PlanElement> elements;
 
-  /// Capas heredadas: se ven atenuadas y no se editan.
+  /// Capas de fondo: se ven atenuadas.
   final List<PlanElement> inheritedElements;
+  final double inheritedOpacity;
+  final bool showGrid;
+
+  /// Zonas de los sets sobre el plano maestro.
+  final List<PlanZone> zones;
   final PlanElement? selectedElement;
   final int? selectedPathIndex;
   final double scale;
@@ -36,6 +58,9 @@ class CameraPlanPainter extends CustomPainter {
     required this.elements,
     required this.palette,
     this.inheritedElements = const [],
+    this.inheritedOpacity = 0.55,
+    this.showGrid = true,
+    this.zones = const [],
     this.selectedElement,
     this.selectedPathIndex,
     this.scale = 1.0,
@@ -54,12 +79,16 @@ class CameraPlanPainter extends CustomPainter {
     canvas.scale(scale);
 
     _drawBackgroundImage(canvas);
-    _drawGrid(canvas, size);
+    if (showGrid) _drawGrid(canvas, size);
+    for (final zone in zones) {
+      _drawZone(canvas, zone);
+    }
 
     if (inheritedElements.isNotEmpty) {
       canvas.saveLayer(
         null,
-        Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.55),
+        Paint()
+          ..color = const Color(0xFFFFFFFF).withValues(alpha: inheritedOpacity),
       );
       for (final el in inheritedElements) {
         _drawElement(canvas, el);
@@ -106,19 +135,48 @@ class CameraPlanPainter extends CustomPainter {
     );
   }
 
+  /// Rejilla que cubre siempre la parte visible, se desplace lo que se
+  /// desplace el lienzo.
   void _drawGrid(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = _CanvasColors.grid
-      ..strokeWidth = 0.5;
+      ..strokeWidth = 0.5 / scale;
     const step = 40.0;
-    final adjustedSize = Size(size.width / scale, size.height / scale);
+    final left = -offset.dx / scale;
+    final top = -offset.dy / scale;
+    final right = left + size.width / scale;
+    final bottom = top + size.height / scale;
 
-    for (double x = 0; x < adjustedSize.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, adjustedSize.height), paint);
+    for (var x = (left / step).floor() * step; x <= right; x += step) {
+      canvas.drawLine(Offset(x, top), Offset(x, bottom), paint);
     }
-    for (double y = 0; y < adjustedSize.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(adjustedSize.width, y), paint);
+    for (var y = (top / step).floor() * step; y <= bottom; y += step) {
+      canvas.drawLine(Offset(left, y), Offset(right, y), paint);
     }
+  }
+
+  void _drawZone(Canvas canvas, PlanZone zone) {
+    final fill = Paint()
+      ..color = zone.color.withValues(alpha: zone.active ? 0.10 : 0.05);
+    canvas.drawRect(zone.rect, fill);
+    final stroke = Paint()
+      ..color = zone.color.withValues(alpha: zone.active ? 1 : 0.7)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = (zone.active ? 2.5 : 1.5) / scale;
+    _drawDashedPath(canvas, Path()..addRect(zone.rect), stroke);
+
+    final tp = TextPainter(
+      text: TextSpan(
+        text: zone.label,
+        style: TextStyle(
+          color: zone.color,
+          fontSize: 13 / scale,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, zone.rect.topLeft + Offset(6 / scale, 4 / scale));
   }
 
   void _drawDashedPath(Canvas canvas, Path path, Paint paint) {
@@ -636,6 +694,9 @@ class CameraPlanPainter extends CustomPainter {
   bool shouldRepaint(CameraPlanPainter old) =>
       old.elements != elements ||
       old.inheritedElements != inheritedElements ||
+      old.inheritedOpacity != inheritedOpacity ||
+      old.showGrid != showGrid ||
+      old.zones != zones ||
       old.selectedElement?.id != selectedElement?.id ||
       old.selectedPathIndex != selectedPathIndex ||
       old.scale != scale ||

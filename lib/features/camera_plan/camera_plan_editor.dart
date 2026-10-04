@@ -22,6 +22,7 @@ import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
 import 'camera_plan_scene_badge.dart';
 import 'floor_plan_repository.dart';
+import 'floor_plan_json.dart';
 import 'floor_plan_scope.dart';
 import 'plan_target.dart';
 import '../locations/location_scan_service.dart';
@@ -116,8 +117,25 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   static const _annotationDocumentSize = Size(1600, 1200);
 
   final List<PlanElement> _elements = [];
-  List<PlanElement> _inherited = const [];
   LightSetup? _lightSetup;
+
+  /// Esquema que se enseña cuando no lo decide un plano.
+  int? _pickedSetupId;
+  bool _setupPicked = false;
+
+  /// Ids temporales de los elementos de las capas guardadas como JSON.
+  int _tempId = 0;
+  final Set<PlanLayer> _hiddenLayers = {};
+  bool _wallsToEnvironment = false;
+  List<PlanZone> _zones = const [];
+  Rect? _setZone;
+  bool _zoneMode = false;
+  Offset? _zoneStart;
+  Rect? _zoneDraft;
+  Rect? _pendingFit;
+  Size _canvasSize = Size.zero;
+  int _setupShotCount = 0;
+  int _setShotCount = 0;
   final AnnotationCanvasController _annotationController =
       AnnotationCanvasController();
   PlanElement? _selected;
@@ -170,20 +188,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   Future<void> _load() async {
     final db = ref.read(databaseProvider);
-    final elements = await _repo.loadElements(
-      scope: widget.scope,
-      siteId: widget.siteId,
-      setId: widget.setId,
-      lightSetupId: widget.lightSetupId,
-      shotId: widget.shotId,
-    );
-    final inherited = await _repo.inheritedLayers(
-      scope: widget.scope,
-      setId: widget.setId,
-      lightSetupId: widget.lightSetupId,
-      shotId: widget.shotId,
-    );
-    var lightSetup = inherited.lightSetup;
+    LightSetup? lightSetup;
     final annotationRow = await db.getProjectAnnotationDocument(
       projectId: widget.projectId,
       targetType: _annotationTargetType,
@@ -256,9 +261,91 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       sceneColor = colors.siteColor(widget.siteId);
     }
 
-    final navTargets = _isShotMode
-        ? await _loadNavTargets(db)
-        : <CameraPlanNavTarget>[];
+    final navTargets = await _loadNavTargets(db);
+
+    // Esquema de luz que se enseña: el del plano, el elegido a mano o, si
+    // no, el primero del set o de la localización.
+    final projectSetups = await db.getLightSetupsForProject(widget.projectId);
+    LightSetup? setupById(int? id) {
+      for (final s in projectSetups) {
+        if (s.id == id) return s;
+      }
+      return null;
+    }
+
+    if (shot != null) {
+      lightSetup = setupById(shot.lightSetupId);
+    } else if (_setupPicked) {
+      lightSetup = setupById(_pickedSetupId);
+    } else if (lightSetup == null) {
+      for (final s in projectSetups) {
+        final matches = linkedSet != null
+            ? s.locationBasePlanId == linkedSet.id
+            : linkedSite != null &&
+                  s.locationBasePlanId == null &&
+                  s.locationSiteId == linkedSite.id;
+        if (matches) {
+          lightSetup = s;
+          break;
+        }
+      }
+    }
+
+    // Un solo lienzo: las cuatro capas, todas editables.
+    final elements = <PlanElement>[];
+    void addLayer(PlanLayer layer, List<PlanElement> list) {
+      for (final el in list) {
+        el.layer = layer;
+        if (layer != PlanLayer.shot) el.id = --_tempId;
+        elements.add(el);
+      }
+    }
+
+    addLayer(
+      PlanLayer.environment,
+      FloorPlanJson.decode(linkedSite?.floorPlanJson),
+    );
+    addLayer(PlanLayer.set, FloorPlanJson.decode(linkedSet?.floorPlanJson));
+    addLayer(PlanLayer.light, FloorPlanJson.decode(lightSetup?.planJson));
+    if (shot != null) {
+      addLayer(
+        PlanLayer.shot,
+        await _repo.loadElements(scope: FloorPlanScope.shot, shotId: shot.id),
+      );
+    }
+
+    // Zonas de los sets sobre el plano maestro.
+    final zones = <PlanZone>[];
+    Rect? setZone;
+    for (final set in allSets) {
+      if (linkedSite == null || set.siteId != linkedSite.id) continue;
+      final rect = SetZone.decode(set.sitePlacementJson);
+      if (rect == null) continue;
+      final active = set.id == linkedSet?.id;
+      if (active) setZone = rect;
+      zones.add(
+        PlanZone(
+          rect: rect,
+          color: colors.setColor(set),
+          label: set.locationName,
+          active: active,
+        ),
+      );
+    }
+
+    final allShots = await (db.select(
+      db.shots,
+    )..where((s) => s.projectId.equals(widget.projectId))).get();
+    final setSceneIds = {
+      for (final s in allScenes)
+        if (linkedSet != null && s.locationId == linkedSet.id) s.id,
+    };
+    final setShotCount = allShots
+        .where((s) => setSceneIds.contains(s.sceneId))
+        .length;
+    final setupShotCount = allShots
+        .where((s) => lightSetup != null && s.lightSetupId == lightSetup.id)
+        .length;
 
     ui.Image? bgImage;
     Rect? bgRect;
@@ -300,12 +387,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _elements
         ..clear()
         ..addAll(elements);
-      _inherited = [
-        ...inherited.environment,
-        ...inherited.set,
-        ...inherited.light,
-      ];
+      _selected = null;
+      _selectedPathIndex = null;
       _lightSetup = lightSetup;
+      _zones = zones;
+      if (_setZone == null && setZone != null) _pendingFit = setZone;
+      _setZone = setZone;
+      _setShotCount = setShotCount;
+      _setupShotCount = setupShotCount;
       _shot = shot;
       _scene = scene;
       _linkedSet = linkedSet;
@@ -394,14 +483,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   Future<void> _saveCurrentPlan() async {
-    await _repo.saveElements(
-      scope: widget.scope,
-      elements: _elements,
-      siteId: widget.siteId,
-      setId: widget.setId,
-      lightSetupId: widget.lightSetupId,
-      shotId: widget.shotId,
-    );
+    await _persistAllElements();
     if (!mounted) return;
     _showSnack('Planta guardada.');
   }
@@ -410,10 +492,29 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Future<void> _chooseLightSetup() async {
     final scene = _scene;
     final shot = _shot;
-    if (scene == null || shot == null) return;
     final palette = context.palette;
-    final setups = await _repo.lightSetupsForScene(scene);
+    final db0 = ref.read(databaseProvider);
+    final List<LightSetup> setups;
+    if (scene != null) {
+      setups = await _repo.lightSetupsForScene(scene);
+    } else {
+      final all = await db0.getLightSetupsForProject(widget.projectId);
+      setups = all.where((s) {
+        if (_linkedSet != null) {
+          return s.locationBasePlanId == _linkedSet!.id ||
+              (s.locationBasePlanId == null &&
+                  s.locationSiteId != null &&
+                  s.locationSiteId == _linkedSite?.id);
+        }
+        if (_linkedSite != null) {
+          return s.locationBasePlanId == null &&
+              s.locationSiteId == _linkedSite!.id;
+        }
+        return s.locationBasePlanId == null && s.locationSiteId == null;
+      }).toList();
+    }
     if (!mounted) return;
+    final currentId = _lightSetup?.id;
 
     const none = -1;
     const create = -2;
@@ -432,14 +533,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
-                  'Esquema de luz del plano',
+                  shot != null ? 'Esquema de luz del plano' : 'Esquema de luz',
                   style: AppTypography.titleMedium(palette),
                 ),
               ),
               for (final setup in setups)
                 ListTile(
                   leading: Icon(
-                    setup.id == shot.lightSetupId
+                    setup.id == currentId
                         ? Icons.radio_button_checked
                         : Icons.radio_button_unchecked,
                     color: palette.accent,
@@ -462,7 +563,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 ),
                 onTap: () => Navigator.pop(ctx, create),
               ),
-              if (shot.lightSetupId != null)
+              if (currentId != null)
                 ListTile(
                   leading: Icon(Icons.link_off, color: palette.textSecondary),
                   title: Text(
@@ -479,39 +580,223 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (choice == null || !mounted) return;
 
     final db = ref.read(databaseProvider);
-    int? setupId;
+    LightSetup? chosen;
     if (choice == create) {
-      final created = await _repo.createLightSetup(
+      chosen = await _repo.createLightSetup(
         projectId: widget.projectId,
-        setId: scene.locationId,
-        siteId: scene.locationId == null ? scene.locationSiteId : null,
+        setId: _linkedSet?.id,
+        siteId: _linkedSet == null ? _linkedSite?.id : null,
       );
-      setupId = created.id;
     } else if (choice != none) {
-      setupId = choice;
+      chosen = setups.firstWhere((s) => s.id == choice);
     }
-    await db.assignLightSetupToShot(shot.id, setupId);
+    if (shot != null) {
+      await db.assignLightSetupToShot(shot.id, chosen?.id);
+    } else if (chosen != null &&
+        widget.scope == FloorPlanScope.lightSetup &&
+        widget.onNavigate != null) {
+      widget.onNavigate!(PlanTarget.lightSetup(chosen.id, chosen.name));
+      return;
+    } else {
+      _pickedSetupId = chosen?.id;
+      _setupPicked = true;
+    }
     await _load();
   }
 
-  Future<void> _openLightSetup() async {
-    final setup = _lightSetup;
-    if (setup == null) return;
-    if (widget.onNavigate != null) {
-      widget.onNavigate!(PlanTarget.lightSetup(setup.id, setup.name));
-      return;
-    }
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => CameraPlanEditor.lightSetup(
-          projectId: widget.projectId,
-          lightSetupId: setup.id,
-          setupName: setup.name,
-        ),
-      ),
+  /// El esquema de luz activo; lo crea si aún no hay ninguno.
+  Future<LightSetup> _ensureLightSetup() async {
+    final existing = _lightSetup;
+    if (existing != null) return existing;
+    final created = await _repo.createLightSetup(
+      projectId: widget.projectId,
+      setId: _linkedSet?.id,
+      siteId: _linkedSet == null ? _linkedSite?.id : null,
     );
-    if (mounted) await _load();
+    final shot = _shot;
+    if (shot != null) {
+      final db = ref.read(databaseProvider);
+      await db.assignLightSetupToShot(shot.id, created.id);
+      _shot = await (db.select(
+        db.shots,
+      )..where((s) => s.id.equals(shot.id))).getSingleOrNull();
+    } else {
+      _pickedSetupId = created.id;
+      _setupPicked = true;
+    }
+    if (mounted) {
+      setState(() => _lightSetup = created);
+      _showSnack('Se ha creado «${created.name}» para la luz.');
+    }
+    return created;
   }
+
+  /// Capa en la que se guarda un elemento nuevo, según su tipo.
+  Future<PlanLayer> _layerForNew(ElementType type) async {
+    switch (type) {
+      case ElementType.light:
+        await _ensureLightSetup();
+        return PlanLayer.light;
+      case ElementType.camera || ElementType.actor:
+        if (_shot != null) return PlanLayer.shot;
+        await _ensureLightSetup();
+        return PlanLayer.light;
+      case ElementType.wall || ElementType.prop:
+        if (_linkedSet != null && !_wallsToEnvironment) return PlanLayer.set;
+        if (_linkedSite != null) return PlanLayer.environment;
+        if (_linkedSet != null) return PlanLayer.set;
+        if (_shot != null) return PlanLayer.shot;
+        await _ensureLightSetup();
+        return PlanLayer.light;
+    }
+  }
+
+  bool _hasLayer(PlanLayer layer) => switch (layer) {
+    PlanLayer.environment => _linkedSite != null,
+    PlanLayer.set => _linkedSet != null,
+    PlanLayer.light => _lightSetup != null,
+    PlanLayer.shot => _shot != null,
+  };
+
+  List<PlanElement> _layerElements(PlanLayer layer) =>
+      _elements.where((e) => e.layer == layer).toList();
+
+  List<PlanElement> get _visibleElements => _hiddenLayers.isEmpty
+      ? _elements
+      : _elements.where((e) => !_hiddenLayers.contains(e.layer)).toList();
+
+  /// Guarda una capa entera en su sitio.
+  Future<void> _saveLayer(PlanLayer layer) async {
+    if (!_hasLayer(layer)) return;
+    final list = _layerElements(layer);
+    switch (layer) {
+      case PlanLayer.environment:
+        await _repo.saveElements(
+          scope: FloorPlanScope.site,
+          elements: list,
+          siteId: _linkedSite!.id,
+        );
+      case PlanLayer.set:
+        await _repo.saveElements(
+          scope: FloorPlanScope.set,
+          elements: list,
+          setId: _linkedSet!.id,
+        );
+      case PlanLayer.light:
+        await _repo.saveElements(
+          scope: FloorPlanScope.lightSetup,
+          elements: list,
+          lightSetupId: _lightSetup!.id,
+        );
+      case PlanLayer.shot:
+        await _repo.saveElements(
+          scope: FloorPlanScope.shot,
+          elements: list,
+          shotId: _shot!.id,
+        );
+    }
+  }
+
+  /// A qué afecta cambiar un elemento de esta capa.
+  String _scopeNotice(PlanLayer layer) {
+    String shots(int n) => '$n plano${n == 1 ? '' : 's'}';
+    return switch (layer) {
+      PlanLayer.environment =>
+        'Entorno · cambia en toda la localización'
+            '${_linkedSite != null ? ' «${_linkedSite!.name}»' : ''}',
+      PlanLayer.set =>
+        'Set «${_linkedSet?.locationName ?? ''}» · '
+            'cambia en sus ${shots(_setShotCount)}',
+      PlanLayer.light =>
+        '${_lightSetup?.name ?? 'Luz'} · '
+            'lo usan ${shots(_setupShotCount)}',
+      PlanLayer.shot => 'Solo este plano',
+    };
+  }
+
+  /// Pasa un elemento a otra capa.
+  Future<void> _moveToLayer(PlanElement el, PlanLayer target) async {
+    final source = el.layer;
+    if (source == target || !_hasLayer(target)) return;
+    if (source == PlanLayer.shot && el.id > 0) {
+      await ref.read(databaseProvider).deleteCameraPlanElement(el.id);
+    }
+    setState(() {
+      el.layer = target;
+      el.id = target == PlanLayer.shot ? 0 : --_tempId;
+    });
+    if (source != PlanLayer.shot) await _saveLayer(source);
+    await _persistElement(el);
+    if (mounted) setState(() {});
+  }
+
+  /// Luces, cámaras y actores guardados en el entorno o en el set.
+  List<PlanElement> get _misplaced => _elements
+      .where(
+        (e) =>
+            (e.layer == PlanLayer.environment || e.layer == PlanLayer.set) &&
+            (e.type == ElementType.light ||
+                e.type == ElementType.camera ||
+                e.type == ElementType.actor),
+      )
+      .toList();
+
+  /// Pasa las luces a un esquema de luz y las cámaras y actores al plano.
+  Future<void> _tidyLayers() async {
+    final misplaced = _misplaced;
+    if (misplaced.isEmpty) return;
+    for (final el in misplaced) {
+      final target = await _layerForNew(el.type);
+      el.layer = target;
+      el.id = target == PlanLayer.shot ? 0 : --_tempId;
+    }
+    await _persistAllElements();
+    if (!mounted) return;
+    setState(() {});
+    _showSnack('Capas ordenadas.');
+  }
+
+  // ── Zona del set ──────────────────────────────────────────────────────────
+
+  Future<void> _saveZone(Rect rect) async {
+    final set = _linkedSet;
+    if (set == null) return;
+    final db = ref.read(databaseProvider);
+    await db.updateLocation(
+      set.copyWith(sitePlacementJson: Value(SetZone.encode(rect))),
+    );
+    await _load();
+  }
+
+  Future<void> _clearZone() async {
+    final set = _linkedSet;
+    if (set == null) return;
+    await ref
+        .read(databaseProvider)
+        .updateLocation(set.copyWith(sitePlacementJson: const Value(null)));
+    await _load();
+  }
+
+  /// Encuadra el lienzo en un rectángulo del plano.
+  void _fitTo(Rect rect) {
+    if (_canvasSize.isEmpty) return;
+    final target = rect.inflate(60);
+    final scale = math
+        .min(
+          _canvasSize.width / target.width,
+          _canvasSize.height / target.height,
+        )
+        .clamp(0.2, 2.5);
+    setState(() {
+      _scale = scale;
+      _canvasOffset = _canvasSize.center(Offset.zero) - target.center * scale;
+    });
+  }
+
+  /// Centro de lo que se ve, en coordenadas del plano.
+  Offset get _viewCenter => _canvasSize.isEmpty
+      ? const Offset(300, 250)
+      : _toCanvasCoords(_canvasSize.center(Offset.zero));
 
   void _showSnack(String message) {
     AppSnackBar.show(context, message);
@@ -642,24 +927,21 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   Future<void> _persistElement(PlanElement el, {int? sortOrder}) async {
-    if (!_isShotMode) {
-      await _repo.saveElements(
-        scope: widget.scope,
-        elements: _elements,
-        siteId: widget.siteId,
-        setId: widget.setId,
-        lightSetupId: widget.lightSetupId,
-      );
+    if (el.layer != PlanLayer.shot) {
+      await _saveLayer(el.layer);
       return;
     }
+    final shotId = _shot?.id;
+    if (shotId == null) return;
 
     final db = ref.read(databaseProvider);
-    final index = _elements.indexWhere((e) => e.id == el.id);
-    final order = sortOrder ?? (index >= 0 ? index : _elements.length);
+    final shotElements = _layerElements(PlanLayer.shot);
+    final index = shotElements.indexOf(el);
+    final order = sortOrder ?? (index >= 0 ? index : shotElements.length);
 
     if (el.id <= 0) {
       final newId = await db.insertCameraPlanElement(
-        el.toCompanion(widget.shotId!, sortOrder: order),
+        el.toCompanion(shotId, sortOrder: order),
       );
       el.id = newId;
       await db.replacePathPoints(
@@ -670,7 +952,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       await db.updateCameraPlanElement(
         CameraPlanElement(
           id: el.id,
-          shotId: widget.shotId!,
+          shotId: shotId,
           type: el.type.dbValue,
           x: el.position.dx,
           y: el.position.dy,
@@ -708,29 +990,25 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       );
       _shot = (await (db.select(
         db.shots,
-      )..where((s) => s.id.equals(widget.shotId!))).getSingleOrNull());
+      )..where((s) => s.id.equals(shotId))).getSingleOrNull());
     }
   }
 
   Future<void> _persistAllElements() async {
-    if (!_isShotMode) {
-      await _repo.saveElements(
-        scope: widget.scope,
-        elements: _elements,
-        siteId: widget.siteId,
-        setId: widget.setId,
-        lightSetupId: widget.lightSetupId,
-      );
-      return;
+    for (final layer in PlanLayer.values) {
+      await _saveLayer(layer);
     }
-    await _repo.saveElements(
-      scope: FloorPlanScope.shot,
-      elements: _elements,
-      shotId: widget.shotId,
-    );
   }
 
   Future<void> _addElement(PlanElement el) async {
+    final layer = await _layerForNew(el.type);
+    if (!mounted) return;
+    el.layer = layer;
+    if (layer != PlanLayer.shot) el.id = --_tempId;
+    // Lo nuevo aparece en lo que se está viendo.
+    final same = _elements.where((e) => e.type == el.type).length;
+    el.position = _viewCenter + Offset(same % 5 * 36.0, same % 5 * 24.0);
+    _hiddenLayers.remove(layer);
     setState(() => _elements.add(el));
     await _persistElement(el);
     setState(() => _selected = el);
@@ -813,20 +1091,17 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   Future<void> _deleteSelected() async {
-    if (_selected == null) return;
-    final id = _selected!.id;
-    if (_isShotMode) {
-      final db = ref.read(databaseProvider);
-      if (id > 0) await db.deleteCameraPlanElement(id);
+    final el = _selected;
+    if (el == null) return;
+    if (el.layer == PlanLayer.shot && el.id > 0) {
+      await ref.read(databaseProvider).deleteCameraPlanElement(el.id);
     }
     setState(() {
-      _elements.remove(_selected);
+      _elements.remove(el);
       _selected = null;
       _selectedPathIndex = null;
     });
-    if (!_isShotMode) {
-      await _persistAllElements();
-    }
+    if (el.layer != PlanLayer.shot) await _saveLayer(el.layer);
   }
 
   Offset _toCanvasCoords(Offset localPos) {
@@ -834,8 +1109,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   PlanElement? _elementAt(Offset canvasPos) {
-    for (final el in _elements.reversed) {
-      if ((el.position - canvasPos).distance < 28) return el;
+    for (final el in _visibleElements.reversed) {
+      if ((el.position - canvasPos).distance < 28 / math.min(1.0, _scale)) {
+        return el;
+      }
     }
     return null;
   }
@@ -906,6 +1183,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   void _onPanStart(DragStartDetails d) {
     final canvasPos = _toCanvasCoords(d.localPosition);
+    if (_zoneMode) {
+      setState(() {
+        _zoneStart = canvasPos;
+        _zoneDraft = Rect.fromPoints(canvasPos, canvasPos);
+      });
+      return;
+    }
     for (final el in _elements.reversed) {
       if (el.type != ElementType.camera) continue;
       final pathIdx = _pathPointIndexAt(el, canvasPos);
@@ -936,6 +1220,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   void _onPanUpdate(DragUpdateDetails d) {
+    if (_zoneMode) {
+      final start = _zoneStart;
+      if (start == null) return;
+      setState(() {
+        _zoneDraft = Rect.fromPoints(start, _toCanvasCoords(d.localPosition));
+      });
+      return;
+    }
     final delta = d.delta / _scale;
     if (_selected != null &&
         _isDraggingPathPoint &&
@@ -954,6 +1246,18 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   Future<void> _onPanEnd(DragEndDetails d) async {
+    if (_zoneMode) {
+      final draft = _zoneDraft;
+      setState(() {
+        _zoneMode = false;
+        _zoneStart = null;
+        _zoneDraft = null;
+      });
+      if (draft != null && draft.width > 40 && draft.height > 40) {
+        await _saveZone(draft);
+      }
+      return;
+    }
     if (_selected != null &&
         (_isRotating || _isDraggingPathPoint || d.primaryVelocity != null)) {
       await _persistElement(_selected!);
@@ -963,6 +1267,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   void _onTapCanvas(TapDownDetails d) {
+    if (_zoneMode) return;
     final canvasPos = _toCanvasCoords(d.localPosition);
     for (final el in _elements.reversed) {
       if (el.type != ElementType.camera) continue;
@@ -994,7 +1299,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   void _zoomBy(double delta) {
-    setState(() => _scale = (_scale + delta).clamp(0.4, 2.5));
+    setState(() => _scale = (_scale + delta).clamp(0.2, 2.5));
   }
 
   void _showAddMenu() {
@@ -1008,6 +1313,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       ),
       builder: (ctx) => _AddElementSheet(
         palette: palette,
+        wallsToEnvironment: _linkedSet != null && _linkedSite != null
+            ? _wallsToEnvironment
+            : null,
+        onWallsToEnvironment: (v) => _wallsToEnvironment = v,
         onAddCamera: () {
           Navigator.pop(ctx);
           _addCamera();
@@ -1028,6 +1337,93 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           Navigator.pop(ctx);
           _addArchitecture(type);
         },
+      ),
+    );
+  }
+
+  void _toggleLayer(PlanLayer layer) {
+    setState(() {
+      if (!_hiddenLayers.remove(layer)) _hiddenLayers.add(layer);
+      if (_selected != null && _hiddenLayers.contains(_selected!.layer)) {
+        _selected = null;
+        _selectedPathIndex = null;
+      }
+    });
+  }
+
+  /// Barra de capas: qué se ve, qué esquema de luz y qué plano.
+  Widget _buildLayerBar(AppPalette palette) {
+    Widget chip(
+      PlanLayer layer,
+      String label,
+      Color color, {
+      VoidCallback? onMenu,
+    }) => _LayerChip(
+      palette: palette,
+      label: label,
+      color: color,
+      visible: !_hiddenLayers.contains(layer),
+      onToggle: () => _toggleLayer(layer),
+      onMenu: onMenu,
+    );
+
+    return Material(
+      color: palette.surface,
+      child: SizedBox(
+        height: 44,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          children: [
+            if (_linkedSite != null)
+              chip(PlanLayer.environment, 'Entorno', palette.textSecondary),
+            if (_linkedSet != null) chip(PlanLayer.set, 'Set', _sceneColor),
+            chip(
+              PlanLayer.light,
+              'Luz: ${_lightSetup?.name ?? 'sin esquema'}',
+              const Color(0xFFFFB300),
+              onMenu: _chooseLightSetup,
+            ),
+            if (_navTargets.isNotEmpty)
+              chip(
+                PlanLayer.shot,
+                'Cámara: ${_shot != null ? widget.label : 'ningún plano'}',
+                palette.accent,
+                onMenu: _showSceneNavigator,
+              ),
+            if (_linkedSet != null && _linkedSite != null && _setZone != null)
+              PopupMenuButton<String>(
+                tooltip: 'Zona del set',
+                padding: EdgeInsets.zero,
+                icon: Icon(
+                  Icons.crop_free,
+                  size: 18,
+                  color: palette.textSecondary,
+                ),
+                onSelected: (action) {
+                  switch (action) {
+                    case 'fit':
+                      _fitTo(_setZone!);
+                    case 'redraw':
+                      setState(() {
+                        _zoneMode = true;
+                        _selected = null;
+                      });
+                    case 'clear':
+                      _clearZone();
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'fit', child: Text('Encuadrar el set')),
+                  PopupMenuItem(
+                    value: 'redraw',
+                    child: Text('Volver a marcar la zona'),
+                  ),
+                  PopupMenuItem(value: 'clear', child: Text('Quitar la zona')),
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1125,12 +1521,44 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                if (_isShotMode)
-                  _LightSetupBar(
+                _buildLayerBar(palette),
+                if (_zoneMode)
+                  _Notice(
                     palette: palette,
-                    setup: _lightSetup,
-                    onChoose: _chooseLightSetup,
-                    onOpen: _lightSetup != null ? _openLightSetup : null,
+                    icon: Icons.crop_free,
+                    text:
+                        'Arrastra sobre el plano para marcar la zona de '
+                        '«${_linkedSet?.locationName ?? ''}».',
+                    actionLabel: 'Cancelar',
+                    onAction: () => setState(() {
+                      _zoneMode = false;
+                      _zoneDraft = null;
+                    }),
+                  )
+                else if (_misplaced.isNotEmpty)
+                  _Notice(
+                    palette: palette,
+                    icon: Icons.layers_outlined,
+                    text:
+                        'Hay luces o cámaras guardadas en el entorno o en el '
+                        'set. Pásalas a su capa para poder compartirlas.',
+                    actionLabel: 'Ordenar capas',
+                    onAction: _tidyLayers,
+                  )
+                else if (_linkedSet != null &&
+                    _linkedSite != null &&
+                    _setZone == null)
+                  _Notice(
+                    palette: palette,
+                    icon: Icons.crop_free,
+                    text:
+                        'Este set aún no tiene zona en el plano de '
+                        '«${_linkedSite!.name}».',
+                    actionLabel: 'Marcar zona',
+                    onAction: () => setState(() {
+                      _zoneMode = true;
+                      _selected = null;
+                    }),
                   ),
                 Expanded(
                   child: Row(
@@ -1138,57 +1566,78 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                       Expanded(
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            return Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                IgnorePointer(
-                                  ignoring: _annotationMode,
-                                  child: GestureDetector(
-                                    onPanStart: _onPanStart,
-                                    onPanUpdate: _onPanUpdate,
-                                    onPanEnd: _onPanEnd,
-                                    onTapDown: _onTapCanvas,
-                                    onDoubleTapDown: _onDoubleTapCanvas,
-                                    child: CustomPaint(
-                                      size: Size(
-                                        constraints.maxWidth,
-                                        constraints.maxHeight,
+                            _canvasSize = constraints.biggest;
+                            final fit = _pendingFit;
+                            if (fit != null) {
+                              _pendingFit = null;
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (mounted) _fitTo(fit);
+                              });
+                            }
+                            return ClipRect(
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  IgnorePointer(
+                                    ignoring: _annotationMode,
+                                    child: GestureDetector(
+                                      onPanStart: _onPanStart,
+                                      onPanUpdate: _onPanUpdate,
+                                      onPanEnd: _onPanEnd,
+                                      onTapDown: _onTapCanvas,
+                                      onDoubleTapDown: _onDoubleTapCanvas,
+                                      child: CustomPaint(
+                                        size: Size(
+                                          constraints.maxWidth,
+                                          constraints.maxHeight,
+                                        ),
+                                        painter: CameraPlanPainter(
+                                          elements: _visibleElements,
+                                          zones: [
+                                            ..._zones,
+                                            if (_zoneDraft != null)
+                                              PlanZone(
+                                                rect: _zoneDraft!,
+                                                color: _sceneColor,
+                                                label:
+                                                    _linkedSet?.locationName ??
+                                                    '',
+                                                active: true,
+                                              ),
+                                          ],
+                                          selectedElement: _selected,
+                                          selectedPathIndex: _selectedPathIndex,
+                                          scale: _scale,
+                                          offset: _canvasOffset,
+                                          palette: palette,
+                                          backgroundImage: _backgroundImage,
+                                          backgroundRect: _backgroundRect,
+                                          backgroundOpacity: _backgroundOpacity,
+                                        ),
+                                        child: Container(
+                                          color: Colors.transparent,
+                                        ),
                                       ),
-                                      painter: CameraPlanPainter(
-                                        elements: _elements,
-                                        inheritedElements: _inherited,
-                                        selectedElement: _selected,
-                                        selectedPathIndex: _selectedPathIndex,
-                                        scale: _scale,
+                                    ),
+                                  ),
+                                  IgnorePointer(
+                                    ignoring: !_annotationMode,
+                                    child: AnnotationCanvas(
+                                      controller: _annotationController,
+                                      enabled: _annotationMode,
+                                      tool: _annotationTool,
+                                      color: _annotationColor,
+                                      width: _annotationWidth,
+                                      viewport: AnnotationViewport(
+                                        documentSize: _annotationDocumentSize,
                                         offset: _canvasOffset,
-                                        palette: palette,
-                                        backgroundImage: _backgroundImage,
-                                        backgroundRect: _backgroundRect,
-                                        backgroundOpacity: _backgroundOpacity,
+                                        scale: _scale,
                                       ),
-                                      child: Container(
-                                        color: Colors.transparent,
-                                      ),
+                                      onChanged: _saveAnnotations,
                                     ),
                                   ),
-                                ),
-                                IgnorePointer(
-                                  ignoring: !_annotationMode,
-                                  child: AnnotationCanvas(
-                                    controller: _annotationController,
-                                    enabled: _annotationMode,
-                                    tool: _annotationTool,
-                                    color: _annotationColor,
-                                    width: _annotationWidth,
-                                    viewport: AnnotationViewport(
-                                      documentSize: _annotationDocumentSize,
-                                      offset: _canvasOffset,
-                                      scale: _scale,
-                                    ),
-                                    onChanged: _saveAnnotations,
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             );
                           },
                         ),
@@ -1197,6 +1646,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                         _ElementPanel(
                           palette: palette,
                           element: _selected!,
+                          scopeNotice: _scopeNotice(_selected!.layer),
+                          moveTargets: [
+                            for (final layer in PlanLayer.values)
+                              if (layer != _selected!.layer && _hasLayer(layer))
+                                layer,
+                          ],
+                          onMove: (layer) => _moveToLayer(_selected!, layer),
                           selectedPathIndex: _selectedPathIndex,
                           onAddPathPoint: _addPathPointAhead,
                           onDeletePathPoint: _deleteSelectedPathPoint,
@@ -1227,9 +1683,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 _BottomToolbar(
                   palette: palette,
                   onAdd: _showAddMenu,
-                  onScenes: _showSceneNavigator,
                   onSave: _saveCurrentPlan,
-                  showScenes: _isShotMode,
                 ),
               ],
             ),
@@ -1237,61 +1691,112 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 }
 
-/// Franja del plano con el esquema de luz que usa.
-class _LightSetupBar extends StatelessWidget {
+/// Franja de aviso con una acción.
+class _Notice extends StatelessWidget {
   final AppPalette palette;
-  final LightSetup? setup;
-  final VoidCallback onChoose;
-  final VoidCallback? onOpen;
+  final IconData icon;
+  final String text;
+  final String actionLabel;
+  final VoidCallback onAction;
 
-  const _LightSetupBar({
+  const _Notice({
     required this.palette,
-    required this.setup,
-    required this.onChoose,
-    this.onOpen,
+    required this.icon,
+    required this.text,
+    required this.actionLabel,
+    required this.onAction,
   });
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: palette.surface,
+      color: palette.accent.withValues(alpha: 0.12),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         child: Row(
           children: [
-            Icon(
-              Icons.wb_incandescent_outlined,
-              color: palette.accent,
-              size: 20,
-            ),
+            Icon(icon, color: palette.accent, size: 18),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                setup == null
-                    ? 'Sin esquema de luz'
-                    : '${setup!.name} · ${lightSetupStatusLabel(setup!.status)}',
-                style: AppTypography.bodyMedium(palette),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: Text(text, style: AppTypography.bodyMedium(palette)),
             ),
-            if (onOpen != null)
-              TextButton(
-                onPressed: onOpen,
-                child: Text(
-                  'Editar luz',
-                  style: AppTypography.label(
-                    palette,
-                  ).copyWith(color: palette.accent),
-                ),
-              ),
             TextButton(
-              onPressed: onChoose,
+              onPressed: onAction,
               child: Text(
-                setup == null ? 'Elegir' : 'Cambiar',
+                actionLabel,
                 style: AppTypography.label(
                   palette,
                 ).copyWith(color: palette.accent),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Pastilla de una capa: ojo para ocultarla y, si procede, un desplegable.
+class _LayerChip extends StatelessWidget {
+  final AppPalette palette;
+  final String label;
+  final Color color;
+  final bool visible;
+  final VoidCallback onToggle;
+  final VoidCallback? onMenu;
+
+  const _LayerChip({
+    required this.palette,
+    required this.label,
+    required this.color,
+    required this.visible,
+    required this.onToggle,
+    this.onMenu,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = visible ? palette.textPrimary : palette.textTertiary;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: color.withValues(alpha: visible ? 0.16 : 0.05),
+        borderRadius: BorderRadius.circular(999),
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InkWell(
+              onTap: onToggle,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+                child: Tooltip(
+                  message: visible ? 'Ocultar capa' : 'Mostrar capa',
+                  child: Icon(
+                    visible
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    size: 16,
+                    color: visible ? color : palette.textTertiary,
+                  ),
+                ),
+              ),
+            ),
+            InkWell(
+              onTap: onMenu ?? onToggle,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(2, 6, 10, 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: AppTypography.label(palette).copyWith(color: ink),
+                    ),
+                    if (onMenu != null)
+                      Icon(Icons.arrow_drop_down, size: 18, color: ink),
+                  ],
+                ),
               ),
             ),
           ],
@@ -1470,16 +1975,12 @@ class _PlanAnnotationToolbar extends StatelessWidget {
 class _BottomToolbar extends StatelessWidget {
   final AppPalette palette;
   final VoidCallback onAdd;
-  final VoidCallback onScenes;
   final VoidCallback onSave;
-  final bool showScenes;
 
   const _BottomToolbar({
     required this.palette,
     required this.onAdd,
-    required this.onScenes,
     required this.onSave,
-    this.showScenes = true,
   });
 
   @override
@@ -1493,15 +1994,6 @@ class _BottomToolbar extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          if (showScenes)
-            _ToolbarButton(
-              palette: palette,
-              icon: Icons.view_list_outlined,
-              label: 'Escenas',
-              onTap: onScenes,
-            )
-          else
-            const SizedBox(width: 72),
           _ToolbarButton(
             palette: palette,
             icon: Icons.add_circle,
@@ -1570,7 +2062,14 @@ class _AddElementSheet extends StatefulWidget {
   final ValueChanged<PropType> onAddProp;
   final ValueChanged<ArchitectureType> onAddArchitecture;
 
+  /// Dónde van paredes y props: al entorno o al set. `null` si no hay
+  /// elección (solo existe una de las dos capas).
+  final bool? wallsToEnvironment;
+  final ValueChanged<bool>? onWallsToEnvironment;
+
   const _AddElementSheet({
+    this.wallsToEnvironment,
+    this.onWallsToEnvironment,
     required this.palette,
     required this.onAddCamera,
     required this.onAddActor,
@@ -1586,6 +2085,7 @@ class _AddElementSheet extends StatefulWidget {
 class _AddElementSheetState extends State<_AddElementSheet>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late bool? _toEnvironment = widget.wallsToEnvironment;
 
   @override
   void initState() {
@@ -1627,6 +2127,32 @@ class _AddElementSheetState extends State<_AddElementSheet>
                 ],
               ),
             ),
+            if (_toEnvironment != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Paredes y props se añaden a',
+                        style: AppTypography.caption(palette),
+                      ),
+                    ),
+                    SegmentedButton<bool>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(value: false, label: Text('Set')),
+                        ButtonSegment(value: true, label: Text('Entorno')),
+                      ],
+                      selected: {_toEnvironment!},
+                      onSelectionChanged: (v) {
+                        setState(() => _toEnvironment = v.first);
+                        widget.onWallsToEnvironment?.call(v.first);
+                      },
+                    ),
+                  ],
+                ),
+              ),
             TabBar(
               controller: _tabController,
               isScrollable: true,
@@ -1864,6 +2390,11 @@ class _ArchitectureTab extends StatelessWidget {
 class _ElementPanel extends StatefulWidget {
   final AppPalette palette;
   final PlanElement element;
+
+  /// A qué afecta cambiar este elemento.
+  final String scopeNotice;
+  final List<PlanLayer> moveTargets;
+  final ValueChanged<PlanLayer> onMove;
   final int? selectedPathIndex;
   final VoidCallback? onAddPathPoint;
   final VoidCallback? onDeletePathPoint;
@@ -1874,6 +2405,9 @@ class _ElementPanel extends StatefulWidget {
   const _ElementPanel({
     required this.palette,
     required this.element,
+    required this.scopeNotice,
+    required this.moveTargets,
+    required this.onMove,
     this.selectedPathIndex,
     this.onAddPathPoint,
     this.onDeletePathPoint,
@@ -1937,7 +2471,41 @@ class _ElementPanelState extends State<_ElementPanel> {
                     element.displayLabel,
                     style: AppTypography.titleMedium(palette),
                   ),
-                  const SizedBox(height: AppSpacing.md),
+                  const SizedBox(height: AppSpacing.sm),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: palette.accent.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      widget.scopeNotice,
+                      style: AppTypography.caption(palette),
+                    ),
+                  ),
+                  if (widget.moveTargets.isNotEmpty)
+                    PopupMenuButton<PlanLayer>(
+                      tooltip: 'Mover a otra capa',
+                      onSelected: widget.onMove,
+                      itemBuilder: (_) => [
+                        for (final layer in widget.moveTargets)
+                          PopupMenuItem(
+                            value: layer,
+                            child: Text('Mover a ${layer.label}'),
+                          ),
+                      ],
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          'Mover a otra capa…',
+                          style: AppTypography.caption(
+                            palette,
+                          ).copyWith(color: palette.accent),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: AppSpacing.sm),
                   Text('Rotación', style: AppTypography.caption(palette)),
                   Row(
                     children: [

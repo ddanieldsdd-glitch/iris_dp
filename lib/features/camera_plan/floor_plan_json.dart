@@ -53,6 +53,37 @@ class FloorPlanUnderlay {
   }
 }
 
+/// Zona del plano maestro de la localización que ocupa un set
+/// (`LocationBasePlans.sitePlacementJson`).
+class SetZone {
+  SetZone._();
+
+  static Rect? decode(String? json) {
+    if (json == null || json.isEmpty) return null;
+    try {
+      final m = jsonDecode(json) as Map<String, dynamic>;
+      final w = (m['width'] as num).toDouble();
+      final h = (m['height'] as num).toDouble();
+      if (w <= 0 || h <= 0) return null;
+      return Rect.fromLTWH(
+        (m['x'] as num).toDouble(),
+        (m['y'] as num).toDouble(),
+        w,
+        h,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String encode(Rect rect) => jsonEncode({
+    'x': rect.left,
+    'y': rect.top,
+    'width': rect.width,
+    'height': rect.height,
+  });
+}
+
 /// Una capa de planta: elementos, escala y fondo.
 class FloorPlanDocument {
   final List<PlanElement> elements;

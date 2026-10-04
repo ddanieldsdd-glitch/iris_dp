@@ -8,6 +8,30 @@ import '../../core/utils/scene_color.dart';
 import 'camera_plan_constants.dart';
 import 'plan_element_external_mapping.dart';
 
+/// Capa a la que pertenece un elemento de planta.
+enum PlanLayer {
+  /// Entorno de la localización.
+  environment,
+
+  /// Añadidos propios del set.
+  set,
+
+  /// Esquema de luz.
+  light,
+
+  /// Plano: cámaras y actores.
+  shot,
+}
+
+extension PlanLayerLabel on PlanLayer {
+  String get label => switch (this) {
+    PlanLayer.environment => 'Entorno',
+    PlanLayer.set => 'Set',
+    PlanLayer.light => 'Luz',
+    PlanLayer.shot => 'Cámara',
+  };
+}
+
 class PlanElement {
   int id;
   final ElementType type;
@@ -27,6 +51,9 @@ class PlanElement {
 
   /// Propiedades por tipo (haz, intensidad, temperatura de color, focal…).
   Map<String, dynamic> props;
+
+  /// Capa en la que se guarda. Solo en memoria: la da quien carga la planta.
+  PlanLayer layer = PlanLayer.shot;
 
   PlanElement({
     required this.id,

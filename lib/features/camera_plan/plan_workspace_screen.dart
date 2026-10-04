@@ -308,11 +308,12 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
     return [
       _planRow(
         target: PlanTarget.site(site.id, site.name),
-        title: 'Entorno',
+        title: 'Plano maestro',
         subtitle: site.name,
         color: color,
         thumbnail: PlanThumbnail(
           elements: _data.environmentOf(site.id),
+          zones: _data.zonesOfSite(site.id),
           emptyIcon: Icons.map_outlined,
         ),
       ),
@@ -351,6 +352,7 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
         thumbnail: PlanThumbnail(
           elements: _data.ownOfSet(set),
           inherited: _data.environmentOf(set.siteId),
+          focus: _data.zoneOf(set),
           emptyIcon: Icons.layers_outlined,
         ),
       ),
@@ -372,6 +374,8 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
       thumbnail: PlanThumbnail(
         elements: _data.ownOfSetup(setup),
         inherited: _data.inheritedOfSetup(setup),
+        inheritedOpacity: 0.22,
+        focus: _data.zoneOf(_data.set(setup.locationBasePlanId)),
         emptyIcon: Icons.wb_incandescent_outlined,
       ),
     ),

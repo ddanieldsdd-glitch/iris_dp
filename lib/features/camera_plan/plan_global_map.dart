@@ -122,7 +122,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
               _CardRow(
                 children: [
                   for (final setup in _data.freeSetups.where(_visible))
-                    _setupCard(setup, palette.accent),
+                    _setupColumn(setup, palette.accent, focus: null),
                   _AddCard(label: 'Planta libre', onTap: () => _newSetup()),
                 ],
               ),
@@ -133,12 +133,15 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
   }
 
   Widget _siteBlock(LocationSite site) {
+    final palette = context.palette;
     final color = _data.colors.siteColor(site.id);
     final sets = _data.setsOfSite(site.id);
+    final siteSetups = _data.setupsOfSite(site.id).where(_visible).toList();
     final setupCount =
         _data.setupsOfSite(site.id).length +
         sets.fold<int>(0, (n, s) => n + _data.setupsOfSet(s.id).length);
     final environment = _data.environmentOf(site.id);
+    final zones = _data.zonesOfSite(site.id);
 
     return _Block(
       color: color,
@@ -153,30 +156,57 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
         onPressed: () => _newSet(site),
       ),
       children: [
-        _CardRow(
+        Wrap(
+          spacing: AppSpacing.lg,
+          runSpacing: AppSpacing.md,
           children: [
             _PlanCard(
+              width: 300,
+              thumbHeight: 200,
               color: color,
-              kind: 'Entorno',
+              kind: 'Plano maestro',
               title: site.name,
-              details: environment.isEmpty
-                  ? 'Sin dibujar'
-                  : '${environment.length} elementos',
+              details: [
+                environment.isEmpty
+                    ? 'Sin dibujar'
+                    : '${environment.length} elementos',
+                '${zones.length} de ${sets.length} sets con zona',
+              ].join(' · '),
               thumbnail: PlanThumbnail(
                 elements: environment,
+                zones: zones,
                 emptyIcon: Icons.map_outlined,
               ),
               onTap: () => widget.onOpen(PlanTarget.site(site.id, site.name)),
             ),
-            for (final setup in _data.setupsOfSite(site.id).where(_visible))
-              _setupCard(setup, color),
-            _AddCard(
-              label: 'Esquema de luz',
-              onTap: () => _newSetup(siteId: site.id),
-            ),
+            if (siteSetups.isNotEmpty)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Luz general de la localización',
+                    style: AppTypography.caption(palette),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: AppSpacing.md,
+                    runSpacing: AppSpacing.md,
+                    children: [
+                      for (final setup in siteSetups)
+                        _setupColumn(setup, color, focus: null),
+                    ],
+                  ),
+                ],
+              ),
           ],
         ),
-        for (final set in sets) _setRow(set),
+        for (final (i, set) in sets.indexed)
+          _TreeBranch(
+            color: color,
+            last: i == sets.length - 1,
+            child: _setRow(set),
+          ),
       ],
     );
   }
@@ -185,8 +215,10 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
     final palette = context.palette;
     final color = _data.colors.setColor(set);
     final own = _data.ownOfSet(set);
+    final zone = _data.zoneOf(set);
     final scenes = _data.scenesOfSet(set.id);
-    final shotCount = _data.shotsOfScenes(scenes).length;
+    final shots = _data.shotsOfScenes(scenes);
+    final withoutSetup = shots.where((s) => s.lightSetupId == null).toList();
 
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.lg),
@@ -201,75 +233,255 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
                 decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
               const SizedBox(width: AppSpacing.sm),
-              Text(
-                set.locationName,
-                style: AppTypography.titleMedium(
-                  palette,
-                ).copyWith(color: color),
+              Flexible(
+                child: Text(
+                  set.locationName,
+                  style: AppTypography.titleMedium(
+                    palette,
+                  ).copyWith(color: color),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               const SizedBox(width: AppSpacing.md),
               Text(
                 '${scenes.length} esc. · '
-                '$shotCount plano${shotCount == 1 ? '' : 's'}',
+                '${shots.length} plano${shots.length == 1 ? '' : 's'}',
                 style: AppTypography.caption(palette),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          _CardRow(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _PlanCard(
                 color: color,
                 kind: 'Set',
                 title: set.locationName,
-                details: own.isEmpty
-                    ? 'Sin añadidos propios'
+                details: zone == null
+                    ? 'Sin zona marcada'
+                    : own.isEmpty
+                    ? 'Zona del plano maestro'
                     : '${own.length} elementos propios',
                 thumbnail: PlanThumbnail(
                   elements: own,
                   inherited: _data.environmentOf(set.siteId),
+                  focus: zone,
                   emptyIcon: Icons.layers_outlined,
                 ),
                 onTap: () =>
                     widget.onOpen(PlanTarget.set(set.id, set.locationName)),
               ),
-              for (final setup in _data.setupsOfSet(set.id).where(_visible))
-                _setupCard(setup, color),
-              _AddCard(
-                label: 'Esquema de luz',
-                onTap: () => _newSetup(setId: set.id),
+              Padding(
+                padding: const EdgeInsets.only(top: _thumbHeight / 2 - 12),
+                child: Icon(Icons.arrow_right_alt, color: palette.textTertiary),
+              ),
+              Expanded(
+                child: Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.md,
+                  children: [
+                    for (final setup
+                        in _data.setupsOfSet(set.id).where(_visible))
+                      _setupColumn(setup, color, focus: zone),
+                    _AddCard(
+                      label: 'Esquema de luz',
+                      onTap: () => _newSetup(setId: set.id),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
+          if (withoutSetup.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _ShotChips(
+              label: 'Sin esquema de luz',
+              shots: withoutSetup,
+              data: _data,
+              onOpen: widget.onOpen,
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _setupCard(LightSetup setup, Color color) {
-    final shotCount = _data.shotsOfSetup(setup.id).length;
+  /// Un esquema de luz con los planos que lo usan debajo.
+  Widget _setupColumn(LightSetup setup, Color color, {required Rect? focus}) {
+    final shots = _data.shotsOfSetup(setup.id);
     final origin = lightSetupOriginLabel(setup.origin);
-    return _PlanCard(
-      color: color,
-      kind: lightSetupStatusLabel(setup.status),
-      kindIcon: setup.status == 'boceto'
-          ? Icons.draw_outlined
-          : Icons.wb_incandescent_outlined,
-      title: setup.name,
-      details: [
-        if (origin.isNotEmpty) origin,
-        if (setup.category?.isNotEmpty == true) setup.category!,
-        '$shotCount plano${shotCount == 1 ? '' : 's'}',
-      ].join(' · '),
-      thumbnail: PlanThumbnail(
-        elements: _data.ownOfSetup(setup),
-        inherited: _data.inheritedOfSetup(setup),
-        emptyIcon: Icons.wb_incandescent_outlined,
+    return SizedBox(
+      width: _cardWidth,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _PlanCard(
+            color: color,
+            kind: lightSetupStatusLabel(setup.status),
+            kindIcon: setup.status == 'boceto'
+                ? Icons.draw_outlined
+                : Icons.wb_incandescent_outlined,
+            title: setup.name,
+            details: [
+              if (origin.isNotEmpty) origin,
+              if (setup.category?.isNotEmpty == true) setup.category!,
+              '${shots.length} plano${shots.length == 1 ? '' : 's'}',
+            ].join(' · '),
+            thumbnail: PlanThumbnail(
+              elements: _data.ownOfSetup(setup),
+              inherited: _data.inheritedOfSetup(setup),
+              inheritedOpacity: 0.22,
+              focus: focus,
+              emptyIcon: Icons.wb_incandescent_outlined,
+            ),
+            trailing: LightSetupMenuButton(
+              setup: setup,
+              shotCount: shots.length,
+            ),
+            onTap: () =>
+                widget.onOpen(PlanTarget.lightSetup(setup.id, setup.name)),
+          ),
+          if (shots.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            _ShotChips(shots: shots, data: _data, onOpen: widget.onOpen),
+          ],
+        ],
       ),
-      trailing: LightSetupMenuButton(setup: setup, shotCount: shotCount),
-      onTap: () => widget.onOpen(PlanTarget.lightSetup(setup.id, setup.name)),
     );
   }
+}
+
+/// Planos como pastillas: tocar uno lo abre con su set y su luz.
+class _ShotChips extends StatelessWidget {
+  final String? label;
+  final List<Shot> shots;
+  final PlanProjectData data;
+  final void Function(PlanTarget target) onOpen;
+
+  const _ShotChips({
+    required this.shots,
+    required this.data,
+    required this.onOpen,
+    this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (label != null)
+          Text('$label:', style: AppTypography.caption(palette)),
+        for (final shot in shots)
+          Tooltip(
+            message: data.shotLabel(shot),
+            child: Material(
+              color: palette.surfaceOverlay,
+              borderRadius: BorderRadius.circular(6),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () =>
+                    onOpen(PlanTarget.shot(shot.id, data.shotLabel(shot))),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.videocam_outlined,
+                        size: 13,
+                        color: palette.textSecondary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${data.scene(shot.sceneId)?.number ?? '–'}'
+                        '·${shot.number}',
+                        style: AppTypography.caption(
+                          palette,
+                        ).copyWith(color: palette.textPrimary),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Rama del árbol: el tronco baja desde la localización y un trazo corto
+/// entra hasta el set.
+class _TreeBranch extends StatelessWidget {
+  final Color color;
+  final bool last;
+  final Widget child;
+
+  const _TreeBranch({
+    required this.color,
+    required this.last,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 32,
+          child: CustomPaint(
+            painter: _BranchPainter(color: color, last: last),
+          ),
+        ),
+        Padding(padding: const EdgeInsets.only(left: 32), child: child),
+      ],
+    );
+  }
+}
+
+class _BranchPainter extends CustomPainter {
+  final Color color;
+  final bool last;
+
+  /// Altura a la que entra el trazo: la del nombre del set.
+  static const double _elbow = AppSpacing.lg + 11;
+
+  const _BranchPainter({required this.color, required this.last});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.55)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    const x = 12.0;
+    canvas.drawLine(
+      const Offset(x, 0),
+      Offset(x, last ? _elbow : size.height),
+      paint,
+    );
+    canvas.drawLine(
+      const Offset(x, _elbow),
+      Offset(size.width - 6, _elbow),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_BranchPainter old) =>
+      old.color != color || old.last != last;
 }
 
 class _Filters extends StatelessWidget {
@@ -398,8 +610,8 @@ class _CardRow extends StatelessWidget {
   }
 }
 
-const double _cardWidth = 216;
-const double _thumbHeight = 150;
+const double _cardWidth = 190;
+const double _thumbHeight = 130;
 
 /// Tarjeta con la miniatura de una planta.
 class _PlanCard extends StatelessWidget {
@@ -411,8 +623,12 @@ class _PlanCard extends StatelessWidget {
   final Widget thumbnail;
   final Widget? trailing;
   final VoidCallback onTap;
+  final double width;
+  final double thumbHeight;
 
   const _PlanCard({
+    this.width = _cardWidth,
+    this.thumbHeight = _thumbHeight,
     required this.color,
     required this.kind,
     required this.title,
@@ -427,7 +643,7 @@ class _PlanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return SizedBox(
-      width: _cardWidth,
+      width: width,
       child: Material(
         color: palette.surfaceElevated,
         borderRadius: BorderRadius.circular(10),
@@ -438,7 +654,7 @@ class _PlanCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
-                height: _thumbHeight,
+                height: thumbHeight,
                 width: double.infinity,
                 child: Stack(
                   fit: StackFit.expand,
@@ -528,7 +744,7 @@ class _AddCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return SizedBox(
-      width: 132,
+      width: 120,
       height: _thumbHeight,
       child: Material(
         color: Colors.transparent,

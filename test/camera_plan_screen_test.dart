@@ -7,7 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/database/database_provider.dart';
 import 'package:iris_dp/core/theme/app_theme.dart';
+import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_editor.dart';
+import 'package:iris_dp/features/camera_plan/camera_plan_painter.dart';
+import 'package:iris_dp/features/camera_plan/floor_plan_json.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_screen.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_repository.dart';
 
@@ -113,7 +116,7 @@ void main() {
     expect(find.text('Setup A'), findsOneWidget);
     expect(find.text('Plantas libres'), findsOneWidget);
     expect(find.text('Esquema de luz'), findsWidgets);
-    expect(find.text('Entorno'), findsOneWidget);
+    expect(find.text('Plano maestro'), findsOneWidget);
     expect(find.text('Boceto'), findsWidgets);
     expect(tester.takeException(), isNull);
 
@@ -181,13 +184,215 @@ void main() {
     );
     await settle(tester);
 
-    expect(find.text('Noche · Boceto'), findsOneWidget);
-    expect(find.text('Editar luz'), findsOneWidget);
-    expect(find.text('Cambiar'), findsOneWidget);
+    // La barra de capas dice qué luz y qué plano se están viendo.
+    expect(find.text('Luz: Noche'), findsOneWidget);
+    expect(find.text('Cámara: Esc 1 · Plano 1'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump(const Duration(milliseconds: 50));
+  });
+
+  group('un solo lienzo', () {
+    late int projectId;
+    late int siteId;
+    late int setId;
+    late int shotId;
+
+    Future<void> seed(WidgetTester tester, {required String siteJson}) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.runAsync(() async {
+        projectId = await db.insertProject(
+          ProjectsCompanion.insert(name: 'Lienzo'),
+        );
+        siteId = await db.insertSite(
+          LocationSitesCompanion.insert(
+            projectId: projectId,
+            name: 'Hospital',
+            floorPlanJson: Value(siteJson),
+          ),
+        );
+        setId = await db.insertLocation(
+          LocationBasePlansCompanion.insert(
+            projectId: projectId,
+            siteId: Value(siteId),
+            locationName: 'Urgencias',
+          ),
+        );
+        final sceneId = await db.insertScene(
+          ScenesCompanion.insert(
+            projectId: projectId,
+            number: 1,
+            name: 'Escena 1',
+            locationCanonical: 'INT. URGENCIAS - DÍA',
+            locationPureName: 'URGENCIAS',
+            locationSiteId: Value(siteId),
+            locationId: Value(setId),
+          ),
+        );
+        shotId = await db.insertShot(
+          ShotsCompanion.insert(
+            sceneId: sceneId,
+            projectId: projectId,
+            number: 1,
+          ),
+        );
+      });
+    }
+
+    String element(String type, double x, double y, {String? lightType}) =>
+        '{"type":"$type","x":$x,"y":$y,"rotation":0,"label":"$type",'
+        '"lightType":${lightType == null ? 'null' : '"$lightType"'},'
+        '"cameraLetter":"A","cameraNumber":1,"pathPoints":[]}';
+
+    testWidgets('mover una pared del entorno desde un plano la guarda en '
+        'la localización', (tester) async {
+      await seed(
+        tester,
+        siteJson: '{"version":2,"elements":[${element('wall', 300, 300)}]}',
+      );
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.shot(
+            projectId: projectId,
+            shotId: shotId,
+            shotLabel: 'Esc 1 · Plano 1',
+          ),
+        ),
+      );
+      await settle(tester);
+
+      final canvas = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is CameraPlanPainter,
+      );
+      final origin = tester.getTopLeft(canvas);
+      await tester.dragFrom(
+        origin + const Offset(300, 300),
+        const Offset(100, 50),
+      );
+      await settle(tester);
+
+      // El aviso dice a qué afecta el cambio.
+      expect(
+        find.textContaining('Entorno · cambia en toda la localización'),
+        findsOneWidget,
+      );
+
+      final site = await tester.runAsync(() => db.getSiteById(siteId));
+      final moved = FloorPlanJson.decode(site!.floorPlanJson).single;
+      expect(moved.position.dx, greaterThan(350));
+      expect(moved.position.dy, greaterThan(320));
+      final rows = await tester.runAsync(
+        () => db.getCameraPlanElementsForShot(shotId),
+      );
+      expect(rows, isEmpty);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('«Ordenar capas» pasa la luz a un esquema y la cámara al '
+        'plano', (tester) async {
+      await seed(
+        tester,
+        siteJson:
+            '{"version":2,"elements":['
+            '${element('wall', 300, 300)},'
+            '${element('light', 500, 200, lightType: 'hmi')},'
+            '${element('camera', 600, 400)}]}',
+      );
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.shot(
+            projectId: projectId,
+            shotId: shotId,
+            shotLabel: 'Esc 1 · Plano 1',
+          ),
+        ),
+      );
+      await settle(tester);
+      expect(find.text('Luz: sin esquema'), findsOneWidget);
+
+      await tester.tap(find.text('Ordenar capas'));
+      await settle(tester);
+
+      final site = await tester.runAsync(() => db.getSiteById(siteId));
+      expect(FloorPlanJson.decode(site!.floorPlanJson).map((e) => e.type), [
+        ElementType.wall,
+      ]);
+      final setups = await tester.runAsync(
+        () => db.getLightSetupsForProject(projectId),
+      );
+      expect(setups!.single.name, 'Setup A');
+      expect(setups.single.locationBasePlanId, setId);
+      expect(
+        FloorPlanJson.decode(setups.single.planJson).single.lightType,
+        LightType.hmi,
+      );
+      final shot = await tester.runAsync(
+        () => (db.select(
+          db.shots,
+        )..where((s) => s.id.equals(shotId))).getSingle(),
+      );
+      expect(shot!.lightSetupId, setups.single.id);
+      final rows = await tester.runAsync(
+        () => db.getCameraPlanElementsForShot(shotId),
+      );
+      expect(rows!.map((r) => r.type), ['camera']);
+      expect(find.text('Luz: Setup A'), findsOneWidget);
+      expect(find.text('Ordenar capas'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('la zona del set se marca arrastrando y se ve en el mapa', (
+      tester,
+    ) async {
+      await seed(
+        tester,
+        siteJson: '{"version":2,"elements":[${element('wall', 300, 300)}]}',
+      );
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.set(
+            projectId: projectId,
+            setId: setId,
+            setName: 'Urgencias',
+          ),
+        ),
+      );
+      await settle(tester);
+
+      await tester.tap(find.text('Marcar zona'));
+      await settle(tester);
+      final canvas = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is CameraPlanPainter,
+      );
+      final origin = tester.getTopLeft(canvas);
+      await tester.dragFrom(
+        origin + const Offset(100, 100),
+        const Offset(300, 200),
+      );
+      await settle(tester);
+
+      final set = await tester.runAsync(() => db.getLocationById(setId));
+      final zone = SetZone.decode(set!.sitePlacementJson)!;
+      expect(zone.width, greaterThan(200));
+      expect(zone.height, greaterThan(120));
+      expect(find.text('Marcar zona'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
   });
 }
