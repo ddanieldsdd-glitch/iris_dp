@@ -65,9 +65,13 @@ void main() {
 
     // El nombre que puso el usuario, no el de fábrica.
     expect(find.text('Mi tono'), findsOneWidget);
-    expect(find.text('Punto de la pantalla'), findsOneWidget);
+    // Cada punto se nombra por lo que es, no como texto genérico.
+    expect(
+      find.text('Punto de la pantalla · Puntos con título'),
+      findsOneWidget,
+    );
     expect(find.text('Paleta de noche'), findsOneWidget);
-    expect(find.text('Paleta de color'), findsOneWidget);
+    expect(find.text('Color · Paleta compacta'), findsOneWidget);
 
     expect(find.byTooltip('Cambiar tipo'), findsNothing);
     expect(find.byTooltip('Renombrar'), findsNWidgets(2));

@@ -1,6 +1,7 @@
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../../../../shared/visual_bible/bible_cards.dart';
 import '../../../../shared/visual_bible/bible_palette.dart';
 import '../../../../shared/visual_bible/bible_section_fields.dart';
 import '../bible_section_export_reader.dart';
@@ -553,9 +554,49 @@ class BiblePdfKit {
         return rows.isEmpty ? null : specsPoint(field.label, rows);
       case BibleSectionFieldType.palette:
         final colors = BiblePaletteColor.listFrom(raw);
-        return colors.isEmpty
-            ? null
-            : swatchRow(field.label, [for (final c in colors) (c.hex, c.name)]);
+        if (colors.isEmpty) return null;
+        // Una simbología lleva el significado de cada color.
+        if (field.widget == 'palette_symbolism' ||
+            colors.any((c) => c.note.trim().isNotEmpty)) {
+          return swatchList(field.label, [
+            for (final c in colors)
+              (hex: c.hex, title: c.name.isEmpty ? c.hex : c.name, text: c.note),
+          ]);
+        }
+        return swatchRow(field.label, [for (final c in colors) (c.hex, c.name)]);
+      case BibleSectionFieldType.cards:
+        final cards = BibleCard.listFrom(raw).where((c) => !c.isEmpty).toList();
+        if (cards.isEmpty) return null;
+        if (field.widget == 'cards_pillars') {
+          return columnsPoint(field.label, [
+            for (final c in cards) (kicker: null, title: c.title, text: c.body),
+          ], perRow: 4);
+        }
+        return titledList(field.label, [
+          for (final c in cards) (c.title, c.body),
+        ]);
+      case BibleSectionFieldType.acts:
+        final all = BibleCard.listFrom(raw);
+        if (all.every((c) => c.isEmpty)) return null;
+        return columnsPoint(field.label, [
+          for (var i = 0; i < all.length; i++)
+            (
+              kicker: all[i].kicker.trim().isEmpty
+                  ? 'Acto ${i + 1}'
+                  : 'Acto ${i + 1} · ${all[i].kicker.trim()}',
+              title: all[i].title,
+              text: all[i].body,
+            ),
+        ]);
+      case BibleSectionFieldType.tags:
+        final tags = BibleSectionPointValue.decodeList(
+          raw,
+        ).where((e) => e.trim().isNotEmpty).toList();
+        if (tags.isEmpty) return null;
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [label(field.label), pw.SizedBox(height: 6), tagRow(tags)],
+        );
       case BibleSectionFieldType.referenceDeck:
         final items = BibleSectionExportReader.referenceItems(
           raw,

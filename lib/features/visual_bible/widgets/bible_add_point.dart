@@ -12,9 +12,9 @@ import 'bible_point_panel.dart';
 /// inicial.
 typedef BibleAddedPoint = ({BibleSectionField field, String? initialValue});
 
-/// Pide qué punto añadir a una pantalla. Ofrece dos grupos: los puntos
-/// propios de la pantalla que no están puestos y los widgets del catálogo.
-/// Devuelve `null` si se cancela.
+/// Pide qué punto añadir a una pantalla. Ofrece los puntos propios de la
+/// pantalla que no están puestos, los widgets recomendados para ella y el
+/// resto del catálogo por familias. Devuelve `null` si se cancela.
 Future<BibleAddedPoint?> showBibleAddPointDialog(
   BuildContext context, {
   required String sectionId,
@@ -23,6 +23,7 @@ Future<BibleAddedPoint?> showBibleAddPointDialog(
   return showDialog<BibleAddedPoint>(
     context: context,
     builder: (_) => _AddPointDialog(
+      sectionId: sectionId,
       sectionPoints: BibleStitchModuleRegistry.missingModules(sectionId, fields)
           .map((m) => m.toField())
           .toList(),
@@ -33,8 +34,9 @@ Future<BibleAddedPoint?> showBibleAddPointDialog(
 class _AddPointDialog extends StatefulWidget {
   /// Puntos propios de la pantalla que hoy no están en ella.
   final List<BibleSectionField> sectionPoints;
+  final String sectionId;
 
-  const _AddPointDialog({required this.sectionPoints});
+  const _AddPointDialog({required this.sectionId, required this.sectionPoints});
 
   @override
   State<_AddPointDialog> createState() => _AddPointDialogState();
@@ -42,7 +44,11 @@ class _AddPointDialog extends StatefulWidget {
 
 class _AddPointDialogState extends State<_AddPointDialog> {
   final _name = TextEditingController();
-  BibleWidgetEntry? _entry = BibleWidgetCatalog.entries.first;
+  late final List<BibleWidgetEntry> _recommended =
+      BibleWidgetCatalog.recommendedFor(widget.sectionId);
+  late BibleWidgetEntry? _entry = _recommended.isNotEmpty
+      ? _recommended.first
+      : BibleWidgetCatalog.entries.first;
   BibleSectionField? _sectionPoint;
 
   @override
@@ -69,6 +75,7 @@ class _AddPointDialogState extends State<_AddPointDialog> {
         key: BibleSectionFieldsConfig.newFieldKey(),
         label: label,
         type: entry.type,
+        widget: entry.id,
       ),
       initialValue: entry.initialValue,
     ));
@@ -120,6 +127,23 @@ class _AddPointDialogState extends State<_AddPointDialog> {
     );
   }
 
+  /// Widgets de [category] que no están ya entre los recomendados.
+  List<BibleWidgetEntry> _others(BibleWidgetCategory category) => [
+    for (final entry in BibleWidgetCatalog.inCategory(category))
+      if (!_recommended.contains(entry)) entry,
+  ];
+
+  Widget _entryOption(BibleWidgetEntry entry) => _option(
+    icon: entry.icon,
+    title: entry.label,
+    subtitle: entry.description,
+    selected: entry == _entry,
+    onTap: () => setState(() {
+      _entry = entry;
+      _sectionPoint = null;
+    }),
+  );
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -148,20 +172,20 @@ class _AddPointDialogState extends State<_AddPointDialog> {
                     }),
                   ),
                 const SizedBox(height: AppSpacing.md),
-                Text('WIDGETS', style: heading),
-                const SizedBox(height: AppSpacing.sm),
               ],
-              for (final entry in BibleWidgetCatalog.entries)
-                _option(
-                  icon: entry.icon,
-                  title: entry.label,
-                  subtitle: entry.description,
-                  selected: entry == _entry,
-                  onTap: () => setState(() {
-                    _entry = entry;
-                    _sectionPoint = null;
-                  }),
-                ),
+              if (_recommended.isNotEmpty) ...[
+                Text('RECOMENDADOS PARA ESTA PANTALLA', style: heading),
+                const SizedBox(height: AppSpacing.sm),
+                for (final entry in _recommended) _entryOption(entry),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              for (final category in BibleWidgetCategory.values)
+                if (_others(category).isNotEmpty) ...[
+                  Text(category.label.toUpperCase(), style: heading),
+                  const SizedBox(height: AppSpacing.sm),
+                  for (final entry in _others(category)) _entryOption(entry),
+                  const SizedBox(height: AppSpacing.md),
+                ],
               if (_entry != null) ...[
                 const SizedBox(height: AppSpacing.sm),
                 TextField(

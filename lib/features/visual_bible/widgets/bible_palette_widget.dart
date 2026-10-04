@@ -298,3 +298,118 @@ class _ExtractedColorsDialogState extends State<_ExtractedColorsDialog> {
     );
   }
 }
+
+/// Simbología de color: cada color con su nombre y lo que significa en la
+/// película.
+class BiblePaletteSymbolismWidget extends StatelessWidget {
+  final List<BiblePaletteColor> colors;
+  final ValueChanged<List<BiblePaletteColor>> onChanged;
+
+  const BiblePaletteSymbolismWidget({
+    super.key,
+    required this.colors,
+    required this.onChanged,
+  });
+
+  Future<void> _edit(BuildContext context, int? index) async {
+    final current = index == null ? null : colors[index];
+    final picked = await BibleVisualColorSheet.show(
+      context,
+      title: 'Color y significado',
+      initialName: current?.name ?? '',
+      initialColor:
+          MoodboardPaletteExtractor.fromHex(current?.hex ?? '') ??
+          const Color(0xFF1B3A4B),
+      nameHint: 'Nombre del color',
+      canDelete: index != null,
+      includeMeaning: true,
+      initialMeaning: current?.note ?? '',
+    );
+    if (picked == null) return;
+    final next = [...colors];
+    if (picked.delete) {
+      if (index != null) next.removeAt(index);
+    } else {
+      final color = BiblePaletteColor(
+        hex: picked.hex,
+        name: picked.name,
+        note: picked.meaning ?? '',
+      );
+      if (index != null) {
+        next[index] = color;
+      } else {
+        next.add(color);
+      }
+    }
+    onChanged(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final label = BiblePointPanel.labelStyle(palette);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < colors.length; i++)
+          InkWell(
+            onTap: () => _edit(context, i),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color:
+                          MoodboardPaletteExtractor.fromHex(colors[i].hex) ??
+                          palette.surfaceOverlay,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: palette.borderBright),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          [
+                            if (colors[i].name.isNotEmpty) colors[i].name,
+                            colors[i].hex,
+                          ].join(' · ').toUpperCase(),
+                          style: label.copyWith(color: palette.textPrimary),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          colors[i].note.isEmpty
+                              ? 'Toca para escribir qué significa…'
+                              : colors[i].note,
+                          style: AppTypography.bodyMedium(palette).copyWith(
+                            color: colors[i].note.isEmpty
+                                ? palette.textTertiary
+                                : palette.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => _edit(context, null),
+            icon: Icon(Icons.add, size: 16, color: palette.accent),
+            label: Text('AÑADIR COLOR', style: label),
+          ),
+        ),
+      ],
+    );
+  }
+}

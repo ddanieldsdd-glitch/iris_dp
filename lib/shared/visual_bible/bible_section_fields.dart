@@ -31,6 +31,17 @@ enum BibleSectionFieldType {
 
   /// Referencias razonadas. El valor es `{preset, items}` en JSON.
   referenceDeck,
+
+  /// Tarjetas con título y desarrollo. El valor es un array JSON de
+  /// `{title, body}`.
+  cards,
+
+  /// División por actos. El valor es un array JSON de
+  /// `{kicker, title, body}`, donde `kicker` es la fase del acto.
+  acts,
+
+  /// Etiquetas. El valor es un array JSON de textos.
+  tags,
 }
 
 /// Codifica el valor de los puntos `list` y `specs` dentro de `values[key]`.
@@ -77,12 +88,17 @@ class BibleSectionField {
   final int maxLines;
   final BibleSectionFieldType type;
 
+  /// Widget del catálogo con el que se pinta, cuando el tipo admite varios
+  /// (p. ej. paleta maestra o compacta). Se fija al crear el punto.
+  final String? widget;
+
   const BibleSectionField({
     required this.key,
     required this.label,
     this.hint,
     this.maxLines = 3,
     this.type = BibleSectionFieldType.text,
+    this.widget,
   });
 
   Map<String, dynamic> toJson() => {
@@ -91,6 +107,7 @@ class BibleSectionField {
         if (hint != null) 'hint': hint,
         'maxLines': maxLines,
         'type': type.name,
+        if (widget != null) 'widget': widget,
       };
 
   factory BibleSectionField.fromJson(Map<String, dynamic> json) {
@@ -103,6 +120,7 @@ class BibleSectionField {
         (t) => t.name == json['type'],
         orElse: () => BibleSectionFieldType.text,
       ),
+      widget: json['widget'] as String?,
     );
   }
 
@@ -118,6 +136,7 @@ class BibleSectionField {
       hint: hint ?? this.hint,
       maxLines: maxLines ?? this.maxLines,
       type: type ?? this.type,
+      widget: widget,
     );
   }
 }
@@ -428,12 +447,15 @@ abstract final class BibleSectionFieldsConfig {
         BibleSectionFieldType.references => 'Referencias moodboard',
         BibleSectionFieldType.image => 'Imágenes / referencias',
         BibleSectionFieldType.blocks => 'Bloques dinámicos',
-        BibleSectionFieldType.text => 'Campo de texto',
+        BibleSectionFieldType.text => 'Texto',
         BibleSectionFieldType.list => 'Lista de puntos',
         BibleSectionFieldType.specs => 'Datos técnicos',
         BibleSectionFieldType.palette => 'Paleta de color',
         BibleSectionFieldType.gallery => 'Imágenes',
         BibleSectionFieldType.referenceDeck => 'Referencias razonadas',
+        BibleSectionFieldType.cards => 'Puntos con título',
+        BibleSectionFieldType.acts => 'División por actos',
+        BibleSectionFieldType.tags => 'Etiquetas',
       };
 
   static String labelFor(

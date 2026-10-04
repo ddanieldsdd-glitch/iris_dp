@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../../../core/database/app_database.dart';
 import '../../../shared/visual_bible/bible_lighting_data.dart';
+import '../../../shared/visual_bible/bible_cards.dart';
 import '../../../shared/visual_bible/bible_palette.dart';
 import '../../../shared/visual_bible/bible_reference.dart';
 import '../../../shared/visual_bible/bible_section_fields.dart';
@@ -304,7 +305,10 @@ abstract final class BibleSectionExportReader {
           field.type == BibleSectionFieldType.specs ||
           field.type == BibleSectionFieldType.palette ||
           field.type == BibleSectionFieldType.referenceDeck ||
-          field.type == BibleSectionFieldType.gallery);
+          field.type == BibleSectionFieldType.gallery ||
+          field.type == BibleSectionFieldType.cards ||
+          field.type == BibleSectionFieldType.acts ||
+          field.type == BibleSectionFieldType.tags);
 
   /// Valor de un punto del usuario como texto plano, para listados de filas.
   static String userPointText(BibleUserPoint point) => switch (point.field.type) {
@@ -321,6 +325,18 @@ abstract final class BibleSectionExportReader {
             .map((r) => [r.title, r.work].where((e) => e.isNotEmpty).join(' — '))
             .join('\n'),
         BibleSectionFieldType.gallery => '',
+        BibleSectionFieldType.cards || BibleSectionFieldType.acts =>
+          BibleCard.listFrom(point.value)
+              .where((c) => !c.isEmpty)
+              .map(
+                (c) => [c.kicker, c.title, c.body]
+                    .where((e) => e.trim().isNotEmpty)
+                    .join(' — '),
+              )
+              .join('\n'),
+        BibleSectionFieldType.tags => BibleSectionPointValue.decodeList(
+            point.value,
+          ).join(' · '),
         _ => point.value.trim(),
       };
 

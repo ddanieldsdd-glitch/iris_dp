@@ -227,24 +227,42 @@ class _BibleSectionFieldsEditorState
     await _save();
   }
 
-  /// Qué es el punto, para el subtítulo de su fila.
-  String _kindLabel(BibleSectionField field) {
-    if (!_isUserPoint(field)) return 'Punto de la pantalla';
-    return BibleWidgetCatalog.forType(field.type)?.label ??
-        BibleSectionFieldsConfig.labelForType(field.type);
+  /// Widget del catálogo que corresponde al punto: el que eligió el usuario
+  /// o, en un punto de la pantalla, aquel al que equivale.
+  BibleWidgetEntry? _entry(BibleSectionField field) {
+    if (!_isUserPoint(field)) {
+      return BibleWidgetCatalog.byId(
+        BibleStitchModuleRegistry.module(_sectionId, field.key)?.widgetId,
+      );
+    }
+    return BibleWidgetCatalog.forField(
+      field,
+      value: BibleSectionFieldsConfig.parseValues(
+        widget.definition.contentJson,
+      )[field.key],
+    );
   }
 
-  IconData _icon(BibleSectionField field) {
-    if (_isUserPoint(field)) {
-      final entry = BibleWidgetCatalog.forType(field.type);
-      if (entry != null) return entry.icon;
+  /// Qué es el punto, para el subtítulo de su fila.
+  String _kindLabel(BibleSectionField field) {
+    final entry = _entry(field);
+    if (!_isUserPoint(field)) {
+      return entry == null
+          ? 'Punto de la pantalla'
+          : 'Punto de la pantalla · ${entry.label}';
     }
-    return BibleStitchModuleRegistry.module(
-          _sectionId,
-          field.key,
-        )?.catalogKind.icon ??
-        Icons.article_outlined;
+    return entry == null
+        ? BibleSectionFieldsConfig.labelForType(field.type)
+        : '${entry.category.label} · ${entry.label}';
   }
+
+  IconData _icon(BibleSectionField field) =>
+      _entry(field)?.icon ??
+      BibleStitchModuleRegistry.module(
+        _sectionId,
+        field.key,
+      )?.catalogKind.icon ??
+      Icons.article_outlined;
 
   @override
   Widget build(BuildContext context) {

@@ -210,6 +210,93 @@ void main() {
     },
   );
 
+  test('actos, pilares, puntos con título, etiquetas y simbología salen en el '
+      'PDF de cualquier pantalla', () async {
+    await addPoint(
+      BibleSectionId.exposure,
+      const BibleSectionField(
+        key: 'field_actos',
+        label: 'Exposición por actos',
+        type: BibleSectionFieldType.acts,
+        widget: 'acts',
+      ),
+      jsonEncode([
+        {'kicker': 'CALMA', 'title': 'Luz plena', 'body': 'Sin sombras duras'},
+        {'kicker': '', 'title': 'Caída', 'body': 'Dos pasos por debajo'},
+      ]),
+    );
+    await addPoint(
+      BibleSectionId.exposure,
+      const BibleSectionField(
+        key: 'field_pilares',
+        label: 'Pilares de exposición',
+        type: BibleSectionFieldType.cards,
+        widget: 'cards_pillars',
+      ),
+      jsonEncode([
+        {'title': 'Altas luces', 'body': 'Se protegen siempre'},
+      ]),
+    );
+    await addPoint(
+      BibleSectionId.exposure,
+      const BibleSectionField(
+        key: 'field_puntos',
+        label: 'Reglas',
+        type: BibleSectionFieldType.cards,
+        widget: 'cards',
+      ),
+      jsonEncode([
+        {'title': 'Piel', 'body': 'Nunca por encima de zona VI'},
+      ]),
+    );
+    await addPoint(
+      BibleSectionId.exposure,
+      const BibleSectionField(
+        key: 'field_tags',
+        label: 'Sensaciones',
+        type: BibleSectionFieldType.tags,
+        widget: 'tags',
+      ),
+      jsonEncode(['Asfixia', 'Vigilia']),
+    );
+    await addPoint(
+      BibleSectionId.exposure,
+      const BibleSectionField(
+        key: 'field_simbolos',
+        label: 'Qué dice cada color',
+        type: BibleSectionFieldType.palette,
+        widget: 'palette_symbolism',
+      ),
+      jsonEncode([
+        {'hex': '#8A1C1C', 'name': 'Rojo óxido', 'note': 'La culpa heredada'},
+      ]),
+    );
+
+    final text = _extract(await export());
+    final expected = [
+      'EXPOSICIÓN POR ACTOS',
+      'ACTO 1 · CALMA',
+      'Luz plena',
+      'ACTO 2',
+      'Dos pasos por debajo',
+      'PILARES DE EXPOSICIÓN',
+      'Altas luces',
+      'REGLAS',
+      'Nunca por encima de zona VI',
+      'SENSACIONES',
+      'QUÉ DICE CADA COLOR',
+      'La culpa heredada',
+    ];
+    var cursor = -1;
+    for (final piece in expected) {
+      final at = text.indexOf(piece, cursor + 1);
+      expect(at, greaterThan(cursor), reason: '«$piece» falta o va antes');
+      cursor = at;
+    }
+    expect(text.toUpperCase(), contains('ASFIXIA'));
+    expect(text, isNot(contains('{"')));
+  });
+
   test('las secciones salen en el orden de la biblia', () async {
     for (final sectionId in [
       BibleSectionId.direction,
