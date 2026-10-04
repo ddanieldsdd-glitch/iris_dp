@@ -30,6 +30,8 @@ enum LightType {
   generator,
   chimera,
   hmi,
+  diffusionFrame,
+  net,
 }
 
 extension ElementTypeCodec on ElementType {
@@ -60,15 +62,17 @@ extension LightTypeLabel on LightType {
         LightType.cyc => 'Cyc Light',
         LightType.softbox => 'Soft Box',
         LightType.practical => 'Practical',
-        LightType.bounce => 'Bounce',
-        LightType.flag => 'Flag/Solid',
+        LightType.bounce => 'Rebote',
+        LightType.flag => 'Negro',
         LightType.octagon => 'Octagon',
-        LightType.cutter => 'Cutter',
+        LightType.cutter => 'Cortador',
         LightType.gel => 'Gel',
         LightType.cStand => 'C-Stand',
         LightType.generator => 'Generador',
         LightType.chimera => 'Chimera',
         LightType.hmi => 'HMI',
+        LightType.diffusionFrame => 'Difusión',
+        LightType.net => 'Red',
       };
 
   String get dbValue => switch (this) {
@@ -244,4 +248,6 @@ const kShotDesignerLightGrid = [
   LightType.cStand,
   LightType.generator,
   LightType.chimera,
+  LightType.diffusionFrame,
+  LightType.net,
 ];

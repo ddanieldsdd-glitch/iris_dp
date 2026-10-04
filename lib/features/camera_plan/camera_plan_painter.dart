@@ -10,6 +10,9 @@ import 'light/light_scene.dart';
 import 'light/plan_light.dart';
 import 'light_beam.dart';
 import 'light_symbols.dart';
+import 'light/modifiers.dart';
+import 'light/surfaces.dart';
+import 'plan_opening.dart';
 import 'plan_segment.dart';
 
 /// Colores del lienzo: fondo oscuro, como en un plató a oscuras, para que
@@ -117,26 +120,29 @@ class CameraPlanPainter extends CustomPainter {
         Paint()
           ..color = const Color(0xFFFFFFFF).withValues(alpha: inheritedOpacity),
       );
-      for (final el in inheritedElements) {
-        _drawBeam(canvas, el);
-      }
-      for (final el in inheritedElements) {
+      for (final el in _paintOrder(inheritedElements)) {
         _drawElement(canvas, el);
       }
       canvas.restore();
     }
 
-    // Lo que corta la luz: paredes, puertas cerradas y banderas de todas
-    // las capas.
-    _lightScene = LightScene(
-      lights: const [],
-      blockers: LightScene.blockersOf([...inheritedElements, ...elements]),
-      metersPerUnit: metersPerUnit ?? defaultMetersPerUnit,
-    );
-
+    // La planta vista por la luz: aparatos, rebotes, telas y paredes de
+    // todas las capas, con lo que las tapa.
+    final scene = LightScene.from([
+      ...inheritedElements,
+      ...elements,
+    ], metersPerUnit: metersPerUnit ?? defaultMetersPerUnit);
+    final dimmed = {...inheritedElements};
     // Los haces van debajo de todo lo demás.
-    for (final el in elements) {
-      _drawBeam(canvas, el);
+    for (final light in scene.lights) {
+      _drawBeam(
+        canvas,
+        scene,
+        light,
+        strength: dimmed.contains(light.fixture?.element)
+            ? inheritedOpacity
+            : 1,
+      );
     }
 
     for (final el in elements.where((e) => e.type == ElementType.camera)) {
@@ -149,19 +155,7 @@ class CameraPlanPainter extends CustomPainter {
       );
     }
 
-    // Calles y relieve debajo; paredes y lo demás encima.
-    final ordered = [
-      ...elements.where(
-        (e) =>
-            PlanSegment.isSegment(e) &&
-            PlanSegment.kind(e) != PlanSegment.kindWall,
-      ),
-      ...elements.where(
-        (e) =>
-            !PlanSegment.isSegment(e) ||
-            PlanSegment.kind(e) == PlanSegment.kindWall,
-      ),
-    ];
+    final ordered = _paintOrder(elements);
     for (final el in ordered) {
       _drawElement(
         canvas,
@@ -175,6 +169,18 @@ class CameraPlanPainter extends CustomPainter {
     canvas.restore();
 
     if (metersPerUnit != null) _drawScaleBar(canvas, size);
+  }
+
+  /// Calles y relieve debajo, luego las paredes y encima todo lo demás:
+  /// así una puerta o una ventana puede abrir su hueco en la pared.
+  static List<PlanElement> _paintOrder(List<PlanElement> elements) {
+    bool isWall(PlanElement e) =>
+        PlanSegment.isSegment(e) && PlanSegment.kind(e) == PlanSegment.kindWall;
+    return [
+      ...elements.where((e) => PlanSegment.isSegment(e) && !isWall(e)),
+      ...elements.where(isWall),
+      ...elements.where((e) => !PlanSegment.isSegment(e)),
+    ];
   }
 
   /// Tramo en curso, medida y asas de la zona.
@@ -604,7 +610,11 @@ class CameraPlanPainter extends CustomPainter {
       case ElementType.prop:
         _drawProp(canvas, el);
       case ElementType.wall:
-        _drawArchitecture(canvas, el);
+        if (PlanOpening.isOpening(el)) {
+          _drawOpening(canvas, el);
+        } else {
+          _drawArchitecture(canvas, el);
+        }
     }
 
     if (selected) {
@@ -641,6 +651,8 @@ class CameraPlanPainter extends CustomPainter {
       case ElementType.actor:
       case ElementType.prop:
       case ElementType.wall:
+        // Puertas y ventanas se entienden solas: sin rótulo.
+        if (PlanOpening.isOpening(el)) break;
         if (el.label != null && el.label!.isNotEmpty) {
           _drawLabelBelow(canvas, el.displayLabel, _CanvasColors.inkSecondary);
         }
@@ -831,21 +843,24 @@ class CameraPlanPainter extends CustomPainter {
     }
   }
 
-  /// La planta vista por la luz, para recortar los haces con las paredes.
-  LightScene? _lightScene;
-
   /// Lux por debajo de los cuales el haz deja de dibujarse.
   static const double _beamFloorLux = 20;
 
-  /// Haz de una luz encendida, calculado: llega hasta donde la luz baja de
-  /// [_beamFloorLux] y se apaga con el cuadrado de la distancia. Más vatios,
-  /// menos difusión o un haz más cerrado lo alargan.
-  void _drawBeam(Canvas canvas, PlanElement el) {
-    final light = PlanLight.of(el);
-    if (light == null || light.source.candela <= 0) return;
+  /// Haz de una fuente, calculado: llega hasta donde la luz baja de
+  /// [_beamFloorLux], se apaga con el cuadrado de la distancia y se corta en
+  /// lo que encuentra. Vale igual para un aparato que para lo que devuelve
+  /// un rebote, una tela o una pared.
+  void _drawBeam(
+    Canvas canvas,
+    LightScene scene,
+    SceneLight light, {
+    double strength = 1,
+  }) {
     final source = light.source;
-    final mpu = metersPerUnit ?? defaultMetersPerUnit;
-    final reachM = source.distanceFor(_beamFloorLux).clamp(0.3, 60.0);
+    if (source.candela <= 0) return;
+    final mpu = scene.metersPerUnit;
+    final reachM = source.distanceFor(_beamFloorLux).clamp(0.0, 60.0);
+    if (reachM < 0.15) return;
     final reach = reachM / mpu;
     final color = LightBeam.colorForCct(source.cct);
 
@@ -854,42 +869,49 @@ class CameraPlanPainter extends CustomPainter {
       final lux = source.illuminance(math.max(reachM * fraction, 0.05));
       final stops =
           math.log(math.max(lux, _beamFloorLux) / _beamFloorLux) / math.ln2;
-      return math.pow((stops / 16).clamp(0.0, 1.0), 1.7).toDouble() * 0.5;
+      return math.pow((stops / 16).clamp(0.0, 1.0), 1.7).toDouble() *
+          0.5 *
+          strength;
     }
 
     const fractions = [0.0, 0.05, 0.12, 0.25, 0.5, 1.0];
-    Paint glow(double strength) => Paint()
+    Paint glow(double amount) => Paint()
       ..blendMode = BlendMode.plus
       ..shader = ui.Gradient.radial(Offset.zero, reach, [
-        for (final f in fractions)
-          color.withValues(alpha: alphaAt(f) * strength),
+        for (final f in fractions) color.withValues(alpha: alphaAt(f) * amount),
       ], fractions);
 
     canvas.save();
-    // Las paredes cortan el haz; las ventanas y las puertas abiertas lo
-    // dejan pasar.
-    final scene = _lightScene;
-    if (scene != null && scene.blockers.isNotEmpty) {
-      canvas.clipPath(scene.visibleArea(el.position, reach));
+    // Las paredes, las personas y el grip cortan el haz; las ventanas y las
+    // puertas abiertas lo dejan pasar.
+    if (scene.blockers.isNotEmpty) {
+      canvas.clipPath(
+        scene.visibleArea(light.position, reach, ignore: light.surface),
+      );
     }
-    canvas.translate(el.position.dx, el.position.dy);
-    canvas.rotate(el.rotation * math.pi / 180);
-    if (source.isOmni) {
+    canvas.translate(light.position.dx, light.position.dy);
+    canvas.rotate(math.atan2(light.aim.dx, -light.aim.dy));
+
+    Path wedge(double degrees) {
+      final sweep = math.min(degrees, 340) * math.pi / 180;
+      return Path()
+        ..moveTo(0, 0)
+        ..arcTo(
+          Rect.fromCircle(center: Offset.zero, radius: reach),
+          -math.pi / 2 - sweep / 2,
+          sweep,
+          false,
+        )
+        ..close();
+    }
+
+    if (light.frontOnly) {
+      // Una superficie devuelve la luz por todo su frente, más en su eje.
+      canvas.drawPath(wedge(178), glow(0.35));
+      canvas.drawPath(wedge(math.min(source.beamDeg, 178)), glow(0.65));
+    } else if (source.isOmni) {
       canvas.drawCircle(Offset.zero, reach, glow(1));
     } else {
-      Path wedge(double degrees) {
-        final sweep = math.min(degrees, 340) * math.pi / 180;
-        return Path()
-          ..moveTo(0, 0)
-          ..arcTo(
-            Rect.fromCircle(center: Offset.zero, radius: reach),
-            -math.pi / 2 - sweep / 2,
-            sweep,
-            false,
-          )
-          ..close();
-      }
-
       // El haz, hasta donde queda la mitad de la luz, y el derrame, más
       // ancho y más tenue.
       canvas.drawPath(wedge(source.beamDeg * 1.7), glow(0.3));
@@ -898,7 +920,196 @@ class CameraPlanPainter extends CustomPainter {
     canvas.restore();
   }
 
+  /// Puerta, ventana o abertura: abre su hueco en la pared y dibuja lo que
+  /// hay en él. Se pinta en coordenadas del elemento (ya trasladado y
+  /// girado): la pared va a lo largo del eje x.
+  void _drawOpening(Canvas canvas, PlanElement el) {
+    final half = PlanOpening.width(el) / 2;
+    // El hueco: se borra la pared que haya debajo.
+    canvas.drawRect(
+      Rect.fromLTRB(-half, -5, half, 5),
+      Paint()..color = _CanvasColors.background,
+    );
+    final jamb = Paint()
+      ..color = _CanvasColors.ink
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(Offset(-half, -5), Offset(-half, 5), jamb);
+    canvas.drawLine(Offset(half, -5), Offset(half, 5), jamb);
+
+    if (PlanOpening.isWindow(el)) {
+      final glass = Rect.fromLTRB(-half, -3, half, 3);
+      canvas.drawRect(
+        glass,
+        Paint()..color = const Color(0xFF7EC8F0).withValues(alpha: 0.35),
+      );
+      canvas.drawRect(
+        glass,
+        Paint()
+          ..color = _CanvasColors.ink
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+      // Cortina o difusión puesta en la ventana.
+      if ((el.props[PlanLight.modifiersKey] as List? ?? const []).isNotEmpty) {
+        _drawDashedPath(
+          canvas,
+          Path()
+            ..moveTo(-half, 8)
+            ..lineTo(half, 8),
+          Paint()
+            ..color = Colors.white.withValues(alpha: 0.8)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        );
+      }
+      return;
+    }
+
+    if (PlanOpening.isDoor(el)) {
+      // Las hojas están en coordenadas del plano: se pasan a las de la
+      // puerta deshaciendo su giro.
+      final rad = -el.rotation * math.pi / 180;
+      Offset local(Offset world) {
+        final d = world - el.position;
+        return Offset(
+          d.dx * math.cos(rad) - d.dy * math.sin(rad),
+          d.dx * math.sin(rad) + d.dy * math.cos(rad),
+        );
+      }
+
+      final leaf = Paint()
+        ..color = _CanvasColors.ink
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round;
+      final swing = Paint()
+        ..color = _CanvasColors.inkTertiary
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1;
+      for (final (hinge, tip) in PlanOpening.leaves(el)) {
+        final h = local(hinge);
+        final t = local(tip);
+        canvas.drawLine(h, t, leaf);
+        // Recorrido de la hoja, del cierre a donde está.
+        final length = (t - h).distance;
+        final closed = Offset(h.dx < 0 ? h.dx + length : h.dx - length, 0);
+        if ((closed - t).distance > 2) {
+          final from = math.atan2(closed.dy - h.dy, closed.dx - h.dx);
+          var sweep = math.atan2(t.dy - h.dy, t.dx - h.dx) - from;
+          if (sweep > math.pi) sweep -= 2 * math.pi;
+          if (sweep < -math.pi) sweep += 2 * math.pi;
+          _drawDashedPath(
+            canvas,
+            Path()
+              ..addArc(Rect.fromCircle(center: h, radius: length), from, sweep),
+            swing,
+          );
+        }
+      }
+      return;
+    }
+
+    if (el.architectureType == ArchitectureType.prisonBars) {
+      for (var x = -half + 6; x < half; x += 8) {
+        canvas.drawLine(
+          Offset(x, -6),
+          Offset(x, 6),
+          Paint()
+            ..color = _CanvasColors.inkSecondary
+            ..strokeWidth = 2,
+        );
+      }
+    }
+  }
+
+  /// Negro, cortador, rebote, tela, red o gelatina: una barra con su largo
+  /// real, a lo largo del eje x del elemento.
+  void _drawGrip(Canvas canvas, PlanElement el) {
+    final half = LightScene.lengthOf(el) / 2;
+    final a = Offset(-half, 0);
+    final b = Offset(half, 0);
+    Paint line(Color color, double width) => Paint()
+      ..color = color
+      ..strokeWidth = width
+      ..strokeCap = StrokeCap.butt
+      ..style = PaintingStyle.stroke;
+
+    switch (el.lightType) {
+      case LightType.flag || LightType.cutter:
+        final width = el.lightType == LightType.flag ? 7.0 : 4.0;
+        canvas.drawLine(a, b, line(_CanvasColors.inkSecondary, width + 2));
+        canvas.drawLine(a, b, line(const Color(0xFF050506), width));
+      case LightType.bounce:
+        final material = SurfaceMaterial.byId(
+          el.props[LightScene.materialKey] as String?,
+          kBounceMaterials,
+        );
+        final tint = LightBeam.colorForCct(
+          1e6 / (1e6 / 5600 + material.miredShift),
+        );
+        canvas.drawLine(a, b, line(tint, 6));
+        canvas.drawLine(
+          a + const Offset(0, 4),
+          b + const Offset(0, 4),
+          line(_CanvasColors.inkTertiary, 2),
+        );
+      case LightType.diffusionFrame:
+        canvas.drawLine(a, b, line(Colors.white.withValues(alpha: 0.55), 7));
+        for (var x = -half + 4; x < half; x += 7) {
+          canvas.drawLine(
+            Offset(x - 2, 4),
+            Offset(x + 2, -4),
+            line(_CanvasColors.background.withValues(alpha: 0.7), 1),
+          );
+        }
+      case LightType.net:
+        _drawDashedPath(
+          canvas,
+          Path()
+            ..moveTo(a.dx, 0)
+            ..lineTo(b.dx, 0),
+          line(_CanvasColors.inkSecondary, 5),
+        );
+      case LightType.gel:
+        final gel = LightModifier.byId(
+          ((el.props[PlanLight.modifiersKey] as List?)?.firstOrNull)
+              ?.toString(),
+        );
+        final warm = (gel?.miredShift ?? 81) >= 0;
+        canvas.drawLine(
+          a,
+          b,
+          line(
+            (warm ? const Color(0xFFFF9E3D) : const Color(0xFF5AA9FF))
+                .withValues(alpha: 0.75),
+            6,
+          ),
+        );
+      default:
+        break;
+    }
+    // Los pies del marco.
+    for (final end in [a, b]) {
+      canvas.drawCircle(end, 3, Paint()..color = _CanvasColors.inkSecondary);
+    }
+  }
+
+  /// ¿Se dibuja como una barra de grip con su largo real?
+  static bool _isGripBar(PlanElement el) => switch (el.lightType) {
+    LightType.flag ||
+    LightType.cutter ||
+    LightType.bounce ||
+    LightType.diffusionFrame ||
+    LightType.net ||
+    LightType.gel => true,
+    _ => false,
+  };
+
   void _drawLight(Canvas canvas, PlanElement el) {
+    if (_isGripBar(el)) {
+      _drawGrip(canvas, el);
+      return;
+    }
     final beam = LightBeam.of(el);
     final lit = beam != null && !beam.off;
     final stroke = lit

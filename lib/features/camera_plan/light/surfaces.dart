@@ -1,0 +1,105 @@
+/// Cómo devuelve la luz una superficie: cuánta, de qué color y cómo de
+/// abierta.
+class SurfaceMaterial {
+  final String id;
+  final String name;
+
+  /// Parte de la luz que devuelve, de 0 a 1.
+  final double reflectance;
+
+  /// Tinte que añade, en mired (positivo = más cálido).
+  final double miredShift;
+
+  /// Ángulo de haz de lo que devuelve. Un rebote mate lo reparte por todo
+  /// el frente (120°); uno plateado lo concentra.
+  final double beamDeg;
+
+  const SurfaceMaterial({
+    required this.id,
+    required this.name,
+    required this.reflectance,
+    this.miredShift = 0,
+    this.beamDeg = 120,
+  });
+
+  static SurfaceMaterial byId(String? id, List<SurfaceMaterial> from) {
+    for (final m in from) {
+      if (m.id == id) return m;
+    }
+    return from.first;
+  }
+}
+
+/// Materiales de un rebote de grip. Valores orientativos.
+const kBounceMaterials = <SurfaceMaterial>[
+  SurfaceMaterial(
+    id: 'ultrabounce',
+    name: 'Ultrabounce',
+    reflectance: 0.85,
+    miredShift: -5,
+  ),
+  SurfaceMaterial(id: 'poly', name: 'Poliespán', reflectance: 0.8),
+  SurfaceMaterial(
+    id: 'muslin-bleached',
+    name: 'Muselina blanqueada',
+    reflectance: 0.7,
+    beamDeg: 130,
+  ),
+  SurfaceMaterial(
+    id: 'muslin',
+    name: 'Muselina cruda',
+    reflectance: 0.6,
+    miredShift: 30,
+    beamDeg: 130,
+  ),
+  SurfaceMaterial(
+    id: 'silver',
+    name: 'Plata',
+    reflectance: 0.9,
+    miredShift: -8,
+    beamDeg: 70,
+  ),
+  SurfaceMaterial(
+    id: 'gold',
+    name: 'Oro',
+    reflectance: 0.75,
+    miredShift: 85,
+    beamDeg: 80,
+  ),
+];
+
+/// Materiales de pared: lo que rebotan al ambiente de la sala y con qué
+/// tinte. Una pared blanca devuelve mucho y algo frío; el ladrillo, poco,
+/// más marrón y más repartido. Valores orientativos.
+const kWallMaterials = <SurfaceMaterial>[
+  SurfaceMaterial(
+    id: 'white',
+    name: 'Blanca',
+    reflectance: 0.75,
+    miredShift: -8,
+  ),
+  SurfaceMaterial(id: 'cream', name: 'Crema', reflectance: 0.6, miredShift: 25),
+  SurfaceMaterial(id: 'grey', name: 'Gris', reflectance: 0.35),
+  SurfaceMaterial(
+    id: 'concrete',
+    name: 'Hormigón',
+    reflectance: 0.35,
+    miredShift: 8,
+    beamDeg: 130,
+  ),
+  SurfaceMaterial(
+    id: 'brick',
+    name: 'Ladrillo',
+    reflectance: 0.25,
+    miredShift: 60,
+    beamDeg: 140,
+  ),
+  SurfaceMaterial(
+    id: 'wood',
+    name: 'Madera',
+    reflectance: 0.3,
+    miredShift: 75,
+    beamDeg: 130,
+  ),
+  SurfaceMaterial(id: 'black', name: 'Negra', reflectance: 0.04),
+];

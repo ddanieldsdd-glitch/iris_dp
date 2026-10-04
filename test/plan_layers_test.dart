@@ -475,11 +475,11 @@ void main() {
         '2× Difusión blanca (Rosco 3026 · 216)',
         '1× ½ CTO (Rosco 3408)',
       ]);
-      expect(gear.grip.map((l) => '$l'), ['1× Flag/Solid']);
+      expect(gear.grip.map((l) => '$l'), ['1× Negro']);
       expect(gear.cameras.map((l) => '$l'), ['1× Cámara A · 35mm · DOLLY']);
       expect(
         gear.toText(title: 'Setup A'),
-        'Setup A\nLUCES\n  2× HMI\n  1× Titan Tube\nGRIP\n  1× Flag/Solid\n'
+        'Setup A\nLUCES\n  2× HMI\n  1× Titan Tube\nGRIP\n  1× Negro\n'
         'CÁMARA\n  1× Cámara A · 35mm · DOLLY',
       );
       expect(GearList.from(const []).isEmpty, isTrue);

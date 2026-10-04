@@ -8,6 +8,7 @@ import 'package:iris_dp/features/camera_plan/light/light_scene.dart';
 import 'package:iris_dp/features/camera_plan/light/modifiers.dart';
 import 'package:iris_dp/features/camera_plan/light/photometry.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
+import 'package:iris_dp/features/camera_plan/plan_opening.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 
 void main() {
@@ -424,6 +425,239 @@ void main() {
       expect(
         two.luxAt(before),
         closeTo(parts.first.lux + parts.last.lux, 1e-6),
+      );
+    });
+  });
+
+  group('simulador: colisiones, grip y rebotes', () {
+    var id = 0;
+    PlanElement light(
+      LightType type,
+      double x,
+      double y,
+      double rotation, [
+      Map<String, dynamic>? props,
+    ]) => PlanElement(
+      id: --id,
+      type: ElementType.light,
+      position: Offset(x, y),
+      rotation: rotation,
+      lightType: type,
+      props: {'intensity': 100, ...?props},
+    );
+    PlanElement hmi(double x, double y, double rotation) =>
+        light(LightType.hmi, x, y, rotation);
+    PlanElement wall(
+      double x1,
+      double y1,
+      double x2,
+      double y2, [
+      String? material,
+    ]) {
+      final el = PlanSegment.create(start: Offset(x1, y1), end: Offset(x2, y2))
+        ..id = --id;
+      if (material != null) el.props['material'] = material;
+      return el;
+    }
+
+    PlanElement door({double open = 90, double width = 60}) => PlanElement(
+      id: --id,
+      type: ElementType.wall,
+      position: const Offset(400, 300),
+      rotation: 90,
+      label: ArchitectureType.doorOpen.dbValue,
+      props: {'open': open, 'width': width},
+    );
+    LightScene scene(List<PlanElement> elements, {bool wallBounce = false}) =>
+        LightScene.from(elements, metersPerUnit: 0.02, wallBounce: wallBounce);
+    const behind = Offset(700, 300);
+
+    test('el haz dibujado se corta en la pared, esté donde esté la luz', () {
+      // La planta con la que falló: sala arriba, luz debajo mirando hacia
+      // arriba, con coordenadas negativas.
+      final room = scene([
+        light(LightType.led1x1, -80, 560, 0),
+        wall(-150, 160, -150, 390),
+        wall(-150, 390, 40, 420),
+        wall(40, 420, 30, 160),
+        wall(30, 160, -150, 160),
+      ]);
+      final area = room.visibleArea(const Offset(-80, 560), 3000);
+      expect(area.contains(const Offset(-80, 480)), isTrue);
+      expect(area.contains(const Offset(-80, 300)), isFalse);
+      expect(area.contains(const Offset(-80, 100)), isFalse);
+      expect(room.luxAt(const Offset(-80, 300)), 0);
+    });
+
+    test('una persona hace sombra, salvo que se le quite', () {
+      final actor = PlanElement(
+        id: --id,
+        type: ElementType.actor,
+        position: const Offset(300, 300),
+      );
+      final open = scene([hmi(100, 300, 90)]).luxAt(behind);
+      expect(scene([hmi(100, 300, 90), actor]).luxAt(behind), 0);
+      // A un lado de la persona, la luz pasa.
+      expect(
+        scene([hmi(100, 300, 90), actor]).luxAt(const Offset(700, 420)),
+        greaterThan(0),
+      );
+      // La propia persona sí está iluminada.
+      expect(
+        scene([hmi(100, 300, 90), actor]).luxAt(actor.position),
+        greaterThan(0),
+      );
+      actor.props['noShadow'] = true;
+      expect(scene([hmi(100, 300, 90), actor]).luxAt(behind), open);
+    });
+
+    test('una puerta se engancha a la pared y se alinea con ella', () {
+      final w = wall(400, 0, 400, 600);
+      final piece = door()
+        ..position = const Offset(420, 310)
+        ..rotation = 0;
+      expect(PlanOpening.snapToWall(piece, [w]), isTrue);
+      expect(
+        (piece.position - const Offset(400, 310)).distance,
+        lessThan(1e-6),
+      );
+      expect(piece.rotation, 90);
+      // Lejos de cualquier pared no se engancha.
+      final far = door()..position = const Offset(900, 300);
+      expect(PlanOpening.snapToWall(far, [w]), isFalse);
+    });
+
+    test('puerta abierta: la luz pasa por el hueco; cerrada, no', () {
+      final open = scene([hmi(100, 300, 90)]).luxAt(behind);
+      final w = wall(400, 0, 400, 600);
+      expect(
+        scene([hmi(100, 300, 90), w, door(open: 90)]).luxAt(behind),
+        closeTo(open, open * 0.001),
+      );
+      expect(scene([hmi(100, 300, 90), w, door(open: 0)]).luxAt(behind), 0);
+      // Fuera del hueco, la pared sigue cortando.
+      expect(
+        scene([hmi(100, 300, 90), w, door()]).luxAt(const Offset(700, 560)),
+        0,
+      );
+    });
+
+    test('la hoja de una puerta abierta hace sombra', () {
+      final piece = door(open: 60);
+      final (hinge, tip) = PlanOpening.leaves(piece).single;
+      expect(hinge, const Offset(400, 270));
+      expect((tip - hinge).distance, closeTo(60, 1e-6));
+      // Una luz detrás de la hoja no llega al otro lado de ella.
+      final mid = (hinge + tip) / 2;
+      final normal = Offset(-(tip - hinge).dy, (tip - hinge).dx) / 60;
+      final lamp = light(
+        LightType.practical,
+        (mid + normal * 30).dx,
+        (mid + normal * 30).dy,
+        0,
+      );
+      final s = scene([lamp, piece]);
+      expect(s.luxAt(mid - normal * 30), 0);
+      expect(s.luxAt(mid + normal * 60), greaterThan(0));
+    });
+
+    test('un negro corta y una red quita medio stop', () {
+      final open = scene([hmi(100, 300, 90)]).luxAt(behind);
+      expect(
+        scene([
+          hmi(100, 300, 90),
+          light(LightType.flag, 250, 300, 90),
+        ]).luxAt(behind),
+        0,
+      );
+      final netted = scene([
+        hmi(100, 300, 90),
+        light(LightType.net, 250, 300, 90),
+      ]).luxAt(behind);
+      expect(stopsBetweenLux(open, netted), closeTo(0.5, 0.01));
+    });
+
+    test('una gelatina en marco quita luz y cambia el color', () {
+      final gelled = scene([
+        hmi(100, 300, 90),
+        light(LightType.gel, 250, 300, 90, {
+          'modifiers': ['cto-full'],
+        }),
+      ]);
+      final open = scene([hmi(100, 300, 90)]);
+      expect(gelled.luxAt(behind), closeTo(open.luxAt(behind) * 0.47, 1));
+      expect(open.cctAt(behind), closeTo(5600, 1));
+      expect(gelled.cctAt(behind), closeTo(2900, 150));
+    });
+
+    test('un marco de difusión corta el haz y lo devuelve más ancho', () {
+      final open = scene([hmi(100, 300, 90)]);
+      final framed = scene([
+        hmi(100, 300, 90),
+        light(LightType.diffusionFrame, 250, 300, 90, {'len': 120}),
+      ]);
+      // En el eje hay menos luz que sin tela…
+      expect(framed.luxAt(behind), greaterThan(0));
+      expect(framed.luxAt(behind), lessThan(open.luxAt(behind) * 0.5));
+      // …y lo que llega viene de la tela, no del aparato.
+      final parts = framed.contributionsAt(behind);
+      expect(parts.single.light.isSecondary, isTrue);
+      expect(parts.single.light.label, contains('grid cloth'));
+      // Muy fuera del haz original, donde antes no había nada, ahora sí.
+      const side = Offset(270, 640);
+      expect(open.luxAt(side), 0);
+      expect(framed.luxAt(side), greaterThan(0));
+      // Por detrás de la tela no sale nada de ella.
+      expect(
+        framed.contributionsAt(const Offset(180, 300)).single.light.isSecondary,
+        isFalse,
+      );
+    });
+
+    test('un rebote ilumina lo que el aparato no ve, con su tinte', () {
+      // La luz mira a la derecha; el punto está detrás de ella.
+      const hidden = Offset(60, 420);
+      expect(scene([hmi(100, 300, 90)]).luxAt(hidden), 0);
+
+      PlanElement bounce(String material) => light(
+        LightType.bounce,
+        400,
+        300,
+        90,
+        {'len': 120, 'material': material},
+      );
+      final white = scene([hmi(100, 300, 90), bounce('ultrabounce')]);
+      final gold = scene([hmi(100, 300, 90), bounce('gold')]);
+      expect(white.luxAt(hidden), greaterThan(0));
+      // El oro devuelve algo menos y bastante más cálido.
+      expect(gold.luxAt(hidden), lessThan(white.luxAt(hidden)));
+      expect(gold.cctAt(hidden)!, lessThan(white.cctAt(hidden)! - 1000));
+      // El rebote no deja pasar la luz.
+      expect(white.luxAt(behind), 0);
+    });
+
+    test('las paredes devuelven luz a la sala, con el tinte del material', () {
+      const hidden = Offset(60, 420);
+      List<PlanElement> room(String material) => [
+        hmi(100, 300, 90),
+        wall(400, 0, 400, 600, material),
+      ];
+      expect(scene(room('white')).luxAt(hidden), 0);
+
+      final white = scene(room('white'), wallBounce: true);
+      final brick = scene(room('brick'), wallBounce: true);
+      final black = scene(room('black'), wallBounce: true);
+      expect(white.luxAt(hidden), greaterThan(brick.luxAt(hidden) * 2));
+      expect(brick.luxAt(hidden), greaterThan(black.luxAt(hidden) * 3));
+      // Blanca: algo más fría que la fuente. Ladrillo: más cálida.
+      expect(white.cctAt(hidden)!, greaterThan(5600));
+      expect(brick.cctAt(hidden)!, lessThan(5000));
+      // La pared sigue sin dejar pasar la luz.
+      expect(white.luxAt(behind), 0);
+      // Y quien aporta es la pared.
+      expect(
+        white.contributionsAt(hidden).first.light.label,
+        startsWith('Pared blanca'),
       );
     });
   });

@@ -30,7 +30,9 @@ import 'light_beam.dart';
 import 'plan_data.dart' show kLightSetupColors;
 import 'plan_gear_list.dart';
 import 'plan_light_controls.dart';
+import 'plan_opening.dart';
 import 'plan_palette.dart';
+import 'plan_piece_controls.dart';
 import 'plan_segment.dart';
 import 'plan_target.dart';
 import '../locations/location_scan_service.dart';
@@ -1322,6 +1324,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         _viewCenter + Offset(same % 5 * 36.0, same % 5 * 24.0),
       );
     }
+    // Una puerta o una ventana nace enganchada a la pared más cercana.
+    if (PlanOpening.isOpening(el)) {
+      PlanOpening.snapToWall(el, _visibleElements);
+    }
     _hiddenLayers.remove(layer);
     setState(() => _elements.add(el));
     await _persistElement(el);
@@ -1754,14 +1760,17 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       // El imán coloca lo que se ha movido sobre la rejilla.
       final anchor = group.first;
       final shift = _snapToGrid(anchor.position) - anchor.position;
-      if (shift != Offset.zero) {
-        setState(() {
-          for (final el in group) {
-            el.position += shift;
-            el.pathPoints = [for (final p in el.pathPoints) p + shift];
+      setState(() {
+        for (final el in group) {
+          // Puertas y ventanas se enganchan a la pared sobre la que caen.
+          if (PlanOpening.isOpening(el) &&
+              PlanOpening.snapToWall(el, _visibleElements)) {
+            continue;
           }
-        });
-      }
+          el.position += shift;
+          el.pathPoints = [for (final p in el.pathPoints) p + shift];
+        }
+      });
       await _persistMany(group);
     } else {
       await _persistElement(_selected!);
@@ -2401,6 +2410,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 onDelete: _deleteSelected,
                                 onDuplicate: _duplicateSelection,
                                 selectionCount: _selection.length,
+                                metersPerUnit: _metersPerUnit,
                                 lengthLabel: PlanSegment.isSegment(_selected!)
                                     ? formatMeters(
                                         PlanSegment.length(_selected!),
@@ -3174,6 +3184,7 @@ class _ElementPanel extends StatefulWidget {
 
   /// Longitud en metros, si es un tramo.
   final String? lengthLabel;
+  final double metersPerUnit;
 
   const _ElementPanel({
     required this.palette,
@@ -3191,6 +3202,7 @@ class _ElementPanel extends StatefulWidget {
     required this.onDuplicate,
     this.selectionCount = 1,
     this.lengthLabel,
+    this.metersPerUnit = defaultMetersPerUnit,
   });
 
   @override
@@ -3367,6 +3379,13 @@ class _ElementPanelState extends State<_ElementPanel> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                   ],
+                  if (PlanPieceControls.appliesTo(element))
+                    PlanPieceControls(
+                      element: element,
+                      metersPerUnit: widget.metersPerUnit,
+                      onPreview: widget.onPreview,
+                      onUpdate: widget.onUpdate,
+                    ),
                   if (widget.lengthLabel != null)
                     Text(
                       'Longitud: ${widget.lengthLabel}',

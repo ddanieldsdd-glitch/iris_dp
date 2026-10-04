@@ -126,6 +126,10 @@ class LightSymbols {
         _chimera(canvas);
       case LightType.hmi:
         _hmi(canvas);
+      case LightType.diffusionFrame:
+        _frame(canvas, hatched: true);
+      case LightType.net:
+        _frame(canvas, hatched: false);
     }
   }
 
@@ -366,6 +370,19 @@ class LightSymbols {
     canvas.drawLine(const Offset(-6, -10), const Offset(6, -10), _stroke());
     canvas.drawLine(const Offset(-6, -10), const Offset(-8, -14), _stroke());
     canvas.drawLine(const Offset(6, -10), const Offset(8, -14), _stroke());
+  }
+
+  /// Marco con tela: rayado para difusión, cruzado para red.
+  static void _frame(Canvas canvas, {required bool hatched}) {
+    final rect = Rect.fromCenter(center: Offset.zero, width: 22, height: 14);
+    canvas.drawRect(rect, _fill());
+    canvas.drawRect(rect, _stroke());
+    for (var x = -8.0; x <= 8; x += 4) {
+      canvas.drawLine(Offset(x - 2, 7), Offset(x + 2, -7), _stroke(1));
+      if (!hatched) {
+        canvas.drawLine(Offset(x + 2, 7), Offset(x - 2, -7), _stroke(1));
+      }
+    }
   }
 
   static void _flag(Canvas canvas) {

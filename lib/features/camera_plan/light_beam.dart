@@ -40,6 +40,8 @@ class LightBeam {
     LightType.bounce ||
     LightType.flag ||
     LightType.cutter ||
+    LightType.diffusionFrame ||
+    LightType.net ||
     LightType.gel ||
     LightType.cStand ||
     LightType.generator => false,
