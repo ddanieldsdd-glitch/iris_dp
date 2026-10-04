@@ -9,45 +9,70 @@ class LightSymbolColors {
   static const stroke = Color(0xFF1B5E20);
   static const fill = Color(0xFFC8E6C9);
   static const strokeWidth = 1.8;
+
+  // Sobre fondo oscuro: lienzo de la planta y tema oscuro.
+  static const darkStroke = Color(0xFFF1F1F4);
+  static const darkFill = Color(0xFF34343C);
 }
 
 /// Dibuja un fixture cenital centrado en (0,0). Escala 1.0 ≈ icono en el mapa.
 class LightSymbolPainter extends CustomPainter {
   final LightType type;
   final double scale;
+  final Color stroke;
+  final Color fill;
 
-  const LightSymbolPainter({required this.type, this.scale = 1.0});
+  const LightSymbolPainter({
+    required this.type,
+    this.scale = 1.0,
+    this.stroke = LightSymbolColors.stroke,
+    this.fill = LightSymbolColors.fill,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
     canvas.scale(scale);
-    LightSymbols.draw(canvas, type);
+    LightSymbols.draw(canvas, type, stroke: stroke, fill: fill);
     canvas.restore();
   }
 
   @override
   bool shouldRepaint(LightSymbolPainter old) =>
-      old.type != type || old.scale != scale;
+      old.type != type ||
+      old.scale != scale ||
+      old.stroke != stroke ||
+      old.fill != fill;
 }
 
 class LightSymbols {
   LightSymbols._();
 
+  // Colores del dibujo en curso; `draw` los fija antes de pintar.
+  static Color _strokeColor = LightSymbolColors.stroke;
+  static Color _fillColor = LightSymbolColors.fill;
+
   static Paint _stroke([double width = LightSymbolColors.strokeWidth]) =>
       Paint()
-        ..color = LightSymbolColors.stroke
+        ..color = _strokeColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = width
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round;
 
   static Paint _fill() => Paint()
-    ..color = LightSymbolColors.fill
+    ..color = _fillColor
     ..style = PaintingStyle.fill;
 
-  static void draw(Canvas canvas, LightType type) {
+  static void draw(
+    Canvas canvas,
+    LightType type, {
+    Color stroke = LightSymbolColors.stroke,
+    Color fill = LightSymbolColors.fill,
+  }) {
+    _strokeColor = stroke;
+    _fillColor = fill;
     switch (type) {
       case LightType.sun:
         _sun(canvas);
@@ -117,27 +142,65 @@ class LightSymbols {
     }
   }
 
-  static void _fresnel(Canvas canvas, {required double w, required double h, required double barn}) {
+  static void _fresnel(
+    Canvas canvas, {
+    required double w,
+    required double h,
+    required double barn,
+  }) {
     final r = Rect.fromCenter(center: Offset.zero, width: w, height: h);
     canvas.drawRect(r, _fill());
     canvas.drawRect(r, _stroke());
-    canvas.drawLine(Offset(-w / 2 - barn, -h / 2), Offset(-w / 2, -h / 2), _stroke());
-    canvas.drawLine(Offset(-w / 2 - barn, h / 2), Offset(-w / 2, h / 2), _stroke());
-    canvas.drawLine(Offset(w / 2, -h / 2), Offset(w / 2 + barn, -h / 2), _stroke());
-    canvas.drawLine(Offset(w / 2, h / 2), Offset(w / 2 + barn, h / 2), _stroke());
+    canvas.drawLine(
+      Offset(-w / 2 - barn, -h / 2),
+      Offset(-w / 2, -h / 2),
+      _stroke(),
+    );
+    canvas.drawLine(
+      Offset(-w / 2 - barn, h / 2),
+      Offset(-w / 2, h / 2),
+      _stroke(),
+    );
+    canvas.drawLine(
+      Offset(w / 2, -h / 2),
+      Offset(w / 2 + barn, -h / 2),
+      _stroke(),
+    );
+    canvas.drawLine(
+      Offset(w / 2, h / 2),
+      Offset(w / 2 + barn, h / 2),
+      _stroke(),
+    );
   }
 
-  static void _flo(Canvas canvas, {required int tubes, required double w, required double h}) {
+  static void _flo(
+    Canvas canvas, {
+    required int tubes,
+    required double w,
+    required double h,
+  }) {
     final r = Rect.fromCenter(center: Offset.zero, width: w, height: h);
     canvas.drawRect(r, _fill());
     canvas.drawRect(r, _stroke());
     final gap = w / (tubes + 1);
     for (var i = 1; i <= tubes; i++) {
       final x = -w / 2 + gap * i;
-      canvas.drawLine(Offset(x, -h / 2 + 1), Offset(x, h / 2 - 1), _stroke(1.2));
+      canvas.drawLine(
+        Offset(x, -h / 2 + 1),
+        Offset(x, h / 2 - 1),
+        _stroke(1.2),
+      );
     }
-    canvas.drawLine(Offset(-w / 2 - 4, -h / 2 + 2), Offset(-w / 2, -h / 2 + 2), _stroke());
-    canvas.drawLine(Offset(-w / 2 - 4, h / 2 - 2), Offset(-w / 2, h / 2 - 2), _stroke());
+    canvas.drawLine(
+      Offset(-w / 2 - 4, -h / 2 + 2),
+      Offset(-w / 2, -h / 2 + 2),
+      _stroke(),
+    );
+    canvas.drawLine(
+      Offset(-w / 2 - 4, h / 2 - 2),
+      Offset(-w / 2, h / 2 - 2),
+      _stroke(),
+    );
   }
 
   static void _floSingle(Canvas canvas) {
@@ -206,10 +269,7 @@ class LightSymbols {
       ..close();
     canvas.drawPath(path, _fill());
     canvas.drawPath(path, _stroke());
-    canvas.drawRect(
-      const Rect.fromLTWH(-16, 2, 6, 6),
-      _stroke(1.2),
-    );
+    canvas.drawRect(const Rect.fromLTWH(-16, 2, 6, 6), _stroke(1.2));
   }
 
   static void _par(Canvas canvas) {
@@ -363,7 +423,11 @@ class LightSymbols {
 
   static void _hmi(Canvas canvas) {
     _sun(canvas);
-    final r = Rect.fromCenter(center: const Offset(0, 14), width: 14, height: 8);
+    final r = Rect.fromCenter(
+      center: const Offset(0, 14),
+      width: 14,
+      height: 8,
+    );
     canvas.drawRect(r, _fill());
     canvas.drawRect(r, _stroke());
   }
@@ -378,6 +442,7 @@ class LightSymbolPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return SizedBox(
       width: size,
       height: size,
@@ -385,6 +450,10 @@ class LightSymbolPreview extends StatelessWidget {
         painter: LightSymbolPainter(
           type: type,
           scale: size / 48,
+          stroke: dark
+              ? LightSymbolColors.darkStroke
+              : LightSymbolColors.stroke,
+          fill: dark ? LightSymbolColors.darkFill : LightSymbolColors.fill,
         ),
       ),
     );

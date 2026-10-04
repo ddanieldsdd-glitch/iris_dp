@@ -74,8 +74,8 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final wide = AppLayout.isWide(context);
-    final open = _navigatorOpen ?? wide;
+    // Plegado de entrada: el sitio es para la paleta y el lienzo.
+    final open = _navigatorOpen ?? false;
 
     return Material(
       color: palette.background,

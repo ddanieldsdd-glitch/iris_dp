@@ -24,6 +24,10 @@ import 'camera_plan_scene_badge.dart';
 import 'floor_plan_repository.dart';
 import 'floor_plan_json.dart';
 import 'floor_plan_scope.dart';
+import 'light_beam.dart';
+import 'plan_data.dart' show kLightSetupColors;
+import 'plan_gear_list.dart';
+import 'plan_palette.dart';
 import 'plan_target.dart';
 import '../locations/location_scan_service.dart';
 import 'plan_element_compat.dart';
@@ -135,6 +139,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Rect? _pendingFit;
   Size _canvasSize = Size.zero;
   int _setupShotCount = 0;
+  Color _setupColor = kLightSetupColors.first;
   int _setShotCount = 0;
   final AnnotationCanvasController _annotationController =
       AnnotationCanvasController();
@@ -339,6 +344,21 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       );
     }
 
+    // Color del esquema: su orden entre los de su mismo set.
+    var setupColor = kLightSetupColors.first;
+    if (lightSetup != null) {
+      final siblings = projectSetups
+          .where(
+            (s) =>
+                s.locationBasePlanId == lightSetup!.locationBasePlanId &&
+                s.locationSiteId == lightSetup.locationSiteId,
+          )
+          .toList();
+      final index = siblings.indexWhere((s) => s.id == lightSetup!.id);
+      setupColor =
+          kLightSetupColors[(index < 0 ? 0 : index) % kLightSetupColors.length];
+    }
+
     final allShots = await (db.select(
       db.shots,
     )..where((s) => s.projectId.equals(widget.projectId))).get();
@@ -401,6 +421,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _setZone = setZone;
       _setShotCount = setShotCount;
       _setupShotCount = setupShotCount;
+      _setupColor = setupColor;
       _shot = shot;
       _scene = scene;
       _linkedSet = linkedSet;
@@ -1038,6 +1059,38 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     );
   }
 
+  /// Color del siguiente actor: uno distinto por cada uno que ya hay.
+  Color get _nextActorColor =>
+      kActorColors[_elements.where((e) => e.type == ElementType.actor).length %
+          kActorColors.length];
+
+  /// Con una cámara del catálogo enlazada, el cono usa su ancho de sensor.
+  Future<void> _syncCameraSensor(PlanElement el) async {
+    if (el.type != ElementType.camera) return;
+    final id = el.externalMapping.catalogCameraId;
+    if (id == null) {
+      el.props.remove('sensorWidthMm');
+      return;
+    }
+    final db = ref.read(databaseProvider);
+    final camera = await (db.select(
+      db.cameras,
+    )..where((c) => c.id.equals(id))).getSingleOrNull();
+    if (camera != null) el.props['sensorWidthMm'] = camera.sensorWidthMm;
+  }
+
+  /// Material de la planta abierta: la luz del esquema y la cámara del plano.
+  GearList get _gearList => GearList.from(
+    _elements.where(
+      (e) => e.layer == PlanLayer.light || e.layer == PlanLayer.shot,
+    ),
+  );
+
+  String get _gearTitle => [
+    _lightSetup?.name ?? 'Sin esquema de luz',
+    if (_shot != null) widget.label,
+  ].join(' · ');
+
   Future<void> _addActor(Color color) async {
     final actorCount = _elements
         .where((e) => e.type == ElementType.actor)
@@ -1399,7 +1452,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             chip(
               PlanLayer.light,
               'Luz: ${_lightSetup?.name ?? 'sin esquema'}',
-              const Color(0xFFFFB300),
+              _setupColor,
               onMenu: _chooseLightSetup,
             ),
             if (_navTargets.isNotEmpty)
@@ -1446,9 +1499,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     );
   }
 
+  /// Con sitio de sobra, la paleta va fija a la izquierda y el panel de
+  /// material y propiedades a la derecha.
+  bool _wide = false;
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    _wide = MediaQuery.sizeOf(context).width >= 1100;
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -1517,6 +1575,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             }),
           ),
           IconButton(
+            tooltip: 'Guardar',
+            icon: Icon(Icons.save_outlined, color: palette.textSecondary),
+            onPressed: _saveCurrentPlan,
+          ),
+          IconButton(
             tooltip: 'Alejar',
             icon: Icon(Icons.remove, color: palette.textSecondary),
             onPressed: () => _zoomBy(-0.1),
@@ -1537,171 +1600,218 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildLayerBar(palette),
-                if (_zoneMode)
-                  _Notice(
-                    palette: palette,
-                    icon: Icons.crop_free,
-                    text:
-                        'Arrastra sobre el plano para marcar la zona de '
-                        '«${_linkedSet?.locationName ?? ''}».',
-                    actionLabel: 'Cancelar',
-                    onAction: () => setState(() {
-                      _zoneMode = false;
-                      _zoneDraft = null;
-                    }),
-                  )
-                else if (_misplaced.isNotEmpty)
-                  _Notice(
-                    palette: palette,
-                    icon: Icons.layers_outlined,
-                    text:
-                        'Hay luces o cámaras guardadas en el entorno o en el '
-                        'set. Pásalas a su capa para poder compartirlas.',
-                    actionLabel: 'Ordenar capas',
-                    onAction: _tidyLayers,
-                  )
-                else if (_linkedSet != null &&
-                    _linkedSite != null &&
-                    _setZone == null)
-                  _Notice(
-                    palette: palette,
-                    icon: Icons.crop_free,
-                    text:
-                        'Este set aún no tiene zona en el plano de '
-                        '«${_linkedSite!.name}».',
-                    actionLabel: 'Marcar zona',
-                    onAction: () => setState(() {
-                      _zoneMode = true;
-                      _selected = null;
-                    }),
+                if (_wide && !_annotationMode)
+                  PlanPalette(
+                    onAddCamera: _addCamera,
+                    onAddActor: () => _addActor(_nextActorColor),
+                    onAddLight: _addLight,
+                    onAddProp: _addProp,
+                    onAddArchitecture: _addArchitecture,
+                    wallsToEnvironment:
+                        _linkedSet != null && _linkedSite != null
+                        ? _wallsToEnvironment
+                        : null,
+                    onWallsToEnvironment: (v) =>
+                        setState(() => _wallsToEnvironment = v),
                   ),
                 Expanded(
-                  child: Row(
+                  child: Column(
                     children: [
+                      _buildLayerBar(palette),
+                      if (_zoneMode)
+                        _Notice(
+                          palette: palette,
+                          icon: Icons.crop_free,
+                          text:
+                              'Arrastra sobre el plano para marcar la zona de '
+                              '«${_linkedSet?.locationName ?? ''}».',
+                          actionLabel: 'Cancelar',
+                          onAction: () => setState(() {
+                            _zoneMode = false;
+                            _zoneDraft = null;
+                          }),
+                        )
+                      else if (_misplaced.isNotEmpty)
+                        _Notice(
+                          palette: palette,
+                          icon: Icons.layers_outlined,
+                          text:
+                              'Hay luces o cámaras guardadas en el entorno o en el '
+                              'set. Pásalas a su capa para poder compartirlas.',
+                          actionLabel: 'Ordenar capas',
+                          onAction: _tidyLayers,
+                        )
+                      else if (_linkedSet != null &&
+                          _linkedSite != null &&
+                          _setZone == null)
+                        _Notice(
+                          palette: palette,
+                          icon: Icons.crop_free,
+                          text:
+                              'Este set aún no tiene zona en el plano de '
+                              '«${_linkedSite!.name}».',
+                          actionLabel: 'Marcar zona',
+                          onAction: () => setState(() {
+                            _zoneMode = true;
+                            _selected = null;
+                          }),
+                        ),
                       Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            _canvasSize = constraints.biggest;
-                            final fit = _pendingFit;
-                            if (fit != null) {
-                              _pendingFit = null;
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                if (mounted) _fitTo(fit);
-                              });
-                            }
-                            return ClipRect(
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  IgnorePointer(
-                                    ignoring: _annotationMode,
-                                    child: GestureDetector(
-                                      onPanStart: _onPanStart,
-                                      onPanUpdate: _onPanUpdate,
-                                      onPanEnd: _onPanEnd,
-                                      onTapDown: _onTapCanvas,
-                                      onDoubleTapDown: _onDoubleTapCanvas,
-                                      child: CustomPaint(
-                                        size: Size(
-                                          constraints.maxWidth,
-                                          constraints.maxHeight,
-                                        ),
-                                        painter: CameraPlanPainter(
-                                          elements: _visibleElements,
-                                          zones: [
-                                            ..._zones,
-                                            if (_zoneDraft != null)
-                                              PlanZone(
-                                                rect: _zoneDraft!,
-                                                color: _sceneColor,
-                                                label:
-                                                    _linkedSet?.locationName ??
-                                                    '',
-                                                active: true,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  _canvasSize = constraints.biggest;
+                                  final fit = _pendingFit;
+                                  if (fit != null) {
+                                    _pendingFit = null;
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                          if (mounted) _fitTo(fit);
+                                        });
+                                  }
+                                  return ClipRect(
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        IgnorePointer(
+                                          ignoring: _annotationMode,
+                                          child: GestureDetector(
+                                            onPanStart: _onPanStart,
+                                            onPanUpdate: _onPanUpdate,
+                                            onPanEnd: _onPanEnd,
+                                            onTapDown: _onTapCanvas,
+                                            onDoubleTapDown: _onDoubleTapCanvas,
+                                            child: CustomPaint(
+                                              size: Size(
+                                                constraints.maxWidth,
+                                                constraints.maxHeight,
                                               ),
-                                          ],
-                                          selectedElement: _selected,
-                                          selectedPathIndex: _selectedPathIndex,
-                                          scale: _scale,
-                                          offset: _canvasOffset,
-                                          palette: palette,
-                                          backgroundImage: _backgroundImage,
-                                          backgroundRect: _backgroundRect,
-                                          backgroundOpacity: _backgroundOpacity,
+                                              painter: CameraPlanPainter(
+                                                elements: _visibleElements,
+                                                zones: [
+                                                  ..._zones,
+                                                  if (_zoneDraft != null)
+                                                    PlanZone(
+                                                      rect: _zoneDraft!,
+                                                      color: _sceneColor,
+                                                      label:
+                                                          _linkedSet
+                                                              ?.locationName ??
+                                                          '',
+                                                      active: true,
+                                                    ),
+                                                ],
+                                                selectedElement: _selected,
+                                                selectedPathIndex:
+                                                    _selectedPathIndex,
+                                                scale: _scale,
+                                                offset: _canvasOffset,
+                                                palette: palette,
+                                                backgroundImage:
+                                                    _backgroundImage,
+                                                backgroundRect: _backgroundRect,
+                                                backgroundOpacity:
+                                                    _backgroundOpacity,
+                                              ),
+                                              child: Container(
+                                                color: Colors.transparent,
+                                              ),
+                                            ),
+                                          ),
                                         ),
-                                        child: Container(
-                                          color: Colors.transparent,
+                                        IgnorePointer(
+                                          ignoring: !_annotationMode,
+                                          child: AnnotationCanvas(
+                                            controller: _annotationController,
+                                            enabled: _annotationMode,
+                                            tool: _annotationTool,
+                                            color: _annotationColor,
+                                            width: _annotationWidth,
+                                            viewport: AnnotationViewport(
+                                              documentSize:
+                                                  _annotationDocumentSize,
+                                              offset: _canvasOffset,
+                                              scale: _scale,
+                                            ),
+                                            onChanged: _saveAnnotations,
+                                          ),
                                         ),
-                                      ),
+                                      ],
                                     ),
-                                  ),
-                                  IgnorePointer(
-                                    ignoring: !_annotationMode,
-                                    child: AnnotationCanvas(
-                                      controller: _annotationController,
-                                      enabled: _annotationMode,
-                                      tool: _annotationTool,
-                                      color: _annotationColor,
-                                      width: _annotationWidth,
-                                      viewport: AnnotationViewport(
-                                        documentSize: _annotationDocumentSize,
-                                        offset: _canvasOffset,
-                                        scale: _scale,
-                                      ),
-                                      onChanged: _saveAnnotations,
-                                    ),
-                                  ),
-                                ],
+                                  );
+                                },
                               ),
-                            );
-                          },
+                            ),
+                            if (_selected != null)
+                              _ElementPanel(
+                                palette: palette,
+                                element: _selected!,
+                                scopeNotice: _scopeNotice(_selected!.layer),
+                                moveTargets: [
+                                  for (final layer in PlanLayer.values)
+                                    if (layer != _selected!.layer &&
+                                        _hasLayer(layer))
+                                      layer,
+                                ],
+                                onMove: (layer) =>
+                                    _moveToLayer(_selected!, layer),
+                                selectedPathIndex: _selectedPathIndex,
+                                onAddPathPoint: _addPathPointAhead,
+                                onDeletePathPoint: _deleteSelectedPathPoint,
+                                onClearPath: _clearCameraPath,
+                                onPreview: () => setState(() {}),
+                                onUpdate: () async {
+                                  final el = _selected!;
+                                  await _syncCameraSensor(el);
+                                  if (mounted) setState(() {});
+                                  await _persistElement(el);
+                                },
+                                onDelete: _deleteSelected,
+                              )
+                            else if (_wide)
+                              Container(
+                                width: 240,
+                                decoration: BoxDecoration(
+                                  color: palette.surface,
+                                  border: Border(
+                                    left: BorderSide(color: palette.border),
+                                  ),
+                                ),
+                                child: PlanGearListPanel(
+                                  gear: _gearList,
+                                  title: _gearTitle,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                      if (_selected != null)
-                        _ElementPanel(
+                      if (_annotationMode)
+                        _PlanAnnotationToolbar(
                           palette: palette,
-                          element: _selected!,
-                          scopeNotice: _scopeNotice(_selected!.layer),
-                          moveTargets: [
-                            for (final layer in PlanLayer.values)
-                              if (layer != _selected!.layer && _hasLayer(layer))
-                                layer,
-                          ],
-                          onMove: (layer) => _moveToLayer(_selected!, layer),
-                          selectedPathIndex: _selectedPathIndex,
-                          onAddPathPoint: _addPathPointAhead,
-                          onDeletePathPoint: _deleteSelectedPathPoint,
-                          onClearPath: _clearCameraPath,
-                          onUpdate: () async {
-                            setState(() {});
-                            await _persistElement(_selected!);
-                          },
-                          onDelete: _deleteSelected,
+                          controller: _annotationController,
+                          tool: _annotationTool,
+                          color: _annotationColor,
+                          width: _annotationWidth,
+                          onToolChanged: (tool) =>
+                              setState(() => _annotationTool = tool),
+                          onColorChanged: (color) =>
+                              setState(() => _annotationColor = color),
+                          onWidthChanged: (width) =>
+                              setState(() => _annotationWidth = width),
+                        ),
+                      if (!_wide)
+                        _BottomToolbar(
+                          palette: palette,
+                          onAdd: _showAddMenu,
+                          onSave: _saveCurrentPlan,
                         ),
                     ],
                   ),
-                ),
-                if (_annotationMode)
-                  _PlanAnnotationToolbar(
-                    palette: palette,
-                    controller: _annotationController,
-                    tool: _annotationTool,
-                    color: _annotationColor,
-                    width: _annotationWidth,
-                    onToolChanged: (tool) =>
-                        setState(() => _annotationTool = tool),
-                    onColorChanged: (color) =>
-                        setState(() => _annotationColor = color),
-                    onWidthChanged: (width) =>
-                        setState(() => _annotationWidth = width),
-                  ),
-                _BottomToolbar(
-                  palette: palette,
-                  onAdd: _showAddMenu,
-                  onSave: _saveCurrentPlan,
                 ),
               ],
             ),
@@ -2413,6 +2523,9 @@ class _ElementPanel extends StatefulWidget {
   final String scopeNotice;
   final List<PlanLayer> moveTargets;
   final ValueChanged<PlanLayer> onMove;
+
+  /// Repinta mientras se arrastra un control, sin guardar todavía.
+  final VoidCallback onPreview;
   final int? selectedPathIndex;
   final VoidCallback? onAddPathPoint;
   final VoidCallback? onDeletePathPoint;
@@ -2426,6 +2539,7 @@ class _ElementPanel extends StatefulWidget {
     required this.scopeNotice,
     required this.moveTargets,
     required this.onMove,
+    required this.onPreview,
     this.selectedPathIndex,
     this.onAddPathPoint,
     this.onDeletePathPoint,
@@ -2459,6 +2573,41 @@ class _ElementPanelState extends State<_ElementPanel> {
   void dispose() {
     _lensCtrl.dispose();
     super.dispose();
+  }
+
+  /// Control de una propiedad del haz: repinta al arrastrar y guarda al
+  /// soltar.
+  Widget _beamSlider(
+    String label,
+    String value,
+    String key,
+    double current,
+    double min,
+    double max, {
+    double step = 1,
+  }) {
+    final palette = widget.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text(label, style: AppTypography.caption(palette))),
+            Text(value, style: AppTypography.caption(palette)),
+          ],
+        ),
+        Slider(
+          value: current.clamp(min, max),
+          min: min,
+          max: max,
+          onChanged: (v) {
+            widget.element.props[key] = (v / step).round() * step;
+            widget.onPreview();
+          },
+          onChangeEnd: (_) => widget.onUpdate(),
+        ),
+      ],
+    );
   }
 
   void _commitLens(String v) {
@@ -2524,6 +2673,60 @@ class _ElementPanelState extends State<_ElementPanel> {
                       ),
                     ),
                   const SizedBox(height: AppSpacing.sm),
+                  if (LightBeam.of(element) case final beam?) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Encendida',
+                            style: AppTypography.caption(palette),
+                          ),
+                        ),
+                        Switch(
+                          value: !beam.off,
+                          onChanged: (on) {
+                            element.props[LightBeam.offKey] = !on;
+                            widget.onUpdate();
+                          },
+                        ),
+                      ],
+                    ),
+                    _beamSlider(
+                      'Intensidad',
+                      '${beam.intensity.round()} %',
+                      LightBeam.intensityKey,
+                      beam.intensity,
+                      0,
+                      100,
+                    ),
+                    _beamSlider(
+                      'Temperatura de color',
+                      '${beam.cct.round()} K',
+                      LightBeam.cctKey,
+                      beam.cct,
+                      2000,
+                      10000,
+                      step: 100,
+                    ),
+                    _beamSlider(
+                      'Apertura del haz',
+                      '${beam.spread.round()}°',
+                      LightBeam.spreadKey,
+                      beam.spread,
+                      5,
+                      360,
+                    ),
+                    _beamSlider(
+                      'Alcance',
+                      '${beam.reach.round()}',
+                      LightBeam.reachKey,
+                      beam.reach,
+                      40,
+                      900,
+                      step: 10,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
                   Text('Rotación', style: AppTypography.caption(palette)),
                   Row(
                     children: [

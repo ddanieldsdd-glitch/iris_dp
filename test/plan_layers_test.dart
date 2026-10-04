@@ -13,6 +13,8 @@ import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_json.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_repository.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_scope.dart';
+import 'package:iris_dp/features/camera_plan/light_beam.dart';
+import 'package:iris_dp/features/camera_plan/plan_gear_list.dart';
 
 const _wallV1 =
     '{"version":1,"elements":[{"type":"wall","x":100,"y":100,"rotation":0,'
@@ -370,5 +372,97 @@ void main() {
     expect(importedShot.lightSetupId, imported.id);
     final rows = await db.getCameraPlanElementsForShot(importedShot.id);
     expect(rows.single.propsJson, '{"lensMm":35}');
+  });
+
+  group('haz de luz y lista de material', () {
+    PlanElement light(LightType type, {Map<String, dynamic>? props}) =>
+        PlanElement(
+          id: 0,
+          type: ElementType.light,
+          position: Offset.zero,
+          lightType: type,
+          props: props,
+        );
+
+    test('una luz toma su haz del tipo y lo cambia con sus propiedades', () {
+      final fresnel = LightBeam.of(light(LightType.fresnelMedium))!;
+      expect(fresnel.spread, 40);
+      expect(fresnel.cct, 3200);
+      expect(fresnel.off, isFalse);
+
+      final tuned = LightBeam.of(
+        light(
+          LightType.fresnelMedium,
+          props: {'spread': 24, 'throw': 550, 'intensity': 78, 'cct': 5600},
+        ),
+      )!;
+      expect(tuned.spread, 24);
+      expect(tuned.reach, 550);
+      expect(tuned.intensity, 78);
+      expect(tuned.cct, 5600);
+
+      expect(
+        LightBeam.of(light(LightType.hmi, props: {'off': true}))!.off,
+        isTrue,
+      );
+    });
+
+    test('el grip no emite luz', () {
+      expect(LightBeam.of(light(LightType.flag)), isNull);
+      expect(LightBeam.of(light(LightType.bounce)), isNull);
+    });
+
+    test('la luz cálida tira a naranja y la fría a azul', () {
+      final warm = LightBeam.colorForCct(2800);
+      final cool = LightBeam.colorForCct(9000);
+      expect(warm.r, greaterThan(warm.b));
+      expect(cool.b, greaterThan(cool.r));
+    });
+
+    test('el haz se guarda y se lee con la planta', () {
+      final json = FloorPlanJson.encode([
+        light(LightType.hmi, props: {'spread': 74, 'cct': 5600, 'off': true}),
+      ]);
+      final beam = LightBeam.of(FloorPlanJson.decode(json).single)!;
+      expect(beam.spread, 74);
+      expect(beam.off, isTrue);
+    });
+
+    test('el ángulo de visión sale de la focal y el sensor', () {
+      expect(cameraFovDegrees('35mm')!, closeTo(39.1, 0.3));
+      expect(cameraFovDegrees('50')!, closeTo(28.0, 0.3));
+      expect(
+        cameraFovDegrees('35mm', sensorWidthMm: 36)!,
+        greaterThan(cameraFovDegrees('35mm')!),
+      );
+      expect(cameraFovDegrees(null), isNull);
+      expect(cameraFovDegrees('zoom'), isNull);
+    });
+
+    test('la lista de material agrupa y cuenta', () {
+      final gear = GearList.from([
+        light(LightType.hmi),
+        light(LightType.hmi),
+        light(LightType.softbox, props: {'name': 'Titan Tube'}),
+        light(LightType.flag),
+        PlanElement(
+          id: 0,
+          type: ElementType.camera,
+          position: Offset.zero,
+          lens: '35mm',
+          stabilization: 'DOLLY',
+        ),
+        PlanElement(id: 0, type: ElementType.wall, position: Offset.zero),
+      ]);
+      expect(gear.lights.map((l) => '$l'), ['2× HMI', '1× Titan Tube']);
+      expect(gear.grip.map((l) => '$l'), ['1× Flag/Solid']);
+      expect(gear.cameras.map((l) => '$l'), ['1× Cámara A · 35mm · DOLLY']);
+      expect(
+        gear.toText(title: 'Setup A'),
+        'Setup A\nLUCES\n  2× HMI\n  1× Titan Tube\nGRIP\n  1× Flag/Solid\n'
+        'CÁMARA\n  1× Cámara A · 35mm · DOLLY',
+      );
+      expect(GearList.from(const []).isEmpty, isTrue);
+    });
   });
 }

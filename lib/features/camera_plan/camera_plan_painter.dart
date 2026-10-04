@@ -6,16 +6,19 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
+import 'light_beam.dart';
 import 'light_symbols.dart';
 
-/// Colores optimizados para renderizar sobre fondo blanco del canvas.
+/// Colores del lienzo: fondo oscuro, como en un plató a oscuras, para que
+/// los haces de luz se lean.
 class _CanvasColors {
-  static const background = Colors.white;
-  static const grid = Color(0xFFE0E0E0);
-  static const ink = Color(0xFF1A1A1A);
-  static const inkSecondary = Color(0xFF555555);
-  static const inkTertiary = Color(0xFF888888);
-  static const accent = Color(0xFF007AFF);
+  static const background = Color(0xFF0C0C0F);
+  static const grid = Color(0xFF1E1E24);
+  static const ink = Color(0xFFE4E4EA);
+  static const inkSecondary = Color(0xFFA9A9B4);
+  static const inkTertiary = Color(0xFF74747F);
+  static const accent = Color(0xFF4DA3FF);
+  static const body = Color(0xFF1A1A20);
 }
 
 /// Zona de un set sobre el plano maestro de la localización.
@@ -91,9 +94,17 @@ class CameraPlanPainter extends CustomPainter {
           ..color = const Color(0xFFFFFFFF).withValues(alpha: inheritedOpacity),
       );
       for (final el in inheritedElements) {
+        _drawBeam(canvas, el);
+      }
+      for (final el in inheritedElements) {
         _drawElement(canvas, el);
       }
       canvas.restore();
+    }
+
+    // Los haces van debajo de todo lo demás.
+    for (final el in elements) {
+      _drawBeam(canvas, el);
     }
 
     for (final el in elements.where((e) => e.type == ElementType.camera)) {
@@ -351,6 +362,11 @@ class CameraPlanPainter extends CustomPainter {
       _drawRotationHandle(canvas, handleColor);
     }
 
+    canvas.restore();
+
+    // Los rótulos no giran con el elemento: siempre se leen del derecho.
+    canvas.save();
+    canvas.translate(el.position.dx, el.position.dy);
     switch (el.type) {
       case ElementType.camera:
         final camColor = cameraColorForLetter(el.cameraLetter);
@@ -392,12 +408,19 @@ class CameraPlanPainter extends CustomPainter {
   }
 
   void _drawLightLabel(Canvas canvas, PlanElement el) {
-    final name = el.lightType?.label ?? el.label;
-    if (name == null || name.isEmpty) return;
+    final base =
+        (el.props['name'] as String?) ?? el.lightType?.label ?? el.label;
+    if (base == null || base.isEmpty) return;
+    final beam = LightBeam.of(el);
+    final name = beam == null
+        ? base
+        : beam.off
+        ? '$base\napagada'
+        : '$base\n${beam.cct.round()}K · ${beam.intensity.round()}%';
     _drawLabelBelow(
       canvas,
       name,
-      LightSymbolColors.stroke,
+      _CanvasColors.inkSecondary,
       yOffset: 20,
       maxWidth: 72,
     );
@@ -425,15 +448,51 @@ class CameraPlanPainter extends CustomPainter {
 
   void _drawCamera(Canvas canvas, PlanElement el) {
     final camColor = cameraColorForLetter(el.cameraLetter);
+    // Cono de visión según la focal y el sensor.
+    final fov =
+        cameraFovDegrees(
+          el.lens,
+          sensorWidthMm:
+              (el.props['sensorWidthMm'] as num?)?.toDouble() ?? 24.89,
+        ) ??
+        40;
+    final half = fov.clamp(4, 170) * math.pi / 360;
+    const reach = 260.0;
+    final left = Offset(-math.sin(half) * reach, -math.cos(half) * reach);
+    final right = Offset(math.sin(half) * reach, -math.cos(half) * reach);
+    final cone = Path()
+      ..moveTo(0, 0)
+      ..lineTo(left.dx, left.dy)
+      ..arcToPoint(right, radius: const Radius.circular(reach))
+      ..close();
+    canvas.drawPath(
+      cone,
+      Paint()
+        ..shader = ui.Gradient.radial(Offset.zero, reach, [
+          camColor.withValues(alpha: 0.16),
+          camColor.withValues(alpha: 0),
+        ]),
+    );
     final fovPaint = Paint()
-      ..color = camColor.withValues(alpha: 0.25)
+      ..color = camColor.withValues(alpha: 0.55)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
+    _drawDashedPath(
+      canvas,
+      Path()
+        ..moveTo(0, 0)
+        ..lineTo(left.dx, left.dy),
+      fovPaint,
+    );
+    _drawDashedPath(
+      canvas,
+      Path()
+        ..moveTo(0, 0)
+        ..lineTo(right.dx, right.dy),
+      fovPaint,
+    );
 
-    canvas.drawLine(const Offset(0, -14), const Offset(-28, -48), fovPaint);
-    canvas.drawLine(const Offset(0, -14), const Offset(28, -48), fovPaint);
-
-    canvas.drawCircle(Offset.zero, 16, Paint()..color = Colors.white);
+    canvas.drawCircle(Offset.zero, 16, Paint()..color = _CanvasColors.body);
     canvas.drawCircle(
       Offset.zero,
       16,
@@ -503,22 +562,76 @@ class CameraPlanPainter extends CustomPainter {
     }
   }
 
+  /// Haz de una luz encendida: un cono degradado con su apertura, alcance,
+  /// intensidad y color.
+  void _drawBeam(Canvas canvas, PlanElement el) {
+    final beam = LightBeam.of(el);
+    if (beam == null || beam.off || beam.intensity <= 0) return;
+
+    canvas.save();
+    canvas.translate(el.position.dx, el.position.dy);
+    canvas.rotate(el.rotation * math.pi / 180);
+
+    final strength = beam.intensity / 100;
+    final paint = Paint()
+      ..blendMode = BlendMode.plus
+      ..shader = ui.Gradient.radial(
+        Offset.zero,
+        beam.reach,
+        [
+          beam.color.withValues(alpha: 0.50 * strength),
+          beam.color.withValues(alpha: 0.16 * strength),
+          beam.color.withValues(alpha: 0),
+        ],
+        const [0, 0.55, 1],
+      );
+
+    if (beam.spread >= 359) {
+      canvas.drawCircle(Offset.zero, beam.reach, paint);
+    } else {
+      final sweep = beam.spread * math.pi / 180;
+      final path = Path()
+        ..moveTo(0, 0)
+        ..arcTo(
+          Rect.fromCircle(center: Offset.zero, radius: beam.reach),
+          -math.pi / 2 - sweep / 2,
+          sweep,
+          false,
+        )
+        ..close();
+      canvas.drawPath(path, paint);
+    }
+    canvas.restore();
+  }
+
   void _drawLight(Canvas canvas, PlanElement el) {
+    final beam = LightBeam.of(el);
+    final lit = beam != null && !beam.off;
+    final stroke = lit
+        ? Color.lerp(LightSymbolColors.darkStroke, beam.color, 0.35)!
+        : beam != null
+        ? _CanvasColors.inkTertiary
+        : LightSymbolColors.darkStroke;
     if (el.lightType != null) {
-      LightSymbols.draw(canvas, el.lightType!);
+      LightSymbols.draw(
+        canvas,
+        el.lightType!,
+        stroke: stroke,
+        fill: LightSymbolColors.darkFill,
+      );
     } else {
       canvas.drawCircle(
         Offset.zero,
         12,
         Paint()
-          ..color = LightSymbolColors.stroke
+          ..color = stroke
           ..style = PaintingStyle.stroke
           ..strokeWidth = LightSymbolColors.strokeWidth,
       );
       canvas.drawCircle(
         Offset.zero,
         6,
-        Paint()..color = LightSymbolColors.fill,
+        Paint()..color = LightSymbolColors.darkFill,
       );
     }
     if (el.lukaCompatible) {

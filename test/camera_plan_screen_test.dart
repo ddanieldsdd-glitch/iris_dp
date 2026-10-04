@@ -124,6 +124,15 @@ void main() {
     await tester.tap(find.text('Setup A'));
     await settle(tester);
     expect(find.text('Esquema de luz · Cabaña'), findsOneWidget);
+    // Paleta a la izquierda y lista de material a la derecha.
+    expect(find.text('LUCES'), findsOneWidget);
+    expect(find.text('GRIP'), findsOneWidget);
+    expect(find.text('Lista de material'), findsOneWidget);
+
+    // El navegador de plantas entra plegado.
+    expect(find.text('Plano del set'), findsNothing);
+    await tester.tap(find.byTooltip('Mostrar plantas'));
+    await settle(tester);
     expect(find.text('Plano del set'), findsOneWidget);
     expect(find.text('Esquema siguiente'), findsNothing);
     expect(find.byTooltip('Esquema siguiente'), findsOneWidget);
