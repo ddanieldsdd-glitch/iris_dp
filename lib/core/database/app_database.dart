@@ -3699,7 +3699,10 @@ class AppDatabase extends _$AppDatabase {
       ..removeWhere(
         (key, _) =>
             dropValueKeys.contains(key) ||
-            dropValueKeys.any((dropped) => key == '${dropped}__images'),
+            dropValueKeys.any(
+              (dropped) =>
+                  key == '${dropped}__images' || key == '${dropped}__extra',
+            ),
       );
     await upsertBibleSectionDefinition(
       def.copyWith(

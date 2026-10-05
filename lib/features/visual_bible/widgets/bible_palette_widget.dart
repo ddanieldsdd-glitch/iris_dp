@@ -499,7 +499,11 @@ class BiblePalettePoint extends StatelessWidget {
       trailing: PopupMenuButton<BiblePalettePart>(
         tooltip: 'Qué se muestra',
         padding: EdgeInsets.zero,
-        icon: Icon(Icons.more_horiz, size: 18, color: palette.textSecondary),
+        icon: Icon(
+          Icons.visibility_outlined,
+          size: 18,
+          color: palette.textSecondary,
+        ),
         onSelected: (part) => onChanged(value.toggled(part)),
         itemBuilder: (_) => [
           for (final part in BiblePalettePart.values)

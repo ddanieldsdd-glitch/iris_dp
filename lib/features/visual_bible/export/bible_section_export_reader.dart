@@ -6,6 +6,7 @@ import '../../../shared/visual_bible/bible_acts.dart';
 import '../../../shared/visual_bible/bible_cards.dart';
 import '../../../shared/visual_bible/direction_points.dart';
 import '../../../shared/visual_bible/bible_palette.dart';
+import '../../../shared/visual_bible/bible_point_extras.dart';
 import '../../../shared/visual_bible/bible_reference.dart';
 import '../../../shared/visual_bible/bible_section_fields.dart';
 import '../../../shared/visual_bible/bible_section_ids.dart';
@@ -320,6 +321,10 @@ abstract final class BibleSectionExportReader {
         ],
         _ => const <int>[],
       },
+    // Complementos (menú «⋯») de cualquier punto.
+    ...BiblePointExtras.allImageIds(
+      BibleSectionFieldsConfig.parseValues(contentJson),
+    ),
     // Actos y tarjetas de Dirección son puntos de la pantalla, con sus
     // imágenes.
     if (sectionId == BibleSectionId.direction) ...[
@@ -459,7 +464,11 @@ abstract final class BibleSectionExportReader {
         if (_isUserPoint(sectionId, field)) field.key,
     };
     custom.removeWhere(
-      (key, _) => userKeys.contains(key) || key.endsWith('__images'),
+      (key, _) =>
+          userKeys.contains(key) ||
+          key.endsWith('__images') ||
+          key.endsWith('__extra') ||
+          key.startsWith('__'),
     );
     return rowsForSection(sectionId, custom);
   }

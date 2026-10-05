@@ -4,6 +4,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../../../shared/visual_bible/bible_acts.dart';
 import '../../../../shared/visual_bible/bible_cards.dart';
 import '../../../../shared/visual_bible/bible_palette.dart';
+import '../../../../shared/visual_bible/bible_point_extras.dart';
 import '../../../../shared/visual_bible/bible_section_fields.dart';
 import '../bible_section_export_reader.dart';
 
@@ -249,6 +250,39 @@ class BiblePdfKit {
         ..._moreImages(card),
       ],
     );
+  }
+
+  /// Complementos de un punto: sus imágenes y su texto. Mientras no se hayan
+  /// guardado, las imágenes son [legacy] (las que el punto tenía antes).
+  List<pw.Widget> extras(
+    Map<String, String> values,
+    String pointKey, {
+    List<pw.ImageProvider> legacy = const [],
+    String? label,
+  }) {
+    final extras = BiblePointExtras.read(values, pointKey);
+    final images = values.containsKey(BiblePointExtras.keyFor(pointKey))
+        ? _loaded(extras.imageIds)
+        : legacy;
+    final text = (extras.text ?? '').trim();
+    if (images.isEmpty && text.isEmpty) return const [];
+    return [
+      if (label != null) ...[this.label(label), pw.SizedBox(height: 6)],
+      if (images.isNotEmpty) imageStrip(images),
+      if (text.isNotEmpty)
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+          child: pw.Text(
+            text,
+            style: pw.TextStyle(
+              font: regular,
+              fontSize: 10,
+              lineSpacing: 3,
+              color: BiblePdfTokens.secondary,
+            ),
+          ),
+        ),
+    ];
   }
 
   /// Los actos de un punto tal como se ven en pantalla. Un acto del proyecto

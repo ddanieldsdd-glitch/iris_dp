@@ -12,9 +12,11 @@ import '../bible_unified_references_panel.dart';
 import '../narrative_bridge_card.dart';
 import '../../../../shared/visual_bible/bible_acts.dart';
 import '../../../../shared/visual_bible/bible_cards.dart';
+import '../../../../shared/visual_bible/bible_point_extras.dart';
 import '../../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../../bible_section_fields.dart';
 import '../bible_add_point.dart';
+import '../bible_point_frame.dart';
 import '../catalog/bible_widget_catalog.dart';
 
 /// Layout común para secciones técnicas de la biblia.
@@ -36,6 +38,13 @@ class BibleSectionScaffold extends ConsumerStatefulWidget {
   /// había escrito antes de compartirlos.
   final List<BibleCard>? sharedActs;
 
+  /// Valor con el que se duplica cada punto propio de la sección que no lo
+  /// guarda en `values[clave]`. Sin valor, el punto no se puede duplicar.
+  final Map<String, String?> duplicateValues;
+
+  /// Imágenes que acompañaban a cada punto antes de los complementos.
+  final Map<String, List<int>> legacyPointImages;
+
   const BibleSectionScaffold({
     super.key,
     required this.sectionId,
@@ -48,6 +57,8 @@ class BibleSectionScaffold extends ConsumerStatefulWidget {
     this.sectionNumber,
     this.sectionTitle,
     this.sharedActs,
+    this.duplicateValues = const {},
+    this.legacyPointImages = const {},
   });
 
   @override
@@ -66,10 +77,16 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
       widget.sectionId,
     );
 
+    final values = BibleSectionFieldsConfig.parseValues(
+      widget.sectionContentJson,
+    );
     final items = <Widget>[];
     for (final field in fields) {
       final w = _buildField(context, field);
-      if (w != null) items.add(w);
+      if (w == null) continue;
+      items.add(
+        widget.data.id > 0 ? _framed(fields, values, field, w) : w,
+      );
     }
 
     return ListView(
@@ -90,6 +107,127 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
           BibleAddPointTile(onTap: () => _addPoint(fields)),
         ],
       ],
+    );
+  }
+
+  /// Valor con el que se duplica [field], o `null` si no se puede.
+  String? _duplicateValue(Map<String, String> values, BibleSectionField field) {
+    if (BibleWidgetCatalog.forField(field) == null) return null;
+    return widget.duplicateValues[field.key] ?? values[field.key];
+  }
+
+  Widget _framed(
+    List<BibleSectionField> fields,
+    Map<String, String> values,
+    BibleSectionField field,
+    Widget point,
+  ) {
+    final db = ref.read(databaseProvider);
+    final extras = BiblePointExtras.read(
+      values,
+      field.key,
+      legacyImages: widget.legacyPointImages[field.key] ?? const [],
+    );
+    final copyValue = _duplicateValue(values, field);
+    return BiblePointFrame(
+      key: ValueKey('frame_${widget.sectionId}_${field.key}'),
+      projectId: widget.projectId,
+      bibleId: widget.data.id,
+      sectionId: widget.sectionId,
+      extras: extras,
+      onExtrasChanged: (next) => db.saveBibleSectionFieldValue(
+        widget.data.id,
+        widget.sectionId,
+        BiblePointExtras.keyFor(field.key),
+        next.encode(),
+      ),
+      onDuplicate: copyValue == null
+          ? null
+          : () => _duplicate(fields, field, copyValue, extras),
+      onRemove: () => _remove(fields, field),
+      child: point,
+    );
+  }
+
+  /// Copia [field] justo debajo, como punto del usuario, con su contenido.
+  Future<void> _duplicate(
+    List<BibleSectionField> fields,
+    BibleSectionField field,
+    String value,
+    BiblePointExtras extras,
+  ) async {
+    final db = ref.read(databaseProvider);
+    final entry = BibleWidgetCatalog.forField(field, value: value);
+    final copy = BibleSectionField(
+      key: BibleSectionFieldsConfig.newFieldKey(),
+      label: '${field.label} (copia)',
+      hint: field.hint,
+      maxLines: field.maxLines,
+      type: field.type,
+      widget: field.widget ?? entry?.id,
+    );
+    final at = fields.indexWhere((f) => f.key == field.key);
+    await db.saveBibleSectionFields(widget.data.id, widget.sectionId, [
+      ...fields.take(at + 1),
+      copy,
+      ...fields.skip(at + 1),
+    ]);
+    await db.saveBibleSectionFieldValue(
+      widget.data.id,
+      widget.sectionId,
+      copy.key,
+      value,
+    );
+    if (!extras.isEmpty) {
+      await db.saveBibleSectionFieldValue(
+        widget.data.id,
+        widget.sectionId,
+        BiblePointExtras.keyFor(copy.key),
+        extras.encode(),
+      );
+    }
+  }
+
+  /// Quita [field] de la pantalla: uno del usuario se borra con su contenido;
+  /// uno propio de la pantalla lo conserva.
+  Future<void> _remove(
+    List<BibleSectionField> fields,
+    BibleSectionField field,
+  ) async {
+    final own = BibleSectionFieldsConfig.isUserPoint(widget.sectionId, field);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Quitar «${field.label}»'),
+        content: Text(
+          own
+              ? 'Es un punto que añadiste tú. Se borra con su contenido y '
+                    'no se puede recuperar.'
+              : 'Es un punto propio de esta pantalla. Deja de mostrarse y de '
+                    'salir en el PDF, pero su contenido se conserva: puedes '
+                    'volver a añadirlo desde «Añadir punto».',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(own ? 'Borrar punto' : 'Quitar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await ref.read(databaseProvider).saveBibleSectionFields(
+      widget.data.id,
+      widget.sectionId,
+      [
+        for (final f in fields)
+          if (f.key != field.key) f,
+      ],
+      dropValueKeys: own ? {field.key} : const {},
     );
   }
 

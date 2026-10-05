@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import 'bible_point_frame.dart';
 
 /// Panel de un punto de la biblia: cristal oscuro con rótulo técnico.
 ///
@@ -66,6 +67,9 @@ class BiblePointPanel extends StatelessWidget {
                 ),
               ),
               if (trailing != null) trailing!,
+              // Hueco para el menú «⋯» del marco del punto.
+              if (BiblePointFrameScope.isIn(context))
+                const SizedBox(width: BiblePointFrameScope.menuWidth),
             ],
           ),
           const SizedBox(height: AppSpacing.md),

@@ -89,6 +89,9 @@ void main() {
     expect(find.text('ACTO 3 · DESENLACE'), findsOneWidget);
     expect(find.textContaining('Actos del proyecto'), findsOneWidget);
 
+    // Cada punto lleva su menú «⋯».
+    expect(find.byTooltip('Opciones del punto'), findsNWidgets(6));
+
     // Renombrar un acto lo cambia en el proyecto; la intención es de aquí.
     await tester.tap(find.text('Orden y rigidez'));
     await tester.pumpAndSettle();

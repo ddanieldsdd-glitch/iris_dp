@@ -182,6 +182,13 @@ void main() {
       'field_mio',
       'Nota intercalada',
     );
+    // Texto complementario del menú «⋯» de «Tono».
+    await db.saveBibleSectionFieldValue(
+      bible.id,
+      BibleSectionId.direction,
+      'tone__extra',
+      '{"images":[],"text":"Complemento del tono"}',
+    );
 
     final repo = VisualBibleRepository(VisualBibleDao(db));
     final bundle = await repo.loadExportBundle(projectId: projectId);
@@ -212,6 +219,7 @@ void main() {
       'Aislamiento psicológico',
       'TENSIÓN',
       'Frío e industrial',
+      'Complemento del tono',
       'Nota intercalada',
       'Movimientos lentos',
       'Personajes aislados',

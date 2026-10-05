@@ -1241,6 +1241,7 @@ class VisualBiblePdfService {
     )) {
       final point = kit.point(field, values[field.key]);
       if (point != null) out.add(point);
+      out.addAll(kit.extras(values, field.key));
 
       try {
         final raw = values['${field.key}__images'];
@@ -1641,9 +1642,14 @@ class VisualBiblePdfService {
           final point = kit.point(field, values[field.key]);
           if (point != null) out.add(point);
       }
-      // Imágenes que acompañan al punto.
-      final strip = assets.pointImages[field.key];
-      if (strip != null && strip.isNotEmpty) out.add(kit.imageStrip(strip));
+      // Complementos del punto: imágenes y texto.
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
     }
     return out;
   }
@@ -1806,9 +1812,14 @@ class VisualBiblePdfService {
           final point = kit.point(field, values[field.key]);
           if (point != null) out.add(point);
       }
-      // Imágenes que acompañan al punto.
-      final strip = assets.pointImages[field.key];
-      if (strip != null && strip.isNotEmpty) out.add(kit.imageStrip(strip));
+      // Complementos del punto: imágenes y texto.
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
     }
     return out;
   }
@@ -2141,13 +2152,22 @@ class VisualBiblePdfService {
       ))
         (row.label, row.value as String?),
     ];
-    final points = [
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final userKeys = <String>{};
+    final points = <pw.Widget>[
       for (final point in BibleSectionExportReader.userPoints(
         contentJson,
         sectionId,
-      ))
-        kit.point(point.field, point.value),
-    ].whereType<pw.Widget>().toList();
+      )) ...[
+        if (userKeys.add(point.field.key))
+          ?kit.point(point.field, point.value),
+        ...kit.extras(values, point.field.key),
+      ],
+      // Complementos de los puntos propios de la pantalla, con su rótulo.
+      for (final field in BibleSectionFieldsConfig.parse(contentJson, sectionId))
+        if (!userKeys.contains(field.key))
+          ...kit.extras(values, field.key, label: field.label),
+    ];
     if (blobRows.isEmpty && points.isEmpty) return pw.SizedBox();
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,

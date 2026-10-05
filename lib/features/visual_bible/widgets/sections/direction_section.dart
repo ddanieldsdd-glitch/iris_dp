@@ -100,25 +100,20 @@ class DirectionSection extends ConsumerWidget {
         for (final tag in blob['emotionTags'] as List) tag.toString(),
     ];
 
-    // Imágenes del moodboard que acompañan a un punto, bajo su panel.
-    Widget withImages(String key, Widget panel) => data.id <= 0
-        ? panel
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              panel,
-              const SizedBox(height: 8),
-              BiblePointImages(
-                projectId: projectId,
-                bibleId: data.id,
-                sectionId: _sectionId,
-                imageIds: biblePointImageIds(blob, key),
-                onChanged: (ids) => _updateBlob(ref, blob, {
-                  'pointImages': biblePointImagesWith(blob, key, ids),
-                }),
-              ),
-            ],
-          );
+    final toneCards = DirectionPoints.toneCards(
+      values,
+      blob,
+      legacyTone: data.tone,
+    );
+    final strategyCards = DirectionPoints.strategyCards(
+      values,
+      blob,
+      camera: data.cameraPhilosophy,
+      staging: data.stagingApproach,
+      pointOfView: data.pointOfView,
+    );
+    final transitionCards = DirectionPoints.transitionCards(values, blob);
+    final actsValue = DirectionPoints.actsValue(values, blob);
 
     final narrative = BiblePointPanel(
       label: label('narrative', 'Intención narrativa'),
@@ -150,7 +145,7 @@ class DirectionSection extends ConsumerWidget {
       icon: Icons.blur_on,
       child: BibleCardsWidget(
         imageSource: imageSource,
-        cards: DirectionPoints.toneCards(values, blob, legacyTone: data.tone),
+        cards: toneCards,
         onChanged: (cards) => _saveCards(ref, DirectionPoints.tone, cards),
       ),
     );
@@ -161,13 +156,7 @@ class DirectionSection extends ConsumerWidget {
       child: BibleCardsWidget(
         imageSource: imageSource,
         layout: BibleCardsLayout.columns,
-        cards: DirectionPoints.strategyCards(
-          values,
-          blob,
-          camera: data.cameraPhilosophy,
-          staging: data.stagingApproach,
-          pointOfView: data.pointOfView,
-        ),
+        cards: strategyCards,
         onChanged: (cards) {
           _saveCards(ref, DirectionPoints.strategies, cards);
           // Cámara y el resumen del proyecto leen estas columnas.
@@ -196,7 +185,7 @@ class DirectionSection extends ConsumerWidget {
         projectId: projectId,
         bibleId: data.id,
         sectionId: _sectionId,
-        value: DirectionPoints.actsValue(values, blob),
+        value: actsValue,
         onChanged: (value) =>
             _saveValue(ref, DirectionPoints.acts, value.encode()),
         sharedActs: sharedActs,
@@ -212,7 +201,7 @@ class DirectionSection extends ConsumerWidget {
       icon: Icons.animation,
       child: BibleCardsWidget(
         imageSource: imageSource,
-        cards: DirectionPoints.transitionCards(values, blob),
+        cards: transitionCards,
         onChanged: (cards) =>
             _saveCards(ref, DirectionPoints.transitions, cards),
       ),
@@ -253,23 +242,27 @@ class DirectionSection extends ConsumerWidget {
       sectionNumber: null,
       sectionTitle: 'Dirección',
       sharedActs: sharedActs,
+      duplicateValues: {
+        DirectionPoints.tone: BibleCard.encode(toneCards),
+        DirectionPoints.strategies: BibleCard.encode(strategyCards),
+        DirectionPoints.transitions: BibleCard.encode(transitionCards),
+        DirectionPoints.acts: actsValue.encode(),
+      },
+      legacyPointImages: {
+        for (final key in const [
+          DirectionPoints.tone,
+          DirectionPoints.strategies,
+          DirectionPoints.acts,
+          DirectionPoints.transitions,
+        ])
+          key: biblePointImageIds(blob, key),
+      },
       fieldWidgets: {
         'narrative': narrative,
-        DirectionPoints.tone: withImages(DirectionPoints.tone, tone),
-        DirectionPoints.strategies: withImages(
-          DirectionPoints.strategies,
-          strategies,
-        ),
-        // Las imágenes sueltas que tuviera el punto antes de que cada acto
-        // llevara las suyas.
-        DirectionPoints.acts:
-            biblePointImageIds(blob, DirectionPoints.acts).isEmpty
-            ? acts
-            : withImages(DirectionPoints.acts, acts),
-        DirectionPoints.transitions: withImages(
-          DirectionPoints.transitions,
-          transitions,
-        ),
+        DirectionPoints.tone: tone,
+        DirectionPoints.strategies: strategies,
+        DirectionPoints.acts: acts,
+        DirectionPoints.transitions: transitions,
         if (data.id > 0) 'references': references,
       },
     );
