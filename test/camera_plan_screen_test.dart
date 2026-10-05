@@ -15,6 +15,7 @@ import 'package:iris_dp/features/camera_plan/camera_plan_screen.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_repository.dart';
 import 'package:iris_dp/features/camera_plan/light_overrides.dart';
+import 'package:iris_dp/features/camera_plan/plan_marks.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 
 void main() {
@@ -805,6 +806,92 @@ void main() {
       );
       expect(rows!.single.rotation, closeTo(90, 2));
       expect(rows.single.x, closeTo(400, 0.5));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('un actor tiene varias posiciones, cada una con su giro', (
+      tester,
+    ) async {
+      await seed(tester, siteJson: '{"version":2,"elements":[]}');
+      await tester.runAsync(() async {
+        await db.insertCameraPlanElement(
+          CameraPlanElementsCompanion.insert(
+            shotId: shotId,
+            type: 'actor',
+            x: const Value(400),
+            y: const Value(300),
+            label: const Value('Gala'),
+          ),
+        );
+      });
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.shot(
+            projectId: projectId,
+            shotId: shotId,
+            shotLabel: 'Esc 1 · Plano 1',
+          ),
+        ),
+      );
+      await settle(tester);
+
+      final state = tester.state(find.byType(CameraPlanEditor));
+      // ignore: avoid_dynamic_calls
+      final view =
+          (state as dynamic).debugView as ({Offset offset, double scale});
+      final canvas = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is CameraPlanPainter,
+      );
+      Offset onScreen(Offset p) =>
+          tester.getTopLeft(canvas) + view.offset + p * view.scale;
+
+      await tester.tapAt(onScreen(const Offset(400, 300)));
+      await settle(tester);
+      expect(find.text('POSICIONES'), findsOneWidget);
+      expect(find.text('Una sola posición'), findsOneWidget);
+
+      // Nueva posición: aparece a un lado del actor, ya seleccionada.
+      await tester.ensureVisible(find.text('Posición'));
+      await tester.tap(find.text('Posición'));
+      await settle(tester);
+      expect(find.text('2 posiciones'), findsOneWidget);
+
+      Future<PlanElement> actor() async {
+        final row = (await db.getCameraPlanElementsForShot(shotId)).single;
+        return PlanElement.fromDb(
+          row,
+          pathRows: await db.getPathPointsForElement(row.id),
+        );
+      }
+
+      final mark = (await tester.runAsync(actor))!.pathPoints.single;
+      expect((mark - const Offset(400, 300)).distance, closeTo(80, 1));
+
+      // Se gira con su asa sin girar al actor.
+      final reach = CameraPlanPainter.rotationHandleDistance(view.scale);
+      final gesture = await tester.startGesture(
+        onScreen(mark + Offset(0, -reach)),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      for (final step in const [
+        Offset(30, -30),
+        Offset(50, -10),
+        Offset(60, 0),
+      ]) {
+        await gesture.moveTo(onScreen(mark + step));
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      await gesture.up();
+      await settle(tester);
+
+      final saved = (await tester.runAsync(actor))!;
+      expect(saved.rotation, 0);
+      expect(PlanMarks.rotationAt(saved, 0), closeTo(90, 2));
+      expect(saved.pathPoints.single, mark);
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

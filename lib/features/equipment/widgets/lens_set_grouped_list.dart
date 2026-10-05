@@ -196,6 +196,7 @@ class _SetTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final summary = LensSetUtils.setSummary(lenses);
     final assignedInSet = lenses.where((l) => assignedIds.contains(l.id)).length;
+    final whole = assignedInSet == lenses.length;
 
     return Padding(
       padding: const EdgeInsets.only(left: 8, right: 4, bottom: 4),
@@ -214,9 +215,28 @@ class _SetTile extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
+        // Llevar el juego entero, o quitarlo, de una vez.
+        leading: Checkbox(
+          tristate: true,
+          value: assignedInSet == 0
+              ? false
+              : whole
+              ? true
+              : null,
+          onChanged: (_) async {
+            for (final lens in lenses) {
+              if (assignedIds.contains(lens.id) == whole) {
+                await onToggleAssign(lens);
+              }
+            }
+          },
+        ),
         trailing: assignedInSet > 0
             ? Chip(
-                label: Text('$assignedInSet', style: const TextStyle(fontSize: 11)),
+                label: Text(
+                  '$assignedInSet de ${lenses.length}',
+                  style: const TextStyle(fontSize: 11),
+                ),
                 padding: EdgeInsets.zero,
                 visualDensity: VisualDensity.compact,
               )

@@ -67,9 +67,24 @@ class PlanEquipment {
   /// Pone en una cámara de planta una lente del proyecto.
   static void applyLens(PlanElement el, Lense lens) {
     el.externalMapping.catalogLensId = lens.id;
-    el.lens = '${_trim(lens.focalLength)}mm';
+    // Un zoom entra por su focal más corta; luego se mueve con su control.
+    final focal = lens.focalLength > 0
+        ? lens.focalLength
+        : (lens.focalMin ?? lens.focalLength);
+    el.lens = '${_trim(focal)}mm';
     el.props['lensName'] = '${lens.brand} ${lens.model}';
   }
+
+  /// Focal de una cámara de planta, en milímetros.
+  static double? focalOf(PlanElement el) {
+    final match = RegExp(r'(\d+(?:[.,]\d+)?)').firstMatch(el.lens ?? '');
+    return match == null
+        ? null
+        : double.tryParse(match.group(1)!.replaceAll(',', '.'));
+  }
+
+  static void setFocal(PlanElement el, double focal) =>
+      el.lens = '${_trim(focal.roundToDouble())}mm';
 
   static String _trim(double v) =>
       v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
@@ -94,6 +109,16 @@ class ProjectGear {
     this.lenses = const [],
   });
 
+  /// Letra de la cámara que ocupa el puesto [index]: A, B, C…
+  static String letterAt(int index) => String.fromCharCode(65 + index);
+
+  /// Cuerpo que lleva la cámara con esa letra, si el proyecto tiene tantas.
+  Camera? cameraForLetter(String? letter) {
+    if (letter == null || letter.isEmpty) return null;
+    final index = letter.toUpperCase().codeUnitAt(0) - 65;
+    return index >= 0 && index < cameras.length ? cameras[index] : null;
+  }
+
   static Future<ProjectGear> load(AppDatabase db, int projectId) async {
     final assigned = await db.getProjectEquipment(projectId);
     final lights = <Light>[];
@@ -113,11 +138,72 @@ class ProjectGear {
       }
     }
     lenses.sort((a, b) => a.focalLength.compareTo(b.focalLength));
+    // La cámara A es la principal del proyecto; las demás siguen el orden
+    // en que se añadieron.
+    final primary = (await db.resolveProjectCamera(projectId))?.id;
+    final at = cameras.indexWhere((c) => c.id == primary);
+    if (at > 0) cameras.insert(0, cameras.removeAt(at));
     return ProjectGear(
       lights: lights,
       cameras: cameras,
       lenses: lenses,
       catalogLights: await db.getAllLights(),
     );
+  }
+}
+
+/// Cambios en el equipo del proyecto hechos desde la planta. Escriben en
+/// el mismo sitio que la pantalla Equipo.
+class ProjectGearEdits {
+  ProjectGearEdits._();
+
+  /// Mete o saca del proyecto varias piezas del mismo tipo (`camera` o
+  /// `lens`).
+  static Future<void> set(
+    AppDatabase db,
+    int projectId,
+    String type,
+    List<int> ids, {
+    required bool inProject,
+  }) async {
+    final assigned = await db.getProjectEquipment(projectId);
+    for (final id in ids) {
+      final rows = assigned.where(
+        (a) => a.equipmentType == type && a.equipmentId == id,
+      );
+      if (inProject) {
+        if (rows.isNotEmpty) continue;
+        await db.assignEquipmentToProject(
+          projectId: projectId,
+          equipmentType: type,
+          equipmentId: id,
+        );
+        await db.maybePromotePrimaryOnEquipmentAssign(
+          projectId: projectId,
+          equipmentType: type,
+          equipmentId: id,
+        );
+      } else {
+        for (final row in rows) {
+          await db.unassignProjectEquipment(row.id);
+        }
+        await db.maybeReconcilePrimaryOnEquipmentUnassign(
+          projectId: projectId,
+          equipmentType: type,
+          equipmentId: id,
+        );
+      }
+    }
+    await db.touchProjectContent(projectId);
+  }
+
+  /// Pone una cámara como A: la principal del proyecto.
+  static Future<void> makePrimaryCamera(
+    AppDatabase db,
+    int projectId,
+    Camera camera,
+  ) async {
+    await db.syncBiblePrimaryCamera(projectId, camera.id);
+    await db.touchProjectContent(projectId);
   }
 }

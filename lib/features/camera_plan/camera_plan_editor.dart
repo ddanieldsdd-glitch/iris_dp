@@ -29,6 +29,8 @@ import 'floor_plan_scope.dart';
 import 'light_beam.dart';
 import 'plan_data.dart' show kLightSetupColors;
 import 'plan_gear_list.dart';
+import 'plan_project_gear_dialog.dart';
+import 'plan_marks.dart';
 import 'plan_room_panel.dart';
 import 'light/ambient.dart';
 import 'light/exposure.dart';
@@ -136,9 +138,11 @@ extension on PlanElement {
   /// Una cámara nueva nace con la cámara del proyecto, si hay una sola
   /// clara: la primera de Equipo.
   void applyProjectGear(ProjectGear gear) {
-    if (gear.cameras.isNotEmpty) {
-      PlanEquipment.applyCamera(this, gear.cameras.first);
-    }
+    // La cámara B coge el cuerpo B del proyecto; si no hay tantas, el A.
+    final body =
+        gear.cameraForLetter(cameraLetter) ??
+        (gear.cameras.isEmpty ? null : gear.cameras.first);
+    if (body != null) PlanEquipment.applyCamera(this, body);
   }
 }
 
@@ -1589,6 +1593,18 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       kActorColors[_elements.where((e) => e.type == ElementType.actor).length %
           kActorColors.length];
 
+  /// Abre las cámaras y los juegos de lentes del proyecto y, al volver,
+  /// recoge lo que haya cambiado.
+  Future<void> _manageGear() async {
+    await PlanProjectGearDialog.show(context, widget.projectId);
+    if (!mounted) return;
+    final gear = await ProjectGear.load(
+      ref.read(databaseProvider),
+      widget.projectId,
+    );
+    if (mounted) setState(() => _gear = gear);
+  }
+
   /// Con una cámara del catálogo enlazada, el cono usa su ancho de sensor.
   Future<void> _syncCameraSensor(PlanElement el) async {
     if (el.type != ElementType.camera) return;
@@ -1765,6 +1781,18 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     return null;
   }
 
+  /// La marca seleccionada del elemento, si la hay: se gira ella y no el
+  /// elemento.
+  int? _markOf(PlanElement el) {
+    final index = _selectedPathIndex;
+    return index != null &&
+            PlanMarks.supports(el) &&
+            index >= 0 &&
+            index < el.pathPoints.length
+        ? index
+        : null;
+  }
+
   /// El toque cae donde se gira el seleccionado: en su asa o en la corona
   /// que lo rodea (si ahí no hay otro elemento que coger).
   bool _hitRotationHandle(Offset canvasPos) {
@@ -1775,61 +1803,82 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (CameraPlanPainter.isAttachedOpening(el, _visibleElements)) {
       return false;
     }
-    final handle = CameraPlanPainter.rotationHandleWorld(el, _scale);
+    final mark = _markOf(el);
+    final centre = mark == null ? el.position : el.pathPoints[mark];
+    final rotation = mark == null
+        ? el.rotation
+        : PlanMarks.rotationAt(el, mark);
+    final handle = CameraPlanPainter.rotationHandleAt(centre, rotation, _scale);
     if ((canvasPos - handle).distance < 18 / _scale) return true;
-    final distance = (canvasPos - el.position).distance;
+    final distance = (canvasPos - centre).distance;
     final inner = 28 / math.min(1.0, _scale);
     final outer =
         CameraPlanPainter.rotationHandleDistance(_scale) + 10 / _scale;
     if (distance < inner || distance > outer) return false;
     final under = _elementAt(canvasPos);
-    return under == null || identical(under, el);
+    return under == null || (mark == null && identical(under, el));
   }
 
   void _updateRotation(PlanElement el, Offset canvasPos) {
+    final mark = _markOf(el);
+    final centre = mark == null ? el.position : el.pathPoints[mark];
     final angle = math.atan2(
-      canvasPos.dy - el.position.dy,
-      canvasPos.dx - el.position.dx,
+      canvasPos.dy - centre.dy,
+      canvasPos.dx - centre.dx,
     );
     var degrees = ((angle * 180 / math.pi) + 90) % 360;
     // Con Mayús, de 15 en 15 grados.
     if (HardwareKeyboard.instance.isShiftPressed) {
       degrees = (degrees / 15).round() * 15.0;
     }
-    el.rotation = (degrees % 360 + 360) % 360;
+    degrees = (degrees % 360 + 360) % 360;
+    if (mark == null) {
+      el.rotation = degrees;
+    } else {
+      PlanMarks.setRotation(el, mark, degrees);
+    }
   }
 
   Future<void> _addPathPointAt(Offset canvasPos) async {
     final cam = _selected;
-    if (cam == null || cam.type != ElementType.camera) return;
+    if (cam == null || !PlanMarks.supports(cam)) return;
     setState(() {
-      cam.pathPoints.add(canvasPos);
+      PlanMarks.add(cam, canvasPos);
       _selectedPathIndex = cam.pathPoints.length - 1;
     });
     await _persistElement(cam);
   }
 
+  /// Nueva posición, un paso más allá de la última, hacia donde mira.
   Future<void> _addPathPointAhead() async {
     final cam = _selected;
-    if (cam == null || cam.type != ElementType.camera) return;
-    final rad = cam.rotation * math.pi / 180;
-    final forward = Offset(-math.sin(rad), math.cos(rad));
+    if (cam == null || !PlanMarks.supports(cam)) return;
+    final last = cam.pathPoints.length - 1;
+    final rad =
+        (last < 0 ? cam.rotation : PlanMarks.rotationAt(cam, last)) *
+        math.pi /
+        180;
+    final forward = Offset(math.sin(rad), -math.cos(rad));
     final origin = cam.pathPoints.isEmpty ? cam.position : cam.pathPoints.last;
-    await _addPathPointAt(origin + forward * 80);
+    // Una cámara avanza; un actor suele cruzar el cuadro.
+    final step = cam.type == ElementType.camera
+        ? forward * 80
+        : Offset(-forward.dy, forward.dx) * 80;
+    await _addPathPointAt(origin + step);
   }
 
   Future<void> _deleteSelectedPathPoint() async {
     final cam = _selected;
     final index = _selectedPathIndex;
     if (cam == null ||
-        cam.type != ElementType.camera ||
+        !PlanMarks.supports(cam) ||
         index == null ||
         index < 0 ||
         index >= cam.pathPoints.length) {
       return;
     }
     setState(() {
-      cam.pathPoints.removeAt(index);
+      PlanMarks.removeAt(cam, index);
       _selectedPathIndex = null;
     });
     await _persistElement(cam);
@@ -1837,9 +1886,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   Future<void> _clearCameraPath() async {
     final cam = _selected;
-    if (cam == null || cam.type != ElementType.camera) return;
+    if (cam == null || !PlanMarks.supports(cam)) return;
     setState(() {
-      cam.pathPoints.clear();
+      PlanMarks.clear(cam);
       _selectedPathIndex = null;
     });
     await _persistElement(cam);
@@ -1881,7 +1930,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       return;
     }
     for (final el in _elements.reversed) {
-      if (el.type != ElementType.camera) continue;
+      if (!PlanMarks.supports(el)) continue;
       final pathIdx = _pathPointIndexAt(el, canvasPos);
       if (pathIdx != null) {
         _isDraggingPathPoint = true;
@@ -2089,7 +2138,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       return;
     }
     for (final el in _elements.reversed) {
-      if (el.type != ElementType.camera) continue;
+      if (!PlanMarks.supports(el)) continue;
       final pathIdx = _pathPointIndexAt(el, canvasPos);
       if (pathIdx != null) {
         setState(() {
@@ -2169,7 +2218,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       });
       return;
     }
-    if (_selected?.type != ElementType.camera) return;
+    final picked = _selected;
+    if (picked == null || !PlanMarks.supports(picked)) return;
     final canvasPos = _toCanvasCoords(d.localPosition);
     if (_elementAt(canvasPos) != null) return;
     if (CameraPlanPainter.pathPointAt(_selected!, canvasPos, scale: _scale) !=
@@ -2804,6 +2854,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 onMove: (layer) =>
                                     _moveToLayer(_selected!, layer),
                                 selectedPathIndex: _selectedPathIndex,
+                                onManageGear: _manageGear,
                                 onAddPathPoint: _addPathPointAhead,
                                 onDeletePathPoint: _deleteSelectedPathPoint,
                                 onClearPath: _clearCameraPath,
@@ -3612,6 +3663,9 @@ class _ElementPanel extends StatefulWidget {
   /// Repinta mientras se arrastra un control, sin guardar todavía.
   final VoidCallback onPreview;
   final int? selectedPathIndex;
+
+  /// Abre «Cámaras y lentes del proyecto».
+  final VoidCallback? onManageGear;
   final VoidCallback? onAddPathPoint;
   final VoidCallback? onDeletePathPoint;
   final VoidCallback? onClearPath;
@@ -3648,6 +3702,7 @@ class _ElementPanel extends StatefulWidget {
     required this.onMove,
     required this.onPreview,
     this.selectedPathIndex,
+    this.onManageGear,
     this.onAddPathPoint,
     this.onDeletePathPoint,
     this.onClearPath,
@@ -3994,14 +4049,19 @@ class _ElementPanelState extends State<_ElementPanel> {
                     if (element.type == ElementType.camera)
                       PlanProjectCameraPicker(
                         gear: widget.gear,
-                        cameraId: element.externalMapping.catalogCameraId,
-                        lensId: element.externalMapping.catalogLensId,
+                        camera: element,
+                        onManage: widget.onManageGear,
                         onCamera: (camera) {
                           PlanEquipment.applyCamera(element, camera);
                           widget.onUpdate();
                         },
                         onLens: (lens) {
                           PlanEquipment.applyLens(element, lens);
+                          _lensCtrl.text = element.lens ?? '';
+                          widget.onUpdate();
+                        },
+                        onFocal: (focal) {
+                          PlanEquipment.setFocal(element, focal);
                           _lensCtrl.text = element.lens ?? '';
                           widget.onUpdate();
                         },
@@ -4044,82 +4104,83 @@ class _ElementPanelState extends State<_ElementPanel> {
                         onSubmitted: _commitLens,
                         onEditingComplete: () => _commitLens(_lensCtrl.text),
                       ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        'Trayectoria',
-                        style: AppTypography.caption(palette),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${element.pathPoints.length} punto(s) · '
-                        '${element.pathPoints.length + 1} posiciones',
-                        style: AppTypography.caption(
-                          palette,
-                        ).copyWith(color: palette.textSecondary, fontSize: 10),
-                      ),
-                      if (widget.selectedPathIndex != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            'Punto ${widget.selectedPathIndex! + 2} seleccionado',
-                            style: AppTypography.caption(
-                              palette,
-                            ).copyWith(color: palette.accent, fontSize: 10),
-                          ),
-                        ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: widget.onAddPathPoint,
-                              icon: const Icon(Icons.add, size: 16),
-                              label: const Text('Añadir'),
-                              style: OutlinedButton.styleFrom(
-                                visualDensity: VisualDensity.compact,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: widget.selectedPathIndex != null
-                                  ? widget.onDeletePathPoint
-                                  : null,
-                              icon: Icon(
-                                Icons.remove,
-                                size: 16,
-                                color: palette.error,
-                              ),
-                              label: Text(
-                                'Quitar',
-                                style: TextStyle(color: palette.error),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                visualDensity: VisualDensity.compact,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (element.pathPoints.isNotEmpty)
-                        TextButton(
-                          onPressed: widget.onClearPath,
-                          child: Text(
-                            'Limpiar trayectoria',
-                            style: AppTypography.caption(
-                              palette,
-                            ).copyWith(color: palette.textSecondary),
-                          ),
-                        ),
-                      Text(
-                        'Doble toque en el canvas para añadir un punto. '
-                        'Arrastra los círculos numerados para mover la ruta.',
-                        style: AppTypography.caption(
-                          palette,
-                        ).copyWith(color: palette.textTertiary, fontSize: 10),
-                      ),
                     ],
+                    if (PlanMarks.supports(element))
+                      _section(palette, 'Posiciones', 'marks', [
+                        Text(
+                          element.pathPoints.isEmpty
+                              ? 'Una sola posición'
+                              : '${element.pathPoints.length + 1} posiciones',
+                          style: AppTypography.caption(palette).copyWith(
+                            color: palette.textSecondary,
+                            fontSize: 10,
+                          ),
+                        ),
+                        if (widget.selectedPathIndex != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              'Posición ${widget.selectedPathIndex! + 2} seleccionada: '
+                              'arrástrala o gírala con su asa',
+                              style: AppTypography.caption(
+                                palette,
+                              ).copyWith(color: palette.accent, fontSize: 10),
+                            ),
+                          ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: widget.onAddPathPoint,
+                                icon: const Icon(Icons.add, size: 16),
+                                label: const Text('Posición'),
+                                style: OutlinedButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: widget.selectedPathIndex != null
+                                    ? widget.onDeletePathPoint
+                                    : null,
+                                icon: Icon(
+                                  Icons.remove,
+                                  size: 16,
+                                  color: palette.error,
+                                ),
+                                label: Text(
+                                  'Quitar',
+                                  style: TextStyle(color: palette.error),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (element.pathPoints.isNotEmpty)
+                          TextButton(
+                            onPressed: widget.onClearPath,
+                            child: Text(
+                              'Dejar una sola posición',
+                              style: AppTypography.caption(
+                                palette,
+                              ).copyWith(color: palette.textSecondary),
+                            ),
+                          ),
+                        Text(
+                          'Doble toque en el lienzo para añadir una posición. Cada '
+                          'una se arrastra y se gira por separado: en la de una '
+                          'cámara se ve qué encuadra desde allí.',
+                          style: AppTypography.caption(
+                            palette,
+                          ).copyWith(color: palette.textTertiary, fontSize: 10),
+                        ),
+                      ]),
                     if (element.type == ElementType.camera ||
                         element.type == ElementType.light ||
                         element.type == ElementType.prop ||

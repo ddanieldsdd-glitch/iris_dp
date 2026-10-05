@@ -4,7 +4,9 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/database/app_database.dart';
+import 'camera_plan_element_model.dart';
 import 'light/ambient.dart';
+import '../equipment/lens_set_utils.dart';
 import 'plan_equipment.dart';
 
 /// Ambiente del esquema de luz: día o noche, sol, cielo y rebote de
@@ -221,43 +223,73 @@ class _PlanLightCatalogDialogState extends State<PlanLightCatalogDialog> {
 /// Cámara y lente del proyecto para una cámara de la planta.
 class PlanProjectCameraPicker extends StatelessWidget {
   final ProjectGear gear;
-  final int? cameraId;
-  final int? lensId;
+  final PlanElement camera;
   final ValueChanged<Camera> onCamera;
   final ValueChanged<Lense> onLens;
+
+  /// Cambia la focal dentro de un zoom.
+  final ValueChanged<double> onFocal;
+
+  /// Abre «Cámaras y lentes del proyecto».
+  final VoidCallback? onManage;
 
   const PlanProjectCameraPicker({
     super.key,
     required this.gear,
-    required this.cameraId,
-    required this.lensId,
+    required this.camera,
     required this.onCamera,
     required this.onLens,
+    required this.onFocal,
+    this.onManage,
   });
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final cameraId = camera.externalMapping.catalogCameraId;
+    final lensId = camera.externalMapping.catalogLensId;
+    final manage = onManage == null
+        ? const SizedBox.shrink()
+        : Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: onManage,
+              icon: const Icon(Icons.tune, size: 16),
+              label: const Text('Cámaras y lentes del proyecto…'),
+            ),
+          );
     if (gear.cameras.isEmpty && gear.lenses.isEmpty) {
       return Padding(
         padding: const EdgeInsets.only(bottom: AppSpacing.md),
-        child: Text(
-          'Añade la cámara y las lentes del proyecto en Equipo para '
-          'elegirlas aquí.',
-          style: AppTypography.caption(
-            palette,
-          ).copyWith(color: palette.textTertiary),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Elige las cámaras y los juegos de lentes que van al rodaje '
+              'para tenerlos aquí.',
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: palette.textTertiary),
+            ),
+            manage,
+          ],
         ),
       );
     }
+    Lense? selected;
+    for (final l in gear.lenses) {
+      if (l.id == lensId) selected = l;
+    }
+    final sets = LensSetUtils.groupBySet(gear.lenses);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Equipo del proyecto', style: AppTypography.label(palette)),
         const SizedBox(height: AppSpacing.sm),
         if (gear.cameras.isNotEmpty) ...[
-          Text('Cámara', style: AppTypography.caption(palette)),
+          Text('Cuerpo', style: AppTypography.caption(palette)),
           DropdownButtonFormField<int>(
+            key: ValueKey('body_${cameraId}_${gear.cameras.length}'),
             isExpanded: true,
             initialValue: gear.cameras.any((c) => c.id == cameraId)
                 ? cameraId
@@ -267,11 +299,11 @@ class PlanProjectCameraPicker extends StatelessWidget {
               hintText: 'Elegir cámara',
             ),
             items: [
-              for (final c in gear.cameras)
+              for (final (i, c) in gear.cameras.indexed)
                 DropdownMenuItem(
                   value: c.id,
                   child: Text(
-                    '${c.brand} ${c.model}',
+                    '${ProjectGear.letterAt(i)} · ${c.brand} ${c.model}',
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -284,35 +316,65 @@ class PlanProjectCameraPicker extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
         ],
-        if (gear.lenses.isNotEmpty) ...[
-          Text('Lente', style: AppTypography.caption(palette)),
-          DropdownButtonFormField<int>(
-            isExpanded: true,
-            initialValue: gear.lenses.any((l) => l.id == lensId)
-                ? lensId
-                : null,
-            decoration: const InputDecoration(
-              isDense: true,
-              hintText: 'Elegir lente',
-            ),
-            items: [
-              for (final l in gear.lenses)
-                DropdownMenuItem(
-                  value: l.id,
-                  child: Text(
-                    PlanEquipment.lensLabel(l),
-                    overflow: TextOverflow.ellipsis,
+        // Las lentes del proyecto, por juegos y de la más angular a la más
+        // tele: se toca una y el cono cambia.
+        for (final lenses in sets.values) ...[
+          Text(
+            '${lenses.first.brand} ${LensSetUtils.setName(lenses.first)}',
+            style: AppTypography.caption(palette),
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              for (final lens in lenses)
+                ChoiceChip(
+                  visualDensity: VisualDensity.compact,
+                  showCheckmark: false,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  label: Text(
+                    LensSetUtils.focalLabel(lens).replaceAll(' mm', ''),
+                    style: const TextStyle(fontSize: 12),
                   ),
+                  tooltip:
+                      '${LensSetUtils.focalLabel(lens)} · '
+                      'T${lens.minTStop.toStringAsFixed(1)}',
+                  selected: lens.id == lensId,
+                  onSelected: (_) => onLens(lens),
                 ),
             ],
-            onChanged: (id) {
-              if (id != null) {
-                onLens(gear.lenses.firstWhere((l) => l.id == id));
-              }
-            },
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        if (selected != null &&
+            selected.focalLength <= 0 &&
+            selected.focalMin != null &&
+            selected.focalMax != null &&
+            selected.focalMax! > selected.focalMin!) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Focal del zoom',
+                  style: AppTypography.caption(palette),
+                ),
+              ),
+              Text(camera.lens ?? '', style: AppTypography.caption(palette)),
+            ],
+          ),
+          Slider(
+            value: (PlanEquipment.focalOf(camera) ?? selected.focalMin!).clamp(
+              selected.focalMin!,
+              selected.focalMax!,
+            ),
+            min: selected.focalMin!,
+            max: selected.focalMax!,
+            onChanged: onFocal,
           ),
         ],
-        const SizedBox(height: AppSpacing.md),
+        manage,
+        const SizedBox(height: AppSpacing.sm),
       ],
     );
   }

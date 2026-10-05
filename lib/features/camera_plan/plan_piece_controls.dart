@@ -9,6 +9,7 @@ import 'light/light_scene.dart';
 import 'light/modifiers.dart';
 import 'light/plan_light.dart';
 import 'light/surfaces.dart';
+import 'plan_marks.dart';
 import 'plan_opening.dart';
 import 'plan_segment.dart';
 
@@ -519,6 +520,20 @@ class PlanPieceControls extends StatelessWidget {
           );
       }
     } else if (el.type == ElementType.actor || el.type == ElementType.camera) {
+      if (el.type == ElementType.actor) {
+        children.add(
+          sides(
+            'Postura',
+            PlanMarks.pose(el),
+            const [
+              (PlanMarks.poseStand, 'De pie'),
+              (PlanMarks.poseSit, 'Sentado'),
+              (PlanMarks.poseLie, 'Tumbado'),
+            ],
+            (pose) => el.props[PlanMarks.poseKey] = pose,
+          ),
+        );
+      }
       children.add(
         toggle('Hace sombra', el.props[LightScene.noShadowKey] != true, (v) {
           if (v) {

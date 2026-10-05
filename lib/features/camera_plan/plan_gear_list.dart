@@ -85,6 +85,8 @@ class GearList {
             cameras,
             [
               'Cámara ${el.cameraLetter}',
+              if (el.props['cameraName'] case final String body) body,
+              if (el.props['lensName'] case final String glass) glass,
               if (el.lens?.isNotEmpty == true) el.lens!,
               if (el.stabilization?.isNotEmpty == true) el.stabilization!,
             ].join(' · '),

@@ -15,6 +15,7 @@ import 'light_beam.dart';
 import 'light_symbols.dart';
 import 'light/modifiers.dart';
 import 'light/surfaces.dart';
+import 'plan_marks.dart';
 import 'plan_opening.dart';
 import 'plan_sun_painter.dart';
 import 'plan_terrain_painter.dart';
@@ -206,7 +207,7 @@ class CameraPlanPainter extends CustomPainter {
       );
     }
 
-    for (final el in elements.where((e) => e.type == ElementType.camera)) {
+    for (final el in elements.where(PlanMarks.supports)) {
       final isSelected = el.id == selectedElement?.id;
       _drawCameraPath(
         canvas,
@@ -662,65 +663,97 @@ class CameraPlanPainter extends CustomPainter {
     Offset canvasPos, {
     double scale = 1,
   }) {
-    if (camera.type != ElementType.camera || camera.pathPoints.isEmpty) {
+    if (!PlanMarks.supports(camera) || camera.pathPoints.isEmpty) {
       return null;
     }
-    final r = pathPointHitRadius / scale;
+    // La marca lleva la figura dibujada: se coge por todo su cuerpo.
+    final r = math.max(pathPointHitRadius, 18.0) / math.min(1.0, scale);
     for (var i = camera.pathPoints.length - 1; i >= 0; i--) {
       if ((camera.pathPoints[i] - canvasPos).distance <= r) return i;
     }
     return null;
   }
 
+  /// Las posiciones de un actor o de una cámara: la figura atenuada en
+  /// cada marca, mirando hacia donde mira allí, con su número y el camino
+  /// entre ellas. De una cámara se ve además qué encuadra desde cada sitio.
   void _drawCameraPath(
     Canvas canvas,
     PlanElement camera, {
     int? highlightPathIndex,
     bool showHandles = false,
   }) {
-    if (camera.pathPoints.isEmpty && !showHandles) return;
+    if (camera.pathPoints.isEmpty) return;
 
-    final camColor = cameraColorForLetter(camera.cameraLetter);
+    final camColor = camera.type == ElementType.camera
+        ? cameraColorForLetter(camera.cameraLetter)
+        : camera.actorColor;
     final pathPaint = Paint()
       ..color = camColor.withValues(alpha: 0.65)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    if (camera.pathPoints.isNotEmpty) {
-      final allPoints = [camera.position, ...camera.pathPoints];
-      final path = Path()..moveTo(allPoints[0].dx, allPoints[0].dy);
-      for (final p in allPoints.skip(1)) {
-        path.lineTo(p.dx, p.dy);
-      }
-      _drawDashedPath(canvas, path, pathPaint);
-
-      for (int i = 0; i < allPoints.length - 1; i++) {
-        final a = allPoints[i];
-        final b = allPoints[i + 1];
-        final mid = Offset((a.dx + b.dx) / 2, (a.dy + b.dy) / 2);
-        final angle = math.atan2(b.dy - a.dy, b.dx - a.dx);
-        _drawArrowHead(canvas, mid, angle, pathPaint);
-      }
+    final allPoints = [camera.position, ...camera.pathPoints];
+    final path = Path()..moveTo(allPoints[0].dx, allPoints[0].dy);
+    for (final p in allPoints.skip(1)) {
+      path.lineTo(p.dx, p.dy);
+    }
+    _drawDashedPath(canvas, path, pathPaint);
+    for (int i = 0; i < allPoints.length - 1; i++) {
+      final a = allPoints[i];
+      final b = allPoints[i + 1];
+      final mid = Offset((a.dx + b.dx) / 2, (a.dy + b.dy) / 2);
+      final angle = math.atan2(b.dy - a.dy, b.dx - a.dx);
+      _drawArrowHead(canvas, mid, angle, pathPaint);
     }
 
-    if (showHandles || camera.pathPoints.isNotEmpty) {
-      _drawPathWaypoint(
-        canvas,
-        camera.position,
-        label: '1',
-        color: camColor,
-        highlighted: false,
-      );
-    }
-
+    const badge = Offset(20, -20);
+    _drawPathWaypoint(
+      canvas,
+      camera.position + badge,
+      label: '1',
+      color: camColor,
+      highlighted: false,
+    );
     for (int i = 0; i < camera.pathPoints.length; i++) {
+      final at = camera.pathPoints[i];
+      final rotation = PlanMarks.rotationAt(camera, i);
+      final picked = highlightPathIndex == i;
+      // La figura en esa marca, atenuada salvo la que se está tocando.
+      canvas.saveLayer(
+        null,
+        Paint()..color = Color.fromRGBO(255, 255, 255, picked ? 0.9 : 0.5),
+      );
+      canvas.translate(at.dx, at.dy);
+      canvas.rotate(rotation * math.pi / 180);
+      if (camera.type == ElementType.camera) {
+        _drawCamera(canvas, camera);
+      } else {
+        _drawActor(canvas, camera, rotation: rotation);
+      }
+      canvas.restore();
+      if (picked) {
+        canvas.save();
+        canvas.translate(at.dx, at.dy);
+        canvas.rotate(rotation * math.pi / 180);
+        canvas.drawCircle(
+          Offset.zero,
+          30,
+          Paint()
+            ..color = camColor.withValues(alpha: 0.35)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        );
+        _drawRotationHandle(canvas, camColor, rotation);
+        canvas.restore();
+      }
       _drawPathWaypoint(
         canvas,
-        camera.pathPoints[i],
+        at + badge,
         label: '${i + 2}',
         color: camColor,
-        highlighted: highlightPathIndex == i,
+        highlighted: picked,
       );
     }
   }
@@ -837,7 +870,11 @@ class CameraPlanPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2,
       );
-      if (!isAttachedOpening(el, [...inheritedElements, ...elements])) {
+      // Con una de sus posiciones seleccionada, el asa es la de esa
+      // posición.
+      final onMark = selectedPathIndex != null && PlanMarks.supports(el);
+      if (!onMark &&
+          !isAttachedOpening(el, [...inheritedElements, ...elements])) {
         _drawRotationHandle(canvas, handleColor, el.rotation);
       }
     }
@@ -865,9 +902,20 @@ class CameraPlanPainter extends CustomPainter {
         // Con lecturas, el actor enseña el diafragma que le llega.
         final reading = showReadings ? _readingAt(el.position) : null;
         final name = el.label?.isNotEmpty == true ? el.displayLabel : null;
+        // Con varias posiciones, el diafragma de cada una: se ve si el
+        // actor cambia de exposición al moverse.
+        final marks = showReadings && el.pathPoints.isNotEmpty
+            ? [
+                for (final (i, at) in [el.position, ...el.pathPoints].indexed)
+                  if (_readingAt(at) case final r?)
+                    '${i + 1}: ${r.lux > 0.5 ? formatStop(r.stop) : 'sin luz'}',
+              ].join(' · ')
+            : null;
         final text = [
           ?name,
-          if (reading != null && reading.lux > 0.5)
+          if (marks != null && marks.isNotEmpty)
+            marks
+          else if (reading != null && reading.lux > 0.5)
             '${formatStop(reading.stop)} '
                 '(${formatStopDifference(reading.stopsOverTarget)})',
         ].join('\n');
@@ -876,7 +924,7 @@ class CameraPlanPainter extends CustomPainter {
             canvas,
             text,
             _CanvasColors.inkSecondary,
-            maxWidth: 110,
+            maxWidth: marks == null ? 110 : 220,
           );
         }
       case ElementType.prop:
@@ -1073,41 +1121,80 @@ class CameraPlanPainter extends CustomPainter {
     tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
   }
 
-  void _drawActor(Canvas canvas, PlanElement el) {
-    final paint = Paint()..color = el.actorColor;
-    canvas.drawCircle(Offset.zero, 16, paint);
-    canvas.drawCircle(
-      Offset.zero,
-      16,
-      Paint()
-        ..color = _CanvasColors.ink
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
+  /// Una persona vista desde arriba: hombros, cabeza y nariz, que marca
+  /// hacia dónde mira. Sentada, con las piernas por delante; tumbada, con
+  /// el cuerpo estirado.
+  void _drawActor(Canvas canvas, PlanElement el, {double? rotation}) {
+    final colour = el.actorColor;
+    final fill = Paint()..color = colour;
+    final dark = Paint()..color = Color.lerp(colour, Colors.black, 0.35)!;
+    final outline = Paint()
+      ..color = _CanvasColors.ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+    void shape(Path path, Paint paint) {
+      canvas.drawPath(path, paint);
+      canvas.drawPath(path, outline);
+    }
 
-    canvas.drawLine(
-      const Offset(0, -14),
-      const Offset(0, 14),
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.9)
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round,
+    Path rounded(Rect rect, double radius) =>
+        Path()
+          ..addRRect(RRect.fromRectAndRadius(rect, Radius.circular(radius)));
+
+    switch (PlanMarks.pose(el)) {
+      case PlanMarks.poseSit:
+        // Los muslos, hacia delante.
+        for (final x in const [-9.0, 2.0]) {
+          shape(rounded(Rect.fromLTWH(x, -20, 7, 18), 3.5), dark);
+        }
+      case PlanMarks.poseLie:
+        // El cuerpo y las piernas, hacia atrás.
+        shape(rounded(const Rect.fromLTWH(-9, 2, 18, 30), 7), dark);
+        for (final x in const [-8.0, 1.0]) {
+          shape(rounded(Rect.fromLTWH(x, 30, 7, 26), 3.5), dark);
+        }
+      default:
+        break;
+    }
+    // Hombros.
+    shape(
+      Path()..addOval(
+        Rect.fromCenter(center: const Offset(0, 2), width: 34, height: 15),
+      ),
+      fill,
+    );
+    // Nariz: hacia dónde mira.
+    shape(
+      Path()
+        ..moveTo(-3.5, -7)
+        ..lineTo(0, -13)
+        ..lineTo(3.5, -7)
+        ..close(),
+      fill,
+    );
+    // Cabeza.
+    shape(
+      Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: 8.5)),
+      Paint()..color = Color.lerp(colour, Colors.white, 0.25)!,
     );
 
     if (el.label != null && el.label!.isNotEmpty) {
-      final initial = el.label![0].toUpperCase();
       final tp = TextPainter(
         text: TextSpan(
-          text: initial,
+          text: el.label![0].toUpperCase(),
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
           ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
+      // La inicial no gira con la figura.
+      canvas.save();
+      canvas.rotate(-(rotation ?? el.rotation) * math.pi / 180);
       tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+      canvas.restore();
     }
   }
 
@@ -1891,10 +1978,18 @@ class CameraPlanPainter extends CustomPainter {
       PlanOpening.isOpening(el) &&
       PlanOpening.nearestWall(el.position, all, within: 4) != null;
 
-  static Offset rotationHandleWorld(PlanElement el, [double scale = 1]) {
+  static Offset rotationHandleWorld(PlanElement el, [double scale = 1]) =>
+      rotationHandleAt(el.position, el.rotation, scale);
+
+  /// Asa de giro de algo centrado en [centre] y girado [rotation] grados.
+  static Offset rotationHandleAt(
+    Offset centre,
+    double rotation, [
+    double scale = 1,
+  ]) {
     final handleLocal = Offset(0, -rotationHandleDistance(scale));
-    final rad = el.rotation * math.pi / 180;
-    return el.position +
+    final rad = rotation * math.pi / 180;
+    return centre +
         Offset(
           handleLocal.dx * math.cos(rad) - handleLocal.dy * math.sin(rad),
           handleLocal.dx * math.sin(rad) + handleLocal.dy * math.cos(rad),

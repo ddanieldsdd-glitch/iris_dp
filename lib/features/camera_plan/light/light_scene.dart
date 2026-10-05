@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
+import '../plan_marks.dart';
 import '../plan_opening.dart';
 import '../plan_segment.dart';
 import 'ambient.dart';
@@ -494,7 +495,16 @@ class LightScene {
         case ElementType.actor || ElementType.camera:
           // Una persona o una cámara hacen sombra.
           if (el.props[noShadowKey] != true) {
-            blockers.add(LightBlocker.circle(el.position, body, element: el));
+            blockers.add(
+              LightBlocker.circle(
+                el.position,
+                body,
+                element: el,
+                heightM: el.type == ElementType.actor
+                    ? PlanMarks.heightM(el)
+                    : 1.6,
+              ),
+            );
           }
           continue;
         case ElementType.light:
