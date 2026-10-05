@@ -739,6 +739,73 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     });
 
+    testWidgets('pulsar el asa de giro y arrastrar gira el elemento, aunque '
+        'se tarde en empezar a arrastrar', (tester) async {
+      await seed(tester, siteJson: '{"version":2,"elements":[]}');
+      await tester.runAsync(() async {
+        await db.insertCameraPlanElement(
+          CameraPlanElementsCompanion.insert(
+            shotId: shotId,
+            type: 'actor',
+            x: const Value(400),
+            y: const Value(300),
+            label: const Value('Gala'),
+          ),
+        );
+      });
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.shot(
+            projectId: projectId,
+            shotId: shotId,
+            shotLabel: 'Esc 1 · Plano 1',
+          ),
+        ),
+      );
+      await settle(tester);
+
+      final state = tester.state(find.byType(CameraPlanEditor));
+      // ignore: avoid_dynamic_calls
+      final view =
+          (state as dynamic).debugView as ({Offset offset, double scale});
+      final canvas = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is CameraPlanPainter,
+      );
+      Offset onScreen(Offset p) =>
+          tester.getTopLeft(canvas) + view.offset + p * view.scale;
+
+      await tester.tapAt(onScreen(const Offset(400, 300)));
+      await settle(tester);
+
+      final reach = CameraPlanPainter.rotationHandleDistance(view.scale);
+      final gesture = await tester.startGesture(
+        onScreen(Offset(400, 300 - reach)),
+      );
+      // Pulsación sostenida: antes esto deseleccionaba y ya no giraba.
+      await tester.pump(const Duration(milliseconds: 200));
+      for (final p in const [
+        Offset(430, 270),
+        Offset(450, 290),
+        Offset(460, 300),
+      ]) {
+        await gesture.moveTo(onScreen(p));
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      await gesture.up();
+      await settle(tester);
+
+      final rows = await tester.runAsync(
+        () => db.getCameraPlanElementsForShot(shotId),
+      );
+      expect(rows!.single.rotation, closeTo(90, 2));
+      expect(rows.single.x, closeTo(400, 0.5));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
     testWidgets('una luz del esquema se puede ajustar solo en un plano', (
       tester,
     ) async {

@@ -1759,10 +1759,25 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     return null;
   }
 
+  /// El toque cae donde se gira el seleccionado: en su asa o en la corona
+  /// que lo rodea (si ahí no hay otro elemento que coger).
   bool _hitRotationHandle(Offset canvasPos) {
-    if (_selected == null || PlanSegment.isSegment(_selected!)) return false;
-    final handle = CameraPlanPainter.rotationHandleWorld(_selected!);
-    return (canvasPos - handle).distance < 14 / _scale;
+    final el = _selected;
+    if (el == null || PlanSegment.isSegment(el) || _multi.length > 1) {
+      return false;
+    }
+    if (CameraPlanPainter.isAttachedOpening(el, _visibleElements)) {
+      return false;
+    }
+    final handle = CameraPlanPainter.rotationHandleWorld(el, _scale);
+    if ((canvasPos - handle).distance < 18 / _scale) return true;
+    final distance = (canvasPos - el.position).distance;
+    final inner = 28 / math.min(1.0, _scale);
+    final outer =
+        CameraPlanPainter.rotationHandleDistance(_scale) + 10 / _scale;
+    if (distance < inner || distance > outer) return false;
+    final under = _elementAt(canvasPos);
+    return under == null || identical(under, el);
   }
 
   void _updateRotation(PlanElement el, Offset canvasPos) {
@@ -1770,8 +1785,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       canvasPos.dy - el.position.dy,
       canvasPos.dx - el.position.dx,
     );
-    el.rotation = ((angle * 180 / math.pi) + 90) % 360;
-    if (el.rotation < 0) el.rotation += 360;
+    var degrees = ((angle * 180 / math.pi) + 90) % 360;
+    // Con Mayús, de 15 en 15 grados.
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      degrees = (degrees / 15).round() * 15.0;
+    }
+    el.rotation = (degrees % 360 + 360) % 360;
   }
 
   Future<void> _addPathPointAt(Offset canvasPos) async {
@@ -1871,7 +1890,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _segmentHandle = _segmentHandleAt(canvasPos);
     if (_segmentHandle != null) return;
     if (_selected != null && _hitRotationHandle(canvasPos)) {
-      _isRotating = true;
+      setState(() => _isRotating = true);
       _isDraggingPathPoint = false;
       return;
     }
@@ -2011,7 +2030,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _dragDirty = false;
     _dragging = null;
     _segmentHandle = null;
-    _isRotating = false;
+    if (_isRotating) setState(() => _isRotating = false);
     _isDraggingPathPoint = false;
     if (!moved || _selected == null) return;
 
@@ -2075,6 +2094,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       }
     }
     if (_segmentHandleAt(canvasPos) != null) return;
+    // Pulsar el asa de giro no es tocar en vacío: no deselecciona.
+    if (_hitRotationHandle(canvasPos)) return;
     final hit = _elementAt(canvasPos);
     if (hit == null && _showOtherCameras) {
       // Tocar la cámara de otro plano abre ese plano.
@@ -2666,6 +2687,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                           ),
                                                       ],
                                                       alsoSelected: _multi,
+                                                      rotating: _isRotating,
                                                       segmentPreview:
                                                           _segmentStart !=
                                                                   null &&
@@ -3851,10 +3873,29 @@ class _ElementPanelState extends State<_ElementPanel> {
                               style: AppTypography.caption(palette),
                             ),
                           ),
+                          for (final step in const [-15.0, 15.0])
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              tooltip: step < 0 ? 'Girar −15°' : 'Girar +15°',
+                              icon: Icon(
+                                step < 0
+                                    ? Icons.rotate_left
+                                    : Icons.rotate_right,
+                                size: 18,
+                              ),
+                              onPressed: () {
+                                final turned =
+                                    ((element.rotation + step) / 15).round() *
+                                    15.0;
+                                element.rotation = (turned % 360 + 360) % 360;
+                                widget.onUpdate();
+                              },
+                            ),
                         ],
                       ),
                       Text(
-                        'Arrastra el asa azul en el canvas para rotar',
+                        'Arrastra el asa o el anillo en el lienzo para girar; '
+                        'con Mayús, de 15 en 15°',
                         style: AppTypography.caption(
                           palette,
                         ).copyWith(color: palette.textTertiary, fontSize: 10),

@@ -90,6 +90,9 @@ class CameraPlanPainter extends CustomPainter {
   /// la barra de escala. `null` = sin rótulos de medida.
   final double? metersPerUnit;
   final PlanElement? selectedElement;
+
+  /// Se está girando el seleccionado: se rotulan sus grados.
+  final bool rotating;
   final int? selectedPathIndex;
   final double scale;
   final Offset offset;
@@ -116,6 +119,7 @@ class CameraPlanPainter extends CustomPainter {
     this.showReadings = false,
     this.exposureMap = false,
     this.selectedElement,
+    this.rotating = false,
     this.selectedPathIndex,
     this.scale = 1.0,
     this.offset = Offset.zero,
@@ -803,7 +807,9 @@ class CameraPlanPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2,
       );
-      _drawRotationHandle(canvas, handleColor);
+      if (!isAttachedOpening(el, [...inheritedElements, ...elements])) {
+        _drawRotationHandle(canvas, handleColor, el.rotation);
+      }
     }
 
     canvas.restore();
@@ -920,24 +926,43 @@ class CameraPlanPainter extends CustomPainter {
     );
   }
 
-  void _drawRotationHandle(Canvas canvas, Color color) {
-    const handleOffset = Offset(0, -36);
+  void _drawRotationHandle(Canvas canvas, Color color, double degrees) {
+    final handleOffset = Offset(0, -rotationHandleDistance(scale));
+    final radius = rotationHandleRadius(scale);
     canvas.drawLine(
       Offset.zero,
       handleOffset,
       Paint()
         ..color = color.withValues(alpha: 0.5)
-        ..strokeWidth = 1.5,
+        ..strokeWidth = 1.5 / math.min(1.0, scale),
     );
-    canvas.drawCircle(handleOffset, 7, Paint()..color = color);
+    canvas.drawCircle(handleOffset, radius, Paint()..color = color);
     canvas.drawCircle(
       handleOffset,
-      7,
+      radius,
       Paint()
         ..color = Colors.white
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
+        ..strokeWidth = 1.5 / math.min(1.0, scale),
     );
+    if (!rotating) return;
+    // Los grados, del derecho aunque el elemento esté girado.
+    canvas.save();
+    canvas.translate(handleOffset.dx, handleOffset.dy - radius * 2.4);
+    canvas.rotate(-degrees * math.pi / 180);
+    final tp = TextPainter(
+      text: TextSpan(
+        text: '${(degrees % 360).round()}°',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 12 / math.min(1.0, scale),
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+    canvas.restore();
   }
 
   void _drawCamera(Canvas canvas, PlanElement el) {
@@ -1758,8 +1783,20 @@ class CameraPlanPainter extends CustomPainter {
   }
 
   /// Posición mundial del asa de rotación para un elemento.
-  static Offset rotationHandleWorld(PlanElement el) {
-    const handleLocal = Offset(0, -36);
+  /// Distancia del asa de giro al centro: al alejar el zoom no encoge en
+  /// pantalla.
+  static double rotationHandleDistance(double scale) =>
+      math.max(36.0, 44 / scale);
+
+  static double rotationHandleRadius(double scale) => math.max(7.0, 8 / scale);
+
+  /// Una puerta o ventana sobre una pared: su ángulo es el de la pared.
+  static bool isAttachedOpening(PlanElement el, Iterable<PlanElement> all) =>
+      PlanOpening.isOpening(el) &&
+      PlanOpening.nearestWall(el.position, all, within: 4) != null;
+
+  static Offset rotationHandleWorld(PlanElement el, [double scale = 1]) {
+    final handleLocal = Offset(0, -rotationHandleDistance(scale));
     final rad = el.rotation * math.pi / 180;
     return el.position +
         Offset(
@@ -1776,6 +1813,7 @@ class CameraPlanPainter extends CustomPainter {
       old.showGrid != showGrid ||
       old.zones != zones ||
       old.alsoSelected != alsoSelected ||
+      old.rotating != rotating ||
       old.segmentPreview != segmentPreview ||
       old.measure != measure ||
       old.zoneHandles != zoneHandles ||
