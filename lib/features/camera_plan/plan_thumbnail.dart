@@ -23,6 +23,10 @@ class PlanThumbnail extends StatelessWidget {
   /// Fuerza con la que se ve lo heredado.
   final double inheritedOpacity;
 
+  /// Recorridos de planos secuencia, de zona a zona: se dibujan con
+  /// flechas encima.
+  final List<List<Offset>> routes;
+
   const PlanThumbnail({
     super.key,
     required this.elements,
@@ -31,6 +35,7 @@ class PlanThumbnail extends StatelessWidget {
     this.focus,
     this.zones = const [],
     this.inheritedOpacity = 0.55,
+    this.routes = const [],
   });
 
   /// Margen alrededor de los elementos, en unidades del lienzo.
@@ -86,6 +91,14 @@ class PlanThumbnail extends StatelessWidget {
         return ClipRect(
           child: CustomPaint(
             size: size,
+            foregroundPainter: routes.isEmpty
+                ? null
+                : _RoutePainter(
+                    routes: routes,
+                    scale: scale,
+                    offset: offset,
+                    color: palette.accent,
+                  ),
             painter: CameraPlanPainter(
               elements: elements,
               inheritedElements: inherited,
@@ -101,4 +114,70 @@ class PlanThumbnail extends StatelessWidget {
       },
     );
   }
+}
+
+/// El recorrido de un plano secuencia sobre el plano maestro.
+class _RoutePainter extends CustomPainter {
+  final List<List<Offset>> routes;
+  final double scale;
+  final Offset offset;
+  final Color color;
+
+  const _RoutePainter({
+    required this.routes,
+    required this.scale,
+    required this.offset,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final line = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    final fill = Paint()..color = color;
+    for (final route in routes) {
+      final points = [for (final p in route) offset + p * scale];
+      for (var i = 0; i < points.length - 1; i++) {
+        final a = points[i];
+        final b = points[i + 1];
+        final span = b - a;
+        if (span.distance < 4) continue;
+        final dir = span / span.distance;
+        final normal = Offset(-dir.dy, dir.dx);
+        // Sin llegar al centro de la zona, para que se vea la punta.
+        final tip = b - dir * 10;
+        canvas.drawLine(a + dir * 10, tip, line);
+        canvas.drawPath(
+          Path()
+            ..moveTo(tip.dx + dir.dx * 8, tip.dy + dir.dy * 8)
+            ..lineTo(tip.dx + normal.dx * 5, tip.dy + normal.dy * 5)
+            ..lineTo(tip.dx - normal.dx * 5, tip.dy - normal.dy * 5)
+            ..close(),
+          fill,
+        );
+      }
+      for (final (i, p) in points.indexed) {
+        canvas.drawCircle(p, 8, fill);
+        final tp = TextPainter(
+          text: TextSpan(
+            text: '${i + 1}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, p - Offset(tp.width / 2, tp.height / 2));
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RoutePainter old) =>
+      old.routes != routes || old.scale != scale || old.offset != offset;
 }

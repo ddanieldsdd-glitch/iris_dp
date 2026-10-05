@@ -47,6 +47,7 @@ import 'plan_palette.dart';
 import 'plan_piece_controls.dart';
 import 'plan_segment.dart';
 import 'plan_target.dart';
+import 'shot_route.dart';
 import '../locations/location_scan_service.dart';
 import 'plan_element_compat.dart';
 import 'plan_element_compat_panel.dart';
@@ -63,6 +64,9 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   final int? lightSetupId;
   final int? shotId;
 
+  /// Tramo de un plano secuencia: su set, su luz y lo colocado en él.
+  final int? leg;
+
   /// En la pantalla de trabajo, abrir otra planta cambia la que se ve en
   /// lugar de apilar una pantalla nueva.
   final void Function(PlanTarget target)? onNavigate;
@@ -76,6 +80,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     this.setId,
     this.lightSetupId,
     this.shotId,
+    this.leg,
     this.onNavigate,
   });
 
@@ -90,7 +95,8 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
        scope = FloorPlanScope.site,
        setId = null,
        lightSetupId = null,
-       shotId = null;
+       shotId = null,
+       leg = null;
 
   /// Plano base del set de rodaje.
   const CameraPlanEditor.set({
@@ -103,7 +109,8 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
        scope = FloorPlanScope.set,
        siteId = null,
        lightSetupId = null,
-       shotId = null;
+       shotId = null,
+       leg = null;
 
   /// Esquema de luz compartido entre planos.
   const CameraPlanEditor.lightSetup({
@@ -116,7 +123,8 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
        scope = FloorPlanScope.lightSetup,
        siteId = null,
        setId = null,
-       shotId = null;
+       shotId = null,
+       leg = null;
 
   /// Planta de cámara de un plano concreto.
   const CameraPlanEditor.shot({
@@ -124,6 +132,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required this.projectId,
     required int this.shotId,
     required String shotLabel,
+    this.leg,
     this.onNavigate,
   }) : label = shotLabel,
        scope = FloorPlanScope.shot,
@@ -383,17 +392,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         scene = await (db.select(
           db.scenes,
         )..where((s) => s.id.equals(shot!.sceneId))).getSingleOrNull();
-        if (scene != null) {
-          if (scene.locationId != null) {
-            linkedSet = await db.getLocationById(scene.locationId!);
-          }
-          if (scene.locationSiteId != null) {
-            linkedSite = await db.getSiteById(scene.locationSiteId!);
-          } else if (linkedSet?.siteId != null) {
-            linkedSite = await db.getSiteById(linkedSet!.siteId!);
-          }
-          sceneColor = colors.sceneColor(scene);
+        // El set es el del tramo (plano secuencia), el propio del plano
+        // o, si no, el de su escena.
+        final ownLeg = _legOf(shot);
+        final shotSetId =
+            ownLeg?.setId ?? shot.locationBasePlanId ?? scene?.locationId;
+        if (shotSetId != null) {
+          linkedSet = await db.getLocationById(shotSetId);
         }
+        final shotSiteId =
+            ownLeg?.siteId ?? linkedSet?.siteId ?? scene?.locationSiteId;
+        if (shotSiteId != null) {
+          linkedSite = await db.getSiteById(shotSiteId);
+        }
+        if (scene != null) sceneColor = colors.sceneColor(scene);
       }
     } else if (widget.scope == FloorPlanScope.set && widget.setId != null) {
       linkedSet = await db.getLocationById(widget.setId!);
@@ -434,7 +446,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     }
 
     if (shot != null) {
-      lightSetup = setupById(shot.lightSetupId);
+      final ownLeg = _legOf(shot);
+      lightSetup = setupById(
+        ownLeg != null ? ownLeg.lightSetupId : shot.lightSetupId,
+      );
     } else if (_setupPicked) {
       lightSetup = setupById(_pickedSetupId);
     } else if (lightSetup == null) {
@@ -486,10 +501,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     ];
     addLayer(PlanLayer.light, shownLights);
     if (shot != null) {
-      addLayer(
-        PlanLayer.shot,
-        await _repo.loadElements(scope: FloorPlanScope.shot, shotId: shot.id),
-      );
+      // En una secuencia, cada tramo ve solo lo que se colocó en él.
+      final inSequence = ShotRoute.decode(shot.routeJson).isNotEmpty;
+      addLayer(PlanLayer.shot, [
+        for (final el in await _repo.loadElements(
+          scope: FloorPlanScope.shot,
+          shotId: shot.id,
+        ))
+          if (!inSequence || FloorPlanRepository.legOf(el) == (widget.leg ?? 0))
+            el,
+      ]);
     }
 
     // Zonas de los sets sobre el plano maestro.
@@ -718,6 +739,35 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     return targets;
   }
 
+  /// Tramo de secuencia que se está viendo, si el plano lo es.
+  ShotLeg? _legOf(Shot shot) {
+    final route = ShotRoute.decode(shot.routeJson);
+    final index = widget.leg;
+    return index != null && index >= 0 && index < route.length
+        ? route[index]
+        : null;
+  }
+
+  /// Pone un esquema de luz al plano o, en una secuencia, a su tramo.
+  Future<void> _assignSetup(Shot shot, int? setupId) async {
+    final db = ref.read(databaseProvider);
+    final route = ShotRoute.decode(shot.routeJson);
+    final index = widget.leg;
+    if (index == null || index < 0 || index >= route.length) {
+      await db.assignLightSetupToShot(shot.id, setupId);
+      return;
+    }
+    final next = [...route];
+    next[index] = ShotLeg(
+      siteId: route[index].siteId,
+      setId: route[index].setId,
+      lightSetupId: setupId,
+    );
+    await db.saveShotRoute(shot.id, ShotRoute.encode(next));
+    // El primer tramo es también el esquema «del plano».
+    if (index == 0) await db.assignLightSetupToShot(shot.id, setupId);
+  }
+
   void _jumpToShot(CameraPlanNavTarget target) {
     if (target.shotId == widget.shotId) return;
     if (widget.onNavigate != null) {
@@ -832,7 +882,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     );
     if (choice == null || !mounted) return;
 
-    final db = ref.read(databaseProvider);
     LightSetup? chosen;
     if (choice == create) {
       chosen = await _repo.createLightSetup(
@@ -844,7 +893,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       chosen = setups.firstWhere((s) => s.id == choice);
     }
     if (shot != null) {
-      await db.assignLightSetupToShot(shot.id, chosen?.id);
+      await _assignSetup(shot, chosen?.id);
     } else if (chosen != null &&
         widget.scope == FloorPlanScope.lightSetup &&
         widget.onNavigate != null) {
@@ -869,7 +918,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final shot = _shot;
     if (shot != null) {
       final db = ref.read(databaseProvider);
-      await db.assignLightSetupToShot(shot.id, created.id);
+      await _assignSetup(shot, created.id);
       _shot = await (db.select(
         db.shots,
       )..where((s) => s.id.equals(shot.id))).getSingleOrNull();
@@ -1277,6 +1326,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final order = sortOrder ?? (index >= 0 ? index : shotElements.length);
 
     if (el.id <= 0) {
+      // Lo que se coloca en un tramo de secuencia es de ese tramo.
+      if (widget.leg != null) {
+        el.props[FloorPlanRepository.legKey] = widget.leg;
+      }
       final newId = await db.insertCameraPlanElement(
         el.toCompanion(shotId, sortOrder: order),
       );

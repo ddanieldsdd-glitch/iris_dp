@@ -17,6 +17,7 @@ import 'package:iris_dp/features/camera_plan/floor_plan_repository.dart';
 import 'package:iris_dp/features/camera_plan/light_overrides.dart';
 import 'package:iris_dp/features/camera_plan/plan_marks.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
+import 'package:iris_dp/features/camera_plan/shot_route.dart';
 
 void main() {
   late AppDatabase db;
@@ -375,37 +376,141 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     });
 
-    testWidgets('el inicio enseña localización, set, escena y plano, y la '
-        'etiqueta cambia el esquema', (tester) async {
+    Future<void> dragTo(WidgetTester tester, Finder what, Finder where) async {
+      final gesture = await tester.startGesture(tester.getCenter(what));
+      await tester.pump(const Duration(milliseconds: 50));
+      await gesture.moveBy(const Offset(12, 12));
+      await tester.pump(const Duration(milliseconds: 50));
+      await gesture.moveTo(tester.getCenter(where));
+      await tester.pump(const Duration(milliseconds: 50));
+      await gesture.up();
+      await settle(tester);
+    }
+
+    Future<Shot> theShot(WidgetTester tester) async => (await tester.runAsync(
+      () =>
+          (db.select(db.shots)..where((s) => s.id.equals(shotId))).getSingle(),
+    ))!;
+
+    testWidgets('el inicio es el tablero de la escena: los planos se '
+        'arrastran a un esquema y a otro set de la localización', (
+      tester,
+    ) async {
       await seed(
         tester,
         siteJson: '{"version":2,"elements":[${element('wall', 300, 300)}]}',
       );
+      late int otherSetId;
+      await tester.runAsync(() async {
+        otherSetId = await db.insertLocation(
+          LocationBasePlansCompanion.insert(
+            projectId: projectId,
+            siteId: Value(siteId),
+            locationName: 'Quirófano',
+          ),
+        );
+        // Otra localización: sus sets no deben ofrecerse en el tablero.
+        final other = await db.insertSite(
+          LocationSitesCompanion.insert(projectId: projectId, name: 'Bosque'),
+        );
+        await db.insertLocation(
+          LocationBasePlansCompanion.insert(
+            projectId: projectId,
+            siteId: Value(other),
+            locationName: 'Claro',
+          ),
+        );
+      });
       await tester.pumpWidget(host(CameraPlanScreen(projectId: projectId)));
       await settle(tester);
 
-      expect(find.text('Hospital'), findsWidgets);
-      expect(find.text('Urgencias'), findsWidgets);
-      expect(find.text('Escena 1'), findsOneWidget);
-      // El plano aún no tiene luz: sale en el tiro «Sin luz».
-      expect(find.text('P1'), findsOneWidget);
+      // El índice, a la izquierda: localización, set y escena.
+      expect(find.text('HOSPITAL'), findsWidgets);
+      expect(find.text('Urgencias'), findsOneWidget);
+      expect(find.text('Escena 1'), findsWidgets);
+      expect(find.text('1 plano · 1 sin luz'), findsOneWidget);
+      // El tablero de la primera escena, a la derecha.
+      expect(find.text('SET URGENCIAS'), findsOneWidget);
       expect(find.text('Sin luz'), findsOneWidget);
+      expect(find.text('P1'), findsOneWidget);
+
+      // Soltar el plano en «Esquema nuevo» lo crea con el plano dentro.
+      await dragTo(tester, find.text('P1'), find.text('Esquema nuevo'));
+      var shot = await theShot(tester);
+      expect(shot.lightSetupId, isNotNull);
+      expect(shot.locationBasePlanId, isNull);
+      expect(find.text('Setup A'), findsOneWidget);
       expect(find.text('1 plano'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Esquema de luz del plano'));
+      // Otro set: solo se ofrecen los de la localización de la escena.
+      await tester.tap(find.text('Otro set de Hospital'));
       await settle(tester);
-      await tester.tap(find.text('Nuevo esquema'));
+      // En el índice y en el menú; «Claro» solo en el índice.
+      expect(find.text('Quirófano'), findsNWidgets(2));
+      expect(find.text('Claro'), findsOneWidget);
+      await tester.tap(find.text('Quirófano').last);
+      await settle(tester);
+      expect(find.text('SET QUIRÓFANO'), findsOneWidget);
+
+      // A «Sin luz» del otro set: cambia de set y se queda sin esquema.
+      await dragTo(
+        tester,
+        find.text('P1'),
+        find.byKey(ValueKey('col_${otherSetId}_null')),
+      );
+      shot = await theShot(tester);
+      expect(shot.locationBasePlanId, otherSetId);
+      expect(shot.lightSetupId, isNull);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('un plano secuencia enseña su recorrido y puede pasar por '
+        'otra localización', (tester) async {
+      await seed(tester, siteJson: '{"version":2,"elements":[]}');
+      late int farSetId;
+      await tester.runAsync(() async {
+        final other = await db.insertSite(
+          LocationSitesCompanion.insert(projectId: projectId, name: 'Bosque'),
+        );
+        farSetId = await db.insertLocation(
+          LocationBasePlansCompanion.insert(
+            projectId: projectId,
+            siteId: Value(other),
+            locationName: 'Claro',
+          ),
+        );
+      });
+      await tester.pumpWidget(host(CameraPlanScreen(projectId: projectId)));
       await settle(tester);
 
-      final shot = await tester.runAsync(
-        () => (db.select(
-          db.shots,
-        )..where((s) => s.id.equals(shotId))).getSingle(),
-      );
-      expect(shot!.lightSetupId, isNotNull);
-      // En la leyenda del set y en el tiro de la escena.
-      expect(find.text('Setup A'), findsNWidgets(2));
-      expect(find.text('Sin luz'), findsNothing);
+      await tester.tap(find.byTooltip('Opciones del plano'));
+      await settle(tester);
+      await tester.tap(find.text('Es un plano secuencia'));
+      await settle(tester);
+      expect(find.text('P1 · PLANO SECUENCIA'), findsOneWidget);
+
+      // El recorrido sí ofrece sets de otra localización.
+      await tester.tap(find.byTooltip('Añadir un tramo'));
+      await settle(tester);
+      expect(find.text('BOSQUE'), findsWidgets);
+      await tester.tap(find.text('Claro').last);
+      await settle(tester);
+
+      final shot = await theShot(tester);
+      final route = ShotRoute.decode(shot.routeJson);
+      expect(route.map((l) => l.setId), [setId, farSetId]);
+      expect(find.text('en Bosque'), findsOneWidget);
+      // En el índice, la escena avisa de que lleva una secuencia.
+      expect(find.byTooltip('Tiene un plano secuencia'), findsOneWidget);
+
+      await tester.tap(find.text('Deja de ser secuencia'));
+      await settle(tester);
+      expect((await theShot(tester)).routeJson, isNull);
+      expect(find.text('P1 · PLANO SECUENCIA'), findsNothing);
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
@@ -16,14 +15,15 @@ import 'floor_plan_repository.dart';
 import 'light_setup_actions.dart';
 import 'plan_data.dart';
 import 'plan_global_map.dart';
-import 'plan_shot_card.dart';
+import 'plan_index.dart';
+import 'plan_scene_board.dart';
 import 'plan_target.dart';
 import 'plan_workspace_screen.dart';
 
-enum _PlanView { map, script }
-
-/// Entrada a las plantas de luz y cámara: un mapa global con miniaturas de
-/// localizaciones, sets y esquemas de luz, y una vista por orden de guion.
+/// Entrada a las plantas de luz y cámara. A la izquierda, el índice
+/// (localizaciones, sets y escenas, o las escenas en orden de guion); a la
+/// derecha, lo que se haya tocado: el tablero de una escena, la ficha de
+/// una localización o todo el proyecto.
 class CameraPlanScreen extends ConsumerStatefulWidget {
   final int projectId;
 
@@ -34,7 +34,11 @@ class CameraPlanScreen extends ConsumerStatefulWidget {
 }
 
 class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
-  _PlanView _view = _PlanView.map;
+  bool _byScript = false;
+
+  /// Lo que se está viendo. `null` = aún no se ha tocado nada: se enseña la
+  /// primera escena o, si no hay, todo el proyecto.
+  PlanPick? _pick;
 
   int get projectId => widget.projectId;
 
@@ -81,23 +85,6 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
           style: AppTypography.titleLarge(palette),
         ),
         actions: [
-          SegmentedButton<_PlanView>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(
-                value: _PlanView.map,
-                icon: Icon(Icons.map_outlined, size: 18),
-                label: Text('Mapa'),
-              ),
-              ButtonSegment(
-                value: _PlanView.script,
-                icon: Icon(Icons.view_list_outlined, size: 18),
-                label: Text('Guion'),
-              ),
-            ],
-            selected: {_view},
-            onSelectionChanged: (v) => setState(() => _view = v.first),
-          ),
           PopupMenuButton<String>(
             tooltip: 'Nuevo',
             icon: Icon(Icons.add, color: palette.textSecondary),
@@ -127,54 +114,87 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
       ),
       body: PlanDataBuilder(
         projectId: projectId,
-        builder: (context, data) => switch (_view) {
-          _PlanView.map => PlanGlobalMap(
-            projectId: projectId,
-            data: data,
-            onOpen: _open,
-          ),
-          _PlanView.script => _ScriptOrderList(data: data, onOpen: _open),
-        },
-      ),
-    );
-  }
-}
-
-/// Todos los planos, escena a escena, en el orden del guion.
-class _ScriptOrderList extends StatelessWidget {
-  final PlanProjectData data;
-  final void Function(PlanTarget target) onOpen;
-
-  const _ScriptOrderList({required this.data, required this.onOpen});
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final scenes = scenesInScriptOrder(data.scenes);
-    if (scenes.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Text(
-            'Sin escenas todavía. Las plantas se pueden empezar desde el '
-            'mapa y vincular a los planos después.',
-            style: AppTypography.bodyMedium(palette),
-            textAlign: TextAlign.center,
-          ),
+        builder: (context, data) => LayoutBuilder(
+          builder: (context, constraints) {
+            final scenes = scenesInScriptOrder(data.scenes);
+            var pick =
+                _pick ??
+                (scenes.isEmpty
+                    ? const PlanPick.overview()
+                    : PlanPick.scene(scenes.first.id));
+            // Lo que se veía puede haberse borrado.
+            if ((pick.kind == PlanPickKind.scene &&
+                    data.scene(pick.id) == null) ||
+                (pick.kind == PlanPickKind.site &&
+                    data.site(pick.id) == null)) {
+              pick = const PlanPick.overview();
+            }
+            final wide = constraints.maxWidth >= 900;
+            final index = PlanIndex(
+              data: data,
+              byScript: _byScript,
+              onByScript: (v) => setState(() => _byScript = v),
+              pick: pick,
+              onPick: (p) {
+                setState(() => _pick = p);
+                if (!wide) Navigator.of(context).maybePop();
+              },
+            );
+            final content = switch (pick.kind) {
+              PlanPickKind.scene => PlanSceneBoard(
+                projectId: projectId,
+                scene: data.scene(pick.id)!,
+                data: data,
+                onOpen: _open,
+              ),
+              PlanPickKind.site => PlanGlobalMap(
+                projectId: projectId,
+                data: data,
+                onOpen: _open,
+                siteId: pick.id,
+                onScene: (scene) =>
+                    setState(() => _pick = PlanPick.scene(scene.id)),
+              ),
+              PlanPickKind.overview => PlanGlobalMap(
+                projectId: projectId,
+                data: data,
+                onOpen: _open,
+                onScene: (scene) =>
+                    setState(() => _pick = PlanPick.scene(scene.id)),
+              ),
+            };
+            if (wide) {
+              return Row(
+                children: [
+                  index,
+                  Expanded(child: content),
+                ],
+              );
+            }
+            // En estrecho, el índice se abre desde un botón.
+            return Column(
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => showModalBottomSheet<void>(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => FractionallySizedBox(
+                        heightFactor: 0.85,
+                        child: index,
+                      ),
+                    ),
+                    icon: const Icon(Icons.menu_open, size: 18),
+                    label: const Text('Escenas y localizaciones'),
+                  ),
+                ),
+                Expanded(child: content),
+              ],
+            );
+          },
         ),
-      );
-    }
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      children: [
-        for (final scene in scenes)
-          PlanSceneBlock(
-            scene: scene,
-            data: data,
-            onOpen: onOpen,
-            showLocation: true,
-          ),
-      ],
+      ),
     );
   }
 }

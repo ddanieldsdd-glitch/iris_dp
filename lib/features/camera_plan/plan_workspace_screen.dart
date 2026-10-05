@@ -38,7 +38,7 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
   }
 
   Widget _editor() {
-    final key = ValueKey('${_target.scope.name}:${_target.id}');
+    final key = ValueKey('${_target.scope.name}:${_target.id}:${_target.leg}');
     return switch (_target.scope) {
       FloorPlanScope.site => CameraPlanEditor.site(
         key: key,
@@ -66,6 +66,7 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
         projectId: widget.projectId,
         shotId: _target.id,
         shotLabel: _target.label,
+        leg: _target.leg,
         onNavigate: _open,
       ),
     };

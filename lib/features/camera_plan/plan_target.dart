@@ -7,24 +7,37 @@ class PlanTarget {
   final int id;
   final String label;
 
+  /// Tramo de un plano secuencia. `null` = el plano entero.
+  final int? leg;
+
   const PlanTarget({
     required this.scope,
     required this.id,
     required this.label,
+    this.leg,
   });
 
-  const PlanTarget.site(this.id, this.label) : scope = FloorPlanScope.site;
-  const PlanTarget.set(this.id, this.label) : scope = FloorPlanScope.set;
+  const PlanTarget.site(this.id, this.label)
+    : scope = FloorPlanScope.site,
+      leg = null;
+  const PlanTarget.set(this.id, this.label)
+    : scope = FloorPlanScope.set,
+      leg = null;
   const PlanTarget.lightSetup(this.id, this.label)
-    : scope = FloorPlanScope.lightSetup;
-  const PlanTarget.shot(this.id, this.label) : scope = FloorPlanScope.shot;
+    : scope = FloorPlanScope.lightSetup,
+      leg = null;
+  const PlanTarget.shot(this.id, this.label, {this.leg})
+    : scope = FloorPlanScope.shot;
 
   @override
   bool operator ==(Object other) =>
-      other is PlanTarget && other.scope == scope && other.id == id;
+      other is PlanTarget &&
+      other.scope == scope &&
+      other.id == id &&
+      other.leg == leg;
 
   @override
-  int get hashCode => Object.hash(scope, id);
+  int get hashCode => Object.hash(scope, id, leg);
 }
 
 /// Estado de un esquema de luz, como se enseña al usuario.

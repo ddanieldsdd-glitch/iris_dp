@@ -1,3 +1,5 @@
+import 'floor_plan_repository.dart';
+import 'shot_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -227,12 +229,114 @@ class PlanProjectData {
   /// Lo que se ve debajo de un plano, sin la luz: entorno y set.
   List<PlanElement> baseOfShot(Shot shot) {
     final sc = scene(shot.sceneId);
-    final owner = set(sc?.locationId);
+    final owner = set(setIdOfShot(shot));
     return [
-      ...environmentOf(sc?.locationSiteId ?? owner?.siteId),
+      ...environmentOf(owner?.siteId ?? sc?.locationSiteId),
       if (owner != null) ...ownOfSet(owner),
     ];
   }
+
+  // ── Tablero de una escena ────────────────────────────────────────────────
+
+  /// Set en el que se rueda un plano: el suyo o, si no, el de su escena.
+  int? setIdOfShot(Shot shot) =>
+      set(shot.locationBasePlanId)?.id ?? scene(shot.sceneId)?.locationId;
+
+  /// Localización de una escena: la suya o la de su set.
+  int? siteIdOfScene(Scene scene) =>
+      site(scene.locationSiteId)?.id ?? set(scene.locationId)?.siteId;
+
+  /// Tramos de un plano secuencia; vacío si no lo es.
+  List<ShotLeg> legsOf(Shot shot) => ShotRoute.decode(shot.routeJson);
+  bool isSequence(Shot shot) => legsOf(shot).isNotEmpty;
+
+  /// Planos secuencia de una escena.
+  List<Shot> sequencesOf(Scene scene) =>
+      shotsOfScene(scene.id).where(isSequence).toList();
+
+  /// Sets del tablero de una escena: el suyo primero, después los otros
+  /// sets de su localización donde se ruede algún plano y los que se hayan
+  /// añadido a mano ([extra]). `null` = la escena no tiene set.
+  List<LocationBasePlan?> boardSetsOf(
+    Scene scene, {
+    Iterable<int> extra = const [],
+  }) {
+    final own = set(scene.locationId);
+    final ids = <int>{
+      for (final shot in shotsOfScene(scene.id))
+        if (!isSequence(shot) && setIdOfShot(shot) != null) setIdOfShot(shot)!,
+      ...extra,
+    }..remove(own?.id);
+    return [
+      own,
+      for (final s in sets)
+        if (ids.contains(s.id)) s,
+    ];
+  }
+
+  /// Sets de la localización de la escena que aún no están en su tablero.
+  List<LocationBasePlan> setsToAdd(Scene scene, Iterable<int?> shown) {
+    final siteId = siteIdOfScene(scene);
+    if (siteId == null) return const [];
+    return [
+      for (final s in setsOfSite(siteId))
+        if (!shown.contains(s.id)) s,
+    ];
+  }
+
+  /// Planos (no secuencia) de una escena que se ruedan en un set.
+  List<Shot> _boardShots(Scene scene, int? setId) => [
+    for (final shot in shotsOfScene(scene.id))
+      if (!isSequence(shot) && setIdOfShot(shot) == setId) shot,
+  ];
+
+  /// Columnas de un set en el tablero: sus esquemas y, además, cualquier
+  /// otro (de la localización o libre) que use algún plano de ahí.
+  List<LightSetup> boardSetupsOf(Scene scene, int? setId) {
+    final used = {
+      for (final shot in _boardShots(scene, setId))
+        if (setup(shot.lightSetupId) != null) shot.lightSetupId!,
+    };
+    return [
+      for (final s in setups)
+        if ((setId != null && s.locationBasePlanId == setId) ||
+            used.contains(s.id))
+          s,
+    ];
+  }
+
+  /// Planos de una casilla del tablero. `setupId` nulo = «Sin luz».
+  List<Shot> boardShots(Scene scene, int? setId, int? setupId) => [
+    for (final shot in _boardShots(scene, setId))
+      if (setup(shot.lightSetupId)?.id == setupId) shot,
+  ];
+
+  /// Lo propio de un plano en un tramo de su secuencia.
+  List<PlanElement> ownOfLeg(Shot shot, int leg) => [
+    for (final el in ownOfShot(shot))
+      if (FloorPlanRepository.legOf(el) == leg) el,
+  ];
+
+  /// Lo que se ve debajo de un tramo: entorno y set.
+  List<PlanElement> baseOfLeg(ShotLeg leg) {
+    final owner = set(leg.setId);
+    return [
+      ...environmentOf(owner?.siteId ?? leg.siteId),
+      if (owner != null) ...ownOfSet(owner),
+    ];
+  }
+
+  /// Recorridos de los planos secuencia que pasan por una localización:
+  /// el centro de la zona de cada set, en orden.
+  List<List<Offset>> routesThroughSite(int siteId) => [
+    for (final shot in shots)
+      if (isSequence(shot))
+        [
+          for (final leg in legsOf(shot))
+            if (set(leg.setId)?.siteId == siteId)
+              if (zoneOf(set(leg.setId)) case final zone?) zone.center,
+        ],
+  ].where((route) => route.length > 1).toList();
 
   // ── Zonas de los sets ─────────────────────────────────────────────────────
 

@@ -214,12 +214,16 @@ class PlanSceneBlock extends StatelessWidget {
   /// Enseña «Localización › Set» bajo la cabecera (vista por guion).
   final bool showLocation;
 
+  /// Tocar la cabecera abre el tablero de la escena.
+  final ValueChanged<Scene>? onScene;
+
   const PlanSceneBlock({
     super.key,
     required this.scene,
     required this.data,
     required this.onOpen,
     this.showLocation = false,
+    this.onScene,
   });
 
   @override
@@ -246,24 +250,27 @@ class PlanSceneBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SceneHeaderRow(
-            sceneNumber: scene.number,
-            sceneColor: color,
-            title: scene.name.isNotEmpty
-                ? scene.name
-                : formatSceneTitle(
-                    number: scene.number,
-                    intExt: scene.intExt,
-                    dayNight: scene.dayNight,
-                    location: location,
-                  ),
-            subtitleWidget: SceneMetaDisplay(
-              intExt: scene.intExt,
-              dayNight: scene.dayNight,
-              location: location,
-              style: AppTypography.caption(palette),
+          InkWell(
+            onTap: onScene == null ? null : () => onScene!(scene),
+            child: SceneHeaderRow(
+              sceneNumber: scene.number,
+              sceneColor: color,
+              title: scene.name.isNotEmpty
+                  ? scene.name
+                  : formatSceneTitle(
+                      number: scene.number,
+                      intExt: scene.intExt,
+                      dayNight: scene.dayNight,
+                      location: location,
+                    ),
+              subtitleWidget: SceneMetaDisplay(
+                intExt: scene.intExt,
+                dayNight: scene.dayNight,
+                location: location,
+                style: AppTypography.caption(palette),
+              ),
+              palette: palette,
             ),
-            palette: palette,
           ),
           if (showLocation)
             Padding(

@@ -22,11 +22,19 @@ class PlanGlobalMap extends ConsumerStatefulWidget {
   final PlanProjectData data;
   final void Function(PlanTarget target) onOpen;
 
+  /// Solo esta localización: es su ficha. `null` = todo el proyecto.
+  final int? siteId;
+
+  /// Tocar la cabecera de una escena abre su tablero.
+  final ValueChanged<Scene>? onScene;
+
   const PlanGlobalMap({
     super.key,
     required this.projectId,
     required this.data,
     required this.onOpen,
+    this.siteId,
+    this.onScene,
   });
 
   @override
@@ -35,10 +43,15 @@ class PlanGlobalMap extends ConsumerStatefulWidget {
 
 class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
   /// `null` = todas las localizaciones.
-  int? _siteId;
+  late int? _siteId = widget.siteId;
+
+  @override
+  void didUpdateWidget(PlanGlobalMap old) {
+    super.didUpdateWidget(old);
+    if (old.siteId != widget.siteId) _siteId = widget.siteId;
+  }
 
   PlanProjectData get _data => widget.data;
-
 
   Future<void> _newSetup({int? setId, int? siteId}) async {
     final setup = await FloorPlanRepository(ref.read(databaseProvider))
@@ -85,7 +98,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        if (_data.sites.length > 1) ...[
+        if (_data.sites.length > 1 && widget.siteId == null) ...[
           _Filters(
             sites: _data.sites,
             siteId: _siteId,
@@ -126,6 +139,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
             children: [
               for (final scene in looseScenes)
                 PlanSceneBlock(
+                  onScene: widget.onScene,
                   scene: scene,
                   data: _data,
                   onOpen: widget.onOpen,
@@ -173,6 +187,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
               ),
               for (final scene in withoutSet)
                 PlanSceneBlock(
+                  onScene: widget.onScene,
                   scene: scene,
                   data: _data,
                   onOpen: widget.onOpen,
@@ -206,6 +221,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
             thumbnail: PlanThumbnail(
               elements: _data.environmentOf(site.id),
               zones: _data.zonesOfSite(site.id),
+              routes: _data.routesThroughSite(site.id),
               emptyIcon: Icons.map_outlined,
             ),
             onTap: () => widget.onOpen(PlanTarget.site(site.id, site.name)),
@@ -299,7 +315,12 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
               ),
             ),
           for (final scene in scenes)
-            PlanSceneBlock(scene: scene, data: _data, onOpen: widget.onOpen),
+            PlanSceneBlock(
+              scene: scene,
+              data: _data,
+              onOpen: widget.onOpen,
+              onScene: widget.onScene,
+            ),
         ],
       ),
     );
