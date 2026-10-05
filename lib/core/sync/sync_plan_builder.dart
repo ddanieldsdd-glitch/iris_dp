@@ -1,5 +1,6 @@
 import '../database/app_database.dart';
 import '../cloud/cloud_session.dart';
+import 'content_sync_base_store.dart';
 import 'project_content_bundle.dart';
 import 'project_content_sync_service.dart';
 import 'sync_plan.dart';
@@ -194,7 +195,11 @@ class SyncPlanBuilder {
       final snap = snapshots[cloudId];
 
       if (snap == null) {
-        if (localSummary.isEmpty) continue;
+        // Un proyecto sin escenas puede tener biblia y moodboard.
+        if (localSummary.isEmpty &&
+            !await ProjectContentBundle.hasLocalContent(_db, local.id)) {
+          continue;
+        }
         items.add(
           SyncPlanItem(
             action: SyncPlanAction.pushContentLocal,
@@ -224,90 +229,73 @@ class SyncPlanBuilder {
         continue;
       }
 
-      // Misma estructura (escenas/planos) → no bloquear por rutas de imágenes locales.
-      if (localSummary == cloudSummary && !localSummary.isEmpty) {
+      SyncPlanItem contentItem(SyncPlanAction action, String description) =>
+          SyncPlanItem(
+            action: action,
+            title: '${local.name} — contenido',
+            description: description,
+            localProjectId: local.id,
+            cloudId: cloudId,
+            localProject: local,
+            localContentSummary: localSummary,
+            cloudContentSummary: cloudSummary,
+            diffs: _contentDiffs(localSummary, cloudSummary),
+          );
+
+      // Quién ha cambiado desde la última sincronización se decide por las
+      // huellas guardadas entonces, no por horas: una descarga reemplaza el
+      // contenido local y no puede depender del reloj.
+      final base = await ContentSyncBaseStore.load(local.id);
+      if (base == null) {
+        if (localSummary.isEmpty &&
+            !await ProjectContentBundle.hasLocalContent(_db, local.id)) {
+          items.add(
+            contentItem(
+              SyncPlanAction.pullContentCloud,
+              'Contenido en la nube — descargar a este dispositivo',
+            ),
+          );
+        } else {
+          items.add(
+            contentItem(
+              SyncPlanAction.contentConflict,
+              'Contenido distinto aquí y en la nube — elige qué versión '
+              'conservar',
+            ),
+          );
+        }
         continue;
       }
 
-      if (localSummary.isEmpty && !cloudSummary.isEmpty) {
-        items.add(
-          SyncPlanItem(
-            action: SyncPlanAction.pullContentCloud,
-            title: '${local.name} — contenido',
-            description:
-                'Escenas y planos en la nube — descargar a este dispositivo',
-            localProjectId: local.id,
-            cloudId: cloudId,
-            localProject: local,
-            cloudContentSummary: cloudSummary,
-          ),
-        );
-        continue;
-      }
+      final cloudNow =
+          cloudHash ??
+          (cloudContent is Map
+              ? ProjectContentBundle.hashBundle(
+                  Map<String, dynamic>.from(cloudContent),
+                )
+              : null);
+      final localChanged = localHash != base.localHash;
+      final cloudChanged = cloudNow != base.cloudHash;
 
-      final localUpdated = local.contentSyncUpdatedAt ?? local.createdAt;
-      final cloudUpdated =
-          DateTime.tryParse(snap['updated_at'] as String? ?? '');
-
-      if (cloudUpdated == null) {
+      if (localChanged && cloudChanged) {
         items.add(
-          SyncPlanItem(
-            action: SyncPlanAction.contentConflict,
-            title: '${local.name} — contenido',
-            description: 'Contenido distinto — elige qué versión conservar',
-            localProjectId: local.id,
-            cloudId: cloudId,
-            localProject: local,
-            localContentSummary: localSummary,
-            cloudContentSummary: cloudSummary,
-            diffs: _contentDiffs(localSummary, cloudSummary),
+          contentItem(
+            SyncPlanAction.contentConflict,
+            'Modificado aquí y en la nube — elige qué versión conservar',
           ),
         );
-        continue;
-      }
-
-      if (localUpdated.isAfter(cloudUpdated)) {
+      } else if (localChanged) {
         items.add(
-          SyncPlanItem(
-            action: SyncPlanAction.pushContentLocal,
-            title: '${local.name} — contenido',
-            description: 'Cambios locales más recientes — subir escenas y planos',
-            localProjectId: local.id,
-            cloudId: cloudId,
-            localProject: local,
-            localContentSummary: localSummary,
-            cloudContentSummary: cloudSummary,
-            diffs: _contentDiffs(localSummary, cloudSummary),
+          contentItem(
+            SyncPlanAction.pushContentLocal,
+            'Cambios en este dispositivo — subir a la nube',
           ),
         );
-      } else if (cloudUpdated.isAfter(localUpdated)) {
+      } else if (cloudChanged) {
         items.add(
-          SyncPlanItem(
-            action: SyncPlanAction.pullContentCloud,
-            title: '${local.name} — contenido',
-            description:
-                'Cambios en la nube más recientes — descargar escenas y planos',
-            localProjectId: local.id,
-            cloudId: cloudId,
-            localProject: local,
-            localContentSummary: localSummary,
-            cloudContentSummary: cloudSummary,
-            diffs: _contentDiffs(localSummary, cloudSummary),
-          ),
-        );
-      } else {
-        items.add(
-          SyncPlanItem(
-            action: SyncPlanAction.contentConflict,
-            title: '${local.name} — contenido',
-            description:
-                'Modificado en ambos sitios — elige qué versión conservar',
-            localProjectId: local.id,
-            cloudId: cloudId,
-            localProject: local,
-            localContentSummary: localSummary,
-            cloudContentSummary: cloudSummary,
-            diffs: _contentDiffs(localSummary, cloudSummary),
+          contentItem(
+            SyncPlanAction.pullContentCloud,
+            'Cambios en la nube — descargar a este dispositivo',
           ),
         );
       }

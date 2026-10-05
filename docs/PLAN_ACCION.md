@@ -126,7 +126,8 @@ Añadido el 2026-10-04. Regla: **Biblia → Pantallas → Puntos.** Un punto tie
 
 ## Fase 2 — Sync fiable (objetivos 1 y 3)
 
-- [ ] **2.1 Bundle v5.** Que viajen `moodboardImages.metaJson` y `assignedCardIds`, `VisualBibleNarrativeCards`, `BibleSectionEvidence`, los FK de localización de `lightingSetups` y los campos de `Shots` que hoy se pierden (`shutterAngle`, `fps`, `description`, `autoNumbering`).
+- [x] **2.0 Sincronizar no pierde datos.** Añadido el 2026-10-05, tras perderse datos de «lala» en una descarga. Subir o descargar se decide por huellas del contenido guardadas en la última sincronización, no por horas. Sin revisión no se resuelve ningún conflicto. Actualizar nombre o estado desde la nube ya no reemplaza el contenido. Antes de una descarga se guarda una copia de la base (`iris_dp.db.antes-de-descargar-…`, se conservan cinco) y la importación es todo o nada. Viajan los datos de los stills (`metaJson`, `assignedCardIds`), las tarjetas narrativas y las evidencias, y los enlaces de la biblia a imágenes se rehacen al importar.
+- [ ] **2.1 Bundle v5 (resto).** Los FK de localización de `lightingSetups` y los campos de `Shots` que hoy se pierden (`shutterAngle`, `fps`, `description`, `autoNumbering`).
 - [ ] **2.2 SharedPreferences → Drift (schema 41).** Estilos de sección, blueprint y catálogo de moodboard pasan a columnas de `VisualBibles`; anotaciones resueltas a `ProjectAnnotationDocuments`.
 
 ## Fase 3 — El plano como eje (objetivos 1 y 4)

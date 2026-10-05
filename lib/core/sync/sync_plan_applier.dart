@@ -179,7 +179,9 @@ class SyncPlanApplier {
       await (_db.update(_db.projects)
             ..where((p) => p.id.equals(localProjectId)))
           .write(companion);
-      await _pullContent(localProjectId, cloudId);
+      // Solo los datos del proyecto (nombre, director, estado…). El
+      // contenido tiene su propio ítem en el plan: descargarlo aquí
+      // reemplazaría lo local sin haberlo comparado.
     } else {
       final localId = await _db.into(_db.projects).insert(companion);
       await _pullContent(localId, cloudId);

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 
+import '../../shared/visual_bible/bible_image_links.dart';
 import '../database/app_database.dart';
 import 'media_entity_keys.dart';
 
@@ -321,8 +322,43 @@ class ProjectContentBundle {
     final lightingSetups = <Map<String, dynamic>>[];
     final cameraTests = <Map<String, dynamic>>[];
     final visualBibleDocuments = <Map<String, dynamic>>[];
+    final narrativeCards = <Map<String, dynamic>>[];
+    final sectionEvidence = <Map<String, dynamic>>[];
     for (final vb in visualBibles) {
       final vbKey = vbKeyById[vb.id]!;
+      final cards = await (db.select(
+        db.visualBibleNarrativeCards,
+      )..where((c) => c.bibleId.equals(vb.id))).get();
+      for (final card in cards) {
+        narrativeCards.add({
+          'bibleKey': vbKey,
+          'sectionId': card.sectionId,
+          'kind': card.kind,
+          'title': card.title,
+          'body': card.body,
+          'coverImageLocalId': card.coverMoodboardImageId,
+          'setKey': card.locationBasePlanId != null
+              ? setKeyById[card.locationBasePlanId!]
+              : null,
+          'metaJson': card.metaJson,
+          'sortOrder': card.sortOrder,
+        });
+      }
+      final evidence = await (db.select(
+        db.bibleSectionEvidence,
+      )..where((e) => e.bibleId.equals(vb.id))).get();
+      for (final item in evidence) {
+        sectionEvidence.add({
+          'bibleKey': vbKey,
+          'sectionId': item.sectionId,
+          'targetType': item.targetType,
+          'targetId': item.targetId,
+          'imagePath': item.imagePath,
+          'caption': item.caption,
+          'equipmentRefJson': item.equipmentRefJson,
+          'sortOrder': item.sortOrder,
+        });
+      }
       final versions = await (db.select(
         db.visualBibleVersions,
       )..where((v) => v.bibleId.equals(vb.id))).get();
@@ -621,7 +657,11 @@ class ProjectContentBundle {
           .map(
             (m) => {
               'groupKey': m.groupId != null ? groupKeyById[m.groupId!] : null,
+              // Id en el dispositivo de origen: el contenido de la biblia
+              // enlaza imágenes por id y al importar hay que rehacerlos.
+              'localId': m.id,
               'bibleId': m.bibleId,
+              'bibleKey': m.bibleId != null ? vbKeyById[m.bibleId!] : null,
               'imagePath': m.imagePath,
               'mediaKey': MediaEntityKeys.moodboard(
                 groupKey: m.groupId != null ? groupKeyById[m.groupId!] : null,
@@ -637,6 +677,8 @@ class ProjectContentBundle {
                   ? setKeyById[m.linkedLocationBasePlanId!]
                   : null,
               'assignedSections': m.assignedSections,
+              'assignedCardIds': m.assignedCardIds,
+              'metaJson': m.metaJson,
               'sortOrder': m.sortOrder,
             },
           )
@@ -653,6 +695,8 @@ class ProjectContentBundle {
       'lightingSetups': lightingSetups,
       'cameraTests': cameraTests,
       'visualBibleDocuments': visualBibleDocuments,
+      'visualBibleNarrativeCards': narrativeCards,
+      'bibleSectionEvidence': sectionEvidence,
       'projectAnnotatedPdfs': annotatedPdfs.map((p) => p.toJson()).toList(),
       'projectAnnotationDocuments': annotationDocuments.map((document) {
         final numericTargetId = int.tryParse(document.targetId);
@@ -734,8 +778,25 @@ class ProjectContentBundle {
 
   static String hashBundle(Map<String, dynamic> bundle) {
     final copy = Map<String, dynamic>.from(bundle);
+    // De los stills cuentan sus datos (título, notas, asignaciones), no su
+    // ruta local ni su id.
+    final stills = bundle['moodboardImages'];
     for (final key in _hashVolatileTopKeys) {
       copy.remove(key);
+    }
+    if (stills is List) {
+      copy['moodboardData'] = [
+        for (final still in stills)
+          if (still is Map)
+            {
+              'mediaKey': still['mediaKey'],
+              'caption': still['caption'],
+              'filmReference': still['filmReference'],
+              'category': still['category'],
+              'assignedSections': still['assignedSections'],
+              'metaJson': still['metaJson'],
+            },
+      ];
     }
     final canonical = jsonEncode(_canonicalize(copy));
     return canonical.hashCode.toRadixString(16);
@@ -809,6 +870,10 @@ class ProjectContentBundle {
         hasRows('projectAnnotationDocuments');
   }
 
+  /// El proyecto tiene en este dispositivo algo que una descarga borraría.
+  static Future<bool> hasLocalContent(AppDatabase db, int projectId) async =>
+      hasMeaningfulContent(await export(db, projectId));
+
   /// Reemplaza todo el contenido del proyecto (mantiene la fila Projects).
   static Future<void> importBundle(
     AppDatabase db,
@@ -816,7 +881,16 @@ class ProjectContentBundle {
     Map<String, dynamic> bundle,
   ) async {
     if (!hasMeaningfulContent(bundle)) return;
+    // Todo o nada: si la importación falla a medias, el contenido anterior
+    // sigue ahí.
+    await db.transaction(() => _replaceContent(db, projectId, bundle));
+  }
 
+  static Future<void> _replaceContent(
+    AppDatabase db,
+    int projectId,
+    Map<String, dynamic> bundle,
+  ) async {
     await db.deleteProjectContentOnly(projectId);
 
     final projectFields =
@@ -1146,6 +1220,9 @@ class ProjectContentBundle {
     }
 
     final moodboardKeyToId = <String, int>{};
+    // Id de cada still en el dispositivo de origen → id recién creado.
+    final moodboardIdMap = <int, int>{};
+    final moodboardBibleKeys = <int, String>{};
     for (final row in bundle['moodboardImages'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final groupKey = m['groupKey'] as String?;
@@ -1168,11 +1245,19 @@ class ProjectContentBundle {
                 setKey != null ? setKeyToId[setKey] : null,
               ),
               assignedSections: Value(m['assignedSections'] as String?),
+              assignedCardIds: Value(m['assignedCardIds'] as String?),
+              metaJson: Value(m['metaJson'] as String?),
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
             ),
           );
       final mediaKey = m['mediaKey'] as String?;
       if (mediaKey != null) moodboardKeyToId[mediaKey] = id;
+      final localId = bundleInt(m['localId']);
+      if (localId != null) moodboardIdMap[localId] = id;
+      final bibleKey =
+          m['bibleKey'] as String? ??
+          (bundleInt(m['bibleId']) != null ? 'vb:${bundleInt(m['bibleId'])}' : null);
+      if (bibleKey != null) moodboardBibleKeys[id] = bibleKey;
     }
 
     for (final row in bundle['lookBibles'] as List? ?? []) {
@@ -1216,6 +1301,13 @@ class ProjectContentBundle {
           .insert(vb.toCompanion(true).copyWith(id: const Value.absent()));
       if (oldId != null) vbKeyToId['vb:$oldId'] = id;
       vbKeyToId['vb:$id'] = id;
+    }
+
+    // Los stills se crean antes que la biblia: ahora se enlazan a la nueva.
+    for (final entry in moodboardBibleKeys.entries) {
+      await (db.update(db.moodboardImages)
+            ..where((m) => m.id.equals(entry.key)))
+          .write(MoodboardImagesCompanion(bibleId: Value(vbKeyToId[entry.value])));
     }
 
     for (final row in bundle['visualBibleVersions'] as List? ?? []) {
@@ -1339,7 +1431,58 @@ class ProjectContentBundle {
               isBuiltIn: Value(m['isBuiltIn'] as bool? ?? true),
               isHidden: Value(m['isHidden'] as bool? ?? false),
               template: Value(m['template'] as String? ?? 'standard'),
-              contentJson: Value(m['contentJson'] as String?),
+              contentJson: Value(
+                BibleImageLinks.remap(
+                  m['contentJson'] as String?,
+                  moodboardIdMap,
+                ),
+              ),
+            ),
+          );
+    }
+
+    for (final row in bundle['visualBibleNarrativeCards'] as List? ?? []) {
+      final m = Map<String, dynamic>.from(row as Map);
+      final bibleId = vbKeyToId[m['bibleKey'] as String];
+      if (bibleId == null) continue;
+      final setKey = m['setKey'] as String?;
+      await db
+          .into(db.visualBibleNarrativeCards)
+          .insert(
+            VisualBibleNarrativeCardsCompanion.insert(
+              bibleId: bibleId,
+              sectionId: m['sectionId'] as String,
+              kind: m['kind'] as String,
+              title: m['title'] as String,
+              body: Value(m['body'] as String?),
+              coverMoodboardImageId: Value(
+                moodboardIdMap[bundleInt(m['coverImageLocalId'])],
+              ),
+              locationBasePlanId: Value(
+                setKey != null ? setKeyToId[setKey] : null,
+              ),
+              metaJson: Value(m['metaJson'] as String?),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+            ),
+          );
+    }
+
+    for (final row in bundle['bibleSectionEvidence'] as List? ?? []) {
+      final m = Map<String, dynamic>.from(row as Map);
+      final bibleId = vbKeyToId[m['bibleKey'] as String];
+      if (bibleId == null) continue;
+      await db
+          .into(db.bibleSectionEvidence)
+          .insert(
+            BibleSectionEvidenceCompanion.insert(
+              bibleId: bibleId,
+              sectionId: m['sectionId'] as String,
+              imagePath: m['imagePath'] as String,
+              targetType: Value(m['targetType'] as String? ?? 'section'),
+              targetId: Value(bundleInt(m['targetId'])),
+              caption: Value(m['caption'] as String?),
+              equipmentRefJson: Value(m['equipmentRefJson'] as String?),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
             ),
           );
     }

@@ -199,8 +199,27 @@ class SyncEngine {
       return _finishSync(workspaceId, pushed: 0, pulled: 0, deleted: 0);
     }
 
+    // Sin revisión no se resuelve ningún conflicto: elegir por el usuario
+    // puede pisar contenido aquí o en la nube. Quedan pendientes.
+    final conflicts = [
+      for (final item in plan.items)
+        if (item.action == SyncPlanAction.conflict ||
+            item.action == SyncPlanAction.contentConflict)
+          item,
+    ];
+    for (final item in conflicts) {
+      item.choice = SyncResolutionChoice.skip;
+    }
+
     final counts = await _applyPlan(plan, workspaceId);
-    _ref.read(pendingSyncPlanProvider.notifier).state = null;
+    _ref.read(pendingSyncPlanProvider.notifier).state = conflicts.isEmpty
+        ? null
+        : SyncPlan(
+            items: [
+              for (final item in conflicts)
+                item.copyWith(choice: SyncResolutionChoice.useLocal),
+            ],
+          );
     return _finishSync(
       workspaceId,
       pushed: counts.pushed,

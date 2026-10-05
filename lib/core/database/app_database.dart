@@ -644,6 +644,9 @@ class AppDatabase extends _$AppDatabase {
           bibleSectionGroups,
         )..where((g) => g.bibleId.equals(vb.id))).go();
         await (delete(
+          visualBibleNarrativeCards,
+        )..where((c) => c.bibleId.equals(vb.id))).go();
+        await (delete(
           bibleSectionEvidence,
         )..where((e) => e.bibleId.equals(vb.id))).go();
         await (delete(

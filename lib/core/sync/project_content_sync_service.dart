@@ -4,6 +4,8 @@ import 'package:drift/drift.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../database/app_database.dart';
+import '../database/local_database_backup.dart';
+import 'content_sync_base_store.dart';
 import 'project_content_bundle.dart';
 
 /// La tabla `cloud_project_snapshots` aún no está en Supabase (migración 007).
@@ -49,6 +51,12 @@ class ProjectContentSyncService {
         .write(ProjectsCompanion(
       contentSyncUpdatedAt: Value(syncedAt),
     ));
+    // Este dispositivo y la nube quedan iguales: punto de partida para
+    // saber quién cambia después.
+    await ContentSyncBaseStore.save(
+      localProjectId,
+      ContentSyncBase(localHash: hash, cloudHash: hash),
+    );
   }
 
   Future<bool> download(int localProjectId, String projectCloudId) async {
@@ -69,10 +77,28 @@ class ProjectContentSyncService {
     final content = row['content'];
     if (content is! Map) return false;
 
-    await ProjectContentBundle.importBundle(
-      _db,
+    final bundle = Map<String, dynamic>.from(content);
+    if (!ProjectContentBundle.hasMeaningfulContent(bundle)) return false;
+
+    // La descarga reemplaza el contenido local: antes se guarda una copia de
+    // la base de datos por si hay que volver atrás.
+    final local = await ProjectContentBundle.export(_db, localProjectId);
+    if (ProjectContentBundle.hasMeaningfulContent(local)) {
+      await LocalDatabaseBackup.create(_db, label: 'antes-de-descargar');
+    }
+
+    await ProjectContentBundle.importBundle(_db, localProjectId, bundle);
+    await ContentSyncBaseStore.save(
       localProjectId,
-      Map<String, dynamic>.from(content),
+      ContentSyncBase(
+        localHash: await ProjectContentBundle.computeLocalHash(
+          _db,
+          localProjectId,
+        ),
+        cloudHash:
+            row['content_hash'] as String? ??
+            ProjectContentBundle.hashBundle(bundle),
+      ),
     );
 
     final cloudUpdated =
