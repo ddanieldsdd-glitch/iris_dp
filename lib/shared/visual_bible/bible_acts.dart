@@ -100,7 +100,8 @@ abstract final class BibleSharedActs {
 /// Valor de un punto «División por actos».
 ///
 /// Con [shared], el punto usa los actos del proyecto y solo guarda lo que
-/// esta pantalla dice de cada uno ([layers]: intención e imágenes por acto).
+/// esta pantalla dice de cada uno ([layers]: intención, imágenes y puntos
+/// por acto).
 /// Sin él, lleva sus propios actos ([own]), independientes de los demás.
 /// Cambiar de un modo a otro no borra lo escrito en el otro.
 class BibleActsValue {
@@ -149,12 +150,7 @@ class BibleActsValue {
     if (layers.isNotEmpty)
       'layers': {
         for (final entry in layers.entries)
-          if (entry.value.body.isNotEmpty || entry.value.imageIds.isNotEmpty)
-            entry.key: {
-              'body': entry.value.body,
-              if (entry.value.imageIds.isNotEmpty)
-                'images': entry.value.imageIds,
-            },
+          if (!entry.value.isEmpty) entry.key: entry.value.toJson(),
       },
   });
 
@@ -176,6 +172,7 @@ class BibleActsValue {
             act.copyWith(
               body: layers[act.id]?.body ?? '',
               imageIds: layers[act.id]?.imageIds ?? const [],
+              points: layers[act.id]?.points ?? const [],
             ),
         ];
 
@@ -185,7 +182,11 @@ class BibleActsValue {
     layers: {
       ...layers,
       for (final act in acts)
-        act.id: BibleCard(body: act.body, imageIds: act.imageIds),
+        act.id: BibleCard(
+          body: act.body,
+          imageIds: act.imageIds,
+          points: act.points,
+        ),
     },
   );
 

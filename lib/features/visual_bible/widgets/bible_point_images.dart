@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/app_database.dart';
@@ -8,6 +9,8 @@ import '../../../core/database/database_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/clipboard_image_reader.dart';
+import '../bible_paste_helpers.dart';
 import '../moodboard_helpers.dart';
 import 'bible_point_panel.dart';
 
@@ -248,6 +251,58 @@ class _MoodboardImagePicker extends ConsumerStatefulWidget {
 class _MoodboardImagePickerState extends ConsumerState<_MoodboardImagePicker> {
   late final List<int> _selected = [...widget.initial];
 
+  /// Aviso bajo la rejilla (p. ej. portapapeles sin imagen).
+  String? _notice;
+
+  void _select(Iterable<int> ids) {
+    if (!mounted) return;
+    setState(() {
+      _notice = null;
+      for (final id in ids) {
+        if (_selected.contains(id)) continue;
+        if (widget.single) _selected.clear();
+        _selected.add(id);
+      }
+    });
+  }
+
+  /// Pega la imagen del portapapeles en el moodboard y la deja elegida.
+  Future<void> _paste() async {
+    final db = ref.read(databaseProvider);
+    final status = await BiblePasteHelpers.pasteFromClipboard(
+      onPayload: (payload) async => _select([
+        await MoodboardHelpers.addImageFromBytesAssigned(
+          db: db,
+          projectId: widget.projectId,
+          bibleId: widget.bibleId,
+          bytes: payload.bytes,
+          extension: payload.extension,
+          assignedSections: [widget.sectionId],
+        ),
+      ]),
+    );
+    if (status != ClipboardImageReadStatus.success && mounted) {
+      setState(() => _notice = 'No hay ninguna imagen en el portapapeles.');
+    }
+  }
+
+  /// Importa archivos y deja elegidos los que entren.
+  Future<void> _import() async {
+    final db = ref.read(databaseProvider);
+    Future<Set<int>> ids() async => {
+      for (final image in await db.watchMoodboardImages(widget.projectId).first)
+        image.id,
+    };
+    final before = await ids();
+    await MoodboardHelpers.addManualImages(
+      db: db,
+      projectId: widget.projectId,
+      bibleId: widget.bibleId,
+      assignedSections: [widget.sectionId],
+    );
+    _select((await ids()).difference(before));
+  }
+
   void _toggle(int id) {
     setState(() {
       if (_selected.contains(id)) {
@@ -263,99 +318,53 @@ class _MoodboardImagePickerState extends ConsumerState<_MoodboardImagePicker> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final db = ref.watch(databaseProvider);
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyV, meta: true): _paste,
+        const SingleActivator(LogicalKeyboardKey.keyV, control: true): _paste,
+      },
+      child: Focus(autofocus: true, child: _dialog(context, palette, db)),
+    );
+  }
+
+  Widget _dialog(BuildContext context, AppPalette palette, AppDatabase db) {
     return AlertDialog(
       title: Text(
-        widget.single ? 'Elegir imagen del moodboard' : 'Imágenes del moodboard',
+        widget.single
+            ? 'Elegir imagen del moodboard'
+            : 'Imágenes del moodboard',
       ),
       content: SizedBox(
         width: 640,
         height: 420,
-        child: StreamBuilder<List<MoodboardImage>>(
-          stream: db.watchMoodboardImages(widget.projectId),
-          builder: (context, snap) {
-            final images = snap.data ?? const <MoodboardImage>[];
-            if (images.isEmpty) {
-              return Center(
-                child: Text(
-                  'El moodboard del proyecto está vacío.\n'
-                  'Importa imágenes para empezar.',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodyMedium(palette),
-                ),
-              );
-            }
-            return GridView.builder(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 160,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                childAspectRatio: 16 / 9,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Text(
+                _notice ??
+                    'Elige del moodboard, importa un archivo o pega una '
+                        'imagen con ⌘V.',
+                style: AppTypography.caption(
+                  palette,
+                ).copyWith(color: _notice == null ? null : palette.error),
               ),
-              itemCount: images.length,
-              itemBuilder: (context, i) {
-                final image = images[i];
-                final on = _selected.contains(image.id);
-                return InkWell(
-                  onTap: () => _toggle(image.id),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            width: 2,
-                            color: on ? palette.accent : Colors.transparent,
-                          ),
-                        ),
-                        child: BibleImageThumb(
-                          path: image.imagePath,
-                          height: 90,
-                          width: 160,
-                        ),
-                      ),
-                      if (on)
-                        Positioned(
-                          top: 6,
-                          right: 6,
-                          child: CircleAvatar(
-                            radius: 10,
-                            backgroundColor: palette.accent,
-                            child: widget.single
-                                ? const Icon(
-                                    Icons.check,
-                                    size: 12,
-                                    color: Colors.white,
-                                  )
-                                : Text(
-                                    '${_selected.indexOf(image.id) + 1}',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
+            ),
+            Expanded(child: _grid(palette, db)),
+          ],
         ),
       ),
       actions: [
         TextButton.icon(
-          onPressed: () => MoodboardHelpers.addManualImages(
-            db: db,
-            projectId: widget.projectId,
-            bibleId: widget.bibleId,
-            assignedSections: [widget.sectionId],
-          ),
+          onPressed: _import,
           icon: const Icon(Icons.upload_file_outlined, size: 16),
           label: const Text('Importar archivo'),
+        ),
+        TextButton.icon(
+          onPressed: _paste,
+          icon: const Icon(Icons.content_paste, size: 16),
+          label: const Text('Pegar'),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context),
@@ -366,6 +375,84 @@ class _MoodboardImagePickerState extends ConsumerState<_MoodboardImagePicker> {
           child: Text(widget.single ? 'Elegir' : 'Usar ${_selected.length}'),
         ),
       ],
+    );
+  }
+
+  Widget _grid(AppPalette palette, AppDatabase db) {
+    return StreamBuilder<List<MoodboardImage>>(
+      stream: db.watchMoodboardImages(widget.projectId),
+      builder: (context, snap) {
+        final images = snap.data ?? const <MoodboardImage>[];
+        if (images.isEmpty) {
+          return Center(
+            child: Text(
+              'El moodboard del proyecto está vacío.\n'
+              'Importa un archivo o pega una imagen con ⌘V.',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyMedium(palette),
+            ),
+          );
+        }
+        return GridView.builder(
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 160,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 16 / 9,
+          ),
+          itemCount: images.length,
+          itemBuilder: (context, i) {
+            final image = images[i];
+            final on = _selected.contains(image.id);
+            return InkWell(
+              onTap: () => _toggle(image.id),
+              borderRadius: BorderRadius.circular(8),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        width: 2,
+                        color: on ? palette.accent : Colors.transparent,
+                      ),
+                    ),
+                    child: BibleImageThumb(
+                      path: image.imagePath,
+                      height: 90,
+                      width: 160,
+                    ),
+                  ),
+                  if (on)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: CircleAvatar(
+                        radius: 10,
+                        backgroundColor: palette.accent,
+                        child: widget.single
+                            ? const Icon(
+                                Icons.check,
+                                size: 12,
+                                color: Colors.white,
+                              )
+                            : Text(
+                                '${_selected.indexOf(image.id) + 1}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white,
+                                ),
+                              ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

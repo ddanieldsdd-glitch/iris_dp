@@ -12,6 +12,7 @@ import '../../bible_section_fields.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_acts_widget.dart';
+import '../bible_card_editor.dart';
 import '../bible_cards_widget.dart';
 import '../bible_form_widgets.dart';
 import '../bible_navigation_scope.dart';
@@ -83,6 +84,11 @@ class DirectionSection extends ConsumerWidget {
         field.key: field.label,
     };
     String label(String key, String fallback) => labels[key] ?? fallback;
+    final imageSource = BibleCardImageSource(
+      projectId: projectId,
+      bibleId: data.id,
+      sectionId: _sectionId,
+    );
 
     final sharedActs = BibleSharedActs.resolve(
       data.actVisualNotes,
@@ -143,6 +149,7 @@ class DirectionSection extends ConsumerWidget {
       label: label(DirectionPoints.tone, 'Tono y atmósfera'),
       icon: Icons.blur_on,
       child: BibleCardsWidget(
+        imageSource: imageSource,
         cards: DirectionPoints.toneCards(values, blob, legacyTone: data.tone),
         onChanged: (cards) => _saveCards(ref, DirectionPoints.tone, cards),
       ),
@@ -152,6 +159,7 @@ class DirectionSection extends ConsumerWidget {
       label: label(DirectionPoints.strategies, 'Estrategia visual'),
       icon: Icons.view_week_outlined,
       child: BibleCardsWidget(
+        imageSource: imageSource,
         layout: BibleCardsLayout.columns,
         cards: DirectionPoints.strategyCards(
           values,
@@ -203,6 +211,7 @@ class DirectionSection extends ConsumerWidget {
       label: label(DirectionPoints.transitions, 'Lenguaje de transiciones'),
       icon: Icons.animation,
       child: BibleCardsWidget(
+        imageSource: imageSource,
         cards: DirectionPoints.transitionCards(values, blob),
         onChanged: (cards) =>
             _saveCards(ref, DirectionPoints.transitions, cards),

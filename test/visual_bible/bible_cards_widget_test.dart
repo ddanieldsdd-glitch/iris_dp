@@ -12,7 +12,7 @@ void main() {
     ),
   );
 
-  testWidgets('una tarjeta se puede mover y eliminar', (tester) async {
+  testWidgets('una tarjeta se edita, se mueve y se elimina desde su ficha', (tester) async {
     var cards = const [BibleCard(title: 'Cámara'), BibleCard(title: 'POV')];
     await pump(
       tester,
@@ -24,17 +24,26 @@ void main() {
       ),
     );
 
+    // Tocar abre la ficha, con los campos editables directamente.
     await tester.tap(find.text('POV'));
     await tester.pumpAndSettle();
+    expect(find.text('Guardar'), findsNothing);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'POV'),
+      'Punto de vista',
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(cards.map((c) => c.title), ['Cámara', 'Punto de vista']);
+
     await tester.tap(find.byTooltip('Mover antes'));
     await tester.pumpAndSettle();
-    expect(cards.map((c) => c.title), ['POV', 'Cámara']);
+    expect(cards.map((c) => c.title), ['Punto de vista', 'Cámara']);
 
-    await tester.tap(find.text('Cámara'));
+    await tester.tap(find.byTooltip('Eliminar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Eliminar'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Eliminar'));
     await tester.pumpAndSettle();
-    expect(cards.map((c) => c.title), ['POV']);
+    expect(cards.map((c) => c.title), ['Cámara']);
   });
 
   testWidgets('las etiquetas se añaden y se quitan', (tester) async {

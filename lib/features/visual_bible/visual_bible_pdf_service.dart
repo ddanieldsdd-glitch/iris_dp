@@ -1560,11 +1560,6 @@ class VisualBiblePdfService {
     final stills = assets.stills;
     final values = BibleSectionFieldsConfig.parseValues(contentJson);
     String text(Object? v) => v?.toString().trim() ?? '';
-    List<(String, String)> pairs(List<BibleCard> cards) => [
-      for (final card in cards)
-        if (!card.isEmpty) (card.title.trim(), card.body.trim()),
-    ];
-
     final out = <pw.Widget>[];
     for (final field in BibleSectionFieldsConfig.parse(
       contentJson,
@@ -1580,10 +1575,12 @@ class VisualBiblePdfService {
           ].where((t) => t.isNotEmpty).toList();
           if (tags.isNotEmpty) out.add(kit.tagRow(tags));
         case DirectionPoints.tone:
-          final points = pairs(
-            DirectionPoints.toneCards(values, blob, legacyTone: data.tone),
-          );
-          if (points.isNotEmpty) out.add(kit.titledList(field.label, points));
+          final cards = DirectionPoints.toneCards(
+            values,
+            blob,
+            legacyTone: data.tone,
+          ).where((card) => !card.isEmpty).toList();
+          if (cards.isNotEmpty) out.add(kit.cardsPoint(field.label, cards));
         case DirectionPoints.strategies:
           // Un pilar sin desarrollar es una invitación a escribir: no sale.
           final pillars = [
@@ -1594,11 +1591,10 @@ class VisualBiblePdfService {
               staging: data.stagingApproach,
               pointOfView: data.pointOfView,
             ))
-              if (card.body.trim().isNotEmpty)
-                (kicker: null, title: card.title.trim(), text: card.body.trim()),
+              if (card.body.trim().isNotEmpty || card.imageIds.isNotEmpty) card,
           ];
           if (pillars.isNotEmpty) {
-            out.add(kit.columnsPoint(field.label, pillars, perRow: 4));
+            out.add(kit.cardsPoint(field.label, pillars, columns: true));
           }
         case DirectionPoints.acts:
           final acts = kit.actsPointOf(
@@ -1607,8 +1603,11 @@ class VisualBiblePdfService {
           );
           if (acts != null) out.add(acts);
         case DirectionPoints.transitions:
-          final entries = pairs(DirectionPoints.transitionCards(values, blob));
-          if (entries.isNotEmpty) out.add(kit.titledList(field.label, entries));
+          final cards = DirectionPoints.transitionCards(
+            values,
+            blob,
+          ).where((card) => !card.isEmpty).toList();
+          if (cards.isNotEmpty) out.add(kit.cardsPoint(field.label, cards));
         case 'references':
           final references = assets.references;
           if (references.isNotEmpty || stills != null) {

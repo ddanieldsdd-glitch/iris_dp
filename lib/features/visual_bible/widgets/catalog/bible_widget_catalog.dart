@@ -11,6 +11,7 @@ import '../../../../shared/visual_bible/bible_section_ids.dart';
 import '../../moodboard_helpers.dart';
 import '../../../../core/database/app_database.dart';
 import '../bible_acts_widget.dart';
+import '../bible_card_editor.dart';
 import '../bible_cards_widget.dart';
 import '../bible_generic_point_views.dart';
 import '../bible_navigation_scope.dart';
@@ -427,6 +428,11 @@ abstract final class BibleWidgetCatalog {
     child: BibleCardsWidget(
       cards: BibleCard.listFrom(ctx.value),
       layout: layout,
+      imageSource: BibleCardImageSource(
+        projectId: ctx.projectId,
+        bibleId: ctx.bibleId,
+        sectionId: ctx.sectionId,
+      ),
       onChanged: (cards) => ctx.onChanged(BibleCard.encode(cards)),
     ),
   );

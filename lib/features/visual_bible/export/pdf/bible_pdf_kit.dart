@@ -122,6 +122,131 @@ class BiblePdfKit {
         ),
         pw.SizedBox(height: 2),
         _titled(act.title, act.body),
+        // Lo que la ficha del acto desarrolla: sus puntos y el resto de
+        // sus imágenes.
+        for (final point in act.points)
+          if (!point.isEmpty)
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(top: 5),
+              child: _titled(point.title.trim(), point.body.trim()),
+            ),
+        ..._moreImages(act),
+      ],
+    );
+  }
+
+  /// Imágenes de una ficha que no son la portada, en pequeño.
+  List<pw.Widget> _moreImages(BibleCard card, {int skip = 1}) {
+    final rest = _loaded(card.imageIds).skip(skip).toList();
+    if (rest.isEmpty) return const [];
+    return [
+      pw.SizedBox(height: 5),
+      pw.Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          for (final image in rest)
+            pw.ClipRRect(
+              horizontalRadius: 3,
+              verticalRadius: 3,
+              child: pw.Image(image, height: 38, fit: pw.BoxFit.cover),
+            ),
+        ],
+      ),
+    ];
+  }
+
+  /// Tarjetas con título y desarrollo: una debajo de otra o, con [columns],
+  /// como pilares. Cada una lleva sus imágenes.
+  pw.Widget cardsPoint(
+    String label,
+    List<BibleCard> cards, {
+    bool columns = false,
+  }) {
+    if (!columns) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            this.label(label),
+            pw.SizedBox(height: 4),
+            for (final card in cards)
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 6),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    _titled(card.title.trim(), card.body.trim()),
+                    ..._moreImages(card, skip: 0),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+    const perRow = 4;
+    return pw.Inseparable(
+      child: pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            this.label(label),
+            pw.SizedBox(height: 6),
+            for (var i = 0; i < cards.length; i += perRow)
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 8),
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    for (var c = 0; c < perRow; c++)
+                      pw.Expanded(
+                        child: i + c >= cards.length
+                            ? pw.SizedBox()
+                            : pw.Padding(
+                                padding: pw.EdgeInsets.only(
+                                  right: c == perRow - 1 ? 0 : 10,
+                                ),
+                                child: _pillar(cards[i + c]),
+                              ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  pw.Widget _pillar(BibleCard card) {
+    final cover = _loaded(card.imageIds).firstOrNull;
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (cover != null) ...[
+          pw.ClipRRect(
+            horizontalRadius: BiblePdfTokens.radius,
+            verticalRadius: BiblePdfTokens.radius,
+            child: pw.AspectRatio(
+              aspectRatio: 16 / 9,
+              child: pw.Image(cover, fit: pw.BoxFit.cover),
+            ),
+          ),
+          pw.SizedBox(height: 5),
+        ],
+        pw.Container(
+          padding: const pw.EdgeInsets.only(left: 8),
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(
+              left: pw.BorderSide(color: BiblePdfTokens.rule, width: 1.5),
+            ),
+          ),
+          child: _titled(card.title.trim(), card.body.trim()),
+        ),
+        ..._moreImages(card),
       ],
     );
   }
@@ -716,14 +841,11 @@ class BiblePdfKit {
       case BibleSectionFieldType.cards:
         final cards = BibleCard.listFrom(raw).where((c) => !c.isEmpty).toList();
         if (cards.isEmpty) return null;
-        if (field.widget == 'cards_pillars') {
-          return columnsPoint(field.label, [
-            for (final c in cards) (kicker: null, title: c.title, text: c.body),
-          ], perRow: 4);
-        }
-        return titledList(field.label, [
-          for (final c in cards) (c.title, c.body),
-        ]);
+        return cardsPoint(
+          field.label,
+          cards,
+          columns: field.widget == 'cards_pillars',
+        );
       case BibleSectionFieldType.acts:
         return actsPointOf(field.label, BibleActsValue.decode(raw));
       case BibleSectionFieldType.tags:

@@ -308,6 +308,9 @@ abstract final class BibleSectionExportReader {
         BibleSectionFieldType.acts => BibleActsValue.decode(
           point.value,
         ).imageIds,
+        BibleSectionFieldType.cards => [
+          for (final card in BibleCard.listFrom(point.value)) ...card.imageIds,
+        ],
         BibleSectionFieldType.palette => BiblePaletteValue.decode(
           point.value,
         ).imageIds,
@@ -317,12 +320,23 @@ abstract final class BibleSectionExportReader {
         ],
         _ => const <int>[],
       },
-    // Los actos de Dirección son un punto de la pantalla, con sus imágenes.
-    if (sectionId == BibleSectionId.direction)
+    // Actos y tarjetas de Dirección son puntos de la pantalla, con sus
+    // imágenes.
+    if (sectionId == BibleSectionId.direction) ...[
       ...DirectionPoints.actsValue(
         BibleSectionFieldsConfig.parseValues(contentJson),
         parseCustomBlob(contentJson, sectionId),
       ).imageIds,
+      for (final key in const [
+        DirectionPoints.tone,
+        DirectionPoints.strategies,
+        DirectionPoints.transitions,
+      ])
+        for (final card in BibleCard.listFrom(
+          BibleSectionFieldsConfig.parseValues(contentJson)[key],
+        ))
+          ...card.imageIds,
+    ],
   };
 
   static bool _isUserPoint(String sectionId, BibleSectionField field) =>

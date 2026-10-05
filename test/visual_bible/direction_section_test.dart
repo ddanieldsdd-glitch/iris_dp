@@ -92,13 +92,12 @@ void main() {
     // Renombrar un acto lo cambia en el proyecto; la intención es de aquí.
     await tester.tap(find.text('Orden y rigidez'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, 'Título'), 'Orden');
+    expect(find.textContaining('Acto del proyecto'), findsOneWidget);
     await tester.enterText(
-      find.widgetWithText(TextField, 'Intención'),
-      'Cámara fija',
+      find.widgetWithText(TextField, 'Orden y rigidez'),
+      'Orden',
     );
-    await tester.tap(find.text('Guardar'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 600));
 
     // Título y fase van al proyecto; la intención se queda en la pantalla.
     expect(changes, 1);

@@ -14,6 +14,10 @@ class BibleCard {
   /// Punto de giro: un hito entre actos, que no se numera.
   final bool turn;
 
+  /// Puntos que desarrollan la ficha (título y texto), p. ej. lo que se
+  /// quiere explicar de un acto.
+  final List<BibleCard> points;
+
   const BibleCard({
     this.id = '',
     this.kicker = '',
@@ -21,13 +25,15 @@ class BibleCard {
     this.body = '',
     this.imageIds = const [],
     this.turn = false,
+    this.points = const [],
   });
 
   bool get isEmpty =>
       kicker.trim().isEmpty &&
       title.trim().isEmpty &&
       body.trim().isEmpty &&
-      imageIds.isEmpty;
+      imageIds.isEmpty &&
+      points.every((point) => point.isEmpty);
 
   BibleCard copyWith({
     String? id,
@@ -36,6 +42,7 @@ class BibleCard {
     String? body,
     List<int>? imageIds,
     bool? turn,
+    List<BibleCard>? points,
   }) => BibleCard(
     id: id ?? this.id,
     kicker: kicker ?? this.kicker,
@@ -43,6 +50,7 @@ class BibleCard {
     body: body ?? this.body,
     imageIds: imageIds ?? this.imageIds,
     turn: turn ?? this.turn,
+    points: points ?? this.points,
   );
 
   factory BibleCard.fromJson(Map<dynamic, dynamic> json) => BibleCard(
@@ -56,6 +64,7 @@ class BibleCard {
           if (id is num) id.toInt(),
     ],
     turn: json['turn'] == true,
+    points: listFrom(json['points']),
   );
 
   Map<String, dynamic> toJson() => {
@@ -65,6 +74,7 @@ class BibleCard {
     'body': body,
     if (imageIds.isNotEmpty) 'images': imageIds,
     if (turn) 'turn': true,
+    if (points.isNotEmpty) 'points': [for (final p in points) p.toJson()],
   };
 
   /// Lee las tarjetas desde una lista ya decodificada o desde su JSON.

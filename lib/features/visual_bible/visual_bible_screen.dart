@@ -1175,10 +1175,31 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                                                     : null,
                                               ),
                                               Expanded(
-                                                child: _buildSection(
-                                                  bibleId,
-                                                  sectionDefsById,
-                                                  contentSnapshot,
+                                                // Navegador propio del
+                                                // contenido: las fichas
+                                                // (referencia, acto, tarjeta)
+                                                // se abren aquí y los
+                                                // laterales siguen a la vista.
+                                                // Cambiar de pantalla cierra
+                                                // la ficha abierta.
+                                                child: Navigator(
+                                                  key: ValueKey(
+                                                    'bible_content_'
+                                                    '$_activeSection',
+                                                  ),
+                                                  onDidRemovePage: (_) {},
+                                                  pages: [
+                                                    MaterialPage<void>(
+                                                      key: const ValueKey(
+                                                        'section',
+                                                      ),
+                                                      child: _buildSection(
+                                                        bibleId,
+                                                        sectionDefsById,
+                                                        contentSnapshot,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
                                               if (_livePanelOpen && bibleId > 0) ...[

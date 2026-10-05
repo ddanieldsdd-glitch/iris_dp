@@ -4,6 +4,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/visual_bible/bible_cards.dart';
+import 'bible_card_editor.dart';
+import 'bible_point_images.dart';
 import 'bible_point_panel.dart';
 
 /// Cómo se reparten las tarjetas de un punto.
@@ -22,50 +24,44 @@ class BibleCardsWidget extends StatelessWidget {
   final ValueChanged<List<BibleCard>> onChanged;
   final BibleCardsLayout layout;
 
+  /// Moodboard del que la ficha de una tarjeta toma sus imágenes; sin él,
+  /// las tarjetas son solo texto.
+  final BibleCardImageSource? imageSource;
+
   const BibleCardsWidget({
     super.key,
     required this.cards,
     required this.onChanged,
     this.layout = BibleCardsLayout.list,
+    this.imageSource,
   });
 
-  Future<void> _edit(BuildContext context, int? index) async {
-    final result = await showDialog<_CardEdit>(
-      context: context,
-      builder: (_) => _CardDialog(
-        title: index == null ? 'Añadir tarjeta' : 'Editar tarjeta',
-        card: index == null ? const BibleCard() : cards[index],
-        canDelete: index != null,
-        canMoveBack: index != null && index > 0,
-        canMoveForward: index != null && index < cards.length - 1,
-      ),
-    );
-    if (result == null) return;
-    final next = [...cards];
-    switch (result.action) {
-      case _CardAction.delete:
-        next.removeAt(index!);
-      case _CardAction.save:
-        if (index == null) {
-          if (result.card.isEmpty) return;
-          next.add(result.card);
-        } else {
-          next[index] = result.card;
-        }
-      case _CardAction.moveBack:
-        next[index!] = result.card;
-        next.insert(index - 1, next.removeAt(index));
-      case _CardAction.moveForward:
-        next[index!] = result.card;
-        next.insert(index + 1, next.removeAt(index));
-    }
-    onChanged(next);
-  }
+  /// Abre la ficha de la tarjeta [index], o la de una nueva.
+  Future<void> _edit(BuildContext context, int? index) => openBibleCardEditor(
+    context,
+    cards: cards,
+    index: index,
+    onChanged: onChanged,
+    copy: BibleCardEditorCopy.card,
+    imageSource: imageSource,
+  );
 
   String _kicker(int index) => cards[index].kicker;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => BibleImagePaths(
+    source: imageSource,
+    builder: (context, paths) => _build(context, paths),
+  );
+
+  String? _cover(int index, Map<int, String> paths) {
+    for (final id in cards[index].imageIds) {
+      if (paths[id] != null) return paths[id];
+    }
+    return null;
+  }
+
+  Widget _build(BuildContext context, Map<int, String> paths) {
     const addLabel = 'AÑADIR TARJETA';
     if (layout == BibleCardsLayout.list) {
       return Column(
@@ -75,6 +71,7 @@ class BibleCardsWidget extends StatelessWidget {
             _CardRow(
               kicker: _kicker(i),
               card: cards[i],
+              cover: _cover(i, paths),
               onTap: () => _edit(context, i),
             ),
           _AddCard(label: addLabel, onTap: () => _edit(context, null)),
@@ -100,6 +97,7 @@ class BibleCardsWidget extends StatelessWidget {
                 child: _CardTile(
                   kicker: _kicker(i),
                   card: cards[i],
+                  cover: _cover(i, paths),
                   onTap: () => _edit(context, i),
                 ),
               ),
@@ -167,12 +165,14 @@ class _CardText extends StatelessWidget {
 class _CardRow extends StatelessWidget {
   final String kicker;
   final BibleCard card;
+  final String? cover;
   final VoidCallback onTap;
 
   const _CardRow({
     required this.kicker,
     required this.card,
     required this.onTap,
+    this.cover,
   });
 
   @override
@@ -187,7 +187,16 @@ class _CardRow extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: palette.border)),
         ),
-        child: _CardText(kicker: kicker, card: card),
+        child: cover == null
+            ? _CardText(kicker: kicker, card: card)
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  BibleImageThumb(path: cover!, height: 72, width: 128),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(child: _CardText(kicker: kicker, card: card)),
+                ],
+              ),
       ),
     );
   }
@@ -196,12 +205,14 @@ class _CardRow extends StatelessWidget {
 class _CardTile extends StatelessWidget {
   final String kicker;
   final BibleCard card;
+  final String? cover;
   final VoidCallback onTap;
 
   const _CardTile({
     required this.kicker,
     required this.card,
     required this.onTap,
+    this.cover,
   });
 
   @override
@@ -216,7 +227,26 @@ class _CardTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: palette.border),
         ),
-        child: _CardText(kicker: kicker, card: card),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (cover != null) ...[
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: LayoutBuilder(
+                  builder: (context, c) => BibleImageThumb(
+                    path: cover!,
+                    height: c.maxHeight,
+                    width: c.maxWidth,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            _CardText(kicker: kicker, card: card),
+          ],
+        ),
       ),
     );
   }
@@ -257,111 +287,6 @@ class _AddCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-enum _CardAction { save, delete, moveBack, moveForward }
-
-typedef _CardEdit = ({BibleCard card, _CardAction action});
-
-class _CardDialog extends StatefulWidget {
-  final String title;
-  final BibleCard card;
-  final bool canDelete;
-  final bool canMoveBack;
-  final bool canMoveForward;
-
-  const _CardDialog({
-    required this.title,
-    required this.card,
-    required this.canDelete,
-    required this.canMoveBack,
-    required this.canMoveForward,
-  });
-
-  @override
-  State<_CardDialog> createState() => _CardDialogState();
-}
-
-class _CardDialogState extends State<_CardDialog> {
-  late final _title = TextEditingController(text: widget.card.title);
-  late final _body = TextEditingController(text: widget.card.body);
-
-  @override
-  void dispose() {
-    _title.dispose();
-    _body.dispose();
-    super.dispose();
-  }
-
-  void _close(_CardAction action) => Navigator.pop<_CardEdit>(context, (
-    card: widget.card.copyWith(
-      title: _title.text.trim(),
-      body: _body.text.trim(),
-    ),
-    action: action,
-  ));
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Row(
-        children: [
-          Expanded(child: Text(widget.title)),
-          if (widget.canMoveBack)
-            IconButton(
-              tooltip: 'Mover antes',
-              icon: const Icon(Icons.arrow_back, size: 18),
-              onPressed: () => _close(_CardAction.moveBack),
-            ),
-          if (widget.canMoveForward)
-            IconButton(
-              tooltip: 'Mover después',
-              icon: const Icon(Icons.arrow_forward, size: 18),
-              onPressed: () => _close(_CardAction.moveForward),
-            ),
-        ],
-      ),
-      content: SizedBox(
-        width: 440,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _title,
-              autofocus: true,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(labelText: 'Título'),
-            ),
-            TextField(
-              controller: _body,
-              maxLines: 6,
-              minLines: 3,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(labelText: 'Desarrollo'),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        if (widget.canDelete)
-          TextButton(
-            onPressed: () => _close(_CardAction.delete),
-            child: Text(
-              'Eliminar',
-              style: TextStyle(color: context.palette.error),
-            ),
-          ),
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(
-          onPressed: () => _close(_CardAction.save),
-          child: const Text('Guardar'),
-        ),
-      ],
     );
   }
 }

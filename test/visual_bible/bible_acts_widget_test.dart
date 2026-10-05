@@ -47,23 +47,70 @@ void main() {
     expect(find.text('IMAGEN DEL ACTO'), findsNWidgets(2));
   });
 
-  testWidgets('añadir un acto', (tester) async {
+  /// Deja pasar la pausa de guardado de la ficha.
+  Future<void> settle(WidgetTester tester) async {
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('añadir un acto abre su ficha y se guarda al escribir', (
+    tester,
+  ) async {
     await pump(tester);
     await tester.ensureVisible(find.text('AÑADIR ACTO O PUNTO DE GIRO'));
     await tester.tap(find.text('AÑADIR ACTO O PUNTO DE GIRO'));
     await tester.pumpAndSettle();
-    expect(find.text('Acto 3'), findsOneWidget);
-    await tester.enterText(find.widgetWithText(TextField, 'Título'), 'Cierre');
-    await tester.tap(find.text('Guardar'));
-    await tester.pumpAndSettle();
-
+    // Es una página, no un diálogo: no hay «Guardar».
+    expect(find.text('Guardar'), findsNothing);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Título del acto'),
+      'Cierre',
+    );
+    await settle(tester);
     expect(acts.map((a) => a.title), ['Orden', 'Ruptura', 'Cierre']);
+    expect(acts.last.id, isNotEmpty, reason: 'nace con identidad');
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     expect(find.text('03'), findsOneWidget);
   });
 
-  testWidgets('editar un acto conserva sus imágenes; se mueve y se elimina', (
+  testWidgets('una ficha nueva que se deja vacía no añade nada', (
     tester,
   ) async {
+    await pump(tester);
+    await tester.tap(find.text('AÑADIR ACTO O PUNTO DE GIRO'));
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(acts.length, 2);
+  });
+
+  testWidgets('la ficha desarrolla el acto con puntos', (tester) async {
+    await pump(tester);
+    await tester.tap(find.text('Orden'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('AÑADIR PUNTO'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'De qué trata'),
+      'La luz de la cocina',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Desarróllalo aquí…'),
+      'Fluorescente verdoso',
+    );
+    await settle(tester);
+    expect(acts.first.points.single.title, 'La luz de la cocina');
+    expect(acts.first.points.single.body, 'Fluorescente verdoso');
+    expect(acts.first.imageIds, [7], reason: 'conserva sus imágenes');
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('· La luz de la cocina'), findsOneWidget);
+  });
+
+  testWidgets('un acto se mueve y se elimina desde su ficha', (tester) async {
     await pump(tester);
     await tester.tap(find.text('Orden'));
     await tester.pumpAndSettle();
@@ -72,11 +119,11 @@ void main() {
     expect(acts.map((a) => a.title), ['Ruptura', 'Orden']);
     expect(acts.last.imageIds, [7]);
 
-    await tester.tap(find.text('Ruptura'));
+    await tester.tap(find.byTooltip('Eliminar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Eliminar'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Eliminar'));
     await tester.pumpAndSettle();
-    expect(acts.map((a) => a.title), ['Orden']);
+    expect(acts.map((a) => a.title), ['Ruptura']);
   });
 
   testWidgets('un punto de giro no se numera y conserva la identidad del acto', (
@@ -92,7 +139,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Punto de giro'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Guardar'));
+    await tester.pageBack();
     await tester.pumpAndSettle();
 
     expect(acts[1].turn, isTrue);

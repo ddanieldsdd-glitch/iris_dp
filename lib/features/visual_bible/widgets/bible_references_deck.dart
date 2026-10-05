@@ -793,7 +793,7 @@ class _BibleReferenceEditorState extends State<BibleReferenceEditor> {
             runSpacing: AppSpacing.sm,
             children: [
               for (final id in existing)
-                _EditorThumb(
+                BibleEditorThumb(
                   path: widget.imagePaths[id]!,
                   isCover: id == existing.first,
                   onTap: () => _setCover(id),
@@ -946,14 +946,14 @@ class _BibleReferenceEditorState extends State<BibleReferenceEditor> {
   }
 }
 
-/// Miniatura de la galería del editor: toca para portada, × para quitar.
-class _EditorThumb extends StatelessWidget {
+/// Miniatura de la galería de una ficha: toca para portada, × para quitar.
+class BibleEditorThumb extends StatelessWidget {
   final String path;
   final bool isCover;
   final VoidCallback onTap;
   final VoidCallback onRemove;
 
-  const _EditorThumb({
+  const BibleEditorThumb({
     required this.path,
     required this.isCover,
     required this.onTap,

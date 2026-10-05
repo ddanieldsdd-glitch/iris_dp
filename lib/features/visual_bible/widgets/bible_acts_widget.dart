@@ -3,14 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/database/app_database.dart';
-import '../../../core/database/database_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/visual_bible/bible_acts.dart';
 import '../../../shared/visual_bible/bible_cards.dart';
-import 'bible_point_images.dart';
+import 'bible_card_editor.dart';
 import 'bible_point_panel.dart';
 
 /// División por actos: cada acto es una tarjeta con su imagen, su número, su
@@ -38,39 +36,32 @@ class BibleActsWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.watch(databaseProvider);
-    return StreamBuilder<List<MoodboardImage>>(
-      stream: db.watchMoodboardImages(projectId),
-      builder: (context, snap) => BibleActsView(
+    final source = BibleCardImageSource(
+      projectId: projectId,
+      bibleId: bibleId,
+      sectionId: sectionId,
+    );
+    return BibleImagePaths(
+      source: source,
+      builder: (context, paths) => BibleActsView(
         acts: acts,
         onChanged: onChanged,
         shared: shared,
-        imagePaths: {
-          for (final image in snap.data ?? const <MoodboardImage>[])
-            image.id: image.imagePath,
-        },
-        imagesEditor: (ids, onIds) => BiblePointImages(
-          projectId: projectId,
-          bibleId: bibleId,
-          sectionId: sectionId,
-          imageIds: ids,
-          onChanged: onIds,
-        ),
+        imagePaths: paths,
+        imageSource: source,
       ),
     );
   }
 }
-
-/// Editor de las imágenes de un acto, dentro de su diálogo.
-typedef BibleActImagesEditor =
-    Widget Function(List<int> imageIds, ValueChanged<List<int>> onChanged);
 
 /// Vista de los actos, sin acceso a datos: recibe las rutas de las imágenes.
 class BibleActsView extends StatelessWidget {
   final List<BibleCard> acts;
   final ValueChanged<List<BibleCard>> onChanged;
   final Map<int, String> imagePaths;
-  final BibleActImagesEditor? imagesEditor;
+
+  /// Moodboard del que la ficha de un acto toma sus imágenes.
+  final BibleCardImageSource? imageSource;
   final bool shared;
 
   const BibleActsView({
@@ -78,49 +69,22 @@ class BibleActsView extends StatelessWidget {
     required this.acts,
     required this.onChanged,
     this.imagePaths = const {},
-    this.imagesEditor,
+    this.imageSource,
     this.shared = false,
   });
 
-  Future<void> _edit(BuildContext context, int? index) async {
-    final result = await showDialog<_ActEdit>(
-      context: context,
-      builder: (_) => _ActDialog(
-        // Número que le toca si es un acto y no un punto de giro.
-        number:
-            BibleCard.actNumbers(
-              acts.sublist(0, index ?? acts.length),
-            ).whereType<int>().length +
-            1,
-        act: index == null ? const BibleCard() : acts[index],
-        isNew: index == null,
-        shared: shared,
-        canMoveBack: index != null && index > 0,
-        canMoveForward: index != null && index < acts.length - 1,
-        imagesEditor: imagesEditor,
-      ),
-    );
-    if (result == null) return;
-    final next = [...acts];
-    switch (result.action) {
-      case _ActAction.delete:
-        next.removeAt(index!);
-      case _ActAction.save:
-        if (index == null) {
-          if (result.act.isEmpty) return;
-          next.add(result.act);
-        } else {
-          next[index] = result.act;
-        }
-      case _ActAction.moveBack:
-        next[index!] = result.act;
-        next.insert(index - 1, next.removeAt(index));
-      case _ActAction.moveForward:
-        next[index!] = result.act;
-        next.insert(index + 1, next.removeAt(index));
-    }
-    onChanged(next);
-  }
+  /// Abre la ficha del acto [index], o la de uno nuevo.
+  Future<void> _edit(BuildContext context, int? index) => openBibleCardEditor(
+    context,
+    cards: acts,
+    index: index,
+    onChanged: onChanged,
+    copy: BibleCardEditorCopy.forAct(shared: shared),
+    imageSource: imageSource,
+    imagePaths: imagePaths,
+    // Un acto nace con identidad para que su ficha guarde siempre sobre él.
+    newCard: BibleSharedActs.withIds(const [BibleCard()]).single,
+  );
 
   String? _imagePath(BibleCard act) {
     for (final id in act.imageIds) {
@@ -356,8 +320,10 @@ class _ActCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       act.body.trim().isEmpty
-                          ? 'Toca para escribir la intención…'
+                          ? 'Toca para desarrollar el acto…'
                           : act.body,
+                      maxLines: 5,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTypography.bodyMedium(palette).copyWith(
                         height: 1.45,
                         color: act.body.trim().isEmpty
@@ -365,6 +331,20 @@ class _ActCard extends StatelessWidget {
                             : palette.textSecondary,
                       ),
                     ),
+                    if (act.points.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      for (final point in act.points.take(4))
+                        if (point.title.trim().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 2),
+                            child: Text(
+                              '· ${point.title.trim()}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.caption(palette),
+                            ),
+                          ),
+                    ],
                   ],
                 ),
               ),
@@ -410,168 +390,6 @@ class _AddAct extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-enum _ActAction { save, delete, moveBack, moveForward }
-
-typedef _ActEdit = ({BibleCard act, _ActAction action});
-
-class _ActDialog extends StatefulWidget {
-  final int number;
-  final BibleCard act;
-  final bool isNew;
-  final bool shared;
-  final bool canMoveBack;
-  final bool canMoveForward;
-  final BibleActImagesEditor? imagesEditor;
-
-  const _ActDialog({
-    required this.number,
-    required this.act,
-    required this.isNew,
-    required this.shared,
-    required this.canMoveBack,
-    required this.canMoveForward,
-    required this.imagesEditor,
-  });
-
-  @override
-  State<_ActDialog> createState() => _ActDialogState();
-}
-
-class _ActDialogState extends State<_ActDialog> {
-  late final _phase = TextEditingController(text: widget.act.kicker);
-  late final _title = TextEditingController(text: widget.act.title);
-  late final _body = TextEditingController(text: widget.act.body);
-  late List<int> _imageIds = [...widget.act.imageIds];
-  late bool _turn = widget.act.turn;
-
-  @override
-  void dispose() {
-    _phase.dispose();
-    _title.dispose();
-    _body.dispose();
-    super.dispose();
-  }
-
-  void _close(_ActAction action) => Navigator.pop<_ActEdit>(context, (
-    act: widget.act.copyWith(
-      kicker: _phase.text.trim(),
-      title: _title.text.trim(),
-      body: _body.text.trim(),
-      imageIds: _imageIds,
-      turn: _turn,
-    ),
-    action: action,
-  ));
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return AlertDialog(
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(_turn ? 'Punto de giro' : 'Acto ${widget.number}'),
-          ),
-          if (widget.canMoveBack)
-            IconButton(
-              tooltip: 'Mover antes',
-              icon: const Icon(Icons.arrow_back, size: 18),
-              onPressed: () => _close(_ActAction.moveBack),
-            ),
-          if (widget.canMoveForward)
-            IconButton(
-              tooltip: 'Mover después',
-              icon: const Icon(Icons.arrow_forward, size: 18),
-              onPressed: () => _close(_ActAction.moveForward),
-            ),
-        ],
-      ),
-      content: SizedBox(
-        width: 480,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (widget.shared)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: Text(
-                    'Acto del proyecto: la fase, el título y el orden son los '
-                    'mismos en todas las pantallas. La intención y las '
-                    'imágenes son de esta.',
-                    style: AppTypography.caption(palette),
-                  ),
-                ),
-              TextField(
-                controller: _phase,
-                textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(
-                  labelText: 'Fase',
-                  hintText: 'Establecimiento, desestabilización, resolución…',
-                ),
-              ),
-              TextField(
-                controller: _title,
-                autofocus: true,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(labelText: 'Título'),
-              ),
-              TextField(
-                controller: _body,
-                maxLines: 6,
-                minLines: 3,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(labelText: 'Intención'),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text('Punto de giro'),
-                subtitle: const Text('Un hito entre actos. No se numera.'),
-                value: _turn,
-                onChanged: (v) => setState(() => _turn = v),
-              ),
-              if (widget.imagesEditor != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'IMÁGENES',
-                  style: BiblePointPanel.labelStyle(palette),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'La primera encabeza la tarjeta.',
-                  style: AppTypography.caption(palette),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                widget.imagesEditor!(
-                  _imageIds,
-                  (ids) => setState(() => _imageIds = ids),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        if (!widget.isNew)
-          TextButton(
-            onPressed: () => _close(_ActAction.delete),
-            child: Text('Eliminar', style: TextStyle(color: palette.error)),
-          ),
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(
-          onPressed: () => _close(_ActAction.save),
-          child: const Text('Guardar'),
-        ),
-      ],
     );
   }
 }
