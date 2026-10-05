@@ -3831,11 +3831,13 @@ class _ElementPanelState extends State<_ElementPanel> {
                         children: [
                           Expanded(
                             child: Slider(
-                              value: element.rotation,
+                              // Girar en el lienzo puede dejar la rotación
+                              // fuera de 0–360 (p. ej. -90).
+                              value: element.rotation % 360,
                               min: 0,
                               max: 360,
                               divisions: 360,
-                              label: '${element.rotation.round()}°',
+                              label: '${(element.rotation % 360).round()}°',
                               onChanged: (v) {
                                 element.rotation = v;
                                 widget.onUpdate();
@@ -3845,7 +3847,7 @@ class _ElementPanelState extends State<_ElementPanel> {
                           SizedBox(
                             width: 40,
                             child: Text(
-                              '${element.rotation.round()}°',
+                              '${(element.rotation % 360).round()}°',
                               style: AppTypography.caption(palette),
                             ),
                           ),

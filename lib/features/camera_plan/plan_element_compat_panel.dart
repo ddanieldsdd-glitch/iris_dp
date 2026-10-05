@@ -332,8 +332,18 @@ class _LightSection extends StatelessWidget {
         Text('Equipo (catálogo)', style: AppTypography.caption(palette)),
         const SizedBox(height: 4),
         DropdownButtonFormField<int?>(
+          // El catálogo llega después del primer pintado: al cargar, el
+          // campo se rehace para mostrar el equipo guardado.
+          key: ValueKey('catalog_light_${catalog.length}'),
           isExpanded: true,
-          initialValue: element.externalMapping.catalogLightId,
+          // El equipo guardado puede no estar ya en el catálogo (o no haber
+          // cargado aún): sin esta comprobación el desplegable falla.
+          initialValue:
+              catalog.any(
+                (l) => l.id == element.externalMapping.catalogLightId,
+              )
+              ? element.externalMapping.catalogLightId
+              : null,
           decoration: const InputDecoration(
             isDense: true,
             hintText: 'Opcional',
