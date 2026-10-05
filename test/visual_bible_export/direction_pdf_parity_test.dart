@@ -30,40 +30,87 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('registro de Dirección', () {
-    test('por defecto: seis puntos tras la cabecera, sin Key Frame', () {
+    test('por defecto: seis puntos, de la idea a las referencias', () {
       expect(
         BibleStitchModuleRegistry.defaultFieldsFor(
           BibleSectionId.direction,
         ).map((f) => f.key),
         [
-          'header',
           'narrative',
           'tone',
           'strategies',
           'acts',
-          'references',
           'transitions',
+          'references',
         ],
       );
     });
 
-    test('Key Frame se puede volver a añadir', () {
+    test('la cabecera de escena y el Key Frame ya no se ofrecen', () {
       final missing = BibleStitchModuleRegistry.missingModules(
         BibleSectionId.direction,
         BibleStitchModuleRegistry.defaultFieldsFor(BibleSectionId.direction),
       );
-      expect(missing.map((m) => m.key), ['keyFrame']);
-      expect(
-        BibleStitchModuleRegistry.hasRenderer(
-          BibleSectionId.direction,
-          'keyFrame',
-        ),
-        isTrue,
-      );
+      expect(missing, isEmpty);
+      for (final key in ['header', 'keyFrame']) {
+        expect(
+          BibleStitchModuleRegistry.hasRenderer(BibleSectionId.direction, key),
+          isFalse,
+        );
+      }
     });
 
-    test('una biblia antigua parte «Tono y estrategias» en dos y conserva '
-        'Key Frame', () {
+    test('los puntos se pintan con su widget del catálogo', () {
+      final byKey = {
+        for (final f in BibleStitchModuleRegistry.defaultFieldsFor(
+          BibleSectionId.direction,
+        ))
+          f.key: f,
+      };
+      expect(byKey['tone']!.type, BibleSectionFieldType.cards);
+      expect(byKey['strategies']!.widget, 'cards_pillars');
+      expect(byKey['acts']!.type, BibleSectionFieldType.acts);
+      expect(byKey['transitions']!.type, BibleSectionFieldType.cards);
+    });
+
+    test('una biblia guardada antes pasa las transiciones delante de las '
+        'referencias, una sola vez', () {
+      const saved = [
+        BibleSectionField(key: 'header', label: 'Cabecera de escena'),
+        BibleSectionField(key: 'narrative', label: 'Intención narrativa'),
+        BibleSectionField(key: 'tone', label: 'Mi tono'),
+        BibleSectionField(key: 'references', label: 'Referencias'),
+        BibleSectionField(key: 'transitions', label: 'Transiciones'),
+      ];
+      final migrated = BibleStitchModuleRegistry.normalizeFields(
+        BibleSectionId.direction,
+        saved,
+        layoutVersion: 2,
+      );
+      expect(migrated.map((f) => f.key), [
+        'narrative',
+        'tone',
+        'transitions',
+        'references',
+      ]);
+      // Conserva el nombre del usuario y toma el tipo del catálogo.
+      expect(migrated[1].label, 'Mi tono');
+      expect(migrated[1].type, BibleSectionFieldType.cards);
+
+      // Ya migrada, se respeta el orden que el usuario elija.
+      final kept = BibleStitchModuleRegistry.normalizeFields(
+        BibleSectionId.direction,
+        saved,
+        layoutVersion: 3,
+      );
+      expect(kept.map((f) => f.key).toList().sublist(2), [
+        'references',
+        'transitions',
+      ]);
+    });
+
+    test('una biblia antigua parte «Tono y estrategias» en dos y pierde la '
+        'cabecera y el Key Frame', () {
       final fields = BibleStitchModuleRegistry.normalizeFields(
         BibleSectionId.direction,
         const [
@@ -73,13 +120,7 @@ void main() {
           BibleSectionField(key: 'field_1', label: 'Mío'),
         ],
       );
-      expect(fields.map((f) => f.key), [
-        'header',
-        'tone',
-        'strategies',
-        'keyFrame',
-        'field_1',
-      ]);
+      expect(fields.map((f) => f.key), ['tone', 'strategies', 'field_1']);
     });
   });
 
@@ -176,13 +217,13 @@ void main() {
       'Personajes aislados',
       'Angulares a media distancia',
       'Planos largos',
-      'Orden y Rigidez',
+      'ACTO 1 · PLANTEAMIENTO',
       'Composiciones simétricas',
+      'Match cuts',
       'PUESTA EN ESCENA',
       'Espacio negativo',
       'El entorno pesa más que el personaje',
       'Que la ciudad oprima a la protagonista',
-      'Match cuts',
     ];
     var cursor = -1;
     for (final piece in expected) {
@@ -190,7 +231,7 @@ void main() {
       expect(at, greaterThan(cursor), reason: '«$piece» falta o va antes');
       cursor = at;
     }
-    expect(text, isNot(contains('Fragmentación')), reason: 'acto vacío');
+    expect(text, isNot(contains('ACTO 2')), reason: 'acto sin intención');
     expect(text, isNot(contains('KEY FRAME')));
   });
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../../../shared/visual_bible/bible_acts.dart';
 import '../../../../shared/visual_bible/bible_cards.dart';
 import '../../../../shared/visual_bible/bible_palette.dart';
 import '../../../../shared/visual_bible/bible_reference.dart';
@@ -32,6 +33,13 @@ class BibleWidgetContext {
   final ValueChanged<String?> onChanged;
   final AppDatabase db;
 
+  /// Los actos del proyecto, para los puntos «División por actos».
+  final List<BibleCard> sharedActs;
+
+  /// Guarda los actos del proyecto; sin él, esos puntos solo llevan actos
+  /// propios.
+  final ValueChanged<List<BibleCard>>? onSharedActsChanged;
+
   const BibleWidgetContext({
     required this.projectId,
     required this.bibleId,
@@ -40,6 +48,8 @@ class BibleWidgetContext {
     required this.value,
     required this.onChanged,
     required this.db,
+    this.sharedActs = const [],
+    this.onSharedActsChanged,
   });
 }
 
@@ -189,8 +199,8 @@ abstract final class BibleWidgetCatalog {
       category: BibleWidgetCategory.structure,
       label: 'División por actos',
       description:
-          'Los actos de la película, cada uno con su imagen, su fase y su '
-          'intención.',
+          'Los actos del proyecto, o unos propios de la pantalla, con su '
+          'imagen, su fase y su intención. Admite puntos de giro.',
       icon: Icons.movie_filter_outlined,
       screens: _narrativeScreens,
       build: _acts,
@@ -439,12 +449,14 @@ abstract final class BibleWidgetCatalog {
       BiblePointPanel(
         label: ctx.field.label,
         icon: Icons.movie_filter_outlined,
-        child: BibleActsWidget(
+        child: BibleActsPoint(
           projectId: ctx.projectId,
           bibleId: ctx.bibleId,
           sectionId: ctx.sectionId,
-          acts: BibleCard.listFrom(ctx.value),
-          onChanged: (acts) => ctx.onChanged(BibleCard.encode(acts)),
+          value: BibleActsValue.decode(ctx.value),
+          onChanged: (value) => ctx.onChanged(value.encode()),
+          sharedActs: ctx.sharedActs,
+          onSharedActsChanged: ctx.onSharedActsChanged,
         ),
       );
 

@@ -113,7 +113,7 @@ void main() {
     // Lo recomendado no se repite en su familia.
     expect(find.text('División por actos'), findsOneWidget);
     expect(find.text('COLOR'), findsOneWidget);
-    expect(find.text('Key Frame'), findsOneWidget, reason: 'punto opcional');
+    expect(find.text('Key Frame'), findsNothing, reason: 'ya no existe');
 
     await tester.tap(find.text('Tono y atmósfera'));
     await tester.pump();

@@ -579,6 +579,10 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
           sectionDefsById,
           BibleSectionId.direction,
         ),
+        conceptSectionContentJson: _sectionContentJson(
+          sectionDefsById,
+          BibleSectionId.concept,
+        ),
         onChanged: _onDataChanged,
       ),
       BibleSectionId.concept => ConceptSection(

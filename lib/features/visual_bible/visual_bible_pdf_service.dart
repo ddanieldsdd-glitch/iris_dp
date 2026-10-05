@@ -8,7 +8,10 @@ import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/pdf_export_fonts.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import '../../shared/visual_bible/camera_pilot_resolve.dart';
+import '../../shared/visual_bible/bible_acts.dart';
+import '../../shared/visual_bible/bible_cards.dart';
 import '../../shared/visual_bible/concept_points.dart';
+import '../../shared/visual_bible/direction_points.dart';
 import '../../shared/visual_bible/bible_reference.dart';
 import '../../shared/visual_bible/format_pilot_resolve.dart';
 import '../../shared/visual_bible/bible_section_fields.dart';
@@ -261,6 +264,17 @@ class VisualBiblePdfService {
     _userPointImages = await _loadUserPointImages(
       sectionContentJsonById,
       moodboard,
+    );
+    _sharedActs = BibleSharedActs.resolve(
+      data.actVisualNotes,
+      directionBlob: BibleSectionExportReader.parseCustomBlob(
+        sectionContentJsonById[BibleSectionId.direction],
+        BibleSectionId.direction,
+      ),
+      conceptBlob: BibleSectionExportReader.parseCustomBlob(
+        sectionContentJsonById[BibleSectionId.concept],
+        BibleSectionId.concept,
+      ),
     );
     final kit = _kit(fonts);
 
@@ -1546,14 +1560,10 @@ class VisualBiblePdfService {
     final stills = assets.stills;
     final values = BibleSectionFieldsConfig.parseValues(contentJson);
     String text(Object? v) => v?.toString().trim() ?? '';
-    List<(String, String)> pairs(Object? raw) => [
-      if (raw is List)
-        for (final e in raw)
-          if (e is Map)
-            (text(e['title']), text(e['body'] ?? e['desc']))
-          else
-            (text(e), ''),
-    ].where((p) => p.$1.isNotEmpty || p.$2.isNotEmpty).toList();
+    List<(String, String)> pairs(List<BibleCard> cards) => [
+      for (final card in cards)
+        if (!card.isEmpty) (card.title.trim(), card.body.trim()),
+    ];
 
     final out = <pw.Widget>[];
     for (final field in BibleSectionFieldsConfig.parse(
@@ -1561,55 +1571,44 @@ class VisualBiblePdfService {
       BibleSectionId.direction,
     )) {
       switch (field.key) {
-        case 'header':
-          final scene = text(blob['sceneTag']);
-          if (scene.isNotEmpty) out.add(kit.tagRow([scene]));
         case 'narrative':
           final intent = text(data.directionNarrativeIntent);
           if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
-          final legacy = text(data.creativeIntention);
-          if (legacy.isNotEmpty) out.add(kit.textPoint('Intención', legacy));
           final tags = [
             if (blob['emotionTags'] is List)
               for (final t in blob['emotionTags'] as List) text(t),
           ].where((t) => t.isNotEmpty).toList();
           if (tags.isNotEmpty) out.add(kit.tagRow(tags));
-        case 'tone':
-          final points = pairs(blob['tonePoints']);
-          final legacy = text(data.tone);
-          if (points.isNotEmpty) {
-            out.add(kit.titledList(field.label, points));
-          } else if (legacy.isNotEmpty) {
-            out.add(kit.textPoint(field.label, legacy));
-          }
-        case 'strategies':
+        case DirectionPoints.tone:
+          final points = pairs(
+            DirectionPoints.toneCards(values, blob, legacyTone: data.tone),
+          );
+          if (points.isNotEmpty) out.add(kit.titledList(field.label, points));
+        case DirectionPoints.strategies:
+          // Un pilar sin desarrollar es una invitación a escribir: no sale.
           final pillars = [
-            (kicker: null, title: 'Cámara', text: text(data.cameraPhilosophy)),
-            (kicker: null, title: 'Blocking', text: text(data.stagingApproach)),
-            (kicker: null, title: 'POV', text: text(data.pointOfView)),
-            for (final (title, body) in pairs(blob['extraStrategies']))
-              (kicker: null, title: title, text: body),
-          ].where((p) => p.text.isNotEmpty).toList();
-          if (pillars.isNotEmpty) {
-            out.add(kit.columnsPoint(field.label, pillars));
-          }
-        case 'acts':
-          // Mismos valores por defecto que muestra la pantalla.
-          const phases = ['ESTABLECIMIENTO', 'DESESTABILIZACIÓN', 'RESOLUCIÓN'];
-          const titles = ['Orden y Rigidez', 'Fragmentación', 'Abstracción'];
-          const numerals = ['I', 'II', 'III'];
-          final acts = [
-            for (var n = 0; n < 3; n++)
-              if (text(blob['act${n + 1}Desc']).isNotEmpty)
-                (
-                  kicker:
-                      'Acto ${numerals[n]}: '
-                      '${blob['act${n + 1}Phase'] ?? phases[n]}',
-                  title: text(blob['act${n + 1}Title'] ?? titles[n]),
-                  text: text(blob['act${n + 1}Desc']),
-                ),
+            for (final card in DirectionPoints.strategyCards(
+              values,
+              blob,
+              camera: data.cameraPhilosophy,
+              staging: data.stagingApproach,
+              pointOfView: data.pointOfView,
+            ))
+              if (card.body.trim().isNotEmpty)
+                (kicker: null, title: card.title.trim(), text: card.body.trim()),
           ];
-          if (acts.isNotEmpty) out.add(kit.columnsPoint(field.label, acts));
+          if (pillars.isNotEmpty) {
+            out.add(kit.columnsPoint(field.label, pillars, perRow: 4));
+          }
+        case DirectionPoints.acts:
+          final acts = kit.actsPointOf(
+            field.label,
+            DirectionPoints.actsValue(values, blob),
+          );
+          if (acts != null) out.add(acts);
+        case DirectionPoints.transitions:
+          final entries = pairs(DirectionPoints.transitionCards(values, blob));
+          if (entries.isNotEmpty) out.add(kit.titledList(field.label, entries));
         case 'references':
           final references = assets.references;
           if (references.isNotEmpty || stills != null) {
@@ -1638,20 +1637,6 @@ class VisualBiblePdfService {
                 ),
               );
             }
-          }
-        case 'transitions':
-          final entries = pairs(blob['transitionLanguage']);
-          if (entries.isNotEmpty) out.add(kit.titledList(field.label, entries));
-        case 'keyFrame':
-          final intent = text(blob['keyFrameIntent']);
-          final specs = [
-            if (blob['keyFrame'] is Map)
-              for (final e in (blob['keyFrame'] as Map).entries)
-                (text(e.key), text(e.value)),
-          ].where((r) => r.$2.isNotEmpty).toList();
-          if (intent.isNotEmpty) {
-            out.add(kit.textPoint(field.label, intent));
-            if (specs.isNotEmpty) out.add(kit.specsPoint('', specs));
           }
         default:
           final point = kit.point(field, values[field.key]);
@@ -1834,11 +1819,15 @@ class VisualBiblePdfService {
   /// Imágenes de los puntos del usuario del documento en curso.
   static Map<int, pw.MemoryImage> _userPointImages = const {};
 
+  /// Los actos del proyecto del documento en curso.
+  static List<BibleCard> _sharedActs = const [];
+
   static BiblePdfKit _kit(({pw.Font regular, pw.Font bold}) fonts) =>
       BiblePdfKit(
         regular: fonts.regular,
         bold: fonts.bold,
         images: _userPointImages,
+        sharedActs: _sharedActs,
       );
 
   /// Carga una vez las imágenes que usan los puntos del usuario (actos,

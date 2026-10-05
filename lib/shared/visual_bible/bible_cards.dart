@@ -4,16 +4,23 @@ import 'dart:convert';
 /// desarrollo. En una división por actos, [kicker] es la fase del acto e
 /// [imageIds] las imágenes del moodboard que lo representan.
 class BibleCard {
+  /// Identidad del acto cuando es uno de los del proyecto; vacío en el resto.
+  final String id;
   final String kicker;
   final String title;
   final String body;
   final List<int> imageIds;
 
+  /// Punto de giro: un hito entre actos, que no se numera.
+  final bool turn;
+
   const BibleCard({
+    this.id = '',
     this.kicker = '',
     this.title = '',
     this.body = '',
     this.imageIds = const [],
+    this.turn = false,
   });
 
   bool get isEmpty =>
@@ -23,18 +30,23 @@ class BibleCard {
       imageIds.isEmpty;
 
   BibleCard copyWith({
+    String? id,
     String? kicker,
     String? title,
     String? body,
     List<int>? imageIds,
+    bool? turn,
   }) => BibleCard(
+    id: id ?? this.id,
     kicker: kicker ?? this.kicker,
     title: title ?? this.title,
     body: body ?? this.body,
     imageIds: imageIds ?? this.imageIds,
+    turn: turn ?? this.turn,
   );
 
   factory BibleCard.fromJson(Map<dynamic, dynamic> json) => BibleCard(
+    id: json['id']?.toString() ?? '',
     kicker: json['kicker']?.toString() ?? '',
     title: json['title']?.toString() ?? '',
     body: json['body']?.toString() ?? '',
@@ -43,13 +55,16 @@ class BibleCard {
         for (final id in json['images'] as List)
           if (id is num) id.toInt(),
     ],
+    turn: json['turn'] == true,
   );
 
   Map<String, dynamic> toJson() => {
+    if (id.isNotEmpty) 'id': id,
     if (kicker.isNotEmpty) 'kicker': kicker,
     'title': title,
     'body': body,
     if (imageIds.isNotEmpty) 'images': imageIds,
+    if (turn) 'turn': true,
   };
 
   /// Lee las tarjetas desde una lista ya decodificada o desde su JSON.
@@ -73,4 +88,10 @@ class BibleCard {
   static String? encode(List<BibleCard> cards) => cards.isEmpty
       ? null
       : jsonEncode([for (final card in cards) card.toJson()]);
+
+  /// Número de cada acto de [acts]; `null` en los puntos de giro.
+  static List<int?> actNumbers(List<BibleCard> acts) {
+    var n = 0;
+    return [for (final act in acts) act.turn ? null : ++n];
+  }
 }

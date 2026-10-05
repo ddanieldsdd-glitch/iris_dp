@@ -10,6 +10,8 @@ import '../bible_navigation_scope.dart';
 import '../bible_section_shared_widgets.dart';
 import '../bible_unified_references_panel.dart';
 import '../narrative_bridge_card.dart';
+import '../../../../shared/visual_bible/bible_acts.dart';
+import '../../../../shared/visual_bible/bible_cards.dart';
 import '../../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../../bible_section_fields.dart';
 import '../bible_add_point.dart';
@@ -30,6 +32,10 @@ class BibleSectionScaffold extends ConsumerStatefulWidget {
   final String? sectionNumber;
   final String? sectionTitle;
 
+  /// Los actos del proyecto, si la sección ya los ha resuelto con lo que
+  /// había escrito antes de compartirlos.
+  final List<BibleCard>? sharedActs;
+
   const BibleSectionScaffold({
     super.key,
     required this.sectionId,
@@ -41,6 +47,7 @@ class BibleSectionScaffold extends ConsumerStatefulWidget {
     required this.fieldWidgets,
     this.sectionNumber,
     this.sectionTitle,
+    this.sharedActs,
   });
 
   @override
@@ -128,6 +135,13 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
           value,
         ),
         db: db,
+        sharedActs:
+            widget.sharedActs ??
+            BibleSharedActs.resolve(widget.data.actVisualNotes),
+        onSharedActsChanged: (acts) {
+          widget.data.actVisualNotes = BibleSharedActs.encode(acts);
+          widget.onChanged(widget.data);
+        },
       ),
     );
   }

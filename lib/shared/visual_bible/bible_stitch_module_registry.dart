@@ -49,6 +49,7 @@ class StitchModule {
         hint: hint,
         maxLines: maxLines,
         type: type,
+        widget: type == BibleSectionFieldType.text ? null : widgetId,
       );
 }
 
@@ -140,7 +141,6 @@ abstract final class BibleStitchModuleRegistry {
             ),
           ],
         BibleSectionId.direction => const [
-            StitchModule(key: 'header', label: 'Cabecera de escena'),
             StitchModule(
               key: 'narrative',
               label: 'Intención narrativa',
@@ -150,29 +150,40 @@ abstract final class BibleStitchModuleRegistry {
             StitchModule(
               key: 'tone',
               label: 'Tono y atmósfera',
+              type: BibleSectionFieldType.cards,
               widgetId: 'cards',
             ),
             StitchModule(
               key: 'strategies',
               label: 'Estrategia visual',
+              type: BibleSectionFieldType.cards,
               widgetId: 'cards_pillars',
             ),
             StitchModule(
               key: 'acts',
-              label: 'Intención visual por acto',
+              label: 'Intención por acto',
+              type: BibleSectionFieldType.acts,
               widgetId: 'acts',
+            ),
+            StitchModule(
+              key: 'transitions',
+              label: 'Lenguaje de transiciones',
+              type: BibleSectionFieldType.cards,
+              widgetId: 'cards',
             ),
             StitchModule(
               key: 'references',
               label: 'Referencias de dirección',
               type: BibleSectionFieldType.references,
             ),
+            // Puntos que ya no existen: la cabecera de escena y el Key Frame
+            // (ahora es una referencia destacada).
             StitchModule(
-              key: 'transitions',
-              label: 'Lenguaje de transiciones',
-              widgetId: 'cards',
+              key: 'header',
+              label: 'Cabecera de escena',
+              legacyOnly: true,
             ),
-            StitchModule(key: 'keyFrame', label: 'Key Frame', optional: true),
+            StitchModule(key: 'keyFrame', label: 'Key Frame', legacyOnly: true),
             StitchModule(
               key: 'toneStrategies',
               label: 'Tono y estrategias (legacy)',
@@ -435,22 +446,46 @@ abstract final class BibleStitchModuleRegistry {
         'transitions',
       };
       final hasModular = keys.any(modularSlotKeys.contains);
-      if (keys.contains('narrative') && !hasModular && !keys.contains('header')) {
+      if (keys.contains('narrative') && !hasModular) {
         return defaultFieldsFor(sectionId);
       }
-      // «Tono y estrategias» era un solo punto; ahora son dos paneles.
-      if (keys.contains('toneStrategies')) {
-        return [
-          for (final field in fields)
-            if (field.key != 'toneStrategies')
-              field
-            else ...[
-              if (!keys.contains('tone')) module(sectionId, 'tone')!.toField(),
-              if (!keys.contains('strategies'))
-                module(sectionId, 'strategies')!.toField(),
-            ],
-        ];
+      final next = <BibleSectionField>[];
+      for (final field in fields) {
+        final m = module(sectionId, field.key);
+        if (field.key == 'toneStrategies') {
+          // «Tono y estrategias» era un solo punto; ahora son dos.
+          if (!keys.contains('tone')) {
+            next.add(module(sectionId, 'tone')!.toField());
+          }
+          if (!keys.contains('strategies')) {
+            next.add(module(sectionId, 'strategies')!.toField());
+          }
+        } else if (m == null) {
+          next.add(field);
+        } else if (!m.legacyOnly) {
+          // Los puntos de la pantalla se pintan con su widget del catálogo;
+          // los que ya no existen (cabecera, Key Frame) se quitan.
+          next.add(
+            BibleSectionField(
+              key: field.key,
+              label: field.label,
+              hint: field.hint,
+              maxLines: field.maxLines,
+              type: m.type,
+              widget: m.widgetId,
+            ),
+          );
+        }
       }
+      // En la versión 3 las transiciones pasan delante de las referencias.
+      if (layoutVersion < 3) {
+        final refs = next.indexWhere((f) => f.key == 'references');
+        final transitions = next.indexWhere((f) => f.key == 'transitions');
+        if (refs >= 0 && transitions > refs) {
+          next.insert(refs, next.removeAt(transitions));
+        }
+      }
+      return next;
     }
 
     if (sectionId == BibleSectionId.lighting) {

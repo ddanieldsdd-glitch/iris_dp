@@ -149,7 +149,7 @@ void main() {
         f('narrative'),
         f('shadowTreatment'),
         f('actNotes'),
-      ]).replaceFirst('"layoutVersion":2', '"layoutVersion":1');
+      ]).replaceFirst('"layoutVersion":3', '"layoutVersion":1');
       expect(
         BibleSectionFieldsConfig.parse(
           old,
@@ -166,7 +166,7 @@ void main() {
         f('shadowTreatment'),
         f('actNotes'),
       ]);
-      expect(saved, contains('"layoutVersion":2'));
+      expect(saved, contains('"layoutVersion":3'));
       expect(
         BibleSectionFieldsConfig.parse(
           saved,

@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import '../../../core/database/app_database.dart';
 import '../../../shared/visual_bible/bible_lighting_data.dart';
+import '../../../shared/visual_bible/bible_acts.dart';
 import '../../../shared/visual_bible/bible_cards.dart';
+import '../../../shared/visual_bible/direction_points.dart';
 import '../../../shared/visual_bible/bible_palette.dart';
 import '../../../shared/visual_bible/bible_reference.dart';
 import '../../../shared/visual_bible/bible_section_fields.dart';
@@ -303,9 +305,9 @@ abstract final class BibleSectionExportReader {
   static Set<int> userPointImageIds(String? contentJson, String sectionId) => {
     for (final point in userPoints(contentJson, sectionId))
       ...switch (point.field.type) {
-        BibleSectionFieldType.acts => [
-          for (final act in BibleCard.listFrom(point.value)) ...act.imageIds,
-        ],
+        BibleSectionFieldType.acts => BibleActsValue.decode(
+          point.value,
+        ).imageIds,
         BibleSectionFieldType.palette => BiblePaletteValue.decode(
           point.value,
         ).imageIds,
@@ -315,6 +317,12 @@ abstract final class BibleSectionExportReader {
         ],
         _ => const <int>[],
       },
+    // Los actos de Dirección son un punto de la pantalla, con sus imágenes.
+    if (sectionId == BibleSectionId.direction)
+      ...DirectionPoints.actsValue(
+        BibleSectionFieldsConfig.parseValues(contentJson),
+        parseCustomBlob(contentJson, sectionId),
+      ).imageIds,
   };
 
   static bool _isUserPoint(String sectionId, BibleSectionField field) =>
@@ -343,7 +351,9 @@ abstract final class BibleSectionExportReader {
             .join('\n'),
         BibleSectionFieldType.gallery => '',
         BibleSectionFieldType.cards || BibleSectionFieldType.acts =>
-          BibleCard.listFrom(point.value)
+          (point.field.type == BibleSectionFieldType.acts
+                  ? _actsForText(point.value)
+                  : BibleCard.listFrom(point.value))
               .where((c) => !c.isEmpty)
               .map(
                 (c) => [c.kicker, c.title, c.body]
@@ -356,6 +366,13 @@ abstract final class BibleSectionExportReader {
           ).join(' · '),
         _ => point.value.trim(),
       };
+
+  /// Actos de un punto para un listado de texto: los propios, o lo que la
+  /// pantalla dice de los del proyecto.
+  static Iterable<BibleCard> _actsForText(String raw) {
+    final value = BibleActsValue.decode(raw);
+    return value.shared ? value.layers.values : value.own;
+  }
 
   static String _paletteText(String raw) {
     final value = BiblePaletteValue.decode(raw);

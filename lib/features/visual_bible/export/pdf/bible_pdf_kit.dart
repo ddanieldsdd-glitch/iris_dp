@@ -1,6 +1,7 @@
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../../../../shared/visual_bible/bible_acts.dart';
 import '../../../../shared/visual_bible/bible_cards.dart';
 import '../../../../shared/visual_bible/bible_palette.dart';
 import '../../../../shared/visual_bible/bible_section_fields.dart';
@@ -31,10 +32,15 @@ class BiblePdfKit {
   /// llevan (actos, paletas, tiras de imágenes).
   final Map<int, pw.ImageProvider> images;
 
+  /// Los actos del proyecto, para los puntos «División por actos» que los
+  /// comparten.
+  final List<BibleCard> sharedActs;
+
   const BiblePdfKit({
     required this.regular,
     required this.bold,
     this.images = const {},
+    this.sharedActs = const [],
   });
 
   List<pw.ImageProvider> _loaded(Iterable<int> ids) => [
@@ -45,6 +51,7 @@ class BiblePdfKit {
   /// División por actos: una columna por acto, con su imagen encima.
   pw.Widget actsPoint(String label, List<BibleCard> acts) {
     const perRow = 3;
+    final numbers = BibleCard.actNumbers(acts);
     final rows = <List<int>>[];
     for (var i = 0; i < acts.length; i += perRow) {
       rows.add([for (var j = i; j < acts.length && j < i + perRow; j++) j]);
@@ -71,7 +78,7 @@ class BiblePdfKit {
                                 padding: pw.EdgeInsets.only(
                                   right: i == perRow - 1 ? 0 : 10,
                                 ),
-                                child: _act(row[i] + 1, acts[row[i]]),
+                                child: _act(numbers[row[i]], acts[row[i]]),
                               ),
                       ),
                   ],
@@ -83,9 +90,11 @@ class BiblePdfKit {
     );
   }
 
-  pw.Widget _act(int number, BibleCard act) {
+  /// [number] es `null` en un punto de giro.
+  pw.Widget _act(int? number, BibleCard act) {
     final image = _loaded(act.imageIds).firstOrNull;
     final phase = act.kicker.trim();
+    final name = number == null ? 'Punto de giro' : 'Acto $number';
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -103,8 +112,7 @@ class BiblePdfKit {
         pw.Container(height: 1.5, color: BiblePdfTokens.accent),
         pw.SizedBox(height: 4),
         pw.Text(
-          (phase.isEmpty ? 'Acto $number' : 'Acto $number · $phase')
-              .toUpperCase(),
+          (phase.isEmpty ? name : '$name · $phase').toUpperCase(),
           style: pw.TextStyle(
             font: bold,
             fontSize: 7,
@@ -116,6 +124,19 @@ class BiblePdfKit {
         _titled(act.title, act.body),
       ],
     );
+  }
+
+  /// Los actos de un punto tal como se ven en pantalla. Un acto del proyecto
+  /// del que esta pantalla no dice nada (ni texto ni imagen) no sale.
+  pw.Widget? actsPointOf(String label, BibleActsValue value) {
+    final acts = [
+      for (final act in value.resolve(sharedActs))
+        if (value.shared
+            ? act.body.trim().isNotEmpty || _loaded(act.imageIds).isNotEmpty
+            : !act.isEmpty)
+          act,
+    ];
+    return acts.isEmpty ? null : actsPoint(label, acts);
   }
 
   /// Punto de paleta: lo que esté marcado para mostrarse, en el orden de la
@@ -704,9 +725,7 @@ class BiblePdfKit {
           for (final c in cards) (c.title, c.body),
         ]);
       case BibleSectionFieldType.acts:
-        final acts = BibleCard.listFrom(raw);
-        if (acts.every((c) => c.isEmpty)) return null;
-        return actsPoint(field.label, acts);
+        return actsPointOf(field.label, BibleActsValue.decode(raw));
       case BibleSectionFieldType.tags:
         final tags = BibleSectionPointValue.decodeList(
           raw,

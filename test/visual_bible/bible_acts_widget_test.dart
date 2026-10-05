@@ -49,8 +49,8 @@ void main() {
 
   testWidgets('añadir un acto', (tester) async {
     await pump(tester);
-    await tester.ensureVisible(find.text('AÑADIR ACTO'));
-    await tester.tap(find.text('AÑADIR ACTO'));
+    await tester.ensureVisible(find.text('AÑADIR ACTO O PUNTO DE GIRO'));
+    await tester.tap(find.text('AÑADIR ACTO O PUNTO DE GIRO'));
     await tester.pumpAndSettle();
     expect(find.text('Acto 3'), findsOneWidget);
     await tester.enterText(find.widgetWithText(TextField, 'Título'), 'Cierre');
@@ -77,5 +77,28 @@ void main() {
     await tester.tap(find.text('Eliminar'));
     await tester.pumpAndSettle();
     expect(acts.map((a) => a.title), ['Orden']);
+  });
+
+  testWidgets('un punto de giro no se numera y conserva la identidad del acto', (
+    tester,
+  ) async {
+    acts = const [
+      BibleCard(id: 'a', title: 'Orden'),
+      BibleCard(id: 'b', title: 'La carta'),
+      BibleCard(id: 'c', title: 'Ruptura'),
+    ];
+    await pump(tester);
+    await tester.tap(find.text('La carta'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Punto de giro'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Guardar'));
+    await tester.pumpAndSettle();
+
+    expect(acts[1].turn, isTrue);
+    expect(acts.map((a) => a.id), ['a', 'b', 'c']);
+    expect(find.text('PUNTO DE GIRO'), findsOneWidget);
+    expect(find.text('ACTO 2'), findsOneWidget, reason: 'el tercero es el 2');
+    expect(find.text('ACTO 3'), findsNothing);
   });
 }

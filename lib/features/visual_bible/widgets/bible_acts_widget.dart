@@ -8,6 +8,7 @@ import '../../../core/database/database_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../shared/visual_bible/bible_acts.dart';
 import '../../../shared/visual_bible/bible_cards.dart';
 import 'bible_point_images.dart';
 import 'bible_point_panel.dart';
@@ -21,6 +22,10 @@ class BibleActsWidget extends ConsumerWidget {
   final List<BibleCard> acts;
   final ValueChanged<List<BibleCard>> onChanged;
 
+  /// Los actos son los del proyecto: el diálogo avisa de que título, fase y
+  /// orden cambian en todas las pantallas.
+  final bool shared;
+
   const BibleActsWidget({
     super.key,
     required this.projectId,
@@ -28,6 +33,7 @@ class BibleActsWidget extends ConsumerWidget {
     required this.sectionId,
     required this.acts,
     required this.onChanged,
+    this.shared = false,
   });
 
   @override
@@ -38,6 +44,7 @@ class BibleActsWidget extends ConsumerWidget {
       builder: (context, snap) => BibleActsView(
         acts: acts,
         onChanged: onChanged,
+        shared: shared,
         imagePaths: {
           for (final image in snap.data ?? const <MoodboardImage>[])
             image.id: image.imagePath,
@@ -64,6 +71,7 @@ class BibleActsView extends StatelessWidget {
   final ValueChanged<List<BibleCard>> onChanged;
   final Map<int, String> imagePaths;
   final BibleActImagesEditor? imagesEditor;
+  final bool shared;
 
   const BibleActsView({
     super.key,
@@ -71,15 +79,22 @@ class BibleActsView extends StatelessWidget {
     required this.onChanged,
     this.imagePaths = const {},
     this.imagesEditor,
+    this.shared = false,
   });
 
   Future<void> _edit(BuildContext context, int? index) async {
     final result = await showDialog<_ActEdit>(
       context: context,
       builder: (_) => _ActDialog(
-        number: (index ?? acts.length) + 1,
+        // Número que le toca si es un acto y no un punto de giro.
+        number:
+            BibleCard.actNumbers(
+              acts.sublist(0, index ?? acts.length),
+            ).whereType<int>().length +
+            1,
         act: index == null ? const BibleCard() : acts[index],
         isNew: index == null,
+        shared: shared,
         canMoveBack: index != null && index > 0,
         canMoveForward: index != null && index < acts.length - 1,
         imagesEditor: imagesEditor,
@@ -125,11 +140,12 @@ class BibleActsView extends StatelessWidget {
         final columns = width >= 720 ? 3 : (width >= 480 ? 2 : 1);
         const gap = AppSpacing.md;
         final cardWidth = (width - gap * (columns - 1)) / columns;
+        final numbers = BibleCard.actNumbers(acts);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (acts.isNotEmpty) ...[
-              _ActsProgress(count: acts.length),
+              _ActsProgress(numbers: numbers),
               const SizedBox(height: AppSpacing.md),
             ],
             Wrap(
@@ -140,7 +156,7 @@ class BibleActsView extends StatelessWidget {
                   SizedBox(
                     width: cardWidth,
                     child: _ActCard(
-                      number: i + 1,
+                      number: numbers[i],
                       act: acts[i],
                       imagePath: _imagePath(acts[i]),
                       onTap: () => _edit(context, i),
@@ -162,35 +178,42 @@ class BibleActsView extends StatelessWidget {
   }
 }
 
-/// Línea con un nodo numerado por acto.
+/// Línea con un nodo por acto: numerado, o un rombo en los puntos de giro.
 class _ActsProgress extends StatelessWidget {
-  final int count;
+  final List<int?> numbers;
 
-  const _ActsProgress({required this.count});
+  const _ActsProgress({required this.numbers});
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final count = numbers.length;
     return Row(
       children: [
         for (var i = 0; i < count; i++) ...[
-          Container(
-            width: 22,
-            height: 22,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: palette.accent, width: 1.5),
-            ),
-            child: Text(
-              '${i + 1}',
-              style: AppTypography.mono(palette).copyWith(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: palette.accent,
+          if (numbers[i] == null)
+            Transform.rotate(
+              angle: 0.785398,
+              child: Container(width: 12, height: 12, color: palette.accent),
+            )
+          else
+            Container(
+              width: 22,
+              height: 22,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: palette.accent, width: 1.5),
+              ),
+              child: Text(
+                '${numbers[i]}',
+                style: AppTypography.mono(palette).copyWith(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: palette.accent,
+                ),
               ),
             ),
-          ),
           Expanded(
             child: Container(
               height: 1.5,
@@ -206,7 +229,8 @@ class _ActsProgress extends StatelessWidget {
 }
 
 class _ActCard extends StatelessWidget {
-  final int number;
+  /// `null` en un punto de giro.
+  final int? number;
   final BibleCard act;
   final String? imagePath;
   final VoidCallback onTap;
@@ -224,6 +248,7 @@ class _ActCard extends StatelessWidget {
     final file = imagePath == null ? null : File(imagePath!);
     final hasImage = file != null && file.existsSync();
     final phase = act.kicker.trim();
+    final name = number == null ? 'PUNTO DE GIRO' : 'ACTO $number';
 
     return Material(
       color: palette.surface.withValues(alpha: 0.55),
@@ -259,7 +284,7 @@ class _ActCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'IMAGEN DEL ACTO',
+                              number == null ? 'IMAGEN' : 'IMAGEN DEL ACTO',
                               style: BiblePointPanel.labelStyle(
                                 palette,
                               ).copyWith(color: palette.textTertiary),
@@ -282,7 +307,7 @@ class _ActCard extends StatelessWidget {
                       left: AppSpacing.md,
                       bottom: AppSpacing.sm,
                       child: Text(
-                        number.toString().padLeft(2, '0'),
+                        number?.toString().padLeft(2, '0') ?? '◆',
                         style: AppTypography.mono(palette).copyWith(
                           fontSize: 40,
                           height: 1,
@@ -314,9 +339,7 @@ class _ActCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      phase.isEmpty
-                          ? 'ACTO $number'
-                          : 'ACTO $number · ${phase.toUpperCase()}',
+                      phase.isEmpty ? name : '$name · ${phase.toUpperCase()}',
                       style: BiblePointPanel.labelStyle(
                         palette,
                       ).copyWith(color: palette.accent),
@@ -333,7 +356,7 @@ class _ActCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       act.body.trim().isEmpty
-                          ? 'Toca para escribir la intención del acto…'
+                          ? 'Toca para escribir la intención…'
                           : act.body,
                       style: AppTypography.bodyMedium(palette).copyWith(
                         height: 1.45,
@@ -377,7 +400,13 @@ class _AddAct extends StatelessWidget {
           children: [
             Icon(Icons.add, size: 16, color: palette.accent),
             const SizedBox(width: AppSpacing.sm),
-            Text('AÑADIR ACTO', style: BiblePointPanel.labelStyle(palette)),
+            Flexible(
+              child: Text(
+                'AÑADIR ACTO O PUNTO DE GIRO',
+                textAlign: TextAlign.center,
+                style: BiblePointPanel.labelStyle(palette),
+              ),
+            ),
           ],
         ),
       ),
@@ -393,6 +422,7 @@ class _ActDialog extends StatefulWidget {
   final int number;
   final BibleCard act;
   final bool isNew;
+  final bool shared;
   final bool canMoveBack;
   final bool canMoveForward;
   final BibleActImagesEditor? imagesEditor;
@@ -401,6 +431,7 @@ class _ActDialog extends StatefulWidget {
     required this.number,
     required this.act,
     required this.isNew,
+    required this.shared,
     required this.canMoveBack,
     required this.canMoveForward,
     required this.imagesEditor,
@@ -415,6 +446,7 @@ class _ActDialogState extends State<_ActDialog> {
   late final _title = TextEditingController(text: widget.act.title);
   late final _body = TextEditingController(text: widget.act.body);
   late List<int> _imageIds = [...widget.act.imageIds];
+  late bool _turn = widget.act.turn;
 
   @override
   void dispose() {
@@ -425,11 +457,12 @@ class _ActDialogState extends State<_ActDialog> {
   }
 
   void _close(_ActAction action) => Navigator.pop<_ActEdit>(context, (
-    act: BibleCard(
+    act: widget.act.copyWith(
       kicker: _phase.text.trim(),
       title: _title.text.trim(),
       body: _body.text.trim(),
       imageIds: _imageIds,
+      turn: _turn,
     ),
     action: action,
   ));
@@ -440,7 +473,9 @@ class _ActDialogState extends State<_ActDialog> {
     return AlertDialog(
       title: Row(
         children: [
-          Expanded(child: Text('Acto ${widget.number}')),
+          Expanded(
+            child: Text(_turn ? 'Punto de giro' : 'Acto ${widget.number}'),
+          ),
           if (widget.canMoveBack)
             IconButton(
               tooltip: 'Mover antes',
@@ -462,6 +497,16 @@ class _ActDialogState extends State<_ActDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (widget.shared)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: Text(
+                    'Acto del proyecto: la fase, el título y el orden son los '
+                    'mismos en todas las pantallas. La intención y las '
+                    'imágenes son de esta.',
+                    style: AppTypography.caption(palette),
+                  ),
+                ),
               TextField(
                 controller: _phase,
                 textCapitalization: TextCapitalization.characters,
@@ -483,10 +528,18 @@ class _ActDialogState extends State<_ActDialog> {
                 textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(labelText: 'Intención'),
               ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Punto de giro'),
+                subtitle: const Text('Un hito entre actos. No se numera.'),
+                value: _turn,
+                onChanged: (v) => setState(() => _turn = v),
+              ),
               if (widget.imagesEditor != null) ...[
                 const SizedBox(height: AppSpacing.md),
                 Text(
-                  'IMÁGENES DEL ACTO',
+                  'IMÁGENES',
                   style: BiblePointPanel.labelStyle(palette),
                 ),
                 const SizedBox(height: AppSpacing.xs),
@@ -517,6 +570,122 @@ class _ActDialogState extends State<_ActDialog> {
         FilledButton(
           onPressed: () => _close(_ActAction.save),
           child: const Text('Guardar'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Punto «División por actos» completo: los actos del proyecto, compartidos
+/// con las demás pantallas, o unos propios de esta.
+class BibleActsPoint extends StatelessWidget {
+  final int projectId;
+  final int bibleId;
+  final String sectionId;
+  final BibleActsValue value;
+  final ValueChanged<BibleActsValue> onChanged;
+
+  /// Los actos del proyecto.
+  final List<BibleCard> sharedActs;
+
+  /// Guarda los actos del proyecto. Sin él, el punto solo admite actos
+  /// propios.
+  final ValueChanged<List<BibleCard>>? onSharedActsChanged;
+
+  const BibleActsPoint({
+    super.key,
+    required this.projectId,
+    required this.bibleId,
+    required this.sectionId,
+    required this.value,
+    required this.onChanged,
+    this.sharedActs = const [],
+    this.onSharedActsChanged,
+  });
+
+  bool get _shared => value.shared && onSharedActsChanged != null;
+
+  void _onActs(List<BibleCard> next) {
+    if (!_shared) {
+      onChanged(value.copyWith(shared: false, own: next));
+      return;
+    }
+    final acts = BibleSharedActs.withIds(next);
+    onSharedActsChanged!([
+      for (final act in acts)
+        BibleCard(
+          id: act.id,
+          kicker: act.kicker,
+          title: act.title,
+          turn: act.turn,
+        ),
+    ]);
+    onChanged(value.withLayersOf(acts));
+  }
+
+  void _toggle() {
+    if (_shared) {
+      // Los propios nacen como copia de los del proyecto, para partir de ahí.
+      onChanged(
+        value.copyWith(
+          shared: false,
+          own: value.own.isNotEmpty
+              ? value.own
+              : [
+                  for (final act in value.resolve(sharedActs))
+                    act.copyWith(id: ''),
+                ],
+        ),
+      );
+    } else {
+      onChanged(value.copyWith(shared: true));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final acts = _shared ? value.resolve(sharedActs) : value.own;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (onSharedActsChanged != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+            child: Row(
+              children: [
+                Icon(
+                  _shared ? Icons.link : Icons.link_off,
+                  size: 14,
+                  color: palette.textTertiary,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    _shared
+                        ? 'Actos del proyecto, los mismos en todas las '
+                              'pantallas. Aquí va lo que toca a esta.'
+                        : 'Actos propios de esta pantalla, independientes de '
+                              'los del proyecto.',
+                    style: AppTypography.caption(palette),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _toggle,
+                  child: Text(
+                    _shared ? 'Usar actos propios' : 'Usar los del proyecto',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        BibleActsWidget(
+          projectId: projectId,
+          bibleId: bibleId,
+          sectionId: sectionId,
+          acts: acts,
+          shared: _shared,
+          onChanged: _onActs,
         ),
       ],
     );

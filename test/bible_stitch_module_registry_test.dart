@@ -72,7 +72,7 @@ void main() {
         .where((m) => !m.legacyOnly)
         .map((m) => m.key)
         .toSet();
-    expect(modules, containsAll(['header', 'narrative', 'tone', 'strategies', 'acts', 'keyFrame', 'transitions', 'references']));
+    expect(modules, ['narrative', 'tone', 'strategies', 'acts', 'transitions', 'references']);
   });
 
   test('normalizeFields upgrades legacy direction monolith narrative', () {
@@ -83,7 +83,7 @@ void main() {
       BibleSectionId.direction,
       legacy,
     );
-    expect(normalized.map((f) => f.key), contains('header'));
+    expect(normalized.map((f) => f.key), contains('strategies'));
   });
 
   test('missingModules lists slots not yet in fields', () {
