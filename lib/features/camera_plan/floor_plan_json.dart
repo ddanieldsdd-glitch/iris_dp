@@ -92,10 +92,15 @@ class FloorPlanDocument {
   final double? metersPerUnit;
   final FloorPlanUnderlay? underlay;
 
+  /// Ambiente del esquema de luz (sol, cielo, rebote de paredes), tal como
+  /// lo escribe `PlanAmbient.toJson`.
+  final Map<String, dynamic>? ambient;
+
   const FloorPlanDocument({
     this.elements = const [],
     this.metersPerUnit,
     this.underlay,
+    this.ambient,
   });
 
   bool get isEmpty => elements.isEmpty && underlay == null;
@@ -116,6 +121,7 @@ class FloorPlanJson {
       'version': version,
       'metersPerUnit': ?document.metersPerUnit,
       'underlay': ?document.underlay?.toJson(),
+      'ambient': ?document.ambient,
       'elements': document.elements.map(_elementToJson).toList(),
     });
   }
@@ -134,6 +140,9 @@ class FloorPlanJson {
             .toList(),
         metersPerUnit: (data['metersPerUnit'] as num?)?.toDouble(),
         underlay: FloorPlanUnderlay.fromJson(data['underlay']),
+        ambient: data['ambient'] is Map
+            ? Map<String, dynamic>.from(data['ambient'] as Map)
+            : null,
       );
     } catch (_) {
       return const FloorPlanDocument();

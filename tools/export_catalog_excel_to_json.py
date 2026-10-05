@@ -244,6 +244,16 @@ def export_lights(wb, dst: Path) -> None:
             entry["tlci"] = tlci
         if d.get("dimming"):
             entry["dimmingType"] = str(d["dimming"])
+        # Haz y fotometría del fabricante: lux en el eje a una distancia, a
+        # plena potencia y sin modificadores. Columnas opcionales.
+        beam = _to_float(d.get("angulo_haz"))
+        if beam is not None:
+            entry["beamAngleDeg"] = beam
+        lux = _to_float(d.get("fotometria_lux"))
+        dist = _to_float(d.get("fotometria_distancia_m"))
+        if lux is not None and dist is not None and lux > 0 and dist > 0:
+            entry["photometryLux"] = lux
+            entry["photometryDistanceM"] = dist
         lights.append(entry)
 
     out = dst / "lights_v1_7.json"

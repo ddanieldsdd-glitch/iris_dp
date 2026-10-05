@@ -73,7 +73,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 42;
+  int get schemaVersion => 43;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -417,6 +417,12 @@ class AppDatabase extends _$AppDatabase {
         );
         await m.addColumn(lightingSetups, lightingSetups.planSetupId);
         await PlanLayerMigration(this).run();
+      }
+      if (from < 43) {
+        // Fotometría del catálogo y ajustes de luz por plano.
+        await m.addColumn(lights, lights.photometryLux);
+        await m.addColumn(lights, lights.photometryDistanceM);
+        await m.addColumn(shots, shots.lightOverridesJson);
       }
     },
   );
@@ -984,6 +990,7 @@ class AppDatabase extends _$AppDatabase {
                   ? lightSetupIdMap[shot.lightSetupId!]
                   : null,
             ),
+            lightOverridesJson: Value(shot.lightOverridesJson),
           ),
         );
 

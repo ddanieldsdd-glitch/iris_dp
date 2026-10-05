@@ -37,6 +37,9 @@ class PlanLight {
   static const measuredMetersKey = 'measuredMeters';
   static const modifiersKey = 'modifiers';
 
+  /// «manufacturer» si el dato medido viene del catálogo y no del set.
+  static const photometrySourceKey = 'photometrySource';
+
   /// Stops que quitan los modificadores y la regulación juntos.
   double get stopsLost {
     if (bare.candela <= 0 || source.candela <= 0) return 0;
@@ -124,6 +127,11 @@ class PlanLight {
             beamDeg: beam.spread,
             sizeM: d.sizeM,
             cct: beam.cct,
+            status:
+                el.props[photometrySourceKey] ==
+                    PhotometryStatus.manufacturer.name
+                ? PhotometryStatus.manufacturer
+                : PhotometryStatus.measured,
           )
         : LightSource.estimated(
             watts: watts,

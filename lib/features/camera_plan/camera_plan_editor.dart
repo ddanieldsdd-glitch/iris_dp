@@ -29,7 +29,11 @@ import 'floor_plan_scope.dart';
 import 'light_beam.dart';
 import 'plan_data.dart' show kLightSetupColors;
 import 'plan_gear_list.dart';
+import 'light/ambient.dart';
 import 'light/exposure.dart';
+import 'light_overrides.dart';
+import 'plan_ambient_sheet.dart';
+import 'plan_equipment.dart';
 import 'light/light_scene.dart';
 import 'light/meter.dart';
 import 'plan_light_controls.dart';
@@ -127,6 +131,16 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   ConsumerState<CameraPlanEditor> createState() => _CameraPlanEditorState();
 }
 
+extension on PlanElement {
+  /// Una cámara nueva nace con la cámara del proyecto, si hay una sola
+  /// clara: la primera de Equipo.
+  void applyProjectGear(ProjectGear gear) {
+    if (gear.cameras.isNotEmpty) {
+      PlanEquipment.applyCamera(this, gear.cameras.first);
+    }
+  }
+}
+
 class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Encuadre actual del lienzo, para los tests.
   @visibleForTesting
@@ -189,6 +203,22 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   double _metersPerUnit = defaultMetersPerUnit;
   final FocusNode _canvasFocus = FocusNode(debugLabel: 'planta');
 
+  /// Luces, cámaras y lentes del proyecto, de la pantalla Equipo.
+  ProjectGear _gear = const ProjectGear();
+
+  /// Sol, cielo y rebote de paredes del esquema de luz abierto.
+  PlanAmbient _ambient = const PlanAmbient();
+
+  /// Cámaras de los otros planos que comparten este esquema de luz, y a
+  /// qué plano lleva cada una.
+  List<PlanElement> _otherCameras = const [];
+  final Map<PlanElement, PlanTarget> _otherCameraShot = {};
+  bool _showOtherCameras = true;
+
+  /// Cómo es en el esquema cada luz que este plano tiene ajustada, por su
+  /// identificador.
+  final Map<String, PlanElement> _setupOriginals = {};
+
   /// Mapa de exposición en falso color, en lugar de los haces.
   bool _exposureMap = false;
 
@@ -233,7 +263,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// Lectura de fotómetro donde está un elemento.
   MeterReading _readingFor(PlanElement el) => MeterReading.at(
-    LightScene.from(_visibleElements, metersPerUnit: _metersPerUnit),
+    LightScene.from(
+      _visibleElements,
+      metersPerUnit: _metersPerUnit,
+      ambient: _lightSetup == null ? null : _ambient,
+    ),
     el.position,
     camera: _meterCamera,
     exposure: _exposure,
@@ -374,6 +408,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     }
 
     final navTargets = await _loadNavTargets(db);
+    final gear = await ProjectGear.load(db, widget.projectId);
 
     // Esquema de luz que se enseña: el del plano, el elegido a mano o, si
     // no, el primero del set o de la localización.
@@ -418,7 +453,25 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       FloorPlanJson.decode(linkedSite?.floorPlanJson),
     );
     addLayer(PlanLayer.set, FloorPlanJson.decode(linkedSet?.floorPlanJson));
-    addLayer(PlanLayer.light, FloorPlanJson.decode(lightSetup?.planJson));
+    // La luz del esquema. Si el plano tiene ajustes propios, se ve con
+    // ellos y se recuerda cómo es en el esquema.
+    final setupLights = FloorPlanJson.decode(lightSetup?.planJson);
+    final originals = <String, PlanElement>{};
+    final overrides = LightOverrides.decode(shot?.lightOverridesJson);
+    final shownLights = [
+      for (final el in setupLights)
+        if (overrides[LightOverrides.uidOf(el)] case final own?)
+          () {
+            final uid = LightOverrides.uidOf(el)!;
+            originals[uid] = el;
+            return own
+              ..props[LightOverrides.uidKey] = uid
+              ..shotOverride = true;
+          }()
+        else
+          el,
+    ];
+    addLayer(PlanLayer.light, shownLights);
     if (shot != null) {
       addLayer(
         PlanLayer.shot,
@@ -463,6 +516,39 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final allShots = await (db.select(
       db.shots,
     )..where((s) => s.projectId.equals(widget.projectId))).get();
+    // Las cámaras de los otros planos que comparten este esquema de luz.
+    final otherCameras = <PlanElement>[];
+    final otherCameraShot = <PlanElement, PlanTarget>{};
+    if (lightSetup != null) {
+      for (final other in allShots) {
+        if (other.lightSetupId != lightSetup.id || other.id == shot?.id) {
+          continue;
+        }
+        final sceneNumber = allScenes
+            .where((s) => s.id == other.sceneId)
+            .map((s) => s.number)
+            .firstOrNull;
+        final tag = sceneNumber == null
+            ? 'P${other.number}'
+            : '$sceneNumber·${other.number}';
+        for (final row in await db.getCameraPlanElementsForShot(other.id)) {
+          if (row.type != 'camera') continue;
+          final ghost = PlanElement.fromDb(row)
+            ..id = --_tempId
+            ..props['shotTag'] = tag
+            // Una cámara que no está en este plano no le hace sombra.
+            ..props[LightScene.noShadowKey] = true;
+          otherCameras.add(ghost);
+          otherCameraShot[ghost] = PlanTarget.shot(
+            other.id,
+            sceneNumber == null
+                ? 'Plano ${other.number}'
+                : 'Esc $sceneNumber · Plano ${other.number}',
+          );
+        }
+      }
+    }
+
     final setSceneIds = {
       for (final s in allScenes)
         if (linkedSet != null && s.locationId == linkedSet.id) s.id,
@@ -538,6 +624,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _setShotCount = setShotCount;
       _setupShotCount = setupShotCount;
       _setupColor = setupColor;
+      _gear = gear;
+      _ambient = FloorPlanRepository.ambientOf(lightSetup);
+      _setupOriginals
+        ..clear()
+        ..addAll(originals);
+      _otherCameras = otherCameras;
+      _otherCameraShot
+        ..clear()
+        ..addAll(otherCameraShot);
       _shot = shot;
       _scene = scene;
       _linkedSet = linkedSet;
@@ -827,11 +922,37 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           setId: _linkedSet!.id,
         );
       case PlanLayer.light:
+        // Cada elemento del esquema lleva un identificador estable, para
+        // que un plano pueda ajustarlo sin tocar el de los demás.
+        LightOverrides.ensureUids(list);
+        final own = <String, PlanElement>{};
+        final shared = <PlanElement>[];
+        for (final el in list) {
+          final uid = LightOverrides.uidOf(el)!;
+          final original = _setupOriginals[uid];
+          if (el.shotOverride && original != null && _shot != null) {
+            // Ajustado solo en este plano: el esquema conserva el suyo.
+            own[uid] = el;
+            shared.add(original);
+          } else {
+            shared.add(el);
+          }
+        }
         await _repo.saveElements(
           scope: FloorPlanScope.lightSetup,
-          elements: list,
+          elements: shared,
           lightSetupId: _lightSetup!.id,
         );
+        final shot = _shot;
+        if (shot != null) {
+          await _repo.saveLightOverrides(shot.id, own);
+          _shot =
+              await (ref
+                      .read(databaseProvider)
+                      .select(ref.read(databaseProvider).shots)
+                    ..where((s) => s.id.equals(shot.id)))
+                  .getSingleOrNull();
+        }
       case PlanLayer.shot:
         await _repo.saveElements(
           scope: FloorPlanScope.shot,
@@ -839,6 +960,69 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           shotId: _shot!.id,
         );
     }
+  }
+
+  /// Hace que una luz del esquema se ajuste solo en este plano, o la
+  /// devuelve a como está en el esquema.
+  Future<void> _setShotOverride(PlanElement el, bool own) async {
+    if (_shot == null || el.layer != PlanLayer.light) return;
+    LightOverrides.ensureUids([el]);
+    final uid = LightOverrides.uidOf(el)!;
+    if (own) {
+      _setupOriginals[uid] = LightOverrides.clone(el);
+      setState(() => el.shotOverride = true);
+    } else {
+      final original = _setupOriginals.remove(uid);
+      if (original != null) {
+        final index = _elements.indexOf(el);
+        original
+          ..layer = PlanLayer.light
+          ..id = --_tempId
+          ..shotOverride = false;
+        setState(() {
+          if (index >= 0) _elements[index] = original;
+          _selected = original;
+          _multi.clear();
+        });
+      } else {
+        setState(() => el.shotOverride = false);
+      }
+    }
+    await _saveLayer(PlanLayer.light);
+    _commitHistory();
+  }
+
+  /// Añade a la planta un aparato del catálogo de Equipo, con sus datos.
+  Future<void> _addCatalogLight(Light light) =>
+      _addElement(PlanEquipment.lightFromCatalog(light));
+
+  Future<void> _pickFromCatalog() async {
+    final all = await ref.read(databaseProvider).watchAllLights().first;
+    if (!mounted) return;
+    final light = await showDialog<Light>(
+      context: context,
+      builder: (_) => PlanLightCatalogDialog(lights: all),
+    );
+    if (light != null) await _addCatalogLight(light);
+  }
+
+  /// Sol, cielo y rebote de paredes: se guardan con el esquema de luz.
+  Future<void> _editAmbient() async {
+    final setup = await _ensureLightSetup();
+    if (!mounted) return;
+    final palette = context.palette;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: palette.surface,
+      isScrollControlled: true,
+      builder: (_) => PlanAmbientSheet(
+        initial: _ambient,
+        onChanged: (next) {
+          setState(() => _ambient = next);
+          _repo.saveAmbient(setup.id, next);
+        },
+      ),
+    );
   }
 
   /// A qué afecta cambiar un elemento de esta capa.
@@ -1402,7 +1586,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         cameraNumber: cameras + 1,
         stabilization: _shot?.movement ?? 'STEADY',
         lens: _shot?.lens ?? '50mm',
-      ),
+      )..applyProjectGear(_gear),
     );
   }
 
@@ -1891,9 +2075,36 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       }
     }
     if (_segmentHandleAt(canvasPos) != null) return;
-    _select(
-      _elementAt(canvasPos),
-      add: HardwareKeyboard.instance.isShiftPressed,
+    final hit = _elementAt(canvasPos);
+    if (hit == null && _showOtherCameras) {
+      // Tocar la cámara de otro plano abre ese plano.
+      for (final ghost in _otherCameras) {
+        if ((ghost.position - canvasPos).distance < 28) {
+          final target = _otherCameraShot[ghost];
+          if (target != null) {
+            _openTarget(target);
+            return;
+          }
+        }
+      }
+    }
+    _select(hit, add: HardwareKeyboard.instance.isShiftPressed);
+  }
+
+  /// Abre otra planta: dentro de la pantalla de trabajo, sin apilar.
+  void _openTarget(PlanTarget target) {
+    if (widget.onNavigate != null) {
+      widget.onNavigate!(target);
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => CameraPlanEditor.shot(
+          projectId: widget.projectId,
+          shotId: target.id,
+          shotLabel: target.label,
+        ),
+      ),
     );
   }
 
@@ -2049,6 +2260,34 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 'Cámara: ${_shot != null ? widget.label : 'ningún plano'}',
                 palette.accent,
                 onMenu: _showSceneNavigator,
+              ),
+            IconButton(
+              tooltip: 'Ambiente: sol, cielo y rebote de paredes',
+              visualDensity: VisualDensity.compact,
+              icon: Icon(
+                _ambient.day
+                    ? Icons.wb_sunny_outlined
+                    : Icons.nightlight_outlined,
+                size: 18,
+                color: palette.textSecondary,
+              ),
+              onPressed: _editAmbient,
+            ),
+            if (_otherCameras.isNotEmpty)
+              IconButton(
+                tooltip: _showOtherCameras
+                    ? 'Ocultar las cámaras de los otros planos'
+                    : 'Ver las cámaras de los otros planos',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  Icons.switch_video_outlined,
+                  size: 18,
+                  color: _showOtherCameras
+                      ? palette.accent
+                      : palette.textTertiary,
+                ),
+                onPressed: () =>
+                    setState(() => _showOtherCameras = !_showOtherCameras),
               ),
             if (_linkedSet != null && _linkedSite != null && _setZone != null)
               PopupMenuButton<String>(
@@ -2246,6 +2485,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     onAddLight: _addLight,
                     onAddProp: _addProp,
                     onAddMeter: _addMeter,
+                    projectLights: _gear.lights,
+                    onAddCatalogLight: _addCatalogLight,
+                    onOpenCatalog: _pickFromCatalog,
                     onAddArchitecture: _addArchitecture,
                     wallsToEnvironment:
                         _linkedSet != null && _linkedSite != null
@@ -2389,6 +2631,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                     painter: CameraPlanPainter(
                                                       elements:
                                                           _visibleElements,
+                                                      inheritedElements:
+                                                          _showOtherCameras
+                                                          ? _otherCameras
+                                                          : const [],
+                                                      ambient:
+                                                          _lightSetup == null
+                                                          ? null
+                                                          : _ambient,
                                                       zones: [
                                                         for (final zone
                                                             in _zones)
@@ -2515,6 +2765,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 metersPerUnit: _metersPerUnit,
                                 exposure: _exposure,
                                 targetStop: _targetStop,
+                                gear: _gear,
+                                canOverride:
+                                    _shot != null &&
+                                    _selected!.layer == PlanLayer.light,
+                                onOverride: (own) =>
+                                    _setShotOverride(_selected!, own),
                                 reading:
                                     _selected!.type == ElementType.actor ||
                                         _selected!.propType == PropType.meter
@@ -3303,6 +3559,13 @@ class _ElementPanel extends StatefulWidget {
   /// Lectura de fotómetro, si lo seleccionado es un fotómetro o un actor.
   final MeterReading? reading;
 
+  /// Equipo del proyecto, para elegir cámara y lente.
+  final ProjectGear gear;
+
+  /// Con un plano abierto, una luz del esquema se puede ajustar solo en él.
+  final bool canOverride;
+  final ValueChanged<bool>? onOverride;
+
   const _ElementPanel({
     required this.palette,
     required this.element,
@@ -3323,6 +3586,9 @@ class _ElementPanel extends StatefulWidget {
     this.exposure = const ExposureSettings(),
     this.targetStop = CameraExposure.defaultStop,
     this.reading,
+    this.gear = const ProjectGear(),
+    this.canOverride = false,
+    this.onOverride,
   });
 
   @override
@@ -3397,344 +3663,383 @@ class _ElementPanelState extends State<_ElementPanel> {
     final palette = widget.palette;
     final element = widget.element;
 
-    return Container(
-      width: 240,
+    // Un Material, no un fondo de color: los controles con tinta (listas,
+    // interruptores) pintan sobre él.
+    return Material(
       color: palette.surface,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Propiedades', style: AppTypography.label(palette)),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    element.displayLabel,
-                    style: AppTypography.titleMedium(palette),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    decoration: BoxDecoration(
-                      color: palette.accent.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      widget.scopeNotice,
-                      style: AppTypography.caption(palette),
-                    ),
-                  ),
-                  if (widget.moveTargets.isNotEmpty)
-                    PopupMenuButton<PlanLayer>(
-                      tooltip: 'Mover a otra capa',
-                      onSelected: widget.onMove,
-                      itemBuilder: (_) => [
-                        for (final layer in widget.moveTargets)
-                          PopupMenuItem(
-                            value: layer,
-                            child: Text('Mover a ${layer.label}'),
-                          ),
-                      ],
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          'Mover a otra capa…',
-                          style: AppTypography.caption(
-                            palette,
-                          ).copyWith(color: palette.accent),
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: AppSpacing.sm),
-                  if (LightBeam.of(element) case final beam?) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Encendida',
-                            style: AppTypography.caption(palette),
-                          ),
-                        ),
-                        Switch(
-                          value: !beam.off,
-                          onChanged: (on) {
-                            element.props[LightBeam.offKey] = !on;
-                            widget.onUpdate();
-                          },
-                        ),
-                      ],
-                    ),
-                    _beamSlider(
-                      'Intensidad',
-                      '${beam.intensity.round()} %',
-                      LightBeam.intensityKey,
-                      beam.intensity,
-                      0,
-                      100,
-                    ),
-                    _beamSlider(
-                      'Temperatura de color',
-                      '${beam.cct.round()} K',
-                      LightBeam.cctKey,
-                      beam.cct,
-                      2000,
-                      10000,
-                      step: 100,
-                    ),
-                    _beamSlider(
-                      'Apertura del haz',
-                      '${beam.spread.round()}°',
-                      LightBeam.spreadKey,
-                      beam.spread,
-                      5,
-                      360,
-                    ),
-                    PlanLightControls(
-                      element: element,
-                      exposure: widget.exposure,
-                      onUpdate: widget.onUpdate,
+      child: Container(
+        width: 240,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Propiedades', style: AppTypography.label(palette)),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      element.displayLabel,
+                      style: AppTypography.titleMedium(palette),
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                  ],
-                  if (widget.reading != null)
-                    PlanMeterPanel(
-                      reading: widget.reading!,
-                      exposure: widget.exposure,
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: palette.accent.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        widget.scopeNotice,
+                        style: AppTypography.caption(palette),
+                      ),
                     ),
-                  if (element.type == ElementType.camera)
-                    PlanCameraExposureControls(
-                      camera: element,
-                      fallback: widget.exposure,
-                      fallbackStop: widget.targetStop,
-                      onUpdate: widget.onUpdate,
-                    ),
-                  if (PlanPieceControls.appliesTo(element))
-                    PlanPieceControls(
-                      element: element,
-                      metersPerUnit: widget.metersPerUnit,
-                      onPreview: widget.onPreview,
-                      onUpdate: widget.onUpdate,
-                    ),
-                  if (widget.lengthLabel != null)
-                    Text(
-                      'Longitud: ${widget.lengthLabel}',
-                      style: AppTypography.bodyMedium(palette),
-                    )
-                  else ...[
-                    Text('Rotación', style: AppTypography.caption(palette)),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Slider(
-                            value: element.rotation,
-                            min: 0,
-                            max: 360,
-                            divisions: 360,
-                            label: '${element.rotation.round()}°',
-                            onChanged: (v) {
-                              element.rotation = v;
+                    if (widget.moveTargets.isNotEmpty)
+                      PopupMenuButton<PlanLayer>(
+                        tooltip: 'Mover a otra capa',
+                        onSelected: widget.onMove,
+                        itemBuilder: (_) => [
+                          for (final layer in widget.moveTargets)
+                            PopupMenuItem(
+                              value: layer,
+                              child: Text('Mover a ${layer.label}'),
+                            ),
+                        ],
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'Mover a otra capa…',
+                            style: AppTypography.caption(
+                              palette,
+                            ).copyWith(color: palette.accent),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (LightBeam.of(element) case final beam?) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Encendida',
+                              style: AppTypography.caption(palette),
+                            ),
+                          ),
+                          Switch(
+                            value: !beam.off,
+                            onChanged: (on) {
+                              element.props[LightBeam.offKey] = !on;
                               widget.onUpdate();
                             },
                           ),
-                        ),
-                        SizedBox(
-                          width: 40,
-                          child: Text(
-                            '${element.rotation.round()}°',
-                            style: AppTypography.caption(palette),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      'Arrastra el asa azul en el canvas para rotar',
-                      style: AppTypography.caption(
-                        palette,
-                      ).copyWith(color: palette.textTertiary, fontSize: 10),
-                    ),
-                  ],
-                  const SizedBox(height: AppSpacing.md),
-                  if (element.type == ElementType.camera) ...[
-                    Text('Lente', style: AppTypography.caption(palette)),
-                    TextField(
-                      controller: _lensCtrl,
-                      style: AppTypography.bodyLarge(palette),
-                      decoration: const InputDecoration(hintText: '50mm'),
-                      onSubmitted: _commitLens,
-                      onEditingComplete: () => _commitLens(_lensCtrl.text),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text('Trayectoria', style: AppTypography.caption(palette)),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${element.pathPoints.length} punto(s) · '
-                      '${element.pathPoints.length + 1} posiciones',
-                      style: AppTypography.caption(
-                        palette,
-                      ).copyWith(color: palette.textSecondary, fontSize: 10),
-                    ),
-                    if (widget.selectedPathIndex != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          'Punto ${widget.selectedPathIndex! + 2} seleccionado',
-                          style: AppTypography.caption(
-                            palette,
-                          ).copyWith(color: palette.accent, fontSize: 10),
-                        ),
+                        ],
                       ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: widget.onAddPathPoint,
-                            icon: const Icon(Icons.add, size: 16),
-                            label: const Text('Añadir'),
-                            style: OutlinedButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: widget.selectedPathIndex != null
-                                ? widget.onDeletePathPoint
-                                : null,
-                            icon: Icon(
-                              Icons.remove,
-                              size: 16,
-                              color: palette.error,
-                            ),
-                            label: Text(
-                              'Quitar',
-                              style: TextStyle(color: palette.error),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (element.pathPoints.isNotEmpty)
-                      TextButton(
-                        onPressed: widget.onClearPath,
-                        child: Text(
-                          'Limpiar trayectoria',
-                          style: AppTypography.caption(
-                            palette,
-                          ).copyWith(color: palette.textSecondary),
-                        ),
+                      _beamSlider(
+                        'Intensidad',
+                        '${beam.intensity.round()} %',
+                        LightBeam.intensityKey,
+                        beam.intensity,
+                        0,
+                        100,
                       ),
-                    Text(
-                      'Doble toque en el canvas para añadir un punto. '
-                      'Arrastra los círculos numerados para mover la ruta.',
-                      style: AppTypography.caption(
-                        palette,
-                      ).copyWith(color: palette.textTertiary, fontSize: 10),
-                    ),
-                  ],
-                  if (element.type == ElementType.camera ||
-                      element.type == ElementType.light ||
-                      element.type == ElementType.prop ||
-                      element.type == ElementType.wall ||
-                      element.type == ElementType.actor) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Compatibilidad 3D',
-                      style: AppTypography.caption(palette),
-                    ),
-                    const SizedBox(height: 6),
-                    PlanElementCompatPanel(
-                      element: element,
-                      onChanged: widget.onUpdate,
-                    ),
-                  ],
-                  if (element.type == ElementType.actor) ...[
-                    Text('Color', style: AppTypography.caption(palette)),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: kActorColors
-                          .map(
-                            (c) => GestureDetector(
-                              onTap: () {
-                                element.actorColor = c;
+                      _beamSlider(
+                        'Temperatura de color',
+                        '${beam.cct.round()} K',
+                        LightBeam.cctKey,
+                        beam.cct,
+                        2000,
+                        10000,
+                        step: 100,
+                      ),
+                      _beamSlider(
+                        'Apertura del haz',
+                        '${beam.spread.round()}°',
+                        LightBeam.spreadKey,
+                        beam.spread,
+                        5,
+                        360,
+                      ),
+                      PlanLightControls(
+                        element: element,
+                        exposure: widget.exposure,
+                        onUpdate: widget.onUpdate,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
+                    if (widget.canOverride)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              element.shotOverride
+                                  ? 'Ajustada solo en este plano'
+                                  : 'Ajustar solo en este plano',
+                              style: AppTypography.caption(palette),
+                            ),
+                          ),
+                          Switch(
+                            value: element.shotOverride,
+                            onChanged: widget.onOverride,
+                          ),
+                        ],
+                      ),
+                    if (element.type == ElementType.camera)
+                      PlanProjectCameraPicker(
+                        gear: widget.gear,
+                        cameraId: element.externalMapping.catalogCameraId,
+                        lensId: element.externalMapping.catalogLensId,
+                        onCamera: (camera) {
+                          PlanEquipment.applyCamera(element, camera);
+                          widget.onUpdate();
+                        },
+                        onLens: (lens) {
+                          PlanEquipment.applyLens(element, lens);
+                          _lensCtrl.text = element.lens ?? '';
+                          widget.onUpdate();
+                        },
+                      ),
+                    if (widget.reading != null)
+                      PlanMeterPanel(
+                        reading: widget.reading!,
+                        exposure: widget.exposure,
+                      ),
+                    if (element.type == ElementType.camera)
+                      PlanCameraExposureControls(
+                        camera: element,
+                        fallback: widget.exposure,
+                        fallbackStop: widget.targetStop,
+                        onUpdate: widget.onUpdate,
+                      ),
+                    if (PlanPieceControls.appliesTo(element))
+                      PlanPieceControls(
+                        element: element,
+                        metersPerUnit: widget.metersPerUnit,
+                        onPreview: widget.onPreview,
+                        onUpdate: widget.onUpdate,
+                      ),
+                    if (widget.lengthLabel != null)
+                      Text(
+                        'Longitud: ${widget.lengthLabel}',
+                        style: AppTypography.bodyMedium(palette),
+                      )
+                    else ...[
+                      Text('Rotación', style: AppTypography.caption(palette)),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Slider(
+                              value: element.rotation,
+                              min: 0,
+                              max: 360,
+                              divisions: 360,
+                              label: '${element.rotation.round()}°',
+                              onChanged: (v) {
+                                element.rotation = v;
                                 widget.onUpdate();
                               },
-                              child: Container(
-                                width: 24,
-                                height: 24,
-                                decoration: BoxDecoration(
-                                  color: c,
-                                  shape: BoxShape.circle,
-                                  border: element.actorColor == c
-                                      ? Border.all(
-                                          color: palette.textPrimary,
-                                          width: 2,
-                                        )
-                                      : null,
-                                ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 40,
+                            child: Text(
+                              '${element.rotation.round()}°',
+                              style: AppTypography.caption(palette),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        'Arrastra el asa azul en el canvas para rotar',
+                        style: AppTypography.caption(
+                          palette,
+                        ).copyWith(color: palette.textTertiary, fontSize: 10),
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.md),
+                    if (element.type == ElementType.camera) ...[
+                      Text('Lente', style: AppTypography.caption(palette)),
+                      TextField(
+                        controller: _lensCtrl,
+                        style: AppTypography.bodyLarge(palette),
+                        decoration: const InputDecoration(hintText: '50mm'),
+                        onSubmitted: _commitLens,
+                        onEditingComplete: () => _commitLens(_lensCtrl.text),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'Trayectoria',
+                        style: AppTypography.caption(palette),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${element.pathPoints.length} punto(s) · '
+                        '${element.pathPoints.length + 1} posiciones',
+                        style: AppTypography.caption(
+                          palette,
+                        ).copyWith(color: palette.textSecondary, fontSize: 10),
+                      ),
+                      if (widget.selectedPathIndex != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Punto ${widget.selectedPathIndex! + 2} seleccionado',
+                            style: AppTypography.caption(
+                              palette,
+                            ).copyWith(color: palette.accent, fontSize: 10),
+                          ),
+                        ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: widget.onAddPathPoint,
+                              icon: const Icon(Icons.add, size: 16),
+                              label: const Text('Añadir'),
+                              style: OutlinedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
                               ),
                             ),
-                          )
-                          .toList(),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: widget.selectedPathIndex != null
+                                  ? widget.onDeletePathPoint
+                                  : null,
+                              icon: Icon(
+                                Icons.remove,
+                                size: 16,
+                                color: palette.error,
+                              ),
+                              label: Text(
+                                'Quitar',
+                                style: TextStyle(color: palette.error),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (element.pathPoints.isNotEmpty)
+                        TextButton(
+                          onPressed: widget.onClearPath,
+                          child: Text(
+                            'Limpiar trayectoria',
+                            style: AppTypography.caption(
+                              palette,
+                            ).copyWith(color: palette.textSecondary),
+                          ),
+                        ),
+                      Text(
+                        'Doble toque en el canvas para añadir un punto. '
+                        'Arrastra los círculos numerados para mover la ruta.',
+                        style: AppTypography.caption(
+                          palette,
+                        ).copyWith(color: palette.textTertiary, fontSize: 10),
+                      ),
+                    ],
+                    if (element.type == ElementType.camera ||
+                        element.type == ElementType.light ||
+                        element.type == ElementType.prop ||
+                        element.type == ElementType.wall ||
+                        element.type == ElementType.actor) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'Compatibilidad 3D',
+                        style: AppTypography.caption(palette),
+                      ),
+                      const SizedBox(height: 6),
+                      PlanElementCompatPanel(
+                        element: element,
+                        onChanged: widget.onUpdate,
+                      ),
+                    ],
+                    if (element.type == ElementType.actor) ...[
+                      Text('Color', style: AppTypography.caption(palette)),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: kActorColors
+                            .map(
+                              (c) => GestureDetector(
+                                onTap: () {
+                                  element.actorColor = c;
+                                  widget.onUpdate();
+                                },
+                                child: Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: c,
+                                    shape: BoxShape.circle,
+                                    border: element.actorColor == c
+                                        ? Border.all(
+                                            color: palette.textPrimary,
+                                            width: 2,
+                                          )
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            if (widget.selectionCount > 1)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '${widget.selectionCount} elementos seleccionados: duplicar '
+                  'y eliminar se aplican a todos.',
+                  style: AppTypography.caption(palette),
+                ),
+              ),
+            GestureDetector(
+              onTap: widget.onDuplicate,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  children: [
+                    Icon(Icons.copy_outlined, color: palette.accent, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Duplicar',
+                      style: AppTypography.bodyMedium(
+                        palette,
+                      ).copyWith(color: palette.accent),
                     ),
                   ],
-                ],
+                ),
               ),
             ),
-          ),
-          if (widget.selectionCount > 1)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                '${widget.selectionCount} elementos seleccionados: duplicar '
-                'y eliminar se aplican a todos.',
-                style: AppTypography.caption(palette),
-              ),
-            ),
-          GestureDetector(
-            onTap: widget.onDuplicate,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 10),
+            GestureDetector(
+              onTap: widget.onDelete,
               child: Row(
                 children: [
-                  Icon(Icons.copy_outlined, color: palette.accent, size: 16),
+                  Icon(Icons.delete_outline, color: palette.error, size: 16),
                   const SizedBox(width: 8),
                   Text(
-                    'Duplicar',
+                    'Eliminar',
                     style: AppTypography.bodyMedium(
                       palette,
-                    ).copyWith(color: palette.accent),
+                    ).copyWith(color: palette.error),
                   ),
                 ],
               ),
             ),
-          ),
-          GestureDetector(
-            onTap: widget.onDelete,
-            child: Row(
-              children: [
-                Icon(Icons.delete_outline, color: palette.error, size: 16),
-                const SizedBox(width: 8),
-                Text(
-                  'Eliminar',
-                  style: AppTypography.bodyMedium(
-                    palette,
-                  ).copyWith(color: palette.error),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

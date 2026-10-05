@@ -3,7 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
+import 'package:iris_dp/features/camera_plan/floor_plan_json.dart';
+import 'package:iris_dp/features/camera_plan/light/ambient.dart';
 import 'package:iris_dp/features/camera_plan/light/exposure.dart';
+import 'package:iris_dp/features/camera_plan/light_overrides.dart';
 import 'package:iris_dp/features/camera_plan/light/light_scene.dart';
 import 'package:iris_dp/features/camera_plan/light/meter.dart';
 import 'package:iris_dp/features/camera_plan/light/modifiers.dart';
@@ -771,6 +774,158 @@ void main() {
       expect(on.g, greaterThan(on.r));
       expect(on.g, greaterThan(on.b));
       expect(over.r, greaterThan(over.b));
+    });
+  });
+
+  group('ambiente: sol y cielo', () {
+    var id = 0;
+    PlanElement wall(double x1, double y1, double x2, double y2) =>
+        PlanSegment.create(start: Offset(x1, y1), end: Offset(x2, y2))
+          ..id = --id;
+    PlanElement window(double x, double y) => PlanElement(
+      id: --id,
+      type: ElementType.wall,
+      position: Offset(x, y),
+      rotation: 90,
+      label: ArchitectureType.window.dbValue,
+    );
+    // Sol desde la izquierda (270°), bajo. Pared vertical en x = 400.
+    const sunFromLeft = PlanAmbient(
+      day: true,
+      sunAzimuth: 270,
+      sunElevation: 30,
+      skyOn: false,
+    );
+    LightScene scene(List<PlanElement> elements, PlanAmbient ambient) =>
+        LightScene.from(elements, metersPerUnit: 0.02, ambient: ambient);
+
+    test('al sol, sin nada en medio, llega el sol directo', () {
+      final s = scene([], sunFromLeft);
+      expect(s.luxAt(const Offset(500, 300)), 60000);
+      expect(
+        s.contributionsAt(const Offset(500, 300)).single.light.label,
+        'Sol',
+      );
+      expect(sunFromLeft.towardSun.dx, closeTo(-1, 1e-9));
+    });
+
+    test('una pared da sombra hasta donde alcanza según la altura del sol', () {
+      final s = scene([wall(400, 0, 400, 600)], sunFromLeft);
+      // Con el sol a 30°, una pared de 2,5 m da 4,33 m de sombra: 216
+      // unidades.
+      expect(sunFromLeft.shadowLength(2.5), closeTo(4.33, 0.01));
+      expect(s.luxAt(const Offset(500, 300)), 0);
+      expect(s.luxAt(const Offset(700, 300)), 60000);
+      // Con el sol más alto, la sombra se acorta.
+      final high = scene([
+        wall(400, 0, 400, 600),
+      ], sunFromLeft.copyWith(sunElevation: 70));
+      expect(high.luxAt(const Offset(500, 300)), 60000);
+    });
+
+    test('el sol entra por una ventana', () {
+      final s = scene([wall(400, 0, 400, 600), window(400, 300)], sunFromLeft);
+      expect(s.luxAt(const Offset(500, 300)), closeTo(54000, 1));
+      expect(s.luxAt(const Offset(500, 500)), 0);
+    });
+
+    test('nublado no hay sol directo, solo cielo', () {
+      const overcast = PlanAmbient(day: true, condition: SkyCondition.overcast);
+      final s = scene([], overcast);
+      final parts = s.contributionsAt(const Offset(500, 300));
+      expect(parts.single.light.label, 'Cielo');
+      expect(parts.single.lux, 8000);
+    });
+
+    test('dentro de una sala cerrada no llega cielo; por la ventana, algo', () {
+      const sky = PlanAmbient(day: true, sunOn: false);
+      final room = [
+        wall(300, 200, 500, 200),
+        wall(500, 200, 500, 400),
+        wall(500, 400, 300, 400),
+        wall(300, 400, 300, 200),
+      ];
+      const inside = Offset(400, 300);
+      expect(scene(room, sky).luxAt(inside), 0);
+      final opened = scene([...room, window(300, 300)], sky).luxAt(inside);
+      expect(opened, greaterThan(0));
+      expect(opened, lessThan(12000));
+      // Fuera, el cielo entero.
+      expect(scene(room, sky).luxAt(const Offset(900, 300)), 12000);
+    });
+
+    test('de noche solo queda la luna', () {
+      final s = scene([], const PlanAmbient());
+      final part = s.contributionsAt(const Offset(500, 300)).single;
+      expect(part.light.label, 'Luna');
+      expect(part.lux, PlanAmbient.moonLux);
+    });
+
+    test('el ambiente se guarda y se lee', () {
+      const a = PlanAmbient(
+        day: true,
+        sunAzimuth: 200,
+        sunElevation: 50,
+        condition: SkyCondition.hazy,
+        wallBounce: false,
+      );
+      expect(PlanAmbient.fromJson(a.toJson()), a);
+      expect(PlanAmbient.fromJson(null), const PlanAmbient());
+      final doc = FloorPlanJson.decodeDocument(
+        FloorPlanJson.encodeDocument(FloorPlanDocument(ambient: a.toJson())),
+      );
+      expect(PlanAmbient.fromJson(doc.ambient), a);
+    });
+  });
+
+  group('ajustes de luz por plano', () {
+    PlanElement lamp(String uid, [Map<String, dynamic>? props]) => PlanElement(
+      id: 0,
+      type: ElementType.light,
+      position: const Offset(100, 100),
+      lightType: LightType.hmi,
+      props: {'uid': uid, ...?props},
+    );
+
+    test('el plano ve su ajuste y el resto del esquema tal cual', () {
+      final setup = [lamp('key'), lamp('fill')];
+      final json = LightOverrides.encode({
+        'key': lamp('key', {'off': true})..position = const Offset(250, 90),
+      });
+      final seen = LightOverrides.apply(setup, json);
+      expect(seen[0].shotOverride, isTrue);
+      expect(seen[0].props['off'], isTrue);
+      expect(seen[0].position, const Offset(250, 90));
+      expect(seen[1].shotOverride, isFalse);
+      expect(seen[1].props['off'], isNull);
+      // Sin ajustes, lo mismo que el esquema.
+      expect(LightOverrides.apply(setup, null), same(setup));
+      expect(LightOverrides.encode({}), isNull);
+    });
+
+    test('un ajuste de una luz que ya no está en el esquema se ignora', () {
+      final json = LightOverrides.encode({'gone': lamp('gone')});
+      final seen = LightOverrides.apply([lamp('key')], json);
+      expect(seen.single.shotOverride, isFalse);
+    });
+
+    test('cada elemento recibe un identificador estable', () {
+      final a = PlanElement(
+        id: 0,
+        type: ElementType.light,
+        position: Offset.zero,
+      );
+      final b = PlanElement(
+        id: 0,
+        type: ElementType.light,
+        position: Offset.zero,
+      );
+      LightOverrides.ensureUids([a, b]);
+      final first = LightOverrides.uidOf(a);
+      expect(first, isNotNull);
+      expect(LightOverrides.uidOf(b), isNot(first));
+      LightOverrides.ensureUids([a]);
+      expect(LightOverrides.uidOf(a), first);
     });
   });
 }

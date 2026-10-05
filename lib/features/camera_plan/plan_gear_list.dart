@@ -30,8 +30,12 @@ class GearList {
   /// Difusiones, redes y gelatinas puestas en los aparatos.
   final List<GearLine> filters;
 
+  /// Potencia de las luces encendidas, en vatios.
+  final double watts;
+
   const GearList({
     this.filters = const [],
+    this.watts = 0,
     this.lights = const [],
     this.grip = const [],
     this.cameras = const [],
@@ -46,6 +50,7 @@ class GearList {
     final grip = <String, int>{};
     final cameras = <String, int>{};
     final filters = <String, int>{};
+    var watts = 0.0;
     void add(Map<String, int> map, String key) =>
         map.update(key, (n) => n + 1, ifAbsent: () => 1);
 
@@ -55,6 +60,10 @@ class GearList {
           final name =
               (el.props['name'] as String?) ?? el.lightType?.label ?? 'Luz';
           add(LightBeam.emits(el.lightType) ? lights : grip, name);
+          final light = PlanLight.of(el);
+          if (light != null && LightBeam.of(el)?.off != true) {
+            watts += light.watts;
+          }
           for (final m in PlanLight.of(el)?.modifiers ?? const []) {
             add(
               filters,
@@ -83,8 +92,26 @@ class GearList {
       grip: lines(grip),
       cameras: lines(cameras),
       filters: lines(filters),
+      watts: watts,
     );
   }
+
+  /// Tensión y calibre de un circuito doméstico en España y casi toda
+  /// Europa.
+  static const double mainsVolts = 230;
+  static const double circuitAmps = 16;
+
+  double get amps => watts / mainsVolts;
+
+  /// Circuitos de 16 A que hacen falta, dejando un 20 % de margen en cada
+  /// uno.
+  int get circuits => watts <= 0 ? 0 : (amps / (circuitAmps * 0.8)).ceil();
+
+  List<String> powerLines() => [
+    '${watts.round()} W encendidos · ${amps.toStringAsFixed(1)} A a 230 V',
+    '$circuits circuito${circuits == 1 ? '' : 's'} de 16 A '
+        '(máx. ${(mainsVolts * circuitAmps * 0.8).round()} W cada uno)',
+  ];
 
   /// Texto para pegar en un correo o en la orden de material.
   String toText({String? title}) {
@@ -102,6 +129,12 @@ class GearList {
     section('GRIP', grip);
     section('DIFUSIÓN Y GELATINAS', filters);
     section('CÁMARA', cameras);
+    if (watts > 0) {
+      buffer.writeln('CORRIENTE');
+      for (final line in powerLines()) {
+        buffer.writeln('  $line');
+      }
+    }
     return buffer.toString().trimRight();
   }
 }
@@ -169,6 +202,26 @@ class PlanGearListPanel extends StatelessWidget {
                       section('GRIP', gear.grip),
                       section('DIFUSIÓN Y GELATINAS', gear.filters),
                       section('CÁMARA', gear.cameras),
+                      if (gear.watts > 0)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'CORRIENTE',
+                              style: AppTypography.caption(palette).copyWith(
+                                color: palette.accent,
+                                letterSpacing: 1.4,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            for (final line in gear.powerLines())
+                              Text(
+                                line,
+                                style: AppTypography.bodyMedium(palette),
+                              ),
+                          ],
+                        ),
                     ],
                   ),
           ),

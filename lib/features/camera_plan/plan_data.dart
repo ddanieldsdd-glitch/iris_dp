@@ -8,6 +8,7 @@ import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
 import 'camera_plan_grouping.dart';
 import 'floor_plan_json.dart';
+import 'light_overrides.dart';
 
 /// Colores de los esquemas de luz, por orden dentro de su set.
 const kLightSetupColors = [
@@ -179,11 +180,49 @@ class PlanProjectData {
         .toList(),
   );
 
-  /// Lo propio de un plano: cámaras y actores.
-  List<PlanElement> ownOfShot(Shot shot) => [
-    for (final row in elementRows)
-      if (row.shotId == shot.id) PlanElement.fromDb(row),
-  ];
+  /// Lo propio de un plano: cámaras y actores. Con [tagged], cada cámara
+  /// lleva el rótulo de su plano («1·3»), para verlas juntas en una planta.
+  List<PlanElement> ownOfShot(Shot shot, {bool tagged = false}) {
+    final sceneNumber = scene(shot.sceneId)?.number;
+    return [
+      for (final row in elementRows)
+        if (row.shotId == shot.id)
+          PlanElement.fromDb(row)
+            ..props.addAll({
+              if (tagged && row.type == 'camera')
+                'shotTag': sceneNumber == null
+                    ? 'P${shot.number}'
+                    : '$sceneNumber·${shot.number}',
+            }),
+    ];
+  }
+
+  /// La luz de un plano: la de su esquema, con sus ajustes propios.
+  List<PlanElement> lightOfShot(Shot shot) {
+    final own = setup(shot.lightSetupId);
+    if (own == null) return const [];
+    return LightOverrides.apply(ownOfSetup(own), shot.lightOverridesJson);
+  }
+
+  /// ¿Tiene el plano ajustes de luz propios sobre su esquema?
+  bool hasLightOverrides(Shot shot) =>
+      LightOverrides.decode(shot.lightOverridesJson).isNotEmpty;
+
+  /// Los tiros de una escena: sus planos agrupados por el esquema de luz
+  /// que comparten, en el orden en que aparece cada esquema. Los planos sin
+  /// luz van al final, con esquema `null`.
+  List<({LightSetup? setup, List<Shot> shots})> tirosOf(Scene scene) {
+    final groups = <int?, List<Shot>>{};
+    for (final shot in shotsOfScene(scene.id)) {
+      final id = setup(shot.lightSetupId)?.id;
+      groups.putIfAbsent(id, () => []).add(shot);
+    }
+    return [
+      for (final entry in groups.entries)
+        if (entry.key != null) (setup: setup(entry.key), shots: entry.value),
+      if (groups[null] case final loose?) (setup: null, shots: loose),
+    ];
+  }
 
   /// Lo que se ve debajo de un plano, sin la luz: entorno y set.
   List<PlanElement> baseOfShot(Shot shot) {

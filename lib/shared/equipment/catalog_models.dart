@@ -298,6 +298,10 @@ class CatalogLightEntry {
   final int colorTempMin;
   final int colorTempMax;
   final double? beamAngleDeg;
+
+  /// Fotometría del fabricante: lux en el eje a [photometryDistanceM].
+  final double? photometryLux;
+  final double? photometryDistanceM;
   final int? cri;
   final int? tlci;
   final String? dimmingType;
@@ -318,6 +322,8 @@ class CatalogLightEntry {
     required this.colorTempMin,
     required this.colorTempMax,
     this.beamAngleDeg,
+    this.photometryLux,
+    this.photometryDistanceM,
     this.cri,
     this.tlci,
     this.dimmingType,
@@ -340,6 +346,9 @@ class CatalogLightEntry {
         colorTempMin: json['colorTempMin'] as int,
         colorTempMax: json['colorTempMax'] as int,
         beamAngleDeg: (json['beamAngleDeg'] as num?)?.toDouble(),
+        photometryLux: (json['photometryLux'] as num?)?.toDouble(),
+        photometryDistanceM:
+            (json['photometryDistanceM'] as num?)?.toDouble(),
         cri: json['cri'] as int?,
         tlci: json['tlci'] as int?,
         dimmingType: json['dimmingType'] as String?,
@@ -364,6 +373,9 @@ class CatalogLightEntry {
         'colorTempMin': colorTempMin,
         'colorTempMax': colorTempMax,
         if (beamAngleDeg != null) 'beamAngleDeg': beamAngleDeg,
+        if (photometryLux != null) 'photometryLux': photometryLux,
+        if (photometryDistanceM != null)
+          'photometryDistanceM': photometryDistanceM,
         if (cri != null) 'cri': cri,
         if (tlci != null) 'tlci': tlci,
         if (dimmingType != null) 'dimmingType': dimmingType,

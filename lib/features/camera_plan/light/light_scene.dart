@@ -5,6 +5,7 @@ import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../plan_opening.dart';
 import '../plan_segment.dart';
+import 'ambient.dart';
 import 'modifiers.dart';
 import 'photometry.dart';
 import 'plan_light.dart';
@@ -99,10 +100,15 @@ class LightScene {
   /// Metros por unidad del lienzo.
   final double metersPerUnit;
 
+  /// Sol, cielo y rebote de paredes. `null` = sala a oscuras, sin ventanas
+  /// al exterior: solo la luz que ponemos.
+  final PlanAmbient? ambient;
+
   const LightScene({
     required this.lights,
     required this.blockers,
     required this.metersPerUnit,
+    this.ambient,
   });
 
   /// Largo de partida de una pieza de grip o de una pared suelta, en
@@ -134,8 +140,10 @@ class LightScene {
     Iterable<PlanElement> elements, {
     required double metersPerUnit,
     bool wallBounce = true,
+    PlanAmbient? ambient,
   }) {
     final all = elements.toList();
+    final bounce = wallBounce && (ambient?.wallBounce ?? true);
     final blockers = blockersOf(all, metersPerUnit: metersPerUnit);
     final fixtures = <SceneLight>[
       for (final el in all)
@@ -156,10 +164,11 @@ class LightScene {
     return LightScene(
       lights: [
         ...fixtures,
-        ...direct._secondarySources(all, wallBounce: wallBounce),
+        ...direct._secondarySources(all, wallBounce: bounce),
       ],
       blockers: blockers,
       metersPerUnit: metersPerUnit,
+      ambient: ambient,
     );
   }
 
@@ -725,7 +734,70 @@ class LightScene {
         );
       }
     }
+    result.addAll(_ambientAt(point));
     result.sort((a, b) => b.lux.compareTo(a.lux));
+    return result;
+  }
+
+  /// Lo que aportan el sol y el cielo a un punto.
+  ///
+  /// El sol llega en línea recta desde su dirección: una pared lo tapa
+  /// hasta donde alcanza su sombra (más larga cuanto más bajo está), y una
+  /// ventana lo deja entrar. El cielo llega de todas partes: cuenta la
+  /// parte de horizonte que el punto tiene despejada.
+  List<LightContribution> _ambientAt(Offset point) {
+    final env = ambient;
+    if (env == null) return const [];
+    final result = <LightContribution>[];
+    SceneLight marker(String label, Offset toward, double cct) => SceneLight(
+      source: LightSource(
+        candela: 0,
+        beamDeg: 360,
+        cct: cct,
+        status: PhotometryStatus.estimated,
+      ),
+      position: point + toward * 1e6,
+      aim: toward * -1,
+      label: label,
+    );
+
+    if (env.hasSun) {
+      final toward = env.towardSun;
+      final shadow = env.shadowLength(wallHeightM) / metersPerUnit;
+      final passed = _throughput(point + toward * shadow, point);
+      final lux = env.condition.sunLux * passed.transmission;
+      if (lux > 0.01) {
+        result.add(
+          LightContribution(
+            marker('Sol', toward, env.condition.sunCct),
+            lux,
+            _shift(env.condition.sunCct, passed.miredShift),
+          ),
+        );
+      }
+    }
+
+    if (env.hasSky) {
+      // Hasta dónde hay que tener despejado para ver cielo sobre una pared.
+      final reach = 4 / metersPerUnit;
+      const rays = 16;
+      var open = 0.0;
+      for (var i = 0; i < rays; i++) {
+        final angle = i * 2 * math.pi / rays;
+        final dir = Offset(math.cos(angle), math.sin(angle));
+        open += _throughput(point + dir * reach, point).transmission;
+      }
+      final lux = env.skyLux * open / rays;
+      if (lux > 0.01) {
+        result.add(
+          LightContribution(
+            marker(env.day ? 'Cielo' : 'Luna', const Offset(0, -1), env.skyCct),
+            lux,
+            env.skyCct,
+          ),
+        );
+      }
+    }
     return result;
   }
 

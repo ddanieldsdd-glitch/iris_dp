@@ -4982,6 +4982,17 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _lightOverridesJsonMeta =
+      const VerificationMeta('lightOverridesJson');
+  @override
+  late final GeneratedColumn<String> lightOverridesJson =
+      GeneratedColumn<String>(
+        'light_overrides_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _lightSetupIdMeta = const VerificationMeta(
     'lightSetupId',
   );
@@ -5020,6 +5031,7 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
     scriptAnchorIndex,
     autoNumbering,
     sortOrder,
+    lightOverridesJson,
     lightSetupId,
   ];
   @override
@@ -5196,6 +5208,15 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
       );
     }
+    if (data.containsKey('light_overrides_json')) {
+      context.handle(
+        _lightOverridesJsonMeta,
+        lightOverridesJson.isAcceptableOrUnknown(
+          data['light_overrides_json']!,
+          _lightOverridesJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('light_setup_id')) {
       context.handle(
         _lightSetupIdMeta,
@@ -5302,6 +5323,10 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
       )!,
+      lightOverridesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}light_overrides_json'],
+      ),
       lightSetupId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}light_setup_id'],
@@ -5338,6 +5363,7 @@ class Shot extends DataClass implements Insertable<Shot> {
   final int? scriptAnchorIndex;
   final bool autoNumbering;
   final int sortOrder;
+  final String? lightOverridesJson;
   final int? lightSetupId;
   const Shot({
     required this.id,
@@ -5362,6 +5388,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     this.scriptAnchorIndex,
     required this.autoNumbering,
     required this.sortOrder,
+    this.lightOverridesJson,
     this.lightSetupId,
   });
   @override
@@ -5421,6 +5448,9 @@ class Shot extends DataClass implements Insertable<Shot> {
     }
     map['auto_numbering'] = Variable<bool>(autoNumbering);
     map['sort_order'] = Variable<int>(sortOrder);
+    if (!nullToAbsent || lightOverridesJson != null) {
+      map['light_overrides_json'] = Variable<String>(lightOverridesJson);
+    }
     if (!nullToAbsent || lightSetupId != null) {
       map['light_setup_id'] = Variable<int>(lightSetupId);
     }
@@ -5479,6 +5509,9 @@ class Shot extends DataClass implements Insertable<Shot> {
           : Value(scriptAnchorIndex),
       autoNumbering: Value(autoNumbering),
       sortOrder: Value(sortOrder),
+      lightOverridesJson: lightOverridesJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lightOverridesJson),
       lightSetupId: lightSetupId == null && nullToAbsent
           ? const Value.absent()
           : Value(lightSetupId),
@@ -5517,6 +5550,9 @@ class Shot extends DataClass implements Insertable<Shot> {
       scriptAnchorIndex: serializer.fromJson<int?>(json['scriptAnchorIndex']),
       autoNumbering: serializer.fromJson<bool>(json['autoNumbering']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      lightOverridesJson: serializer.fromJson<String?>(
+        json['lightOverridesJson'],
+      ),
       lightSetupId: serializer.fromJson<int?>(json['lightSetupId']),
     );
   }
@@ -5546,6 +5582,7 @@ class Shot extends DataClass implements Insertable<Shot> {
       'scriptAnchorIndex': serializer.toJson<int?>(scriptAnchorIndex),
       'autoNumbering': serializer.toJson<bool>(autoNumbering),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'lightOverridesJson': serializer.toJson<String?>(lightOverridesJson),
       'lightSetupId': serializer.toJson<int?>(lightSetupId),
     };
   }
@@ -5573,6 +5610,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     Value<int?> scriptAnchorIndex = const Value.absent(),
     bool? autoNumbering,
     int? sortOrder,
+    Value<String?> lightOverridesJson = const Value.absent(),
     Value<int?> lightSetupId = const Value.absent(),
   }) => Shot(
     id: id ?? this.id,
@@ -5609,6 +5647,9 @@ class Shot extends DataClass implements Insertable<Shot> {
         : this.scriptAnchorIndex,
     autoNumbering: autoNumbering ?? this.autoNumbering,
     sortOrder: sortOrder ?? this.sortOrder,
+    lightOverridesJson: lightOverridesJson.present
+        ? lightOverridesJson.value
+        : this.lightOverridesJson,
     lightSetupId: lightSetupId.present ? lightSetupId.value : this.lightSetupId,
   );
   Shot copyWithCompanion(ShotsCompanion data) {
@@ -5653,6 +5694,9 @@ class Shot extends DataClass implements Insertable<Shot> {
           ? data.autoNumbering.value
           : this.autoNumbering,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      lightOverridesJson: data.lightOverridesJson.present
+          ? data.lightOverridesJson.value
+          : this.lightOverridesJson,
       lightSetupId: data.lightSetupId.present
           ? data.lightSetupId.value
           : this.lightSetupId,
@@ -5684,6 +5728,7 @@ class Shot extends DataClass implements Insertable<Shot> {
           ..write('scriptAnchorIndex: $scriptAnchorIndex, ')
           ..write('autoNumbering: $autoNumbering, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('lightOverridesJson: $lightOverridesJson, ')
           ..write('lightSetupId: $lightSetupId')
           ..write(')'))
         .toString();
@@ -5713,6 +5758,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     scriptAnchorIndex,
     autoNumbering,
     sortOrder,
+    lightOverridesJson,
     lightSetupId,
   ]);
   @override
@@ -5741,6 +5787,7 @@ class Shot extends DataClass implements Insertable<Shot> {
           other.scriptAnchorIndex == this.scriptAnchorIndex &&
           other.autoNumbering == this.autoNumbering &&
           other.sortOrder == this.sortOrder &&
+          other.lightOverridesJson == this.lightOverridesJson &&
           other.lightSetupId == this.lightSetupId);
 }
 
@@ -5767,6 +5814,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
   final Value<int?> scriptAnchorIndex;
   final Value<bool> autoNumbering;
   final Value<int> sortOrder;
+  final Value<String?> lightOverridesJson;
   final Value<int?> lightSetupId;
   const ShotsCompanion({
     this.id = const Value.absent(),
@@ -5791,6 +5839,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     this.scriptAnchorIndex = const Value.absent(),
     this.autoNumbering = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.lightOverridesJson = const Value.absent(),
     this.lightSetupId = const Value.absent(),
   });
   ShotsCompanion.insert({
@@ -5816,6 +5865,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     this.scriptAnchorIndex = const Value.absent(),
     this.autoNumbering = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.lightOverridesJson = const Value.absent(),
     this.lightSetupId = const Value.absent(),
   }) : sceneId = Value(sceneId),
        projectId = Value(projectId),
@@ -5843,6 +5893,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     Expression<int>? scriptAnchorIndex,
     Expression<bool>? autoNumbering,
     Expression<int>? sortOrder,
+    Expression<String>? lightOverridesJson,
     Expression<int>? lightSetupId,
   }) {
     return RawValuesInsertable({
@@ -5870,6 +5921,8 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
       if (scriptAnchorIndex != null) 'script_anchor_index': scriptAnchorIndex,
       if (autoNumbering != null) 'auto_numbering': autoNumbering,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (lightOverridesJson != null)
+        'light_overrides_json': lightOverridesJson,
       if (lightSetupId != null) 'light_setup_id': lightSetupId,
     });
   }
@@ -5897,6 +5950,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     Value<int?>? scriptAnchorIndex,
     Value<bool>? autoNumbering,
     Value<int>? sortOrder,
+    Value<String?>? lightOverridesJson,
     Value<int?>? lightSetupId,
   }) {
     return ShotsCompanion(
@@ -5922,6 +5976,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
       scriptAnchorIndex: scriptAnchorIndex ?? this.scriptAnchorIndex,
       autoNumbering: autoNumbering ?? this.autoNumbering,
       sortOrder: sortOrder ?? this.sortOrder,
+      lightOverridesJson: lightOverridesJson ?? this.lightOverridesJson,
       lightSetupId: lightSetupId ?? this.lightSetupId,
     );
   }
@@ -5997,6 +6052,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
+    if (lightOverridesJson.present) {
+      map['light_overrides_json'] = Variable<String>(lightOverridesJson.value);
+    }
     if (lightSetupId.present) {
       map['light_setup_id'] = Variable<int>(lightSetupId.value);
     }
@@ -6028,6 +6086,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
           ..write('scriptAnchorIndex: $scriptAnchorIndex, ')
           ..write('autoNumbering: $autoNumbering, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('lightOverridesJson: $lightOverridesJson, ')
           ..write('lightSetupId: $lightSetupId')
           ..write(')'))
         .toString();
@@ -14324,6 +14383,28 @@ class $LightsTable extends Lights with TableInfo<$LightsTable, Light> {
     type: DriftSqlType.double,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _photometryLuxMeta = const VerificationMeta(
+    'photometryLux',
+  );
+  @override
+  late final GeneratedColumn<double> photometryLux = GeneratedColumn<double>(
+    'photometry_lux',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _photometryDistanceMMeta =
+      const VerificationMeta('photometryDistanceM');
+  @override
+  late final GeneratedColumn<double> photometryDistanceM =
+      GeneratedColumn<double>(
+        'photometry_distance_m',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _criMeta = const VerificationMeta('cri');
   @override
   late final GeneratedColumn<int> cri = GeneratedColumn<int>(
@@ -14485,6 +14566,8 @@ class $LightsTable extends Lights with TableInfo<$LightsTable, Light> {
     isLukaCompatible,
     lukaFixtureId,
     beamAngleDeg,
+    photometryLux,
+    photometryDistanceM,
     cri,
     tlci,
     dimmingType,
@@ -14634,6 +14717,24 @@ class $LightsTable extends Lights with TableInfo<$LightsTable, Light> {
         beamAngleDeg.isAcceptableOrUnknown(
           data['beam_angle_deg']!,
           _beamAngleDegMeta,
+        ),
+      );
+    }
+    if (data.containsKey('photometry_lux')) {
+      context.handle(
+        _photometryLuxMeta,
+        photometryLux.isAcceptableOrUnknown(
+          data['photometry_lux']!,
+          _photometryLuxMeta,
+        ),
+      );
+    }
+    if (data.containsKey('photometry_distance_m')) {
+      context.handle(
+        _photometryDistanceMMeta,
+        photometryDistanceM.isAcceptableOrUnknown(
+          data['photometry_distance_m']!,
+          _photometryDistanceMMeta,
         ),
       );
     }
@@ -14806,6 +14907,14 @@ class $LightsTable extends Lights with TableInfo<$LightsTable, Light> {
         DriftSqlType.double,
         data['${effectivePrefix}beam_angle_deg'],
       ),
+      photometryLux: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}photometry_lux'],
+      ),
+      photometryDistanceM: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}photometry_distance_m'],
+      ),
       cri: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}cri'],
@@ -14889,6 +14998,8 @@ class Light extends DataClass implements Insertable<Light> {
   final bool isLukaCompatible;
   final String? lukaFixtureId;
   final double? beamAngleDeg;
+  final double? photometryLux;
+  final double? photometryDistanceM;
   final int? cri;
   final int? tlci;
   final String? dimmingType;
@@ -14919,6 +15030,8 @@ class Light extends DataClass implements Insertable<Light> {
     required this.isLukaCompatible,
     this.lukaFixtureId,
     this.beamAngleDeg,
+    this.photometryLux,
+    this.photometryDistanceM,
     this.cri,
     this.tlci,
     this.dimmingType,
@@ -14967,6 +15080,12 @@ class Light extends DataClass implements Insertable<Light> {
     }
     if (!nullToAbsent || beamAngleDeg != null) {
       map['beam_angle_deg'] = Variable<double>(beamAngleDeg);
+    }
+    if (!nullToAbsent || photometryLux != null) {
+      map['photometry_lux'] = Variable<double>(photometryLux);
+    }
+    if (!nullToAbsent || photometryDistanceM != null) {
+      map['photometry_distance_m'] = Variable<double>(photometryDistanceM);
     }
     if (!nullToAbsent || cri != null) {
       map['cri'] = Variable<int>(cri);
@@ -15042,6 +15161,12 @@ class Light extends DataClass implements Insertable<Light> {
       beamAngleDeg: beamAngleDeg == null && nullToAbsent
           ? const Value.absent()
           : Value(beamAngleDeg),
+      photometryLux: photometryLux == null && nullToAbsent
+          ? const Value.absent()
+          : Value(photometryLux),
+      photometryDistanceM: photometryDistanceM == null && nullToAbsent
+          ? const Value.absent()
+          : Value(photometryDistanceM),
       cri: cri == null && nullToAbsent ? const Value.absent() : Value(cri),
       tlci: tlci == null && nullToAbsent ? const Value.absent() : Value(tlci),
       dimmingType: dimmingType == null && nullToAbsent
@@ -15101,6 +15226,10 @@ class Light extends DataClass implements Insertable<Light> {
       isLukaCompatible: serializer.fromJson<bool>(json['isLukaCompatible']),
       lukaFixtureId: serializer.fromJson<String?>(json['lukaFixtureId']),
       beamAngleDeg: serializer.fromJson<double?>(json['beamAngleDeg']),
+      photometryLux: serializer.fromJson<double?>(json['photometryLux']),
+      photometryDistanceM: serializer.fromJson<double?>(
+        json['photometryDistanceM'],
+      ),
       cri: serializer.fromJson<int?>(json['cri']),
       tlci: serializer.fromJson<int?>(json['tlci']),
       dimmingType: serializer.fromJson<String?>(json['dimmingType']),
@@ -15138,6 +15267,8 @@ class Light extends DataClass implements Insertable<Light> {
       'isLukaCompatible': serializer.toJson<bool>(isLukaCompatible),
       'lukaFixtureId': serializer.toJson<String?>(lukaFixtureId),
       'beamAngleDeg': serializer.toJson<double?>(beamAngleDeg),
+      'photometryLux': serializer.toJson<double?>(photometryLux),
+      'photometryDistanceM': serializer.toJson<double?>(photometryDistanceM),
       'cri': serializer.toJson<int?>(cri),
       'tlci': serializer.toJson<int?>(tlci),
       'dimmingType': serializer.toJson<String?>(dimmingType),
@@ -15173,6 +15304,8 @@ class Light extends DataClass implements Insertable<Light> {
     bool? isLukaCompatible,
     Value<String?> lukaFixtureId = const Value.absent(),
     Value<double?> beamAngleDeg = const Value.absent(),
+    Value<double?> photometryLux = const Value.absent(),
+    Value<double?> photometryDistanceM = const Value.absent(),
     Value<int?> cri = const Value.absent(),
     Value<int?> tlci = const Value.absent(),
     Value<String?> dimmingType = const Value.absent(),
@@ -15207,6 +15340,12 @@ class Light extends DataClass implements Insertable<Light> {
         ? lukaFixtureId.value
         : this.lukaFixtureId,
     beamAngleDeg: beamAngleDeg.present ? beamAngleDeg.value : this.beamAngleDeg,
+    photometryLux: photometryLux.present
+        ? photometryLux.value
+        : this.photometryLux,
+    photometryDistanceM: photometryDistanceM.present
+        ? photometryDistanceM.value
+        : this.photometryDistanceM,
     cri: cri.present ? cri.value : this.cri,
     tlci: tlci.present ? tlci.value : this.tlci,
     dimmingType: dimmingType.present ? dimmingType.value : this.dimmingType,
@@ -15269,6 +15408,12 @@ class Light extends DataClass implements Insertable<Light> {
       beamAngleDeg: data.beamAngleDeg.present
           ? data.beamAngleDeg.value
           : this.beamAngleDeg,
+      photometryLux: data.photometryLux.present
+          ? data.photometryLux.value
+          : this.photometryLux,
+      photometryDistanceM: data.photometryDistanceM.present
+          ? data.photometryDistanceM.value
+          : this.photometryDistanceM,
       cri: data.cri.present ? data.cri.value : this.cri,
       tlci: data.tlci.present ? data.tlci.value : this.tlci,
       dimmingType: data.dimmingType.present
@@ -15318,6 +15463,8 @@ class Light extends DataClass implements Insertable<Light> {
           ..write('isLukaCompatible: $isLukaCompatible, ')
           ..write('lukaFixtureId: $lukaFixtureId, ')
           ..write('beamAngleDeg: $beamAngleDeg, ')
+          ..write('photometryLux: $photometryLux, ')
+          ..write('photometryDistanceM: $photometryDistanceM, ')
           ..write('cri: $cri, ')
           ..write('tlci: $tlci, ')
           ..write('dimmingType: $dimmingType, ')
@@ -15353,6 +15500,8 @@ class Light extends DataClass implements Insertable<Light> {
     isLukaCompatible,
     lukaFixtureId,
     beamAngleDeg,
+    photometryLux,
+    photometryDistanceM,
     cri,
     tlci,
     dimmingType,
@@ -15387,6 +15536,8 @@ class Light extends DataClass implements Insertable<Light> {
           other.isLukaCompatible == this.isLukaCompatible &&
           other.lukaFixtureId == this.lukaFixtureId &&
           other.beamAngleDeg == this.beamAngleDeg &&
+          other.photometryLux == this.photometryLux &&
+          other.photometryDistanceM == this.photometryDistanceM &&
           other.cri == this.cri &&
           other.tlci == this.tlci &&
           other.dimmingType == this.dimmingType &&
@@ -15419,6 +15570,8 @@ class LightsCompanion extends UpdateCompanion<Light> {
   final Value<bool> isLukaCompatible;
   final Value<String?> lukaFixtureId;
   final Value<double?> beamAngleDeg;
+  final Value<double?> photometryLux;
+  final Value<double?> photometryDistanceM;
   final Value<int?> cri;
   final Value<int?> tlci;
   final Value<String?> dimmingType;
@@ -15449,6 +15602,8 @@ class LightsCompanion extends UpdateCompanion<Light> {
     this.isLukaCompatible = const Value.absent(),
     this.lukaFixtureId = const Value.absent(),
     this.beamAngleDeg = const Value.absent(),
+    this.photometryLux = const Value.absent(),
+    this.photometryDistanceM = const Value.absent(),
     this.cri = const Value.absent(),
     this.tlci = const Value.absent(),
     this.dimmingType = const Value.absent(),
@@ -15480,6 +15635,8 @@ class LightsCompanion extends UpdateCompanion<Light> {
     this.isLukaCompatible = const Value.absent(),
     this.lukaFixtureId = const Value.absent(),
     this.beamAngleDeg = const Value.absent(),
+    this.photometryLux = const Value.absent(),
+    this.photometryDistanceM = const Value.absent(),
     this.cri = const Value.absent(),
     this.tlci = const Value.absent(),
     this.dimmingType = const Value.absent(),
@@ -15516,6 +15673,8 @@ class LightsCompanion extends UpdateCompanion<Light> {
     Expression<bool>? isLukaCompatible,
     Expression<String>? lukaFixtureId,
     Expression<double>? beamAngleDeg,
+    Expression<double>? photometryLux,
+    Expression<double>? photometryDistanceM,
     Expression<int>? cri,
     Expression<int>? tlci,
     Expression<String>? dimmingType,
@@ -15548,6 +15707,9 @@ class LightsCompanion extends UpdateCompanion<Light> {
       if (isLukaCompatible != null) 'is_luka_compatible': isLukaCompatible,
       if (lukaFixtureId != null) 'luka_fixture_id': lukaFixtureId,
       if (beamAngleDeg != null) 'beam_angle_deg': beamAngleDeg,
+      if (photometryLux != null) 'photometry_lux': photometryLux,
+      if (photometryDistanceM != null)
+        'photometry_distance_m': photometryDistanceM,
       if (cri != null) 'cri': cri,
       if (tlci != null) 'tlci': tlci,
       if (dimmingType != null) 'dimming_type': dimmingType,
@@ -15582,6 +15744,8 @@ class LightsCompanion extends UpdateCompanion<Light> {
     Value<bool>? isLukaCompatible,
     Value<String?>? lukaFixtureId,
     Value<double?>? beamAngleDeg,
+    Value<double?>? photometryLux,
+    Value<double?>? photometryDistanceM,
     Value<int?>? cri,
     Value<int?>? tlci,
     Value<String?>? dimmingType,
@@ -15613,6 +15777,8 @@ class LightsCompanion extends UpdateCompanion<Light> {
       isLukaCompatible: isLukaCompatible ?? this.isLukaCompatible,
       lukaFixtureId: lukaFixtureId ?? this.lukaFixtureId,
       beamAngleDeg: beamAngleDeg ?? this.beamAngleDeg,
+      photometryLux: photometryLux ?? this.photometryLux,
+      photometryDistanceM: photometryDistanceM ?? this.photometryDistanceM,
       cri: cri ?? this.cri,
       tlci: tlci ?? this.tlci,
       dimmingType: dimmingType ?? this.dimmingType,
@@ -15681,6 +15847,14 @@ class LightsCompanion extends UpdateCompanion<Light> {
     if (beamAngleDeg.present) {
       map['beam_angle_deg'] = Variable<double>(beamAngleDeg.value);
     }
+    if (photometryLux.present) {
+      map['photometry_lux'] = Variable<double>(photometryLux.value);
+    }
+    if (photometryDistanceM.present) {
+      map['photometry_distance_m'] = Variable<double>(
+        photometryDistanceM.value,
+      );
+    }
     if (cri.present) {
       map['cri'] = Variable<int>(cri.value);
     }
@@ -15744,6 +15918,8 @@ class LightsCompanion extends UpdateCompanion<Light> {
           ..write('isLukaCompatible: $isLukaCompatible, ')
           ..write('lukaFixtureId: $lukaFixtureId, ')
           ..write('beamAngleDeg: $beamAngleDeg, ')
+          ..write('photometryLux: $photometryLux, ')
+          ..write('photometryDistanceM: $photometryDistanceM, ')
           ..write('cri: $cri, ')
           ..write('tlci: $tlci, ')
           ..write('dimmingType: $dimmingType, ')
@@ -39652,6 +39828,7 @@ typedef $$ShotsTableCreateCompanionBuilder =
       Value<int?> scriptAnchorIndex,
       Value<bool> autoNumbering,
       Value<int> sortOrder,
+      Value<String?> lightOverridesJson,
       Value<int?> lightSetupId,
     });
 typedef $$ShotsTableUpdateCompanionBuilder =
@@ -39678,6 +39855,7 @@ typedef $$ShotsTableUpdateCompanionBuilder =
       Value<int?> scriptAnchorIndex,
       Value<bool> autoNumbering,
       Value<int> sortOrder,
+      Value<String?> lightOverridesJson,
       Value<int?> lightSetupId,
     });
 
@@ -39914,6 +40092,11 @@ class $$ShotsTableFilterComposer extends Composer<_$AppDatabase, $ShotsTable> {
 
   ColumnFilters<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lightOverridesJson => $composableBuilder(
+    column: $table.lightOverridesJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -40171,6 +40354,11 @@ class $$ShotsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get lightOverridesJson => $composableBuilder(
+    column: $table.lightOverridesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ScenesTableOrderingComposer get sceneId {
     final $$ScenesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -40327,6 +40515,11 @@ class $$ShotsTableAnnotationComposer
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<String> get lightOverridesJson => $composableBuilder(
+    column: $table.lightOverridesJson,
+    builder: (column) => column,
+  );
 
   $$ScenesTableAnnotationComposer get sceneId {
     final $$ScenesTableAnnotationComposer composer = $composerBuilder(
@@ -40532,6 +40725,7 @@ class $$ShotsTableTableManager
                 Value<int?> scriptAnchorIndex = const Value.absent(),
                 Value<bool> autoNumbering = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String?> lightOverridesJson = const Value.absent(),
                 Value<int?> lightSetupId = const Value.absent(),
               }) => ShotsCompanion(
                 id: id,
@@ -40556,6 +40750,7 @@ class $$ShotsTableTableManager
                 scriptAnchorIndex: scriptAnchorIndex,
                 autoNumbering: autoNumbering,
                 sortOrder: sortOrder,
+                lightOverridesJson: lightOverridesJson,
                 lightSetupId: lightSetupId,
               ),
           createCompanionCallback:
@@ -40582,6 +40777,7 @@ class $$ShotsTableTableManager
                 Value<int?> scriptAnchorIndex = const Value.absent(),
                 Value<bool> autoNumbering = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String?> lightOverridesJson = const Value.absent(),
                 Value<int?> lightSetupId = const Value.absent(),
               }) => ShotsCompanion.insert(
                 id: id,
@@ -40606,6 +40802,7 @@ class $$ShotsTableTableManager
                 scriptAnchorIndex: scriptAnchorIndex,
                 autoNumbering: autoNumbering,
                 sortOrder: sortOrder,
+                lightOverridesJson: lightOverridesJson,
                 lightSetupId: lightSetupId,
               ),
           withReferenceMapper: (p0) => p0
@@ -46127,6 +46324,8 @@ typedef $$LightsTableCreateCompanionBuilder =
       Value<bool> isLukaCompatible,
       Value<String?> lukaFixtureId,
       Value<double?> beamAngleDeg,
+      Value<double?> photometryLux,
+      Value<double?> photometryDistanceM,
       Value<int?> cri,
       Value<int?> tlci,
       Value<String?> dimmingType,
@@ -46159,6 +46358,8 @@ typedef $$LightsTableUpdateCompanionBuilder =
       Value<bool> isLukaCompatible,
       Value<String?> lukaFixtureId,
       Value<double?> beamAngleDeg,
+      Value<double?> photometryLux,
+      Value<double?> photometryDistanceM,
       Value<int?> cri,
       Value<int?> tlci,
       Value<String?> dimmingType,
@@ -46260,6 +46461,16 @@ class $$LightsTableFilterComposer
 
   ColumnFilters<double> get beamAngleDeg => $composableBuilder(
     column: $table.beamAngleDeg,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get photometryLux => $composableBuilder(
+    column: $table.photometryLux,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get photometryDistanceM => $composableBuilder(
+    column: $table.photometryDistanceM,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -46418,6 +46629,16 @@ class $$LightsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get photometryLux => $composableBuilder(
+    column: $table.photometryLux,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get photometryDistanceM => $composableBuilder(
+    column: $table.photometryDistanceM,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get cri => $composableBuilder(
     column: $table.cri,
     builder: (column) => ColumnOrderings(column),
@@ -46561,6 +46782,16 @@ class $$LightsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<double> get photometryLux => $composableBuilder(
+    column: $table.photometryLux,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get photometryDistanceM => $composableBuilder(
+    column: $table.photometryDistanceM,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get cri =>
       $composableBuilder(column: $table.cri, builder: (column) => column);
 
@@ -46659,6 +46890,8 @@ class $$LightsTableTableManager
                 Value<bool> isLukaCompatible = const Value.absent(),
                 Value<String?> lukaFixtureId = const Value.absent(),
                 Value<double?> beamAngleDeg = const Value.absent(),
+                Value<double?> photometryLux = const Value.absent(),
+                Value<double?> photometryDistanceM = const Value.absent(),
                 Value<int?> cri = const Value.absent(),
                 Value<int?> tlci = const Value.absent(),
                 Value<String?> dimmingType = const Value.absent(),
@@ -46689,6 +46922,8 @@ class $$LightsTableTableManager
                 isLukaCompatible: isLukaCompatible,
                 lukaFixtureId: lukaFixtureId,
                 beamAngleDeg: beamAngleDeg,
+                photometryLux: photometryLux,
+                photometryDistanceM: photometryDistanceM,
                 cri: cri,
                 tlci: tlci,
                 dimmingType: dimmingType,
@@ -46721,6 +46956,8 @@ class $$LightsTableTableManager
                 Value<bool> isLukaCompatible = const Value.absent(),
                 Value<String?> lukaFixtureId = const Value.absent(),
                 Value<double?> beamAngleDeg = const Value.absent(),
+                Value<double?> photometryLux = const Value.absent(),
+                Value<double?> photometryDistanceM = const Value.absent(),
                 Value<int?> cri = const Value.absent(),
                 Value<int?> tlci = const Value.absent(),
                 Value<String?> dimmingType = const Value.absent(),
@@ -46751,6 +46988,8 @@ class $$LightsTableTableManager
                 isLukaCompatible: isLukaCompatible,
                 lukaFixtureId: lukaFixtureId,
                 beamAngleDeg: beamAngleDeg,
+                photometryLux: photometryLux,
+                photometryDistanceM: photometryDistanceM,
                 cri: cri,
                 tlci: tlci,
                 dimmingType: dimmingType,

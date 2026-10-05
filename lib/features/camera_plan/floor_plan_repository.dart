@@ -5,6 +5,8 @@ import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'floor_plan_json.dart';
 import 'floor_plan_scope.dart';
+import 'light/ambient.dart';
+import 'light_overrides.dart';
 
 /// Capas de una planta, de abajo arriba. Cada nivel ve las anteriores por
 /// referencia: nada se copia.
@@ -121,6 +123,7 @@ class FloorPlanRepository {
         elements: elements,
         metersPerUnit: previous.metersPerUnit,
         underlay: previous.underlay,
+        ambient: previous.ambient,
       ),
     );
   }
@@ -206,7 +209,11 @@ class FloorPlanRepository {
     return PlanLayers(
       environment: base.environment,
       set: base.set,
-      light: FloorPlanJson.decode(setup?.planJson),
+      // La luz del esquema, con los ajustes propios de este plano.
+      light: LightOverrides.apply(
+        FloorPlanJson.decode(setup?.planJson),
+        shot.lightOverridesJson,
+      ),
       shot: await _shotElements(shot.id),
       lightSetup: setup,
     );
@@ -265,6 +272,47 @@ class FloorPlanRepository {
       FloorPlanScope.lightSetup => json != null && json.isNotEmpty,
       FloorPlanScope.shot => elementCount > 0,
     };
+  }
+
+  /// Ambiente de un esquema de luz (sol, cielo, rebote de paredes).
+  static PlanAmbient ambientOf(LightSetup? setup) => PlanAmbient.fromJson(
+    FloorPlanJson.decodeDocument(setup?.planJson).ambient,
+  );
+
+  Future<void> saveAmbient(int lightSetupId, PlanAmbient ambient) async {
+    final setup = await db.getLightSetupById(lightSetupId);
+    if (setup == null) return;
+    final doc = FloorPlanJson.decodeDocument(setup.planJson);
+    await db.updateLightSetup(
+      setup.copyWith(
+        planJson: Value(
+          FloorPlanJson.encodeDocument(
+            FloorPlanDocument(
+              elements: doc.elements,
+              metersPerUnit: doc.metersPerUnit,
+              underlay: doc.underlay,
+              ambient: ambient.toJson(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Guarda los ajustes de luz propios de un plano.
+  Future<void> saveLightOverrides(
+    int shotId,
+    Map<String, PlanElement> overrides,
+  ) async {
+    final shot = await (db.select(
+      db.shots,
+    )..where((s) => s.id.equals(shotId))).getSingleOrNull();
+    if (shot == null) return;
+    await db.updateShot(
+      shot.copyWith(
+        lightOverridesJson: Value(LightOverrides.encode(overrides)),
+      ),
+    );
   }
 
   // ── Esquemas de luz ───────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/database/app_database.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -51,6 +52,11 @@ class PlanPalette extends StatelessWidget {
   final ValueChanged<LightType> onAddLight;
   final ValueChanged<PropType> onAddProp;
   final VoidCallback onAddMeter;
+
+  /// Luces del proyecto, de la pantalla Equipo.
+  final List<Light> projectLights;
+  final ValueChanged<Light>? onAddCatalogLight;
+  final VoidCallback? onOpenCatalog;
   final ValueChanged<ArchitectureType> onAddArchitecture;
 
   /// Dónde van paredes y props. `null` si no hay elección.
@@ -66,6 +72,9 @@ class PlanPalette extends StatelessWidget {
     required this.onAddLight,
     required this.onAddProp,
     required this.onAddMeter,
+    this.projectLights = const [],
+    this.onAddCatalogLight,
+    this.onOpenCatalog,
     required this.onAddArchitecture,
     this.wallsToEnvironment,
     this.onWallsToEnvironment,
@@ -145,7 +154,41 @@ class PlanPalette extends StatelessWidget {
               onTap: onAddMeter,
             ),
           ]),
-          header('LUCES'),
+          header('LUCES DEL PROYECTO'),
+          if (projectLights.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                'Añade luces al proyecto en Equipo y saldrán aquí con sus '
+                'datos.',
+                style: AppTypography.caption(
+                  palette,
+                ).copyWith(color: palette.textTertiary, fontSize: 10),
+              ),
+            ),
+          for (final light in projectLights)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: SizedBox(
+                height: 38,
+                child: _PaletteButton(
+                  icon: const Icon(Icons.wb_incandescent_outlined, size: 16),
+                  label: '${light.brand} ${light.model}',
+                  onTap: () => onAddCatalogLight?.call(light),
+                ),
+              ),
+            ),
+          if (onOpenCatalog != null)
+            SizedBox(
+              height: 34,
+              child: _PaletteButton(
+                icon: const Icon(Icons.search, size: 16),
+                label: 'Catálogo de Equipo…',
+                tooltip: 'Buscar en el catálogo de Equipo',
+                onTap: onOpenCatalog!,
+              ),
+            ),
+          header('LUCES GENÉRICAS'),
           grid([
             for (final type in lights)
               _PaletteButton(

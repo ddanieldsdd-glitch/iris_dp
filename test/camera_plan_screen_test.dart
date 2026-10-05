@@ -14,6 +14,7 @@ import 'package:iris_dp/features/camera_plan/floor_plan_json.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_screen.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_repository.dart';
+import 'package:iris_dp/features/camera_plan/light_overrides.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 
 void main() {
@@ -127,7 +128,8 @@ void main() {
     await settle(tester);
     expect(find.text('Esquema de luz · Cabaña'), findsOneWidget);
     // Paleta a la izquierda y lista de material a la derecha.
-    expect(find.text('LUCES'), findsOneWidget);
+    expect(find.text('LUCES DEL PROYECTO'), findsOneWidget);
+    expect(find.text('LUCES GENÉRICAS'), findsOneWidget);
     expect(find.text('GRIP'), findsOneWidget);
     expect(find.text('Lista de material'), findsOneWidget);
 
@@ -378,10 +380,12 @@ void main() {
       expect(find.text('Hospital'), findsWidgets);
       expect(find.text('Urgencias'), findsWidgets);
       expect(find.text('Escena 1'), findsOneWidget);
+      // El plano aún no tiene luz: sale en el tiro «Sin luz».
       expect(find.text('P1'), findsOneWidget);
       expect(find.text('Sin luz'), findsOneWidget);
+      expect(find.text('1 plano'), findsOneWidget);
 
-      await tester.tap(find.text('Sin luz'));
+      await tester.tap(find.byTooltip('Esquema de luz del plano'));
       await settle(tester);
       await tester.tap(find.text('Nuevo esquema'));
       await settle(tester);
@@ -392,7 +396,7 @@ void main() {
         )..where((s) => s.id.equals(shotId))).getSingle(),
       );
       expect(shot!.lightSetupId, isNotNull);
-      // En la leyenda del set y en la etiqueta del plano.
+      // En la leyenda del set y en el tiro de la escena.
       expect(find.text('Setup A'), findsNWidgets(2));
       expect(find.text('Sin luz'), findsNothing);
       expect(tester.takeException(), isNull);
@@ -728,6 +732,87 @@ void main() {
       await tester.tap(find.byTooltip('Mapa de exposición'));
       await settle(tester);
       expect(find.byTooltip('Volver a los haces de luz'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('una luz del esquema se puede ajustar solo en un plano', (
+      tester,
+    ) async {
+      await seed(tester, siteJson: '{"version":2,"elements":[]}');
+      late int setupId;
+      await tester.runAsync(() async {
+        final setup = await FloorPlanRepository(
+          db,
+        ).createLightSetup(projectId: projectId, setId: setId, name: 'Setup A');
+        setupId = setup.id;
+        await db.updateLightSetup(
+          setup.copyWith(
+            planJson: Value(
+              '{"version":2,"elements":['
+              '{"type":"light","x":300,"y":300,"rotation":90,'
+              '"lightType":"hmi","cameraLetter":"A","cameraNumber":1,'
+              '"pathPoints":[],"props":{"intensity":100,"uid":"key"}}]}',
+            ),
+          ),
+        );
+        await db.assignLightSetupToShot(shotId, setup.id);
+      });
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.shot(
+            projectId: projectId,
+            shotId: shotId,
+            shotLabel: 'Esc 1 · Plano 1',
+          ),
+        ),
+      );
+      await settle(tester);
+
+      final canvas = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is CameraPlanPainter,
+      );
+      await tester.tapAt(tester.getTopLeft(canvas) + const Offset(300, 300));
+      await settle(tester);
+
+      // Se ajusta solo en este plano y se apaga.
+      Finder switchOf(String label) => find.descendant(
+        of: find
+            .ancestor(of: find.text(label), matching: find.byType(Row))
+            .first,
+        matching: find.byType(Switch),
+      );
+      await tester.ensureVisible(switchOf('Ajustar solo en este plano'));
+      await tester.tap(switchOf('Ajustar solo en este plano'));
+      await settle(tester);
+      expect(
+        tester.widget<Switch>(switchOf('Ajustada solo en este plano')).value,
+        isTrue,
+      );
+      await tester.ensureVisible(switchOf('Encendida'));
+      await tester.tap(switchOf('Encendida'));
+      await settle(tester);
+
+      // El esquema sigue con la luz encendida; el plano la tiene apagada.
+      final setup = await tester.runAsync(() => db.getLightSetupById(setupId));
+      final shared = FloorPlanJson.decode(setup!.planJson).single;
+      expect(shared.props['off'], isNot(true));
+      final shot = await tester.runAsync(
+        () => (db.select(
+          db.shots,
+        )..where((s) => s.id.equals(shotId))).getSingle(),
+      );
+      final own = LightOverrides.decode(shot!.lightOverridesJson);
+      expect(own.keys, ['key']);
+      expect(own['key']!.props['off'], isTrue);
+      // Y así llega a quien pinta el plano.
+      final layers = await tester.runAsync(
+        () => FloorPlanRepository(db).layersForShot(shot),
+      );
+      expect(layers!.light.single.props['off'], isTrue);
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

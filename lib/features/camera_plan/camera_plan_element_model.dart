@@ -55,6 +55,10 @@ class PlanElement {
   /// Capa en la que se guarda. Solo en memoria: la da quien carga la planta.
   PlanLayer layer = PlanLayer.shot;
 
+  /// Es un elemento del esquema de luz ajustado solo para el plano
+  /// abierto. Solo en memoria.
+  bool shotOverride = false;
+
   PlanElement({
     required this.id,
     required this.type,

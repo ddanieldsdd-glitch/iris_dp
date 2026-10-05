@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
+import 'light/ambient.dart';
 import 'light/exposure.dart';
 import 'light/light_scene.dart';
 import 'light/meter.dart';
@@ -76,6 +77,9 @@ class CameraPlanPainter extends CustomPainter {
   /// Diafragma de trabajo, para decir cuánto sobra o falta.
   final double targetStop;
 
+  /// Sol, cielo y rebote de paredes del esquema de luz.
+  final PlanAmbient? ambient;
+
   /// Enseña bajo cada actor el diafragma que le llega.
   final bool showReadings;
 
@@ -108,6 +112,7 @@ class CameraPlanPainter extends CustomPainter {
     this.metersPerUnit,
     this.exposure,
     this.targetStop = CameraExposure.defaultStop,
+    this.ambient,
     this.showReadings = false,
     this.exposureMap = false,
     this.selectedElement,
@@ -147,10 +152,11 @@ class CameraPlanPainter extends CustomPainter {
 
     // La planta vista por la luz: aparatos, rebotes, telas y paredes de
     // todas las capas, con lo que las tapa.
-    final scene = LightScene.from([
-      ...inheritedElements,
-      ...elements,
-    ], metersPerUnit: metersPerUnit ?? defaultMetersPerUnit);
+    final scene = LightScene.from(
+      [...inheritedElements, ...elements],
+      metersPerUnit: metersPerUnit ?? defaultMetersPerUnit,
+      ambient: ambient,
+    );
     _scene = scene;
     final dimmed = {...inheritedElements};
     if (exposureMap && exposure != null) {
@@ -194,6 +200,45 @@ class CameraPlanPainter extends CustomPainter {
 
     if (metersPerUnit != null) _drawScaleBar(canvas, size);
     if (exposureMap && exposure != null) _drawExposureLegend(canvas, size);
+    if (ambient?.hasSun ?? false) _drawSunCompass(canvas, size);
+  }
+
+  /// Arriba a la derecha, de dónde viene el sol.
+  void _drawSunCompass(Canvas canvas, Size size) {
+    final env = ambient!;
+    final centre = Offset(size.width - 44, 44);
+    const sun = Color(0xFFFFD27A);
+    canvas.drawCircle(
+      centre,
+      26,
+      Paint()..color = _CanvasColors.background.withValues(alpha: 0.85),
+    );
+    canvas.drawCircle(
+      centre,
+      26,
+      Paint()
+        ..color = _CanvasColors.inkTertiary
+        ..style = PaintingStyle.stroke,
+    );
+    final at = centre + env.towardSun * 17;
+    canvas.drawCircle(at, 6, Paint()..color = sun);
+    // La flecha va del sol hacia la planta: por ahí entra la luz.
+    canvas.drawLine(
+      at,
+      centre - env.towardSun * 14,
+      Paint()
+        ..color = sun
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round,
+    );
+    final tp = TextPainter(
+      text: TextSpan(
+        text: '${env.sunElevation.round()}°',
+        style: const TextStyle(color: _CanvasColors.inkSecondary, fontSize: 10),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, centre + Offset(-tp.width / 2, 30));
   }
 
   /// La planta vista por la luz, calculada una vez por pintado.
@@ -752,8 +797,11 @@ class CameraPlanPainter extends CustomPainter {
     switch (el.type) {
       case ElementType.camera:
         final camColor = cameraColorForLetter(el.cameraLetter);
+        // Con varias cámaras de distintos planos en la misma planta, cada
+        // una se rotula con su plano.
+        final tag = el.props['shotTag'] as String?;
         final labelText =
-            '${el.cameraLabel}\n${el.stabilization ?? ''} ${el.lens ?? ''}'
+            '${tag ?? el.cameraLabel}\n${el.stabilization ?? ''} ${el.lens ?? ''}'
                 .trim();
         if (labelText.isNotEmpty) {
           _drawLabelBelow(canvas, labelText, camColor, yOffset: 28);
@@ -1534,6 +1582,7 @@ class CameraPlanPainter extends CustomPainter {
       old.metersPerUnit != metersPerUnit ||
       old.exposure != exposure ||
       old.targetStop != targetStop ||
+      old.ambient != ambient ||
       old.showReadings != showReadings ||
       old.exposureMap != exposureMap ||
       old.selectedElement?.id != selectedElement?.id ||

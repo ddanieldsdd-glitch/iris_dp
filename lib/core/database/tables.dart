@@ -107,6 +107,8 @@ class Shots extends Table {
   IntColumn get scriptAnchorIndex => integer().nullable()();
   BoolColumn get autoNumbering => boolean().withDefault(const Constant(true))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  // Ajustes de luz propios del plano sobre su esquema (schemaVersion 43).
+  TextColumn get lightOverridesJson => text().nullable()();
   // Esquema de luz que usa el plano (schemaVersion 42).
   IntColumn get lightSetupId =>
       integer().nullable().references(LightSetups, #id)();
@@ -378,6 +380,10 @@ class Lights extends Table with CatalogProvenanceColumns {
       boolean().withDefault(const Constant(false))();
   TextColumn get lukaFixtureId => text().nullable()();
   RealColumn get beamAngleDeg => real().nullable()();
+  // Fotometría del fabricante: lux en el eje a una distancia, a plena
+  // potencia y sin modificadores (schemaVersion 43).
+  RealColumn get photometryLux => real().nullable()();
+  RealColumn get photometryDistanceM => real().nullable()();
   IntColumn get cri => integer().nullable()();
   IntColumn get tlci => integer().nullable()();
   TextColumn get dimmingType => text().nullable()();

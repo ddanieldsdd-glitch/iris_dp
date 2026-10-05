@@ -571,6 +571,7 @@ class ProjectContentBundle {
           'durationSeconds': shot.durationSeconds,
           'scriptAnchorIndex': shot.scriptAnchorIndex,
           'sortOrder': shot.sortOrder,
+          'lightOverridesJson': shot.lightOverridesJson,
           'lightSetupKey': shot.lightSetupId != null
               ? lightSetupKeyById[shot.lightSetupId!]
               : null,
@@ -996,6 +997,7 @@ class ProjectContentBundle {
               scriptAnchorIndex: Value(bundleInt(m['scriptAnchorIndex'])),
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
               lightSetupId: Value(lightSetupKeyToId[m['lightSetupKey']]),
+              lightOverridesJson: Value(m['lightOverridesJson'] as String?),
             ),
           );
       shotKeyToId[m['shotKey'] as String] = id;

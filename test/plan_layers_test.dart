@@ -13,7 +13,11 @@ import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_json.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_repository.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_scope.dart';
+import 'package:iris_dp/features/camera_plan/light/photometry.dart';
+import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
 import 'package:iris_dp/features/camera_plan/light_beam.dart';
+import 'package:iris_dp/features/camera_plan/plan_data.dart';
+import 'package:iris_dp/features/camera_plan/plan_equipment.dart';
 import 'package:iris_dp/features/camera_plan/plan_gear_list.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 
@@ -480,9 +484,21 @@ void main() {
       expect(
         gear.toText(title: 'Setup A'),
         'Setup A\nLUCES\n  2× HMI\n  1× Titan Tube\nGRIP\n  1× Negro\n'
-        'CÁMARA\n  1× Cámara A · 35mm · DOLLY',
+        'CÁMARA\n  1× Cámara A · 35mm · DOLLY\n'
+        'CORRIENTE\n  3900 W encendidos · 17.0 A a 230 V\n'
+        '  2 circuitos de 16 A (máx. 2944 W cada uno)',
       );
       expect(GearList.from(const []).isEmpty, isTrue);
+      // Dos HMI de 1800 W, un LED de 300 W; la bandera no consume.
+      expect(gear.watts, 3900);
+      expect(gear.amps, closeTo(16.96, 0.01));
+      expect(gear.circuits, 2);
+      expect(gear.toText(), contains('CORRIENTE'));
+      final dark = GearList.from([
+        light(LightType.hmi, props: {'off': true}),
+      ]);
+      expect(dark.watts, 0);
+      expect(dark.circuits, 0);
     });
   });
 
@@ -553,6 +569,91 @@ void main() {
       expect(PlanSegment.isSegment(back), isTrue);
       expect(PlanSegment.kind(back), PlanSegment.kindStreet);
       expect(back.displayLabel, 'Calle');
+    });
+  });
+
+  group('equipo y tiros', () {
+    test('una luz del catálogo llega a la planta con sus datos', () async {
+      final id = await db.insertLight(
+        LightsCompanion.insert(
+          brand: 'ARRI',
+          model: 'M18',
+          lightType: 'hmi',
+          powerW: 1800,
+          colorTempMin: 5600,
+          colorTempMax: 5600,
+          beamAngleDeg: const Value(52),
+          photometryLux: const Value(4550),
+          photometryDistanceM: const Value(5),
+        ),
+      );
+      final el = PlanEquipment.lightFromCatalog((await db.getLightById(id))!);
+      expect(el.lightType, LightType.hmi);
+      expect(el.props['name'], 'ARRI M18');
+      expect(el.externalMapping.catalogLightId, id);
+
+      el.props['intensity'] = 100;
+      final light = PlanLight.of(el)!;
+      expect(light.watts, 1800);
+      expect(light.tech, LightTech.hmi);
+      expect(light.source.beamDeg, 52);
+      // Con fotometría del fabricante, el cálculo parte de ella.
+      expect(light.source.status, PhotometryStatus.manufacturer);
+      expect(light.source.illuminance(5), closeTo(4550, 5));
+
+      // Sin fotometría, se estima.
+      final bareId = await db.insertLight(
+        LightsCompanion.insert(
+          brand: 'Aputure',
+          model: '600d',
+          lightType: 'led',
+          powerW: 600,
+          colorTempMin: 5600,
+          colorTempMax: 5600,
+        ),
+      );
+      final bare = PlanEquipment.lightFromCatalog(
+        (await db.getLightById(bareId))!,
+      )..props['intensity'] = 100;
+      expect(PlanLight.of(bare)!.source.status, PhotometryStatus.estimated);
+    });
+
+    test('los planos de una escena se agrupan por su esquema de luz', () async {
+      final a = await addShot(1);
+      final b = await addShot(2);
+      final c = await addShot(3);
+      final d = await addShot(4);
+      final setupA = await repo.createLightSetup(
+        projectId: projectId,
+        setId: setId,
+      );
+      final setupB = await repo.createLightSetup(
+        projectId: projectId,
+        setId: setId,
+      );
+      await db.assignLightSetupToShot(a, setupA.id);
+      await db.assignLightSetupToShot(b, setupB.id);
+      await db.assignLightSetupToShot(c, setupA.id);
+      await addElement(a, 'camera', x: 300, y: 300);
+
+      final data = PlanProjectData(
+        sites: await db.watchSitesForProject(projectId).first,
+        sets: await db.watchLocationsForProject(projectId).first,
+        setups: await db.getLightSetupsForProject(projectId),
+        scenes: await db.watchScenesForProject(projectId).first,
+        shots: await db.watchShotsForProject(projectId).first,
+        elementRows: await db
+            .watchCameraPlanElementsForProject(projectId)
+            .first,
+      );
+      final tiros = data.tirosOf(data.scenes.single);
+      expect(tiros.map((t) => t.setup?.name), ['Setup A', 'Setup B', null]);
+      expect(tiros[0].shots.map((s) => s.id), [a, c]);
+      expect(tiros[1].shots.map((s) => s.id), [b]);
+      expect(tiros[2].shots.map((s) => s.id), [d]);
+      // En la planta del tiro, cada cámara lleva el rótulo de su plano.
+      final camera = data.ownOfShot(tiros[0].shots.first, tagged: true).single;
+      expect(camera.props['shotTag'], '1·1');
     });
   });
 }
