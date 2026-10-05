@@ -30,6 +30,65 @@ extension SkyConditionInfo on SkyCondition {
   double get skyCct => this == SkyCondition.overcast ? 6500 : 7500;
 }
 
+/// Lo que se ha decidido de un recinto cerrado: si tiene techo, a qué
+/// altura y de qué es el suelo. El recinto es el que contiene el punto
+/// ([x], [y]).
+class RoomSetting {
+  final double x;
+  final double y;
+
+  /// Sin techo: un patio.
+  final bool openSky;
+  final double? ceilingM;
+
+  /// Material del suelo (ver `kFloorMaterials`).
+  final String? floor;
+
+  const RoomSetting({
+    required this.x,
+    required this.y,
+    this.openSky = false,
+    this.ceilingM,
+    this.floor,
+  });
+
+  Offset get point => Offset(x, y);
+
+  Map<String, dynamic> toJson() => {
+    'x': x,
+    'y': y,
+    'openSky': openSky,
+    'ceilingM': ?ceilingM,
+    'floor': ?floor,
+  };
+
+  static RoomSetting? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final x = (raw['x'] as num?)?.toDouble();
+    final y = (raw['y'] as num?)?.toDouble();
+    if (x == null || y == null) return null;
+    return RoomSetting(
+      x: x,
+      y: y,
+      openSky: raw['openSky'] as bool? ?? false,
+      ceilingM: (raw['ceilingM'] as num?)?.toDouble(),
+      floor: raw['floor'] as String?,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is RoomSetting &&
+      other.x == x &&
+      other.y == y &&
+      other.openSky == openSky &&
+      other.ceilingM == ceilingM &&
+      other.floor == floor;
+
+  @override
+  int get hashCode => Object.hash(x, y, openSky, ceilingM, floor);
+}
+
 /// Ambiente de un esquema de luz: la luz que no ponemos nosotros.
 class PlanAmbient {
   /// De día hay sol y cielo; de noche, solo un resto de luna.
@@ -48,6 +107,10 @@ class PlanAmbient {
   /// Si las paredes devuelven luz a la sala.
   final bool wallBounce;
 
+  /// Recintos con ajustes propios. Los demás tienen techo a la altura de
+  /// partida.
+  final List<RoomSetting> rooms;
+
   const PlanAmbient({
     this.day = false,
     this.sunOn = true,
@@ -56,6 +119,7 @@ class PlanAmbient {
     this.condition = SkyCondition.clear,
     this.skyOn = true,
     this.wallBounce = true,
+    this.rooms = const [],
   });
 
   /// Luz de luna llena sobre el suelo, en lux.
@@ -87,6 +151,7 @@ class PlanAmbient {
     SkyCondition? condition,
     bool? skyOn,
     bool? wallBounce,
+    List<RoomSetting>? rooms,
   }) => PlanAmbient(
     day: day ?? this.day,
     sunOn: sunOn ?? this.sunOn,
@@ -95,6 +160,7 @@ class PlanAmbient {
     condition: condition ?? this.condition,
     skyOn: skyOn ?? this.skyOn,
     wallBounce: wallBounce ?? this.wallBounce,
+    rooms: rooms ?? this.rooms,
   );
 
   Map<String, dynamic> toJson() => {
@@ -105,6 +171,7 @@ class PlanAmbient {
     'condition': condition.name,
     'skyOn': skyOn,
     'wallBounce': wallBounce,
+    if (rooms.isNotEmpty) 'rooms': [for (final r in rooms) r.toJson()],
   };
 
   static PlanAmbient fromJson(Object? raw) {
@@ -120,6 +187,10 @@ class PlanAmbient {
       ),
       skyOn: raw['skyOn'] as bool? ?? true,
       wallBounce: raw['wallBounce'] as bool? ?? true,
+      rooms: [
+        for (final r in (raw['rooms'] as List? ?? const []))
+          ?RoomSetting.fromJson(r),
+      ],
     );
   }
 
@@ -132,7 +203,11 @@ class PlanAmbient {
       other.sunElevation == sunElevation &&
       other.condition == condition &&
       other.skyOn == skyOn &&
-      other.wallBounce == wallBounce;
+      other.wallBounce == wallBounce &&
+      other.rooms.length == rooms.length &&
+      [
+        for (var i = 0; i < rooms.length; i++) rooms[i] == other.rooms[i],
+      ].every((same) => same);
 
   @override
   int get hashCode => Object.hash(
@@ -143,5 +218,6 @@ class PlanAmbient {
     condition,
     skyOn,
     wallBounce,
+    Object.hashAll(rooms),
   );
 }

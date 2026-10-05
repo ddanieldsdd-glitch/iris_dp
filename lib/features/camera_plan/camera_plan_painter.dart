@@ -91,6 +91,9 @@ class CameraPlanPainter extends CustomPainter {
   final double? metersPerUnit;
   final PlanElement? selectedElement;
 
+  /// Punto dentro del recinto seleccionado.
+  final Offset? selectedRoom;
+
   /// Se está girando el seleccionado: se rotulan sus grados.
   final bool rotating;
   final int? selectedPathIndex;
@@ -119,6 +122,7 @@ class CameraPlanPainter extends CustomPainter {
     this.showReadings = false,
     this.exposureMap = false,
     this.selectedElement,
+    this.selectedRoom,
     this.rotating = false,
     this.selectedPathIndex,
     this.scale = 1.0,
@@ -163,18 +167,32 @@ class CameraPlanPainter extends CustomPainter {
     );
     _scene = scene;
     final dimmed = {...inheritedElements};
+    _drawRooms(canvas, scene);
     if (exposureMap && exposure != null) {
       _drawExposureMap(canvas, size, scene);
     }
     if (!exposureMap && (ambient?.hasSun ?? false)) {
-      // De día, el sol baña la planta y las paredes le dan sombra.
+      // De día, el sol baña lo que está al aire libre y las cosas le dan
+      // sombra. Bajo techo solo entra por los huecos.
+      final view = Rect.fromLTWH(
+        -offset.dx / scale,
+        -offset.dy / scale,
+        size.width / scale,
+        size.height / scale,
+      );
+      var outdoors = Path()..addRect(view);
+      for (final room in scene.rooms) {
+        if (!room.roofed) continue;
+        outdoors = Path.combine(
+          PathOperation.difference,
+          outdoors,
+          room.room.path,
+        );
+      }
+      canvas.save();
+      canvas.clipPath(outdoors);
       canvas.drawRect(
-        Rect.fromLTWH(
-          -offset.dx / scale,
-          -offset.dy / scale,
-          size.width / scale,
-          size.height / scale,
-        ),
+        view,
         Paint()
           ..blendMode = BlendMode.plus
           ..color = LightBeam.colorForCct(
@@ -182,6 +200,8 @@ class CameraPlanPainter extends CustomPainter {
           ).withValues(alpha: 0.13),
       );
       _drawSunShadows(canvas, scene);
+      canvas.restore();
+      _drawSunPatches(canvas, scene);
     }
     // Los haces van debajo de todo lo demás. Con el mapa de exposición no
     // se pintan: el mapa ya dice cuánta luz hay en cada sitio.
@@ -499,14 +519,7 @@ class CameraPlanPainter extends CustomPainter {
             ..strokeWidth = 1.5,
         );
       case PlanSegment.kindRelief:
-        _drawDashedPath(
-          canvas,
-          path,
-          Paint()
-            ..color = const Color(0xFFB08968)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2,
-        );
+        _drawSlope(canvas, el, path);
       default:
         canvas.drawPath(
           path,
@@ -547,6 +560,79 @@ class CameraPlanPainter extends CustomPainter {
     handle(PlanSegment.end(el));
     handle(PlanSegment.midpoint(el), hollow: true);
     _drawLengthLabel(canvas, PlanSegment.midpoint(el), PlanSegment.length(el));
+  }
+
+  /// Un talud: la línea de la cresta y, hacia el lado que baja, las
+  /// rayitas de pendiente de los planos topográficos.
+  void _drawSlope(Canvas canvas, PlanElement el, Path path) {
+    const earth = Color(0xFFB08968);
+    final down = el.props['flip'] == true ? -1.0 : 1.0;
+    // Más alto, más ancha la falda.
+    final skirt = (10 + LightScene.propHeightM(el) * 7).clamp(12.0, 60.0);
+    final tick = Paint()
+      ..color = earth.withValues(alpha: 0.75)
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+    for (final metric in path.computeMetrics()) {
+      final band = Path();
+      final foot = <Offset>[];
+      var i = 0;
+      for (var d = 0.0; d <= metric.length; d += 9, i++) {
+        final t = metric.getTangentForOffset(d);
+        if (t == null) continue;
+        final normal = Offset(-t.vector.dy, t.vector.dx) * down;
+        if (i == 0) {
+          band.moveTo(t.position.dx, t.position.dy);
+        } else {
+          band.lineTo(t.position.dx, t.position.dy);
+        }
+        foot.add(t.position + normal * skirt);
+        canvas.drawLine(
+          t.position,
+          t.position + normal * (i.isEven ? skirt : skirt * 0.55),
+          tick,
+        );
+      }
+      for (final p in foot.reversed) {
+        band.lineTo(p.dx, p.dy);
+      }
+      canvas.drawPath(
+        band..close(),
+        Paint()..color = earth.withValues(alpha: 0.14),
+      );
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = earth
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  /// Contorno irregular y cerrado alrededor del origen: una copa, una
+  /// roca, una curva de nivel. Siempre el mismo para la misma semilla.
+  static Path _blob(double radius, int seed, {double rough = 0.12}) {
+    final random = math.Random(seed);
+    const points = 14;
+    final radii = [
+      for (var i = 0; i < points; i++)
+        radius * (1 - rough + random.nextDouble() * rough * 2),
+    ];
+    Offset at(int i) {
+      final angle = (i % points) * 2 * math.pi / points;
+      return Offset(math.cos(angle), math.sin(angle)) * radii[i % points];
+    }
+
+    final path = Path();
+    final start = (at(0) + at(points - 1)) / 2;
+    path.moveTo(start.dx, start.dy);
+    for (var i = 0; i < points; i++) {
+      final mid = (at(i) + at(i + 1)) / 2;
+      path.quadraticBezierTo(at(i).dx, at(i).dy, mid.dx, mid.dy);
+    }
+    return path..close();
   }
 
   void _drawCanvasBackground(Canvas canvas, Size size) {
@@ -1108,7 +1194,18 @@ class CameraPlanPainter extends CustomPainter {
 
     // Lux a una distancia sobre el plano y, colgada del techo, a lo que eso
     // equivale en diagonal y en ángulo.
-    double luxAtFlat(double meters) => scene.luxFrom(light, meters / mpu, 0);
+    // Inclinada, el charco se centra donde su eje toca el plano y se
+    // alarga hacia allí.
+    final tilt = drop == null
+        ? 0.0
+        : light.tiltDeg.clamp(0.0, 75.0) * math.pi / 180;
+    final pool = drop == null
+        ? light.position
+        : light.position + light.aim * (drop * math.tan(tilt) / mpu);
+    final side = Offset(-light.aim.dy, light.aim.dx);
+    double luxAtFlat(double meters) => drop == null
+        ? scene.luxFrom(light, meters / mpu, 0)
+        : scene.luxOf(light, pool + side * (meters / mpu));
 
     double alphaFor(double lux) {
       final stops =
@@ -1202,7 +1299,8 @@ class CameraPlanPainter extends CustomPainter {
               fromAbove: drop != null,
             );
 
-      void paintShape(Path shape, double amount) {
+      void paintShape(Path shape, double amount, [Offset? glow]) {
+        final centre = glow ?? origin;
         var path = shape;
         if (visible != null) {
           try {
@@ -1215,7 +1313,7 @@ class CameraPlanPainter extends CustomPainter {
               shape,
               Paint()
                 ..blendMode = BlendMode.plus
-                ..shader = shaderAt(origin, amount / samples),
+                ..shader = shaderAt(centre, amount / samples),
             );
             canvas.restore();
             return;
@@ -1226,17 +1324,21 @@ class CameraPlanPainter extends CustomPainter {
           Paint()
             ..blendMode = BlendMode.plus
             ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur)
-            ..shader = shaderAt(origin, amount / samples),
+            ..shader = shaderAt(centre, amount / samples),
         );
       }
 
       if (layers.isEmpty) {
         // En todas direcciones: una práctica, o el charco de luz de un
         // aparato colgado del techo.
-        paintShape(
-          Path()..addOval(Rect.fromCircle(center: origin, radius: reach)),
-          1,
-        );
+        final centre = origin + (pool - light.position);
+        final oval = Path()
+          ..addOval(Rect.fromCircle(center: Offset.zero, radius: reach));
+        final stretch = Matrix4.identity()
+          ..translateByDouble(centre.dx, centre.dy, 0, 1)
+          ..rotateZ(math.atan2(light.aim.dy, light.aim.dx))
+          ..scaleByDouble(1 / math.cos(tilt), 1, 1, 1);
+        paintShape(oval.transform(stretch.storage), 1, centre);
         continue;
       }
       for (final (degrees, amount) in layers) {
@@ -1261,48 +1363,146 @@ class CameraPlanPainter extends CustomPainter {
   /// Sombras del sol: de cada pared y de cada persona, hacia el lado
   /// contrario al sol y tan largas como diga su altura. Con ellas se ve de
   /// dónde viene y cómo de bajo está.
+  /// El suelo de cada recinto: los que tienen techo, con su tono; los que
+  /// están a cielo abierto, con el borde punteado.
+  void _drawRooms(Canvas canvas, LightScene scene) {
+    for (final room in scene.rooms) {
+      final path = room.room.path;
+      final picked = selectedRoom != null && room.room.contains(selectedRoom!);
+      if (room.roofed) {
+        canvas.drawPath(path, Paint()..color = const Color(0xFF15151B));
+      } else {
+        _drawDashedPath(
+          canvas,
+          path,
+          Paint()
+            ..color = _CanvasColors.inkTertiary
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5,
+        );
+      }
+      if (picked) {
+        canvas.drawPath(
+          path,
+          Paint()..color = _CanvasColors.accent.withValues(alpha: 0.10),
+        );
+      }
+    }
+  }
+
   void _drawSunShadows(Canvas canvas, LightScene scene) {
     final env = ambient;
     if (env == null || !env.hasSun) return;
     final away = env.towardSun * -1;
     final mpu = scene.metersPerUnit;
-    final wallShadow = away * (env.shadowLength(LightScene.wallHeightM) / mpu);
-    final bodyShadow = away * (env.shadowLength(1.75) / mpu);
+    Offset cast(double heightM) => away * (env.shadowLength(heightM) / mpu);
 
     final shadows = Path();
+    final dappled = Path();
     for (final blocker in scene.blockers) {
-      if (!blocker.isOpaque) continue;
+      // El grip no da sombra de sol que merezca dibujarse.
+      if (blocker.element?.type == ElementType.light) continue;
       if (blocker.isCircle) {
-        // Una persona: su silueta estirada.
+        // Una persona, un árbol, una roca: su silueta estirada.
         final r = blocker.radius;
+        final shadow = cast(blocker.heightM);
         final side = Offset(-away.dy, away.dx) * r;
-        shadows.addPolygon([
+        final into = blocker.isOpaque ? shadows : dappled;
+        into.addPolygon([
           blocker.a + side,
           blocker.a - side,
-          blocker.a - side + bodyShadow,
-          blocker.a + side + bodyShadow,
+          blocker.a - side + shadow,
+          blocker.a + side + shadow,
         ], true);
-        shadows.addOval(
-          Rect.fromCircle(center: blocker.a + bodyShadow, radius: r),
-        );
-      } else if (blocker.element?.type == ElementType.wall) {
+        into.addOval(Rect.fromCircle(center: blocker.a + shadow, radius: r));
+      } else if (blocker.isOpaque || blocker.isAperture) {
+        final shadow = cast(blocker.heightM);
         shadows.addPolygon([
           blocker.a,
           blocker.b,
-          blocker.b + wallShadow,
-          blocker.a + wallShadow,
+          blocker.b + shadow,
+          blocker.a + shadow,
         ], true);
       }
     }
+    // Un recinto con techo da la sombra de todo su volumen.
+    for (final room in scene.rooms) {
+      if (!room.roofed) continue;
+      shadows.addPath(room.room.path.shift(cast(room.ceilingM)), Offset.zero);
+    }
     // En una sola capa, para que donde se pisan no se oscurezcan dos veces.
+    final blur = MaskFilter.blur(BlurStyle.normal, 0.08 / mpu);
     canvas.saveLayer(null, Paint()..color = const Color(0x66000000));
     canvas.drawPath(
       shadows,
       Paint()
         ..color = const Color(0xFF000000)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 0.08 / mpu),
+        ..maskFilter = blur,
     );
     canvas.restore();
+    canvas.saveLayer(null, Paint()..color = const Color(0x33000000));
+    canvas.drawPath(
+      dappled,
+      Paint()
+        ..color = const Color(0xFF000000)
+        ..maskFilter = blur,
+    );
+    canvas.restore();
+  }
+
+  /// La mancha de sol que entra por cada hueco de un recinto con techo:
+  /// en el suelo, entre lo que deja pasar el alféizar y el dintel.
+  void _drawSunPatches(Canvas canvas, LightScene scene) {
+    final env = ambient;
+    if (env == null || !env.hasSun) return;
+    final toward = env.towardSun;
+    final mpu = scene.metersPerUnit;
+    final colour = LightBeam.colorForCct(env.condition.sunCct);
+    for (final gap in scene.apertures) {
+      if (gap.transmission <= 0 || gap.diffuseDeg != null) continue;
+      final span = gap.b - gap.a;
+      if (span.distance < 1) continue;
+      final normal = Offset(-span.dy, span.dx) / span.distance;
+      SceneRoom? room;
+      Offset? inward;
+      for (final side in [normal, normal * -1]) {
+        final found = scene.roomAt(gap.centre + side * 10);
+        if (found != null && found.roofed) {
+          room = found;
+          inward = side;
+        }
+      }
+      if (room == null || inward == null) continue;
+      // El sol tiene que venir de fuera.
+      if (toward.dx * inward.dx + toward.dy * inward.dy > -0.05) continue;
+      // Y llegar hasta el hueco: que no lo tape nada por fuera.
+      final reaches = scene.sunThroughput(
+        gap.centre + inward * 4,
+        heightM: (gap.sillM + gap.headM) / 2,
+      );
+      if (reaches.transmission <= 0) continue;
+      final near = toward * (-env.shadowLength(gap.sillM) / mpu);
+      final far = toward * (-env.shadowLength(gap.headM) / mpu);
+      final patch = Path.combine(
+        PathOperation.intersect,
+        Path()..addPolygon([
+          gap.a + near,
+          gap.b + near,
+          gap.b + far,
+          gap.a + far,
+        ], true),
+        room.room.path,
+      );
+      canvas.drawPath(
+        patch,
+        Paint()
+          ..blendMode = BlendMode.plus
+          ..color = colour.withValues(
+            alpha: (0.34 * reaches.transmission).clamp(0.05, 0.4),
+          )
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 0.04 / mpu),
+      );
+    }
   }
 
   /// Puerta, ventana o abertura: abre su hueco en la pared y dibuja lo que
@@ -1580,6 +1780,7 @@ class CameraPlanPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 
+    final mpu = metersPerUnit ?? defaultMetersPerUnit;
     switch (el.propType) {
       case PropType.table:
         canvas.drawRect(const Rect.fromLTWH(-16, -10, 32, 20), paint);
@@ -1635,35 +1836,76 @@ class CameraPlanPainter extends CustomPainter {
             ..strokeWidth = 1.5,
         );
       case PropType.tree:
-        canvas.drawCircle(
-          Offset.zero,
-          22,
-          Paint()..color = const Color(0xFF2E7D32).withValues(alpha: 0.35),
+        // La copa, a su tamaño: tapa la luz y deja pasar una parte.
+        final crown = _blob(LightScene.propSizeM(el) / mpu, el.id.hashCode);
+        canvas.drawPath(
+          crown,
+          Paint()..color = const Color(0xFF2E7D32).withValues(alpha: 0.38),
         );
-        canvas.drawCircle(
-          Offset.zero,
-          22,
-          paint..color = const Color(0xFF66BB6A),
+        canvas.drawPath(
+          _blob(LightScene.propSizeM(el) / mpu * 0.55, el.id.hashCode + 3),
+          Paint()..color = const Color(0xFF43A047).withValues(alpha: 0.30),
         );
+        canvas.drawPath(crown, paint..color = const Color(0xFF66BB6A));
         canvas.drawCircle(
           Offset.zero,
-          3,
+          4,
           Paint()..color = const Color(0xFF8D6E63),
         );
       case PropType.rock:
-        final rock = Path()
-          ..moveTo(-16, 6)
-          ..lineTo(-8, -10)
-          ..lineTo(6, -12)
-          ..lineTo(16, 0)
-          ..lineTo(10, 10)
-          ..lineTo(-10, 12)
-          ..close();
+        final rock = _blob(
+          LightScene.propSizeM(el) / mpu,
+          el.id.hashCode + 11,
+          rough: 0.22,
+        );
         canvas.drawPath(
           rock,
           Paint()..color = const Color(0xFF6B6B76).withValues(alpha: 0.5),
         );
         canvas.drawPath(rock, paint);
+      case PropType.hill:
+        // Curvas de nivel, con la ladera que mira al sol más clara.
+        const earth = Color(0xFFB08968);
+        final radius = LightScene.propSizeM(el) / mpu;
+        final seed = el.id.hashCode + 21;
+        final rad = -el.rotation * math.pi / 180;
+        final sun = ambient?.hasSun ?? false
+            ? ambient!.towardSun
+            : const Offset(-0.7, -0.7);
+        final lit = Offset(
+          sun.dx * math.cos(rad) - sun.dy * math.sin(rad),
+          sun.dx * math.sin(rad) + sun.dy * math.cos(rad),
+        );
+        final outline = _blob(radius, seed);
+        canvas.save();
+        canvas.clipPath(outline);
+        canvas.drawRect(
+          Rect.fromCircle(center: Offset.zero, radius: radius * 1.3),
+          Paint()
+            ..shader = ui.Gradient.linear(lit * radius, lit * -radius, [
+              earth.withValues(alpha: 0.42),
+              const Color(0xFF3A2C22).withValues(alpha: 0.55),
+            ]),
+        );
+        canvas.restore();
+        const rings = 5;
+        for (var i = 0; i < rings; i++) {
+          final k = 1 - i / rings;
+          canvas.save();
+          // Las curvas se aprietan hacia la cima, algo corrida del centro.
+          canvas.translate(
+            lit.dx * radius * 0.12 * (1 - k),
+            lit.dy * radius * 0.12 * (1 - k),
+          );
+          canvas.drawPath(
+            _blob(radius * k, seed),
+            Paint()
+              ..color = earth.withValues(alpha: i == 0 ? 0.9 : 0.55)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = i == 0 ? 2 : 1.2,
+          );
+          canvas.restore();
+        }
       case PropType.vehicle:
         final body = RRect.fromRectAndRadius(
           const Rect.fromLTWH(-18, -38, 36, 76),
@@ -1814,6 +2056,7 @@ class CameraPlanPainter extends CustomPainter {
       old.zones != zones ||
       old.alsoSelected != alsoSelected ||
       old.rotating != rotating ||
+      old.selectedRoom != selectedRoom ||
       old.segmentPreview != segmentPreview ||
       old.measure != measure ||
       old.zoneHandles != zoneHandles ||

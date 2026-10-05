@@ -100,6 +100,18 @@ class PlanOpening {
   /// ¿Tiene hojas que se abren? Puertas y ventanas.
   static bool hasLeaves(PlanElement el) => isDoor(el) || isWindow(el);
 
+  static const sillKey = 'sill';
+  static const headKey = 'head';
+
+  /// Altura a la que empieza el hueco, en metros: el alféizar de una
+  /// ventana; una puerta empieza en el suelo.
+  static double sill(PlanElement el) =>
+      (el.props[sillKey] as num?)?.toDouble() ?? (isWindow(el) ? 0.9 : 0);
+
+  /// Altura a la que acaba el hueco, en metros: el dintel.
+  static double head(PlanElement el) =>
+      math.max(sill(el) + 0.1, (el.props[headKey] as num?)?.toDouble() ?? 2.1);
+
   /// Grados que está abierta una puerta o una ventana. 0 = cerrada.
   static double openDeg(PlanElement el) {
     final stored = (el.props[openKey] as num?)?.toDouble();

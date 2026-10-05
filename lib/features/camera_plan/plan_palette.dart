@@ -5,7 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'camera_plan_constants.dart';
-import 'light_beam.dart';
+import 'light_family.dart';
 import 'light_symbols.dart';
 
 /// Herramienta activa del lienzo.
@@ -56,7 +56,9 @@ class PlanPalette extends StatelessWidget {
   /// Luces del proyecto, de la pantalla Equipo.
   final List<Light> projectLights;
   final ValueChanged<Light>? onAddCatalogLight;
-  final VoidCallback? onOpenCatalog;
+
+  /// Todo el catálogo de Equipo.
+  final List<Light> catalogLights;
   final ValueChanged<ArchitectureType> onAddArchitecture;
 
   /// Dónde van paredes y props. `null` si no hay elección.
@@ -74,7 +76,7 @@ class PlanPalette extends StatelessWidget {
     required this.onAddMeter,
     this.projectLights = const [],
     this.onAddCatalogLight,
-    this.onOpenCatalog,
+    this.catalogLights = const [],
     required this.onAddArchitecture,
     this.wallsToEnvironment,
     this.onWallsToEnvironment,
@@ -85,11 +87,6 @@ class PlanPalette extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final lights = kShotDesignerLightGrid.where(LightBeam.emits).toList();
-    if (!lights.contains(LightType.hmi)) lights.add(LightType.hmi);
-    final grip = kShotDesignerLightGrid
-        .where((t) => !LightBeam.emits(t))
-        .toList();
 
     Widget header(String text) => Padding(
       padding: const EdgeInsets.fromLTRB(4, AppSpacing.md, 4, 6),
@@ -154,58 +151,32 @@ class PlanPalette extends StatelessWidget {
               onTap: onAddMeter,
             ),
           ]),
-          header('LUCES DEL PROYECTO'),
-          if (projectLights.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text(
-                'Añade luces al proyecto en Equipo y saldrán aquí con sus '
-                'datos.',
-                style: AppTypography.caption(
-                  palette,
-                ).copyWith(color: palette.textTertiary, fontSize: 10),
-              ),
+          header('LUCES'),
+          PlanLightBrowser(
+            projectLights: projectLights,
+            catalogLights: catalogLights,
+            onAddLight: onAddLight,
+            onAddCatalogLight: onAddCatalogLight,
+          ),
+          for (final (title, types) in const [
+            ('GRIP · CORTA', [LightType.flag, LightType.cutter]),
+            (
+              'GRIP · DIFUNDE Y FILTRA',
+              [LightType.diffusionFrame, LightType.net, LightType.gel],
             ),
-          for (final light in projectLights)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: SizedBox(
-                height: 38,
-                child: _PaletteButton(
-                  icon: const Icon(Icons.wb_incandescent_outlined, size: 16),
-                  label: '${light.brand} ${light.model}',
-                  onTap: () => onAddCatalogLight?.call(light),
+            ('GRIP · REBOTA', [LightType.bounce]),
+            ('SOPORTE Y CORRIENTE', [LightType.cStand, LightType.generator]),
+          ]) ...[
+            header(title),
+            grid([
+              for (final type in types)
+                _PaletteButton(
+                  icon: LightSymbolPreview(type: type, size: 20),
+                  label: type.label,
+                  onTap: () => onAddLight(type),
                 ),
-              ),
-            ),
-          if (onOpenCatalog != null)
-            SizedBox(
-              height: 34,
-              child: _PaletteButton(
-                icon: const Icon(Icons.search, size: 16),
-                label: 'Catálogo de Equipo…',
-                tooltip: 'Buscar en el catálogo de Equipo',
-                onTap: onOpenCatalog!,
-              ),
-            ),
-          header('LUCES GENÉRICAS'),
-          grid([
-            for (final type in lights)
-              _PaletteButton(
-                icon: LightSymbolPreview(type: type, size: 20),
-                label: type.label,
-                onTap: () => onAddLight(type),
-              ),
-          ]),
-          header('GRIP'),
-          grid([
-            for (final type in grip)
-              _PaletteButton(
-                icon: LightSymbolPreview(type: type, size: 20),
-                label: type.label,
-                onTap: () => onAddLight(type),
-              ),
-          ]),
+            ]),
+          ],
           header('SALA'),
           if (wallsToEnvironment != null)
             Padding(
@@ -295,6 +266,231 @@ class _PaletteButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Las luces de la paleta, por familias: LED, HMI, tungsteno… Dentro de
+/// cada una, sus tipos; y en cada tipo, primero las del proyecto, luego
+/// la genérica y, al desplegar, las del catálogo de Equipo.
+class PlanLightBrowser extends StatefulWidget {
+  final List<Light> projectLights;
+  final List<Light> catalogLights;
+  final ValueChanged<LightType> onAddLight;
+  final ValueChanged<Light>? onAddCatalogLight;
+
+  const PlanLightBrowser({
+    super.key,
+    required this.projectLights,
+    required this.catalogLights,
+    required this.onAddLight,
+    this.onAddCatalogLight,
+  });
+
+  @override
+  State<PlanLightBrowser> createState() => _PlanLightBrowserState();
+}
+
+class _PlanLightBrowserState extends State<PlanLightBrowser> {
+  final _openFamilies = <LightFamily>{};
+  final _openGroups = <String>{};
+  String _query = '';
+
+  static String _nameOf(Light l) => '${l.brand} ${l.model}';
+
+  /// El catálogo trae aparatos repetidos: uno por nombre.
+  List<Light> _unique(Iterable<Light> lights) {
+    final seen = <String>{};
+    return [
+      for (final l in lights)
+        if (seen.add(_nameOf(l).toLowerCase())) l,
+    ]..sort((a, b) => _nameOf(a).compareTo(_nameOf(b)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final projectIds = {for (final l in widget.projectLights) l.id};
+    final project = _unique(widget.projectLights);
+    final catalog = _unique(
+      widget.catalogLights.where((l) => !projectIds.contains(l.id)),
+    );
+    final q = _query.trim().toLowerCase();
+
+    Widget fixture(Light light, {required bool inProject}) => Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: SizedBox(
+        height: 34,
+        child: _PaletteButton(
+          icon: Icon(
+            inProject ? Icons.star_rounded : Icons.wb_incandescent_outlined,
+            size: 15,
+            color: inProject ? palette.accent : null,
+          ),
+          label: _nameOf(light),
+          tooltip:
+              '${_nameOf(light)} · ${light.powerW} W'
+              '${inProject ? ' · en el proyecto' : ''}',
+          onTap: () => widget.onAddCatalogLight?.call(light),
+        ),
+      ),
+    );
+
+    Widget generic(LightType type, String name) => Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: SizedBox(
+        height: 34,
+        child: _PaletteButton(
+          icon: LightSymbolPreview(type: type, size: 18),
+          label: name,
+          tooltip: 'Añadir $name (genérica)',
+          onTap: () => widget.onAddLight(type),
+        ),
+      ),
+    );
+
+    final search = Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: TextField(
+        style: AppTypography.caption(
+          palette,
+        ).copyWith(color: palette.textPrimary),
+        decoration: const InputDecoration(
+          isDense: true,
+          prefixIcon: Icon(Icons.search, size: 16),
+          prefixIconConstraints: BoxConstraints(minWidth: 28),
+          hintText: 'Buscar luz…',
+        ),
+        onChanged: (v) => setState(() => _query = v),
+      ),
+    );
+
+    if (q.isNotEmpty) {
+      final found = [
+        ...project.where((l) => _nameOf(l).toLowerCase().contains(q)),
+        ...catalog.where((l) => _nameOf(l).toLowerCase().contains(q)),
+      ];
+      final generics = [
+        for (final group in kLightGroups)
+          for (final (type, name) in group.generics)
+            if (name.toLowerCase().contains(q)) (type, name),
+      ];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          search,
+          for (final (type, name) in generics) generic(type, name),
+          for (final light in found.take(40))
+            fixture(light, inProject: projectIds.contains(light.id)),
+          if (found.isEmpty && generics.isEmpty)
+            Text(
+              'Nada con ese nombre.',
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: palette.textTertiary),
+            ),
+        ],
+      );
+    }
+
+    Widget row({
+      required String label,
+      required int count,
+      required bool open,
+      required VoidCallback onTap,
+      bool sub = false,
+    }) => InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(sub ? 10 : 2, 6, 2, 6),
+        child: Row(
+          children: [
+            Icon(
+              open ? Icons.expand_more : Icons.chevron_right,
+              size: 16,
+              color: palette.textSecondary,
+            ),
+            const SizedBox(width: 2),
+            Expanded(
+              child: Text(
+                label,
+                style: AppTypography.caption(palette).copyWith(
+                  color: sub ? palette.textSecondary : palette.textPrimary,
+                  fontWeight: sub ? FontWeight.w500 : FontWeight.w700,
+                  fontSize: sub ? 11 : 12,
+                ),
+              ),
+            ),
+            if (count > 0)
+              Text(
+                '$count',
+                style: AppTypography.caption(
+                  palette,
+                ).copyWith(color: palette.textTertiary, fontSize: 10),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    final children = <Widget>[search];
+    for (final family in LightFamily.values) {
+      final groups = kLightGroups.where((g) => g.family == family).toList();
+      bool inFamily(Light l) =>
+          lightGroupForCatalogType(l.lightType).family == family;
+      final familyOpen = _openFamilies.contains(family);
+      children.add(
+        row(
+          label: family.label,
+          count:
+              project.where(inFamily).length + catalog.where(inFamily).length,
+          open: familyOpen,
+          onTap: () => setState(() {
+            if (!_openFamilies.remove(family)) _openFamilies.add(family);
+          }),
+        ),
+      );
+      if (!familyOpen) continue;
+      for (final group in groups) {
+        bool inGroup(Light l) =>
+            lightGroupForCatalogType(l.lightType).id == group.id;
+        final mine = project.where(inGroup).toList();
+        final others = catalog.where(inGroup).toList();
+        final groupOpen = _openGroups.contains(group.id);
+        // Con un solo tipo en la familia, sobra el segundo nivel.
+        if (groups.length > 1) {
+          children.add(
+            row(
+              label: group.name,
+              count: mine.length + others.length,
+              open: groupOpen,
+              sub: true,
+              onTap: () => setState(() {
+                if (!_openGroups.remove(group.id)) _openGroups.add(group.id);
+              }),
+            ),
+          );
+        }
+        if (groups.length > 1 && !groupOpen) continue;
+        children.add(
+          Padding(
+            padding: EdgeInsets.only(left: groups.length > 1 ? 12 : 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final light in mine) fixture(light, inProject: true),
+                for (final (type, name) in group.generics) generic(type, name),
+                for (final light in others) fixture(light, inProject: false),
+              ],
+            ),
+          ),
+        );
+      }
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
     );
   }
 }

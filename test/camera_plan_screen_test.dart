@@ -128,9 +128,15 @@ void main() {
     await settle(tester);
     expect(find.text('Esquema de luz · Cabaña'), findsOneWidget);
     // Paleta a la izquierda y lista de material a la derecha.
-    expect(find.text('LUCES DEL PROYECTO'), findsOneWidget);
-    expect(find.text('LUCES GENÉRICAS'), findsOneWidget);
-    expect(find.text('GRIP'), findsOneWidget);
+    expect(find.text('LUCES'), findsOneWidget);
+    // Las luces van por familias; al abrir una salen sus tipos.
+    expect(find.text('LED'), findsOneWidget);
+    expect(find.text('Tungsteno'), findsOneWidget);
+    await tester.tap(find.text('LED'));
+    await settle(tester);
+    expect(find.text('Panel'), findsOneWidget);
+    expect(find.text('Tubo'), findsOneWidget);
+    expect(find.text('GRIP · CORTA'), findsOneWidget);
     expect(find.text('Lista de material'), findsOneWidget);
 
     // El navegador de plantas entra plegado.

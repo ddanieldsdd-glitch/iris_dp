@@ -50,6 +50,12 @@ class PlanLight {
 
   static bool isOverhead(PlanElement el) => el.props[mountKey] == mountCeiling;
 
+  /// Grados que se inclina una luz colgada, desde la vertical.
+  static const tiltKey = 'tilt';
+  static double tiltOf(PlanElement el) => isOverhead(el)
+      ? ((el.props[tiltKey] as num?)?.toDouble() ?? 0).clamp(0.0, 80.0)
+      : 0;
+
   static double heightOf(PlanElement el) =>
       (el.props[heightKey] as num?)?.toDouble() ?? defaultCeilingHeight;
 

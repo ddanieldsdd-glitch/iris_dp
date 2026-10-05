@@ -45,33 +45,33 @@ extension ElementTypeCodec on ElementType {
 
 extension LightTypeLabel on LightType {
   String get label => switch (this) {
-        LightType.sun => 'Sun',
-        LightType.fresnelSmall => 'Small Fresnel',
-        LightType.fresnelMedium => 'Medium Fresnel',
-        LightType.fresnelLarge => 'Large Fresnel',
-        LightType.flo4Tubes => 'FLO 4 Tubes',
-        LightType.flo2Tubes => 'FLO 2 Tubes',
-        LightType.floSingle => 'Single FLO Tube',
-        LightType.lightPanel => 'Light Panel',
+        LightType.sun => 'Sol',
+        LightType.fresnelSmall => 'Fresnel pequeño',
+        LightType.fresnelMedium => 'Fresnel mediano',
+        LightType.fresnelLarge => 'Fresnel grande',
+        LightType.flo4Tubes => 'Pantalla de 4 tubos',
+        LightType.flo2Tubes => 'Pantalla de 2 tubos',
+        LightType.floSingle => 'Tubo',
+        LightType.lightPanel => 'Panel LED',
         LightType.led => 'LED',
-        LightType.led1x1 => 'LED 1x1 Panel',
-        LightType.openFace => 'Open Face',
-        LightType.ellipsoidal => 'Ellipsoidal',
-        LightType.par => 'PAR Light',
+        LightType.led1x1 => 'Panel 1×1',
+        LightType.openFace => 'Cuarzo abierto',
+        LightType.ellipsoidal => 'Recorte',
+        LightType.par => 'PAR',
         LightType.scoop => 'Scoop',
-        LightType.cyc => 'Cyc Light',
-        LightType.softbox => 'Soft Box',
-        LightType.practical => 'Practical',
+        LightType.cyc => 'Ciclorama',
+        LightType.softbox => 'Softbox',
+        LightType.practical => 'Práctica',
         LightType.bounce => 'Rebote',
         LightType.flag => 'Negro',
-        LightType.octagon => 'Octagon',
+        LightType.octagon => 'Octa',
         LightType.cutter => 'Cortador',
-        LightType.gel => 'Gel',
+        LightType.gel => 'Gelatina',
         LightType.cStand => 'C-Stand',
         LightType.generator => 'Generador',
         LightType.chimera => 'Chimera',
         LightType.hmi => 'HMI',
-        LightType.diffusionFrame => 'Difusión',
+        LightType.diffusionFrame => 'Marco de difusión',
         LightType.net => 'Red',
       };
 
@@ -114,6 +114,9 @@ enum PropType {
   rock,
   vehicle,
 
+  /// Colina o montaña.
+  hill,
+
   /// Fotómetro colocado en la planta.
   meter,
 }
@@ -140,6 +143,7 @@ extension PropTypeCodec on PropType {
         PropType.tree => 'Árbol',
         PropType.rock => 'Roca',
         PropType.vehicle => 'Vehículo',
+        PropType.hill => 'Colina',
         PropType.meter => 'Fotómetro',
       };
 
@@ -152,6 +156,7 @@ extension PropTypeCodec on PropType {
         PropType.tree => Icons.park_outlined,
         PropType.rock => Icons.landscape_outlined,
         PropType.vehicle => Icons.directions_car_outlined,
+        PropType.hill => Icons.terrain,
         PropType.meter => Icons.speed_outlined,
       };
 

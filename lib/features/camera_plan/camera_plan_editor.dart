@@ -29,6 +29,7 @@ import 'floor_plan_scope.dart';
 import 'light_beam.dart';
 import 'plan_data.dart' show kLightSetupColors;
 import 'plan_gear_list.dart';
+import 'plan_room_panel.dart';
 import 'light/ambient.dart';
 import 'light/exposure.dart';
 import 'light_overrides.dart';
@@ -282,6 +283,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   double _scale = 1.0;
   bool _loading = true;
   bool _isRotating = false;
+
+  /// Punto tocado dentro de un recinto: abre sus propiedades.
+  Offset? _selectedRoom;
   bool _isDraggingPathPoint = false;
 
   /// Algo se ha movido en el arrastre en curso y hay que guardarlo.
@@ -996,16 +1000,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Future<void> _addCatalogLight(Light light) =>
       _addElement(PlanEquipment.lightFromCatalog(light));
 
-  Future<void> _pickFromCatalog() async {
-    final all = await ref.read(databaseProvider).watchAllLights().first;
-    if (!mounted) return;
-    final light = await showDialog<Light>(
-      context: context,
-      builder: (_) => PlanLightCatalogDialog(lights: all),
-    );
-    if (light != null) await _addCatalogLight(light);
-  }
-
   /// Sol, cielo y rebote de paredes: se guardan con el esquema de luz.
   Future<void> _editAmbient() async {
     final setup = await _ensureLightSetup();
@@ -1617,6 +1611,18 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     ),
   );
 
+  /// Tocar una línea de la lista de material selecciona en la planta lo
+  /// que suma; tocarla otra vez pasa al siguiente.
+  void _pickGearLine(GearLine line) {
+    final live = [
+      for (final el in line.elements)
+        if (_elements.contains(el)) el,
+    ];
+    if (live.isEmpty) return;
+    final at = live.indexOf(_selected ?? live.last);
+    _select(live[(at + 1) % live.length]);
+  }
+
   String get _gearTitle => [
     _lightSetup?.name ?? 'Sin esquema de luz',
     if (_shot != null) widget.label,
@@ -2110,6 +2116,31 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       }
     }
     _select(hit, add: HardwareKeyboard.instance.isShiftPressed);
+    // Tocar el suelo de un recinto cerrado abre sus propiedades.
+    final room = hit == null ? _lightScene.roomAt(canvasPos) : null;
+    setState(() => _selectedRoom = room == null ? null : canvasPos);
+  }
+
+  LightScene get _lightScene => LightScene.from(
+    _visibleElements,
+    metersPerUnit: _metersPerUnit,
+    ambient: _lightSetup == null ? null : _ambient,
+  );
+
+  /// Guarda lo que se ha decidido de un recinto, con el esquema de luz.
+  Future<void> _saveRoom(RoomSetting setting) async {
+    final room = _lightScene.roomAt(setting.point);
+    final setup = await _ensureLightSetup();
+    if (!mounted) return;
+    final next = _ambient.copyWith(
+      rooms: [
+        for (final r in _ambient.rooms)
+          if (room == null || !room.room.contains(r.point)) r,
+        setting,
+      ],
+    );
+    setState(() => _ambient = next);
+    await _repo.saveAmbient(setup.id, next);
   }
 
   /// Abre otra planta: dentro de la pantalla de trabajo, sin apilar.
@@ -2508,7 +2539,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     onAddMeter: _addMeter,
                     projectLights: _gear.lights,
                     onAddCatalogLight: _addCatalogLight,
-                    onOpenCatalog: _pickFromCatalog,
+                    catalogLights: _gear.catalogLights,
                     onAddArchitecture: _addArchitecture,
                     wallsToEnvironment:
                         _linkedSet != null && _linkedSite != null
@@ -2688,6 +2719,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                       ],
                                                       alsoSelected: _multi,
                                                       rotating: _isRotating,
+                                                      selectedRoom:
+                                                          _selectedRoom,
                                                       segmentPreview:
                                                           _segmentStart !=
                                                                   null &&
@@ -2805,6 +2838,24 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                       )
                                     : null,
                               )
+                            else if (_selectedRoom != null &&
+                                _lightScene.roomAt(_selectedRoom!) != null)
+                              Container(
+                                width: 280,
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    left: BorderSide(color: palette.border),
+                                  ),
+                                ),
+                                child: PlanRoomPanel(
+                                  room: _lightScene.roomAt(_selectedRoom!)!,
+                                  metersPerUnit: _metersPerUnit,
+                                  anchor: _selectedRoom!,
+                                  onChanged: _saveRoom,
+                                  onClose: () =>
+                                      setState(() => _selectedRoom = null),
+                                ),
+                              )
                             else if (_wide)
                               Container(
                                 width: 240,
@@ -2817,6 +2868,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 child: PlanGearListPanel(
                                   gear: _gearList,
                                   title: _gearTitle,
+                                  onPick: _pickGearLine,
                                 ),
                               ),
                           ],
@@ -3680,6 +3732,103 @@ class _ElementPanelState extends State<_ElementPanel> {
     widget.onUpdate();
   }
 
+  /// Bloques abiertos o plegados; se recuerda mientras dure la sesión.
+  static final _openSections = <String, bool>{};
+
+  /// Un bloque plegable del panel.
+  Widget _section(
+    AppPalette palette,
+    String title,
+    String key,
+    List<Widget> children, {
+    bool open = true,
+  }) {
+    final isOpen = _openSections[key] ?? open;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _openSections[key] = !isOpen),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title.toUpperCase(),
+                    style: AppTypography.caption(palette).copyWith(
+                      color: palette.accent,
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Icon(
+                  isOpen ? Icons.expand_less : Icons.expand_more,
+                  size: 18,
+                  color: palette.textSecondary,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (isOpen) ...children,
+        Divider(height: 12, color: palette.border),
+      ],
+    );
+  }
+
+  List<Widget> _rotationControls(AppPalette palette, PlanElement element) => [
+    Text('Rotación', style: AppTypography.caption(palette)),
+    Row(
+      children: [
+        Expanded(
+          child: Slider(
+            // Girar en el lienzo puede dejar la rotación
+            // fuera de 0–360 (p. ej. -90).
+            value: element.rotation % 360,
+            min: 0,
+            max: 360,
+            divisions: 360,
+            label: '${(element.rotation % 360).round()}°',
+            onChanged: (v) {
+              element.rotation = v;
+              widget.onUpdate();
+            },
+          ),
+        ),
+        SizedBox(
+          width: 40,
+          child: Text(
+            '${(element.rotation % 360).round()}°',
+            style: AppTypography.caption(palette),
+          ),
+        ),
+        for (final step in const [-15.0, 15.0])
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: step < 0 ? 'Girar −15°' : 'Girar +15°',
+            icon: Icon(
+              step < 0 ? Icons.rotate_left : Icons.rotate_right,
+              size: 18,
+            ),
+            onPressed: () {
+              final turned = ((element.rotation + step) / 15).round() * 15.0;
+              element.rotation = (turned % 360 + 360) % 360;
+              widget.onUpdate();
+            },
+          ),
+      ],
+    ),
+    Text(
+      'Arrastra el asa o el anillo en el lienzo para girar; '
+      'con Mayús, de 15 en 15°',
+      style: AppTypography.caption(
+        palette,
+      ).copyWith(color: palette.textTertiary, fontSize: 10),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final palette = widget.palette;
@@ -3742,54 +3891,88 @@ class _ElementPanelState extends State<_ElementPanel> {
                       ),
                     const SizedBox(height: AppSpacing.sm),
                     if (LightBeam.of(element) case final beam?) ...[
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Encendida',
-                              style: AppTypography.caption(palette),
+                      _section(palette, 'Aparato', 'fixture', [
+                        PlanElementCompatPanel(
+                          element: element,
+                          onChanged: widget.onUpdate,
+                          part: CompatPart.identity,
+                        ),
+                      ]),
+                      _section(palette, 'Luz', 'light', [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Encendida',
+                                style: AppTypography.caption(palette),
+                              ),
                             ),
-                          ),
-                          Switch(
-                            value: !beam.off,
-                            onChanged: (on) {
-                              element.props[LightBeam.offKey] = !on;
-                              widget.onUpdate();
-                            },
-                          ),
-                        ],
-                      ),
-                      _beamSlider(
-                        'Intensidad',
-                        '${beam.intensity.round()} %',
-                        LightBeam.intensityKey,
-                        beam.intensity,
-                        0,
-                        100,
-                      ),
-                      _beamSlider(
-                        'Temperatura de color',
-                        '${beam.cct.round()} K',
-                        LightBeam.cctKey,
-                        beam.cct,
-                        2000,
-                        10000,
-                        step: 100,
-                      ),
-                      _beamSlider(
-                        'Apertura del haz',
-                        '${beam.spread.round()}°',
-                        LightBeam.spreadKey,
-                        beam.spread,
-                        5,
-                        360,
-                      ),
-                      PlanLightControls(
-                        element: element,
-                        exposure: widget.exposure,
-                        onUpdate: widget.onUpdate,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
+                            Switch(
+                              value: !beam.off,
+                              onChanged: (on) {
+                                element.props[LightBeam.offKey] = !on;
+                                widget.onUpdate();
+                              },
+                            ),
+                          ],
+                        ),
+                        _beamSlider(
+                          'Intensidad',
+                          '${beam.intensity.round()} %',
+                          LightBeam.intensityKey,
+                          beam.intensity,
+                          0,
+                          100,
+                        ),
+                        _beamSlider(
+                          'Temperatura de color',
+                          '${beam.cct.round()} K',
+                          LightBeam.cctKey,
+                          beam.cct,
+                          2000,
+                          10000,
+                          step: 100,
+                        ),
+                        _beamSlider(
+                          'Apertura del haz',
+                          '${beam.spread.round()}°',
+                          LightBeam.spreadKey,
+                          beam.spread,
+                          5,
+                          360,
+                        ),
+                        PlanLightControls(
+                          element: element,
+                          exposure: widget.exposure,
+                          onUpdate: widget.onUpdate,
+                          parts: const {LightControlPart.power},
+                        ),
+                      ]),
+                      _section(palette, 'Montaje', 'mount', [
+                        PlanLightControls(
+                          element: element,
+                          exposure: widget.exposure,
+                          onUpdate: widget.onUpdate,
+                          parts: const {LightControlPart.mount},
+                        ),
+                        ..._rotationControls(palette, element),
+                      ]),
+                      _section(palette, 'Filtros y difusión', 'filters', [
+                        PlanLightControls(
+                          element: element,
+                          exposure: widget.exposure,
+                          onUpdate: widget.onUpdate,
+                          parts: const {LightControlPart.filters},
+                        ),
+                      ]),
+                      _section(palette, 'Dato del fabricante', 'data', [
+                        PlanLightControls(
+                          element: element,
+                          exposure: widget.exposure,
+                          onUpdate: widget.onUpdate,
+                          parts: const {LightControlPart.data},
+                        ),
+                      ]),
                     ],
                     if (widget.canOverride)
                       Row(
@@ -3848,58 +4031,8 @@ class _ElementPanelState extends State<_ElementPanel> {
                         style: AppTypography.bodyMedium(palette),
                       )
                     else ...[
-                      Text('Rotación', style: AppTypography.caption(palette)),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Slider(
-                              // Girar en el lienzo puede dejar la rotación
-                              // fuera de 0–360 (p. ej. -90).
-                              value: element.rotation % 360,
-                              min: 0,
-                              max: 360,
-                              divisions: 360,
-                              label: '${(element.rotation % 360).round()}°',
-                              onChanged: (v) {
-                                element.rotation = v;
-                                widget.onUpdate();
-                              },
-                            ),
-                          ),
-                          SizedBox(
-                            width: 40,
-                            child: Text(
-                              '${(element.rotation % 360).round()}°',
-                              style: AppTypography.caption(palette),
-                            ),
-                          ),
-                          for (final step in const [-15.0, 15.0])
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              tooltip: step < 0 ? 'Girar −15°' : 'Girar +15°',
-                              icon: Icon(
-                                step < 0
-                                    ? Icons.rotate_left
-                                    : Icons.rotate_right,
-                                size: 18,
-                              ),
-                              onPressed: () {
-                                final turned =
-                                    ((element.rotation + step) / 15).round() *
-                                    15.0;
-                                element.rotation = (turned % 360 + 360) % 360;
-                                widget.onUpdate();
-                              },
-                            ),
-                        ],
-                      ),
-                      Text(
-                        'Arrastra el asa o el anillo en el lienzo para girar; '
-                        'con Mayús, de 15 en 15°',
-                        style: AppTypography.caption(
-                          palette,
-                        ).copyWith(color: palette.textTertiary, fontSize: 10),
-                      ),
+                      if (LightBeam.of(element) == null)
+                        ..._rotationControls(palette, element),
                     ],
                     const SizedBox(height: AppSpacing.md),
                     if (element.type == ElementType.camera) ...[
@@ -3992,16 +4125,25 @@ class _ElementPanelState extends State<_ElementPanel> {
                         element.type == ElementType.prop ||
                         element.type == ElementType.wall ||
                         element.type == ElementType.actor) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        'Compatibilidad 3D',
-                        style: AppTypography.caption(palette),
-                      ),
-                      const SizedBox(height: 6),
-                      PlanElementCompatPanel(
-                        element: element,
-                        onChanged: widget.onUpdate,
-                      ),
+                      _section(palette, 'Exportar a 3D', 'export', [
+                        Text(
+                          'Enlace con ARRI Luka y Cine Tracer. Se rellena '
+                          'solo al elegir un modelo de Equipo.',
+                          style: AppTypography.caption(
+                            palette,
+                          ).copyWith(color: palette.textTertiary),
+                        ),
+                        const SizedBox(height: 6),
+                        PlanElementCompatPanel(
+                          element: element,
+                          onChanged: widget.onUpdate,
+                          part:
+                              element.type == ElementType.light &&
+                                  LightBeam.of(element) != null
+                              ? CompatPart.export
+                              : CompatPart.all,
+                        ),
+                      ], open: false),
                     ],
                     if (element.type == ElementType.actor) ...[
                       Text('Color', style: AppTypography.caption(palette)),

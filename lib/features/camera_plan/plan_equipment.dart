@@ -7,6 +7,7 @@ import 'light/meter.dart';
 import 'light/photometry.dart';
 import 'light/plan_light.dart';
 import 'light_beam.dart';
+import 'light_family.dart';
 
 /// Puente entre la pantalla Equipo y la planta: las luces, cámaras y lentes
 /// del proyecto, con sus datos técnicos, convertidas en elementos de planta.
@@ -14,18 +15,8 @@ class PlanEquipment {
   PlanEquipment._();
 
   /// Símbolo de planta para un tipo de luz del catálogo.
-  static LightType lightTypeFor(String catalogType) {
-    final t = catalogType.toLowerCase();
-    if (t.contains('hmi')) return LightType.hmi;
-    if (t.contains('fresnel')) return LightType.fresnelMedium;
-    if (t.contains('tube') || t.contains('flo')) return LightType.floSingle;
-    if (t.contains('panel')) return LightType.lightPanel;
-    if (t.contains('practical') || t.contains('balloon')) {
-      return LightType.practical;
-    }
-    if (t.contains('par')) return LightType.par;
-    return LightType.led;
-  }
+  static LightType lightTypeFor(String catalogType) =>
+      lightGroupForCatalogType(catalogType).symbol;
 
   /// Un aparato del catálogo como luz de planta, con su potencia, su
   /// tecnología, su haz y, si el catálogo la trae, su fotometría.
@@ -93,7 +84,11 @@ class ProjectGear {
   final List<Camera> cameras;
   final List<Lense> lenses;
 
+  /// Todas las luces del catálogo de Equipo, estén o no en el proyecto.
+  final List<Light> catalogLights;
+
   const ProjectGear({
+    this.catalogLights = const [],
     this.lights = const [],
     this.cameras = const [],
     this.lenses = const [],
@@ -118,6 +113,11 @@ class ProjectGear {
       }
     }
     lenses.sort((a, b) => a.focalLength.compareTo(b.focalLength));
-    return ProjectGear(lights: lights, cameras: cameras, lenses: lenses);
+    return ProjectGear(
+      lights: lights,
+      cameras: cameras,
+      lenses: lenses,
+      catalogLights: await db.getAllLights(),
+    );
   }
 }

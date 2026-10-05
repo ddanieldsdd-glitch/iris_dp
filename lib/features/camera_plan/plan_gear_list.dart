@@ -15,7 +15,10 @@ class GearLine {
   final int count;
   final String label;
 
-  const GearLine(this.count, this.label);
+  /// Los elementos de la planta que suma esta línea.
+  final List<PlanElement> elements;
+
+  const GearLine(this.count, this.label, [this.elements = const []]);
 
   @override
   String toString() => '$count× $label';
@@ -51,10 +54,17 @@ class GearList {
     final cameras = <String, int>{};
     final filters = <String, int>{};
     var watts = 0.0;
-    void add(Map<String, int> map, String key) =>
-        map.update(key, (n) => n + 1, ifAbsent: () => 1);
+    final members = <(Map<String, int>, String), List<PlanElement>>{};
+    PlanElement? current;
+    void add(Map<String, int> map, String key) {
+      map.update(key, (n) => n + 1, ifAbsent: () => 1);
+      if (current != null) {
+        members.putIfAbsent((map, key), () => []).add(current);
+      }
+    }
 
     for (final el in elements) {
+      current = el;
       switch (el.type) {
         case ElementType.light:
           final name =
@@ -85,7 +95,8 @@ class GearList {
     }
 
     List<GearLine> lines(Map<String, int> map) => [
-      for (final e in map.entries) GearLine(e.value, e.key),
+      for (final e in map.entries)
+        GearLine(e.value, e.key, members[(map, e.key)] ?? const []),
     ];
     return GearList(
       lights: lines(lights),
@@ -144,7 +155,15 @@ class PlanGearListPanel extends StatelessWidget {
   final GearList gear;
   final String title;
 
-  const PlanGearListPanel({super.key, required this.gear, required this.title});
+  /// Tocar una línea señala en la planta lo que suma.
+  final ValueChanged<GearLine>? onPick;
+
+  const PlanGearListPanel({
+    super.key,
+    required this.gear,
+    required this.title,
+    this.onPick,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -167,11 +186,16 @@ class PlanGearListPanel extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             for (final line in lines)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1),
-                child: Text(
-                  line.toString(),
-                  style: AppTypography.bodyMedium(palette),
+              InkWell(
+                onTap: onPick == null || line.elements.isEmpty
+                    ? null
+                    : () => onPick!(line),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Text(
+                    line.toString(),
+                    style: AppTypography.bodyMedium(palette),
+                  ),
                 ),
               ),
           ],

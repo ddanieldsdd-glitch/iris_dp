@@ -23,7 +23,16 @@ class PlanLightControls extends StatefulWidget {
     required this.element,
     required this.onUpdate,
     this.exposure = const ExposureSettings(),
+    this.parts = const {
+      LightControlPart.power,
+      LightControlPart.mount,
+      LightControlPart.filters,
+      LightControlPart.data,
+    },
   });
+
+  /// Qué bloques se enseñan: el panel de propiedades los reparte.
+  final Set<LightControlPart> parts;
 
   @override
   State<PlanLightControls> createState() => _PlanLightControlsState();
@@ -171,146 +180,188 @@ class _PlanLightControlsState extends State<PlanLightControls> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Potencia', style: AppTypography.caption(palette)),
-        number(
-          _watts,
-          PlanLight.wattsKey,
-          '${defaults.watts.round()} (típica)',
-          suffix: 'W · ${light.tech.label}',
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text('Montaje', style: AppTypography.caption(palette)),
-        SegmentedButton<bool>(
-          showSelectedIcon: false,
-          style: const ButtonStyle(visualDensity: VisualDensity.compact),
-          segments: const [
-            ButtonSegment(value: false, label: Text('Trípode')),
-            ButtonSegment(value: true, label: Text('Techo')),
+        if (widget.parts.contains(LightControlPart.power)) ...[
+          Text('Potencia', style: AppTypography.caption(palette)),
+          number(
+            _watts,
+            PlanLight.wattsKey,
+            '${defaults.watts.round()} (típica)',
+            suffix: 'W · ${light.tech.label}',
+          ),
+        ],
+        if (widget.parts.contains(LightControlPart.mount)) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text('Montaje', style: AppTypography.caption(palette)),
+          SegmentedButton<bool>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: const [
+              ButtonSegment(value: false, label: Text('Trípode')),
+              ButtonSegment(value: true, label: Text('Techo')),
+            ],
+            selected: {PlanLight.isOverhead(_el)},
+            onSelectionChanged: (v) {
+              if (v.first) {
+                _el.props[PlanLight.mountKey] = PlanLight.mountCeiling;
+              } else {
+                _el.props.remove(PlanLight.mountKey);
+              }
+              setState(() {});
+              widget.onUpdate();
+            },
+          ),
+          if (PlanLight.isOverhead(_el)) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Altura', style: AppTypography.caption(palette)),
+                ),
+                Text(
+                  '${PlanLight.heightOf(_el).toStringAsFixed(1)} m',
+                  style: AppTypography.caption(palette),
+                ),
+              ],
+            ),
+            Slider(
+              value: PlanLight.heightOf(_el).clamp(2.0, 10.0),
+              min: 2,
+              max: 10,
+              divisions: 32,
+              onChanged: (v) =>
+                  setState(() => _el.props[PlanLight.heightKey] = v),
+              onChangeEnd: (_) => widget.onUpdate(),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Inclinación',
+                    style: AppTypography.caption(palette),
+                  ),
+                ),
+                Text(
+                  PlanLight.tiltOf(_el) < 1
+                      ? 'recta hacia abajo'
+                      : '${PlanLight.tiltOf(_el).round()}°',
+                  style: AppTypography.caption(palette),
+                ),
+              ],
+            ),
+            Slider(
+              value: PlanLight.tiltOf(_el),
+              min: 0,
+              max: 80,
+              divisions: 16,
+              onChanged: (v) => setState(() {
+                if (v < 1) {
+                  _el.props.remove(PlanLight.tiltKey);
+                } else {
+                  _el.props[PlanLight.tiltKey] = v;
+                }
+              }),
+              onChangeEnd: (_) => widget.onUpdate(),
+            ),
+            Text(
+              'Colgada del techo, alumbra hacia abajo: hace un charco de luz '
+              'y pasa por encima de las personas. Inclinada, el charco se va '
+              'hacia donde apunta.',
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: palette.textTertiary, fontSize: 10),
+            ),
           ],
-          selected: {PlanLight.isOverhead(_el)},
-          onSelectionChanged: (v) {
-            if (v.first) {
-              _el.props[PlanLight.mountKey] = PlanLight.mountCeiling;
-            } else {
-              _el.props.remove(PlanLight.mountKey);
-            }
-            setState(() {});
-            widget.onUpdate();
-          },
-        ),
-        if (PlanLight.isOverhead(_el)) ...[
+        ],
+        if (widget.parts.contains(LightControlPart.filters)) ...[
+          picker('Difusión', ModifierKind.diffusion),
+          picker('Red', ModifierKind.scrim),
+          picker('Gelatina', ModifierKind.correction),
+        ],
+        if (widget.parts.contains(LightControlPart.data)) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Dato medido o del fabricante',
+            style: AppTypography.caption(palette),
+          ),
           Row(
             children: [
               Expanded(
-                child: Text('Altura', style: AppTypography.caption(palette)),
+                child: number(
+                  _lux,
+                  PlanLight.measuredLuxKey,
+                  'lux',
+                  suffix: 'lx',
+                ),
               ),
-              Text(
-                '${PlanLight.heightOf(_el).toStringAsFixed(1)} m',
-                style: AppTypography.caption(palette),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                child: Text('a'),
+              ),
+              Expanded(
+                child: number(
+                  _meters,
+                  PlanLight.measuredMetersKey,
+                  'metros',
+                  suffix: 'm',
+                ),
               ),
             ],
           ),
-          Slider(
-            value: PlanLight.heightOf(_el).clamp(2.0, 10.0),
-            min: 2,
-            max: 10,
-            divisions: 32,
-            onChanged: (v) =>
-                setState(() => _el.props[PlanLight.heightKey] = v),
-            onChangeEnd: (_) => widget.onUpdate(),
-          ),
-          Text(
-            'Colgada del techo, alumbra hacia abajo: hace un charco de luz '
-            'y pasa por encima de las personas.',
-            style: AppTypography.caption(
-              palette,
-            ).copyWith(color: palette.textTertiary, fontSize: 10),
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: palette.surfaceOverlay,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Lo que da en el eje',
+                        style: AppTypography.caption(palette),
+                      ),
+                    ),
+                    _StatusTag(status: light.source.status),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                for (final meters in const [2.0, 4.0, 8.0])
+                  Text(
+                    'a ${meters.round()} m: '
+                    '${formatLux(light.source.illuminance(meters))} · '
+                    '${formatStop(widget.exposure.stopFor(light.source.illuminance(meters)))}',
+                    style: AppTypography.bodyMedium(palette),
+                  ),
+                const SizedBox(height: 4),
+                Text(
+                  [
+                    'ISO ${widget.exposure.iso.round()}',
+                    '${widget.exposure.shutterDeg.round()}°',
+                    '${widget.exposure.fps.round()} fps',
+                    if (lost > 0.15)
+                      '−${formatStopDifference(lost).substring(1)} por '
+                          'regulación y filtros',
+                  ].join(' · '),
+                  style: AppTypography.caption(
+                    palette,
+                  ).copyWith(color: palette.textTertiary, fontSize: 10),
+                ),
+              ],
+            ),
           ),
         ],
-        picker('Difusión', ModifierKind.diffusion),
-        picker('Red', ModifierKind.scrim),
-        picker('Gelatina', ModifierKind.correction),
-        const SizedBox(height: AppSpacing.md),
-        Text(
-          'Dato medido o del fabricante',
-          style: AppTypography.caption(palette),
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: number(
-                _lux,
-                PlanLight.measuredLuxKey,
-                'lux',
-                suffix: 'lx',
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 6),
-              child: Text('a'),
-            ),
-            Expanded(
-              child: number(
-                _meters,
-                PlanLight.measuredMetersKey,
-                'metros',
-                suffix: 'm',
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          decoration: BoxDecoration(
-            color: palette.surfaceOverlay,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Lo que da en el eje',
-                      style: AppTypography.caption(palette),
-                    ),
-                  ),
-                  _StatusTag(status: light.source.status),
-                ],
-              ),
-              const SizedBox(height: 4),
-              for (final meters in const [2.0, 4.0, 8.0])
-                Text(
-                  'a ${meters.round()} m: '
-                  '${formatLux(light.source.illuminance(meters))} · '
-                  '${formatStop(widget.exposure.stopFor(light.source.illuminance(meters)))}',
-                  style: AppTypography.bodyMedium(palette),
-                ),
-              const SizedBox(height: 4),
-              Text(
-                [
-                  'ISO ${widget.exposure.iso.round()}',
-                  '${widget.exposure.shutterDeg.round()}°',
-                  '${widget.exposure.fps.round()} fps',
-                  if (lost > 0.15)
-                    '−${formatStopDifference(lost).substring(1)} por '
-                        'regulación y filtros',
-                ].join(' · '),
-                style: AppTypography.caption(
-                  palette,
-                ).copyWith(color: palette.textTertiary, fontSize: 10),
-              ),
-            ],
-          ),
-        ),
         const SizedBox(height: AppSpacing.md),
       ],
     );
   }
 }
+
+/// Bloques de [PlanLightControls].
+enum LightControlPart { power, mount, filters, data }
 
 class _StatusTag extends StatelessWidget {
   final PhotometryStatus status;

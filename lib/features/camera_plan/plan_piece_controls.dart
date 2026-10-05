@@ -33,9 +33,17 @@ class PlanPieceControls extends StatelessWidget {
     required this.onUpdate,
   });
 
+  static bool _isTerrain(PlanElement el) =>
+      el.type == ElementType.prop &&
+      (el.propType == PropType.tree ||
+          el.propType == PropType.rock ||
+          el.propType == PropType.hill ||
+          el.propType == PropType.vehicle);
+
   static bool appliesTo(PlanElement el) =>
       PlanOpening.isOpening(el) ||
       PlanSegment.isSegment(el) ||
+      _isTerrain(el) ||
       _isGrip(el) ||
       el.type == ElementType.actor ||
       el.type == ElementType.camera;
@@ -267,8 +275,40 @@ class PlanPieceControls extends StatelessWidget {
             ),
           filter('Difusión pegada al cristal', ModifierKind.diffusion),
           filter('Gelatina en el cristal', ModifierKind.correction),
+          Text(
+            'Con difusión o cortina, el sol deja de entrar en mancha y la '
+            'ventana pasa a ser una fuente blanda.',
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.textTertiary),
+          ),
+          const SizedBox(height: AppSpacing.sm),
         ]);
       }
+      // Entre qué alturas está el hueco: decide hasta dónde entra el sol.
+      final sill = PlanOpening.sill(el);
+      final head = PlanOpening.head(el);
+      children.addAll([
+        if (!PlanOpening.isDoor(el))
+          slider(
+            'Alféizar (altura a la que empieza)',
+            '${sill.toStringAsFixed(2)} m',
+            current: sill,
+            min: 0,
+            max: 2,
+            onChanged: (v) =>
+                el.props[PlanOpening.sillKey] = (v * 20).round() / 20,
+          ),
+        slider(
+          'Dintel (altura a la que acaba)',
+          '${head.toStringAsFixed(2)} m',
+          current: head,
+          min: 1,
+          max: 6,
+          onChanged: (v) =>
+              el.props[PlanOpening.headKey] = (v * 20).round() / 20,
+        ),
+      ]);
     } else if (PlanSegment.isSegment(el) &&
         PlanSegment.kind(el) == PlanSegment.kindWall) {
       final material = SurfaceMaterial.byId(
@@ -289,6 +329,70 @@ class PlanPieceControls extends StatelessWidget {
               : material.miredShift < -3
               ? ', algo más fría'
               : ''}.',
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textTertiary),
+        ),
+      ]);
+    } else if (PlanSegment.isSegment(el) &&
+        PlanSegment.kind(el) == PlanSegment.kindRelief) {
+      final height = LightScene.propHeightM(el);
+      children.addAll([
+        slider(
+          'Altura del talud',
+          '${height.toStringAsFixed(1)} m',
+          current: height,
+          min: 0.5,
+          max: 30,
+          onChanged: (v) =>
+              el.props[LightScene.heightKey] = (v * 2).round() / 2,
+        ),
+        toggle(
+          'Baja hacia el otro lado',
+          el.props['flip'] == true,
+          (v) => el.props['flip'] = v,
+        ),
+        Text(
+          height < 1.2
+              ? 'Tan bajo no tapa la luz de los aparatos; al sol le da '
+                    'sombra corta.'
+              : 'Tapa la luz y da sombra de sol según su altura.',
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textTertiary),
+        ),
+      ]);
+    } else if (_isTerrain(el)) {
+      final size = LightScene.propSizeM(el);
+      final height = LightScene.propHeightM(el);
+      final type = el.propType;
+      children.addAll([
+        if (type != PropType.vehicle)
+          slider(
+            type == PropType.tree ? 'Radio de la copa' : 'Radio',
+            '${size.toStringAsFixed(1)} m',
+            current: size,
+            min: 0.2,
+            max: type == PropType.hill ? 40 : 8,
+            onChanged: (v) =>
+                el.props[LightScene.sizeKey] = (v * 10).round() / 10,
+          ),
+        slider(
+          'Altura',
+          '${height.toStringAsFixed(1)} m',
+          current: height,
+          min: 0.2,
+          max: type == PropType.hill ? 60 : 25,
+          onChanged: (v) =>
+              el.props[LightScene.heightKey] = (v * 10).round() / 10,
+        ),
+        Text(
+          type == PropType.tree
+              ? 'La copa deja pasar una cuarta parte de la luz y da sombra '
+                    'de sol según su altura.'
+              : height < 1.2
+              ? 'Tan bajo no tapa la luz de los aparatos.'
+              : 'Tapa la luz y da sombra de sol según su altura.',
           style: AppTypography.caption(
             palette,
           ).copyWith(color: palette.textTertiary),

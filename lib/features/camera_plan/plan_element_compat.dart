@@ -186,6 +186,7 @@ class PlanElementCompat {
         PropType.tree ||
         PropType.meter ||
         PropType.rock ||
+        PropType.hill ||
         PropType.vehicle ||
         PropType.rectangle || null => defaultUnrealMesh,
       };
@@ -196,7 +197,7 @@ class PlanElementCompat {
         PropType.sofa => 'furniture_sofa',
         PropType.bed => 'furniture_bed',
         PropType.tree => 'nature_tree',
-        PropType.rock => 'nature_rock',
+        PropType.rock || PropType.hill => 'nature_rock',
         PropType.vehicle => 'vehicle_car',
         PropType.meter => 'prop_generic',
         PropType.rectangle || null => 'prop_generic',

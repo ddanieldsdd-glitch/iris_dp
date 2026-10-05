@@ -6,12 +6,14 @@ import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_json.dart';
 import 'package:iris_dp/features/camera_plan/light/ambient.dart';
 import 'package:iris_dp/features/camera_plan/light/exposure.dart';
+import 'package:iris_dp/features/camera_plan/light_family.dart';
 import 'package:iris_dp/features/camera_plan/light_overrides.dart';
 import 'package:iris_dp/features/camera_plan/light/light_scene.dart';
 import 'package:iris_dp/features/camera_plan/light/meter.dart';
 import 'package:iris_dp/features/camera_plan/light/modifiers.dart';
 import 'package:iris_dp/features/camera_plan/light/photometry.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
+import 'package:iris_dp/features/camera_plan/light/rooms.dart';
 import 'package:iris_dp/features/camera_plan/plan_opening.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 
@@ -811,22 +813,32 @@ void main() {
 
     test('una pared da sombra hasta donde alcanza según la altura del sol', () {
       final s = scene([wall(400, 0, 400, 600)], sunFromLeft);
-      // Con el sol a 30°, una pared de 2,5 m da 4,33 m de sombra: 216
+      // Con el sol a 30°, una pared de 2,5 m da 4,33 m de sombra en el
+      // suelo. A la altura de la cara (1,5 m) tapa hasta 1,73 m: 87
       // unidades.
       expect(sunFromLeft.shadowLength(2.5), closeTo(4.33, 0.01));
-      expect(s.luxAt(const Offset(500, 300)), 0);
-      expect(s.luxAt(const Offset(700, 300)), 60000);
+      expect(s.luxAt(const Offset(480, 300)), 0);
+      expect(s.luxAt(const Offset(500, 300)), 60000);
+      // En el suelo la sombra llega más lejos.
+      expect(
+        s.sunThroughput(const Offset(500, 300), heightM: 0).transmission,
+        0,
+      );
+      expect(
+        s.sunThroughput(const Offset(700, 300), heightM: 0).transmission,
+        1,
+      );
       // Con el sol más alto, la sombra se acorta.
       final high = scene([
         wall(400, 0, 400, 600),
       ], sunFromLeft.copyWith(sunElevation: 70));
-      expect(high.luxAt(const Offset(500, 300)), 60000);
+      expect(high.luxAt(const Offset(480, 300)), 60000);
     });
 
     test('el sol entra por una ventana', () {
       final s = scene([wall(400, 0, 400, 600), window(400, 300)], sunFromLeft);
-      expect(s.luxAt(const Offset(500, 300)), closeTo(54000, 1));
-      expect(s.luxAt(const Offset(500, 500)), 0);
+      expect(s.luxAt(const Offset(450, 300)), closeTo(54000, 1));
+      expect(s.luxAt(const Offset(450, 500)), 0);
     });
 
     test('nublado no hay sol directo, solo cielo', () {
@@ -1070,6 +1082,50 @@ void main() {
       },
     );
 
+    test('inclinada, la luz de techo lleva su máximo hacia donde apunta', () {
+      // Apunta a la derecha (90°), colgada a 4,5 m: 3 m sobre la cara.
+      final tilted = scene([
+        hmi(300, 300, 90, {'mount': 'ceiling', 'height': 4.5, 'tilt': 45.0}),
+      ]);
+      // A 45°, el eje toca el plano 3 m (150 unidades) más allá.
+      final onAxis = tilted.luxAt(const Offset(450, 300));
+      expect(onAxis, greaterThan(tilted.luxAt(const Offset(300, 300))));
+      expect(onAxis, greaterThan(tilted.luxAt(const Offset(150, 300)) * 4));
+      // Y en el eje llega lo que da el aparato a esa distancia en diagonal.
+      final light = PlanLight.of(
+        hmi(0, 0, 90, {'mount': 'ceiling', 'height': 4.5}),
+      )!;
+      expect(
+        onAxis,
+        closeTo(light.source.illuminance(3 * 1.41421356), onAxis * 0.001),
+      );
+    });
+
+    test('sin altura propia, cuelga del techo del recinto', () {
+      PlanElement w(double x1, double y1, double x2, double y2) =>
+          wall(x1, y1, x2, y2);
+      final room = [
+        w(100, 100, 500, 100),
+        w(500, 100, 500, 500),
+        w(500, 500, 100, 500),
+        w(100, 500, 100, 100),
+      ];
+      LightScene with_(double ceiling) => LightScene.from(
+        [
+          ...room,
+          hmi(300, 300, 0, {'mount': 'ceiling'}),
+        ],
+        metersPerUnit: 0.02,
+        wallBounce: false,
+        ambient: PlanAmbient(
+          skyOn: false,
+          rooms: [RoomSetting(x: 300, y: 300, ceilingM: ceiling)],
+        ),
+      );
+      expect(with_(2.5).lights.first.overheadM, closeTo(1.0, 1e-9));
+      expect(with_(5.5).lights.first.overheadM, closeTo(4.0, 1e-9));
+    });
+
     test('las telas de palio de Rosco están en el catálogo', () {
       for (final id in [
         'grid-full',
@@ -1103,6 +1159,249 @@ void main() {
       );
       final ids = kLightModifiers.map((m) => m.id).toSet();
       expect(ids.length, kLightModifiers.length);
+    });
+  });
+  group('recintos, techo y sol', () {
+    var id = 0;
+    PlanElement wall(double x1, double y1, double x2, double y2) =>
+        PlanSegment.create(start: Offset(x1, y1), end: Offset(x2, y2))
+          ..id = --id;
+    PlanElement relief(double x1, double y1, double x2, double y2) =>
+        PlanSegment.create(
+          start: Offset(x1, y1),
+          end: Offset(x2, y2),
+          kind: PlanSegment.kindRelief,
+        )..id = --id;
+    // Ventana de 1,2 m en la pared oeste (x = 300), a media altura.
+    PlanElement window([Map<String, dynamic>? props]) => PlanElement(
+      id: --id,
+      type: ElementType.wall,
+      position: const Offset(300, 350),
+      rotation: 90,
+      label: ArchitectureType.window.dbValue,
+      props: {'width': 60.0, ...?props},
+    );
+    PlanElement grip(LightType type, double x, double y, [String? material]) =>
+        PlanElement(
+          id: --id,
+          type: ElementType.light,
+          position: Offset(x, y),
+          rotation: 90,
+          lightType: type,
+          props: {'len': 100, 'material': ?material},
+        );
+    PlanElement prop(PropType type, double x, double y) => PlanElement(
+      id: --id,
+      type: ElementType.prop,
+      position: Offset(x, y),
+      label: type.dbValue,
+    );
+    // Sala de 8 × 6 m.
+    List<PlanElement> room() => [
+      wall(300, 200, 700, 200),
+      wall(700, 200, 700, 500),
+      wall(700, 500, 300, 500),
+      wall(300, 500, 300, 200),
+    ];
+    // Sol desde la izquierda, a 30°.
+    const sun = PlanAmbient(
+      day: true,
+      sunAzimuth: 270,
+      sunElevation: 30,
+      skyOn: false,
+      wallBounce: false,
+    );
+    LightScene scene(List<PlanElement> elements, [PlanAmbient ambient = sun]) =>
+        LightScene.from(elements, metersPerUnit: 0.02, ambient: ambient);
+    double sunAt(LightScene s, Offset p) => s
+        .contributionsAt(p)
+        .where((c) => c.light.label == 'Sol')
+        .fold(0, (sum, c) => sum + c.lux);
+    const nearWindow = Offset(330, 350);
+    const deep = Offset(600, 350);
+
+    test('cuatro paredes cierran un recinto; con un hueco de 30 cm, no', () {
+      List<(Offset, Offset)> spans(List<PlanElement> walls) => [
+        for (final w in walls) (PlanSegment.start(w), PlanSegment.end(w)),
+      ];
+      final rooms = PlanRooms.detect(spans(room()));
+      expect(rooms, hasLength(1));
+      expect(rooms.single.area, closeTo(400 * 300, 1));
+      expect(rooms.single.contains(deep), isTrue);
+      expect(rooms.single.contains(const Offset(100, 100)), isFalse);
+
+      final open = PlanRooms.detect(
+        spans([
+          wall(315, 200, 700, 200),
+          wall(700, 200, 700, 500),
+          wall(700, 500, 300, 500),
+          wall(300, 500, 300, 200),
+        ]),
+      );
+      expect(open, isEmpty);
+    });
+
+    test('dos salas pegadas son dos recintos, y un tabique las parte', () {
+      final rooms = PlanRooms.detect([
+        for (final w in [...room(), wall(500, 200, 500, 500)])
+          (PlanSegment.start(w), PlanSegment.end(w)),
+      ]);
+      expect(rooms, hasLength(2));
+      expect(rooms.map((r) => r.area), everyElement(closeTo(200 * 300, 1)));
+    });
+
+    test('bajo techo y sin huecos no entra el sol; a cielo abierto, sí', () {
+      final closed = scene(room());
+      expect(closed.isRoofed(deep), isTrue);
+      expect(closed.luxAt(deep), 0);
+      expect(closed.luxAt(nearWindow), 0);
+      // Fuera sigue dando el sol.
+      expect(sunAt(closed, const Offset(100, 350)), 60000);
+
+      final patio = scene(
+        room(),
+        sun.copyWith(rooms: const [RoomSetting(x: 500, y: 350, openSky: true)]),
+      );
+      expect(patio.isRoofed(deep), isFalse);
+      expect(sunAt(patio, deep), 60000);
+      // Junto a la pared, su sombra.
+      expect(sunAt(patio, const Offset(320, 350)), 0);
+    });
+
+    test('por la ventana el sol entra solo hasta donde deja el dintel', () {
+      final s = scene([...room(), window()]);
+      // Cerca: el rayo cruza la pared entre el alféizar y el dintel.
+      expect(sunAt(s, nearWindow), closeTo(54000, 1));
+      // Lejos: a esa distancia el rayo ya va por encima del dintel.
+      expect(sunAt(s, deep), 0);
+      // A un lado de la ventana, pared.
+      expect(sunAt(s, const Offset(330, 450)), 0);
+      // La mancha del suelo devuelve algo de luz a la sala.
+      final parts = s.contributionsAt(deep);
+      expect(parts.single.light.label, startsWith('Suelo'));
+      expect(parts.single.lux, greaterThan(1));
+    });
+
+    test('un negro delante de la ventana corta el sol', () {
+      final s = scene([...room(), window(), grip(LightType.flag, 315, 350)]);
+      expect(sunAt(s, nearWindow), 0);
+    });
+
+    test('un rebote al sol de la ventana levanta la sombra', () {
+      // Junto a la pared de la ventana, a un lado: no le da el sol.
+      const shade = Offset(312, 430);
+      final without = scene([...room(), window()]);
+      final with_ = scene([
+        ...room(),
+        window(),
+        grip(LightType.bounce, 345, 350, 'ultrabounce'),
+      ]);
+      expect(sunAt(without, shade), 0);
+      expect(
+        with_.contributionsAt(shade).map((c) => c.light.label),
+        contains(contains('← Sol')),
+      );
+      expect(with_.luxAt(shade), greaterThan(without.luxAt(shade) * 1.5));
+    });
+
+    test('con difusión en la ventana el sol entra blando, no en mancha', () {
+      final hard = scene([...room(), window()]);
+      final soft = scene([
+        ...room(),
+        window({
+          'modifiers': ['grid-half'],
+        }),
+      ]);
+      expect(sunAt(soft, nearWindow), 0);
+      final labels = soft.contributionsAt(deep).map((c) => c.light.label);
+      expect(labels, contains('Sol difuso por ventana'));
+      // La tela se come luz, pero al fondo de la sala llega más que con
+      // la mancha dura, que solo devuelve el suelo.
+      expect(soft.luxAt(deep), greaterThan(hard.luxAt(deep) * 1.3));
+    });
+
+    test('el cielo entra por la ventana y un rebote lo devuelve', () {
+      const sky = PlanAmbient(day: true, sunOn: false, wallBounce: false);
+      final s = scene([...room(), window()], sky);
+      final part = s.contributionsAt(const Offset(400, 350)).single;
+      expect(part.light.label, 'Cielo por ventana');
+      // Más cerca de la ventana, más luz.
+      expect(
+        s.luxAt(const Offset(340, 350)),
+        greaterThan(s.luxAt(const Offset(600, 350)) * 4),
+      );
+      // Sin ventana, nada.
+      expect(scene(room(), sky).luxAt(const Offset(400, 350)), 0);
+    });
+
+    test('un árbol deja pasar una parte del sol; una colina, nada', () {
+      const behind = Offset(400, 300);
+      expect(
+        sunAt(scene([prop(PropType.tree, 300, 300)]), behind),
+        closeTo(60000 * LightScene.treeTransmission, 1),
+      );
+      expect(sunAt(scene([prop(PropType.hill, 150, 300)]), behind), 0);
+      // Una roca baja no tapa a la altura de la cara.
+      expect(sunAt(scene([prop(PropType.rock, 370, 300)]), behind), 60000);
+    });
+
+    test('un árbol tapa también la luz de un aparato', () {
+      PlanElement hmi() => PlanElement(
+        id: --id,
+        type: ElementType.light,
+        position: const Offset(100, 300),
+        rotation: 90,
+        lightType: LightType.hmi,
+        props: {'intensity': 100},
+      );
+      const at = Offset(600, 300);
+      final open = LightScene.from([hmi()], metersPerUnit: 0.02).luxAt(at);
+      final shaded = LightScene.from([
+        hmi(),
+        prop(PropType.tree, 350, 300),
+      ], metersPerUnit: 0.02).luxAt(at);
+      expect(shaded, closeTo(open * LightScene.treeTransmission, open * 0.01));
+    });
+
+    test('un relieve da sombra según su altura', () {
+      // Talud de 2 m: a la altura de la cara tapa menos de un metro.
+      final s = scene([relief(300, 0, 300, 600)]);
+      expect(sunAt(s, const Offset(330, 300)), 0);
+      expect(sunAt(s, const Offset(400, 300)), 60000);
+      final tall = scene([relief(300, 0, 300, 600)..props['height'] = 6.0]);
+      expect(sunAt(tall, const Offset(400, 300)), 0);
+    });
+
+    test('los ajustes de un recinto se guardan con el ambiente', () {
+      final a = sun.copyWith(
+        rooms: const [
+          RoomSetting(x: 10, y: 20, openSky: true, ceilingM: 4, floor: 'dark'),
+        ],
+      );
+      expect(PlanAmbient.fromJson(a.toJson()), a);
+      expect(PlanAmbient.fromJson(a.toJson()).rooms.single.ceilingM, 4);
+    });
+  });
+  group('familias de luz', () {
+    test('el mismo tipo escrito de varias formas cae en el mismo grupo', () {
+      for (final type in ['led_panel', 'LED Panel', 'led-panel']) {
+        expect(lightGroupForCatalogType(type).id, 'led-panel');
+      }
+      expect(lightGroupForCatalogType('LED Tube').id, 'led-tube');
+      expect(lightGroupForCatalogType('led_tube').family, LightFamily.led);
+      expect(lightGroupForCatalogType('LED COB').id, 'led-point');
+      expect(lightGroupForCatalogType('LED point-source').id, 'led-point');
+      expect(lightGroupForCatalogType('LED Flexible Panel').id, 'led-flex');
+      expect(lightGroupForCatalogType('hmi').family, LightFamily.hmi);
+      expect(lightGroupForCatalogType('fresnel').family, LightFamily.tungsten);
+      expect(lightGroupForCatalogType('balloon').id, 'balloon');
+    });
+
+    test('todos los grupos tienen símbolo y familia', () {
+      for (final family in LightFamily.values) {
+        expect(kLightGroups.where((g) => g.family == family), isNotEmpty);
+      }
+      expect(kLightGroups.every((g) => g.generics.isNotEmpty), isTrue);
     });
   });
 }

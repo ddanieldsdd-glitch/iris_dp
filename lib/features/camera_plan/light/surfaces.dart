@@ -128,3 +128,12 @@ const kWallMaterials = <SurfaceMaterial>[
   ),
   SurfaceMaterial(id: 'black', name: 'Negra', reflectance: 0.04),
 ];
+
+/// Suelos de un recinto: lo que devuelve la mancha de sol que cae sobre
+/// ellos. Valores orientativos.
+const kFloorMaterials = <SurfaceMaterial>[
+  SurfaceMaterial(id: 'wood', name: 'Madera', reflectance: 0.3, miredShift: 25),
+  SurfaceMaterial(id: 'concrete', name: 'Hormigón', reflectance: 0.25),
+  SurfaceMaterial(id: 'light', name: 'Suelo claro', reflectance: 0.6),
+  SurfaceMaterial(id: 'dark', name: 'Moqueta oscura', reflectance: 0.08),
+];

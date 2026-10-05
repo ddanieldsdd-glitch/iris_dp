@@ -12,14 +12,20 @@ import '../luka_export/luka_fixture_picker.dart';
 import '../luka_export/luka_light_mapping.dart';
 
 /// Panel de propiedades con vínculos LUKA / Unreal / Cine Tracer.
+enum CompatPart { all, identity, export }
+
 class PlanElementCompatPanel extends ConsumerWidget {
   final PlanElement element;
   final VoidCallback onChanged;
+
+  /// Qué se enseña: qué aparato es, o su enlace con las apps de 3D.
+  final CompatPart part;
 
   const PlanElementCompatPanel({
     super.key,
     required this.element,
     required this.onChanged,
+    this.part = CompatPart.all,
   });
 
   @override
@@ -60,33 +66,38 @@ class PlanElementCompatPanel extends ConsumerWidget {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _CompatBadges(palette: palette, profile: profile),
-                    const SizedBox(height: 12),
-                    switch (element.type) {
-                      ElementType.camera => _CameraSection(
-                        palette: palette,
-                        element: element,
-                        cameras: cameras,
-                        lenses: lenses,
-                        catalog: catalog,
-                        onChanged: onChanged,
-                      ),
-                      ElementType.light => _LightSection(
-                        palette: palette,
-                        element: element,
-                        catalog: catalog,
-                        cameras: cameras,
-                        lenses: lenses,
-                        onChanged: onChanged,
-                      ),
-                      ElementType.prop || ElementType.wall => _PropSection(
-                        palette: palette,
-                        element: element,
-                        profile: profile,
-                        onChanged: onChanged,
-                      ),
-                      ElementType.actor => _ActorSection(palette: palette),
-                    },
+                    if (part != CompatPart.identity) ...[
+                      _CompatBadges(palette: palette, profile: profile),
+                      const SizedBox(height: 12),
+                    ],
+                    if (part != CompatPart.identity ||
+                        element.type == ElementType.light)
+                      switch (element.type) {
+                        ElementType.camera => _CameraSection(
+                          palette: palette,
+                          element: element,
+                          cameras: cameras,
+                          lenses: lenses,
+                          catalog: catalog,
+                          onChanged: onChanged,
+                        ),
+                        ElementType.light => _LightSection(
+                          palette: palette,
+                          element: element,
+                          catalog: catalog,
+                          cameras: cameras,
+                          lenses: lenses,
+                          onChanged: onChanged,
+                          part: part,
+                        ),
+                        ElementType.prop || ElementType.wall => _PropSection(
+                          palette: palette,
+                          element: element,
+                          profile: profile,
+                          onChanged: onChanged,
+                        ),
+                        ElementType.actor => _ActorSection(palette: palette),
+                      },
                   ],
                 );
               },
@@ -289,8 +300,10 @@ class _LightSection extends StatelessWidget {
   final List<Camera> cameras;
   final List<Lense> lenses;
   final VoidCallback onChanged;
+  final CompatPart part;
 
   const _LightSection({
+    this.part = CompatPart.all,
     required this.palette,
     required this.element,
     required this.catalog,
@@ -304,73 +317,76 @@ class _LightSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Tipo simbólico', style: AppTypography.caption(palette)),
-        const SizedBox(height: 4),
-        DropdownButtonFormField<LightType?>(
-          isExpanded: true,
-          initialValue: element.lightType,
-          decoration: const InputDecoration(isDense: true),
-          items: [
-            for (final t in LightType.values)
-              DropdownMenuItem(
-                value: t,
-                child: Text(t.label, overflow: TextOverflow.ellipsis),
-              ),
-          ],
-          onChanged: (t) {
-            element.lightType = t;
-            LukaLightMapping.applyDefaults(
-              element,
-              catalog: catalog,
-              cameras: cameras,
-              lenses: lenses,
-            );
-            onChanged();
-          },
-        ),
-        const SizedBox(height: 8),
-        Text('Equipo (catálogo)', style: AppTypography.caption(palette)),
-        const SizedBox(height: 4),
-        DropdownButtonFormField<int?>(
-          // El catálogo llega después del primer pintado: al cargar, el
-          // campo se rehace para mostrar el equipo guardado.
-          key: ValueKey('catalog_light_${catalog.length}'),
-          isExpanded: true,
-          // El equipo guardado puede no estar ya en el catálogo (o no haber
-          // cargado aún): sin esta comprobación el desplegable falla.
-          initialValue:
-              catalog.any(
-                (l) => l.id == element.externalMapping.catalogLightId,
-              )
-              ? element.externalMapping.catalogLightId
-              : null,
-          decoration: const InputDecoration(
-            isDense: true,
-            hintText: 'Opcional',
-          ),
-          items: [
-            const DropdownMenuItem<int?>(value: null, child: Text('—')),
-            for (final l in catalog)
-              DropdownMenuItem(
-                value: l.id,
-                child: Text(
-                  '${l.brand} ${l.model}${l.isLukaCompatible ? ' · LUKA' : ''}',
-                  overflow: TextOverflow.ellipsis,
+        if (part != CompatPart.export) ...[
+          Text('Símbolo en la planta', style: AppTypography.caption(palette)),
+          const SizedBox(height: 4),
+          DropdownButtonFormField<LightType?>(
+            isExpanded: true,
+            initialValue: element.lightType,
+            decoration: const InputDecoration(isDense: true),
+            items: [
+              for (final t in LightType.values)
+                DropdownMenuItem(
+                  value: t,
+                  child: Text(t.label, overflow: TextOverflow.ellipsis),
                 ),
-              ),
-          ],
-          onChanged: (id) {
-            element.externalMapping.catalogLightId = id;
-            final light = catalog.where((l) => l.id == id).firstOrNull;
-            if (light != null && light.isLukaCompatible) {
-              element.lukaCompatible = true;
-              element.lukaFixtureId = light.lukaFixtureId;
-            }
-            onChanged();
-          },
-        ),
-        const SizedBox(height: 8),
-        LukaFixturePicker(element: element, onChanged: onChanged),
+            ],
+            onChanged: (t) {
+              element.lightType = t;
+              LukaLightMapping.applyDefaults(
+                element,
+                catalog: catalog,
+                cameras: cameras,
+                lenses: lenses,
+              );
+              onChanged();
+            },
+          ),
+          const SizedBox(height: 8),
+          Text('Modelo (de Equipo)', style: AppTypography.caption(palette)),
+          const SizedBox(height: 4),
+          DropdownButtonFormField<int?>(
+            // El catálogo llega después del primer pintado: al cargar, el
+            // campo se rehace para mostrar el equipo guardado.
+            key: ValueKey('catalog_light_${catalog.length}'),
+            isExpanded: true,
+            // El equipo guardado puede no estar ya en el catálogo (o no haber
+            // cargado aún): sin esta comprobación el desplegable falla.
+            initialValue:
+                catalog.any(
+                  (l) => l.id == element.externalMapping.catalogLightId,
+                )
+                ? element.externalMapping.catalogLightId
+                : null,
+            decoration: const InputDecoration(
+              isDense: true,
+              hintText: 'Opcional',
+            ),
+            items: [
+              const DropdownMenuItem<int?>(value: null, child: Text('—')),
+              for (final l in catalog)
+                DropdownMenuItem(
+                  value: l.id,
+                  child: Text(
+                    '${l.brand} ${l.model}${l.isLukaCompatible ? ' · LUKA' : ''}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: (id) {
+              element.externalMapping.catalogLightId = id;
+              final light = catalog.where((l) => l.id == id).firstOrNull;
+              if (light != null && light.isLukaCompatible) {
+                element.lukaCompatible = true;
+                element.lukaFixtureId = light.lukaFixtureId;
+              }
+              onChanged();
+            },
+          ),
+        ],
+        if (part == CompatPart.all) const SizedBox(height: 8),
+        if (part != CompatPart.identity)
+          LukaFixturePicker(element: element, onChanged: onChanged),
       ],
     );
   }
