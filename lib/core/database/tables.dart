@@ -112,6 +112,13 @@ class Shots extends Table {
   // Esquema de luz que usa el plano (schemaVersion 42).
   IntColumn get lightSetupId =>
       integer().nullable().references(LightSetups, #id)();
+  // Set en el que se rueda el plano, si no es el de su escena
+  // (schemaVersion 44).
+  IntColumn get locationBasePlanId =>
+      integer().nullable().references(LocationBasePlans, #id)();
+  // Recorrido de un plano secuencia: tramos con su set y su esquema de luz
+  // (schemaVersion 44). Nulo = no es secuencia.
+  TextColumn get routeJson => text().nullable()();
 }
 
 /// Documento de rodaje (Plani, jornada, referencia en set).

@@ -73,7 +73,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 43;
+  int get schemaVersion => 44;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -423,6 +423,11 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(lights, lights.photometryLux);
         await m.addColumn(lights, lights.photometryDistanceM);
         await m.addColumn(shots, shots.lightOverridesJson);
+      }
+      if (from < 44) {
+        // Set por plano y recorrido de los planos secuencia.
+        await m.addColumn(shots, shots.locationBasePlanId);
+        await m.addColumn(shots, shots.routeJson);
       }
     },
   );
@@ -2182,6 +2187,36 @@ class AppDatabase extends _$AppDatabase {
   Future<void> assignLightSetupToShot(int shotId, int? setupId) async {
     await (update(shots)..where((s) => s.id.equals(shotId))).write(
       ShotsCompanion(lightSetupId: Value(setupId)),
+    );
+    final shot = await (select(
+      shots,
+    )..where((s) => s.id.equals(shotId))).getSingleOrNull();
+    if (shot != null) await touchProjectContent(shot.projectId);
+  }
+
+  /// Lleva un plano a un esquema de luz y al set donde se rueda. `setId`
+  /// nulo = el set de su escena.
+  Future<void> moveShot(
+    int shotId, {
+    required int? setId,
+    required int? lightSetupId,
+  }) async {
+    await (update(shots)..where((s) => s.id.equals(shotId))).write(
+      ShotsCompanion(
+        locationBasePlanId: Value(setId),
+        lightSetupId: Value(lightSetupId),
+      ),
+    );
+    final shot = await (select(
+      shots,
+    )..where((s) => s.id.equals(shotId))).getSingleOrNull();
+    if (shot != null) await touchProjectContent(shot.projectId);
+  }
+
+  /// Guarda el recorrido de un plano secuencia. `null` = deja de serlo.
+  Future<void> saveShotRoute(int shotId, String? routeJson) async {
+    await (update(shots)..where((s) => s.id.equals(shotId))).write(
+      ShotsCompanion(routeJson: Value(routeJson)),
     );
     final shot = await (select(
       shots,

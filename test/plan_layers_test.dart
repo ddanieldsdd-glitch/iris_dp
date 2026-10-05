@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show OrderingTerm, Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart' show Offset, Rect;
 import 'package:flutter_test/flutter_test.dart';
@@ -20,6 +20,7 @@ import 'package:iris_dp/features/camera_plan/plan_data.dart';
 import 'package:iris_dp/features/camera_plan/plan_equipment.dart';
 import 'package:iris_dp/features/camera_plan/plan_gear_list.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
+import 'package:iris_dp/features/camera_plan/shot_route.dart';
 
 const _wallV1 =
     '{"version":1,"elements":[{"type":"wall","x":100,"y":100,"rotation":0,'
@@ -654,6 +655,150 @@ void main() {
       // En la planta del tiro, cada cámara lleva el rótulo de su plano.
       final camera = data.ownOfShot(tiros[0].shots.first, tagged: true).single;
       expect(camera.props['shotTag'], '1·1');
+    });
+  });
+
+  group('set por plano y plano secuencia', () {
+    String wallAt(double x) =>
+        '{"version":2,"elements":[{"type":"wall","x":$x,"y":0,"rotation":0,'
+        '"label":"wall","cameraLetter":"A","cameraNumber":1,"pathPoints":[]}]}';
+
+    Future<int> otherSet(String name, double wallX, {int? inSite}) async {
+      final id = await db.insertLocation(
+        LocationBasePlansCompanion.insert(
+          projectId: projectId,
+          siteId: Value(inSite ?? siteId),
+          locationName: name,
+        ),
+      );
+      await db.saveFloorPlanToSet(id, wallAt(wallX));
+      return id;
+    }
+
+    Future<Shot> shotById(int id) =>
+        (db.select(db.shots)..where((s) => s.id.equals(id))).getSingle();
+
+    test('un plano puede rodarse en otro set de la localización', () async {
+      await db.saveFloorPlanToSet(setId, wallAt(10));
+      final kitchen = await otherSet('Cocina', 20);
+      final shotId = await addShot(1);
+      var layers = await repo.layersForShot(await shotById(shotId));
+      expect(layers.set.single.position.dx, 10);
+
+      // A «Sin luz» de otro set: cambia el set y no hay esquema.
+      await db.moveShot(shotId, setId: kitchen, lightSetupId: null);
+      layers = await repo.layersForShot(await shotById(shotId));
+      expect(layers.set.single.position.dx, 20);
+      expect(layers.lightSetup, isNull);
+
+      // A un esquema de ese set: set y esquema.
+      final setup = await repo.createLightSetup(
+        projectId: projectId,
+        setId: kitchen,
+        name: 'Setup A',
+      );
+      await db.moveShot(shotId, setId: kitchen, lightSetupId: setup.id);
+      layers = await repo.layersForShot(await shotById(shotId));
+      expect(layers.lightSetup!.id, setup.id);
+      expect(layers.set.single.position.dx, 20);
+
+      // De vuelta al set de la escena.
+      await db.moveShot(shotId, setId: null, lightSetupId: null);
+      layers = await repo.layersForShot(await shotById(shotId));
+      expect(layers.set.single.position.dx, 10);
+    });
+
+    test('un plano secuencia abre cada tramo con su set, su luz y lo '
+        'suyo', () async {
+      await db.saveFloorPlanToSet(setId, wallAt(10));
+      final hall = await otherSet('Pasillo', 20);
+      final garden = await db.insertSite(
+        LocationSitesCompanion.insert(projectId: projectId, name: 'Jardín'),
+      );
+      final lawn = await otherSet('Césped', 30, inSite: garden);
+      final lit = await repo.createLightSetup(
+        projectId: projectId,
+        setId: lawn,
+        name: 'Setup B',
+      );
+      final shotId = await addShot(1);
+      await db.saveShotRoute(
+        shotId,
+        ShotRoute.encode([
+          ShotLeg(siteId: siteId, setId: setId),
+          ShotLeg(siteId: siteId, setId: hall),
+          ShotLeg(siteId: garden, setId: lawn, lightSetupId: lit.id),
+        ]),
+      );
+      for (final (leg, name) in [(0, 'a'), (2, 'c')]) {
+        await db.insertCameraPlanElement(
+          CameraPlanElementsCompanion.insert(
+            shotId: shotId,
+            type: 'actor',
+            label: Value(name),
+            propsJson: Value('{"leg":$leg}'),
+          ),
+        );
+      }
+      final shot = await shotById(shotId);
+      expect(ShotRoute.decode(shot.routeJson), hasLength(3));
+
+      final first = await repo.layersForShot(shot, leg: 0);
+      expect(first.set.single.position.dx, 10);
+      expect(first.shot.single.label, 'a');
+
+      final second = await repo.layersForShot(shot, leg: 1);
+      expect(second.set.single.position.dx, 20);
+      expect(second.shot, isEmpty);
+      expect(second.lightSetup, isNull);
+
+      final third = await repo.layersForShot(shot, leg: 2);
+      expect(third.set.single.position.dx, 30);
+      expect(third.lightSetup!.id, lit.id);
+      expect(third.shot.single.label, 'c');
+
+      // Deja de ser secuencia.
+      await db.saveShotRoute(shotId, null);
+      expect((await shotById(shotId)).routeJson, isNull);
+    });
+
+    test('el set del plano y su recorrido viajan en el bundle', () async {
+      final kitchen = await otherSet('Cocina', 20);
+      final plain = await addShot(1);
+      final sequence = await addShot(2);
+      await db.moveShot(plain, setId: kitchen, lightSetupId: null);
+      await db.saveShotRoute(
+        sequence,
+        ShotRoute.encode([
+          ShotLeg(siteId: siteId, setId: setId),
+          ShotLeg(siteId: siteId, setId: kitchen),
+        ]),
+      );
+
+      final bundle =
+          jsonDecode(
+                jsonEncode(await ProjectContentBundle.export(db, projectId)),
+              )
+              as Map<String, dynamic>;
+      final targetId = await db.insertProject(
+        ProjectsCompanion.insert(name: 'Destino'),
+      );
+      await ProjectContentBundle.importBundle(db, targetId, bundle);
+
+      final sets = {
+        for (final s in await (db.select(
+          db.locationBasePlans,
+        )..where((l) => l.projectId.equals(targetId))).get())
+          s.locationName: s.id,
+      };
+      final shots =
+          await (db.select(db.shots)
+                ..where((s) => s.projectId.equals(targetId))
+                ..orderBy([(s) => OrderingTerm.asc(s.number)]))
+              .get();
+      expect(shots[0].locationBasePlanId, sets['Cocina']);
+      final route = ShotRoute.decode(shots[1].routeJson);
+      expect(route.map((l) => l.setId), [sets['Cabaña'], sets['Cocina']]);
     });
   });
 }

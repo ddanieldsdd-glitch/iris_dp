@@ -1,3 +1,4 @@
+import 'shot_route.dart';
 import 'package:drift/drift.dart' show Value;
 
 import '../../core/database/app_database.dart';
@@ -195,17 +196,38 @@ class FloorPlanRepository {
   }
 
   /// Todas las capas de un plano: entorno, set, esquema de luz y lo propio.
-  Future<PlanLayers> layersForShot(Shot shot) async {
+  ///
+  /// El set es el del plano y, si no tiene uno propio, el de su escena. En
+  /// un plano secuencia, [leg] elige el tramo: su set, su luz y lo que se
+  /// colocó en él.
+  Future<PlanLayers> layersForShot(Shot shot, {int? leg}) async {
     final scene = await (db.select(
       db.scenes,
     )..where((s) => s.id.equals(shot.sceneId))).getSingleOrNull();
-    final setup = shot.lightSetupId != null
-        ? await db.getLightSetupById(shot.lightSetupId!)
+    final route = ShotRoute.decode(shot.routeJson);
+    final onLeg = leg != null && leg >= 0 && leg < route.length
+        ? route[leg]
         : null;
+    final setupId = onLeg != null ? onLeg.lightSetupId : shot.lightSetupId;
+    final setup = setupId != null ? await db.getLightSetupById(setupId) : null;
+    final setId =
+        onLeg?.setId ??
+        shot.locationBasePlanId ??
+        scene?.locationId ??
+        setup?.locationBasePlanId;
+    // La localización es la del set; si no hay set, la de la escena.
+    final ownSet = setId != null ? await db.getLocationById(setId) : null;
     final base = await _baseLayers(
-      setId: scene?.locationId ?? setup?.locationBasePlanId,
-      siteId: scene?.locationSiteId ?? setup?.locationSiteId,
+      setId: setId,
+      siteId:
+          onLeg?.siteId ??
+          ownSet?.siteId ??
+          scene?.locationSiteId ??
+          setup?.locationSiteId,
     );
+    // En una secuencia, cada tramo ve solo lo que se colocó en él.
+    final own = await _shotElements(shot.id);
+    final legIndex = route.isEmpty ? null : (leg ?? 0);
     return PlanLayers(
       environment: base.environment,
       set: base.set,
@@ -214,10 +236,19 @@ class FloorPlanRepository {
         FloorPlanJson.decode(setup?.planJson),
         shot.lightOverridesJson,
       ),
-      shot: await _shotElements(shot.id),
+      shot: legIndex == null
+          ? own
+          : [
+              for (final el in own)
+                if (legOf(el) == legIndex) el,
+            ],
       lightSetup: setup,
     );
   }
+
+  /// Tramo de la secuencia en el que está un elemento propio del plano.
+  static const legKey = 'leg';
+  static int legOf(PlanElement el) => (el.props[legKey] as num?)?.toInt() ?? 0;
 
   /// Elementos que se ven en un plano, ya aplanados. Para PDF y exportadores.
   Future<List<PlanElement>> resolvedElementsForShot(Shot shot) async =>

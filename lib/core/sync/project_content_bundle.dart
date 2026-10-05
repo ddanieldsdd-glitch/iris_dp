@@ -1,3 +1,4 @@
+import '../../features/camera_plan/shot_route.dart';
 import 'dart:convert';
 
 import 'package:drift/drift.dart' show Value, OrderingTerm;
@@ -611,6 +612,20 @@ class ProjectContentBundle {
           'lightSetupKey': shot.lightSetupId != null
               ? lightSetupKeyById[shot.lightSetupId!]
               : null,
+          'shotSetKey': shot.locationBasePlanId != null
+              ? setKeyById[shot.locationBasePlanId!]
+              : null,
+          // El recorrido de una secuencia, con claves en vez de ids.
+          'route': [
+            for (final leg in ShotRoute.decode(shot.routeJson))
+              {
+                'siteKey': leg.siteId != null ? siteKeyById[leg.siteId!] : null,
+                'setKey': leg.setId != null ? setKeyById[leg.setId!] : null,
+                'lightSetupKey': leg.lightSetupId != null
+                    ? lightSetupKeyById[leg.lightSetupId!]
+                    : null,
+              },
+          ],
         };
       }).toList(),
       'shotReferences': shotReferences,
@@ -1072,6 +1087,18 @@ class ProjectContentBundle {
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
               lightSetupId: Value(lightSetupKeyToId[m['lightSetupKey']]),
               lightOverridesJson: Value(m['lightOverridesJson'] as String?),
+              locationBasePlanId: Value(setKeyToId[m['shotSetKey']]),
+              routeJson: Value(
+                ShotRoute.encode([
+                  for (final leg in m['route'] as List? ?? const [])
+                    if (leg is Map)
+                      ShotLeg(
+                        siteId: siteKeyToId[leg['siteKey']],
+                        setId: setKeyToId[leg['setKey']],
+                        lightSetupId: lightSetupKeyToId[leg['lightSetupKey']],
+                      ),
+                ]),
+              ),
             ),
           );
       shotKeyToId[m['shotKey'] as String] = id;
