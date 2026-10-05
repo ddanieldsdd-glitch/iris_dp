@@ -100,6 +100,30 @@ class PlanOpening {
   /// ¿Tiene hojas que se abren? Puertas y ventanas.
   static bool hasLeaves(PlanElement el) => isDoor(el) || isWindow(el);
 
+  /// Dónde van los filtros (difusión, gelatina, ND): pegados al cristal,
+  /// o en un marco por dentro o por fuera.
+  static const filterSideKey = 'filterSide';
+
+  /// A qué lado de la pared cuelga la cortina.
+  static const curtainSideKey = 'curtainSide';
+  static const sideGlass = 'glass';
+  static const sideIn = 'in';
+  static const sideOut = 'out';
+
+  /// Separación de la pared de un marco de filtros y de una cortina, en
+  /// unidades del lienzo.
+  static const double frameOffset = 4;
+  static const double curtainOffset = 8;
+
+  static String filterSide(PlanElement el) {
+    final side = el.props[filterSideKey];
+    if (side == sideIn || side == sideOut) return side as String;
+    return isWindow(el) ? sideGlass : sideIn;
+  }
+
+  static String curtainSide(PlanElement el) =>
+      el.props[curtainSideKey] == sideOut ? sideOut : sideIn;
+
   static const sillKey = 'sill';
   static const headKey = 'head';
 
@@ -148,10 +172,14 @@ class PlanOpening {
 
   /// Las hojas de una puerta, de la bisagra al canto, según lo abierta que
   /// esté. Una puerta cerrada tiene la hoja sobre el hueco.
-  static List<(Offset, Offset)> leaves(PlanElement el) {
+  static List<(Offset, Offset)> leaves(
+    PlanElement el, {
+    bool includeClosed = false,
+  }) {
     if (!hasLeaves(el)) return const [];
-    // Una ventana cerrada no tiene hoja que dibujar: es el cristal.
-    if (isWindow(el) && openDeg(el) <= 3) return const [];
+    // Una ventana cerrada no tiene hoja que dibujar: es el cristal. Para
+    // la luz sí cuenta: la hoja cerrada es ese cristal.
+    if (!includeClosed && isWindow(el) && openDeg(el) <= 3) return const [];
     final (a, b) = span(el);
     final dir = direction(el);
     final open = openDeg(el) * (swingIn(el) ? -1 : 1);

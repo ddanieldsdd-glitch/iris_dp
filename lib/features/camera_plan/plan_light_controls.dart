@@ -275,6 +275,7 @@ class _PlanLightControlsState extends State<PlanLightControls> {
           picker('Difusión', ModifierKind.diffusion),
           picker('Red', ModifierKind.scrim),
           picker('Gelatina', ModifierKind.correction),
+          picker('ND', ModifierKind.nd),
         ],
         if (widget.parts.contains(LightControlPart.data)) ...[
           const SizedBox(height: AppSpacing.md),

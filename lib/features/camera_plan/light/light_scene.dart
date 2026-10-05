@@ -30,8 +30,25 @@ class LightBlocker {
   /// de lo que no llega a la altura de la cara.
   final double heightM;
 
-  /// Es el cristal o la tela de un hueco de pared (ver [LightAperture]).
-  final bool isAperture;
+  /// Desde qué altura tapa: la hoja de una ventana empieza en el alféizar
+  /// y el sol pasa por debajo.
+  final double baseM;
+
+  /// Es un tramo de pared.
+  final bool isWall;
+
+  /// Si deshace la luz que lo cruza (una tela, una cortina): la luz
+  /// directa no pasa y sale por el otro lado como fuente blanda con este
+  /// ángulo de haz y [diffuseKeep] de lo que le llega.
+  final double? diffuseDeg;
+  final double diffuseKeep;
+
+  /// Una loma: radio de su base. Su altura baja de [heightM] en el centro
+  /// a cero en el borde; [radius] es lo que mide a la altura de la cara.
+  final double? domeRadius;
+
+  /// Nombre con el que sale en el fotómetro cuando emite.
+  final String? label;
 
   /// Elemento de la planta del que sale, si lo hay.
   final PlanElement? element;
@@ -42,9 +59,14 @@ class LightBlocker {
     this.transmission = 0,
     this.miredShift = 0,
     this.heightM = 2.5,
-    this.isAperture = false,
+    this.baseM = 0,
+    this.isWall = false,
+    this.diffuseDeg,
+    this.diffuseKeep = 0,
+    this.label,
     this.element,
-  }) : radius = 0;
+  }) : radius = 0,
+       domeRadius = null;
 
   const LightBlocker.circle(
     Offset centre,
@@ -52,10 +74,15 @@ class LightBlocker {
     this.element,
     this.transmission = 0,
     this.heightM = 1.75,
+    this.domeRadius,
   }) : a = centre,
        b = centre,
        miredShift = 0,
-       isAperture = false;
+       baseM = 0,
+       isWall = false,
+       diffuseDeg = null,
+       diffuseKeep = 0,
+       label = null;
 
   LightBlocker withHeight(double height) => isCircle
       ? LightBlocker.circle(
@@ -64,6 +91,7 @@ class LightBlocker {
           element: element,
           transmission: transmission,
           heightM: height,
+          domeRadius: domeRadius,
         )
       : LightBlocker(
           a,
@@ -71,7 +99,11 @@ class LightBlocker {
           transmission: transmission,
           miredShift: miredShift,
           heightM: height,
-          isAperture: isAperture,
+          baseM: baseM,
+          isWall: isWall,
+          diffuseDeg: diffuseDeg,
+          diffuseKeep: diffuseKeep,
+          label: label,
           element: element,
         );
 
@@ -80,6 +112,13 @@ class LightBlocker {
 
   bool get isOpaque => transmission <= 0;
   bool get isCircle => radius > 0;
+
+  /// Altura de una loma a [distance] de su centro.
+  double domeHeightAt(double distance) {
+    final r = domeRadius;
+    if (r == null || r <= 0) return heightM;
+    return heightM * (1 - distance / r).clamp(0.0, 1.0);
+  }
 }
 
 /// Un hueco en una pared (ventana, puerta, abertura): el sol y el cielo
@@ -87,30 +126,15 @@ class LightBlocker {
 class LightAperture {
   final Offset a;
   final Offset b;
-  final double transmission;
-  final double miredShift;
   final double sillM;
   final double headM;
-
-  /// Si lo que lleva (difusión, visillo) deshace el sol directo: el hueco
-  /// pasa a ser una fuente blanda con este ángulo de haz. `null` = el sol
-  /// pasa en línea recta.
-  final double? diffuseDeg;
-
-  /// Su cristal o su tela, para que la fuente que sale de él no se tape a
-  /// sí misma.
-  final LightBlocker? pane;
   final PlanElement? element;
 
   const LightAperture(
     this.a,
     this.b, {
-    required this.transmission,
     required this.sillM,
     required this.headM,
-    this.miredShift = 0,
-    this.diffuseDeg,
-    this.pane,
     this.element,
   });
 
@@ -138,19 +162,9 @@ class SceneRoom {
 class _Gap {
   final Offset a;
   final Offset b;
-  final double transmission;
-  final double mired;
-  final double? diffuseDeg;
   final PlanElement element;
 
-  const _Gap(
-    this.a,
-    this.b,
-    this.transmission,
-    this.element, {
-    this.mired = 0,
-    this.diffuseDeg,
-  });
+  const _Gap(this.a, this.b, this.element);
 }
 
 /// Una fuente dentro de la planta: un aparato, o una superficie que
@@ -280,21 +294,24 @@ class LightScene {
     PlanAmbient? ambient,
   }) {
     final all = elements.toList();
-    final built = _build(all, metersPerUnit: metersPerUnit);
     final rooms = <SceneRoom>[
       for (final room in PlanRooms.detect(
-        built.walls,
+        _build(all, metersPerUnit: metersPerUnit).walls,
         minArea: 1 / (metersPerUnit * metersPerUnit),
       ))
         _roomWith(room, ambient?.rooms ?? const []),
     ];
+    // Con los recintos ya se sabe qué lado de cada hueco es el de dentro.
+    final built = _build(
+      all,
+      metersPerUnit: metersPerUnit,
+      roofedAt: (p) => rooms.any((r) => r.roofed && r.room.contains(p)),
+    );
     final bounce = wallBounce && (ambient?.wallBounce ?? true);
     // La pared de un recinto con techo llega hasta él.
     final blockers = <LightBlocker>[
       for (final blocker in built.blockers)
-        if (!blocker.isCircle &&
-            blocker.element?.type == ElementType.wall &&
-            !blocker.isAperture)
+        if (blocker.isWall)
           blocker.withHeight(_wallHeight(blocker, rooms))
         else
           blocker,
@@ -329,28 +346,29 @@ class LightScene {
       apertures: apertures,
       rooms: rooms,
     );
-    // Los huecos por los que entra el cielo (o un sol difuso) son fuentes:
-    // un rebote o un negro actúan sobre ellos como sobre un aparato.
-    final direct = LightScene(
-      lights: [...fixtures, ...bare._apertureSources()],
+    LightScene stage(List<SceneLight> lights) => LightScene(
+      lights: lights,
       blockers: blockers,
       metersPerUnit: metersPerUnit,
       ambient: ambient,
       apertures: apertures,
       rooms: rooms,
     );
-    return LightScene(
-      lights: [
-        ...direct.lights,
-        ...direct._secondarySources(all, wallBounce: bounce),
-        ...direct._floorSunSources(),
-      ],
-      blockers: blockers,
-      metersPerUnit: metersPerUnit,
-      ambient: ambient,
-      apertures: apertures,
-      rooms: rooms,
-    );
+    // Los huecos por los que entra el cielo son fuentes: un rebote o un
+    // negro actúan sobre ellos como sobre un aparato.
+    final entering = [...fixtures, ...bare._apertureSources()];
+    // Primero lo que difunde (telas, cortinas, marcos): recibe la luz y la
+    // suelta blanda por el otro lado. Después lo que rebota, que ya ve
+    // también esa luz blanda.
+    final soft = stage(
+      entering,
+    )._secondarySources(all, wallBounce: false, diffusers: true);
+    final direct = stage([...entering, ...soft]);
+    return stage([
+      ...direct.lights,
+      ...direct._secondarySources(all, wallBounce: bounce, diffusers: false),
+      ...direct._floorSunSources(),
+    ]);
   }
 
   static double? _ceilingAt(List<SceneRoom> rooms, Offset point) {
@@ -459,7 +477,11 @@ class LightScene {
     List<LightAperture> apertures,
     List<(Offset, Offset)> walls,
   })
-  _build(List<PlanElement> elements, {required double metersPerUnit}) {
+  _build(
+    List<PlanElement> elements, {
+    required double metersPerUnit,
+    bool Function(Offset point)? roofedAt,
+  }) {
     // Huecos: tramo que ocupan y luz que dejan pasar.
     final openings = <_Gap>[];
     final walls = <(Offset, Offset, PlanElement)>[];
@@ -483,8 +505,24 @@ class LightScene {
               blockers.add(LightBlocker(a, b, element: el));
             case LightType.diffusionFrame:
               // La tela corta el haz directo: lo que sale de ella es una
-              // fuente nueva, más ancha (ver `_secondarySources`).
-              blockers.add(LightBlocker(a, b, element: el));
+              // fuente nueva, más ancha (ver `_secondarySources`). El
+              // marco es cuadrado y va centrado a la altura de la cara.
+              final cloth = diffusionOf(el);
+              final side = lengthOf(el) * metersPerUnit;
+              final base = math.max(0.0, PlanLight.subjectHeightM - side / 2);
+              blockers.add(
+                LightBlocker(
+                  a,
+                  b,
+                  miredShift: cloth.miredShift,
+                  baseM: base,
+                  heightM: base + side,
+                  diffuseDeg: cloth.spreadDeg ?? 120,
+                  diffuseKeep: cloth.transmission,
+                  label: cloth.name,
+                  element: el,
+                ),
+              );
             case LightType.net:
               final scrim = _filterTransmission(el, ModifierKind.scrim);
               blockers.add(
@@ -496,18 +534,23 @@ class LightScene {
                 ),
               );
             case LightType.gel:
-              final gels = _filters(
-                el,
-              ).where((m) => m.kind == ModifierKind.correction).toList();
-              final gel = gels.isEmpty
-                  ? LightModifier.byId('cto-half')!
-                  : gels.first;
+              final gels = _filters(el)
+                  .where(
+                    (m) =>
+                        m.kind == ModifierKind.correction ||
+                        m.kind == ModifierKind.nd,
+                  )
+                  .toList();
+              // Sin elegir nada, medio CTO. Varias hojas se suman.
+              final stack = gels.isEmpty
+                  ? [LightModifier.byId('cto-half')!]
+                  : gels;
               blockers.add(
                 LightBlocker(
                   a,
                   b,
-                  transmission: gel.transmission,
-                  miredShift: gel.miredShift,
+                  transmission: stack.fold(1, (t, m) => t * m.transmission),
+                  miredShift: stack.fold(0, (t, m) => t + m.miredShift),
                   element: el,
                 ),
               );
@@ -530,7 +573,23 @@ class LightScene {
                   heightM: height,
                 ),
               );
-            case PropType.rock || PropType.hill:
+            case PropType.hill:
+              // Una loma: a la altura de la cara mide menos que en la
+              // base, y el sol pasa por encima de su falda.
+              blockers.add(
+                LightBlocker.circle(
+                  el.position,
+                  math.max(
+                    1,
+                    radius *
+                        (1 - PlanLight.subjectHeightM / math.max(height, 0.1)),
+                  ),
+                  element: el,
+                  heightM: height,
+                  domeRadius: radius,
+                ),
+              );
+            case PropType.rock:
               blockers.add(
                 LightBlocker.circle(
                   el.position,
@@ -596,60 +655,137 @@ class LightScene {
 
       if (PlanOpening.isOpening(el)) {
         final (a, b) = PlanOpening.span(el);
-        if (PlanOpening.isWindow(el)) {
-          // Abierta, no hay cristal en medio (ni lo que lleve pegado); sus
-          // hojas hacen sombra como las de una puerta.
-          final isOpen = PlanOpening.openDeg(el) > 3;
-          var glass = isOpen ? 1.0 : glassTransmission;
-          var mired = 0.0;
-          double? diffuse;
-          if (!isOpen) {
-            for (final m in _filters(el)) {
-              glass *= m.transmission;
-              mired += m.miredShift;
-              final spread = m.spreadDeg;
-              if (spread != null) diffuse = math.max(diffuse ?? 0, spread);
-            }
-          }
-          if (isOpen) {
-            for (final (hinge, tip) in PlanOpening.leaves(el)) {
-              blockers.add(LightBlocker(hinge, tip, element: el));
-            }
-          }
-          // La cortina tapa una parte del ancho, desde un lado.
-          final covered = PlanOpening.curtain(el);
-          if (covered <= 0.01) {
-            openings.add(
-              _Gap(a, b, glass, el, mired: mired, diffuseDeg: diffuse),
-            );
-          } else {
-            final split = a + (b - a) * covered;
-            final cloth = PlanOpening.curtainMaterial(el).transmission;
-            // Una cortina deshace el sol: lo que pasa sale blando.
-            openings.add(
-              _Gap(a, split, glass * cloth, el, mired: mired, diffuseDeg: 120),
-            );
-            if (covered < 0.99) {
-              openings.add(
-                _Gap(split, b, glass, el, mired: mired, diffuseDeg: diffuse),
+        final span = b - a;
+        if (span.distance < 1) continue;
+        openings.add(_Gap(a, b, el));
+        final sill = PlanOpening.sill(el);
+        final head = PlanOpening.head(el);
+        final dir = span / span.distance;
+        final normal = Offset(-dir.dy, dir.dx);
+        // El lado de dentro: el que da a un recinto con techo.
+        final front = roofedAt?.call(el.position + normal * 10) ?? false;
+        final back = roofedAt?.call(el.position - normal * 10) ?? false;
+        final inward = back && !front ? normal * -1 : normal;
+
+        // Lo que hay en el hueco: cristal, filtros o tela. Lo que difunde
+        // no deja pasar la luz directa: la suelta blanda por el otro lado.
+        LightBlocker panel(
+          Offset p,
+          Offset q,
+          double keep,
+          double mired,
+          double? diffuse,
+          String label,
+        ) => diffuse != null
+            ? LightBlocker(
+                p,
+                q,
+                miredShift: mired,
+                baseM: sill,
+                heightM: head,
+                diffuseDeg: diffuse,
+                diffuseKeep: keep,
+                label: label,
+                element: el,
+              )
+            : LightBlocker(
+                p,
+                q,
+                transmission: keep,
+                miredShift: mired,
+                baseM: sill,
+                heightM: head,
+                label: label,
+                element: el,
               );
-            }
+
+        final filters = _filters(el);
+        var keep = 1.0;
+        var mired = 0.0;
+        double? diffuse;
+        for (final m in filters) {
+          keep *= m.transmission;
+          mired += m.miredShift;
+          final spread = m.spreadDeg;
+          if (spread != null) diffuse = math.max(diffuse ?? 0, spread);
+        }
+        final isWindow = PlanOpening.isWindow(el);
+        final side = PlanOpening.filterSide(el);
+        final onGlass =
+            isWindow && filters.isNotEmpty && side == PlanOpening.sideGlass;
+
+        // Cerrada, las hojas son un solo paño sobre el hueco.
+        final leaves = PlanOpening.openDeg(el) <= 3
+            ? [(a, b)]
+            : PlanOpening.leaves(el);
+        if (isWindow) {
+          // Las hojas son de cristal y llevan lo que tengan pegado. Giran
+          // con la apertura: abierta, la luz entra por el hueco sin
+          // tocarlas.
+          for (final (hinge, tip) in leaves) {
+            blockers.add(
+              panel(
+                hinge,
+                tip,
+                glassTransmission * (onGlass ? keep : 1),
+                onGlass ? mired : 0,
+                onGlass ? diffuse : null,
+                onGlass
+                    ? 'Ventana (${filters.map((m) => m.name).join(' + ')})'
+                    : 'Ventana',
+              ),
+            );
           }
         } else if (PlanOpening.isDoor(el)) {
-          // Abierta, el hueco deja pasar y la hoja tapa donde esté.
-          openings.add(_Gap(a, b, PlanOpening.passesLight(el) ? 1 : 0, el));
-          if (PlanOpening.passesLight(el)) {
-            for (final (hinge, tip) in PlanOpening.leaves(el)) {
-              blockers.add(LightBlocker(hinge, tip, element: el));
-            }
+          for (final (hinge, tip) in leaves) {
+            blockers.add(
+              LightBlocker(hinge, tip, baseM: sill, heightM: head, element: el),
+            );
           }
-        } else {
-          openings.add(
-            _Gap(
-              a,
-              b,
-              el.architectureType == ArchitectureType.prisonBars ? 0.7 : 1,
-              el,
+        } else if (el.architectureType == ArchitectureType.prisonBars) {
+          blockers.add(panel(a, b, 0.7, 0, null, 'Rejas'));
+        }
+
+        // Filtros en un marco, por dentro o por fuera: cubren todo el
+        // hueco, esté la ventana abierta o cerrada.
+        if (filters.isNotEmpty && !onGlass) {
+          final off =
+              (side == PlanOpening.sideOut ? inward * -1 : inward) *
+              PlanOpening.frameOffset;
+          // El marco solapa un poco el hueco por los lados.
+          final lap = dir * PlanOpening.frameOffset;
+          blockers.add(
+            panel(
+              a + off - lap,
+              b + off + lap,
+              keep,
+              mired,
+              diffuse,
+              filters.map((m) => m.name).join(' + '),
+            ),
+          );
+        }
+
+        // La cortina tapa una parte del ancho, desde un lado.
+        final covered = PlanOpening.curtain(el);
+        if (covered > 0.01) {
+          final cloth = PlanOpening.curtainMaterial(el);
+          final off =
+              (PlanOpening.curtainSide(el) == PlanOpening.sideOut
+                  ? inward * -1
+                  : inward) *
+              PlanOpening.curtainOffset;
+          // La cortina solapa la pared por el lado del que cuelga y, echada
+          // del todo, también por el otro.
+          final lap = dir * PlanOpening.curtainOffset;
+          blockers.add(
+            panel(
+              a + off - lap,
+              a + off + span * covered + (covered > 0.99 ? lap : Offset.zero),
+              cloth.transmission,
+              0,
+              cloth.transmission > 0 ? 120 : null,
+              'Cortina (${cloth.name.toLowerCase()})',
             ),
           );
         }
@@ -659,16 +795,6 @@ class LightScene {
       // Pared suelta de tamaño fijo.
       final (a, b) = _span(el, pieceWidth);
       walls.add((a, b, el));
-    }
-
-    bool mountedOn(Offset centre, (Offset, Offset, PlanElement) wall) {
-      final length = (wall.$2 - wall.$1).distance;
-      if (length < 1) return false;
-      final dir = (wall.$2 - wall.$1) / length;
-      final along =
-          (centre.dx - wall.$1.dx) * dir.dx + (centre.dy - wall.$1.dy) * dir.dy;
-      final foot = wall.$1 + dir * along.clamp(0, length);
-      return (centre - foot).distance <= _mountTolerance;
     }
 
     for (final wall in walls) {
@@ -703,34 +829,23 @@ class LightScene {
       for (final (from, to, gap) in cuts) {
         if (from > cursor + 0.5) {
           blockers.add(
-            LightBlocker(a + dir * cursor, a + dir * from, element: element),
+            LightBlocker(
+              a + dir * cursor,
+              a + dir * from,
+              isWall: true,
+              element: element,
+            ),
           );
         }
         final start = a + dir * math.max(from, cursor);
         final end = a + dir * to;
-        LightBlocker? pane;
-        if (gap.transmission < 1) {
-          pane = LightBlocker(
-            start,
-            end,
-            transmission: gap.transmission,
-            miredShift: gap.mired,
-            isAperture: true,
-            element: gap.element,
-          );
-          blockers.add(pane);
-        }
         if ((end - start).distance > 1) {
           apertures.add(
             LightAperture(
               start,
               end,
-              transmission: gap.transmission,
-              miredShift: gap.mired,
               sillM: PlanOpening.sill(gap.element),
               headM: PlanOpening.head(gap.element),
-              diffuseDeg: gap.diffuseDeg,
-              pane: pane,
               element: gap.element,
             ),
           );
@@ -738,23 +853,8 @@ class LightScene {
         cursor = math.max(cursor, to);
       }
       if (length > cursor + 0.5) {
-        blockers.add(LightBlocker(a + dir * cursor, b, element: element));
-      }
-    }
-
-    // Ventanas y puertas cerradas sueltas, sin pared: filtran o tapan igual.
-    for (final gap in openings) {
-      if (gap.transmission >= 1) continue;
-      final centre = (gap.a + gap.b) / 2;
-      if (!walls.any((w) => mountedOn(centre, w))) {
         blockers.add(
-          LightBlocker(
-            gap.a,
-            gap.b,
-            transmission: gap.transmission,
-            miredShift: gap.mired,
-            element: gap.element,
-          ),
+          LightBlocker(a + dir * cursor, b, isWall: true, element: element),
         );
       }
     }
@@ -808,6 +908,7 @@ class LightScene {
   List<SceneLight> _secondarySources(
     List<PlanElement> elements, {
     required bool wallBounce,
+    required bool diffusers,
   }) {
     final result = <SceneLight>[];
 
@@ -888,6 +989,30 @@ class LightScene {
       );
     }
 
+    if (diffusers) {
+      // Telas, cortinas y filtros de difusión: en marcos de grip o en los
+      // huecos de las paredes.
+      for (final cloth in blockers) {
+        final beam = cloth.diffuseDeg;
+        if (beam == null || cloth.isCircle || cloth.diffuseKeep <= 0) continue;
+        final span = cloth.b - cloth.a;
+        if (span.distance < 1) continue;
+        emit(
+          centre: (cloth.a + cloth.b) / 2,
+          tangent: span / span.distance,
+          lengthUnits: span.distance,
+          heightM: cloth.heightM - cloth.baseM,
+          keep: cloth.diffuseKeep,
+          mired: cloth.miredShift,
+          beamDeg: beam,
+          through: true,
+          own: cloth,
+          label: cloth.label ?? 'Difusión',
+        );
+      }
+      return result;
+    }
+
     LightBlocker? blockerOf(PlanElement el) {
       for (final b in blockers) {
         if (identical(b.element, el)) return b;
@@ -897,41 +1022,26 @@ class LightScene {
 
     for (final el in elements) {
       if (el.type != ElementType.light) continue;
+      if (el.lightType != LightType.bounce) continue;
       final rad = el.rotation * math.pi / 180;
       final tangent = Offset(math.cos(rad), math.sin(rad));
       final length = lengthOf(el);
-      if (el.lightType == LightType.bounce) {
-        final material = SurfaceMaterial.byId(
-          el.props[materialKey] as String?,
-          kBounceMaterials,
-        );
-        emit(
-          centre: el.position,
-          tangent: tangent,
-          lengthUnits: length,
-          heightM: length * metersPerUnit,
-          keep: material.reflectance,
-          mired: material.miredShift,
-          beamDeg: material.beamDeg,
-          through: false,
-          own: blockerOf(el),
-          label: '${el.displayLabel} (${material.name})',
-        );
-      } else if (el.lightType == LightType.diffusionFrame) {
-        final cloth = diffusionOf(el);
-        emit(
-          centre: el.position,
-          tangent: tangent,
-          lengthUnits: length,
-          heightM: length * metersPerUnit,
-          keep: cloth.transmission,
-          mired: cloth.miredShift,
-          beamDeg: cloth.spreadDeg ?? 120,
-          through: true,
-          own: blockerOf(el),
-          label: cloth.name,
-        );
-      }
+      final material = SurfaceMaterial.byId(
+        el.props[materialKey] as String?,
+        kBounceMaterials,
+      );
+      emit(
+        centre: el.position,
+        tangent: tangent,
+        lengthUnits: length,
+        heightM: length * metersPerUnit,
+        keep: material.reflectance,
+        mired: material.miredShift,
+        beamDeg: material.beamDeg,
+        through: false,
+        own: blockerOf(el),
+        label: '${el.displayLabel} (${material.name})',
+      );
     }
 
     if (wallBounce) {
@@ -1272,21 +1382,23 @@ class LightScene {
     for (final gap in apertures) {
       final hit = _rayHit(point, toward, LightBlocker(gap.a, gap.b));
       if (hit == null || hit < 0.5) continue;
+      // Por debajo del alféizar y por encima del dintel hay pared. Lo que
+      // lleve el hueco (cristal, tela, hojas) va aparte, como topes.
       final h = heightAt(hit);
-      if (h < gap.sillM) return (transmission: 0, miredShift: 0);
-      if (h <= gap.headM) {
-        // Con difusión o cortina, el sol directo no pasa: sale como luz
-        // blanda del propio hueco (ver `_apertureSources`).
-        if (gap.diffuseDeg != null) return (transmission: 0, miredShift: 0);
-        transmission *= gap.transmission;
-        mired += gap.miredShift;
-        if (transmission <= 0) return (transmission: 0, miredShift: 0);
-      } else if (h < _wallTopAt(gap.centre)) {
+      if (h < gap.sillM || (h > gap.headM && h < _wallTopAt(gap.centre))) {
         return (transmission: 0, miredShift: 0);
       }
     }
     for (final blocker in blockers) {
-      if (blocker.isAperture) continue;
+      final dome = blocker.domeRadius;
+      if (dome != null) {
+        // Quien está sobre la loma no queda a su sombra.
+        if ((point - blocker.a).distance <= dome) continue;
+        if (_domeBlocks(point, toward, blocker, heightAt)) {
+          return (transmission: 0, miredShift: 0);
+        }
+        continue;
+      }
       if (blocker.isCircle &&
           (point - blocker.a).distance <= blocker.radius &&
           blocker.heightM <= 2) {
@@ -1294,12 +1406,39 @@ class LightScene {
       }
       final hit = _rayHit(point, toward, blocker);
       if (hit == null || hit < 0.5) continue;
-      if (heightAt(hit) >= blocker.heightM) continue;
+      final h = heightAt(hit);
+      if (h >= blocker.heightM || h < blocker.baseM) continue;
       transmission *= blocker.transmission;
       mired += blocker.miredShift;
       if (transmission <= 0) return (transmission: 0, miredShift: 0);
     }
     return (transmission: transmission, miredShift: mired);
+  }
+
+  /// Si un rayo que sube choca con la ladera de una loma.
+  static bool _domeBlocks(
+    Offset origin,
+    Offset dir,
+    LightBlocker hill,
+    double Function(double units) heightAt,
+  ) {
+    final radius = hill.domeRadius!;
+    final oc = origin - hill.a;
+    final b = oc.dx * dir.dx + oc.dy * dir.dy;
+    final c = oc.dx * oc.dx + oc.dy * oc.dy - radius * radius;
+    final disc = b * b - c;
+    if (disc <= 0) return false;
+    final root = math.sqrt(disc);
+    final enter = math.max(0.0, -b - root);
+    final exit = -b + root;
+    if (exit <= enter) return false;
+    const steps = 16;
+    for (var i = 0; i <= steps; i++) {
+      final t = enter + (exit - enter) * i / steps;
+      final distance = (origin + dir * t - hill.a).distance;
+      if (heightAt(t) < hill.domeHeightAt(distance)) return true;
+    }
+    return false;
   }
 
   /// Hasta dónde sube la pared en un punto de ella.
@@ -1351,69 +1490,45 @@ class LightScene {
   }
 
   /// Los huecos de un recinto con techo, como fuentes: por ellos entra el
-  /// cielo y, si llevan difusión o cortina, el sol hecho luz blanda.
+  /// cielo. La fuente nace justo fuera del hueco, así lo que este lleve
+  /// (cristal, filtros, cortina, hojas) actúa sobre ella.
   List<SceneLight> _apertureSources() {
     final env = ambient;
-    if (env == null) return const [];
+    if (env == null || !env.hasSky) return const [];
     final result = <SceneLight>[];
     for (final gap in apertures) {
-      if (gap.transmission <= 0) continue;
       final inward = _inwardOf(gap);
       if (inward == null) continue;
       final outward = inward * -1;
-      final outside = gap.centre + outward * 10;
+      final outside = gap.centre + outward * skyOffset;
       final areaM2 = gap.width * metersPerUnit * (gap.headM - gap.sillM);
       final what = PlanOpening.isDoor(gap.element!) ? 'puerta' : 'ventana';
-
-      void emit(double lux, double cct, double beamDeg, String label) {
-        final candela = lux * areaM2 * gap.transmission / math.pi;
-        if (candela < 0.05) return;
-        result.add(
-          SceneLight(
-            source: LightSource(
-              candela: candela,
-              beamDeg: beamDeg,
-              sizeM: gap.width * metersPerUnit,
-              cct: _shift(cct, gap.miredShift),
-              status: PhotometryStatus.estimated,
-            ),
-            position: gap.centre + inward * 2,
-            aim: inward,
-            frontOnly: true,
-            surface: gap.pane,
-            label: label,
+      // Una ventana ve medio cielo: la mitad de lo que recibe el suelo.
+      final lux = env.skyLux * 0.5 * _openSky(outside, facing: outward);
+      final candela = lux * areaM2 / math.pi;
+      if (candela < 0.05) continue;
+      result.add(
+        SceneLight(
+          source: LightSource(
+            candela: candela,
+            beamDeg: 120,
+            sizeM: gap.width * metersPerUnit,
+            cct: env.skyCct,
+            status: PhotometryStatus.estimated,
           ),
-        );
-      }
-
-      if (env.hasSky) {
-        // Una ventana ve medio cielo: la mitad de lo que recibe el suelo.
-        final lux = env.skyLux * 0.5 * _openSky(outside, facing: outward);
-        emit(lux, env.skyCct, 120, '${env.day ? 'Cielo' : 'Luna'} por $what');
-      }
-      final diffuse = gap.diffuseDeg;
-      if (env.hasSun && diffuse != null) {
-        final toward = env.towardSun;
-        final facing = toward.dx * outward.dx + toward.dy * outward.dy;
-        if (facing > 0.02) {
-          final sun = sunThroughput(
-            outside,
-            heightM: (gap.sillM + gap.headM) / 2,
-          );
-          final cosElevation = 1 / math.sqrt(1 + _sunTan * _sunTan);
-          final lux =
-              env.condition.sunLux * sun.transmission * cosElevation * facing;
-          emit(
-            lux,
-            _shift(env.condition.sunCct, sun.miredShift),
-            diffuse,
-            'Sol difuso por $what',
-          );
-        }
-      }
+          position: outside,
+          aim: inward,
+          frontOnly: true,
+          label: '${env.day ? 'Cielo' : 'Luna'} por $what',
+        ),
+      );
     }
     return result;
   }
+
+  /// A qué distancia de la pared, por fuera, nace la luz de cielo de un
+  /// hueco: más allá de un marco o una cortina puestos por fuera.
+  static const double skyOffset = 12;
 
   /// La mancha de sol que entra por cada hueco y cae en el suelo devuelve
   /// luz hacia arriba: el relleno natural de una sala con sol.
@@ -1425,7 +1540,6 @@ class LightScene {
     final sinElevation = tan / math.sqrt(1 + tan * tan);
     final result = <SceneLight>[];
     for (final gap in apertures) {
-      if (gap.transmission <= 0 || gap.diffuseDeg != null) continue;
       final inward = _inwardOf(gap);
       if (inward == null) continue;
       final facing = -(toward.dx * inward.dx + toward.dy * inward.dy);

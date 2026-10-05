@@ -16,6 +16,8 @@ import 'light_symbols.dart';
 import 'light/modifiers.dart';
 import 'light/surfaces.dart';
 import 'plan_opening.dart';
+import 'plan_sun_painter.dart';
+import 'plan_terrain_painter.dart';
 import 'plan_segment.dart';
 
 /// Colores del lienzo: fondo oscuro, como en un plató a oscuras, para que
@@ -146,18 +148,6 @@ class CameraPlanPainter extends CustomPainter {
       _drawZone(canvas, zone);
     }
 
-    if (inheritedElements.isNotEmpty) {
-      canvas.saveLayer(
-        null,
-        Paint()
-          ..color = const Color(0xFFFFFFFF).withValues(alpha: inheritedOpacity),
-      );
-      for (final el in _paintOrder(inheritedElements)) {
-        _drawElement(canvas, el);
-      }
-      canvas.restore();
-    }
-
     // La planta vista por la luz: aparatos, rebotes, telas y paredes de
     // todas las capas, con lo que las tapa.
     final scene = LightScene.from(
@@ -168,40 +158,40 @@ class CameraPlanPainter extends CustomPainter {
     _scene = scene;
     final dimmed = {...inheritedElements};
     _drawRooms(canvas, scene);
+
+    // El suelo va debajo de todo: calles, taludes y colinas. La luz y las
+    // sombras caen encima.
+    for (final el in [...inheritedElements, ...elements]) {
+      if (PlanTerrainPainter.isTerrain(el)) _drawTerrain(canvas, el);
+    }
+
+    if (inheritedElements.isNotEmpty) {
+      canvas.saveLayer(
+        null,
+        Paint()
+          ..color = const Color(0xFFFFFFFF).withValues(alpha: inheritedOpacity),
+      );
+      for (final el in _paintOrder(inheritedElements)) {
+        _drawElement(canvas, el, body: !PlanTerrainPainter.isTerrain(el));
+      }
+      canvas.restore();
+    }
+
     if (exposureMap && exposure != null) {
       _drawExposureMap(canvas, size, scene);
     }
     if (!exposureMap && (ambient?.hasSun ?? false)) {
-      // De día, el sol baña lo que está al aire libre y las cosas le dan
-      // sombra. Bajo techo solo entra por los huecos.
-      final view = Rect.fromLTWH(
-        -offset.dx / scale,
-        -offset.dy / scale,
-        size.width / scale,
-        size.height / scale,
+      PlanSunPainter.paint(
+        canvas,
+        scene,
+        ambient!,
+        Rect.fromLTWH(
+          -offset.dx / scale,
+          -offset.dy / scale,
+          size.width / scale,
+          size.height / scale,
+        ),
       );
-      var outdoors = Path()..addRect(view);
-      for (final room in scene.rooms) {
-        if (!room.roofed) continue;
-        outdoors = Path.combine(
-          PathOperation.difference,
-          outdoors,
-          room.room.path,
-        );
-      }
-      canvas.save();
-      canvas.clipPath(outdoors);
-      canvas.drawRect(
-        view,
-        Paint()
-          ..blendMode = BlendMode.plus
-          ..color = LightBeam.colorForCct(
-            ambient!.condition.sunCct,
-          ).withValues(alpha: 0.13),
-      );
-      _drawSunShadows(canvas, scene);
-      canvas.restore();
-      _drawSunPatches(canvas, scene);
     }
     // Los haces van debajo de todo lo demás. Con el mapa de exposición no
     // se pintan: el mapa ya dice cuánta luz hay en cada sitio.
@@ -233,6 +223,7 @@ class CameraPlanPainter extends CustomPainter {
         el,
         selected: el.id == selectedElement?.id,
         ringed: alsoSelected.contains(el),
+        body: !PlanTerrainPainter.isTerrain(el),
       );
     }
 
@@ -498,37 +489,59 @@ class CameraPlanPainter extends CustomPainter {
   }
 
   /// Pared, calle o relieve dibujados punto a punto.
-  void _drawSegment(Canvas canvas, PlanElement el, {required bool selected}) {
+  /// Calle, talud o colina: el suelo.
+  void _drawTerrain(Canvas canvas, PlanElement el) {
+    if (PlanSegment.isSegment(el)) {
+      _drawSegment(canvas, el, selected: false);
+      return;
+    }
+    PlanTerrainPainter.hill(
+      canvas,
+      el,
+      metersPerUnit: metersPerUnit ?? defaultMetersPerUnit,
+      scale: scale,
+      towardSun: (ambient?.hasSun ?? false) ? ambient!.towardSun : null,
+    );
+  }
+
+  void _drawSegment(
+    Canvas canvas,
+    PlanElement el, {
+    required bool selected,
+    bool body = true,
+  }) {
     final path = PlanSegment.path(el);
-    switch (PlanSegment.kind(el)) {
-      case PlanSegment.kindStreet:
-        canvas.drawPath(
-          path,
-          Paint()
-            ..color = const Color(0xFF3A3A44)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 64
-            ..strokeCap = StrokeCap.butt,
-        );
-        _drawDashedPath(
-          canvas,
-          path,
-          Paint()
-            ..color = _CanvasColors.inkTertiary
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5,
-        );
-      case PlanSegment.kindRelief:
-        _drawSlope(canvas, el, path);
-      default:
-        canvas.drawPath(
-          path,
-          Paint()
-            ..color = _CanvasColors.ink
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 6
-            ..strokeCap = StrokeCap.round,
-        );
+    if (body) {
+      switch (PlanSegment.kind(el)) {
+        case PlanSegment.kindStreet:
+          canvas.drawPath(
+            path,
+            Paint()
+              ..color = const Color(0xFF3A3A44)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 64
+              ..strokeCap = StrokeCap.butt,
+          );
+          _drawDashedPath(
+            canvas,
+            path,
+            Paint()
+              ..color = _CanvasColors.inkTertiary
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.5,
+          );
+        case PlanSegment.kindRelief:
+          PlanTerrainPainter.slope(canvas, el, scale: scale);
+        default:
+          canvas.drawPath(
+            path,
+            Paint()
+              ..color = _CanvasColors.ink
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 6
+              ..strokeCap = StrokeCap.round,
+          );
+      }
     }
 
     if (!selected) return;
@@ -560,79 +573,6 @@ class CameraPlanPainter extends CustomPainter {
     handle(PlanSegment.end(el));
     handle(PlanSegment.midpoint(el), hollow: true);
     _drawLengthLabel(canvas, PlanSegment.midpoint(el), PlanSegment.length(el));
-  }
-
-  /// Un talud: la línea de la cresta y, hacia el lado que baja, las
-  /// rayitas de pendiente de los planos topográficos.
-  void _drawSlope(Canvas canvas, PlanElement el, Path path) {
-    const earth = Color(0xFFB08968);
-    final down = el.props['flip'] == true ? -1.0 : 1.0;
-    // Más alto, más ancha la falda.
-    final skirt = (10 + LightScene.propHeightM(el) * 7).clamp(12.0, 60.0);
-    final tick = Paint()
-      ..color = earth.withValues(alpha: 0.75)
-      ..strokeWidth = 1.2
-      ..strokeCap = StrokeCap.round;
-    for (final metric in path.computeMetrics()) {
-      final band = Path();
-      final foot = <Offset>[];
-      var i = 0;
-      for (var d = 0.0; d <= metric.length; d += 9, i++) {
-        final t = metric.getTangentForOffset(d);
-        if (t == null) continue;
-        final normal = Offset(-t.vector.dy, t.vector.dx) * down;
-        if (i == 0) {
-          band.moveTo(t.position.dx, t.position.dy);
-        } else {
-          band.lineTo(t.position.dx, t.position.dy);
-        }
-        foot.add(t.position + normal * skirt);
-        canvas.drawLine(
-          t.position,
-          t.position + normal * (i.isEven ? skirt : skirt * 0.55),
-          tick,
-        );
-      }
-      for (final p in foot.reversed) {
-        band.lineTo(p.dx, p.dy);
-      }
-      canvas.drawPath(
-        band..close(),
-        Paint()..color = earth.withValues(alpha: 0.14),
-      );
-    }
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = earth
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  /// Contorno irregular y cerrado alrededor del origen: una copa, una
-  /// roca, una curva de nivel. Siempre el mismo para la misma semilla.
-  static Path _blob(double radius, int seed, {double rough = 0.12}) {
-    final random = math.Random(seed);
-    const points = 14;
-    final radii = [
-      for (var i = 0; i < points; i++)
-        radius * (1 - rough + random.nextDouble() * rough * 2),
-    ];
-    Offset at(int i) {
-      final angle = (i % points) * 2 * math.pi / points;
-      return Offset(math.cos(angle), math.sin(angle)) * radii[i % points];
-    }
-
-    final path = Path();
-    final start = (at(0) + at(points - 1)) / 2;
-    path.moveTo(start.dx, start.dy);
-    for (var i = 0; i < points; i++) {
-      final mid = (at(i) + at(i + 1)) / 2;
-      path.quadraticBezierTo(at(i).dx, at(i).dy, mid.dx, mid.dy);
-    }
-    return path..close();
   }
 
   void _drawCanvasBackground(Canvas canvas, Size size) {
@@ -845,9 +785,13 @@ class CameraPlanPainter extends CustomPainter {
     PlanElement el, {
     bool selected = false,
     bool ringed = false,
+
+    /// `false` = solo lo que va encima (selección, asas, rótulo): el
+    /// cuerpo ya se pintó con el suelo.
+    bool body = true,
   }) {
     if (PlanSegment.isSegment(el)) {
-      _drawSegment(canvas, el, selected: selected || ringed);
+      _drawSegment(canvas, el, selected: selected || ringed, body: body);
       return;
     }
     if (ringed && !selected) {
@@ -872,7 +816,7 @@ class CameraPlanPainter extends CustomPainter {
       case ElementType.light:
         _drawLight(canvas, el);
       case ElementType.prop:
-        _drawProp(canvas, el);
+        if (body) _drawProp(canvas, el);
       case ElementType.wall:
         if (PlanOpening.isOpening(el)) {
           _drawOpening(canvas, el);
@@ -1390,121 +1334,6 @@ class CameraPlanPainter extends CustomPainter {
     }
   }
 
-  void _drawSunShadows(Canvas canvas, LightScene scene) {
-    final env = ambient;
-    if (env == null || !env.hasSun) return;
-    final away = env.towardSun * -1;
-    final mpu = scene.metersPerUnit;
-    Offset cast(double heightM) => away * (env.shadowLength(heightM) / mpu);
-
-    final shadows = Path();
-    final dappled = Path();
-    for (final blocker in scene.blockers) {
-      // El grip no da sombra de sol que merezca dibujarse.
-      if (blocker.element?.type == ElementType.light) continue;
-      if (blocker.isCircle) {
-        // Una persona, un árbol, una roca: su silueta estirada.
-        final r = blocker.radius;
-        final shadow = cast(blocker.heightM);
-        final side = Offset(-away.dy, away.dx) * r;
-        final into = blocker.isOpaque ? shadows : dappled;
-        into.addPolygon([
-          blocker.a + side,
-          blocker.a - side,
-          blocker.a - side + shadow,
-          blocker.a + side + shadow,
-        ], true);
-        into.addOval(Rect.fromCircle(center: blocker.a + shadow, radius: r));
-      } else if (blocker.isOpaque || blocker.isAperture) {
-        final shadow = cast(blocker.heightM);
-        shadows.addPolygon([
-          blocker.a,
-          blocker.b,
-          blocker.b + shadow,
-          blocker.a + shadow,
-        ], true);
-      }
-    }
-    // Un recinto con techo da la sombra de todo su volumen.
-    for (final room in scene.rooms) {
-      if (!room.roofed) continue;
-      shadows.addPath(room.room.path.shift(cast(room.ceilingM)), Offset.zero);
-    }
-    // En una sola capa, para que donde se pisan no se oscurezcan dos veces.
-    final blur = MaskFilter.blur(BlurStyle.normal, 0.08 / mpu);
-    canvas.saveLayer(null, Paint()..color = const Color(0x66000000));
-    canvas.drawPath(
-      shadows,
-      Paint()
-        ..color = const Color(0xFF000000)
-        ..maskFilter = blur,
-    );
-    canvas.restore();
-    canvas.saveLayer(null, Paint()..color = const Color(0x33000000));
-    canvas.drawPath(
-      dappled,
-      Paint()
-        ..color = const Color(0xFF000000)
-        ..maskFilter = blur,
-    );
-    canvas.restore();
-  }
-
-  /// La mancha de sol que entra por cada hueco de un recinto con techo:
-  /// en el suelo, entre lo que deja pasar el alféizar y el dintel.
-  void _drawSunPatches(Canvas canvas, LightScene scene) {
-    final env = ambient;
-    if (env == null || !env.hasSun) return;
-    final toward = env.towardSun;
-    final mpu = scene.metersPerUnit;
-    final colour = LightBeam.colorForCct(env.condition.sunCct);
-    for (final gap in scene.apertures) {
-      if (gap.transmission <= 0 || gap.diffuseDeg != null) continue;
-      final span = gap.b - gap.a;
-      if (span.distance < 1) continue;
-      final normal = Offset(-span.dy, span.dx) / span.distance;
-      SceneRoom? room;
-      Offset? inward;
-      for (final side in [normal, normal * -1]) {
-        final found = scene.roomAt(gap.centre + side * 10);
-        if (found != null && found.roofed) {
-          room = found;
-          inward = side;
-        }
-      }
-      if (room == null || inward == null) continue;
-      // El sol tiene que venir de fuera.
-      if (toward.dx * inward.dx + toward.dy * inward.dy > -0.05) continue;
-      // Y llegar hasta el hueco: que no lo tape nada por fuera.
-      final reaches = scene.sunThroughput(
-        gap.centre + inward * 4,
-        heightM: (gap.sillM + gap.headM) / 2,
-      );
-      if (reaches.transmission <= 0) continue;
-      final near = toward * (-env.shadowLength(gap.sillM) / mpu);
-      final far = toward * (-env.shadowLength(gap.headM) / mpu);
-      final patch = Path.combine(
-        PathOperation.intersect,
-        Path()..addPolygon([
-          gap.a + near,
-          gap.b + near,
-          gap.b + far,
-          gap.a + far,
-        ], true),
-        room.room.path,
-      );
-      canvas.drawPath(
-        patch,
-        Paint()
-          ..blendMode = BlendMode.plus
-          ..color = colour.withValues(
-            alpha: (0.34 * reaches.transmission).clamp(0.05, 0.4),
-          )
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 0.04 / mpu),
-      );
-    }
-  }
-
   /// Puerta, ventana o abertura: abre su hueco en la pared y dibuja lo que
   /// hay en él. Se pinta en coordenadas del elemento (ya trasladado y
   /// girado): la pared va a lo largo del eje x.
@@ -1537,9 +1366,10 @@ class CameraPlanPainter extends CustomPainter {
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1,
         );
-        // Difusión o gelatina pegada al cristal.
-        if ((el.props[PlanLight.modifiersKey] as List? ?? const [])
-            .isNotEmpty) {
+        // Lo que lleve pegado el cristal.
+        final ids = el.props[PlanLight.modifiersKey] as List? ?? const [];
+        if (ids.isNotEmpty &&
+            PlanOpening.filterSide(el) == PlanOpening.sideGlass) {
           canvas.drawLine(
             Offset(-half, 0),
             Offset(half, 0),
@@ -1549,15 +1379,67 @@ class CameraPlanPainter extends CustomPainter {
           );
         }
       }
-      // La cortina, sobre la parte del ancho que tapa.
+    }
+
+    // Qué lado es el de dentro: el que da a un recinto con techo.
+    final rot = el.rotation * math.pi / 180;
+    final normal = Offset(-math.sin(rot), math.cos(rot));
+    final scene = _scene;
+    final inside =
+        scene != null &&
+            scene.isRoofed(el.position - normal * 10) &&
+            !scene.isRoofed(el.position + normal * 10)
+        ? -1.0
+        : 1.0;
+    final filters = [
+      for (final id in (el.props[PlanLight.modifiersKey] as List? ?? const []))
+        ?LightModifier.byId(id?.toString()),
+    ];
+    final filterSide = PlanOpening.filterSide(el);
+    final onGlass =
+        PlanOpening.isWindow(el) && filterSide == PlanOpening.sideGlass;
+    Color filterColour() {
+      if (filters.any((m) => m.kind == ModifierKind.diffusion)) {
+        return Colors.white.withValues(alpha: 0.85);
+      }
+      if (filters.any((m) => m.kind == ModifierKind.correction)) {
+        final warm = filters.any((m) => m.miredShift > 0);
+        return (warm ? const Color(0xFFFFB45E) : const Color(0xFF7FB6FF))
+            .withValues(alpha: 0.9);
+      }
+      return const Color(0xFF8A8A96);
+    }
+
+    // Filtros en un marco, por dentro o por fuera.
+    if (filters.isNotEmpty && !onGlass) {
+      final y =
+          inside *
+          (filterSide == PlanOpening.sideOut ? -1 : 1) *
+          PlanOpening.frameOffset;
+      final frame = Paint()
+        ..color = filterColour()
+        ..strokeWidth = 2.5;
+      canvas.drawLine(Offset(-half, y), Offset(half, y), frame);
+      for (final x in [-half, half]) {
+        canvas.drawLine(Offset(x, y - 2.5), Offset(x, y + 2.5), frame);
+      }
+    }
+
+    {
+      // La cortina, sobre la parte del ancho que tapa y al lado que
+      // cuelga.
       final covered = PlanOpening.curtain(el);
       if (covered > 0.01) {
         final cloth = PlanOpening.curtainMaterial(el);
+        final y =
+            inside *
+            (PlanOpening.curtainSide(el) == PlanOpening.sideOut ? -1 : 1) *
+            PlanOpening.curtainOffset;
         final end = -half + 2 * half * covered;
-        final wave = Path()..moveTo(-half, 9);
+        final wave = Path()..moveTo(-half, y);
         for (var x = -half; x < end; x += 6) {
-          wave.quadraticBezierTo(x + 1.5, 6, x + 3, 9);
-          wave.quadraticBezierTo(x + 4.5, 12, math.min(x + 6, end), 9);
+          wave.quadraticBezierTo(x + 1.5, y - 3, x + 3, y);
+          wave.quadraticBezierTo(x + 4.5, y + 3, math.min(x + 6, end), y);
         }
         canvas.drawPath(
           wave,
@@ -1585,8 +1467,14 @@ class CameraPlanPainter extends CustomPainter {
         );
       }
 
+      // La hoja de una ventana es de cristal; la de una puerta, maciza.
+      final glazed = PlanOpening.isWindow(el);
       final leaf = Paint()
-        ..color = _CanvasColors.ink
+        ..color = glazed
+            ? (filters.isNotEmpty && onGlass
+                  ? filterColour()
+                  : const Color(0xFF7EC8F0))
+            : _CanvasColors.ink
         ..strokeWidth = 3
         ..strokeCap = StrokeCap.round;
       final swing = Paint()
@@ -1837,13 +1725,19 @@ class CameraPlanPainter extends CustomPainter {
         );
       case PropType.tree:
         // La copa, a su tamaño: tapa la luz y deja pasar una parte.
-        final crown = _blob(LightScene.propSizeM(el) / mpu, el.id.hashCode);
+        final crown = PlanTerrainPainter.blob(
+          LightScene.propSizeM(el) / mpu,
+          el.id.hashCode,
+        );
         canvas.drawPath(
           crown,
           Paint()..color = const Color(0xFF2E7D32).withValues(alpha: 0.38),
         );
         canvas.drawPath(
-          _blob(LightScene.propSizeM(el) / mpu * 0.55, el.id.hashCode + 3),
+          PlanTerrainPainter.blob(
+            LightScene.propSizeM(el) / mpu * 0.55,
+            el.id.hashCode + 3,
+          ),
           Paint()..color = const Color(0xFF43A047).withValues(alpha: 0.30),
         );
         canvas.drawPath(crown, paint..color = const Color(0xFF66BB6A));
@@ -1853,7 +1747,7 @@ class CameraPlanPainter extends CustomPainter {
           Paint()..color = const Color(0xFF8D6E63),
         );
       case PropType.rock:
-        final rock = _blob(
+        final rock = PlanTerrainPainter.blob(
           LightScene.propSizeM(el) / mpu,
           el.id.hashCode + 11,
           rough: 0.22,
@@ -1864,48 +1758,8 @@ class CameraPlanPainter extends CustomPainter {
         );
         canvas.drawPath(rock, paint);
       case PropType.hill:
-        // Curvas de nivel, con la ladera que mira al sol más clara.
-        const earth = Color(0xFFB08968);
-        final radius = LightScene.propSizeM(el) / mpu;
-        final seed = el.id.hashCode + 21;
-        final rad = -el.rotation * math.pi / 180;
-        final sun = ambient?.hasSun ?? false
-            ? ambient!.towardSun
-            : const Offset(-0.7, -0.7);
-        final lit = Offset(
-          sun.dx * math.cos(rad) - sun.dy * math.sin(rad),
-          sun.dx * math.sin(rad) + sun.dy * math.cos(rad),
-        );
-        final outline = _blob(radius, seed);
-        canvas.save();
-        canvas.clipPath(outline);
-        canvas.drawRect(
-          Rect.fromCircle(center: Offset.zero, radius: radius * 1.3),
-          Paint()
-            ..shader = ui.Gradient.linear(lit * radius, lit * -radius, [
-              earth.withValues(alpha: 0.42),
-              const Color(0xFF3A2C22).withValues(alpha: 0.55),
-            ]),
-        );
-        canvas.restore();
-        const rings = 5;
-        for (var i = 0; i < rings; i++) {
-          final k = 1 - i / rings;
-          canvas.save();
-          // Las curvas se aprietan hacia la cima, algo corrida del centro.
-          canvas.translate(
-            lit.dx * radius * 0.12 * (1 - k),
-            lit.dy * radius * 0.12 * (1 - k),
-          );
-          canvas.drawPath(
-            _blob(radius * k, seed),
-            Paint()
-              ..color = earth.withValues(alpha: i == 0 ? 0.9 : 0.55)
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = i == 0 ? 2 : 1.2,
-          );
-          canvas.restore();
-        }
+        // Se pinta con el suelo (ver `_drawTerrain`).
+        break;
       case PropType.vehicle:
         final body = RRect.fromRectAndRadius(
           const Rect.fromLTWH(-18, -38, 36, 76),

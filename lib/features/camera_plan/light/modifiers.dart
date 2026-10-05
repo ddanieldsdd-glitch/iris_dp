@@ -10,6 +10,9 @@ enum ModifierKind {
 
   /// Gelatina de corrección de color: quita luz y cambia la temperatura.
   correction,
+
+  /// Densidad neutra: quita luz sin cambiar su color ni su calidad.
+  nd,
 }
 
 /// Difusión, red o gelatina que se pone delante de un aparato.
@@ -425,5 +428,39 @@ const kLightModifiers = <LightModifier>[
     kind: ModifierKind.correction,
     transmission: 0.81,
     miredShift: -12,
+  ),
+  // Densidad neutra, Rosco E-Colour. La reducción es la que da el
+  // fabricante.
+  LightModifier(
+    id: 'nd-03',
+    name: 'ND 0.3',
+    reference: 'Rosco E-Colour 209',
+    kind: ModifierKind.nd,
+    transmission: 0.5,
+    published: true,
+  ),
+  LightModifier(
+    id: 'nd-06',
+    name: 'ND 0.6',
+    reference: 'Rosco E-Colour 210',
+    kind: ModifierKind.nd,
+    transmission: 0.25,
+    published: true,
+  ),
+  LightModifier(
+    id: 'nd-09',
+    name: 'ND 0.9',
+    reference: 'Rosco E-Colour 211',
+    kind: ModifierKind.nd,
+    transmission: 0.125,
+    published: true,
+  ),
+  LightModifier(
+    id: 'nd-12',
+    name: 'ND 1.2',
+    reference: 'Rosco E-Colour 299',
+    kind: ModifierKind.nd,
+    transmission: 0.0625,
+    published: true,
   ),
 ];

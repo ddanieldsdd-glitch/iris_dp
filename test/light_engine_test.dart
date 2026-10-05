@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' show Offset;
+import 'package:flutter/material.dart' show Offset, Path;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
@@ -16,6 +16,7 @@ import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
 import 'package:iris_dp/features/camera_plan/light/rooms.dart';
 import 'package:iris_dp/features/camera_plan/plan_opening.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
+import 'package:iris_dp/features/camera_plan/plan_sun_painter.dart';
 
 void main() {
   group('caída de la luz', () {
@@ -349,25 +350,35 @@ void main() {
       expect(windowed.luxAt(const Offset(700, 560)), 0);
     });
 
-    test('una ventana con difusión quita los stops de la tela', () {
+    test('una ventana con difusión pasa a ser la fuente: quita más que la '
+        'tela y alumbra a los lados', () {
+      PlanElement diffusedWindow() => piece(
+        ArchitectureType.window,
+        400,
+        300,
+        props: {
+          'modifiers': ['grid-half'],
+        },
+      );
       final plain = scene([
         hmi(100, 300, 90),
         wall(),
         piece(ArchitectureType.window, 400, 300),
-      ]).luxAt(behind);
-      final diffused = scene([
-        hmi(100, 300, 90),
-        wall(),
-        piece(
-          ArchitectureType.window,
-          400,
-          300,
-          props: {
-            'modifiers': ['grid-half'],
-          },
-        ),
-      ]).luxAt(behind);
-      expect(stopsBetweenLux(plain, diffused), closeTo(1, 1e-6));
+      ]);
+      final diffused = scene([hmi(100, 300, 90), wall(), diffusedWindow()]);
+      // En el eje, además del stop de la tela, la luz se reparte.
+      expect(
+        stopsBetweenLux(plain.luxAt(behind), diffused.luxAt(behind)),
+        greaterThan(1),
+      );
+      // A un lado, donde el haz duro no llega por la pared, ahora sí.
+      const aside = Offset(520, 480);
+      expect(plain.luxAt(aside), 0);
+      expect(diffused.luxAt(aside), greaterThan(1));
+      expect(
+        diffused.contributionsAt(aside).first.light.label,
+        startsWith('Ventana (Light Grid Cloth'),
+      );
     });
 
     test('puerta abierta y abertura dejan pasar todo; cerrada, nada', () {
@@ -1025,11 +1036,11 @@ void main() {
       final half = {'curtain': 0.5, 'curtainMaterial': 'blackout'};
       expect(through(half, top), 0);
       expect(through(half, bottom), closeTo(through(null, bottom), 1e-6));
-      // Un visillo echado del todo quita el 40 %.
-      expect(
-        through({'curtain': 1.0, 'curtainMaterial': 'sheer'}, top),
-        closeTo(bare * 0.6, bare * 0.001),
-      );
+      // Un visillo echado del todo deshace el haz: llega menos que el
+      // 60 % que deja pasar, porque lo reparte hacia todos lados.
+      final sheer = through({'curtain': 1.0, 'curtainMaterial': 'sheer'}, top);
+      expect(sheer, greaterThan(0));
+      expect(sheer, lessThan(bare * 0.6));
       // Sin cortina, como si no existiera.
       expect(through({'curtain': 0.0}, top), bare);
     });
@@ -1314,7 +1325,7 @@ void main() {
       ]);
       expect(sunAt(soft, nearWindow), 0);
       final labels = soft.contributionsAt(deep).map((c) => c.light.label);
-      expect(labels, contains('Sol difuso por ventana'));
+      expect(labels, contains(contains('Light Grid Cloth) ← Sol')));
       // La tela se come luz, pero al fondo de la sala llega más que con
       // la mancha dura, que solo devuelve el suelo.
       expect(soft.luxAt(deep), greaterThan(hard.luxAt(deep) * 1.3));
@@ -1370,6 +1381,184 @@ void main() {
       expect(sunAt(s, const Offset(400, 300)), 60000);
       final tall = scene([relief(300, 0, 300, 600)..props['height'] = 6.0]);
       expect(sunAt(tall, const Offset(400, 300)), 0);
+    });
+
+    PlanElement door([Map<String, dynamic>? props]) => PlanElement(
+      id: --id,
+      type: ElementType.wall,
+      position: const Offset(300, 350),
+      rotation: 90,
+      label: ArchitectureType.doorOpen.dbValue,
+      props: {'width': 60.0, 'double': false, ...?props},
+    );
+    PlanElement lamp() => PlanElement(
+      id: --id,
+      type: ElementType.light,
+      position: const Offset(100, 350),
+      rotation: 90,
+      lightType: LightType.hmi,
+      props: {'intensity': 100},
+    );
+    const night = PlanAmbient(skyOn: false, wallBounce: false);
+
+    test('cuanto más se abre una puerta, más luz entra: del aparato y del '
+        'sol', () {
+      double fromLamp(double open) {
+        final s = scene([
+          ...room(),
+          door({'open': open}),
+          lamp(),
+        ], night);
+        var sum = 0.0;
+        for (var y = 260.0; y <= 440; y += 10) {
+          sum += s.luxAt(Offset(520, y));
+        }
+        return sum;
+      }
+
+      double fromSun(double open) {
+        final s = scene([
+          ...room(),
+          door({'open': open}),
+        ]);
+        var lit = 0;
+        for (var x = 305.0; x < 500; x += 10) {
+          for (var y = 300.0; y <= 400; y += 10) {
+            if (s.sunThroughput(Offset(x, y), heightM: 0).transmission > 0) {
+              lit++;
+            }
+          }
+        }
+        return lit.toDouble();
+      }
+
+      for (final reading in [fromLamp, fromSun]) {
+        expect(reading(0), 0);
+        expect(reading(20), greaterThan(0));
+        expect(reading(50), greaterThan(reading(20)));
+        expect(reading(90), greaterThan(reading(50)));
+      }
+    });
+
+    test('un filtro en el cristal se esquiva al abrir la ventana; en un '
+        'marco, no', () {
+      double at(Map<String, dynamic> props) => scene([
+        ...room(),
+        window({'double': false, ...props}),
+        lamp(),
+      ], night).luxAt(deep);
+      final clear = at({});
+      final open = at({'open': 90.0});
+      // El cristal quita un 10 %; abierta, nada.
+      expect(clear, closeTo(open * 0.9, open * 0.001));
+      const nd = {
+        'modifiers': ['nd-06'],
+      };
+      // ND 0.6 en el cristal: dos stops con la ventana cerrada.
+      expect(stopsBetweenLux(clear, at(nd)), closeTo(2, 1e-6));
+      // Abierta, la luz no pasa por el cristal ni por su ND.
+      expect(at({...nd, 'open': 90.0}), closeTo(open, open * 0.001));
+      // En un marco por dentro o por fuera, sigue actuando.
+      for (final side in ['in', 'out']) {
+        expect(
+          stopsBetweenLux(open, at({...nd, 'open': 90.0, 'filterSide': side})),
+          closeTo(2, 1e-6),
+        );
+      }
+    });
+
+    test('la cortina cuelga por dentro o por fuera y da parecida luz', () {
+      const sky = PlanAmbient(day: true, sunOn: false, wallBounce: false);
+      LightScene with_(String side) => scene([
+        ...room(),
+        window({
+          'curtain': 1.0,
+          'curtainMaterial': 'sheer',
+          'curtainSide': side,
+        }),
+      ], sky);
+      double clothX(LightScene s) =>
+          s.lights.firstWhere((l) => l.label.startsWith('Cortina')).position.dx;
+      final inside = with_('in');
+      final outside = with_('out');
+      // La pared está en x = 300 y la sala a su derecha.
+      expect(clothX(inside), greaterThan(300));
+      expect(clothX(outside), lessThan(300));
+      expect(inside.luxAt(deep), greaterThan(0));
+      expect(
+        outside.luxAt(deep),
+        closeTo(inside.luxAt(deep), inside.luxAt(deep) * 0.3),
+      );
+      // Con cortina llega menos que sin ella.
+      expect(
+        inside.luxAt(deep),
+        lessThan(scene([...room(), window()], sky).luxAt(deep)),
+      );
+    });
+
+    test('la mancha de sol dibujada coincide con el cálculo, también con un '
+        'negro dentro', () {
+      final s = scene([
+        ...room(),
+        window(),
+        grip(LightType.flag, 345, 350)..props['len'] = 24,
+      ]);
+      final veiled = <(Path, double)>[];
+      final patch = PlanSunPainter.patchFor(
+        s,
+        sun,
+        s.apertures.single,
+        veiled: veiled,
+      )!;
+      var total = 0;
+      var wrong = 0;
+      var lit = 0;
+      for (var x = 306.0; x < 700; x += 6) {
+        for (var y = 206.0; y < 500; y += 6) {
+          final p = Offset(x, y);
+          final drawn =
+              patch.contains(p) || veiled.any((v) => v.$1.contains(p));
+          final real = s.sunThroughput(p, heightM: 0).transmission > 0;
+          total++;
+          if (real) lit++;
+          if (drawn != real) wrong++;
+        }
+      }
+      expect(lit, greaterThan(40));
+      // Solo se permiten desajustes en el borde.
+      expect(wrong / total, lessThan(0.02));
+      // El negro parte la mancha: detrás de él no hay sol.
+      expect(
+        s.sunThroughput(const Offset(420, 350), heightM: 0).transmission,
+        0,
+      );
+      expect(patch.contains(const Offset(420, 350)), isFalse);
+      // El cristal cerrado va como velo, no como hueco.
+      expect(veiled, isNotEmpty);
+    });
+
+    test('una colina es una loma: tapa cerca y deja pasar sobre la falda', () {
+      // Radio 4 m (200 unidades) y 6 m de cima, centrada en x = 300.
+      final s = scene([prop(PropType.hill, 300, 300)]);
+      // Justo detrás, a su sombra.
+      expect(sunAt(s, const Offset(520, 300)), 0);
+      // Más lejos, el rayo ya pasa por encima de la cima.
+      expect(sunAt(s, const Offset(800, 300)), 60000);
+      // La luz de un aparato pasa rozando la falda y no por el centro.
+      PlanElement hmiAt(double y) => PlanElement(
+        id: --id,
+        type: ElementType.light,
+        position: Offset(60, y),
+        rotation: 90,
+        lightType: LightType.hmi,
+        props: {'intensity': 100},
+      );
+      LightScene lit(double y) => LightScene.from([
+        prop(PropType.hill, 300, 300),
+        hmiAt(y),
+      ], metersPerUnit: 0.02);
+      expect(lit(300).luxAt(const Offset(700, 300)), 0);
+      expect(lit(480).luxAt(const Offset(700, 480)), greaterThan(100));
     });
 
     test('los ajustes de un recinto se guardan con el ambiente', () {

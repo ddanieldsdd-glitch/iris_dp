@@ -137,6 +137,45 @@ class PlanPieceControls extends StatelessWidget {
       ),
     );
 
+    /// Elegir entre dos o tres lados.
+    Widget sides(
+      String label,
+      String value,
+      List<(String, String)> options,
+      ValueChanged<String> onChanged,
+    ) => Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AppTypography.caption(palette)),
+          const SizedBox(height: 4),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<String>(
+              showSelectedIcon: false,
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              segments: [
+                for (final (id, name) in options)
+                  ButtonSegment(
+                    value: id,
+                    label: Text(name, style: const TextStyle(fontSize: 11)),
+                  ),
+              ],
+              selected: {value},
+              onSelectionChanged: (v) {
+                onChanged(v.first);
+                onUpdate();
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+
     /// Una sola tela, red o gelatina en la pieza.
     Widget filter(String label, ModifierKind kind, {bool allowNone = true}) {
       final ids = [
@@ -218,11 +257,12 @@ class PlanPieceControls extends StatelessWidget {
             window
                 ? open < 3
                       ? 'Cerrada: la luz pasa por el cristal y pierde un poco.'
-                      : 'Abierta: la luz pasa sin cristal y las hojas hacen '
-                            'sombra.'
+                      : 'Abierta: por el hueco la luz entra limpia; la que '
+                            'cruza una hoja pasa por su cristal.'
                 : open < 3
                 ? 'Cerrada: no deja pasar la luz.'
-                : 'Abierta: la luz pasa por el hueco y la hoja hace sombra.',
+                : 'Cuanto más abierta, más hueco queda libre; la hoja tapa '
+                      'donde esté.',
             style: AppTypography.caption(
               palette,
             ).copyWith(color: palette.textTertiary),
@@ -230,8 +270,11 @@ class PlanPieceControls extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
         ]);
       }
-      if (PlanOpening.isWindow(el)) {
+      if (PlanOpening.hasLeaves(el)) {
         final covered = PlanOpening.curtain(el);
+        final isWindow = PlanOpening.isWindow(el);
+        final hasFilters =
+            (el.props[PlanLight.modifiersKey] as List? ?? const []).isNotEmpty;
         children.addAll([
           slider(
             'Cortina',
@@ -257,7 +300,7 @@ class PlanPieceControls extends StatelessWidget {
               }
             },
           ),
-          if (covered > 0.01)
+          if (covered > 0.01) ...[
             choice<String>(
               'Tela de la cortina',
               PlanOpening.curtainMaterial(el).id,
@@ -273,11 +316,44 @@ class PlanPieceControls extends StatelessWidget {
               ],
               (id) => el.props[PlanOpening.curtainMaterialKey] = id,
             ),
-          filter('Difusión pegada al cristal', ModifierKind.diffusion),
-          filter('Gelatina en el cristal', ModifierKind.correction),
+            sides(
+              'La cortina cuelga',
+              PlanOpening.curtainSide(el),
+              const [
+                (PlanOpening.sideIn, 'Por dentro'),
+                (PlanOpening.sideOut, 'Por fuera'),
+              ],
+              (side) => el.props[PlanOpening.curtainSideKey] = side,
+            ),
+          ],
+          filter('Difusión', ModifierKind.diffusion),
+          filter('Gelatina', ModifierKind.correction),
+          filter('ND', ModifierKind.nd),
+          if (hasFilters) ...[
+            sides(
+              'Los filtros van',
+              PlanOpening.filterSide(el),
+              [
+                if (isWindow) (PlanOpening.sideGlass, 'En el cristal'),
+                (PlanOpening.sideIn, 'Por dentro'),
+                (PlanOpening.sideOut, 'Por fuera'),
+              ],
+              (side) => el.props[PlanOpening.filterSideKey] = side,
+            ),
+            Text(
+              PlanOpening.filterSide(el) == PlanOpening.sideGlass
+                  ? 'Pegados al cristal: al abrir la ventana, la luz entra '
+                        'sin pasar por ellos.'
+                  : 'En un marco que cubre el hueco: actúan con la '
+                        '${isWindow ? 'ventana' : 'puerta'} abierta o cerrada.',
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: palette.textTertiary),
+            ),
+          ],
           Text(
-            'Con difusión o cortina, el sol deja de entrar en mancha y la '
-            'ventana pasa a ser una fuente blanda.',
+            'Con difusión o cortina, la luz que entra deja de dar mancha '
+            'dura y el hueco pasa a ser una fuente blanda.',
             style: AppTypography.caption(
               palette,
             ).copyWith(color: palette.textTertiary),
@@ -428,9 +504,10 @@ class PlanPieceControls extends StatelessWidget {
         case LightType.net:
           children.add(filter('Red', ModifierKind.scrim, allowNone: false));
         case LightType.gel:
-          children.add(
-            filter('Gelatina', ModifierKind.correction, allowNone: false),
-          );
+          children.addAll([
+            filter('Gelatina', ModifierKind.correction),
+            filter('ND', ModifierKind.nd),
+          ]);
         default:
           children.add(
             Text(
