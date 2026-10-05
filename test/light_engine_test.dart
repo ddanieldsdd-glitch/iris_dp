@@ -5,6 +5,7 @@ import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/light/exposure.dart';
 import 'package:iris_dp/features/camera_plan/light/light_scene.dart';
+import 'package:iris_dp/features/camera_plan/light/meter.dart';
 import 'package:iris_dp/features/camera_plan/light/modifiers.dart';
 import 'package:iris_dp/features/camera_plan/light/photometry.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
@@ -659,6 +660,117 @@ void main() {
         white.contributionsAt(hidden).first.light.label,
         startsWith('Pared blanca'),
       );
+    });
+  });
+
+  group('fotómetro', () {
+    var id = 0;
+    PlanElement hmi(double x, double y, double rotation, [double? intensity]) =>
+        PlanElement(
+          id: --id,
+          type: ElementType.light,
+          position: Offset(x, y),
+          rotation: rotation,
+          lightType: LightType.hmi,
+          props: {'intensity': intensity ?? 100},
+        );
+    PlanElement camera(double x, double y, [Map<String, dynamic>? props]) =>
+        PlanElement(
+          id: --id,
+          type: ElementType.camera,
+          position: Offset(x, y),
+          props: {'noShadow': true, ...?props},
+        );
+    LightScene scene(List<PlanElement> elements) =>
+        LightScene.from(elements, metersPerUnit: 0.02, wallBounce: false);
+
+    // Sujeto en (500, 300); la cámara debajo, mirando hacia arriba.
+    const subject = Offset(500, 300);
+
+    test('lee lux y diafragma con los ajustes de la cámara', () {
+      final cam = camera(500, 600);
+      final s = scene([hmi(200, 300, 90), cam]);
+      final r = MeterReading.at(s, subject, camera: cam);
+      expect(r.lux, closeTo(s.luxAt(subject), 1e-9));
+      expect(r.stop, closeTo(const ExposureSettings().stopFor(r.lux), 1e-9));
+      expect(r.targetStop, 2.8);
+      expect(
+        r.stopsOverTarget,
+        closeTo(stopsBetweenApertures(r.stop, 2.8), 1e-9),
+      );
+      expect(r.shortLabel, startsWith('T'));
+      expect(r.estimated, isTrue);
+      expect(r.cct, closeTo(5600, 1));
+    });
+
+    test('subir el ISO un stop cierra el diafragma un stop', () {
+      final base = camera(500, 600);
+      final fast = camera(500, 600, {'iso': 1600, 'tStop': 4});
+      final s = scene([hmi(200, 300, 90)]);
+      final a = MeterReading.at(s, subject, camera: base);
+      final b = MeterReading.at(s, subject, camera: fast);
+      expect(stopsBetweenApertures(b.stop, a.stop), closeTo(1, 1e-9));
+      expect(b.targetStop, 4);
+    });
+
+    test('separa clave, relleno y contra respecto a la cámara', () {
+      final cam = camera(500, 600);
+      // Clave fuerte por la izquierda de cámara, relleno flojo por la
+      // derecha y un contra por detrás del sujeto.
+      final s = scene([
+        hmi(200, 300, 90),
+        hmi(800, 300, 270, 25),
+        hmi(500, 60, 180, 50),
+        cam,
+      ]);
+      final r = MeterReading.at(s, subject, camera: cam);
+      expect(r.hasCamera, isTrue);
+      expect(r.keyIsLeft, isTrue);
+      expect(r.left.lux, greaterThan(r.right.lux));
+      expect(r.back.lux, greaterThan(0));
+      expect(r.left.lux + r.right.lux + r.back.lux, closeTo(r.lux, 1e-6));
+      // Relleno al 25 % de la clave: dos stops, 4:1.
+      expect(r.contrastStops, closeTo(2, 1e-6));
+      expect(r.ratioLabel, '4:1');
+    });
+
+    test('con la cámara al otro lado, izquierda y derecha se cambian', () {
+      final s = scene([hmi(200, 300, 90)]);
+      final below = MeterReading.at(s, subject, camera: camera(500, 600));
+      final above = MeterReading.at(s, subject, camera: camera(500, 0));
+      expect(below.keyIsLeft, isTrue);
+      expect(above.keyIsLeft, isFalse);
+    });
+
+    test('sin relleno y sin luz', () {
+      final cam = camera(500, 600);
+      final one = MeterReading.at(
+        scene([hmi(200, 300, 90), cam]),
+        subject,
+        camera: cam,
+      );
+      expect(one.ratioLabel, 'sin relleno');
+      final dark = MeterReading.at(scene([cam]), subject, camera: cam);
+      expect(dark.lux, 0);
+      expect(dark.cct, isNull);
+      expect(dark.stopsOverTarget, 0);
+    });
+
+    test('el diafragma del plano se lee en cualquier formato', () {
+      expect(CameraExposure.parseStop('T2.8'), 2.8);
+      expect(CameraExposure.parseStop('f/5,6'), 5.6);
+      expect(CameraExposure.parseStop('4'), 4);
+      expect(CameraExposure.parseStop('abierto'), isNull);
+    });
+
+    test('el color del mapa va de azul a rojo pasando por verde', () {
+      final under = exposureColor(-4);
+      final on = exposureColor(0);
+      final over = exposureColor(4);
+      expect(under.b, greaterThan(under.r));
+      expect(on.g, greaterThan(on.r));
+      expect(on.g, greaterThan(on.b));
+      expect(over.r, greaterThan(over.b));
     });
   });
 }

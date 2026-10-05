@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
+import 'light/exposure.dart';
 import 'light/light_scene.dart';
+import 'light/meter.dart';
 import 'light/plan_light.dart';
 import 'light_beam.dart';
 import 'light_symbols.dart';
@@ -67,6 +69,19 @@ class CameraPlanPainter extends CustomPainter {
   /// Zona con asas en las esquinas, mientras se ajusta.
   final Rect? zoneHandles;
 
+  /// Ajustes de cámara con los que se lee la luz en diafragmas. `null` =
+  /// sin lecturas: ni fotómetros, ni actores, ni mapa.
+  final ExposureSettings? exposure;
+
+  /// Diafragma de trabajo, para decir cuánto sobra o falta.
+  final double targetStop;
+
+  /// Enseña bajo cada actor el diafragma que le llega.
+  final bool showReadings;
+
+  /// Mapa de exposición en falso color, en lugar de los haces.
+  final bool exposureMap;
+
   /// Metros por unidad del lienzo; con él se rotulan longitudes y se pinta
   /// la barra de escala. `null` = sin rótulos de medida.
   final double? metersPerUnit;
@@ -91,6 +106,10 @@ class CameraPlanPainter extends CustomPainter {
     this.measure,
     this.zoneHandles,
     this.metersPerUnit,
+    this.exposure,
+    this.targetStop = CameraExposure.defaultStop,
+    this.showReadings = false,
+    this.exposureMap = false,
     this.selectedElement,
     this.selectedPathIndex,
     this.scale = 1.0,
@@ -132,9 +151,14 @@ class CameraPlanPainter extends CustomPainter {
       ...inheritedElements,
       ...elements,
     ], metersPerUnit: metersPerUnit ?? defaultMetersPerUnit);
+    _scene = scene;
     final dimmed = {...inheritedElements};
-    // Los haces van debajo de todo lo demás.
-    for (final light in scene.lights) {
+    if (exposureMap && exposure != null) {
+      _drawExposureMap(canvas, size, scene);
+    }
+    // Los haces van debajo de todo lo demás. Con el mapa de exposición no
+    // se pintan: el mapa ya dice cuánta luz hay en cada sitio.
+    for (final light in exposureMap ? const <SceneLight>[] : scene.lights) {
       _drawBeam(
         canvas,
         scene,
@@ -169,6 +193,94 @@ class CameraPlanPainter extends CustomPainter {
     canvas.restore();
 
     if (metersPerUnit != null) _drawScaleBar(canvas, size);
+    if (exposureMap && exposure != null) _drawExposureLegend(canvas, size);
+  }
+
+  /// La planta vista por la luz, calculada una vez por pintado.
+  LightScene? _scene;
+
+  /// Lectura de fotómetro en un punto, con los ajustes de la cámara.
+  MeterReading? _readingAt(Offset point) {
+    final scene = _scene;
+    final settings = exposure;
+    if (scene == null || settings == null) return null;
+    return MeterReading.at(
+      scene,
+      point,
+      exposure: settings,
+      targetStop: targetStop,
+    );
+  }
+
+  /// Mapa de exposición: cada celda, del color de los stops que le sobran
+  /// o le faltan respecto al diafragma de trabajo.
+  void _drawExposureMap(Canvas canvas, Size size, LightScene scene) {
+    final settings = exposure!;
+    const cellPx = 26.0;
+    final cell = cellPx / scale;
+    final left = -offset.dx / scale;
+    final top = -offset.dy / scale;
+    final cols = (size.width / cellPx).ceil();
+    final rows = (size.height / cellPx).ceil();
+    final paint = Paint();
+    for (var row = 0; row < rows; row++) {
+      for (var col = 0; col < cols; col++) {
+        final rect = Rect.fromLTWH(
+          left + col * cell,
+          top + row * cell,
+          cell,
+          cell,
+        );
+        final lux = scene.luxAt(rect.center);
+        if (lux < 0.5) continue;
+        final stops = stopsBetweenApertures(settings.stopFor(lux), targetStop);
+        paint.color = exposureColor(stops).withValues(alpha: 0.55);
+        canvas.drawRect(rect, paint);
+      }
+    }
+  }
+
+  void _drawExposureLegend(Canvas canvas, Size size) {
+    const steps = [-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0];
+    const w = 26.0;
+    final origin = Offset(size.width - steps.length * w - 16, size.height - 46);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(origin.dx - 8, origin.dy - 20, steps.length * w + 16, 58),
+        const Radius.circular(8),
+      ),
+      Paint()..color = _CanvasColors.background.withValues(alpha: 0.85),
+    );
+    void text(String value, Offset at, {bool bold = false}) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: value,
+          style: TextStyle(
+            color: _CanvasColors.inkSecondary,
+            fontSize: 10,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, at);
+    }
+
+    text(
+      'Stops respecto a ${formatStop(targetStop)}',
+      origin + const Offset(0, -16),
+      bold: true,
+    );
+    for (var i = 0; i < steps.length; i++) {
+      canvas.drawRect(
+        Rect.fromLTWH(origin.dx + i * w, origin.dy, w - 1.5, 10),
+        Paint()..color = exposureColor(steps[i]),
+      );
+      text(
+        steps[i] == 0 ? '0' : formatStopDifference(steps[i]),
+        origin + Offset(i * w + 4, 14),
+      );
+    }
   }
 
   /// Calles y relieve debajo, luego las paredes y encima todo lo demás:
@@ -649,7 +761,41 @@ class CameraPlanPainter extends CustomPainter {
       case ElementType.light:
         _drawLightLabel(canvas, el);
       case ElementType.actor:
+        // Con lecturas, el actor enseña el diafragma que le llega.
+        final reading = showReadings ? _readingAt(el.position) : null;
+        final name = el.label?.isNotEmpty == true ? el.displayLabel : null;
+        final text = [
+          ?name,
+          if (reading != null && reading.lux > 0.5)
+            '${formatStop(reading.stop)} '
+                '(${formatStopDifference(reading.stopsOverTarget)})',
+        ].join('\n');
+        if (text.isNotEmpty) {
+          _drawLabelBelow(
+            canvas,
+            text,
+            _CanvasColors.inkSecondary,
+            maxWidth: 110,
+          );
+        }
       case ElementType.prop:
+        if (el.propType == PropType.meter) {
+          final reading = _readingAt(el.position);
+          _drawLabelBelow(
+            canvas,
+            reading == null
+                ? 'Fotómetro'
+                : reading.lux < 0.05
+                ? 'sin luz'
+                : '${reading.shortLabel}\n'
+                      '${formatStopDifference(reading.stopsOverTarget)} stops',
+            _CanvasColors.accent,
+            yOffset: 16,
+            maxWidth: 130,
+          );
+        } else if (el.label != null && el.label!.isNotEmpty) {
+          _drawLabelBelow(canvas, el.displayLabel, _CanvasColors.inkSecondary);
+        }
       case ElementType.wall:
         // Puertas y ventanas se entienden solas: sin rótulo.
         if (PlanOpening.isOpening(el)) break;
@@ -1186,6 +1332,35 @@ class CameraPlanPainter extends CustomPainter {
           const Rect.fromLTWH(-20, -8, 12, 16),
           paint..style = PaintingStyle.fill,
         );
+      case PropType.meter:
+        // Fotómetro: la semiesfera blanca sobre su cuerpo.
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(-5, -2, 10, 14),
+            const Radius.circular(3),
+          ),
+          Paint()..color = _CanvasColors.body,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(-5, -2, 10, 14),
+            const Radius.circular(3),
+          ),
+          paint..color = _CanvasColors.accent,
+        );
+        canvas.drawCircle(
+          const Offset(0, -5),
+          6,
+          Paint()..color = Colors.white,
+        );
+        canvas.drawCircle(
+          const Offset(0, -5),
+          6,
+          Paint()
+            ..color = _CanvasColors.accent
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5,
+        );
       case PropType.tree:
         canvas.drawCircle(
           Offset.zero,
@@ -1357,6 +1532,10 @@ class CameraPlanPainter extends CustomPainter {
       old.measure != measure ||
       old.zoneHandles != zoneHandles ||
       old.metersPerUnit != metersPerUnit ||
+      old.exposure != exposure ||
+      old.targetStop != targetStop ||
+      old.showReadings != showReadings ||
+      old.exposureMap != exposureMap ||
       old.selectedElement?.id != selectedElement?.id ||
       old.selectedPathIndex != selectedPathIndex ||
       old.scale != scale ||

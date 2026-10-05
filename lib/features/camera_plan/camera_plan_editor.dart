@@ -29,7 +29,11 @@ import 'floor_plan_scope.dart';
 import 'light_beam.dart';
 import 'plan_data.dart' show kLightSetupColors;
 import 'plan_gear_list.dart';
+import 'light/exposure.dart';
+import 'light/light_scene.dart';
+import 'light/meter.dart';
 import 'plan_light_controls.dart';
+import 'plan_meter_panel.dart';
 import 'plan_opening.dart';
 import 'plan_palette.dart';
 import 'plan_piece_controls.dart';
@@ -184,6 +188,58 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Metros que mide una unidad del lienzo.
   double _metersPerUnit = defaultMetersPerUnit;
   final FocusNode _canvasFocus = FocusNode(debugLabel: 'planta');
+
+  /// Mapa de exposición en falso color, en lugar de los haces.
+  bool _exposureMap = false;
+
+  /// Lecturas de diafragma bajo cada actor.
+  bool _showReadings = true;
+
+  /// La cámara con la que se lee la luz: la del plano abierto o, si no hay,
+  /// la primera que haya en la planta.
+  PlanElement? get _meterCamera {
+    PlanElement? any;
+    for (final el in _elements) {
+      if (el.type != ElementType.camera) continue;
+      if (el.layer == PlanLayer.shot) return el;
+      any ??= el;
+    }
+    return any;
+  }
+
+  /// Ajustes de exposición: los de la cámara y, lo que no diga, del plano.
+  ExposureSettings get _exposure {
+    final camera = _meterCamera;
+    final shot = _shot;
+    double pick(String key, double? fromShot, double fallback) =>
+        (camera?.props[key] as num?)?.toDouble() ?? fromShot ?? fallback;
+    return ExposureSettings(
+      iso: pick(CameraExposure.isoKey, null, 800),
+      shutterDeg: pick(
+        CameraExposure.shutterKey,
+        CameraExposure.parseStop(shot?.shutterAngle),
+        180,
+      ),
+      fps: pick(CameraExposure.fpsKey, shot?.fps?.toDouble(), 24),
+      ndStops: pick(CameraExposure.ndKey, null, 0),
+    );
+  }
+
+  /// Diafragma de trabajo: el de la cámara, el del plano o T2.8.
+  double get _targetStop =>
+      (_meterCamera?.props[CameraExposure.stopKey] as num?)?.toDouble() ??
+      CameraExposure.parseStop(_shot?.fStop) ??
+      CameraExposure.defaultStop;
+
+  /// Lectura de fotómetro donde está un elemento.
+  MeterReading _readingFor(PlanElement el) => MeterReading.at(
+    LightScene.from(_visibleElements, metersPerUnit: _metersPerUnit),
+    el.position,
+    camera: _meterCamera,
+    exposure: _exposure,
+    targetStop: _targetStop,
+  );
+
   int _setShotCount = 0;
   final AnnotationCanvasController _annotationController =
       AnnotationCanvasController();
@@ -1418,6 +1474,26 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     await _addElement(el);
   }
 
+  /// Un fotómetro mide la luz del esquema: se guarda con él.
+  Future<void> _addMeter() async {
+    await _ensureLightSetup();
+    final el = PlanElement(
+      id: 0,
+      type: ElementType.prop,
+      position: Offset.zero,
+      label: PropType.meter.dbValue,
+    );
+    if (!mounted) return;
+    el
+      ..layer = PlanLayer.light
+      ..id = --_tempId
+      ..position = _snapToGrid(_viewCenter);
+    _hiddenLayers.remove(PlanLayer.light);
+    setState(() => _elements.add(el));
+    await _persistElement(el);
+    if (mounted) _select(el);
+  }
+
   Future<void> _addProp(PropType type) async {
     final count = _elements.where((e) => e.type == ElementType.prop).length;
     final el = PlanElement(
@@ -2113,6 +2189,26 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             onPressed: () => setState(() => _snap = !_snap),
           ),
           IconButton(
+            tooltip: _exposureMap
+                ? 'Volver a los haces de luz'
+                : 'Mapa de exposición',
+            icon: Icon(
+              Icons.gradient,
+              color: _exposureMap ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: () => setState(() => _exposureMap = !_exposureMap),
+          ),
+          IconButton(
+            tooltip: _showReadings
+                ? 'Ocultar lecturas de los actores'
+                : 'Mostrar lecturas de los actores',
+            icon: Icon(
+              Icons.speed_outlined,
+              color: _showReadings ? palette.accent : palette.textTertiary,
+            ),
+            onPressed: () => setState(() => _showReadings = !_showReadings),
+          ),
+          IconButton(
             tooltip: 'Guardar',
             icon: Icon(Icons.save_outlined, color: palette.textSecondary),
             onPressed: _saveCurrentPlan,
@@ -2149,6 +2245,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     onAddActor: () => _addActor(_nextActorColor),
                     onAddLight: _addLight,
                     onAddProp: _addProp,
+                    onAddMeter: _addMeter,
                     onAddArchitecture: _addArchitecture,
                     wallsToEnvironment:
                         _linkedSet != null && _linkedSite != null
@@ -2337,6 +2434,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                           _zoneEditRect,
                                                       metersPerUnit:
                                                           _metersPerUnit,
+                                                      exposure: _exposure,
+                                                      targetStop: _targetStop,
+                                                      showReadings:
+                                                          _showReadings,
+                                                      exposureMap: _exposureMap,
                                                       selectedElement:
                                                           _selected,
                                                       selectedPathIndex:
@@ -2411,6 +2513,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 onDuplicate: _duplicateSelection,
                                 selectionCount: _selection.length,
                                 metersPerUnit: _metersPerUnit,
+                                exposure: _exposure,
+                                targetStop: _targetStop,
+                                reading:
+                                    _selected!.type == ElementType.actor ||
+                                        _selected!.propType == PropType.meter
+                                    ? _readingFor(_selected!)
+                                    : null,
                                 lengthLabel: PlanSegment.isSegment(_selected!)
                                     ? formatMeters(
                                         PlanSegment.length(_selected!),
@@ -3116,7 +3225,8 @@ class _PropTab extends StatelessWidget {
         crossAxisSpacing: 10,
         childAspectRatio: 0.9,
       ),
-      itemCount: PropType.values.length,
+      // El fotómetro, último de la lista, se añade desde «Medición».
+      itemCount: PropType.values.length - 1,
       itemBuilder: (context, i) {
         final type = PropType.values[i];
         return _GridTile(
@@ -3186,6 +3296,13 @@ class _ElementPanel extends StatefulWidget {
   final String? lengthLabel;
   final double metersPerUnit;
 
+  /// Ajustes con los que se lee la luz y diafragma de trabajo.
+  final ExposureSettings exposure;
+  final double targetStop;
+
+  /// Lectura de fotómetro, si lo seleccionado es un fotómetro o un actor.
+  final MeterReading? reading;
+
   const _ElementPanel({
     required this.palette,
     required this.element,
@@ -3203,6 +3320,9 @@ class _ElementPanel extends StatefulWidget {
     this.selectionCount = 1,
     this.lengthLabel,
     this.metersPerUnit = defaultMetersPerUnit,
+    this.exposure = const ExposureSettings(),
+    this.targetStop = CameraExposure.defaultStop,
+    this.reading,
   });
 
   @override
@@ -3375,10 +3495,23 @@ class _ElementPanelState extends State<_ElementPanel> {
                     ),
                     PlanLightControls(
                       element: element,
+                      exposure: widget.exposure,
                       onUpdate: widget.onUpdate,
                     ),
                     const SizedBox(height: AppSpacing.sm),
                   ],
+                  if (widget.reading != null)
+                    PlanMeterPanel(
+                      reading: widget.reading!,
+                      exposure: widget.exposure,
+                    ),
+                  if (element.type == ElementType.camera)
+                    PlanCameraExposureControls(
+                      camera: element,
+                      fallback: widget.exposure,
+                      fallbackStop: widget.targetStop,
+                      onUpdate: widget.onUpdate,
+                    ),
                   if (PlanPieceControls.appliesTo(element))
                     PlanPieceControls(
                       element: element,

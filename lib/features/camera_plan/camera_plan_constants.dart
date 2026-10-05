@@ -113,6 +113,9 @@ enum PropType {
   tree,
   rock,
   vehicle,
+
+  /// Fotómetro colocado en la planta.
+  meter,
 }
 
 enum ArchitectureType {
@@ -137,6 +140,7 @@ extension PropTypeCodec on PropType {
         PropType.tree => 'Árbol',
         PropType.rock => 'Roca',
         PropType.vehicle => 'Vehículo',
+        PropType.meter => 'Fotómetro',
       };
 
   IconData get icon => switch (this) {
@@ -148,6 +152,7 @@ extension PropTypeCodec on PropType {
         PropType.tree => Icons.park_outlined,
         PropType.rock => Icons.landscape_outlined,
         PropType.vehicle => Icons.directions_car_outlined,
+        PropType.meter => Icons.speed_outlined,
       };
 
   static PropType? fromLabel(String? value) {

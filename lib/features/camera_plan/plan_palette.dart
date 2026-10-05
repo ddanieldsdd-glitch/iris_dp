@@ -50,6 +50,7 @@ class PlanPalette extends StatelessWidget {
   final VoidCallback onAddActor;
   final ValueChanged<LightType> onAddLight;
   final ValueChanged<PropType> onAddProp;
+  final VoidCallback onAddMeter;
   final ValueChanged<ArchitectureType> onAddArchitecture;
 
   /// Dónde van paredes y props. `null` si no hay elección.
@@ -64,6 +65,7 @@ class PlanPalette extends StatelessWidget {
     required this.onAddActor,
     required this.onAddLight,
     required this.onAddProp,
+    required this.onAddMeter,
     required this.onAddArchitecture,
     this.wallsToEnvironment,
     this.onWallsToEnvironment,
@@ -135,6 +137,14 @@ class PlanPalette extends StatelessWidget {
               onTap: onAddCamera,
             ),
           ]),
+          header('MEDICIÓN'),
+          grid([
+            _PaletteButton(
+              icon: const Icon(Icons.speed_outlined, size: 16),
+              label: 'Fotómetro',
+              onTap: onAddMeter,
+            ),
+          ]),
           header('LUCES'),
           grid([
             for (final type in lights)
@@ -176,11 +186,12 @@ class PlanPalette extends StatelessWidget {
                 onTap: () => onAddArchitecture(type),
               ),
             for (final type in PropType.values)
-              _PaletteButton(
-                icon: Icon(type.icon, size: 16),
-                label: type.label,
-                onTap: () => onAddProp(type),
-              ),
+              if (type != PropType.meter)
+                _PaletteButton(
+                  icon: Icon(type.icon, size: 16),
+                  label: type.label,
+                  onTap: () => onAddProp(type),
+                ),
           ]),
         ],
       ),

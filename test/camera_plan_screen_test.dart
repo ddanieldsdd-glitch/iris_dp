@@ -659,5 +659,80 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
       await tester.pump(const Duration(milliseconds: 50));
     });
+
+    testWidgets('fotómetro: al seleccionar un actor se lee su luz, y el '
+        'mapa de exposición se pinta', (tester) async {
+      await seed(tester, siteJson: '{"version":2,"elements":[]}');
+      await tester.runAsync(() async {
+        final setup = await FloorPlanRepository(
+          db,
+        ).createLightSetup(projectId: projectId, setId: setId, name: 'Setup A');
+        await db.updateLightSetup(
+          setup.copyWith(
+            planJson: Value(
+              '{"version":2,"elements":['
+              '{"type":"light","x":120,"y":300,"rotation":90,'
+              '"lightType":"hmi","cameraLetter":"A","cameraNumber":1,'
+              '"pathPoints":[],"props":{"intensity":100}}]}',
+            ),
+          ),
+        );
+        await db.assignLightSetupToShot(shotId, setup.id);
+        await db.insertCameraPlanElement(
+          CameraPlanElementsCompanion.insert(
+            shotId: shotId,
+            type: 'actor',
+            x: const Value(400),
+            y: const Value(300),
+            label: const Value('Gala'),
+          ),
+        );
+        await db.insertCameraPlanElement(
+          CameraPlanElementsCompanion.insert(
+            shotId: shotId,
+            type: 'camera',
+            x: const Value(400),
+            y: const Value(500),
+          ),
+        );
+      });
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.shot(
+            projectId: projectId,
+            shotId: shotId,
+            shotLabel: 'Esc 1 · Plano 1',
+          ),
+        ),
+      );
+      await settle(tester);
+
+      final canvas = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is CameraPlanPainter,
+      );
+      await tester.tapAt(tester.getTopLeft(canvas) + const Offset(400, 300));
+      await settle(tester);
+
+      expect(find.text('Qué aporta cada fuente'), findsOneWidget);
+      expect(find.textContaining('Clave ('), findsOneWidget);
+      expect(find.text('sin relleno'), findsOneWidget);
+      expect(find.text('estimado'), findsOneWidget);
+      expect(find.textContaining('para T2.8'), findsOneWidget);
+
+      // La cámara lleva los ajustes de exposición.
+      await tester.tapAt(tester.getTopLeft(canvas) + const Offset(400, 500));
+      await settle(tester);
+      expect(find.text('Exposición'), findsOneWidget);
+      expect(find.text('Diafragma de trabajo'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Mapa de exposición'));
+      await settle(tester);
+      expect(find.byTooltip('Volver a los haces de luz'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
   });
 }
