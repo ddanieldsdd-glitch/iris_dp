@@ -48,6 +48,11 @@ class LightBlocker {
   /// a cero en el borde; [radius] es lo que mide a la altura de la cara.
   final double? domeRadius;
 
+  /// Una loma alargada: cuánto se estira a lo largo de su eje ([turn], en
+  /// radianes). 1 = redonda.
+  final double stretch;
+  final double turn;
+
   /// Nombre con el que sale en el fotómetro cuando emite.
   final String? label;
 
@@ -67,7 +72,9 @@ class LightBlocker {
     this.label,
     this.element,
   }) : radius = 0,
-       domeRadius = null;
+       domeRadius = null,
+       stretch = 1,
+       turn = 0;
 
   const LightBlocker.circle(
     Offset centre,
@@ -76,6 +83,8 @@ class LightBlocker {
     this.transmission = 0,
     this.heightM = 1.75,
     this.domeRadius,
+    this.stretch = 1,
+    this.turn = 0,
   }) : a = centre,
        b = centre,
        miredShift = 0,
@@ -93,6 +102,8 @@ class LightBlocker {
           transmission: transmission,
           heightM: height,
           domeRadius: domeRadius,
+          stretch: stretch,
+          turn: turn,
         )
       : LightBlocker(
           a,
@@ -113,6 +124,18 @@ class LightBlocker {
 
   bool get isOpaque => transmission <= 0;
   bool get isCircle => radius > 0;
+
+  /// Un vector del plano visto desde el círculo: una loma alargada es un
+  /// círculo en un espacio encogido a lo largo de su eje.
+  Offset localVector(Offset v) {
+    if (stretch == 1) return v;
+    final c = math.cos(-turn);
+    final s = math.sin(-turn);
+    return Offset((v.dx * c - v.dy * s) / stretch, v.dx * s + v.dy * c);
+  }
+
+  /// Distancia de un punto al centro, en ese mismo espacio.
+  double localDistance(Offset point) => localVector(point - a).distance;
 
   /// Altura de una loma a [distance] de su centro.
   double domeHeightAt(double distance) {
@@ -470,6 +493,14 @@ class LightScene {
               _ => 0.8,
             });
 
+  static const stretchKey = 'stretch';
+  static const roughKey = 'rough';
+  static const seedKey = 'seed';
+
+  /// Cuánto se alarga una colina a lo largo de su eje. 1 = redonda.
+  static double hillStretch(PlanElement el) =>
+      ((el.props[stretchKey] as num?)?.toDouble() ?? 1).clamp(0.25, 6.0);
+
   /// Luz que se cuela entre las hojas de un árbol.
   static const double treeTransmission = 0.25;
 
@@ -597,6 +628,8 @@ class LightScene {
                   element: el,
                   heightM: height,
                   domeRadius: radius,
+                  stretch: hillStretch(el),
+                  turn: el.rotation * math.pi / 180,
                 ),
               );
             case PropType.rock:
@@ -728,7 +761,14 @@ class LightScene {
         final leaves = PlanOpening.openDeg(el) <= 3
             ? [(a, b)]
             : PlanOpening.leaves(el);
-        if (isWindow) {
+        if (isWindow && PlanOpening.solidLeaves(el)) {
+          // Contraventanas: macizas, como una puerta.
+          for (final (hinge, tip) in leaves) {
+            blockers.add(
+              LightBlocker(hinge, tip, baseM: sill, heightM: head, element: el),
+            );
+          }
+        } else if (isWindow) {
           // Las hojas son de cristal y llevan lo que tengan pegado. Giran
           // con la apertura: abierta, la luz entra por el hueco sin
           // tocarlas.
@@ -927,6 +967,7 @@ class LightScene {
       required Offset tangent,
       required double lengthUnits,
       required double heightM,
+      double baseM = 0,
       required double keep,
       required double mired,
       required double beamDeg,
@@ -974,7 +1015,26 @@ class LightScene {
       final dot = toward.dx * normalA.dx + toward.dy * normalA.dy;
       if (dot.abs() < 0.05) return;
       final facing = dot >= 0 ? normalA : normalA * -1;
-      final sun = sunThroughput(centre + facing * 3);
+      // El sol puede darle solo en parte (la mancha de una ventana cae
+      // baja): se mira a varias alturas y a lo largo de la superficie.
+      var lit = 0.0;
+      var sunMired = 0.0;
+      const across = [-1 / 3, 0.0, 1 / 3];
+      const up = [1 / 6, 1 / 2, 5 / 6];
+      for (final k in across) {
+        for (final v in up) {
+          final part = sunThroughput(
+            centre + tangent * (lengthUnits * k) + facing * 3,
+            heightM: baseM + heightM * v,
+          );
+          lit += part.transmission;
+          if (part.transmission > 0) sunMired = part.miredShift;
+        }
+      }
+      final sun = (
+        transmission: lit / (across.length * up.length),
+        miredShift: sunMired,
+      );
       if (sun.transmission <= 0) return;
       final cosElevation = 1 / math.sqrt(1 + _sunTan * _sunTan);
       final lux =
@@ -1012,6 +1072,7 @@ class LightScene {
           tangent: span / span.distance,
           lengthUnits: span.distance,
           heightM: cloth.heightM - cloth.baseM,
+          baseM: cloth.baseM,
           keep: cloth.diffuseKeep,
           mired: cloth.miredShift,
           beamDeg: beam,
@@ -1100,14 +1161,17 @@ class LightScene {
   /// encuentra el tope; `null` si no lo encuentra.
   static double? _rayHit(Offset origin, Offset dir, LightBlocker blocker) {
     if (blocker.isCircle) {
-      final oc = origin - blocker.a;
-      final b = oc.dx * dir.dx + oc.dy * dir.dy;
+      final oc = blocker.localVector(origin - blocker.a);
+      final d = blocker.localVector(dir);
+      final a = d.dx * d.dx + d.dy * d.dy;
+      if (a < 1e-12) return null;
+      final b = oc.dx * d.dx + oc.dy * d.dy;
       final c = oc.dx * oc.dx + oc.dy * oc.dy - blocker.radius * blocker.radius;
       // El origen está dentro del círculo: no se tapa a sí mismo.
       if (c <= 0) return null;
-      final disc = b * b - c;
+      final disc = b * b - a * c;
       if (disc < 0) return null;
-      final t = -b - math.sqrt(disc);
+      final t = (-b - math.sqrt(disc)) / a;
       return t > 1e-6 ? t : null;
     }
     final s = blocker.b - blocker.a;
@@ -1140,7 +1204,7 @@ class LightScene {
       // La luz que cae del techo pasa por encima de personas y cámaras.
       if (fromAbove && blocker.isCircle && blocker.heightM <= 2) continue;
       // Quien está dentro del cuerpo de una persona no queda a su sombra.
-      if (blocker.isCircle && (to - blocker.a).distance <= blocker.radius) {
+      if (blocker.isCircle && blocker.localDistance(to) <= blocker.radius) {
         continue;
       }
       final hit = _rayHit(from, dir, blocker);
@@ -1209,19 +1273,21 @@ class LightScene {
         // Las dos tangentes al círculo.
         final d = blocker.a - origin;
         final distance = d.distance;
-        if (distance <= blocker.radius || distance > reach + blocker.radius) {
+        final wide = blocker.radius * math.max(1.0, blocker.stretch);
+        if (distance <= wide || distance > reach + wide) {
           continue;
         }
         final centre = math.atan2(d.dy, d.dx);
-        final half = math.asin(blocker.radius / distance);
+        final half = math.asin(wide / distance);
         for (final edge in [centre - half, centre + half]) {
           for (final delta in const [-0.001, 0.001]) {
             angles.add((edge + delta) % twoPi);
           }
         }
         // Y unos cuantos por dentro, para que la sombra siga el contorno.
-        for (var i = 1; i < 6; i++) {
-          angles.add((centre - half + 2 * half * i / 6) % twoPi);
+        final inner = blocker.stretch == 1 ? 6 : 24;
+        for (var i = 1; i < inner; i++) {
+          angles.add((centre - half + 2 * half * i / inner) % twoPi);
         }
       } else {
         addCorner(blocker.a);
@@ -1403,7 +1469,7 @@ class LightScene {
       final dome = blocker.domeRadius;
       if (dome != null) {
         // Quien está sobre la loma no queda a su sombra.
-        if ((point - blocker.a).distance <= dome) continue;
+        if (blocker.localDistance(point) <= dome) continue;
         if (_domeBlocks(point, toward, blocker, heightAt)) {
           return (transmission: 0, miredShift: 0);
         }
@@ -1433,19 +1499,22 @@ class LightScene {
     double Function(double units) heightAt,
   ) {
     final radius = hill.domeRadius!;
-    final oc = origin - hill.a;
-    final b = oc.dx * dir.dx + oc.dy * dir.dy;
+    final oc = hill.localVector(origin - hill.a);
+    final d = hill.localVector(dir);
+    final a = d.dx * d.dx + d.dy * d.dy;
+    if (a < 1e-12) return false;
+    final b = oc.dx * d.dx + oc.dy * d.dy;
     final c = oc.dx * oc.dx + oc.dy * oc.dy - radius * radius;
-    final disc = b * b - c;
+    final disc = b * b - a * c;
     if (disc <= 0) return false;
     final root = math.sqrt(disc);
-    final enter = math.max(0.0, -b - root);
-    final exit = -b + root;
+    final enter = math.max(0.0, (-b - root) / a);
+    final exit = (-b + root) / a;
     if (exit <= enter) return false;
     const steps = 16;
     for (var i = 0; i <= steps; i++) {
       final t = enter + (exit - enter) * i / steps;
-      final distance = (origin + dir * t - hill.a).distance;
+      final distance = hill.localDistance(origin + dir * t);
       if (heightAt(t) < hill.domeHeightAt(distance)) return true;
     }
     return false;

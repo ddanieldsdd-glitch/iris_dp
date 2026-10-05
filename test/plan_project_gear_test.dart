@@ -1,11 +1,12 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart' show Offset;
+import 'package:flutter/material.dart' show Color, Offset;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
+import 'package:iris_dp/features/camera_plan/plan_cast.dart';
 import 'package:iris_dp/features/camera_plan/plan_equipment.dart';
 import 'package:iris_dp/features/camera_plan/plan_marks.dart';
 
@@ -172,5 +173,58 @@ void main() {
     // La postura cambia la altura a la que hace sombra.
     actor.props[PlanMarks.poseKey] = PlanMarks.poseLie;
     expect(PlanMarks.heightM(actor), lessThan(1));
+  });
+
+  test('un personaje lleva el mismo color en todas las plantas', () async {
+    final sceneId = await db.insertScene(
+      ScenesCompanion.insert(
+        projectId: projectId,
+        number: 1,
+        name: 'Escena 1',
+        locationCanonical: 'INT. CASA - DÍA',
+        locationPureName: 'CASA',
+      ),
+    );
+    Future<int> shot(int n) => db.insertShot(
+      ShotsCompanion.insert(sceneId: sceneId, projectId: projectId, number: n),
+    );
+    Future<void> actor(int shotId, String name, String colour) =>
+        db.insertCameraPlanElement(
+          CameraPlanElementsCompanion.insert(
+            shotId: shotId,
+            type: 'actor',
+            label: Value(name),
+            color: Value(colour),
+          ),
+        );
+    final first = await shot(1);
+    final second = await shot(2);
+    await actor(first, 'Adil', '#FF453A');
+    await actor(second, 'ADIL ', '#0A84FF');
+    await actor(second, 'Juan', '#30D158');
+    await actor(second, 'Actor 3', '#FFD60A');
+
+    var cast = await PlanCast.load(db, projectId);
+    // «Actor 3» no es un personaje; Adil cuenta una vez, con su primer
+    // color.
+    expect(cast.keys, ['ADIL', 'JUAN']);
+    expect(cast['ADIL']!.name, 'Adil');
+    expect(cast['ADIL']!.color, const Color(0xFFFF453A));
+
+    await PlanCast.recolour(db, projectId, 'adil', const Color(0xFFBF5AF2));
+    cast = await PlanCast.load(db, projectId);
+    expect(cast['ADIL']!.color, const Color(0xFFBF5AF2));
+    final rows = await db.getCameraPlanElementsForShot(second);
+    expect(
+      rows.firstWhere((r) => r.label == 'ADIL ').color!.toUpperCase(),
+      contains('BF5AF2'),
+    );
+    // A Juan no le cambia.
+    expect(cast['JUAN']!.color, const Color(0xFF30D158));
+    // Un personaje nuevo coge un color libre.
+    expect(
+      PlanCast.freeColor(cast.values.map((c) => c.color)),
+      isNot(anyOf(const Color(0xFFBF5AF2), const Color(0xFF30D158))),
+    );
   });
 }

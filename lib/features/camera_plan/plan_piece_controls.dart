@@ -238,6 +238,18 @@ class PlanPieceControls extends StatelessWidget {
             max: PlanOpening.maxOpen,
             onChanged: (v) => el.props[PlanOpening.openKey] = v.roundToDouble(),
           ),
+          if (window)
+            sides(
+              'Hojas',
+              PlanOpening.solidLeaves(el)
+                  ? PlanOpening.leafSolid
+                  : PlanOpening.leafGlass,
+              const [
+                (PlanOpening.leafGlass, 'De cristal'),
+                (PlanOpening.leafSolid, 'Macizas (contraventana)'),
+              ],
+              (leaf) => el.props[PlanOpening.leafKey] = leaf,
+            ),
           toggle(
             'Dos hojas',
             PlanOpening.isDouble(el),
@@ -255,9 +267,16 @@ class PlanPieceControls extends StatelessWidget {
             (v) => el.props[PlanOpening.swingInKey] = v,
           ),
           Text(
-            window
+            window && PlanOpening.solidLeaves(el)
                 ? open < 3
-                      ? 'Cerrada: la luz pasa por el cristal y pierde un poco.'
+                      ? 'Cerrada: no deja pasar la luz.'
+                      : 'Cuanto más abierta, más hueco queda libre; las '
+                            'hojas tapan donde estén.'
+                : window
+                ? open < 3
+                      ? 'Cerrada: el cristal deja pasar la luz y le quita un '
+                            '10 %. Para que no entre, pon las hojas macizas '
+                            'o echa una cortina opaca.'
                       : 'Abierta: por el hueco la luz entra limpia; la que '
                             'cruza una hoja pasa por su cristal.'
                 : open < 3
@@ -463,6 +482,50 @@ class PlanPieceControls extends StatelessWidget {
           onChanged: (v) =>
               el.props[LightScene.heightKey] = (v * 10).round() / 10,
         ),
+        if (type == PropType.hill) ...[
+          slider(
+            'Alargar',
+            LightScene.hillStretch(el) == 1
+                ? 'redonda'
+                : '× ${LightScene.hillStretch(el).toStringAsFixed(1)}',
+            current: LightScene.hillStretch(el),
+            min: 0.3,
+            max: 5,
+            onChanged: (v) {
+              // Cerca de 1 se queda redonda.
+              final snapped = (v - 1).abs() < 0.08 ? 1.0 : v;
+              el.props[LightScene.stretchKey] = (snapped * 10).round() / 10;
+            },
+          ),
+          slider(
+            'Irregularidad del contorno',
+            '${(((el.props[LightScene.roughKey] as num?)?.toDouble() ?? 0.12) * 100).round()} %',
+            current:
+                (el.props[LightScene.roughKey] as num?)?.toDouble() ?? 0.12,
+            min: 0,
+            max: 0.35,
+            onChanged: (v) =>
+                el.props[LightScene.roughKey] = (v * 100).round() / 100,
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () {
+                el.props[LightScene.seedKey] =
+                    ((el.props[LightScene.seedKey] as num?)?.toInt() ?? 0) + 1;
+                onUpdate();
+              },
+              icon: const Icon(Icons.casino_outlined, size: 16),
+              label: const Text('Otra forma'),
+            ),
+          ),
+          Text(
+            'Gírala con su asa para orientar la parte alargada.',
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.textTertiary),
+          ),
+        ],
         Text(
           type == PropType.tree
               ? 'La copa deja pasar una cuarta parte de la luz y da sombra '

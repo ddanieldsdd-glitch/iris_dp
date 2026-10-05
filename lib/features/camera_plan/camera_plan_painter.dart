@@ -1054,24 +1054,27 @@ class CameraPlanPainter extends CustomPainter {
         ) ??
         40;
     final half = fov.clamp(4, 170) * math.pi / 360;
-    const reach = 260.0;
+    // Seleccionada, el encuadre entero; si no, solo un apunte corto y
+    // tenue para no tapar la escena.
+    final picked = selectedElement?.id == el.id;
+    final reach = picked ? 260.0 : 70.0;
     final left = Offset(-math.sin(half) * reach, -math.cos(half) * reach);
     final right = Offset(math.sin(half) * reach, -math.cos(half) * reach);
     final cone = Path()
       ..moveTo(0, 0)
       ..lineTo(left.dx, left.dy)
-      ..arcToPoint(right, radius: const Radius.circular(reach))
+      ..arcToPoint(right, radius: Radius.circular(reach))
       ..close();
     canvas.drawPath(
       cone,
       Paint()
         ..shader = ui.Gradient.radial(Offset.zero, reach, [
-          camColor.withValues(alpha: 0.16),
+          camColor.withValues(alpha: picked ? 0.16 : 0.10),
           camColor.withValues(alpha: 0),
         ]),
     );
     final fovPaint = Paint()
-      ..color = camColor.withValues(alpha: 0.55)
+      ..color = camColor.withValues(alpha: picked ? 0.45 : 0.25)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     _drawDashedPath(

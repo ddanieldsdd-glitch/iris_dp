@@ -1561,6 +1561,74 @@ void main() {
       expect(lit(480).luxAt(const Offset(700, 480)), greaterThan(100));
     });
 
+    test('un rebote sobre la mancha de sol devuelve luz aunque el sol no le '
+        'llegue a la altura de la cara', () {
+      // A 2,5 m de la ventana el sol ya solo da por debajo de 60 cm.
+      const onPatch = Offset(430, 350);
+      final bare = scene([...room(), window()]);
+      expect(sunAt(bare, onPatch), 0);
+      expect(bare.sunThroughput(onPatch, heightM: 0.3).transmission, 0.9);
+      final bounced = scene([
+        ...room(),
+        window(),
+        grip(LightType.bounce, 430, 350, 'ultrabounce'),
+      ]);
+      const shade = Offset(380, 430);
+      expect(
+        bounced.contributionsAt(shade).map((c) => c.light.label),
+        contains(contains('← Sol')),
+      );
+      expect(bounced.luxAt(shade), greaterThan(bare.luxAt(shade) * 1.5));
+    });
+
+    test('con las hojas macizas, la ventana cerrada no deja pasar el sol', () {
+      final glass = scene([...room(), window()]);
+      final shut = scene([
+        ...room(),
+        window({'leaf': 'solid'}),
+      ]);
+      final ajar = scene([
+        ...room(),
+        window({'leaf': 'solid', 'open': 90.0, 'swingIn': true}),
+      ]);
+      expect(sunAt(glass, nearWindow), closeTo(54000, 1));
+      expect(sunAt(shut, nearWindow), 0);
+      expect(shut.luxAt(deep), 0);
+      expect(sunAt(ajar, nearWindow), 60000);
+    });
+
+    test('una colina alargada tapa a lo largo de su eje y no a lo ancho', () {
+      // Radio 4 m, alargada ×3 de este a oeste: 24 m de largo y 8 de ancho.
+      PlanElement ridge() =>
+          prop(PropType.hill, 600, 300)..props['stretch'] = 3.0;
+      PlanElement hmiAt(double x, double y, double rotation) => PlanElement(
+        id: --id,
+        type: ElementType.light,
+        position: Offset(x, y),
+        rotation: rotation,
+        lightType: LightType.hmi,
+        props: {'intensity': 100},
+      );
+      // Una luz que la cruza a lo ancho, lejos del centro: redonda no la
+      // taparía, alargada sí.
+      final across = LightScene.from([
+        ridge(),
+        hmiAt(1000, 60, 180),
+      ], metersPerUnit: 0.02).luxAt(const Offset(1000, 540));
+      final round = LightScene.from([
+        prop(PropType.hill, 600, 300),
+        hmiAt(1000, 60, 180),
+      ], metersPerUnit: 0.02).luxAt(const Offset(1000, 540));
+      expect(round, greaterThan(100));
+      expect(across, 0);
+      // Por fuera de su ancho, pasa.
+      final beside = LightScene.from([
+        ridge(),
+        hmiAt(100, 520, 90),
+      ], metersPerUnit: 0.02).luxAt(const Offset(700, 520));
+      expect(beside, greaterThan(100));
+    });
+
     test('los ajustes de un recinto se guardan con el ambiente', () {
       final a = sun.copyWith(
         rooms: const [

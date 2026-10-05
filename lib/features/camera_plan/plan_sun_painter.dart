@@ -26,36 +26,57 @@ class PlanSunPainter {
     if (far.distance < 0.5) return null;
     final dome = blocker.domeRadius;
     if (dome != null) {
-      // Una loma: sombra en punta, de la base a donde cae su cima.
+      // Una loma: sombra en punta, de los dos bordes de su base a donde
+      // cae su cima.
       final tip = blocker.a + far;
-      final path = Path();
-      if (far.distance <= dome) return null;
-      final toTip = far / far.distance;
-      final spread = math.acos(dome / far.distance);
-      Offset onBase(double sign) {
-        final c = math.cos(spread * sign);
-        final s = math.sin(spread * sign);
-        return blocker.a +
-            Offset(toTip.dx * c - toTip.dy * s, toTip.dx * s + toTip.dy * c) *
-                dome;
+      if (blocker.localDistance(tip) <= dome) return null;
+      final away = far / far.distance;
+      final c = math.cos(blocker.turn);
+      final sn = math.sin(blocker.turn);
+      Offset? left;
+      Offset? right;
+      var most = double.negativeInfinity;
+      var least = double.infinity;
+      for (var i = 0; i < 48; i++) {
+        final angle = i * 2 * math.pi / 48;
+        final x = math.cos(angle) * dome * blocker.stretch;
+        final y = math.sin(angle) * dome;
+        final rel = Offset(x * c - y * sn, x * sn + y * c);
+        final side = rel.dx * away.dy - rel.dy * away.dx;
+        if (side > most) {
+          most = side;
+          left = blocker.a + rel;
+        }
+        if (side < least) {
+          least = side;
+          right = blocker.a + rel;
+        }
       }
-
-      path.addPolygon([onBase(1), tip, onBase(-1)], true);
-      return path;
+      return Path()..addPolygon([left!, tip, right!], true);
     }
     if (blocker.isCircle) {
       final r = blocker.radius;
       final away = far / far.distance;
       final side = Offset(-away.dy, away.dx) * r;
-      return Path()
+      // Tres piezas unidas de verdad: en un solo trazado, las que giran
+      // en sentido contrario se anulan y dejan huecos.
+      var shadow = Path()
         ..addPolygon([
           blocker.a + side,
           blocker.a - side,
           blocker.a - side + far,
           blocker.a + side + far,
-        ], true)
-        ..addOval(Rect.fromCircle(center: blocker.a, radius: r))
-        ..addOval(Rect.fromCircle(center: blocker.a + far, radius: r));
+        ], true);
+      for (final centre in [blocker.a, blocker.a + far]) {
+        try {
+          shadow = Path.combine(
+            PathOperation.union,
+            shadow,
+            Path()..addOval(Rect.fromCircle(center: centre, radius: r)),
+          );
+        } catch (_) {}
+      }
+      return shadow;
     }
     final near = _cast(env, blocker.baseM, mpu);
     return Path()..addPolygon([
@@ -192,15 +213,19 @@ class PlanSunPainter {
         if (room.roofed) room,
     ];
     for (final room in roofed) {
+      // Cada pared barre su tramo de sombra y el techo pone el resto. Van
+      // por separado: en un solo trazado se anularían unas a otras.
       final shift = _cast(env, room.ceilingM, mpu);
       final poly = room.room.polygon;
-      final sweep = Path()..addPath(room.room.path.shift(shift), Offset.zero);
+      solid.add((room.room.path.shift(shift), shift.distance));
       for (var i = 0; i < poly.length; i++) {
         final a = poly[i];
         final b = poly[(i + 1) % poly.length];
-        sweep.addPolygon([a, b, b + shift, a + shift], true);
+        solid.add((
+          Path()..addPolygon([a, b, b + shift, a + shift], true),
+          shift.distance,
+        ));
       }
-      solid.add((sweep, shift.distance));
     }
     bool ofRoofed(LightBlocker wall) {
       final span = wall.b - wall.a;
@@ -217,6 +242,9 @@ class PlanSunPainter {
     for (final blocker in scene.blockers) {
       // El grip no da sombra de sol que merezca dibujarse fuera.
       if (blocker.element?.type == ElementType.light) continue;
+      // Lo que está bajo techo no da sombra fuera: el sol no le llega más
+      // que por los huecos, y eso ya es la mancha.
+      if (!blocker.isWall && scene.isRoofed(blocker.a)) continue;
       if (blocker.isWall && ofRoofed(blocker)) continue;
       // Hojas, cristales y cortinas: van con su edificio.
       if (!blocker.isWall &&

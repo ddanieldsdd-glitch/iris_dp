@@ -156,7 +156,27 @@ class PlanTerrainPainter {
   }) {
     final radius = LightScene.propSizeM(el) / metersPerUnit;
     final height = LightScene.propHeightM(el);
-    final seed = el.id.hashCode + 21;
+    final seed =
+        el.id.hashCode +
+        21 +
+        ((el.props[LightScene.seedKey] as num?)?.toInt() ?? 0) * 7919;
+    final rough = (el.props[LightScene.roughKey] as num?)?.toDouble() ?? 0.12;
+    final stretch = LightScene.hillStretch(el);
+    // La forma se estira a lo largo de su eje y se gira con el elemento;
+    // los trazos y los rótulos no se deforman.
+    final shape = Matrix4.identity()
+      ..rotateZ(el.rotation * math.pi / 180)
+      ..scaleByDouble(stretch, 1, 1, 1);
+    Path ring(double r) => blob(r, seed, rough: rough).transform(shape.storage);
+    Offset placed(Offset local) {
+      final turn = el.rotation * math.pi / 180;
+      final x = local.dx * stretch;
+      return Offset(
+        x * math.cos(turn) - local.dy * math.sin(turn),
+        x * math.sin(turn) + local.dy * math.cos(turn),
+      );
+    }
+
     final lit = towardSun ?? const Offset(-0.7, -0.7);
     final step = contourInterval(height);
     final levels = (height / step).floor();
@@ -176,15 +196,18 @@ class PlanTerrainPainter {
       final r = radius * (1 - elevation / height);
       if (r < 2) break;
       canvas.drawPath(
-        blob(r, seed),
+        ring(r),
         Paint()..color = tintAt(elevation).withValues(alpha: k == 0 ? 0.55 : 1),
       );
     }
     // La ladera que no mira al sol, en sombra.
     canvas.save();
-    canvas.clipPath(blob(radius, seed));
+    canvas.clipPath(ring(radius));
     canvas.drawRect(
-      Rect.fromCircle(center: Offset.zero, radius: radius * 1.3),
+      Rect.fromCircle(
+        center: Offset.zero,
+        radius: radius * 1.4 * math.max(1.0, stretch),
+      ),
       Paint()
         ..shader = ui.Gradient.linear(lit * radius, lit * -radius, [
           const Color(0x00000000),
@@ -200,7 +223,7 @@ class PlanTerrainPainter {
       if (r < 2) break;
       final index = k % 5 == 0;
       canvas.drawPath(
-        blob(r, seed),
+        ring(r),
         Paint()
           ..color = const Color(
             0xFF2A1F17,
@@ -213,7 +236,7 @@ class PlanTerrainPainter {
         _text(
           canvas,
           _meters(elevation),
-          Offset(r, 0),
+          placed(Offset(r, 0)),
           scale: scale,
           color: const Color(0xFFE9D9BF),
         );

@@ -49,6 +49,10 @@ class PlanPalette extends StatelessWidget {
   final ValueChanged<PlanTool> onTool;
   final VoidCallback onAddCamera;
   final VoidCallback onAddActor;
+
+  /// Personajes que ya existen en el proyecto, con su color.
+  final List<(String, Color)> cast;
+  final void Function(String name, Color color)? onAddCast;
   final ValueChanged<LightType> onAddLight;
   final ValueChanged<PropType> onAddProp;
   final VoidCallback onAddMeter;
@@ -71,6 +75,8 @@ class PlanPalette extends StatelessWidget {
     required this.onTool,
     required this.onAddCamera,
     required this.onAddActor,
+    this.cast = const [],
+    this.onAddCast,
     required this.onAddLight,
     required this.onAddProp,
     required this.onAddMeter,
@@ -143,6 +149,19 @@ class PlanPalette extends StatelessWidget {
               onTap: onAddCamera,
             ),
           ]),
+          if (cast.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            // El reparto: cada personaje vuelve con su nombre y su color.
+            grid([
+              for (final (name, color) in cast)
+                _PaletteButton(
+                  icon: CircleAvatar(backgroundColor: color, radius: 6),
+                  label: name,
+                  tooltip: 'Añadir a $name',
+                  onTap: () => onAddCast?.call(name, color),
+                ),
+            ]),
+          ],
           header('MEDICIÓN'),
           grid([
             _PaletteButton(
@@ -294,6 +313,11 @@ class PlanLightBrowser extends StatefulWidget {
 class _PlanLightBrowserState extends State<PlanLightBrowser> {
   final _openFamilies = <LightFamily>{};
   final _openGroups = <String>{};
+  final _openBrands = <String>{};
+
+  static List<String> brandsOf(List<Light> lights) =>
+      {for (final l in lights) l.brand}.toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
   String _query = '';
 
   static String _nameOf(Light l) => '${l.brand} ${l.model}';
@@ -317,7 +341,11 @@ class _PlanLightBrowserState extends State<PlanLightBrowser> {
     );
     final q = _query.trim().toLowerCase();
 
-    Widget fixture(Light light, {required bool inProject}) => Padding(
+    Widget fixture(
+      Light light, {
+      required bool inProject,
+      bool short = false,
+    }) => Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: SizedBox(
         height: 34,
@@ -327,7 +355,8 @@ class _PlanLightBrowserState extends State<PlanLightBrowser> {
             size: 15,
             color: inProject ? palette.accent : null,
           ),
-          label: _nameOf(light),
+          // Bajo su marca, basta el modelo.
+          label: short ? light.model : _nameOf(light),
           tooltip:
               '${_nameOf(light)} · ${light.powerW} W'
               '${inProject ? ' · en el proyecto' : ''}',
@@ -481,7 +510,31 @@ class _PlanLightBrowserState extends State<PlanLightBrowser> {
               children: [
                 for (final light in mine) fixture(light, inProject: true),
                 for (final (type, name) in group.generics) generic(type, name),
-                for (final light in others) fixture(light, inProject: false),
+                // El catálogo, por marcas: ARRI, Aputure…
+                for (final brand in brandsOf(others)) ...[
+                  row(
+                    label: brand,
+                    count: others.where((l) => l.brand == brand).length,
+                    open: _openBrands.contains('${group.id}|$brand'),
+                    sub: true,
+                    onTap: () => setState(() {
+                      final key = '${group.id}|$brand';
+                      if (!_openBrands.remove(key)) _openBrands.add(key);
+                    }),
+                  ),
+                  if (_openBrands.contains('${group.id}|$brand'))
+                    Padding(
+                      padding: const EdgeInsets.only(left: 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (final light in others)
+                            if (light.brand == brand)
+                              fixture(light, inProject: false, short: true),
+                        ],
+                      ),
+                    ),
+                ],
               ],
             ),
           ),

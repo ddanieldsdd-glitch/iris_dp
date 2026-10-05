@@ -124,6 +124,14 @@ class PlanOpening {
   static String curtainSide(PlanElement el) =>
       el.props[curtainSideKey] == sideOut ? sideOut : sideIn;
 
+  /// De qué son las hojas de una ventana: de cristal, o macizas (una
+  /// contraventana).
+  static const leafKey = 'leaf';
+  static const leafGlass = 'glass';
+  static const leafSolid = 'solid';
+  static bool solidLeaves(PlanElement el) =>
+      isWindow(el) && el.props[leafKey] == leafSolid;
+
   static const sillKey = 'sill';
   static const headKey = 'head';
 

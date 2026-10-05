@@ -28,6 +28,7 @@ import 'floor_plan_json.dart';
 import 'floor_plan_scope.dart';
 import 'light_beam.dart';
 import 'plan_data.dart' show kLightSetupColors;
+import 'plan_cast.dart';
 import 'plan_gear_list.dart';
 import 'plan_project_gear_dialog.dart';
 import 'plan_marks.dart';
@@ -210,6 +211,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// Luces, cámaras y lentes del proyecto, de la pantalla Equipo.
   ProjectGear _gear = const ProjectGear();
+
+  /// Personajes del proyecto, con su color: el mismo en todas las plantas.
+  Map<String, ({String name, Color color})> _cast = const {};
 
   /// Sol, cielo y rebote de paredes del esquema de luz abierto.
   PlanAmbient _ambient = const PlanAmbient();
@@ -417,6 +421,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
     final navTargets = await _loadNavTargets(db);
     final gear = await ProjectGear.load(db, widget.projectId);
+    final cast = await PlanCast.load(db, widget.projectId);
 
     // Esquema de luz que se enseña: el del plano, el elegido a mano o, si
     // no, el primero del set o de la localización.
@@ -633,6 +638,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _setupShotCount = setupShotCount;
       _setupColor = setupColor;
       _gear = gear;
+      _cast = cast;
       _ambient = FloorPlanRepository.ambientOf(lightSetup);
       _setupOriginals
         ..clear()
@@ -1589,9 +1595,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   /// Color del siguiente actor: uno distinto por cada uno que ya hay.
-  Color get _nextActorColor =>
-      kActorColors[_elements.where((e) => e.type == ElementType.actor).length %
-          kActorColors.length];
+  Color get _nextActorColor => PlanCast.freeColor([
+    for (final c in _knownCast.values) c.color,
+    for (final e in _elements)
+      if (e.type == ElementType.actor) e.actorColor,
+  ]);
 
   /// Abre las cámaras y los juegos de lentes del proyecto y, al volver,
   /// recoge lo que haya cambiado.
@@ -1644,7 +1652,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (_shot != null) widget.label,
   ].join(' · ');
 
-  Future<void> _addActor(Color color) async {
+  Future<void> _addActor(Color color, {String? name}) async {
     final actorCount = _elements
         .where((e) => e.type == ElementType.actor)
         .length;
@@ -1653,10 +1661,42 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         id: 0,
         type: ElementType.actor,
         position: Offset(150 + actorCount * 60.0, 150),
-        label: 'Actor ${actorCount + 1}',
+        label: name ?? 'Actor ${actorCount + 1}',
         actorColor: color,
       ),
     );
+  }
+
+  /// Los personajes de esta planta y los del resto del proyecto.
+  Map<String, ({String name, Color color})> get _knownCast => {
+    ..._cast,
+    for (final el in _elements)
+      if (el.type == ElementType.actor && PlanCast.isNamed(el.label))
+        PlanCast.key(el.label): (name: el.label!.trim(), color: el.actorColor),
+  };
+
+  /// Un personaje cambia de color: en esta planta y en todas las demás.
+  Future<void> _recolourCast(PlanElement actor, Color color) async {
+    final key = PlanCast.key(actor.label);
+    final same = [
+      for (final el in _elements)
+        if (el.type == ElementType.actor &&
+            (identical(el, actor) ||
+                (PlanCast.isNamed(actor.label) &&
+                    PlanCast.key(el.label) == key)))
+          el,
+    ];
+    setState(() {
+      for (final el in same) {
+        el.actorColor = color;
+      }
+    });
+    await _persistMany(same);
+    if (!PlanCast.isNamed(actor.label)) return;
+    final db = ref.read(databaseProvider);
+    await PlanCast.recolour(db, widget.projectId, actor.label!, color);
+    final cast = await PlanCast.load(db, widget.projectId);
+    if (mounted) setState(() => _cast = cast);
   }
 
   Future<void> _addLight(LightType type) async {
@@ -2584,6 +2624,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     onTool: _setTool,
                     onAddCamera: _addCamera,
                     onAddActor: () => _addActor(_nextActorColor),
+                    cast: [
+                      for (final c in _knownCast.values) (c.name, c.color),
+                    ],
+                    onAddCast: (name, color) => _addActor(color, name: name),
                     onAddLight: _addLight,
                     onAddProp: _addProp,
                     onAddMeter: _addMeter,
@@ -2855,6 +2899,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                     _moveToLayer(_selected!, layer),
                                 selectedPathIndex: _selectedPathIndex,
                                 onManageGear: _manageGear,
+                                cast: _knownCast,
+                                onRecolourCast: (color) =>
+                                    _recolourCast(_selected!, color),
                                 onAddPathPoint: _addPathPointAhead,
                                 onDeletePathPoint: _deleteSelectedPathPoint,
                                 onClearPath: _clearCameraPath,
@@ -3666,6 +3713,12 @@ class _ElementPanel extends StatefulWidget {
 
   /// Abre «Cámaras y lentes del proyecto».
   final VoidCallback? onManageGear;
+
+  /// Personajes del proyecto y su color.
+  final Map<String, ({String name, Color color})> cast;
+
+  /// Cambia el color del personaje seleccionado en todo el proyecto.
+  final ValueChanged<Color>? onRecolourCast;
   final VoidCallback? onAddPathPoint;
   final VoidCallback? onDeletePathPoint;
   final VoidCallback? onClearPath;
@@ -3703,6 +3756,8 @@ class _ElementPanel extends StatefulWidget {
     required this.onPreview,
     this.selectedPathIndex,
     this.onManageGear,
+    this.cast = const {},
+    this.onRecolourCast,
     this.onAddPathPoint,
     this.onDeletePathPoint,
     this.onClearPath,
@@ -3726,6 +3781,20 @@ class _ElementPanel extends StatefulWidget {
 
 class _ElementPanelState extends State<_ElementPanel> {
   late TextEditingController _lensCtrl;
+  late final TextEditingController _nameCtrl = TextEditingController(
+    text: widget.element.label ?? '',
+  );
+
+  /// Pone nombre al personaje. Si ya existe en el proyecto, coge su color.
+  void _commitName(String value) {
+    final element = widget.element;
+    final name = value.trim();
+    if (name.isEmpty || name == element.label) return;
+    element.label = name;
+    final known = widget.cast[PlanCast.key(name)];
+    if (known != null) element.actorColor = known.color;
+    widget.onUpdate();
+  }
 
   @override
   void initState() {
@@ -3738,12 +3807,14 @@ class _ElementPanelState extends State<_ElementPanel> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.element.id != widget.element.id) {
       _lensCtrl.text = widget.element.lens ?? '';
+      _nameCtrl.text = widget.element.label ?? '';
     }
   }
 
   @override
   void dispose() {
     _lensCtrl.dispose();
+    _nameCtrl.dispose();
     super.dispose();
   }
 
@@ -3945,6 +4016,95 @@ class _ElementPanelState extends State<_ElementPanel> {
                         ),
                       ),
                     const SizedBox(height: AppSpacing.sm),
+                    if (element.type == ElementType.actor)
+                      _section(palette, 'Personaje', 'cast', [
+                        TextField(
+                          controller: _nameCtrl,
+                          textCapitalization: TextCapitalization.characters,
+                          style: AppTypography.bodyLarge(palette),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            labelText: 'Nombre',
+                            hintText: 'ADIL',
+                          ),
+                          onSubmitted: _commitName,
+                          onTapOutside: (_) => _commitName(_nameCtrl.text),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            for (final c in kActorColors)
+                              GestureDetector(
+                                onTap: () => widget.onRecolourCast?.call(c),
+                                child: Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: c,
+                                    shape: BoxShape.circle,
+                                    border: element.actorColor == c
+                                        ? Border.all(
+                                            color: palette.textPrimary,
+                                            width: 2,
+                                          )
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          PlanCast.isNamed(element.label)
+                              ? '${element.label!.trim()} lleva este color en '
+                                    'todas las plantas del proyecto.'
+                              : 'Ponle nombre y su color le seguirá en todas '
+                                    'las plantas.',
+                          style: AppTypography.caption(
+                            palette,
+                          ).copyWith(color: palette.textTertiary),
+                        ),
+                      ]),
+                    if (element.type == ElementType.camera)
+                      _section(palette, 'Cámara', 'camera-id', [
+                        Wrap(
+                          spacing: 6,
+                          children: [
+                            for (final letter in const ['A', 'B', 'C', 'D'])
+                              ChoiceChip(
+                                visualDensity: VisualDensity.compact,
+                                showCheckmark: false,
+                                avatar: CircleAvatar(
+                                  backgroundColor: cameraColorForLetter(letter),
+                                  radius: 6,
+                                ),
+                                label: Text('Cám. $letter'),
+                                selected: element.cameraLetter == letter,
+                                onSelected: (_) {
+                                  element.cameraLetter = letter;
+                                  final body = widget.gear.cameraForLetter(
+                                    letter,
+                                  );
+                                  if (body != null) {
+                                    PlanEquipment.applyCamera(element, body);
+                                  }
+                                  widget.onUpdate();
+                                },
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Cada letra tiene su color, el mismo en todas las '
+                          'plantas, y coge el cuerpo que lleve esa letra en '
+                          'el proyecto.',
+                          style: AppTypography.caption(
+                            palette,
+                          ).copyWith(color: palette.textTertiary),
+                        ),
+                      ]),
                     if (LightBeam.of(element) case final beam?) ...[
                       _section(palette, 'Aparato', 'fixture', [
                         PlanElementCompatPanel(
@@ -4205,38 +4365,6 @@ class _ElementPanelState extends State<_ElementPanel> {
                               : CompatPart.all,
                         ),
                       ], open: false),
-                    ],
-                    if (element.type == ElementType.actor) ...[
-                      Text('Color', style: AppTypography.caption(palette)),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: kActorColors
-                            .map(
-                              (c) => GestureDetector(
-                                onTap: () {
-                                  element.actorColor = c;
-                                  widget.onUpdate();
-                                },
-                                child: Container(
-                                  width: 24,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    color: c,
-                                    shape: BoxShape.circle,
-                                    border: element.actorColor == c
-                                        ? Border.all(
-                                            color: palette.textPrimary,
-                                            width: 2,
-                                          )
-                                        : null,
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
                     ],
                   ],
                 ),
