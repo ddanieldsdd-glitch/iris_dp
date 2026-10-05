@@ -58,6 +58,10 @@ class SceneLight {
   /// Solo emite hacia delante: una superficie no ilumina a su espalda.
   final bool frontOnly;
 
+  /// Si cuelga del techo y alumbra hacia abajo: metros que hay de la fuente
+  /// al plano donde se mide. `null` = a la altura del sujeto, en trípode.
+  final double? overheadM;
+
   /// Lo que es por dentro: la luz de un aparato, o `null` si es una
   /// superficie.
   final PlanLight? fixture;
@@ -73,6 +77,7 @@ class SceneLight {
     required this.aim,
     required this.label,
     this.frontOnly = false,
+    this.overheadM,
     this.fixture,
     this.surface,
   });
@@ -152,6 +157,7 @@ class LightScene {
             source: light.source,
             position: el.position,
             aim: aimOf(el),
+            overheadM: PlanLight.overheadDrop(el),
             fixture: light,
             label: (el.props['name'] as String?) ?? el.displayLabel,
           ),
@@ -282,12 +288,30 @@ class LightScene {
       if (PlanOpening.isOpening(el)) {
         final (a, b) = PlanOpening.span(el);
         if (PlanOpening.isWindow(el)) {
-          // Una ventana puede llevar cortina: su difusión o su gelatina.
-          var transmission = glassTransmission;
-          for (final m in _filters(el)) {
-            transmission *= m.transmission;
+          // Abierta, no hay cristal en medio (ni lo que lleve pegado); sus
+          // hojas hacen sombra como las de una puerta.
+          final isOpen = PlanOpening.openDeg(el) > 3;
+          var glass = isOpen ? 1.0 : glassTransmission;
+          if (!isOpen) {
+            for (final m in _filters(el)) {
+              glass *= m.transmission;
+            }
           }
-          openings.add((a, b, transmission));
+          if (isOpen) {
+            for (final (hinge, tip) in PlanOpening.leaves(el)) {
+              blockers.add(LightBlocker(hinge, tip, element: el));
+            }
+          }
+          // La cortina tapa una parte del ancho, desde un lado.
+          final covered = PlanOpening.curtain(el);
+          if (covered <= 0.01) {
+            openings.add((a, b, glass));
+          } else {
+            final split = a + (b - a) * covered;
+            final cloth = PlanOpening.curtainMaterial(el).transmission;
+            openings.add((a, split, glass * cloth));
+            if (covered < 0.99) openings.add((split, b, glass));
+          }
         } else if (PlanOpening.isDoor(el)) {
           // Abierta, el hueco deja pasar y la hoja tapa donde esté.
           openings.add((a, b, PlanOpening.passesLight(el) ? 1 : 0));
@@ -330,12 +354,19 @@ class LightScene {
       // Tramos de esta pared ocupados por huecos, en distancia desde `a`.
       final cuts = <(double, double, double)>[];
       for (final (oa, ob, transmission) in openings) {
+        // El hueco cuenta en este tramo si está sobre su línea y lo pisa.
+        // Así una ventana en una pared curva abre hueco en todos los
+        // tramos que ocupa, no solo en el de su centro.
         final centre = (oa + ob) / 2;
-        if (!mountedOn(centre, wall)) continue;
-        final along = (centre.dx - a.dx) * dir.dx + (centre.dy - a.dy) * dir.dy;
-        final half = (ob - oa).distance / 2;
-        final from = (along - half).clamp(0.0, length);
-        final to = (along + half).clamp(0.0, length);
+        final rel = centre - a;
+        final off = (rel.dx * dir.dy - rel.dy * dir.dx).abs();
+        if (off > _mountTolerance) continue;
+        double along(Offset p) =>
+            (p.dx - a.dx) * dir.dx + (p.dy - a.dy) * dir.dy;
+        final la = along(oa);
+        final lb = along(ob);
+        final from = math.min(la, lb).clamp(0.0, length);
+        final to = math.max(la, lb).clamp(0.0, length);
         if (to - from > 1) cuts.add((from, to, transmission));
       }
       cuts.sort((x, y) => x.$1.compareTo(y.$1));
@@ -394,12 +425,8 @@ class LightScene {
     if (cos <= 0.02) return null;
     final passed = _throughput(light.position, centre, ignore: own);
     if (passed.transmission <= 0) return null;
-    final meters = math.max(units * metersPerUnit, 0.05);
     final lux =
-        light.source.illuminance(
-          meters,
-          offAxisDeg: _offAxis(light, toSurface),
-        ) *
+        luxFrom(light, units, _offAxis(light, toSurface)) *
         passed.transmission *
         cos;
     if (lux < 0.5) return null;
@@ -533,12 +560,15 @@ class LightScene {
           wall.props[materialKey] as String?,
           kWallMaterials,
         );
-        // La pared se reparte en tres paños; cada uno devuelve lo suyo.
-        for (final t in const [1 / 6, 0.5, 5 / 6]) {
+        // La pared se reparte en paños de alrededor de dos metros (hasta
+        // tres); cada uno devuelve lo suyo. Un tramo corto, como los de una
+        // pared curva, es un solo paño.
+        final panes = (length * metersPerUnit / 2).round().clamp(1, 3);
+        for (final t in [for (var i = 0; i < panes; i++) (i + 0.5) / panes]) {
           emit(
             centre: blocker.a + span * t,
             tangent: span / length,
-            lengthUnits: length / 3,
+            lengthUnits: length / panes,
             heightM: wallHeightM,
             keep: material.reflectance,
             mired: material.miredShift,
@@ -584,6 +614,7 @@ class LightScene {
     Offset from,
     Offset to, {
     LightBlocker? ignore,
+    bool fromAbove = false,
   }) {
     final span = to - from;
     final distance = span.distance;
@@ -593,6 +624,8 @@ class LightScene {
     var mired = 0.0;
     for (final blocker in blockers) {
       if (identical(blocker, ignore)) continue;
+      // La luz que cae del techo pasa por encima de personas y cámaras.
+      if (fromAbove && blocker.isCircle) continue;
       // Quien está dentro del cuerpo de una persona no queda a su sombra.
       if (blocker.isCircle && (to - blocker.a).distance <= blocker.radius) {
         continue;
@@ -620,10 +653,12 @@ class LightScene {
     Offset dir,
     double max, {
     LightBlocker? ignore,
+    bool fromAbove = false,
   }) {
     var best = max;
     for (final blocker in blockers) {
       if (!blocker.isOpaque || identical(blocker, ignore)) continue;
+      if (fromAbove && blocker.isCircle) continue;
       final hit = _rayHit(origin, dir, blocker);
       if (hit != null && hit < best) best = hit;
     }
@@ -632,7 +667,12 @@ class LightScene {
 
   /// Zona que alcanza una luz desde [origin] hasta [reach], recortada por
   /// lo que la tapa: lo que queda a su sombra no entra.
-  Path visibleArea(Offset origin, double reach, {LightBlocker? ignore}) {
+  Path visibleArea(
+    Offset origin,
+    double reach, {
+    LightBlocker? ignore,
+    bool fromAbove = false,
+  }) {
     // Un rayo cada grado y medio, más uno a cada lado de cada esquina para
     // que el corte de la sombra salga limpio. Todos los ángulos van de 0 a
     // 2π: mezclados con negativos, el contorno se cruza y deja de recortar.
@@ -649,6 +689,7 @@ class LightScene {
 
     for (final blocker in blockers) {
       if (!blocker.isOpaque || identical(blocker, ignore)) continue;
+      if (fromAbove && blocker.isCircle) continue;
       if (blocker.isCircle) {
         // Las dos tangentes al círculo.
         final d = blocker.a - origin;
@@ -679,7 +720,15 @@ class LightScene {
     for (final angle in angles) {
       final dir = Offset(math.cos(angle), math.sin(angle));
       final point =
-          origin + dir * reachAlong(origin, dir, reach, ignore: ignore);
+          origin +
+          dir *
+              reachAlong(
+                origin,
+                dir,
+                reach,
+                ignore: ignore,
+                fromAbove: fromAbove,
+              );
       if (first) {
         path.moveTo(point.dx, point.dy);
         first = false;
@@ -708,6 +757,27 @@ class LightScene {
     return math.acos(cos) * 180 / math.pi;
   }
 
+  /// Lux que da una fuente a [units] de distancia sobre el plano, sin nada
+  /// en medio.
+  ///
+  /// En trípode, la luz viaja a la altura del sujeto. Colgada del techo,
+  /// alumbra hacia abajo: lo que cuenta es la distancia real (en diagonal)
+  /// y cuánto se aparta el punto de la vertical del aparato.
+  double luxFrom(SceneLight light, double units, double offAxisDeg) {
+    final flat = units * metersPerUnit;
+    final drop = light.overheadM;
+    if (drop == null) {
+      return light.source.illuminance(
+        math.max(flat, 0.05),
+        offAxisDeg: offAxisDeg,
+      );
+    }
+    return light.source.illuminance(
+      math.sqrt(flat * flat + drop * drop),
+      offAxisDeg: math.atan2(flat, drop) * 180 / math.pi,
+    );
+  }
+
   /// Lo que aporta cada fuente a un punto de la planta, de más a menos.
   List<LightContribution> contributionsAt(Offset point) {
     final result = <LightContribution>[];
@@ -715,15 +785,17 @@ class LightScene {
       if (light.source.candela <= 0) continue;
       final span = point - light.position;
       final units = span.distance;
-      final meters = math.max(units * metersPerUnit, 0.05);
       final dir = units > 1e-6 ? span / units : light.aim;
       final offAxis = _offAxis(light, dir);
       if (light.frontOnly && offAxis >= 89) continue;
-      final passed = _throughput(light.position, point, ignore: light.surface);
+      final passed = _throughput(
+        light.position,
+        point,
+        ignore: light.surface,
+        fromAbove: light.overheadM != null,
+      );
       if (passed.transmission <= 0) continue;
-      final lux =
-          light.source.illuminance(meters, offAxisDeg: offAxis) *
-          passed.transmission;
+      final lux = luxFrom(light, units, offAxis) * passed.transmission;
       if (lux > 0.01) {
         result.add(
           LightContribution(

@@ -178,8 +178,9 @@ class PlanPieceControls extends StatelessWidget {
           onChanged: (v) => el.props[PlanOpening.widthKey] = v,
         ),
       );
-      if (PlanOpening.isDoor(el)) {
+      if (PlanOpening.hasLeaves(el)) {
         final open = PlanOpening.openDeg(el);
+        final window = PlanOpening.isWindow(el);
         children.addAll([
           slider(
             'Apertura',
@@ -206,17 +207,65 @@ class PlanPieceControls extends StatelessWidget {
             (v) => el.props[PlanOpening.swingInKey] = v,
           ),
           Text(
-            open < 3
+            window
+                ? open < 3
+                      ? 'Cerrada: la luz pasa por el cristal y pierde un poco.'
+                      : 'Abierta: la luz pasa sin cristal y las hojas hacen '
+                            'sombra.'
+                : open < 3
                 ? 'Cerrada: no deja pasar la luz.'
                 : 'Abierta: la luz pasa por el hueco y la hoja hace sombra.',
             style: AppTypography.caption(
               palette,
             ).copyWith(color: palette.textTertiary),
           ),
+          const SizedBox(height: AppSpacing.sm),
         ]);
-      } else if (PlanOpening.isWindow(el)) {
+      }
+      if (PlanOpening.isWindow(el)) {
+        final covered = PlanOpening.curtain(el);
         children.addAll([
-          filter('Cortina o difusión', ModifierKind.diffusion),
+          slider(
+            'Cortina',
+            covered < 0.01
+                ? 'sin cortina'
+                : covered > 0.99
+                ? 'echada'
+                : '${(covered * 100).round()} % del ancho',
+            current: covered,
+            min: 0,
+            max: 1,
+            onChanged: (v) {
+              // Cerca de los extremos, se queda en ellos.
+              final snapped = v < 0.04
+                  ? 0.0
+                  : v > 0.96
+                  ? 1.0
+                  : v;
+              if (snapped == 0) {
+                el.props.remove(PlanOpening.curtainKey);
+              } else {
+                el.props[PlanOpening.curtainKey] = snapped;
+              }
+            },
+          ),
+          if (covered > 0.01)
+            choice<String>(
+              'Tela de la cortina',
+              PlanOpening.curtainMaterial(el).id,
+              [
+                for (final c in kCurtains)
+                  (
+                    c.id,
+                    c.transmission <= 0
+                        ? '${c.name} · no pasa luz'
+                        : '${c.name} · pasa el '
+                              '${(c.transmission * 100).round()} %',
+                  ),
+              ],
+              (id) => el.props[PlanOpening.curtainMaterialKey] = id,
+            ),
+          filter('Difusión pegada al cristal', ModifierKind.diffusion),
           filter('Gelatina en el cristal', ModifierKind.correction),
         ]);
       }

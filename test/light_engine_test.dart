@@ -606,7 +606,7 @@ void main() {
       // …y lo que llega viene de la tela, no del aparato.
       final parts = framed.contributionsAt(behind);
       expect(parts.single.light.isSecondary, isTrue);
-      expect(parts.single.light.label, contains('grid cloth'));
+      expect(parts.single.light.label, contains('Grid Cloth'));
       // Muy fuera del haz original, donde antes no había nada, ahora sí.
       const side = Offset(270, 640);
       expect(open.luxAt(side), 0);
@@ -926,6 +926,183 @@ void main() {
       expect(LightOverrides.uidOf(b), isNot(first));
       LightOverrides.ensureUids([a]);
       expect(LightOverrides.uidOf(a), first);
+    });
+  });
+
+  group('ventanas, cortinas y luz del techo', () {
+    var id = 0;
+    PlanElement hmi(
+      double x,
+      double y,
+      double rotation, [
+      Map<String, dynamic>? props,
+    ]) => PlanElement(
+      id: --id,
+      type: ElementType.light,
+      position: Offset(x, y),
+      rotation: rotation,
+      lightType: LightType.hmi,
+      props: {'intensity': 100, ...?props},
+    );
+    PlanElement wall(double x1, double y1, double x2, double y2) =>
+        PlanSegment.create(start: Offset(x1, y1), end: Offset(x2, y2))
+          ..id = --id;
+    PlanElement window([Map<String, dynamic>? props]) => PlanElement(
+      id: --id,
+      type: ElementType.wall,
+      position: const Offset(400, 300),
+      rotation: 90,
+      label: ArchitectureType.window.dbValue,
+      props: {'width': 120.0, ...?props},
+    );
+    LightScene scene(List<PlanElement> elements) =>
+        LightScene.from(elements, metersPerUnit: 0.02, wallBounce: false);
+    const behind = Offset(700, 300);
+    double through(Map<String, dynamic>? props, [Offset at = behind]) => scene([
+      hmi(100, 300, 90),
+      wall(400, 0, 400, 600),
+      window(props),
+    ]).luxAt(at);
+
+    test('al engancharse, el ángulo queda entre 0 y 360', () {
+      // Una pared dibujada de abajo arriba da un ángulo negativo.
+      final w = wall(400, 600, 400, 0);
+      final piece = window()..position = const Offset(410, 300);
+      expect(PlanOpening.snapToWall(piece, [w]), isTrue);
+      expect(piece.rotation, inInclusiveRange(0, 360));
+      expect(piece.rotation, closeTo(270, 1e-6));
+    });
+
+    test('se engancha a una pared curva y le abre hueco entero', () {
+      final curved = wall(400, 0, 400, 600)..props['curve'] = 80.0;
+      final piece = window()..position = const Offset(370, 300);
+      expect(PlanOpening.snapToWall(piece, [curved]), isTrue);
+      // Queda sobre la curva, no sobre la cuerda.
+      expect(
+        (piece.position - PlanSegment.midpoint(curved)).distance,
+        lessThan(8),
+      );
+      final s = scene([hmi(100, 300, 90), curved, piece]);
+      // La luz pasa por el centro y por los dos lados del hueco.
+      final x = piece.position.dx + 250;
+      expect(s.luxAt(Offset(x, 300)), greaterThan(0));
+      expect(s.luxAt(Offset(x, 300 - 60)), greaterThan(0));
+      expect(s.luxAt(Offset(x, 300 + 60)), greaterThan(0));
+      // Y la pared sigue cortando lejos del hueco.
+      expect(s.luxAt(const Offset(700, 580)), 0);
+    });
+
+    test('abierta no hay cristal: pasa toda la luz', () {
+      final open = scene([hmi(100, 300, 90)]).luxAt(behind);
+      expect(through(null), closeTo(open * 0.9, open * 0.001));
+      // Hojas hacia el lado de la luz, para que no den sombra al punto.
+      expect(
+        through({'open': 90.0, 'swingIn': true}),
+        closeTo(open, open * 0.001),
+      );
+      expect(PlanOpening.leaves(window({'open': 90.0})), hasLength(2));
+      expect(PlanOpening.leaves(window()), isEmpty);
+    });
+
+    test('la cortina tapa solo la parte que cubre', () {
+      // La ventana va de y = 240 a y = 360; la cortina empieza en 240.
+      const top = Offset(700, 240);
+      const bottom = Offset(700, 360);
+      final bare = through(null, top);
+      // Media cortina opaca: arriba no pasa nada, abajo todo.
+      final half = {'curtain': 0.5, 'curtainMaterial': 'blackout'};
+      expect(through(half, top), 0);
+      expect(through(half, bottom), closeTo(through(null, bottom), 1e-6));
+      // Un visillo echado del todo quita el 40 %.
+      expect(
+        through({'curtain': 1.0, 'curtainMaterial': 'sheer'}, top),
+        closeTo(bare * 0.6, bare * 0.001),
+      );
+      // Sin cortina, como si no existiera.
+      expect(through({'curtain': 0.0}, top), bare);
+    });
+
+    test(
+      'colgada del techo, hace un charco bajo ella y pasa sobre la gente',
+      () {
+        final rigged = hmi(300, 300, 0, {'mount': 'ceiling', 'height': 4.5});
+        final actor = PlanElement(
+          id: --id,
+          type: ElementType.actor,
+          position: const Offset(330, 300),
+        );
+        final s = scene([rigged, actor]);
+        // Justo debajo hay 3 m de caída (4,5 m menos 1,5 m del sujeto).
+        final light = PlanLight.of(rigged)!;
+        expect(PlanLight.overheadDrop(rigged), 3);
+        expect(
+          s.luxAt(const Offset(300, 300)),
+          closeTo(light.source.illuminance(3), 1e-6),
+        );
+        // Igual a un lado que al otro: ya no importa hacia dónde «mira».
+        expect(
+          s.luxAt(const Offset(400, 300)),
+          closeTo(s.luxAt(const Offset(200, 300)), 1e-6),
+        );
+        expect(
+          s.luxAt(const Offset(300, 400)),
+          closeTo(s.luxAt(const Offset(400, 300)), 1e-6),
+        );
+        // Menos luz lejos de la vertical, y nada muy lejos.
+        expect(
+          s.luxAt(const Offset(400, 300)),
+          lessThan(s.luxAt(const Offset(300, 300))),
+        );
+        expect(s.luxAt(const Offset(900, 300)), 0);
+        // La persona no tapa a quien tiene detrás.
+        expect(s.luxAt(const Offset(380, 300)), greaterThan(0));
+        // Más alta, menos luz debajo.
+        final higher = scene([
+          hmi(300, 300, 0, {'mount': 'ceiling', 'height': 7.5}),
+        ]);
+        expect(
+          stopsBetweenLux(
+            s.luxAt(const Offset(300, 300)),
+            higher.luxAt(const Offset(300, 300)),
+          ),
+          closeTo(2, 0.01),
+        );
+      },
+    );
+
+    test('las telas de palio de Rosco están en el catálogo', () {
+      for (final id in [
+        'grid-full',
+        'grid-half',
+        'grid-quarter',
+        'silent-grid-full',
+        'silent-grid-half',
+        'silent-grid-quarter',
+        'silk-china',
+        'silk',
+        'muslin-bleached',
+        'muslin',
+        'scrim-triple',
+      ]) {
+        expect(LightModifier.byId(id), isNotNull, reason: id);
+      }
+      // Las reducciones que publica Rosco.
+      expect(LightModifier.byId('silk')!.stopsLost, closeTo(1, 1e-9));
+      expect(LightModifier.byId('silk-china')!.stopsLost, closeTo(0.5, 0.01));
+      expect(
+        LightModifier.byId('silk-quarter')!.stopsLost,
+        closeTo(0.25, 0.01),
+      );
+      expect(LightModifier.byId('scrim-triple')!.stopsLost, closeTo(1.5, 0.01));
+      expect(LightModifier.byId('silk')!.published, isTrue);
+      expect(LightModifier.byId('grid-full')!.published, isFalse);
+      // El silent grid quita lo mismo que su grid cloth.
+      expect(
+        LightModifier.byId('silent-grid-half')!.transmission,
+        LightModifier.byId('grid-half')!.transmission,
+      );
+      final ids = kLightModifiers.map((m) => m.id).toSet();
+      expect(ids.length, kLightModifiers.length);
     });
   });
 }

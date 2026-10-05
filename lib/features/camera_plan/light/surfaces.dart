@@ -30,7 +30,8 @@ class SurfaceMaterial {
   }
 }
 
-/// Materiales de un rebote de grip. Valores orientativos.
+/// Materiales de un rebote de grip, con los nombres de los palios de
+/// Rosco. Lo que devuelve cada uno y su tinte son valores orientativos.
 const kBounceMaterials = <SurfaceMaterial>[
   SurfaceMaterial(
     id: 'ultrabounce',
@@ -38,33 +39,57 @@ const kBounceMaterials = <SurfaceMaterial>[
     reflectance: 0.85,
     miredShift: -5,
   ),
+  SurfaceMaterial(
+    id: 'cinebounce',
+    name: 'Cinebounce (cara blanca)',
+    reflectance: 0.8,
+  ),
+  SurfaceMaterial(
+    id: 'griffolyn',
+    name: 'Griffolyn blanco',
+    reflectance: 0.8,
+    miredShift: -5,
+  ),
   SurfaceMaterial(id: 'poly', name: 'Poliespán', reflectance: 0.8),
   SurfaceMaterial(
+    id: 'molton-white',
+    name: 'Molton blanco',
+    reflectance: 0.7,
+    beamDeg: 130,
+  ),
+  SurfaceMaterial(
     id: 'muslin-bleached',
-    name: 'Muselina blanqueada',
+    name: 'Muslin blanca',
     reflectance: 0.7,
     beamDeg: 130,
   ),
   SurfaceMaterial(
     id: 'muslin',
-    name: 'Muselina cruda',
+    name: 'Muslin cruda',
     reflectance: 0.6,
     miredShift: 30,
     beamDeg: 130,
   ),
   SurfaceMaterial(
     id: 'silver',
-    name: 'Plata',
+    name: 'Reflector plata',
     reflectance: 0.9,
     miredShift: -8,
     beamDeg: 70,
   ),
   SurfaceMaterial(
     id: 'gold',
-    name: 'Oro',
+    name: 'Reflector oro',
     reflectance: 0.75,
     miredShift: 85,
     beamDeg: 80,
+  ),
+  SurfaceMaterial(
+    id: 'checkerboard',
+    name: 'Checkerboard oro/plata',
+    reflectance: 0.82,
+    miredShift: 40,
+    beamDeg: 75,
   ),
 ];
 

@@ -5,6 +5,23 @@ import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'plan_segment.dart';
 
+/// Tela de una cortina: cuánta luz deja pasar.
+class CurtainMaterial {
+  final String id;
+  final String name;
+  final double transmission;
+
+  const CurtainMaterial(this.id, this.name, this.transmission);
+}
+
+/// Cortinas de partida. Valores orientativos.
+const kCurtains = <CurtainMaterial>[
+  CurtainMaterial('sheer', 'Visillo', 0.6),
+  CurtainMaterial('linen', 'Lino', 0.3),
+  CurtainMaterial('heavy', 'Cortina gruesa', 0.08),
+  CurtainMaterial('blackout', 'Opaca', 0),
+];
+
 /// Puertas, ventanas y aberturas: piezas que se enganchan a una pared y le
 /// abren un hueco.
 ///
@@ -22,6 +39,12 @@ class PlanOpening {
   static const hingeFarKey = 'hingeFar';
   static const swingInKey = 'swingIn';
 
+  /// Parte del ancho de una ventana que tapa la cortina, de 0 a 1.
+  static const curtainKey = 'curtain';
+
+  /// Tela de la cortina (ver [kCurtains]).
+  static const curtainMaterialKey = 'curtainMaterial';
+
   /// Ancho de partida: 0,9 m de puerta y 1,2 m de ventana a la escala por
   /// defecto.
   static const double defaultDoorWidth = 45;
@@ -29,7 +52,7 @@ class PlanOpening {
   static const double maxOpen = 110;
 
   /// Distancia a la que una pieza se engancha a una pared al soltarla.
-  static const double snapDistance = 40;
+  static const double snapDistance = 70;
 
   static bool isDoor(PlanElement el) =>
       el.type == ElementType.wall &&
@@ -63,16 +86,31 @@ class PlanOpening {
           ? defaultDoorWidth
           : defaultWindowWidth);
 
-  /// Grados que está abierta una puerta. 0 = cerrada.
+  /// Parte del ancho que tapa la cortina de una ventana, de 0 a 1.
+  static double curtain(PlanElement el) =>
+      ((el.props[curtainKey] as num?)?.toDouble() ?? 0).clamp(0, 1);
+
+  static CurtainMaterial curtainMaterial(PlanElement el) {
+    for (final c in kCurtains) {
+      if (c.id == el.props[curtainMaterialKey]) return c;
+    }
+    return kCurtains.first;
+  }
+
+  /// ¿Tiene hojas que se abren? Puertas y ventanas.
+  static bool hasLeaves(PlanElement el) => isDoor(el) || isWindow(el);
+
+  /// Grados que está abierta una puerta o una ventana. 0 = cerrada.
   static double openDeg(PlanElement el) {
     final stored = (el.props[openKey] as num?)?.toDouble();
     if (stored != null) return stored.clamp(0, maxOpen);
+    if (isWindow(el)) return 0;
     return el.architectureType == ArchitectureType.doorClosed ? 0 : 90;
   }
 
   static bool isDouble(PlanElement el) =>
       el.props[doubleKey] as bool? ??
-      el.architectureType == ArchitectureType.doubleDoor;
+      (el.architectureType == ArchitectureType.doubleDoor || isWindow(el));
 
   static bool hingeFar(PlanElement el) => el.props[hingeFarKey] == true;
   static bool swingIn(PlanElement el) => el.props[swingInKey] == true;
@@ -99,7 +137,9 @@ class PlanOpening {
   /// Las hojas de una puerta, de la bisagra al canto, según lo abierta que
   /// esté. Una puerta cerrada tiene la hoja sobre el hueco.
   static List<(Offset, Offset)> leaves(PlanElement el) {
-    if (!isDoor(el)) return const [];
+    if (!hasLeaves(el)) return const [];
+    // Una ventana cerrada no tiene hoja que dibujar: es el cristal.
+    if (isWindow(el) && openDeg(el) <= 3) return const [];
     final (a, b) = span(el);
     final dir = direction(el);
     final open = openDeg(el) * (swingIn(el) ? -1 : 1);
@@ -168,7 +208,8 @@ class PlanOpening {
     if (wall == null) return false;
     el
       ..position = wall.point
-      ..rotation = wall.rotation;
+      // Siempre de 0 a 360: el ángulo de una pared puede salir negativo.
+      ..rotation = (wall.rotation % 360 + 360) % 360;
     return true;
   }
 }

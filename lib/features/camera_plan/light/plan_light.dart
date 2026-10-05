@@ -37,6 +37,27 @@ class PlanLight {
   static const measuredMetersKey = 'measuredMeters';
   static const modifiersKey = 'modifiers';
 
+  /// «ceiling» si el aparato cuelga del techo y alumbra hacia abajo.
+  static const mountKey = 'mount';
+  static const mountCeiling = 'ceiling';
+
+  /// Altura a la que cuelga, en metros.
+  static const heightKey = 'height';
+  static const double defaultCeilingHeight = 3;
+
+  /// Altura a la que se mide la luz: la cara de una persona de pie.
+  static const double subjectHeightM = 1.5;
+
+  static bool isOverhead(PlanElement el) => el.props[mountKey] == mountCeiling;
+
+  static double heightOf(PlanElement el) =>
+      (el.props[heightKey] as num?)?.toDouble() ?? defaultCeilingHeight;
+
+  /// Metros que hay del aparato al plano donde se mide, si cuelga del
+  /// techo; `null` si va en trípode.
+  static double? overheadDrop(PlanElement el) =>
+      isOverhead(el) ? (heightOf(el) - subjectHeightM).clamp(0.3, 50.0) : null;
+
   /// «manufacturer» si el dato medido viene del catálogo y no del set.
   static const photometrySourceKey = 'photometrySource';
 

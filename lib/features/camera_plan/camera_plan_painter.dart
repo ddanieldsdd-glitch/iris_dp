@@ -162,6 +162,23 @@ class CameraPlanPainter extends CustomPainter {
     if (exposureMap && exposure != null) {
       _drawExposureMap(canvas, size, scene);
     }
+    if (!exposureMap && (ambient?.hasSun ?? false)) {
+      // De día, el sol baña la planta y las paredes le dan sombra.
+      canvas.drawRect(
+        Rect.fromLTWH(
+          -offset.dx / scale,
+          -offset.dy / scale,
+          size.width / scale,
+          size.height / scale,
+        ),
+        Paint()
+          ..blendMode = BlendMode.plus
+          ..color = LightBeam.colorForCct(
+            ambient!.condition.sunCct,
+          ).withValues(alpha: 0.13),
+      );
+      _drawSunShadows(canvas, scene);
+    }
     // Los haces van debajo de todo lo demás. Con el mapa de exposición no
     // se pintan: el mapa ya dice cuánta luz hay en cada sitio.
     for (final light in exposureMap ? const <SceneLight>[] : scene.lights) {
@@ -891,6 +908,8 @@ class CameraPlanPainter extends CustomPainter {
             if (filters.isNotEmpty) filters,
             '${(light.source.cct / 50).round() * 50}K · '
                 '${beam.intensity.round()}%',
+            if (PlanLight.isOverhead(el))
+              'techo · ${PlanLight.heightOf(el).toStringAsFixed(1)} m',
           ].join('\n');
     _drawLabelBelow(
       canvas,
@@ -1044,6 +1063,12 @@ class CameraPlanPainter extends CustomPainter {
   /// [_beamFloorLux], se apaga con el cuadrado de la distancia y se corta en
   /// lo que encuentra. Vale igual para un aparato que para lo que devuelve
   /// un rebote, una tela o una pared.
+  ///
+  /// La luz no sale de un punto: sale de una superficie. Por eso el haz se
+  /// pinta varias veces, desde distintos puntos a lo ancho de la fuente, y
+  /// las sombras salen con penumbra: nítidas con un fresnel desnudo, anchas
+  /// y blandas con una tela de dos metros, y más abiertas cuanto más lejos
+  /// del objeto que las hace.
   void _drawBeam(
     Canvas canvas,
     LightScene scene,
@@ -1053,14 +1078,14 @@ class CameraPlanPainter extends CustomPainter {
     final source = light.source;
     if (source.candela <= 0) return;
     final mpu = scene.metersPerUnit;
-    final reachM = source.distanceFor(_beamFloorLux).clamp(0.0, 60.0);
-    if (reachM < 0.15) return;
-    final reach = reachM / mpu;
+    final drop = light.overheadM;
     final color = LightBeam.colorForCct(source.cct);
 
-    // Brillo según los stops que quedan por encima del suelo del haz.
-    double alphaAt(double fraction) {
-      final lux = source.illuminance(math.max(reachM * fraction, 0.05));
+    // Lux a una distancia sobre el plano y, colgada del techo, a lo que eso
+    // equivale en diagonal y en ángulo.
+    double luxAtFlat(double meters) => scene.luxFrom(light, meters / mpu, 0);
+
+    double alphaFor(double lux) {
       final stops =
           math.log(math.max(lux, _beamFloorLux) / _beamFloorLux) / math.ln2;
       return math.pow((stops / 16).clamp(0.0, 1.0), 1.7).toDouble() *
@@ -1068,49 +1093,190 @@ class CameraPlanPainter extends CustomPainter {
           strength;
     }
 
-    const fractions = [0.0, 0.05, 0.12, 0.25, 0.5, 1.0];
-    Paint glow(double amount) => Paint()
-      ..blendMode = BlendMode.plus
-      ..shader = ui.Gradient.radial(Offset.zero, reach, [
-        for (final f in fractions) color.withValues(alpha: alphaAt(f) * amount),
-      ], fractions);
-
-    canvas.save();
-    // Las paredes, las personas y el grip cortan el haz; las ventanas y las
-    // puertas abiertas lo dejan pasar.
-    if (scene.blockers.isNotEmpty) {
-      canvas.clipPath(
-        scene.visibleArea(light.position, reach, ignore: light.surface),
-      );
-    }
-    canvas.translate(light.position.dx, light.position.dy);
-    canvas.rotate(math.atan2(light.aim.dx, -light.aim.dy));
-
-    Path wedge(double degrees) {
-      final sweep = math.min(degrees, 340) * math.pi / 180;
-      return Path()
-        ..moveTo(0, 0)
-        ..arcTo(
-          Rect.fromCircle(center: Offset.zero, radius: reach),
-          -math.pi / 2 - sweep / 2,
-          sweep,
-          false,
-        )
-        ..close();
-    }
-
-    if (light.frontOnly) {
-      // Una superficie devuelve la luz por todo su frente, más en su eje.
-      canvas.drawPath(wedge(178), glow(0.35));
-      canvas.drawPath(wedge(math.min(source.beamDeg, 178)), glow(0.65));
-    } else if (source.isOmni) {
-      canvas.drawCircle(Offset.zero, reach, glow(1));
+    // Hasta dónde llega.
+    double reachM;
+    if (drop == null) {
+      reachM = source.distanceFor(_beamFloorLux).clamp(0.0, 60.0);
     } else {
-      // El haz, hasta donde queda la mitad de la luz, y el derrame, más
-      // ancho y más tenue.
-      canvas.drawPath(wedge(source.beamDeg * 1.7), glow(0.3));
-      canvas.drawPath(wedge(source.beamDeg), glow(0.7));
+      // El charco de luz bajo el aparato: se busca dónde baja del suelo.
+      reachM = 0;
+      for (var r = 0.25; r <= 40; r += 0.25) {
+        if (luxAtFlat(r) < _beamFloorLux) break;
+        reachM = r;
+      }
     }
+    if (reachM < 0.15) return;
+    final reach = reachM / mpu;
+
+    const fractions = [0.0, 0.05, 0.12, 0.25, 0.5, 1.0];
+    ui.Shader shaderAt(Offset centre, double amount) =>
+        ui.Gradient.radial(centre, reach, [
+          for (final f in fractions)
+            color.withValues(
+              alpha:
+                  alphaFor(
+                    drop == null
+                        ? source.illuminance(math.max(reachM * f, 0.05))
+                        : luxAtFlat(reachM * f),
+                  ) *
+                  amount,
+            ),
+        ], fractions);
+
+    // Cuántos puntos de la fuente se muestrean: más cuanto más grande.
+    final sizeM = source.sizeM;
+    // El rebote de una pared es tenue y ancho: con un punto basta, y así
+    // una sala con muchas paredes no se hace lenta de pintar.
+    final ambientBounce =
+        light.isSecondary && light.surface?.element?.type == ElementType.wall;
+    final samples = ambientBounce
+        ? 1
+        : sizeM >= 1.2
+        ? 7
+        : sizeM >= 0.5
+        ? 5
+        : sizeM >= 0.2
+        ? 3
+        : 1;
+    final across = Offset(-light.aim.dy, light.aim.dx);
+    final halfSize = sizeM / 2 / mpu;
+    // Un desenfoque corto funde los pasos entre muestras y quita el filo
+    // geométrico del borde del haz.
+    final blur = (0.05 + sizeM * 0.12) / mpu;
+    final rotation = math.atan2(light.aim.dx, -light.aim.dy);
+
+    // El haz no tiene un borde: se apaga hacia fuera siguiendo su perfil.
+    // Se pinta en capas, de la más ancha y tenue a la más estrecha.
+    final layers = <(double, double)>[];
+    if (light.frontOnly) {
+      layers.addAll(
+        ambientBounce
+            ? const [(178, 0.45), (110, 0.4)]
+            : const [(178, 0.3), (150, 0.25), (110, 0.25), (70, 0.2)],
+      );
+    } else if (drop == null && !source.isOmni) {
+      final b = source.beamDeg;
+      layers.addAll([
+        (b * 2.0, 0.10),
+        (b * 1.6, 0.14),
+        (b * 1.25, 0.20),
+        (b * 0.9, 0.26),
+        (b * 0.55, 0.30),
+      ]);
+    }
+
+    for (var k = 0; k < samples; k++) {
+      final t = samples == 1 ? 0.0 : 2 * k / (samples - 1) - 1;
+      final origin = light.position + across * (halfSize * t);
+      final visible = scene.blockers.isEmpty
+          ? null
+          : scene.visibleArea(
+              origin,
+              reach,
+              ignore: light.surface,
+              fromAbove: drop != null,
+            );
+
+      void paintShape(Path shape, double amount) {
+        var path = shape;
+        if (visible != null) {
+          try {
+            path = Path.combine(PathOperation.intersect, shape, visible);
+          } catch (_) {
+            // Si la intersección falla, el recorte hace el mismo trabajo.
+            canvas.save();
+            canvas.clipPath(visible);
+            canvas.drawPath(
+              shape,
+              Paint()
+                ..blendMode = BlendMode.plus
+                ..shader = shaderAt(origin, amount / samples),
+            );
+            canvas.restore();
+            return;
+          }
+        }
+        canvas.drawPath(
+          path,
+          Paint()
+            ..blendMode = BlendMode.plus
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur)
+            ..shader = shaderAt(origin, amount / samples),
+        );
+      }
+
+      if (layers.isEmpty) {
+        // En todas direcciones: una práctica, o el charco de luz de un
+        // aparato colgado del techo.
+        paintShape(
+          Path()..addOval(Rect.fromCircle(center: origin, radius: reach)),
+          1,
+        );
+        continue;
+      }
+      for (final (degrees, amount) in layers) {
+        final sweep = math.min(degrees, 340.0) * math.pi / 180;
+        final start = rotation - math.pi / 2 - sweep / 2;
+        paintShape(
+          Path()
+            ..moveTo(origin.dx, origin.dy)
+            ..arcTo(
+              Rect.fromCircle(center: origin, radius: reach),
+              start,
+              sweep,
+              false,
+            )
+            ..close(),
+          amount,
+        );
+      }
+    }
+  }
+
+  /// Sombras del sol: de cada pared y de cada persona, hacia el lado
+  /// contrario al sol y tan largas como diga su altura. Con ellas se ve de
+  /// dónde viene y cómo de bajo está.
+  void _drawSunShadows(Canvas canvas, LightScene scene) {
+    final env = ambient;
+    if (env == null || !env.hasSun) return;
+    final away = env.towardSun * -1;
+    final mpu = scene.metersPerUnit;
+    final wallShadow = away * (env.shadowLength(LightScene.wallHeightM) / mpu);
+    final bodyShadow = away * (env.shadowLength(1.75) / mpu);
+
+    final shadows = Path();
+    for (final blocker in scene.blockers) {
+      if (!blocker.isOpaque) continue;
+      if (blocker.isCircle) {
+        // Una persona: su silueta estirada.
+        final r = blocker.radius;
+        final side = Offset(-away.dy, away.dx) * r;
+        shadows.addPolygon([
+          blocker.a + side,
+          blocker.a - side,
+          blocker.a - side + bodyShadow,
+          blocker.a + side + bodyShadow,
+        ], true);
+        shadows.addOval(
+          Rect.fromCircle(center: blocker.a + bodyShadow, radius: r),
+        );
+      } else if (blocker.element?.type == ElementType.wall) {
+        shadows.addPolygon([
+          blocker.a,
+          blocker.b,
+          blocker.b + wallShadow,
+          blocker.a + wallShadow,
+        ], true);
+      }
+    }
+    // En una sola capa, para que donde se pisan no se oscurezcan dos veces.
+    canvas.saveLayer(null, Paint()..color = const Color(0x66000000));
+    canvas.drawPath(
+      shadows,
+      Paint()
+        ..color = const Color(0xFF000000)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 0.08 / mpu),
+    );
     canvas.restore();
   }
 
@@ -1132,35 +1298,57 @@ class CameraPlanPainter extends CustomPainter {
     canvas.drawLine(Offset(half, -5), Offset(half, 5), jamb);
 
     if (PlanOpening.isWindow(el)) {
-      final glass = Rect.fromLTRB(-half, -3, half, 3);
-      canvas.drawRect(
-        glass,
-        Paint()..color = const Color(0xFF7EC8F0).withValues(alpha: 0.35),
-      );
-      canvas.drawRect(
-        glass,
-        Paint()
-          ..color = _CanvasColors.ink
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
-      );
-      // Cortina o difusión puesta en la ventana.
-      if ((el.props[PlanLight.modifiersKey] as List? ?? const []).isNotEmpty) {
-        _drawDashedPath(
-          canvas,
-          Path()
-            ..moveTo(-half, 8)
-            ..lineTo(half, 8),
+      // Cerrada, el cristal; abierta, el hueco limpio y sus hojas.
+      if (PlanOpening.openDeg(el) <= 3) {
+        final glass = Rect.fromLTRB(-half, -3, half, 3);
+        canvas.drawRect(
+          glass,
+          Paint()..color = const Color(0xFF7EC8F0).withValues(alpha: 0.35),
+        );
+        canvas.drawRect(
+          glass,
           Paint()
-            ..color = Colors.white.withValues(alpha: 0.8)
+            ..color = _CanvasColors.ink
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 2,
+            ..strokeWidth = 1,
+        );
+        // Difusión o gelatina pegada al cristal.
+        if ((el.props[PlanLight.modifiersKey] as List? ?? const [])
+            .isNotEmpty) {
+          canvas.drawLine(
+            Offset(-half, 0),
+            Offset(half, 0),
+            Paint()
+              ..color = Colors.white.withValues(alpha: 0.7)
+              ..strokeWidth = 2,
+          );
+        }
+      }
+      // La cortina, sobre la parte del ancho que tapa.
+      final covered = PlanOpening.curtain(el);
+      if (covered > 0.01) {
+        final cloth = PlanOpening.curtainMaterial(el);
+        final end = -half + 2 * half * covered;
+        final wave = Path()..moveTo(-half, 9);
+        for (var x = -half; x < end; x += 6) {
+          wave.quadraticBezierTo(x + 1.5, 6, x + 3, 9);
+          wave.quadraticBezierTo(x + 4.5, 12, math.min(x + 6, end), 9);
+        }
+        canvas.drawPath(
+          wave,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = cloth.transmission < 0.2 ? 3.5 : 2
+            ..color = cloth.transmission <= 0
+                ? const Color(0xFF6B6B76)
+                : Colors.white.withValues(
+                    alpha: 0.45 + 0.5 * (1 - cloth.transmission),
+                  ),
         );
       }
-      return;
     }
 
-    if (PlanOpening.isDoor(el)) {
+    if (PlanOpening.hasLeaves(el)) {
       // Las hojas están en coordenadas del plano: se pasan a las de la
       // puerta deshaciendo su giro.
       final rad = -el.rotation * math.pi / 180;
@@ -1202,6 +1390,7 @@ class CameraPlanPainter extends CustomPainter {
       }
       return;
     }
+    if (PlanOpening.isWindow(el)) return;
 
     if (el.architectureType == ArchitectureType.prisonBars) {
       for (var x = -half + 6; x < half; x += 8) {
@@ -1303,6 +1492,17 @@ class CameraPlanPainter extends CustomPainter {
     if (_isGripBar(el)) {
       _drawGrip(canvas, el);
       return;
+    }
+    if (PlanLight.isOverhead(el)) {
+      // Colgada del techo: un aro discontinuo alrededor del aparato.
+      _drawDashedPath(
+        canvas,
+        Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: 20)),
+        Paint()
+          ..color = _CanvasColors.inkSecondary
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2,
+      );
     }
     final beam = LightBeam.of(el);
     final lit = beam != null && !beam.off;

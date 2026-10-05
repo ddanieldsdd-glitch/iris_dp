@@ -178,6 +178,55 @@ class _PlanLightControlsState extends State<PlanLightControls> {
           '${defaults.watts.round()} (típica)',
           suffix: 'W · ${light.tech.label}',
         ),
+        const SizedBox(height: AppSpacing.sm),
+        Text('Montaje', style: AppTypography.caption(palette)),
+        SegmentedButton<bool>(
+          showSelectedIcon: false,
+          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+          segments: const [
+            ButtonSegment(value: false, label: Text('Trípode')),
+            ButtonSegment(value: true, label: Text('Techo')),
+          ],
+          selected: {PlanLight.isOverhead(_el)},
+          onSelectionChanged: (v) {
+            if (v.first) {
+              _el.props[PlanLight.mountKey] = PlanLight.mountCeiling;
+            } else {
+              _el.props.remove(PlanLight.mountKey);
+            }
+            setState(() {});
+            widget.onUpdate();
+          },
+        ),
+        if (PlanLight.isOverhead(_el)) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Text('Altura', style: AppTypography.caption(palette)),
+              ),
+              Text(
+                '${PlanLight.heightOf(_el).toStringAsFixed(1)} m',
+                style: AppTypography.caption(palette),
+              ),
+            ],
+          ),
+          Slider(
+            value: PlanLight.heightOf(_el).clamp(2.0, 10.0),
+            min: 2,
+            max: 10,
+            divisions: 32,
+            onChanged: (v) =>
+                setState(() => _el.props[PlanLight.heightKey] = v),
+            onChangeEnd: (_) => widget.onUpdate(),
+          ),
+          Text(
+            'Colgada del techo, alumbra hacia abajo: hace un charco de luz '
+            'y pasa por encima de las personas.',
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.textTertiary, fontSize: 10),
+          ),
+        ],
         picker('Difusión', ModifierKind.diffusion),
         picker('Red', ModifierKind.scrim),
         picker('Gelatina', ModifierKind.correction),
