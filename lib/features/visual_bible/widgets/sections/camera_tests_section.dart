@@ -19,7 +19,7 @@ import '../bible_moodboard_image_target.dart';
 import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
-import '../bible_section_shared_widgets.dart';
+import '../bible_screen_hero.dart';
 import '../camera_test_comparator.dart';
 
 class CameraTestsSection extends ConsumerStatefulWidget {
@@ -49,11 +49,12 @@ class _CameraTestsSectionState extends ConsumerState<CameraTestsSection> {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        const BibleSectionHeader(
-          number: '13',
-          title: 'Pruebas de Cámara',
+        BibleSectionHero(
+          projectId: widget.projectId,
+          bibleId: widget.bibleId,
+          sectionId: BibleSectionId.cameraTests,
+          title: 'Pruebas de cámara',
         ),
-        const SizedBox(height: AppSpacing.lg),
         Row(
           children: [
             Text('Pruebas de cámara',

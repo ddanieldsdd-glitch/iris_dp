@@ -106,7 +106,10 @@ Principio: la lista de puntos de cada sección (`BibleSectionDefinitions.content
 Añadido el 2026-10-03. La biblia es una maqueta de partida hecha con piezas que el usuario puede añadir, mover y ampliar en cualquier sección. Va antes que el resto de secciones de 1.5.
 
 - [x] **W1. Catálogo único de widgets.** `widgets/catalog/bible_widget_catalog.dart`: texto, lista, datos técnicos, paleta, imágenes y referencias (narrativas, visuales, técnicas). Lo leen las secciones, las pantallas personalizadas y «Añadir punto».
-- [ ] **W2. Marco de punto y complementos.** Menú «⋯» en cada punto: renombrar, ancho, mover, quitar, y añadirle imágenes o una paleta.
+- [x] **W2. Marco de punto y complementos.** Menú «⋯» en cada punto (`BiblePointFrame`, lo pone `BibleSectionScaffold`): duplicar, eliminar, añadir imágenes y añadir texto complementario. Los complementos se guardan en `values['<clave>__extra']` y salen en el PDF tras el punto. Pendiente: renombrar, ancho y mover desde el menú (hoy en «Ajustes de pantalla»), y llevar el marco a las pantallas personalizadas.
+- [x] **W8. Fichas ampliadas** (2026-10-05). Actos y tarjetas dejan los diálogos: tocar abre una ficha de edición directa (`bible_card_editor.dart`), como en las referencias, con portada, galería y, en los actos, puntos que lo desarrollan. Las fichas se abren en un navegador propio del contenido: los laterales de la biblia siguen a la vista.
+- [x] **W9. Un solo selector de imágenes**, el del moodboard, con importar archivo y pegar con ⌘V; lo pegado o importado queda elegido.
+- [x] **W10. Cabecera de pantalla.** Cada pantalla abre con su título en grande sobre una imagen elegida por el usuario (`BibleScreenHero`, `values['__hero']`). En el PDF, la sección abre con una banda con esa imagen. Fuera quedan Moodboard y Resumen.
 - [x] **W3. Widget de paleta.** `BiblePaletteWidget`: muestras con código y nombre, y extracción desde una imagen del moodboard.
 - [x] **W4. Referencias.** Varias imágenes por referencia y pantalla de detalle con edición directa.
 - [ ] **W5. Disposición responsiva.** Ancho por punto: completo, medio o tercio.

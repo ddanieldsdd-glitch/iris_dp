@@ -10,6 +10,7 @@ import '../../core/utils/pdf_safe_image.dart';
 import '../../shared/visual_bible/camera_pilot_resolve.dart';
 import '../../shared/visual_bible/bible_acts.dart';
 import '../../shared/visual_bible/bible_cards.dart';
+import '../../shared/visual_bible/bible_point_extras.dart';
 import '../../shared/visual_bible/concept_points.dart';
 import '../../shared/visual_bible/direction_points.dart';
 import '../../shared/visual_bible/bible_reference.dart';
@@ -276,6 +277,7 @@ class VisualBiblePdfService {
         BibleSectionId.concept,
       ),
     );
+    _heroes = await _loadHeroes(sectionContentJsonById, moodboard);
     final kit = _kit(fonts);
 
     // Las páginas se guardan por sección y se vuelcan al final en el orden
@@ -367,7 +369,10 @@ class VisualBiblePdfService {
             pageFormat: PdfPageFormat.a4,
             margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
             build: (_) => [
-              kit.sectionHeader('Dirección'),
+              kit.sectionHeader(
+                'Dirección',
+                image: _heroes[BibleSectionId.direction],
+              ),
               pw.SizedBox(height: 24),
               ...directionContent,
             ],
@@ -400,7 +405,10 @@ class VisualBiblePdfService {
             pageFormat: PdfPageFormat.a4,
             margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
             build: (_) => [
-              kit.sectionHeader('Concepto de imagen'),
+              kit.sectionHeader(
+                'Concepto de imagen',
+                image: _heroes[BibleSectionId.concept],
+              ),
               pw.SizedBox(height: 24),
               ...conceptContent,
             ],
@@ -422,7 +430,11 @@ class VisualBiblePdfService {
           theme: theme,
           pageFormat: PdfPageFormat.a4,
           build: (context) => [
-            _sectionHeader('COLOR E IMAGEN', fonts.bold),
+            _sectionHeader(
+              'COLOR E IMAGEN',
+              fonts.bold,
+              sectionId: BibleSectionId.colorImage,
+            ),
             ...colorBlocks.map(
               (block) => pw.Container(
                 margin: const pw.EdgeInsets.only(bottom: 20),
@@ -501,6 +513,7 @@ class VisualBiblePdfService {
           pageFormat: PdfPageFormat.a4,
           build: (_) => _sectionPage(
             title: 'ILUMINACIÓN',
+            sectionId: BibleSectionId.lighting,
             fontBold: fonts.bold,
             font: fonts.regular,
             content: pw.Column(
@@ -602,6 +615,7 @@ class VisualBiblePdfService {
           pageFormat: PdfPageFormat.a4,
           build: (_) => _sectionPage(
             title: 'EXPOSICIÓN',
+            sectionId: BibleSectionId.exposure,
             fontBold: fonts.bold,
             font: fonts.regular,
             content: pw.Column(
@@ -664,6 +678,7 @@ class VisualBiblePdfService {
             pageFormat: PdfPageFormat.a4,
             build: (_) => _sectionPage(
               title: 'CÁMARA Y SENSOR',
+              sectionId: BibleSectionId.camera,
               fontBold: fonts.bold,
               font: fonts.regular,
               content: _textFieldsContent([
@@ -703,6 +718,7 @@ class VisualBiblePdfService {
             pageFormat: PdfPageFormat.a4,
             build: (_) => _sectionPage(
               title: 'LOCALIZACIÓN',
+              sectionId: BibleSectionId.location,
               fontBold: fonts.bold,
               font: fonts.regular,
               content: _locationPageContent(
@@ -733,6 +749,7 @@ class VisualBiblePdfService {
             pageFormat: PdfPageFormat.a4,
             build: (_) => _sectionPage(
               title: 'FORMATO',
+              sectionId: BibleSectionId.format,
               fontBold: fonts.bold,
               font: fonts.regular,
               content: _textFieldsContent([
@@ -797,6 +814,7 @@ class VisualBiblePdfService {
           pageFormat: PdfPageFormat.a4,
           build: (_) => _sectionPage(
             title: 'TEXTURA',
+            sectionId: BibleSectionId.texture,
             fontBold: fonts.bold,
             font: fonts.regular,
             content: pw.Column(
@@ -841,6 +859,7 @@ class VisualBiblePdfService {
           pageFormat: PdfPageFormat.a4,
           build: (_) => _sectionPage(
             title: 'WORKFLOW',
+            sectionId: BibleSectionId.workflow,
             fontBold: fonts.bold,
             font: fonts.regular,
             content: _textFieldsContent([
@@ -968,6 +987,7 @@ class VisualBiblePdfService {
           pageFormat: PdfPageFormat.a4,
           build: (_) => _sectionPage(
             title: 'PRUEBAS DE CÁMARA',
+            sectionId: BibleSectionId.cameraTests,
             fontBold: fonts.bold,
             font: fonts.regular,
             content: pw.Column(
@@ -1129,6 +1149,7 @@ class VisualBiblePdfService {
           pageFormat: PdfPageFormat.a4,
           build: (_) => _sectionPage(
             title: 'ÓPTICA',
+            sectionId: BibleSectionId.optics,
             fontBold: fonts.bold,
             font: fonts.regular,
             content: _textFieldsContent([
@@ -1157,7 +1178,7 @@ class VisualBiblePdfService {
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
           build: (_) => [
-            kit.sectionHeader(section.label),
+            kit.sectionHeader(section.label, image: _heroes[section.id]),
             pw.SizedBox(height: 24),
             ...children,
           ],
@@ -1829,6 +1850,27 @@ class VisualBiblePdfService {
   /// Imágenes de los puntos del usuario del documento en curso.
   static Map<int, pw.MemoryImage> _userPointImages = const {};
 
+  /// Imagen de cabecera de cada pantalla del documento en curso.
+  static Map<String, pw.MemoryImage> _heroes = const {};
+
+  static Future<Map<String, pw.MemoryImage>> _loadHeroes(
+    Map<String, String?> sectionContentJsonById,
+    List<MoodboardImageModel> moodboard,
+  ) async {
+    final byId = {for (final image in moodboard) image.id: image};
+    final heroes = <String, pw.MemoryImage>{};
+    for (final entry in sectionContentJsonById.entries) {
+      final image =
+          byId[BibleScreenHeroValue.read(
+            BibleSectionFieldsConfig.parseValues(entry.value),
+          )];
+      if (image == null) continue;
+      final bytes = await PdfSafeImage.loadFromPathMaxEdge(image.imagePath);
+      if (bytes != null) heroes[entry.key] = pw.MemoryImage(bytes);
+    }
+    return heroes;
+  }
+
   /// Los actos del proyecto del documento en curso.
   static List<BibleCard> _sharedActs = const [];
 
@@ -2252,6 +2294,7 @@ class VisualBiblePdfService {
 
   static pw.Widget _sectionPage({
     required String title,
+    String? sectionId,
     required pw.Font fontBold,
     required pw.Font font,
     required pw.Widget content,
@@ -2261,7 +2304,7 @@ class VisualBiblePdfService {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          _sectionHeader(title, fontBold),
+          _sectionHeader(title, fontBold, sectionId: sectionId),
           pw.SizedBox(height: 24),
           pw.Expanded(child: content),
         ],
@@ -2269,8 +2312,14 @@ class VisualBiblePdfService {
     );
   }
 
-  static pw.Widget _sectionHeader(String title, pw.Font fontBold) =>
-      BiblePdfKit(regular: fontBold, bold: fontBold).sectionHeader(title);
+  static pw.Widget _sectionHeader(
+    String title,
+    pw.Font fontBold, {
+    String? sectionId,
+  }) => BiblePdfKit(
+    regular: fontBold,
+    bold: fontBold,
+  ).sectionHeader(title, image: _heroes[sectionId]);
 
   static PdfColor _hexToPdf(String hex) {
     final clean = hex.replaceAll('#', '');

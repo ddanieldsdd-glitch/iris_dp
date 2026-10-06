@@ -18,6 +18,8 @@ import '../bible_navigation_scope.dart';
 import '../bible_unified_references_panel.dart';
 import '../block_reference_images.dart';
 import '../narrative_bridge_card.dart';
+import '../bible_screen_hero.dart';
+import '../../../../shared/visual_bible/bible_point_extras.dart';
 
 /// Sección personalizada con sub-apartados configurables (texto, imágenes…).
 /// Si `contentJson` contiene `v2Blocks`, usa el compositor modular.
@@ -245,6 +247,17 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
+        BibleScreenHero(
+          projectId: widget.projectId,
+          bibleId: widget.bibleId,
+          sectionId: widget.sectionId,
+          title: widget.label,
+          imageId: BibleScreenHeroValue.read(_values),
+          onChanged: (id) => _setValue(
+            BibleScreenHeroValue.key,
+            BibleScreenHeroValue.encode(id),
+          ),
+        ),
         ...items,
         if (items.isNotEmpty) const SizedBox(height: AppSpacing.lg),
         BibleAddPointTile(onTap: _addPoint),

@@ -9,8 +9,10 @@ import 'package:iris_dp/core/database/dao/visual_bible_dao.dart';
 import 'package:iris_dp/features/visual_bible/data/visual_bible_repository.dart';
 import 'package:iris_dp/features/visual_bible/visual_bible_model.dart';
 import 'package:iris_dp/features/visual_bible/visual_bible_pdf_service.dart';
+import 'package:iris_dp/shared/visual_bible/bible_point_extras.dart';
 import 'package:iris_dp/shared/visual_bible/bible_section_fields.dart';
 import 'package:iris_dp/shared/visual_bible/bible_stitch_module_registry.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 String _extract(Uint8List bytes) {
@@ -241,5 +243,71 @@ void main() {
     }
     expect(text, isNot(contains('ACTO 2')), reason: 'acto sin intención');
     expect(text, isNot(contains('KEY FRAME')));
+  });
+
+  test('la imagen de cabecera de la pantalla abre su sección en el PDF',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final projectId = await db.insertProject(
+      ProjectsCompanion.insert(name: 'Cabecera'),
+    );
+    final bible = await db.ensureVisualBibleForProject(projectId);
+    await db.addBuiltinBibleSection(
+      bibleId: bible.id,
+      sectionId: BibleSectionId.direction,
+    );
+    final dir = Directory('build/direction_parity')
+      ..createSync(recursive: true);
+    final still = File('${dir.path}/hero.png')
+      ..writeAsBytesSync([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, //
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+        0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+      ]);
+    final imageId = await db.insertMoodboardImage(
+      MoodboardImagesCompanion.insert(
+        projectId: projectId,
+        imagePath: still.path,
+      ),
+    );
+    await db.saveBibleSectionFieldValue(
+      bible.id,
+      BibleSectionId.direction,
+      BibleScreenHeroValue.key,
+      BibleScreenHeroValue.encode(imageId),
+    );
+
+    final repo = VisualBibleRepository(VisualBibleDao(db));
+    final bundle = await repo.loadExportBundle(projectId: projectId);
+    bundle.data.directionNarrativeIntent = 'Aislamiento';
+
+    Future<Uint8List> build(Map<String, String?> content) =>
+        VisualBiblePdfService.buildBytes(
+          mode: VisualBibleExportMode.full,
+          projectName: 'Cabecera',
+          director: null,
+          data: bundle.data,
+          colorBlocks: bundle.blocks,
+          exposureBlocks: bundle.exposureBlocks,
+          lightingSetups: bundle.lightingSetups,
+          cameraTests: bundle.cameraTests,
+          moodboard: bundle.moodboard,
+          sectionContentJsonById: content,
+          sectionOrder: bundle.sectionOrder,
+        );
+
+    final withHero = _extract(await build(bundle.sectionContentJsonById));
+    // Con imagen, el título va en grande y sin versalitas sobre la banda.
+    expect(withHero, contains('Dirección'));
+    expect(withHero, isNot(contains('DIRECCIÓN')));
+    expect(withHero, contains('Aislamiento'));
+
+    final withoutHero = _extract(await build(const {}));
+    expect(withoutHero, contains('DIRECCIÓN'));
   });
 }

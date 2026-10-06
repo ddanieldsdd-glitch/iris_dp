@@ -31,6 +31,7 @@ import '../../moodboard_helpers.dart';
 import '../../services/lighting_narrative_cards_service.dart';
 import '../../../../shared/visual_bible/bible_section_ids.dart';
 import '../narrative_deck/narrative_card_detail.dart';
+import '../bible_screen_hero.dart';
 
 /// Localización — layout Stitch (hero + solar + atmósfera + staging).
 class LocationSection extends ConsumerStatefulWidget {
@@ -182,8 +183,12 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
                 return ListView(
                   padding: const EdgeInsets.all(24),
                   children: [
-                    _SectionTitle(palette: palette),
-                    const SizedBox(height: 12),
+                    BibleSectionHero(
+                      projectId: widget.projectId,
+                      bibleId: widget.bibleId,
+                      sectionId: BibleSectionId.location,
+                      title: 'Localización',
+                    ),
                     _LocationHubHeader(
                       palette: palette,
                       projectId: widget.projectId,
@@ -279,51 +284,6 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
           },
         );
       },
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  final AppPalette palette;
-  const _SectionTitle({required this.palette});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        Text(
-          '10',
-          style: AppTypography.displayMedium(palette).copyWith(
-            fontSize: 48,
-            color: palette.accent.withValues(alpha: 0.45),
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(width: 14),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'LOCALIZACIÓN',
-              style: AppTypography.titleMedium(palette).copyWith(
-                fontSize: 24,
-                letterSpacing: 0.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Text(
-              'NARRATIVE LIGHT & COLOR VARIANT',
-              style: AppTypography.mono(palette).copyWith(
-                fontSize: 11,
-                letterSpacing: 1.2,
-                color: palette.accent.withValues(alpha: 0.8),
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }

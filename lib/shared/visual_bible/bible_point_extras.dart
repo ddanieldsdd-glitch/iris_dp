@@ -67,3 +67,27 @@ class BiblePointExtras {
         ).imageIds,
   };
 }
+
+/// Imagen de cabecera de una pantalla de la biblia, elegida por el usuario.
+///
+/// Se guarda en `values['__hero']` como `{"imageId": id}`: con esa forma la
+/// reenlaza `BibleImageLinks` al descargar un proyecto de la nube.
+abstract final class BibleScreenHeroValue {
+  static const key = '__hero';
+
+  static int? read(Map<String, String> values) {
+    final raw = values[key];
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      final id = decoded is Map ? decoded['imageId'] : null;
+      return id is num ? id.toInt() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// `null` quita la imagen.
+  static String? encode(int? imageId) =>
+      imageId == null ? null : jsonEncode({'imageId': imageId});
+}

@@ -7,7 +7,6 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../visual_bible_model.dart';
 import '../bible_navigation_scope.dart';
-import '../bible_section_shared_widgets.dart';
 import '../bible_unified_references_panel.dart';
 import '../narrative_bridge_card.dart';
 import '../../../../shared/visual_bible/bible_acts.dart';
@@ -17,6 +16,7 @@ import '../../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../../bible_section_fields.dart';
 import '../bible_add_point.dart';
 import '../bible_point_frame.dart';
+import '../bible_screen_hero.dart';
 import '../catalog/bible_widget_catalog.dart';
 
 /// Layout común para secciones técnicas de la biblia.
@@ -92,12 +92,21 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
     return ListView(
       padding: _contentPadding,
       children: [
-        if (widget.sectionNumber != null)
-          BibleSectionHeader(
-            number: widget.sectionNumber!,
-            title:
-                widget.sectionTitle ?? BibleSectionId.label(widget.sectionId),
-          ),
+        BibleScreenHero(
+          projectId: widget.projectId,
+          bibleId: widget.data.id,
+          sectionId: widget.sectionId,
+          title: widget.sectionTitle ?? BibleSectionId.label(widget.sectionId),
+          imageId: BibleScreenHeroValue.read(values),
+          onChanged: widget.data.id <= 0
+              ? null
+              : (id) => ref.read(databaseProvider).saveBibleSectionFieldValue(
+                  widget.data.id,
+                  widget.sectionId,
+                  BibleScreenHeroValue.key,
+                  BibleScreenHeroValue.encode(id),
+                ),
+        ),
         for (var i = 0; i < items.length; i++) ...[
           if (i > 0) const SizedBox(height: _sectionGap),
           items[i],

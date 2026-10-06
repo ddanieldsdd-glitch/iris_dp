@@ -354,22 +354,68 @@ class BiblePdfKit {
     color: BiblePdfTokens.ink,
   );
 
-  pw.Widget sectionHeader(String title) => pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      pw.Container(height: 3, width: 32, color: BiblePdfTokens.accent),
-      pw.SizedBox(height: 8),
-      pw.Text(
-        title.toUpperCase(),
-        style: pw.TextStyle(
-          font: bold,
-          fontSize: 11,
-          letterSpacing: 3,
-          color: BiblePdfTokens.tertiary,
+  /// Cabecera de una sección. Con [image] (la que el usuario eligió para la
+  /// pantalla), el título va en grande sobre una banda con ella.
+  pw.Widget sectionHeader(String title, {pw.ImageProvider? image}) {
+    if (image != null) {
+      return pw.ClipRRect(
+        horizontalRadius: BiblePdfTokens.radius,
+        verticalRadius: BiblePdfTokens.radius,
+        child: pw.SizedBox(
+          height: 118,
+          width: double.infinity,
+          child: pw.Stack(
+            children: [
+              pw.Positioned.fill(child: pw.Image(image, fit: pw.BoxFit.cover)),
+              pw.Positioned.fill(
+                child: pw.Container(
+                  decoration: const pw.BoxDecoration(
+                    gradient: pw.LinearGradient(
+                      begin: pw.Alignment.topCenter,
+                      end: pw.Alignment.bottomCenter,
+                      colors: [
+                        PdfColor(0, 0, 0, 0.1),
+                        PdfColor(0, 0, 0, 0.8),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              pw.Positioned(
+                left: 14,
+                right: 14,
+                bottom: 12,
+                child: pw.Text(
+                  title,
+                  style: pw.TextStyle(
+                    font: bold,
+                    fontSize: 24,
+                    color: PdfColors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    ],
-  );
+      );
+    }
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Container(height: 3, width: 32, color: BiblePdfTokens.accent),
+        pw.SizedBox(height: 8),
+        pw.Text(
+          title.toUpperCase(),
+          style: pw.TextStyle(
+            font: bold,
+            fontSize: 11,
+            letterSpacing: 3,
+            color: BiblePdfTokens.tertiary,
+          ),
+        ),
+      ],
+    );
+  }
 
   pw.Widget label(String text) => pw.Text(
     text.toUpperCase(),
