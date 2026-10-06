@@ -70,12 +70,18 @@ class LightSource {
   final double cct;
   final PhotometryStatus status;
 
+  /// Superficie mate (una tela, un rebote blanco): emite según la ley del
+  /// coseno de Lambert, `I = I₀·cos θ`, en vez de con un haz.
+  /// https://en.wikipedia.org/wiki/Lambert%27s_cosine_law
+  final bool lambertian;
+
   const LightSource({
     required this.candela,
     required this.beamDeg,
     this.sizeM = 0.1,
     this.cct = 5600,
     this.status = PhotometryStatus.estimated,
+    this.lambertian = false,
   });
 
   bool get isOmni => beamDeg >= 359;
@@ -148,18 +154,24 @@ class LightSource {
     double? sizeM,
     double? cct,
     PhotometryStatus? status,
+    bool? lambertian,
   }) => LightSource(
     candela: candela ?? this.candela,
     beamDeg: beamDeg ?? this.beamDeg,
     sizeM: sizeM ?? this.sizeM,
     cct: cct ?? this.cct,
     status: status ?? this.status,
+    lambertian: lambertian ?? this.lambertian,
   );
 
   /// Cuánto queda de la intensidad del eje a [offAxisDeg] grados de él.
   /// Vale 1 en el eje y 0,5 en el borde del haz; más allá sigue cayendo
   /// (el derrame) hasta desaparecer.
   double profile(double offAxisDeg) {
+    if (lambertian) {
+      final off = offAxisDeg.abs();
+      return off >= 90 ? 0 : math.cos(off * math.pi / 180);
+    }
     if (isOmni) return 1;
     final half = beamDeg / 2;
     final x = offAxisDeg.abs() / half;
