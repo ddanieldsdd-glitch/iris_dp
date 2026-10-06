@@ -278,6 +278,22 @@ class VisualBiblePdfService {
       ),
     );
     _heroes = await _loadHeroes(sectionContentJsonById, moodboard);
+    _heroColors = {
+      for (final entry in sectionContentJsonById.entries)
+        if (BibleScreenHeroValue.read(
+              BibleSectionFieldsConfig.parseValues(entry.value),
+            ).argb
+            case final argb?)
+          entry.key: PdfColor.fromInt(argb),
+    };
+    // Nombre que el usuario haya dado a una pantalla de la biblia.
+    _renamed = {
+      for (final section in sectionOrder)
+        if (!section.isCustom &&
+            section.label.trim().isNotEmpty &&
+            section.label != BibleSectionId.label(section.id))
+          section.id: section.label.trim(),
+    };
     final kit = _kit(fonts);
 
     // Las páginas se guardan por sección y se vuelcan al final en el orden
@@ -370,8 +386,9 @@ class VisualBiblePdfService {
             margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
             build: (_) => [
               kit.sectionHeader(
-                'Dirección',
+                _renamed[BibleSectionId.direction] ?? 'Dirección',
                 image: _heroes[BibleSectionId.direction],
+                accent: _heroColors[BibleSectionId.direction],
               ),
               pw.SizedBox(height: 24),
               ...directionContent,
@@ -406,8 +423,9 @@ class VisualBiblePdfService {
             margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
             build: (_) => [
               kit.sectionHeader(
-                'Concepto de imagen',
+                _renamed[BibleSectionId.concept] ?? 'Concepto de imagen',
                 image: _heroes[BibleSectionId.concept],
+                accent: _heroColors[BibleSectionId.concept],
               ),
               pw.SizedBox(height: 24),
               ...conceptContent,
@@ -1178,7 +1196,11 @@ class VisualBiblePdfService {
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
           build: (_) => [
-            kit.sectionHeader(section.label, image: _heroes[section.id]),
+            kit.sectionHeader(
+              section.label,
+              image: _heroes[section.id],
+              accent: _heroColors[section.id],
+            ),
             pw.SizedBox(height: 24),
             ...children,
           ],
@@ -1853,6 +1875,10 @@ class VisualBiblePdfService {
   /// Imagen de cabecera de cada pantalla del documento en curso.
   static Map<String, pw.MemoryImage> _heroes = const {};
 
+  /// Color de cada pantalla que lo tenga, y nombre de las renombradas.
+  static Map<String, PdfColor> _heroColors = const {};
+  static Map<String, String> _renamed = const {};
+
   static Future<Map<String, pw.MemoryImage>> _loadHeroes(
     Map<String, String?> sectionContentJsonById,
     List<MoodboardImageModel> moodboard,
@@ -1863,7 +1889,7 @@ class VisualBiblePdfService {
       final image =
           byId[BibleScreenHeroValue.read(
             BibleSectionFieldsConfig.parseValues(entry.value),
-          )];
+          ).imageId];
       if (image == null) continue;
       final bytes = await PdfSafeImage.loadFromPathMaxEdge(image.imagePath);
       if (bytes != null) heroes[entry.key] = pw.MemoryImage(bytes);
@@ -2319,7 +2345,11 @@ class VisualBiblePdfService {
   }) => BiblePdfKit(
     regular: fontBold,
     bold: fontBold,
-  ).sectionHeader(title, image: _heroes[sectionId]);
+  ).sectionHeader(
+    _renamed[sectionId]?.toUpperCase() ?? title,
+    image: _heroes[sectionId],
+    accent: _heroColors[sectionId],
+  );
 
   static PdfColor _hexToPdf(String hex) {
     final clean = hex.replaceAll('#', '');

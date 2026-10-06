@@ -252,11 +252,18 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
           bibleId: widget.bibleId,
           sectionId: widget.sectionId,
           title: widget.label,
-          imageId: BibleScreenHeroValue.read(_values),
-          onChanged: (id) => _setValue(
-            BibleScreenHeroValue.key,
-            BibleScreenHeroValue.encode(id),
-          ),
+          value: BibleScreenHeroValue.read(_values),
+          onChanged: (value) =>
+              _setValue(BibleScreenHeroValue.key, value.encode()),
+          onReset: () {
+            // Se conservan los puntos y la cabecera; se borra lo escrito.
+            setState(
+              () => _values.removeWhere(
+                (key, _) => key != BibleScreenHeroValue.key,
+              ),
+            );
+            _persist();
+          },
         ),
         ...items,
         if (items.isNotEmpty) const SizedBox(height: AppSpacing.lg),

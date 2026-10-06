@@ -355,8 +355,13 @@ class BiblePdfKit {
   );
 
   /// Cabecera de una sección. Con [image] (la que el usuario eligió para la
-  /// pantalla), el título va en grande sobre una banda con ella.
-  pw.Widget sectionHeader(String title, {pw.ImageProvider? image}) {
+  /// pantalla), el título va en grande sobre una banda con ella. [accent]
+  /// es el color de la pantalla, si lo tiene.
+  pw.Widget sectionHeader(
+    String title, {
+    pw.ImageProvider? image,
+    PdfColor? accent,
+  }) {
     if (image != null) {
       return pw.ClipRRect(
         horizontalRadius: BiblePdfTokens.radius,
@@ -381,6 +386,13 @@ class BiblePdfKit {
                   ),
                 ),
               ),
+              if (accent != null)
+                pw.Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: pw.Container(height: 3, color: accent),
+                ),
               pw.Positioned(
                 left: 14,
                 right: 14,
@@ -402,7 +414,11 @@ class BiblePdfKit {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Container(height: 3, width: 32, color: BiblePdfTokens.accent),
+        pw.Container(
+          height: 3,
+          width: 32,
+          color: accent ?? BiblePdfTokens.accent,
+        ),
         pw.SizedBox(height: 8),
         pw.Text(
           title.toUpperCase(),

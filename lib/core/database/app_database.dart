@@ -3681,6 +3681,37 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// Reinicia una pantalla: vuelven sus puntos de fábrica y se borra todo lo
+  /// escrito en ella, también los puntos que añadió el usuario. Solo se
+  /// conservan los valores de [keepValueKeys] (p. ej. su cabecera).
+  Future<void> resetBibleSectionContent(
+    int bibleId,
+    String sectionId, {
+    Set<String> keepValueKeys = const {},
+  }) async {
+    final def =
+        await (select(
+              bibleSectionDefinitions,
+            )..where((d) => d.bibleId.equals(bibleId) & d.id.equals(sectionId)))
+            .getSingleOrNull();
+    if (def == null) return;
+    final kept = BibleSectionFieldsConfig.parseValues(def.contentJson)
+      ..removeWhere((key, _) => !keepValueKeys.contains(key));
+    final fields = def.template == 'freeform'
+        ? BibleSectionFieldsConfig.parse(
+            BibleSectionFieldsConfig.customScreenStarterJson(def.label),
+            sectionId,
+          )
+        : BibleSectionFieldsConfig.defaultsFor(sectionId);
+    await upsertBibleSectionDefinition(
+      def.copyWith(
+        contentJson: Value(
+          BibleSectionFieldsConfig.encode(fields, values: kept),
+        ),
+      ),
+    );
+  }
+
   /// Guarda la lista de puntos de una pantalla. Los valores de
   /// [dropValueKeys] se borran: son puntos que el usuario ha eliminado.
   Future<void> saveBibleSectionFields(

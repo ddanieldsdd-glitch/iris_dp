@@ -68,26 +68,58 @@ class BiblePointExtras {
   };
 }
 
-/// Imagen de cabecera de una pantalla de la biblia, elegida por el usuario.
+/// Cabecera de una pantalla de la biblia: la imagen y el color que el
+/// usuario elige para representarla.
 ///
-/// Se guarda en `values['__hero']` como `{"imageId": id}`: con esa forma la
-/// reenlaza `BibleImageLinks` al descargar un proyecto de la nube.
-abstract final class BibleScreenHeroValue {
+/// Se guarda en `values['__hero']` como `{"imageId": id, "color": "#RRGGBB"}`:
+/// con esa forma `BibleImageLinks` reenlaza la imagen al descargar un
+/// proyecto de la nube.
+class BibleScreenHeroValue {
   static const key = '__hero';
 
-  static int? read(Map<String, String> values) {
+  final int? imageId;
+
+  /// Color representativo, `#RRGGBB`.
+  final String? colorHex;
+
+  const BibleScreenHeroValue({this.imageId, this.colorHex});
+
+  factory BibleScreenHeroValue.read(Map<String, String> values) {
     final raw = values[key];
-    if (raw == null || raw.isEmpty) return null;
+    if (raw == null || raw.isEmpty) return const BibleScreenHeroValue();
     try {
       final decoded = jsonDecode(raw);
-      final id = decoded is Map ? decoded['imageId'] : null;
-      return id is num ? id.toInt() : null;
+      if (decoded is! Map) return const BibleScreenHeroValue();
+      final id = decoded['imageId'];
+      final color = decoded['color']?.toString();
+      return BibleScreenHeroValue(
+        imageId: id is num ? id.toInt() : null,
+        colorHex: color == null || color.isEmpty ? null : color,
+      );
     } catch (_) {
-      return null;
+      return const BibleScreenHeroValue();
     }
   }
 
-  /// `null` quita la imagen.
-  static String? encode(int? imageId) =>
-      imageId == null ? null : jsonEncode({'imageId': imageId});
+  BibleScreenHeroValue withImage(int? id) =>
+      BibleScreenHeroValue(imageId: id, colorHex: colorHex);
+
+  BibleScreenHeroValue withColor(String? hex) =>
+      BibleScreenHeroValue(imageId: imageId, colorHex: hex);
+
+  /// `null` si la pantalla no tiene ni imagen ni color.
+  String? encode() => imageId == null && colorHex == null
+      ? null
+      : jsonEncode({
+          if (imageId != null) 'imageId': imageId,
+          if (colorHex != null) 'color': colorHex,
+        });
+
+  /// Valor ARGB de [colorHex], o `null` si no hay color o no es válido.
+  int? get argb {
+    final hex = colorHex?.replaceFirst('#', '');
+    if (hex == null || hex.length != 6) return null;
+    final value = int.tryParse(hex, radix: 16);
+    return value == null ? null : 0xFF000000 | value;
+  }
 }

@@ -279,7 +279,7 @@ void main() {
       bible.id,
       BibleSectionId.direction,
       BibleScreenHeroValue.key,
-      BibleScreenHeroValue.encode(imageId),
+      BibleScreenHeroValue(imageId: imageId, colorHex: '#FF9F0A').encode(),
     );
 
     final repo = VisualBibleRepository(VisualBibleDao(db));

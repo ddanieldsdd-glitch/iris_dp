@@ -70,6 +70,9 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
   static const _contentPadding = EdgeInsets.all(AppSpacing.lg);
   static const double _sectionGap = AppSpacing.xl;
 
+  /// Veces que se ha reiniciado la pantalla desde que está abierta.
+  int _resetCount = 0;
+
   @override
   Widget build(BuildContext context) {
     final fields = BibleSectionFieldsConfig.parse(
@@ -92,24 +95,26 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
     return ListView(
       padding: _contentPadding,
       children: [
-        BibleScreenHero(
+        BibleSectionHero(
           projectId: widget.projectId,
           bibleId: widget.data.id,
           sectionId: widget.sectionId,
           title: widget.sectionTitle ?? BibleSectionId.label(widget.sectionId),
-          imageId: BibleScreenHeroValue.read(values),
-          onChanged: widget.data.id <= 0
-              ? null
-              : (id) => ref.read(databaseProvider).saveBibleSectionFieldValue(
-                  widget.data.id,
-                  widget.sectionId,
-                  BibleScreenHeroValue.key,
-                  BibleScreenHeroValue.encode(id),
-                ),
+          onAfterReset: () {
+            // Lo que la pantalla escribe en la biblia, fuera de su definición.
+            widget.data.clearSection(widget.sectionId);
+            widget.onChanged(widget.data);
+            if (mounted) setState(() => _resetCount++);
+          },
         ),
         for (var i = 0; i < items.length; i++) ...[
           if (i > 0) const SizedBox(height: _sectionGap),
-          items[i],
+          // Tras reiniciar, los campos se montan de nuevo: no deben
+          // conservar el texto que tenían.
+          KeyedSubtree(
+            key: ValueKey('point_${_resetCount}_$i'),
+            child: items[i],
+          ),
         ],
         if (widget.data.id > 0) ...[
           const SizedBox(height: _sectionGap),

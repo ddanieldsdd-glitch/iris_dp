@@ -401,6 +401,60 @@ class VisualBibleData {
     ),
   );
 
+  /// Vacía lo que la pantalla [sectionId] escribe en la biblia, para
+  /// reiniciarla. Algunos textos se comparten con otra pantalla (la cámara
+  /// de Dirección con Cámara, la filosofía de luz de Concepto con
+  /// Iluminación) y se vacían también. No toca los actos del proyecto.
+  void clearSection(String sectionId) {
+    setNarrativeIntentForSection(sectionId, null);
+    switch (sectionId) {
+      case BibleSectionId.direction:
+        tone = null;
+        creativeIntention = null;
+        stagingApproach = null;
+        pointOfView = null;
+        cameraPhilosophy = null;
+      case BibleSectionId.concept:
+        visualConcept = null;
+        lightingPhilosophy = null;
+        contrastStyle = null;
+        narrativeReferences = [];
+      case BibleSectionId.camera:
+        primaryCameraId = null;
+        cameraPhilosophy = null;
+        movementStyle = null;
+        recordingFormat = null;
+      case BibleSectionId.optics:
+        lensPhilosophy = null;
+        opticType = null;
+        primaryFocalLengths = [];
+        depthOfFieldNotes = null;
+      case BibleSectionId.exposure:
+        highlightBehavior = null;
+        shadowBehavior = null;
+        nativeIso = null;
+        defaultTStop = null;
+      case BibleSectionId.lighting:
+        lightingPhilosophy = null;
+        lightQuality = null;
+        contrastStyle = null;
+        lightSource = null;
+      case BibleSectionId.colorImage:
+        workingLutName = null;
+        creativeLutName = null;
+        creativeLutDescription = null;
+      case BibleSectionId.format:
+        aspectRatio = null;
+        aspectRatioJustification = null;
+      case BibleSectionId.texture:
+        imageTexture = null;
+        grainLevel = null;
+        diffusionNotes = null;
+      case BibleSectionId.workflow:
+        workflowPipeline = null;
+    }
+  }
+
   String? narrativeIntentForSection(String sectionId) => switch (sectionId) {
     BibleSectionId.direction => directionNarrativeIntent,
     BibleSectionId.concept => conceptNarrativeIntent,
