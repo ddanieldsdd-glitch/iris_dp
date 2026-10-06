@@ -65,6 +65,9 @@ class CameraPlanPainter extends CustomPainter {
   /// Otros elementos seleccionados a la vez (selección múltiple).
   final Set<PlanElement> alsoSelected;
 
+  /// Marco de selección que se está arrastrando.
+  final Rect? marquee;
+
   /// Tramo que se está dibujando.
   final ({Offset from, Offset to, String kind})? segmentPreview;
 
@@ -120,6 +123,7 @@ class CameraPlanPainter extends CustomPainter {
     this.showGrid = true,
     this.zones = const [],
     this.alsoSelected = const {},
+    this.marquee,
     this.segmentPreview,
     this.measure,
     this.zoneHandles,
@@ -390,6 +394,20 @@ class CameraPlanPainter extends CustomPainter {
 
   /// Tramo en curso, medida y asas de la zona.
   void _drawOverlays(Canvas canvas) {
+    final area = marquee;
+    if (area != null) {
+      canvas.drawRect(
+        area,
+        Paint()..color = _CanvasColors.accent.withValues(alpha: 0.10),
+      );
+      canvas.drawRect(
+        area,
+        Paint()
+          ..color = _CanvasColors.accent
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1 / scale,
+      );
+    }
     final preview = segmentPreview;
     if (preview != null) {
       final ghost = PlanSegment.create(
@@ -2242,6 +2260,7 @@ class CameraPlanPainter extends CustomPainter {
       old.showGrid != showGrid ||
       old.zones != zones ||
       old.alsoSelected != alsoSelected ||
+      old.marquee != marquee ||
       old.rotating != rotating ||
       old.selectedRoom != selectedRoom ||
       old.segmentPreview != segmentPreview ||

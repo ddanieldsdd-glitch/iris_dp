@@ -302,6 +302,21 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   PlanElement? _selected;
   Offset _canvasOffset = Offset.zero;
   double _scale = 1.0;
+
+  /// Marco de selección que se está arrastrando, y dónde empezó.
+  Offset? _marqueeStart;
+  Rect? _marquee;
+
+  /// Dónde está el cursor sobre la planta: ahí se pega lo copiado.
+  Offset? _cursor;
+  bool _middlePan = false;
+  double _pinchScale = 1;
+
+  /// Lo copiado, compartido entre plantas mientras dure la sesión.
+  static String? _clipboard;
+
+  static const double _minScale = 0.1;
+  static const double _maxScale = 6;
   bool _loading = true;
   bool _isRotating = false;
 
@@ -1172,7 +1187,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           _canvasSize.width / target.width,
           _canvasSize.height / target.height,
         )
-        .clamp(0.2, 2.5);
+        .clamp(_minScale, _maxScale);
     setState(() {
       _scale = scale;
       _canvasOffset = _canvasSize.center(Offset.zero) - target.center * scale;
@@ -2049,7 +2064,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     }
     _isRotating = false;
     _isDraggingPathPoint = false;
-    final tapped = _elementAt(canvasPos);
+    // Con Espacio, arrastrar mueve la vista aunque haya algo debajo.
+    final panning = HardwareKeyboard.instance.isLogicalKeyPressed(
+      LogicalKeyboardKey.space,
+    );
+    final tapped = panning ? null : _elementAt(canvasPos);
+    // Con ratón, arrastrar en vacío traza un marco de selección. Con el
+    // dedo sigue moviendo la vista: no hay otra forma de hacerlo.
+    _marqueeStart =
+        tapped == null &&
+            !panning &&
+            _tool == PlanTool.select &&
+            d.kind != ui.PointerDeviceKind.touch
+        ? canvasPos
+        : null;
     _dragging = tapped;
     if (tapped != null && !_multi.contains(tapped)) _select(tapped);
   }
@@ -2141,9 +2169,272 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           el.pathPoints = [for (final p in el.pathPoints) p + delta];
         }
       });
+    } else if (_marqueeStart != null) {
+      setState(() => _marquee = Rect.fromPoints(_marqueeStart!, canvasPos));
     } else {
       setState(() => _canvasOffset += d.delta);
     }
+  }
+
+  /// Selecciona lo que cae dentro del marco. Con Mayús, se añade.
+  void _selectInMarquee(Rect area) {
+    final inside = [
+      for (final el in _visibleElements)
+        if (PlanSegment.isSegment(el)
+            ? area.contains(PlanSegment.start(el)) &&
+                  area.contains(PlanSegment.end(el))
+            : area.contains(el.position))
+          el,
+    ];
+    setState(() {
+      final keep = HardwareKeyboard.instance.isShiftPressed
+          ? _selection
+          : const <PlanElement>[];
+      final all = {...keep, ...inside}.toList();
+      _selectedPathIndex = null;
+      _multi
+        ..clear()
+        ..addAll(all.length > 1 ? all : const []);
+      _selected = all.isEmpty ? null : all.last;
+    });
+  }
+
+  /// Zoom hacia un punto de la pantalla: lo que hay bajo el cursor se
+  /// queda donde está.
+  void _zoomAt(Offset local, double factor) {
+    final next = (_scale * factor).clamp(_minScale, _maxScale);
+    if (next == _scale) return;
+    final anchor = (local - _canvasOffset) / _scale;
+    setState(() {
+      _scale = next;
+      _canvasOffset = local - anchor * next;
+    });
+  }
+
+  /// Encuadra todo lo que hay en la planta.
+  void _fitAll() {
+    Rect? bounds;
+    for (final el in _visibleElements) {
+      for (final p in [
+        el.position,
+        if (PlanSegment.isSegment(el)) PlanSegment.end(el),
+      ]) {
+        final at = Rect.fromCircle(center: p, radius: 40);
+        bounds = bounds?.expandToInclude(at) ?? at;
+      }
+    }
+    if (bounds != null) _fitTo(bounds);
+  }
+
+  // ── Copiar, cortar, pegar, mover y girar con el teclado ───────────────────
+
+  void _copySelection() {
+    final picked = _selection;
+    if (picked.isEmpty) return;
+    _clipboard = FloorPlanJson.encode(picked);
+    _showSnack(
+      picked.length == 1 ? 'Copiado.' : '${picked.length} elementos copiados.',
+    );
+  }
+
+  Future<void> _cutSelection() async {
+    if (_selection.isEmpty) return;
+    _copySelection();
+    await _deleteSelected();
+  }
+
+  /// Pega lo copiado donde está el cursor (o en el centro de la vista).
+  Future<void> _paste() async {
+    final stored = _clipboard;
+    if (stored == null) return;
+    final copies = FloorPlanJson.decode(stored);
+    if (copies.isEmpty) return;
+    var centre = Offset.zero;
+    for (final el in copies) {
+      centre += el.position;
+    }
+    centre = centre / copies.length.toDouble();
+    final shift = _snapToGrid(_cursor ?? _viewCenter) - centre;
+    for (final el in copies) {
+      el
+        ..id = 0
+        ..position += shift
+        ..pathPoints = [for (final p in el.pathPoints) p + shift];
+      // Un identificador propio: no es la misma luz que la copiada.
+      el.props.remove('uid');
+      await _addElement(el, keepPosition: true, select: false);
+    }
+    if (!mounted) return;
+    setState(() {
+      _selectedPathIndex = null;
+      _multi
+        ..clear()
+        ..addAll(copies.length > 1 ? copies : const []);
+      _selected = copies.last;
+    });
+  }
+
+  void _selectAll() {
+    final all = _visibleElements.toList();
+    if (all.isEmpty) return;
+    setState(() {
+      _selectedPathIndex = null;
+      _multi
+        ..clear()
+        ..addAll(all.length > 1 ? all : const []);
+      _selected = all.last;
+    });
+  }
+
+  /// Mueve la selección un centímetro (o diez, con Mayús).
+  Future<void> _nudge(Offset direction, {bool big = false}) async {
+    final picked = _selection;
+    if (picked.isEmpty) return;
+    final delta = direction * ((big ? 0.10 : 0.01) / _metersPerUnit);
+    setState(() {
+      for (final el in picked) {
+        el.position += delta;
+        el.pathPoints = [for (final p in el.pathPoints) p + delta];
+      }
+    });
+    await _persistMany(picked);
+  }
+
+  Future<void> _rotateSelection(double degrees) async {
+    final picked = [
+      for (final el in _selection)
+        if (!PlanSegment.isSegment(el) &&
+            !CameraPlanPainter.isAttachedOpening(el, _visibleElements))
+          el,
+    ];
+    if (picked.isEmpty) return;
+    setState(() {
+      for (final el in picked) {
+        el.rotation = ((el.rotation + degrees) % 360 + 360) % 360;
+      }
+    });
+    await _persistMany(picked);
+  }
+
+  /// Menú del botón derecho.
+  Future<void> _showContextMenu(Offset global, Offset canvasPos) async {
+    final under = _elementAt(canvasPos);
+    if (under != null && !_selection.contains(under)) _select(under);
+    final has = _selection.isNotEmpty;
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        global.dx,
+        global.dy,
+        global.dx,
+        global.dy,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'copy',
+          enabled: has,
+          child: const Text('Copiar   ⌘C'),
+        ),
+        PopupMenuItem(
+          value: 'cut',
+          enabled: has,
+          child: const Text('Cortar   ⌘X'),
+        ),
+        PopupMenuItem(
+          value: 'paste',
+          enabled: _clipboard != null,
+          child: const Text('Pegar aquí   ⌘V'),
+        ),
+        PopupMenuItem(
+          value: 'duplicate',
+          enabled: has,
+          child: const Text('Duplicar   ⌘D'),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(value: 'all', child: Text('Seleccionar todo   ⌘A')),
+        PopupMenuItem(
+          value: 'delete',
+          enabled: has,
+          child: const Text('Eliminar   ⌫'),
+        ),
+      ],
+    );
+    if (!mounted) return;
+    _cursor = canvasPos;
+    switch (action) {
+      case 'copy':
+        _copySelection();
+      case 'cut':
+        await _cutSelection();
+      case 'paste':
+        await _paste();
+      case 'duplicate':
+        await _duplicateSelection();
+      case 'all':
+        _selectAll();
+      case 'delete':
+        await _deleteSelected();
+    }
+  }
+
+  void _showShortcuts() {
+    const rows = [
+      (
+        'Mover la vista',
+        'Dos dedos en el trackpad · Espacio + arrastrar · botón central',
+      ),
+      ('Zoom', 'Pellizco · rueda del ratón · ⌘ + dos dedos · ⌘= y ⌘−'),
+      ('Encajar todo', '⌘0'),
+      ('Seleccionar varios', 'Arrastrar en vacío · Mayús + clic · ⌘A'),
+      ('Deshacer / rehacer', '⌘Z / ⇧⌘Z'),
+      ('Copiar / cortar / pegar', '⌘C / ⌘X / ⌘V (pega bajo el cursor)'),
+      ('Duplicar', '⌘D'),
+      ('Eliminar', '⌫'),
+      ('Mover 1 cm / 10 cm', 'Flechas / ⇧ + flechas'),
+      ('Girar 15°', 'R / ⇧R (al arrastrar el asa, ⇧ va de 15 en 15)'),
+      ('Herramientas', 'V mover · W pared · M medir · Esc soltar'),
+    ];
+    final palette = context.palette;
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: palette.surfaceElevated,
+        title: Text('Atajos', style: AppTypography.titleMedium(palette)),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final (what, how) in rows)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 190,
+                        child: Text(
+                          what,
+                          style: AppTypography.bodyMedium(palette),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(how, style: AppTypography.caption(palette)),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _onPanEnd(DragEndDetails d) async {
@@ -2175,6 +2466,18 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       return;
     }
     if (_tool == PlanTool.measure) return;
+
+    if (_marqueeStart != null) {
+      final area = _marquee;
+      setState(() {
+        _marqueeStart = null;
+        _marquee = null;
+      });
+      if (area != null && area.shortestSide > 4 / _scale) {
+        _selectInMarquee(area);
+      }
+      return;
+    }
 
     // Se guarda siempre que algo se haya movido, se suelte como se suelte.
     final moved = _dragDirty;
@@ -2349,6 +2652,43 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         _setTool(PlanTool.wall),
     const SingleActivator(LogicalKeyboardKey.keyM): () =>
         _setTool(PlanTool.measure),
+    for (final (meta, control) in const [(true, false), (false, true)]) ...{
+      SingleActivator(LogicalKeyboardKey.keyC, meta: meta, control: control):
+          _copySelection,
+      SingleActivator(LogicalKeyboardKey.keyX, meta: meta, control: control):
+          _cutSelection,
+      SingleActivator(LogicalKeyboardKey.keyV, meta: meta, control: control):
+          _paste,
+      SingleActivator(LogicalKeyboardKey.keyA, meta: meta, control: control):
+          _selectAll,
+      SingleActivator(LogicalKeyboardKey.digit0, meta: meta, control: control):
+          _fitAll,
+      SingleActivator(
+        LogicalKeyboardKey.equal,
+        meta: meta,
+        control: control,
+      ): () =>
+          _zoomAt(_canvasSize.center(Offset.zero), 1.25),
+      SingleActivator(
+        LogicalKeyboardKey.minus,
+        meta: meta,
+        control: control,
+      ): () =>
+          _zoomAt(_canvasSize.center(Offset.zero), 0.8),
+    },
+    for (final big in const [false, true]) ...{
+      SingleActivator(LogicalKeyboardKey.arrowLeft, shift: big): () =>
+          _nudge(const Offset(-1, 0), big: big),
+      SingleActivator(LogicalKeyboardKey.arrowRight, shift: big): () =>
+          _nudge(const Offset(1, 0), big: big),
+      SingleActivator(LogicalKeyboardKey.arrowUp, shift: big): () =>
+          _nudge(const Offset(0, -1), big: big),
+      SingleActivator(LogicalKeyboardKey.arrowDown, shift: big): () =>
+          _nudge(const Offset(0, 1), big: big),
+    },
+    const SingleActivator(LogicalKeyboardKey.keyR): () => _rotateSelection(15),
+    const SingleActivator(LogicalKeyboardKey.keyR, shift: true): () =>
+        _rotateSelection(-15),
   };
 
   /// Esc: suelta lo que se esté haciendo.
@@ -2368,9 +2708,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     }
   }
 
-  void _zoomBy(double delta) {
-    setState(() => _scale = (_scale + delta).clamp(0.2, 2.5));
-  }
+  void _zoomBy(double delta) =>
+      _zoomAt(_canvasSize.center(Offset.zero), 1 + delta * 2);
 
   void _showAddMenu() {
     final palette = context.palette;
@@ -2653,6 +2992,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             onPressed: _saveCurrentPlan,
           ),
           IconButton(
+            tooltip: 'Atajos',
+            icon: Icon(Icons.keyboard_outlined, color: palette.textSecondary),
+            onPressed: _showShortcuts,
+          ),
+          IconButton(
+            tooltip: 'Encajar todo (⌘0)',
+            icon: Icon(Icons.fit_screen_outlined, color: palette.textSecondary),
+            onPressed: _fitAll,
+          ),
+          IconButton(
             tooltip: 'Alejar',
             icon: Icon(Icons.remove, color: palette.textSecondary),
             onPressed: () => _zoomBy(-0.1),
@@ -2798,6 +3147,21 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                               focusNode: _canvasFocus,
                                               autofocus: true,
                                               child: MouseRegion(
+                                                // Al entrar con el ratón, el
+                                                // lienzo coge el foco (salvo
+                                                // que se esté escribiendo):
+                                                // así los atajos responden.
+                                                onEnter: (_) {
+                                                  final focused = FocusManager
+                                                      .instance
+                                                      .primaryFocus
+                                                      ?.context
+                                                      ?.widget;
+                                                  if (focused
+                                                      is! EditableText) {
+                                                    _canvasFocus.requestFocus();
+                                                  }
+                                                },
                                                 cursor: _tool == PlanTool.select
                                                     ? MouseCursor.defer
                                                     : SystemMouseCursors
@@ -2815,104 +3179,214 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                     );
                                                   }
                                                 },
-                                                child: GestureDetector(
-                                                  // El arrastre empieza donde se tocó, no donde se
-                                                  // reconoció: si no, las asas pequeñas se escapan
-                                                  // en pantalla táctil.
-                                                  dragStartBehavior:
-                                                      DragStartBehavior.down,
-                                                  onPanStart: _onPanStart,
-                                                  onPanUpdate: _onPanUpdate,
-                                                  onPanEnd: _onPanEnd,
-                                                  onTapDown: _onTapCanvas,
-                                                  onDoubleTapDown:
-                                                      _onDoubleTapCanvas,
-                                                  child: CustomPaint(
-                                                    size: Size(
-                                                      constraints.maxWidth,
-                                                      constraints.maxHeight,
-                                                    ),
-                                                    painter: CameraPlanPainter(
-                                                      elements:
-                                                          _visibleElements,
-                                                      inheritedElements:
-                                                          _showOtherCameras
-                                                          ? _otherCameras
-                                                          : const [],
-                                                      ambient:
-                                                          _lightSetup == null
-                                                          ? null
-                                                          : _ambient,
-                                                      zones: [
-                                                        for (final zone
-                                                            in _zones)
-                                                          if (zone.active &&
-                                                              _zoneEditRect !=
-                                                                  null)
+                                                child: Listener(
+                                                  onPointerHover: (e) =>
+                                                      _cursor = _toCanvasCoords(
+                                                        e.localPosition,
+                                                      ),
+                                                  onPointerDown: (e) {
+                                                    _cursor = _toCanvasCoords(
+                                                      e.localPosition,
+                                                    );
+                                                    if (e.buttons ==
+                                                        kMiddleMouseButton) {
+                                                      _middlePan = true;
+                                                    } else if (e.buttons ==
+                                                        kSecondaryMouseButton) {
+                                                      _canvasFocus
+                                                          .requestFocus();
+                                                      _showContextMenu(
+                                                        e.position,
+                                                        _cursor!,
+                                                      );
+                                                    }
+                                                  },
+                                                  onPointerMove: (e) {
+                                                    if (_middlePan) {
+                                                      setState(
+                                                        () => _canvasOffset +=
+                                                            e.delta,
+                                                      );
+                                                    }
+                                                  },
+                                                  onPointerUp: (_) =>
+                                                      _middlePan = false,
+                                                  onPointerCancel: (_) =>
+                                                      _middlePan = false,
+                                                  // La rueda del ratón: zoom
+                                                  // hacia el cursor.
+                                                  onPointerSignal: (e) {
+                                                    if (e
+                                                        is PointerScrollEvent) {
+                                                      GestureBinding
+                                                          .instance
+                                                          .pointerSignalResolver
+                                                          .register(
+                                                            e,
+                                                            (_) => _zoomAt(
+                                                              e.localPosition,
+                                                              math.exp(
+                                                                -e.scrollDelta.dy /
+                                                                    400,
+                                                              ),
+                                                            ),
+                                                          );
+                                                    }
+                                                  },
+                                                  // El trackpad: dos dedos
+                                                  // mueven la vista y el
+                                                  // pellizco hace zoom.
+                                                  onPointerPanZoomStart: (_) =>
+                                                      _pinchScale = 1,
+                                                  onPointerPanZoomUpdate: (e) {
+                                                    if (HardwareKeyboard
+                                                        .instance
+                                                        .isMetaPressed) {
+                                                      _zoomAt(
+                                                        e.localPosition,
+                                                        math.exp(
+                                                          -e.localPanDelta.dy /
+                                                              300,
+                                                        ),
+                                                      );
+                                                      return;
+                                                    }
+                                                    if (e.scale !=
+                                                        _pinchScale) {
+                                                      _zoomAt(
+                                                        e.localPosition,
+                                                        e.scale / _pinchScale,
+                                                      );
+                                                      _pinchScale = e.scale;
+                                                    }
+                                                    setState(
+                                                      () => _canvasOffset +=
+                                                          e.localPanDelta,
+                                                    );
+                                                  },
+                                                  child: GestureDetector(
+                                                    // El trackpad no arrastra
+                                                    // elementos con dos dedos:
+                                                    // eso mueve la vista.
+                                                    supportedDevices: const {
+                                                      ui
+                                                          .PointerDeviceKind
+                                                          .touch,
+                                                      ui
+                                                          .PointerDeviceKind
+                                                          .mouse,
+                                                      ui
+                                                          .PointerDeviceKind
+                                                          .stylus,
+                                                      ui
+                                                          .PointerDeviceKind
+                                                          .invertedStylus,
+                                                    },
+                                                    // El arrastre empieza donde se tocó, no donde se
+                                                    // reconoció: si no, las asas pequeñas se escapan
+                                                    // en pantalla táctil.
+                                                    dragStartBehavior:
+                                                        DragStartBehavior.down,
+                                                    onPanStart: _onPanStart,
+                                                    onPanUpdate: _onPanUpdate,
+                                                    onPanEnd: _onPanEnd,
+                                                    onTapDown: _onTapCanvas,
+                                                    onDoubleTapDown:
+                                                        _onDoubleTapCanvas,
+                                                    child: CustomPaint(
+                                                      size: Size(
+                                                        constraints.maxWidth,
+                                                        constraints.maxHeight,
+                                                      ),
+                                                      painter: CameraPlanPainter(
+                                                        elements:
+                                                            _visibleElements,
+                                                        inheritedElements:
+                                                            _showOtherCameras
+                                                            ? _otherCameras
+                                                            : const [],
+                                                        ambient:
+                                                            _lightSetup == null
+                                                            ? null
+                                                            : _ambient,
+                                                        zones: [
+                                                          for (final zone
+                                                              in _zones)
+                                                            if (zone.active &&
+                                                                _zoneEditRect !=
+                                                                    null)
+                                                              PlanZone(
+                                                                rect:
+                                                                    _zoneEditRect!,
+                                                                color:
+                                                                    zone.color,
+                                                                label:
+                                                                    zone.label,
+                                                                active: true,
+                                                              )
+                                                            else
+                                                              zone,
+                                                          if (_zoneDraft !=
+                                                              null)
                                                             PlanZone(
-                                                              rect:
-                                                                  _zoneEditRect!,
-                                                              color: zone.color,
-                                                              label: zone.label,
+                                                              rect: _zoneDraft!,
+                                                              color:
+                                                                  _sceneColor,
+                                                              label:
+                                                                  _linkedSet
+                                                                      ?.locationName ??
+                                                                  '',
                                                               active: true,
-                                                            )
-                                                          else
-                                                            zone,
-                                                        if (_zoneDraft != null)
-                                                          PlanZone(
-                                                            rect: _zoneDraft!,
-                                                            color: _sceneColor,
-                                                            label:
-                                                                _linkedSet
-                                                                    ?.locationName ??
-                                                                '',
-                                                            active: true,
-                                                          ),
-                                                      ],
-                                                      alsoSelected: _multi,
-                                                      rotating: _isRotating,
-                                                      lightMap: _lightMap,
-                                                      selectedRoom:
-                                                          _selectedRoom,
-                                                      segmentPreview:
-                                                          _segmentStart !=
-                                                                  null &&
-                                                              _segmentHover !=
-                                                                  null
-                                                          ? (
-                                                              from:
-                                                                  _segmentStart!,
-                                                              to: _segmentHover!,
-                                                              kind:
-                                                                  _segmentKind,
-                                                            )
-                                                          : null,
-                                                      measure: _measure,
-                                                      zoneHandles:
-                                                          _zoneEditRect,
-                                                      metersPerUnit:
-                                                          _metersPerUnit,
-                                                      exposure: _exposure,
-                                                      targetStop: _targetStop,
-                                                      showReadings:
-                                                          _showReadings,
-                                                      exposureMap: _exposureMap,
-                                                      selectedElement:
-                                                          _selected,
-                                                      selectedPathIndex:
-                                                          _selectedPathIndex,
-                                                      scale: _scale,
-                                                      offset: _canvasOffset,
-                                                      palette: palette,
-                                                      backgroundImage:
-                                                          _backgroundImage,
-                                                      backgroundRect:
-                                                          _backgroundRect,
-                                                      backgroundOpacity:
-                                                          _backgroundOpacity,
-                                                    ),
-                                                    child: Container(
-                                                      color: Colors.transparent,
+                                                            ),
+                                                        ],
+                                                        alsoSelected: _multi,
+                                                        rotating: _isRotating,
+                                                        marquee: _marquee,
+                                                        lightMap: _lightMap,
+                                                        selectedRoom:
+                                                            _selectedRoom,
+                                                        segmentPreview:
+                                                            _segmentStart !=
+                                                                    null &&
+                                                                _segmentHover !=
+                                                                    null
+                                                            ? (
+                                                                from:
+                                                                    _segmentStart!,
+                                                                to: _segmentHover!,
+                                                                kind:
+                                                                    _segmentKind,
+                                                              )
+                                                            : null,
+                                                        measure: _measure,
+                                                        zoneHandles:
+                                                            _zoneEditRect,
+                                                        metersPerUnit:
+                                                            _metersPerUnit,
+                                                        exposure: _exposure,
+                                                        targetStop: _targetStop,
+                                                        showReadings:
+                                                            _showReadings,
+                                                        exposureMap:
+                                                            _exposureMap,
+                                                        selectedElement:
+                                                            _selected,
+                                                        selectedPathIndex:
+                                                            _selectedPathIndex,
+                                                        scale: _scale,
+                                                        offset: _canvasOffset,
+                                                        palette: palette,
+                                                        backgroundImage:
+                                                            _backgroundImage,
+                                                        backgroundRect:
+                                                            _backgroundRect,
+                                                        backgroundOpacity:
+                                                            _backgroundOpacity,
+                                                      ),
+                                                      child: Container(
+                                                        color:
+                                                            Colors.transparent,
+                                                      ),
                                                     ),
                                                   ),
                                                 ),

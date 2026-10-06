@@ -1,6 +1,8 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -997,6 +999,101 @@ void main() {
       expect(saved.rotation, 0);
       expect(PlanMarks.rotationAt(saved, 0), closeTo(90, 2));
       expect(saved.pathPoints.single, mark);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('ratón y teclado: marco de selección, copiar y pegar, '
+        'flechas, y la rueda hace zoom hacia el cursor', (tester) async {
+      await seed(tester, siteJson: '{"version":2,"elements":[]}');
+      await tester.runAsync(() async {
+        for (final (x, name) in [(300.0, 'Adil'), (400.0, 'Juan')]) {
+          await db.insertCameraPlanElement(
+            CameraPlanElementsCompanion.insert(
+              shotId: shotId,
+              type: 'actor',
+              x: Value(x),
+              y: const Value(300),
+              label: Value(name),
+            ),
+          );
+        }
+      });
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.shot(
+            projectId: projectId,
+            shotId: shotId,
+            shotLabel: 'Esc 1 · Plano 1',
+          ),
+        ),
+      );
+      await settle(tester);
+      final state = tester.state(find.byType(CameraPlanEditor));
+      ({Offset offset, double scale}) view() =>
+          // ignore: avoid_dynamic_calls
+          (state as dynamic).debugView as ({Offset offset, double scale});
+      final canvas = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is CameraPlanPainter,
+      );
+      Offset onScreen(Offset p) =>
+          tester.getTopLeft(canvas) + view().offset + p * view().scale;
+      Future<List<CameraPlanElement>> rows() async => (await tester.runAsync(
+        () => db.getCameraPlanElementsForShot(shotId),
+      ))!;
+
+      // Arrastrar con el ratón en vacío traza un marco: coge a los dos.
+      final mouse = await tester.startGesture(
+        onScreen(const Offset(240, 240)),
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      await mouse.moveTo(onScreen(const Offset(350, 330)));
+      await tester.pump(const Duration(milliseconds: 50));
+      await mouse.moveTo(onScreen(const Offset(460, 360)));
+      await tester.pump(const Duration(milliseconds: 50));
+      await mouse.up();
+      await settle(tester);
+      expect(find.textContaining('2 elementos seleccionados'), findsOneWidget);
+
+      // Flecha derecha con Mayús: los dos se mueven 10 cm (5 unidades).
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await settle(tester);
+      expect((await rows()).map((r) => r.x), [305, 405]);
+
+      // Copiar y pegar: dos más, bajo el cursor.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await settle(tester);
+      final all = await rows();
+      expect(all, hasLength(4));
+      expect(all.map((r) => r.label).toSet(), {'Adil', 'Juan'});
+      // Las copias no están encima de los originales.
+      expect(all[2].x, isNot(305));
+
+      // Deshacer quita lo pegado.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await settle(tester);
+      expect((await rows()).length, lessThan(4));
+
+      // La rueda acerca, y el punto bajo el cursor no se mueve.
+      final before = view();
+      final anchor = onScreen(const Offset(300, 300));
+      final pointer = TestPointer(1, PointerDeviceKind.mouse);
+      await tester.sendEventToBinding(pointer.hover(anchor));
+      await tester.sendEventToBinding(pointer.scroll(const Offset(0, -200)));
+      await settle(tester);
+      expect(view().scale, greaterThan(before.scale));
+      expect((onScreen(const Offset(300, 300)) - anchor).distance, lessThan(1));
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());
