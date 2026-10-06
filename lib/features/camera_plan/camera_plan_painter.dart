@@ -15,6 +15,7 @@ import 'light_beam.dart';
 import 'light_symbols.dart';
 import 'light/modifiers.dart';
 import 'light/surfaces.dart';
+import 'plan_light_map.dart';
 import 'plan_marks.dart';
 import 'plan_opening.dart';
 import 'plan_sun_painter.dart';
@@ -107,6 +108,10 @@ class CameraPlanPainter extends CustomPainter {
   final Rect? backgroundRect;
   final double backgroundOpacity;
 
+  /// Con él, la luz se pinta calculada punto a punto (ver [PlanLightMap])
+  /// en vez de con un haz por fuente. Sin él (miniaturas), los haces.
+  final PlanLightMapCache? lightMap;
+
   CameraPlanPainter({
     required this.elements,
     required this.palette,
@@ -133,7 +138,8 @@ class CameraPlanPainter extends CustomPainter {
     this.backgroundImage,
     this.backgroundRect,
     this.backgroundOpacity = 0.85,
-  });
+    this.lightMap,
+  }) : super(repaint: lightMap);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -181,7 +187,26 @@ class CameraPlanPainter extends CustomPainter {
     if (exposureMap && exposure != null) {
       _drawExposureMap(canvas, size, scene);
     }
-    if (!exposureMap && (ambient?.hasSun ?? false)) {
+    final view = Rect.fromLTWH(
+      -offset.dx / scale,
+      -offset.dy / scale,
+      size.width / scale,
+      size.height / scale,
+    );
+    final mapped = !exposureMap && lightMap != null;
+    if (mapped) {
+      // La luz, calculada punto a punto: todas las fuentes sumadas y lo
+      // que las tapa.
+      lightMap!
+          .resolve(scene, _lightKey(scene), _lightRect(scene))
+          .paint(canvas, view);
+      // La mancha de sol de cada ventana, encima y con su filo: el mapa
+      // la tiene, pero con el borde blando de su rejilla.
+      if (ambient?.hasSun ?? false) {
+        PlanSunPainter.paintPatches(canvas, scene, ambient!, strength: 0.45);
+      }
+    }
+    if (!exposureMap && !mapped && (ambient?.hasSun ?? false)) {
       PlanSunPainter.paint(
         canvas,
         scene,
@@ -196,7 +221,8 @@ class CameraPlanPainter extends CustomPainter {
     }
     // Los haces van debajo de todo lo demás. Con el mapa de exposición no
     // se pintan: el mapa ya dice cuánta luz hay en cada sitio.
-    for (final light in exposureMap ? const <SceneLight>[] : scene.lights) {
+    for (final light
+        in exposureMap || mapped ? const <SceneLight>[] : scene.lights) {
       _drawBeam(
         canvas,
         scene,
@@ -490,6 +516,56 @@ class CameraPlanPainter extends CustomPainter {
   }
 
   /// Pared, calle o relieve dibujados punto a punto.
+  /// Zona que cubre el mapa de luz: lo que hay en la planta, con margen
+  /// para que se vea hasta dónde llega cada luz.
+  Rect _lightRect(LightScene scene) {
+    Rect? bounds;
+    void take(Offset p) {
+      final at = Rect.fromCircle(center: p, radius: 1);
+      bounds = bounds?.expandToInclude(at) ?? at;
+    }
+
+    for (final el in [...inheritedElements, ...elements]) {
+      take(el.position);
+      if (PlanSegment.isSegment(el)) take(PlanSegment.end(el));
+    }
+    final mpu = scene.metersPerUnit;
+    final box = (bounds ?? Rect.zero).inflate(7 / mpu);
+    // Hasta 90 m de lado: más allá el grano sería demasiado grueso.
+    final limit = 90 / mpu;
+    return Rect.fromCenter(
+      center: box.center,
+      width: math.min(box.width, limit),
+      height: math.min(box.height, limit),
+    );
+  }
+
+  /// Cambia cuando cambia algo que afecta a la luz.
+  int _lightKey(LightScene scene) {
+    int ofProps(Map<String, dynamic> props) => Object.hashAllUnordered([
+      for (final e in props.entries)
+        Object.hash(
+          e.key,
+          e.value is List ? Object.hashAll(e.value as List) : e.value,
+        ),
+    ]);
+    return Object.hash(
+      scene.metersPerUnit,
+      ambient,
+      Object.hashAll([
+        for (final el in [...inheritedElements, ...elements])
+          Object.hash(
+            el.type,
+            el.position,
+            el.rotation,
+            el.lightType,
+            el.label,
+            ofProps(el.props),
+          ),
+      ]),
+    );
+  }
+
   /// Calle, talud o colina: el suelo.
   void _drawTerrain(Canvas canvas, PlanElement el) {
     if (PlanSegment.isSegment(el)) {

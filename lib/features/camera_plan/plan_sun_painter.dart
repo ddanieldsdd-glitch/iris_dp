@@ -280,7 +280,20 @@ class PlanSunPainter {
     layer(dappled, const Color(0x33000000));
     canvas.restore();
 
-    // Bajo techo: la mancha de cada hueco.
+    paintPatches(canvas, scene, env);
+  }
+
+  /// La mancha de sol de cada hueco, con su borde nítido. [strength] baja
+  /// su fuerza cuando va encima de la luz ya pintada, solo para dar filo.
+  static void paintPatches(
+    Canvas canvas,
+    LightScene scene,
+    PlanAmbient env, {
+    double strength = 1,
+  }) {
+    if (!env.hasSun) return;
+    final mpu = scene.metersPerUnit;
+    final colour = LightBeam.colorForCct(env.condition.sunCct);
     for (final gap in scene.apertures) {
       final veiled = <(Path, double)>[];
       final patch = patchFor(scene, env, gap, veiled: veiled);
@@ -289,7 +302,9 @@ class PlanSunPainter {
         path,
         Paint()
           ..blendMode = BlendMode.plus
-          ..color = colour.withValues(alpha: (0.36 * keep).clamp(0.0, 0.4))
+          ..color = colour.withValues(
+            alpha: (0.36 * keep * strength).clamp(0.0, 0.4),
+          )
           ..maskFilter = MaskFilter.blur(BlurStyle.normal, 0.03 / mpu),
       );
       fill(patch, 1);

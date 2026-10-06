@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' show Offset, Path;
+import 'package:flutter/material.dart' show Offset, Path, Rect;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
@@ -14,6 +14,7 @@ import 'package:iris_dp/features/camera_plan/light/modifiers.dart';
 import 'package:iris_dp/features/camera_plan/light/photometry.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
 import 'package:iris_dp/features/camera_plan/light/rooms.dart';
+import 'package:iris_dp/features/camera_plan/plan_light_map.dart';
 import 'package:iris_dp/features/camera_plan/plan_opening.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 import 'package:iris_dp/features/camera_plan/plan_sun_painter.dart';
@@ -1627,6 +1628,57 @@ void main() {
         hmiAt(100, 520, 90),
       ], metersPerUnit: 0.02).luxAt(const Offset(700, 520));
       expect(beside, greaterThan(100));
+    });
+
+    test('el mapa de luz suma las fuentes: el rebote de una pared al sol '
+        'apenas cambia lo que ya da el sol', () {
+      final s = scene(room(), sun.copyWith(wallBounce: true));
+      // Fuera, al sol, junto a la pared blanca que lo devuelve.
+      const sunny = Offset(240, 350);
+      final total = s.sampleAt(sunny).lux;
+      expect(total, greaterThan(60000));
+      // Menos de un stop por encima del sol solo.
+      expect(stopsBetweenLux(total, 60000), lessThan(1));
+      final map = PlanLightMap.compute(
+        s,
+        const Rect.fromLTWH(0, 0, 1000, 700),
+        budget: 40000,
+      );
+      final direct = PlanLightMap.brightnessFor(60000, map.keyLux);
+      final bounced = PlanLightMap.brightnessFor(total, map.keyLux);
+      expect(bounced - direct, lessThan(0.12));
+      // Dentro, sin huecos, no hay luz.
+      expect(s.sampleAt(deep).lux, 0);
+    });
+
+    test('con cortina, la luz del sol sale blanda de la ventana y se ve '
+        'dentro', () {
+      final s = scene([
+        ...room(),
+        window({'curtain': 1.0, 'curtainMaterial': 'sheer'}),
+      ]);
+      // Ni una mancha de sol directo: la cortina cuelga por debajo del
+      // alféizar.
+      for (var x = 310.0; x < 690; x += 10) {
+        expect(s.sunThroughput(Offset(x, 350), heightM: 0).transmission, 0);
+      }
+      // Pero la tela devuelve luz, más cuanto más cerca.
+      final near = s.sampleAt(const Offset(360, 350)).lux;
+      final far = s.sampleAt(const Offset(640, 350)).lux;
+      expect(near, greaterThan(far * 3));
+      expect(far, greaterThan(10));
+      // Y en el mapa se ve: bajo techo el brillo se mide contra lo de
+      // dentro, no solo contra el sol de fuera.
+      final map = PlanLightMap.compute(
+        s,
+        const Rect.fromLTWH(0, 0, 1000, 700),
+        budget: 60000,
+      );
+      expect(map.indoorKeyLux, lessThan(map.keyLux));
+      expect(
+        PlanLightMap.brightnessFor(near, map.indoorKeyLux),
+        greaterThan(0.3),
+      );
     });
 
     test('los ajustes de un recinto se guardan con el ambiente', () {

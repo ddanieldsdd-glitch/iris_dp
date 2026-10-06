@@ -44,6 +44,10 @@ class LightBlocker {
   final double? diffuseDeg;
   final double diffuseKeep;
 
+  /// Alto de la parte que recibe luz y la suelta, si no es todo el tope:
+  /// una cortina cuelga más allá del hueco, pero solo le da luz el hueco.
+  final double? diffuseHeightM;
+
   /// Una loma: radio de su base. Su altura baja de [heightM] en el centro
   /// a cero en el borde; [radius] es lo que mide a la altura de la cara.
   final double? domeRadius;
@@ -69,6 +73,7 @@ class LightBlocker {
     this.isWall = false,
     this.diffuseDeg,
     this.diffuseKeep = 0,
+    this.diffuseHeightM,
     this.label,
     this.element,
   }) : radius = 0,
@@ -92,6 +97,7 @@ class LightBlocker {
        isWall = false,
        diffuseDeg = null,
        diffuseKeep = 0,
+       diffuseHeightM = null,
        label = null;
 
   LightBlocker withHeight(double height) => isCircle
@@ -115,6 +121,7 @@ class LightBlocker {
           isWall: isWall,
           diffuseDeg: diffuseDeg,
           diffuseKeep: diffuseKeep,
+          diffuseHeightM: diffuseHeightM,
           label: label,
           element: element,
         );
@@ -712,22 +719,26 @@ class LightScene {
 
         // Lo que hay en el hueco: cristal, filtros o tela. Lo que difunde
         // no deja pasar la luz directa: la suelta blanda por el otro lado.
+        // Una cortina o un marco cuelgan algo más allá del hueco por
+        // arriba y por abajo ([over]): si no, el sol se colaría por debajo.
         LightBlocker panel(
           Offset p,
           Offset q,
           double keep,
           double mired,
           double? diffuse,
-          String label,
-        ) => diffuse != null
+          String label, {
+          double over = 0,
+        }) => diffuse != null
             ? LightBlocker(
                 p,
                 q,
                 miredShift: mired,
-                baseM: sill,
-                heightM: head,
+                baseM: math.max(0, sill - over),
+                heightM: head + over,
                 diffuseDeg: diffuse,
                 diffuseKeep: keep,
+                diffuseHeightM: head - sill,
                 label: label,
                 element: el,
               )
@@ -736,8 +747,8 @@ class LightScene {
                 q,
                 transmission: keep,
                 miredShift: mired,
-                baseM: sill,
-                heightM: head,
+                baseM: math.max(0, sill - over),
+                heightM: head + over,
                 label: label,
                 element: el,
               );
@@ -812,6 +823,7 @@ class LightScene {
               mired,
               diffuse,
               filters.map((m) => m.name).join(' + '),
+              over: 0.15,
             ),
           );
         }
@@ -836,6 +848,7 @@ class LightScene {
               0,
               cloth.transmission > 0 ? 120 : null,
               'Cortina (${cloth.name.toLowerCase()})',
+              over: 0.4,
             ),
           );
         }
@@ -1071,8 +1084,11 @@ class LightScene {
           centre: (cloth.a + cloth.b) / 2,
           tangent: span / span.distance,
           lengthUnits: span.distance,
-          heightM: cloth.heightM - cloth.baseM,
-          baseM: cloth.baseM,
+          heightM: cloth.diffuseHeightM ?? cloth.heightM - cloth.baseM,
+          baseM:
+              cloth.baseM +
+              (cloth.heightM - cloth.baseM - (cloth.diffuseHeightM ?? 0)) *
+                  (cloth.diffuseHeightM == null ? 0 : 0.5),
           keep: cloth.diffuseKeep,
           mired: cloth.miredShift,
           beamDeg: beam,
@@ -1376,6 +1392,93 @@ class LightScene {
       1.0,
     );
     return luxFrom(light, units, math.acos(cos) * 180 / math.pi);
+  }
+
+  /// Toda la luz que llega a un punto, ya sumada: para pintar la planta.
+  ///
+  /// Las fuentes anchas se miran desde tres puntos de su frente, así sus
+  /// sombras salen con penumbra. El sol se mide a [sunHeightM] del suelo
+  /// (en el suelo, por defecto: es donde se ve su mancha). Lo que aporta
+  /// menos de [cutoff] lux ni se comprueba si está tapado.
+  ({double lux, double cct}) sampleAt(
+    Offset point, {
+    double cutoff = 0,
+    double sunHeightM = 0,
+  }) {
+    var total = 0.0;
+    var mired = 0.0;
+    void add(double lux, double kelvin) {
+      if (lux <= 0) return;
+      total += lux;
+      mired += lux * 1e6 / (kelvin <= 0 ? 5600 : kelvin);
+    }
+
+    for (final light in lights) {
+      final source = light.source;
+      if (source.candela <= 0) continue;
+      final span = point - light.position;
+      final units = span.distance;
+      final dir = units > 1e-6 ? span / units : light.aim;
+      final offAxis = light.overheadM != null && light.tiltDeg > 0
+          ? math.acos(
+                  (dir.dx * light.aim.dx + dir.dy * light.aim.dy).clamp(
+                    -1.0,
+                    1.0,
+                  ),
+                ) *
+                180 /
+                math.pi
+          : _offAxis(light, dir);
+      if (light.frontOnly && offAxis >= 89) continue;
+      final raw = luxFrom(light, units, offAxis);
+      if (raw <= cutoff) continue;
+
+      final above = light.overheadM != null;
+      final half = source.sizeM / metersPerUnit / 3;
+      double keep;
+      double shift;
+      if (half < 5 || above) {
+        final passed = _throughput(
+          light.position,
+          point,
+          ignore: light.surface,
+          fromAbove: above,
+        );
+        keep = passed.transmission;
+        shift = passed.miredShift;
+      } else {
+        // Penumbra: la fuente vista desde tres puntos de su ancho.
+        final across = Offset(-light.aim.dy, light.aim.dx) * half;
+        keep = 0;
+        shift = 0;
+        for (final k in const [-1.0, 0.0, 1.0]) {
+          final passed = _throughput(
+            light.position + across * k,
+            point,
+            ignore: light.surface,
+          );
+          keep += passed.transmission / 3;
+          if (passed.transmission > 0) shift = passed.miredShift;
+        }
+      }
+      if (keep <= 0) continue;
+      add(raw * keep, _shift(source.cct, shift));
+    }
+
+    final env = ambient;
+    if (env != null) {
+      if (env.hasSun) {
+        final passed = sunThroughput(point, heightM: sunHeightM);
+        add(
+          env.condition.sunLux * passed.transmission,
+          _shift(env.condition.sunCct, passed.miredShift),
+        );
+      }
+      if (env.hasSky && env.skyLux > cutoff && !isRoofed(point)) {
+        add(env.skyLux * _openSky(point), env.skyCct);
+      }
+    }
+    return (lux: total, cct: total <= 0 ? 0 : 1e6 / (mired / total));
   }
 
   /// Lo que aporta cada fuente a un punto de la planta, de más a menos.

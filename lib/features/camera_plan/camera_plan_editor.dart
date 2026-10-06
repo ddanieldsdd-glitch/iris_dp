@@ -30,6 +30,7 @@ import 'light_beam.dart';
 import 'plan_data.dart' show kLightSetupColors;
 import 'plan_cast.dart';
 import 'plan_gear_list.dart';
+import 'plan_light_map.dart';
 import 'plan_project_gear_dialog.dart';
 import 'plan_marks.dart';
 import 'plan_room_panel.dart';
@@ -219,6 +220,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   final FocusNode _canvasFocus = FocusNode(debugLabel: 'planta');
 
   /// Luces, cámaras y lentes del proyecto, de la pantalla Equipo.
+  /// La luz de la planta, calculada punto a punto.
+  final _lightMap = PlanLightMapCache();
+
   ProjectGear _gear = const ProjectGear();
 
   /// Personajes del proyecto, con su color: el mismo en todas las plantas.
@@ -348,6 +352,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   @override
   void dispose() {
+    _lightMap.dispose();
     _annotationController.dispose();
     _canvasFocus.dispose();
     super.dispose();
@@ -2866,6 +2871,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                       ],
                                                       alsoSelected: _multi,
                                                       rotating: _isRotating,
+                                                      lightMap: _lightMap,
                                                       selectedRoom:
                                                           _selectedRoom,
                                                       segmentPreview:
