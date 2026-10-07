@@ -8,6 +8,7 @@ import '../camera_plan/floor_plan_repository.dart';
 import '../camera_plan/plan_element_compat.dart';
 import 'luka_light_mapping.dart';
 import 'unreal_coords.dart';
+import '../../shared/rich_text/script_markup.dart';
 
 /// Resultado del export de planta de cámara + luz para LUKA / Unreal.
 class LukaCameraPlanExport {
@@ -223,7 +224,7 @@ class LukaCameraPlanExporter {
       'shot_number': shot.number,
       'plan_source': source,
       'technical': {
-        'framing': shot.framing ?? '',
+        'framing': scriptMarkupToPlain(shot.framing),
         'lens_mm': parseFocalLengthMm(shot.lens),
         'lens_raw': shot.lens ?? '',
         'movement': shot.movement ?? 'STEADY',
@@ -232,8 +233,8 @@ class LukaCameraPlanExporter {
         't_stop': parseTStop(shot.fStop),
         'shutter_angle': shot.shutterAngle ?? '180',
         'fps': shot.fps ?? 24,
-        'action': shot.action ?? '',
-        'notes': shot.notes ?? '',
+        'action': scriptMarkupToPlain(shot.action),
+        'notes': scriptMarkupToPlain(shot.notes),
       },
       'primary_camera': primaryCamera,
       'elements': {
@@ -352,7 +353,7 @@ class LukaCameraPlanExporter {
       'path_point_count': el.pathPoints.length,
       'path_length_m': pathLengthM,
       'path_points': pathPoints,
-      'framing': shot?.framing ?? '',
+      'framing': scriptMarkupToPlain(shot?.framing),
       'angle': shot?.angle ?? 'normal',
       'fps': shot?.fps ?? 24,
       'shutter_angle': shot?.shutterAngle ?? '180',

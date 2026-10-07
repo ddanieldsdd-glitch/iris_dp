@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -24,6 +25,7 @@ import '../locations/locations_screen.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
+import '../../shared/rich_text/script_markup.dart';
 import '../locations/location_picker.dart';
 import '../locations/where_field.dart';
 import 'scene_form_sheet.dart';
@@ -42,6 +44,31 @@ const kAngles = kShotAngles;
 /// Plano en el que se está trabajando: el de la última celda tocada. La barra
 /// de formato actúa sobre él.
 final _activeShotProvider = StateProvider.autoDispose<int?>((ref) => null);
+
+/// Celda en la que se está trabajando; el color de celda actúa sobre ella.
+final _activeCellProvider =
+    StateProvider.autoDispose<({int shotId, String column})?>((ref) => null);
+
+/// Si los colores de la barra tiñen el plano entero o solo la celda.
+final _colorTargetIsCellProvider = StateProvider.autoDispose<bool>(
+  (ref) => false,
+);
+
+/// Colores de celda de un plano: columna → color.
+Map<String, String> _cellStyles(Shot shot) {
+  final raw = shot.cellStylesJson;
+  if (raw == null || raw.isEmpty) return const {};
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return const {};
+    return {
+      for (final e in decoded.entries)
+        if (e.value is String) '${e.key}': e.value as String,
+    };
+  } catch (_) {
+    return const {};
+  }
+}
 
 class TechnicalScriptScreen extends ConsumerWidget {
   final int projectId;
@@ -218,14 +245,32 @@ class _FormatBar extends ConsumerWidget {
       onPressed: onTap,
     );
 
-    Future<void> setRowColor(String? value) async {
-      if (activeShot == null) return;
-      await ref
-          .read(databaseProvider)
-          .updateShotFields(
-            activeShot,
-            ShotsCompanion(notesHighlight: Value(value)),
-          );
+    final cellTarget = ref.watch(_colorTargetIsCellProvider);
+    final activeCell = ref.watch(_activeCellProvider);
+    final canColor = cellTarget ? activeCell != null : activeShot != null;
+
+    Future<void> setColor(String? value) async {
+      final db = ref.read(databaseProvider);
+      if (!cellTarget) {
+        if (activeShot == null) return;
+        await db.updateShotFields(
+          activeShot,
+          ShotsCompanion(notesHighlight: Value(value)),
+        );
+        return;
+      }
+      final cell = activeCell;
+      if (cell == null) return;
+      final shot = await db.getShotById(cell.shotId);
+      if (shot == null) return;
+      final styles = {..._cellStyles(shot)};
+      value == null ? styles.remove(cell.column) : styles[cell.column] = value;
+      await db.updateShotFields(
+        cell.shotId,
+        ShotsCompanion(
+          cellStylesJson: Value(styles.isEmpty ? null : jsonEncode(styles)),
+        ),
+      );
     }
 
     final swatches = ScriptSheetTheme.resolve(
@@ -233,175 +278,275 @@ class _FormatBar extends ConsumerWidget {
       palette,
     );
 
-    return Container(
-      height: 44,
-      width: double.infinity,
-      alignment: Alignment.centerLeft,
-      decoration: BoxDecoration(
-        color: palette.surface,
-        border: Border(bottom: BorderSide(color: palette.divider)),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        child: Row(
-          children: [
-            SegmentedButton<ScriptView>(
-              showSelectedIcon: false,
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              segments: const [
-                ButtonSegment(
-                  value: ScriptView.sheet,
-                  icon: Icon(Icons.description_outlined, size: 16),
-                  label: Text('Hoja'),
+    // Tocar la barra no saca el foco del campo que se está editando.
+    return TextFieldTapRegion(
+      child: Container(
+        height: 44,
+        width: double.infinity,
+        alignment: Alignment.centerLeft,
+        decoration: BoxDecoration(
+          color: palette.surface,
+          border: Border(bottom: BorderSide(color: palette.divider)),
+        ),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          child: Row(
+            children: [
+              SegmentedButton<ScriptView>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                ButtonSegment(
-                  value: ScriptView.dark,
-                  icon: Icon(Icons.dark_mode_outlined, size: 16),
-                  label: Text('Oscura'),
-                ),
-              ],
-              selected: {settings.view},
-              onSelectionChanged: (s) =>
-                  notifier.update((v) => v.copyWith(view: s.first)),
-            ),
-            divider(),
-            PopupMenuButton<String>(
-              tooltip: 'Tipografía de la tabla',
-              color: palette.surfaceElevated,
-              onSelected: (f) =>
-                  notifier.update((v) => v.copyWith(fontFamily: f)),
-              itemBuilder: (_) => [
-                for (final f in kScriptFonts.entries)
-                  CheckedPopupMenuItem(
-                    value: f.key,
-                    checked: settings.fontFamily == f.key,
-                    child: Text(f.value),
+                segments: const [
+                  ButtonSegment(
+                    value: ScriptView.sheet,
+                    icon: Icon(Icons.description_outlined, size: 16),
+                    label: Text('Hoja'),
                   ),
-              ],
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    kScriptFonts[settings.fontFamily] ?? settings.fontFamily,
-                    style: label,
-                  ),
-                  Icon(
-                    Icons.arrow_drop_down,
-                    size: 18,
-                    color: palette.textSecondary,
+                  ButtonSegment(
+                    value: ScriptView.dark,
+                    icon: Icon(Icons.dark_mode_outlined, size: 16),
+                    label: Text('Oscura'),
                   ),
                 ],
+                selected: {settings.view},
+                onSelectionChanged: (s) =>
+                    notifier.update((v) => v.copyWith(view: s.first)),
               ),
-            ),
-            const SizedBox(width: 6),
-            iconButton(
-              tooltip: 'Letra más pequeña',
-              icon: Icons.remove,
-              onTap: settings.fontSize <= TechnicalScriptSettings.minFontSize
-                  ? null
-                  : () => notifier.update(
-                      (v) => v.copyWith(fontSize: v.fontSize - 1),
+              divider(),
+              PopupMenuButton<String>(
+                tooltip: 'Tipografía de la tabla',
+                color: palette.surfaceElevated,
+                onSelected: (f) =>
+                    notifier.update((v) => v.copyWith(fontFamily: f)),
+                itemBuilder: (_) => [
+                  for (final f in kScriptFonts.entries)
+                    CheckedPopupMenuItem(
+                      value: f.key,
+                      checked: settings.fontFamily == f.key,
+                      child: Text(f.value),
                     ),
-            ),
-            Container(
-              width: 34,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              decoration: BoxDecoration(
-                border: Border.all(color: palette.border),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(settings.fontSize.round().toString(), style: label),
-            ),
-            iconButton(
-              tooltip: 'Letra más grande',
-              icon: Icons.add,
-              onTap: settings.fontSize >= TechnicalScriptSettings.maxFontSize
-                  ? null
-                  : () => notifier.update(
-                      (v) => v.copyWith(fontSize: v.fontSize + 1),
-                    ),
-            ),
-            divider(),
-            Tooltip(
-              message: activeShot == null
-                  ? 'Toca un plano para darle color'
-                  : 'Color del plano',
-              child: Opacity(
-                opacity: activeShot == null ? 0.4 : 1,
+                ],
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.format_color_fill,
-                      size: 18,
-                      color: palette.textPrimary,
+                    Text(
+                      kScriptFonts[settings.fontFamily] ?? settings.fontFamily,
+                      style: label,
                     ),
-                    const SizedBox(width: 8),
-                    for (final c in kScriptRowColors)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 5),
-                        child: Tooltip(
-                          message: scriptRowColorLabel(c),
-                          child: InkResponse(
-                            radius: 14,
-                            onTap: activeShot == null
-                                ? null
-                                : () => setRowColor(c),
-                            child: Container(
-                              width: 18,
-                              height: 18,
-                              decoration: BoxDecoration(
-                                color: swatches.rowFill(c),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: palette.border),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    iconButton(
-                      tooltip: 'Quitar el color del plano',
-                      icon: Icons.format_color_reset_outlined,
-                      onTap: activeShot == null
-                          ? null
-                          : () => setRowColor(null),
+                    Icon(
+                      Icons.arrow_drop_down,
+                      size: 18,
+                      color: palette.textSecondary,
                     ),
                   ],
                 ),
               ),
-            ),
-            divider(),
-            PopupMenuButton<String>(
-              tooltip: 'Columnas visibles',
-              color: palette.surfaceElevated,
-              onSelected: notifier.toggleColumn,
-              itemBuilder: (_) => [
-                for (final c in ScriptColumn.optional)
-                  CheckedPopupMenuItem(
-                    value: c,
-                    checked: settings.shows(c),
-                    child: Text(ScriptColumn.label(c)),
-                  ),
-              ],
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.view_column_outlined,
-                    size: 18,
-                    color: palette.textPrimary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text('Columnas', style: label),
-                ],
+              const SizedBox(width: 6),
+              iconButton(
+                tooltip: 'Letra más pequeña',
+                icon: Icons.remove,
+                onTap: settings.fontSize <= TechnicalScriptSettings.minFontSize
+                    ? null
+                    : () => notifier.update(
+                        (v) => v.copyWith(fontSize: v.fontSize - 1),
+                      ),
               ),
-            ),
-          ],
+              Container(
+                width: 34,
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                decoration: BoxDecoration(
+                  border: Border.all(color: palette.border),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(settings.fontSize.round().toString(), style: label),
+              ),
+              iconButton(
+                tooltip: 'Letra más grande',
+                icon: Icons.add,
+                onTap: settings.fontSize >= TechnicalScriptSettings.maxFontSize
+                    ? null
+                    : () => notifier.update(
+                        (v) => v.copyWith(fontSize: v.fontSize + 1),
+                      ),
+              ),
+              divider(),
+              ValueListenableBuilder<TextEditingController?>(
+                valueListenable: activeScriptEditor,
+                builder: (context, editor, _) => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    iconButton(
+                      tooltip: 'Negrita (⌘B)',
+                      icon: Icons.format_bold,
+                      onTap: editor == null
+                          ? null
+                          : () => applyScriptMark(editor, ScriptMark.bold),
+                    ),
+                    iconButton(
+                      tooltip: 'Cursiva (⌘I)',
+                      icon: Icons.format_italic,
+                      onTap: editor == null
+                          ? null
+                          : () => applyScriptMark(editor, ScriptMark.italic),
+                    ),
+                    iconButton(
+                      tooltip: 'Subrayado (⌘U)',
+                      icon: Icons.format_underlined,
+                      onTap: editor == null
+                          ? null
+                          : () => applyScriptMark(editor, ScriptMark.underline),
+                    ),
+                    const SizedBox(width: 6),
+                    Opacity(
+                      opacity: editor == null ? 0.4 : 1,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.border_color_outlined,
+                            size: 18,
+                            color: palette.textPrimary,
+                          ),
+                          const SizedBox(width: 8),
+                          for (final c in kScriptMarkerColors.entries)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 5),
+                              child: Tooltip(
+                                message: 'Marcador ${c.value.toLowerCase()}',
+                                child: InkResponse(
+                                  radius: 14,
+                                  onTap: editor == null
+                                      ? null
+                                      : () => applyScriptMark(
+                                          editor,
+                                          ScriptMark.marker,
+                                          color: c.key,
+                                        ),
+                                  child: Container(
+                                    width: 18,
+                                    height: 18,
+                                    decoration: BoxDecoration(
+                                      color: kScriptMarkerFills[c.key],
+                                      borderRadius: BorderRadius.circular(3),
+                                      border: Border.all(color: palette.border),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          iconButton(
+                            tooltip: 'Quitar el marcador',
+                            icon: Icons.format_clear,
+                            onTap: editor == null
+                                ? null
+                                : () => applyScriptMark(
+                                    editor,
+                                    ScriptMark.marker,
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              divider(),
+              SegmentedButton<bool>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                segments: const [
+                  ButtonSegment(value: false, label: Text('Plano')),
+                  ButtonSegment(value: true, label: Text('Celda')),
+                ],
+                selected: {cellTarget},
+                onSelectionChanged: (v) =>
+                    ref.read(_colorTargetIsCellProvider.notifier).state =
+                        v.first,
+              ),
+              const SizedBox(width: 8),
+              Tooltip(
+                message: !canColor
+                    ? (cellTarget
+                          ? 'Toca una celda para darle color'
+                          : 'Toca un plano para darle color')
+                    : (cellTarget ? 'Color de la celda' : 'Color del plano'),
+                child: Opacity(
+                  opacity: canColor ? 1 : 0.4,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.format_color_fill,
+                        size: 18,
+                        color: palette.textPrimary,
+                      ),
+                      const SizedBox(width: 8),
+                      for (final c in kScriptRowColors)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 5),
+                          child: Tooltip(
+                            message: scriptRowColorLabel(c),
+                            child: InkResponse(
+                              radius: 14,
+                              onTap: canColor ? () => setColor(c) : null,
+                              child: Container(
+                                width: 18,
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  color: swatches.rowFill(c),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: palette.border),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      iconButton(
+                        tooltip: cellTarget
+                            ? 'Quitar el color de la celda'
+                            : 'Quitar el color del plano',
+                        icon: Icons.format_color_reset_outlined,
+                        onTap: canColor ? () => setColor(null) : null,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              divider(),
+              PopupMenuButton<String>(
+                tooltip: 'Columnas visibles',
+                color: palette.surfaceElevated,
+                onSelected: notifier.toggleColumn,
+                itemBuilder: (_) => [
+                  for (final c in ScriptColumn.optional)
+                    CheckedPopupMenuItem(
+                      value: c,
+                      checked: settings.shows(c),
+                      child: Text(ScriptColumn.label(c)),
+                    ),
+                ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.view_column_outlined,
+                      size: 18,
+                      color: palette.textPrimary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text('Columnas', style: label),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1102,26 +1247,47 @@ class _TableHeader extends StatelessWidget {
 
 /// Celda de la hoja: línea a la derecha y, si lo que contiene tiene el foco,
 /// borde de acento.
-class _Cell extends StatelessWidget {
+class _Cell extends ConsumerWidget {
   final double width;
   final Widget child;
   final EdgeInsets padding;
   final Alignment alignment;
+
+  /// Plano y columna, en las celdas que admiten color propio.
+  final Shot? shot;
+  final String? column;
 
   const _Cell({
     required this.width,
     required this.child,
     this.padding = const EdgeInsets.all(6),
     this.alignment = Alignment.topLeft,
+    this.shot,
+    this.column,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (width == 0) return const SizedBox.shrink();
     final sheet = ScriptSheet.of(context);
+    final shot = this.shot;
+    final column = this.column;
+    final fill = shot == null || column == null
+        ? null
+        : sheet.rowFill(_cellStyles(shot)[column]);
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,
+      onFocusChange: shot == null || column == null
+          ? null
+          : (focused) {
+              if (focused) {
+                ref.read(_activeCellProvider.notifier).state = (
+                  shotId: shot.id,
+                  column: column,
+                );
+              }
+            },
       child: Builder(
         builder: (context) {
           // Depender del foco así repinta la celda sin `setState`.
@@ -1129,6 +1295,7 @@ class _Cell extends StatelessWidget {
           return Container(
             width: width,
             padding: padding,
+            color: fill,
             foregroundDecoration: BoxDecoration(
               border: focused
                   ? Border.all(color: sheet.accent, width: 2)
@@ -1388,7 +1555,9 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
       required ValueChanged<String> onChanged,
       int minLines = 1,
       TextAlign align = TextAlign.start,
+      bool rich = false,
     }) => EditableCell(
+      rich: rich,
       value: value,
       hint: hintText,
       style: sheet.text,
@@ -1439,16 +1608,21 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                 ),
                 _Cell(
                   width: cols.encuadre,
+                  shot: shot,
+                  column: 'encuadre',
                   alignment: Alignment.center,
                   child: field(
                     value: shot.framing,
                     hintText: 'PD, PMC...',
+                    rich: true,
                     align: TextAlign.center,
                     onChanged: (v) => write(ShotsCompanion(framing: Value(v))),
                   ),
                 ),
                 _Cell(
                   width: cols.lens,
+                  shot: shot,
+                  column: 'lens',
                   alignment: Alignment.center,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -1478,6 +1652,8 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                 ),
                 _Cell(
                   width: cols.fStop,
+                  shot: shot,
+                  column: 'f',
                   alignment: Alignment.center,
                   child: field(
                     value: shot.fStop,
@@ -1488,6 +1664,8 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                 ),
                 _Cell(
                   width: cols.personajes,
+                  shot: shot,
+                  column: 'pers',
                   child: field(
                     value: decodeSceneCharacters(
                       shot.charactersJson,
@@ -1505,6 +1683,8 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                 ),
                 _Cell(
                   width: cols.duracion,
+                  shot: shot,
+                  column: 'dur',
                   alignment: Alignment.center,
                   child: field(
                     value: shot.durationSeconds?.toString(),
@@ -1519,9 +1699,12 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                 ),
                 _Cell(
                   width: cols.action,
+                  shot: shot,
+                  column: 'action',
                   child: field(
                     value: shot.action,
                     hintText: 'Descripción de la acción...',
+                    rich: true,
                     minLines: 3,
                     onChanged: (v) => write(ShotsCompanion(action: Value(v))),
                   ),
@@ -1544,9 +1727,12 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                 ),
                 _Cell(
                   width: cols.apuntes,
+                  shot: shot,
+                  column: 'notes',
                   child: field(
                     value: shot.notes,
                     hintText: 'Apuntes...',
+                    rich: true,
                     minLines: 3,
                     onChanged: (v) => write(ShotsCompanion(notes: Value(v))),
                   ),
@@ -1585,7 +1771,7 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                     ),
                     child: Text(
                       'Plano ${shot.number}'
-                      '${(shot.framing ?? '').trim().isEmpty ? '' : ' · ${shot.framing!.trim()}'}',
+                      '${scriptMarkupToPlain(shot.framing).trim().isEmpty ? '' : ' · ${scriptMarkupToPlain(shot.framing).trim()}'}',
                       style: AppTypography.bodyMedium(
                         palette,
                       ).copyWith(color: palette.textPrimary),

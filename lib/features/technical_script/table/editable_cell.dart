@@ -1,4 +1,84 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../../shared/rich_text/script_markup.dart';
+
+/// Campo de texto con formato que se está editando ahora, si lo hay. La
+/// barra de formato actúa sobre él.
+final activeScriptEditor = ValueNotifier<TextEditingController?>(null);
+
+/// Fondo de cada color de marcador.
+const kScriptMarkerFills = {
+  'y': Color(0xFFFFF176),
+  'g': Color(0xFFA5D6A7),
+  'p': Color(0xFFF48FB1),
+  'b': Color(0xFF90CAF9),
+};
+
+/// Pone o quita un formato en la selección de [controller].
+void applyScriptMark(
+  TextEditingController controller,
+  ScriptMark mark, {
+  String? color,
+}) {
+  final selection = controller.selection;
+  if (!selection.isValid || selection.isCollapsed) return;
+  final edit = toggleScriptMarkup(
+    controller.text,
+    selection.start,
+    selection.end,
+    mark,
+    color: color,
+  );
+  controller.value = TextEditingValue(
+    text: edit.text,
+    selection: TextSelection(baseOffset: edit.start, extentOffset: edit.end),
+  );
+}
+
+/// Estilo de un trozo de texto con formato sobre el estilo [base].
+TextStyle scriptSpanStyle(TextStyle base, ScriptSpan span) {
+  final marked = span.marker != null;
+  return base.copyWith(
+    fontWeight: span.bold ? FontWeight.w700 : null,
+    fontStyle: span.italic ? FontStyle.italic : null,
+    decoration: span.underline ? TextDecoration.underline : null,
+    decorationColor: marked ? const Color(0xFF111111) : base.color,
+    backgroundColor: marked ? kScriptMarkerFills[span.marker] : null,
+    // Sobre el marcador el texto va siempre oscuro, también en vista oscura.
+    color: marked ? const Color(0xFF111111) : null,
+  );
+}
+
+/// Campo que pinta el formato mientras se escribe, con las marcas atenuadas.
+class ScriptMarkupController extends TextEditingController {
+  ScriptMarkupController.fromValue(super.value) : super.fromValue();
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    final base = style ?? const TextStyle();
+    return TextSpan(
+      style: base,
+      children: [
+        for (final span in parseScriptMarkup(text, keepMarkup: true))
+          TextSpan(
+            text: span.text,
+            style: span.isMarkup
+                ? base.copyWith(
+                    color: (base.color ?? const Color(0xFF888888)).withValues(
+                      alpha: 0.35,
+                    ),
+                  )
+                : scriptSpanStyle(base, span),
+          ),
+      ],
+    );
+  }
+}
 
 /// Celda de texto de la tabla. Mientras no se edita es solo texto, que es
 /// barato de pintar; al tocarla (o al llegar con Tab) monta su campo con el
@@ -12,6 +92,9 @@ class EditableCell extends StatefulWidget {
   final int minLines;
   final ValueChanged<String> onChanged;
 
+  /// Admite negrita, cursiva, subrayado y marcador.
+  final bool rich;
+
   const EditableCell({
     super.key,
     required this.value,
@@ -21,6 +104,7 @@ class EditableCell extends StatefulWidget {
     required this.onChanged,
     this.textAlign = TextAlign.start,
     this.minLines = 1,
+    this.rich = false,
   });
 
   @override
@@ -34,6 +118,8 @@ class _EditableCellState extends State<EditableCell> {
   TextEditingController? _ctrl;
 
   bool get _editing => _ctrl != null;
+
+  bool get _hasFormat => parseScriptMarkup(_value).any((span) => !span.isPlain);
   String get _value => widget.value ?? '';
 
   @override
@@ -49,30 +135,35 @@ class _EditableCellState extends State<EditableCell> {
   void _startEditing([Offset? tapPosition]) {
     if (_editing) return;
     var offset = _value.length;
-    if (tapPosition != null && _value.isNotEmpty) {
+    final shown = widget.rich ? scriptMarkupToPlain(_value) : _value;
+    if (tapPosition != null && shown.isNotEmpty) {
       final box = context.findRenderObject() as RenderBox?;
       if (box != null && box.hasSize) {
         final painter = TextPainter(
-          text: TextSpan(text: _value, style: widget.style),
+          text: TextSpan(text: shown, style: widget.style),
           textAlign: widget.textAlign,
           textDirection: Directionality.of(context),
           textScaler: MediaQuery.textScalerOf(context),
         )..layout(minWidth: box.size.width, maxWidth: box.size.width);
         offset = painter.getPositionForOffset(tapPosition).offset;
         painter.dispose();
+        // El clic cae sobre el texto visible; el campo lleva las marcas.
+        if (widget.rich) offset = scriptRawOffsetForPlain(_value, offset);
       }
     }
     final focus = FocusNode(debugLabel: 'EditableCell.edit')
       ..addListener(_onEditFocus);
     setState(() {
       _editFocus = focus;
-      _ctrl = TextEditingController.fromValue(
-        TextEditingValue(
-          text: _value,
-          selection: TextSelection.collapsed(offset: offset),
-        ),
+      final value = TextEditingValue(
+        text: _value,
+        selection: TextSelection.collapsed(offset: offset),
       );
+      _ctrl = widget.rich
+          ? ScriptMarkupController.fromValue(value)
+          : TextEditingController.fromValue(value);
     });
+    if (widget.rich) activeScriptEditor.value = _ctrl;
     focus.requestFocus();
   }
 
@@ -87,6 +178,7 @@ class _EditableCellState extends State<EditableCell> {
     final focus = _editFocus;
     if (ctrl == null) return;
     final text = ctrl.text;
+    if (activeScriptEditor.value == ctrl) activeScriptEditor.value = null;
     if (mounted) {
       setState(() {
         _ctrl = null;
@@ -109,6 +201,13 @@ class _EditableCellState extends State<EditableCell> {
   void dispose() {
     final ctrl = _ctrl;
     if (ctrl != null && ctrl.text != _value) widget.onChanged(ctrl.text);
+    if (ctrl != null && activeScriptEditor.value == ctrl) {
+      // Fuera de este momento: avisar a la barra mientras se desmonta la
+      // celda rompería el repintado.
+      Future.microtask(() {
+        if (activeScriptEditor.value == ctrl) activeScriptEditor.value = null;
+      });
+    }
     _restFocus
       ..removeListener(_onRestFocus)
       ..dispose();
@@ -117,6 +216,26 @@ class _EditableCellState extends State<EditableCell> {
     ctrl?.dispose();
     super.dispose();
   }
+
+  Widget _field(TextEditingController ctrl) => TextField(
+    controller: ctrl,
+    focusNode: _editFocus,
+    minLines: 1,
+    maxLines: null,
+    textAlign: widget.textAlign,
+    keyboardType: TextInputType.multiline,
+    textInputAction: TextInputAction.newline,
+    style: widget.style,
+    cursorColor: widget.style.color,
+    decoration: const InputDecoration(
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
+      filled: false,
+      isCollapsed: true,
+      contentPadding: EdgeInsets.zero,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -128,25 +247,23 @@ class _EditableCellState extends State<EditableCell> {
     if (ctrl != null) {
       return ConstrainedBox(
         constraints: BoxConstraints(minHeight: minHeight),
-        child: TextField(
-          controller: ctrl,
-          focusNode: _editFocus,
-          minLines: 1,
-          maxLines: null,
-          textAlign: widget.textAlign,
-          keyboardType: TextInputType.multiline,
-          textInputAction: TextInputAction.newline,
-          style: widget.style,
-          cursorColor: widget.style.color,
-          decoration: const InputDecoration(
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            filled: false,
-            isCollapsed: true,
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
+        child: !widget.rich
+            ? _field(ctrl)
+            : CallbackShortcuts(
+                bindings: {
+                  for (final entry in {
+                    LogicalKeyboardKey.keyB: ScriptMark.bold,
+                    LogicalKeyboardKey.keyI: ScriptMark.italic,
+                    LogicalKeyboardKey.keyU: ScriptMark.underline,
+                  }.entries) ...{
+                    SingleActivator(entry.key, meta: true): () =>
+                        applyScriptMark(ctrl, entry.value),
+                    SingleActivator(entry.key, control: true): () =>
+                        applyScriptMark(ctrl, entry.value),
+                  },
+                },
+                child: _field(ctrl),
+              ),
       );
     }
 
@@ -162,11 +279,26 @@ class _EditableCellState extends State<EditableCell> {
               minHeight: minHeight,
               minWidth: double.infinity,
             ),
-            child: Text(
-              _value.isEmpty ? widget.hint : _value,
-              textAlign: widget.textAlign,
-              style: _value.isEmpty ? widget.hintStyle : widget.style,
-            ),
+            // Sin formato es texto normal, que es más barato de pintar.
+            child: _value.isEmpty || !widget.rich || !_hasFormat
+                ? Text(
+                    _value.isEmpty ? widget.hint : _value,
+                    textAlign: widget.textAlign,
+                    style: _value.isEmpty ? widget.hintStyle : widget.style,
+                  )
+                : Text.rich(
+                    TextSpan(
+                      children: [
+                        for (final span in parseScriptMarkup(_value))
+                          TextSpan(
+                            text: span.text,
+                            style: scriptSpanStyle(widget.style, span),
+                          ),
+                      ],
+                    ),
+                    textAlign: widget.textAlign,
+                    style: widget.style,
+                  ),
           ),
         ),
       ),

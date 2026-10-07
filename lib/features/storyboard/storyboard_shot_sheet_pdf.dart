@@ -17,6 +17,7 @@ import 'storyboard_shot_export_meta.dart';
 import 'storyboard_shot_image_exporter.dart';
 import '../camera_plan/camera_plan_constants.dart';
 import '../camera_plan/floor_plan_repository.dart';
+import '../../shared/rich_text/script_markup.dart';
 
 /// PDF de plano único estilo Artemis (S2 Detail / S3 Shot Plan).
 class StoryboardShotSheetPdf {
@@ -316,9 +317,9 @@ class StoryboardShotSheetPdf {
 
   static String _notesText(Shot shot) {
     final parts = <String>[
-      if (shot.notes?.trim().isNotEmpty == true) shot.notes!.trim(),
-      if (shot.action?.trim().isNotEmpty == true) shot.action!.trim(),
-      if (shot.framing?.trim().isNotEmpty == true) shot.framing!.trim(),
+      if (shot.notes?.trim().isNotEmpty == true) scriptMarkupToPlain(shot.notes).trim(),
+      if (shot.action?.trim().isNotEmpty == true) scriptMarkupToPlain(shot.action).trim(),
+      if (shot.framing?.trim().isNotEmpty == true) scriptMarkupToPlain(shot.framing).trim(),
       if (shot.movement?.trim().isNotEmpty == true) shot.movement!.trim(),
     ];
     return parts.isEmpty ? '—' : parts.join('\n');

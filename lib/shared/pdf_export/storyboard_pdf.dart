@@ -20,6 +20,7 @@ import '../../features/storyboard/storyboard_image_palette.dart';
 import '../../features/storyboard/storyboard_shot_export_meta.dart';
 import '../../features/storyboard/storyboard_shot_sheet_pdf.dart';
 import '../../features/storyboard/storyboard_shot_image_exporter.dart';
+import '../rich_text/script_markup.dart';
 
 /// PDF de storyboard con estilos CLEAN / BASIC / DETAIL / SHOT PLAN.
 class StoryboardPdfExporter {
@@ -546,7 +547,7 @@ class StoryboardPdfExporter {
                 if (shot.action?.isNotEmpty == true) ...[
                   pw.SizedBox(height: 4),
                   pw.Text(
-                    shot.action!,
+                    scriptMarkupToPlain(shot.action),
                     style: const pw.TextStyle(fontSize: 8),
                     maxLines: 3,
                   ),
@@ -554,7 +555,7 @@ class StoryboardPdfExporter {
                 if (shot.notes?.isNotEmpty == true) ...[
                   pw.SizedBox(height: 4),
                   pw.Text(
-                    shot.notes!,
+                    scriptMarkupToPlain(shot.notes),
                     style: const pw.TextStyle(
                       fontSize: 8,
                       color: PdfColors.grey800,
@@ -626,7 +627,7 @@ class StoryboardPdfExporter {
               style == StoryboardExportStyle.detail &&
               shot.action?.isNotEmpty == true)
             pw.Text(
-              shot.action!,
+              scriptMarkupToPlain(shot.action),
               style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey800),
               maxLines: 2,
               textAlign: pw.TextAlign.center,
@@ -684,7 +685,7 @@ class StoryboardPdfExporter {
               padding: const pw.EdgeInsets.all(3),
               child: pw.Text(
                 [
-                  if (shot.framing?.isNotEmpty == true) shot.framing,
+                  if (shot.framing?.isNotEmpty == true) scriptMarkupToPlain(shot.framing),
                   if (shot.lens?.isNotEmpty == true) shot.lens,
                   if (shot.movement?.isNotEmpty == true) shot.movement,
                 ].whereType<String>().join(' · '),

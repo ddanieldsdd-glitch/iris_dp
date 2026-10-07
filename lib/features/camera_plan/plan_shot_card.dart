@@ -13,6 +13,7 @@ import 'floor_plan_repository.dart';
 import 'plan_data.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
+import '../../shared/rich_text/script_markup.dart';
 
 /// Tarjeta de un plano: miniatura de lo que se ve en él y la etiqueta de su
 /// esquema de luz. Tocar la tarjeta lo abre; tocar la etiqueta cambia el
@@ -36,7 +37,7 @@ class PlanShotCard extends ConsumerWidget {
     final palette = context.palette;
     final scene = data.scene(shot.sceneId);
     final details = [
-      if (shot.framing?.isNotEmpty == true) shot.framing!,
+      if (shot.framing?.isNotEmpty == true) scriptMarkupToPlain(shot.framing),
       if (shot.lens?.isNotEmpty == true) shot.lens!,
     ].join(' · ');
 
@@ -462,7 +463,7 @@ class _ShotChip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final details = [
-      if (shot.framing?.isNotEmpty == true) shot.framing!,
+      if (shot.framing?.isNotEmpty == true) scriptMarkupToPlain(shot.framing),
       if (shot.lens?.isNotEmpty == true) shot.lens!,
     ].join(' ');
     final own = data.hasLightOverrides(shot);

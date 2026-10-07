@@ -10,6 +10,7 @@ import 'floor_plan_scope.dart';
 import 'plan_data.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
+import '../../shared/rich_text/script_markup.dart';
 
 /// Pantalla única de trabajo: el editor de la planta abierta y, al lado, un
 /// navegador para cambiar de set, esquema de luz, plano o localización sin
@@ -486,7 +487,7 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
     final selected = target == widget.target;
     final setup = _data.setup(shot.lightSetupId);
     final details = [
-      if (shot.framing?.isNotEmpty == true) shot.framing!,
+      if (shot.framing?.isNotEmpty == true) scriptMarkupToPlain(shot.framing),
       if (shot.lens?.isNotEmpty == true) shot.lens!,
     ].join(' · ');
     return Material(

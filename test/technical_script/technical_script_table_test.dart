@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/database/database_provider.dart';
 import 'package:iris_dp/core/theme/app_theme.dart';
+import 'package:iris_dp/features/technical_script/table/editable_cell.dart';
 import 'package:iris_dp/features/technical_script/technical_script_screen.dart';
 
 /// Base de datos que tarda en guardar el orden, como la de verdad.
@@ -552,6 +553,70 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.tap(find.byTooltip('Cerrar'));
     await settle(tester);
+    await unmount(tester);
+  });
+
+  testWidgets('la barra pone negrita a la selección sin sacar el cursor de '
+      'la celda, y el texto se lee sin las marcas', (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+
+    await tester.tap(find.text('PML de ALI 2'));
+    await tester.pump();
+    final editor = activeScriptEditor.value!;
+    editor.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Negrita (⌘B)'));
+    await settle(tester);
+    // Sigue en edición: la barra no le ha quitado el foco.
+    expect(activeScriptEditor.value, same(editor));
+    expect(editor.text, '**PML** de ALI 2');
+
+    await tester.tap(find.byTooltip('Marcador verde'));
+    await settle(tester);
+    expect(editor.text, '**==g:PML==** de ALI 2');
+
+    // Al salir de la celda se guarda y se lee sin marcas.
+    await tester.tap(find.text('PML de ALI 3'));
+    await settle(tester);
+    final shots = await db.getShotsForProject(projectId);
+    expect(shots[1].framing, '**==g:PML==** de ALI 2');
+    expect(find.text('PML de ALI 2', findRichText: true), findsOneWidget);
+    expect(find.textContaining('**', findRichText: true), findsNothing);
+    await unmount(tester);
+  });
+
+  testWidgets('color de una celda suelta', (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+
+    await tester.tap(find.text('PML de ALI 2'));
+    await settle(tester);
+    await tester.tap(find.text('Celda'));
+    await settle(tester);
+    await tester.tap(find.byTooltip('Verde'));
+    await settle(tester);
+
+    var shots = await db.getShotsForProject(projectId);
+    expect(shots[1].cellStylesJson, '{"encuadre":"green"}');
+    // El plano entero no se tiñe.
+    expect(shots[1].notesHighlight, isNull);
+
+    await tester.tap(find.byTooltip('Quitar el color de la celda'));
+    await settle(tester);
+    shots = await db.getShotsForProject(projectId);
+    expect(shots[1].cellStylesJson, isNull);
     await unmount(tester);
   });
 }

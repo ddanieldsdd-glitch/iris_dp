@@ -4,6 +4,7 @@ import '../../core/database/app_database.dart';
 import '../../core/utils/scene_format.dart';
 import '../../core/utils/shot_technical_options.dart';
 import '../luka_export/unreal_coords.dart';
+import '../../shared/rich_text/script_markup.dart';
 
 /// Ancho de sensor full-frame (mm) para estimar HFOV desde focal.
 const kDefaultSensorWidthMm = 36.0;
@@ -38,8 +39,8 @@ String shotMetadataBlock(Shot shot, Scene scene) {
     if (formatShotTechnicalLine(shot).isNotEmpty) formatShotTechnicalLine(shot),
     sceneLocationLine(scene),
     if (shot.fStop?.isNotEmpty == true) 'T${shot.fStop}',
-    if (shot.notes?.isNotEmpty == true) shot.notes!,
-    if (shot.action?.isNotEmpty == true) shot.action!,
+    if (shot.notes?.isNotEmpty == true) scriptMarkupToPlain(shot.notes),
+    if (shot.action?.isNotEmpty == true) scriptMarkupToPlain(shot.action),
   ];
   return lines.join('\n');
 }

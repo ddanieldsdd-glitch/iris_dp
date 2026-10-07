@@ -26,6 +26,7 @@ import '../technical_script/technical_script_screen.dart';
 import 'storyboard_export_options_sheet.dart';
 import 'storyboard_shot_export_service.dart';
 import '../../core/widgets/app_snackbar.dart';
+import '../../shared/rich_text/script_markup.dart';
 
 enum _StoryboardLayout { linear, grid, list }
 
@@ -974,7 +975,7 @@ class _StoryboardFrame extends ConsumerWidget {
 
   String _metaLine() {
     return [
-      if (shot.framing?.isNotEmpty == true) shot.framing,
+      if (shot.framing?.isNotEmpty == true) scriptMarkupToPlain(shot.framing),
       if (shot.lens?.isNotEmpty == true) shot.lens,
       if (shot.movement?.isNotEmpty == true) shot.movement,
     ].whereType<String>().join(' · ');
@@ -1105,7 +1106,7 @@ class _StoryboardFrame extends ConsumerWidget {
                     if (shot.action?.isNotEmpty == true) ...[
                       const SizedBox(height: 4),
                       Text(
-                        shot.action!,
+                        scriptMarkupToPlain(shot.action),
                         style: AppTypography.caption(palette),
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
@@ -1150,7 +1151,7 @@ class _StoryboardFrame extends ConsumerWidget {
                   if (shot.action?.isNotEmpty == true) ...[
                     const SizedBox(height: 2),
                     Text(
-                      shot.action!,
+                      scriptMarkupToPlain(shot.action),
                       style: AppTypography.caption(palette).copyWith(
                         color: palette.textSecondary,
                       ),

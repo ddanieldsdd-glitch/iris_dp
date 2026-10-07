@@ -16,6 +16,7 @@ import 'plan_data.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
 import 'shot_route.dart';
+import '../../shared/rich_text/script_markup.dart';
 
 /// Tablero de una escena: sus planos repartidos por set y por esquema de
 /// luz. Cada plano es una tarjeta que se arrastra a la columna que toque.
@@ -562,7 +563,7 @@ class _ShotCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final details = [
-      if (shot.framing?.isNotEmpty == true) shot.framing!,
+      if (shot.framing?.isNotEmpty == true) scriptMarkupToPlain(shot.framing),
       if (shot.lens?.isNotEmpty == true) shot.lens!,
       if (shot.movement?.isNotEmpty == true) shot.movement!,
     ].join(' · ');

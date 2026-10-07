@@ -4,6 +4,7 @@ import '../../core/database/app_database.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../shared/rich_text/script_markup.dart';
 
 /// Escenas y planos del guion técnico elegidos para un documento de rodaje,
 /// en el orden del guion.
@@ -183,8 +184,8 @@ class _ScriptPickerDialogState extends State<_ScriptPickerDialog> {
             title: Text(
               [
                 'Plano ${shot.number}',
-                if ((shot.framing ?? '').trim().isNotEmpty)
-                  shot.framing!.trim(),
+                if ((scriptMarkupToPlain(shot.framing)).trim().isNotEmpty)
+                  scriptMarkupToPlain(shot.framing).trim(),
               ].join(' · '),
               style: AppTypography.bodyMedium(palette),
             ),

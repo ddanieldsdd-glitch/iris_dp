@@ -1,6 +1,7 @@
 import '../../core/database/app_database.dart';
 import '../../core/utils/scene_characters.dart';
 import 'shoot_document_block_types.dart';
+import '../../shared/rich_text/script_markup.dart';
 
 /// Datos resueltos para renderizar un bloque (maestro + overrides).
 class ResolvedShootBlock {
@@ -20,8 +21,12 @@ class ResolvedShootBlock {
 
   String? get lens => overrides['lens'] as String? ?? shot?.lens;
   String? get movement => overrides['movement'] as String? ?? shot?.movement;
-  String? get framing => overrides['framing'] as String? ?? shot?.framing;
-  String? get action => overrides['action'] as String? ?? shot?.action;
+  String? get framing =>
+      overrides['framing'] as String? ??
+      (shot?.framing == null ? null : scriptMarkupToPlain(shot!.framing));
+  String? get action =>
+      overrides['action'] as String? ??
+      (shot?.action == null ? null : scriptMarkupToPlain(shot!.action));
   String? get imagePath => block.imagePath ?? shot?.referenceImagePath;
   List<String> get characters {
     final fromBlock = decodeSceneCharacters(block.charactersJson);
