@@ -9,6 +9,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_snackbar.dart';
 import 'shoot_document_block_types.dart';
+import '../../core/widgets/safe_reorderable_column.dart';
 
 /// Editor visual de plantillas de documentos de rodaje.
 class ShootTemplateEditorScreen extends ConsumerStatefulWidget {
@@ -287,10 +288,11 @@ class _ShootTemplateEditorScreenState
                       style: AppTypography.bodyMedium(palette),
                     ),
                   )
-                : ReorderableListView.builder(
+                : SafeReorderableColumn(
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     itemCount: _blocks.length,
-                    onReorderItem: (oldIndex, newIndex) {
+                    keyOf: (index) => ObjectKey(_blocks[index]),
+                    onReorder: (oldIndex, newIndex) {
                       setState(() {
                         final item = _blocks.removeAt(oldIndex);
                         _blocks.insert(newIndex, item);

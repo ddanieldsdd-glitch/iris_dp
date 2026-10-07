@@ -22,6 +22,7 @@ import '../../bible_preset_service.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_screen_library_sheet.dart';
 import '../bible_section_fields_editor.dart';
+import '../../../../core/widgets/safe_reorderable_column.dart';
 
 /// Configuración de la biblia: sus pantallas y sus plantillas.
 ///
@@ -521,12 +522,13 @@ class _ScreenList extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return ReorderableListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      buildDefaultDragHandles: false,
+    return SafeReorderableColumn(
+      scrollable: false,
+      overlayHandle: false,
       itemCount: defs.length,
-      onReorderItem: (oldIndex, newIndex) {
+      keyOf: (index) => ValueKey(defs[index].id),
+      dragLabel: (index) => defs[index].label,
+      onReorder: (oldIndex, newIndex) {
         final next = List<BibleSectionDefinition>.from(defs);
         next.insert(newIndex, next.removeAt(oldIndex));
         onReorder(next.map((d) => d.id).toList());
@@ -537,7 +539,6 @@ class _ScreenList extends StatelessWidget {
         final hidden = def.isHidden;
 
         return Material(
-          key: ValueKey(def.id),
           color: Colors.transparent,
           child: Container(
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -549,14 +550,7 @@ class _ScreenList extends StatelessWidget {
             ),
             child: Row(
               children: [
-                ReorderableDragStartListener(
-                  index: index,
-                  child: Icon(
-                    Icons.drag_indicator,
-                    size: 18,
-                    color: palette.textTertiary,
-                  ),
-                ),
+                SafeReorderableColumn.handle(context, index),
                 const SizedBox(width: 8),
                 Icon(
                   bibleIconFromKey(def.iconKey),

@@ -10,6 +10,7 @@ import '../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../bible_section_fields.dart';
 import 'bible_add_point.dart';
 import 'catalog/bible_widget_catalog.dart';
+import '../../../core/widgets/safe_reorderable_column.dart';
 
 /// Puntos de una pantalla de la biblia: orden, nombre, añadir y quitar.
 ///
@@ -291,20 +292,19 @@ class _BibleSectionFieldsEditorState
             ),
             const SizedBox(height: AppSpacing.sm),
             Expanded(
-              child: ReorderableListView.builder(
+              child: SafeReorderableColumn(
                 itemCount: _fields.length,
-                onReorderItem: (oldIndex, newIndex) {
+                keyOf: (index) => ValueKey(_fields[index].key),
+                dragLabel: (index) => _fields[index].label,
+                onReorder: (oldIndex, newIndex) {
                   setState(() {
-                    if (newIndex > oldIndex) newIndex--;
-                    final item = _fields.removeAt(oldIndex);
-                    _fields.insert(newIndex, item);
+                    _fields.insert(newIndex, _fields.removeAt(oldIndex));
                   });
                   _save();
                 },
                 itemBuilder: (context, index) {
                   final field = _fields[index];
                   return Material(
-                    key: ValueKey(field.key),
                     color: palette.surfaceElevated,
                     child: ListTile(
                       contentPadding: EdgeInsets.zero,

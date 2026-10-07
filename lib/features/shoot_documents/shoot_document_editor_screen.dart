@@ -20,6 +20,7 @@ import 'shoot_document_block_types.dart';
 import 'shoot_document_composer.dart';
 import 'shoot_document_on_set_view.dart';
 import 'shoot_document_script_picker.dart';
+import '../../core/widgets/safe_reorderable_column.dart';
 
 enum _EditorMode { blocks, preview, onSet, settings }
 
@@ -547,10 +548,12 @@ class _BlocksEditor extends StatelessWidget {
       );
     }
 
-    return ReorderableListView.builder(
+    return SafeReorderableColumn(
       padding: const EdgeInsets.all(AppSpacing.lg),
       itemCount: blocks.length,
-      onReorderItem: (oldIndex, newIndex) {
+      keyOf: (index) => ValueKey(blocks[index].id),
+      dragLabel: (index) => resolved[index].title,
+      onReorder: (oldIndex, newIndex) {
         final ids = blocks.map((b) => b.id).toList();
         final id = ids.removeAt(oldIndex);
         ids.insert(newIndex, id);
@@ -560,7 +563,6 @@ class _BlocksEditor extends StatelessWidget {
         final block = blocks[index];
         final r = resolved[index];
         return ShootDocumentBlockTile(
-          key: ValueKey(block.id),
           resolved: r,
           palette: palette,
           onEdit: () => onEdit(block),

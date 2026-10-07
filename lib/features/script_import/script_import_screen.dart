@@ -42,6 +42,7 @@ import 'script_preview_controller.dart';
 import 'script_fullscreen_reader.dart';
 import 'script_scene_index_panel.dart';
 import '../../core/widgets/app_snackbar.dart';
+import '../../core/widgets/safe_reorderable_column.dart';
 
 class _SceneListItem {
   final String id;
@@ -1436,10 +1437,11 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
                       textAlign: TextAlign.center,
                     ),
                   )
-                : ReorderableListView.builder(
-                    buildDefaultDragHandles: false,
+                : SafeReorderableColumn(
+                    overlayHandle: false,
                     itemCount: _scenes.length,
-                    onReorderItem: _onReorderItem,
+                    keyOf: (i) => ValueKey(_scenes[i].id),
+                    onReorder: _onReorderItem,
                     itemBuilder: (context, i) => _sceneCard(
                       palette,
                       colorCtx,
@@ -1486,16 +1488,8 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ReorderableDragStartListener(
-              index: i,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 8, top: 2),
-                child: Icon(
-                  Icons.drag_handle,
-                  color: palette.textTertiary,
-                  size: 22,
-                ),
-              ),
+            Builder(
+              builder: (context) => SafeReorderableColumn.handle(context, i),
             ),
             Container(
               width: 4,

@@ -15,6 +15,7 @@ import '../moodboard_reference_meta.dart';
 import '../services/bible_section_references_service.dart';
 import '../visual_bible_model.dart';
 import 'bible_navigation_scope.dart';
+import '../../../core/widgets/safe_reorderable_column.dart';
 
 /// Gestor unificado de referencias de imagen por sección (añadir, reordenar, hero, eliminar).
 class BibleSectionReferencesManager extends ConsumerWidget {
@@ -71,19 +72,17 @@ class BibleSectionReferencesManager extends ConsumerWidget {
                 ),
               ),
             if (compact)
-              ReorderableListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
+              SafeReorderableColumn(
+                scrollable: false,
                 itemCount: images.length,
-                onReorder: (oldIndex, newIndex) async {
-                  if (newIndex > oldIndex) newIndex--;
-                  await BibleSectionReferencesService.reorder(
-                    db,
-                    images,
-                    oldIndex,
-                    newIndex,
-                  );
-                },
+                keyOf: (index) => ValueKey(images[index].id),
+                onReorder: (oldIndex, newIndex) =>
+                    BibleSectionReferencesService.reorder(
+                      db,
+                      images,
+                      oldIndex,
+                      newIndex,
+                    ),
                 itemBuilder: (context, index) {
                   final image = images[index];
                   return _CompactRefTile(
@@ -274,7 +273,8 @@ class _CompactRefTile extends ConsumerWidget {
               icon: Icon(Icons.close, size: 18, color: palette.textSecondary),
               onPressed: onRemove,
             ),
-            const Icon(Icons.drag_handle, size: 18),
+            // Sitio para el asa de arrastre de la lista.
+            const SizedBox(width: 34),
           ],
         ),
         ),
