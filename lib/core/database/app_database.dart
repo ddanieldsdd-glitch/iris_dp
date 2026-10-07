@@ -1432,6 +1432,47 @@ class AppDatabase extends _$AppDatabase {
     if (scene != null) await touchProjectContent(scene.projectId);
   }
 
+  /// Pasa un plano a otra escena, delante del plano que ocupa [beforeIndex]
+  /// en ella (nulo = al final). Los planos de las dos escenas se renumeran y
+  /// los bloques de documentos de rodaje del plano pasan a la escena nueva.
+  Future<void> moveShotToScene(
+    int shotId,
+    int targetSceneId, {
+    int? beforeIndex,
+  }) async {
+    final shot = await getShotById(shotId);
+    final target = await getSceneById(targetSceneId);
+    if (shot == null || target == null || shot.sceneId == targetSceneId) return;
+    final sourceSceneId = shot.sceneId;
+    await transaction(() async {
+      final targetShots =
+          await (select(shots)
+                ..where((s) => s.sceneId.equals(targetSceneId))
+                ..orderBy([
+                  (s) => OrderingTerm.asc(s.sortOrder),
+                  (s) => OrderingTerm.asc(s.id),
+                ]))
+              .get();
+      final ids = [for (final s in targetShots) s.id];
+      final at = (beforeIndex ?? ids.length).clamp(0, ids.length);
+      ids.insert(at, shotId);
+      await (update(shots)..where((s) => s.id.equals(shotId))).write(
+        ShotsCompanion(sceneId: Value(targetSceneId)),
+      );
+      for (var i = 0; i < ids.length; i++) {
+        await (update(shots)..where((s) => s.id.equals(ids[i]))).write(
+          ShotsCompanion(sortOrder: Value(i)),
+        );
+      }
+      await (update(shootDocumentBlocks)
+            ..where((b) => b.shotId.equals(shotId)))
+          .write(ShootDocumentBlocksCompanion(sceneId: Value(targetSceneId)));
+      await _renumberShotsInScene(targetSceneId);
+      await _renumberShotsInScene(sourceSceneId);
+    });
+    await touchProjectContent(target.projectId);
+  }
+
   Future<void> _renumberShotsInScene(int sceneId) async {
     final sceneShots =
         await (select(shots)

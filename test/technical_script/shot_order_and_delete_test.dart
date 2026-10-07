@@ -137,4 +137,47 @@ void main() {
     final blocks = await db.getBlocksForShootDocument(docId);
     expect(blocks.map((b) => b.shotId), [kept]);
   });
+
+  test('mover un plano a otra escena renumera las dos y se lleva sus '
+      'bloques de documento', () async {
+    final other = await db.insertScene(
+      ScenesCompanion.insert(
+        projectId: projectId,
+        number: 2,
+        name: 'Otra',
+        locationCanonical: 'INT. KEBAB - NOCHE',
+        locationPureName: 'KEBAB',
+      ),
+    );
+    final a = await addShot(1);
+    final b = await addShot(2);
+    final c = await addShot(3);
+    final x = await addShot(1, scene: other);
+    final y = await addShot(2, scene: other);
+    final docId = await db.insertShootDocument(
+      ShootDocumentsCompanion.insert(projectId: projectId, name: 'Jornada'),
+    );
+    await db.insertShootDocumentBlock(
+      ShootDocumentBlocksCompanion.insert(
+        documentId: docId,
+        blockType: 'shot',
+        sceneId: Value(sceneId),
+        shotId: Value(b),
+      ),
+    );
+
+    // Al medio de la otra escena.
+    await db.moveShotToScene(b, other, beforeIndex: 1);
+
+    expect((await shots()).map((s) => s.id), [a, c]);
+    expect((await shots()).map((s) => s.number), [1, 2]);
+    expect((await shots(other)).map((s) => s.id), [x, b, y]);
+    expect((await shots(other)).map((s) => s.number), [1, 2, 3]);
+    expect((await db.getBlocksForShootDocument(docId)).single.sceneId, other);
+
+    // Sin posición, al final.
+    await db.moveShotToScene(a, other);
+    expect((await shots(other)).map((s) => s.id), [x, b, y, a]);
+    expect((await shots()).map((s) => s.number), [1]);
+  });
 }

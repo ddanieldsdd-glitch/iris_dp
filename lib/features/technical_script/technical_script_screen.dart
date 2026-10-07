@@ -777,6 +777,22 @@ class _SceneSectionState extends ConsumerState<_SceneSection> {
     );
   }
 
+  /// Un plano soltado aquí: si es de esta escena cambia de sitio; si viene
+  /// de otra, se pasa a esta.
+  void _dropBefore(List<Shot> shots, _ShotDrag drag, int beforeIndex) {
+    if (drag.sceneId == widget.scene.id) {
+      _moveBefore(shots, drag.shotId, beforeIndex);
+      return;
+    }
+    ref
+        .read(databaseProvider)
+        .moveShotToScene(
+          drag.shotId,
+          widget.scene.id,
+          beforeIndex: beforeIndex,
+        );
+  }
+
   /// Coloca el plano arrastrado delante del que ocupa [beforeIndex]
   /// (`shots.length` = al final).
   void _moveBefore(List<Shot> shots, int draggedId, int beforeIndex) {
@@ -819,13 +835,13 @@ class _SceneSectionState extends ConsumerState<_SceneSection> {
             key: ValueKey(shots[i].id),
             sceneId: scene.id,
             shotId: shots[i].id,
-            onDrop: (draggedId) => _moveBefore(shots, draggedId, i),
+            onDrop: (drag) => _dropBefore(shots, drag, i),
             child: _rowFor(shots[i]),
           ),
         _ShotDropTarget(
           sceneId: scene.id,
           shotId: null,
-          onDrop: (draggedId) => _moveBefore(shots, draggedId, shots.length),
+          onDrop: (drag) => _dropBefore(shots, drag, shots.length),
           child: Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -1097,14 +1113,14 @@ class _ShotDrag {
   const _ShotDrag({required this.shotId, required this.sceneId});
 }
 
-/// Hueco donde soltar un plano: delante de [child]. Marca con una línea de
-/// acento dónde va a caer.
+/// Hueco donde soltar un plano, de esta escena o de otra: delante de
+/// [child]. Marca con una línea de acento dónde va a caer.
 class _ShotDropTarget extends StatelessWidget {
   final int sceneId;
 
   /// Plano de esta fila; nulo en el hueco del final de la escena.
   final int? shotId;
-  final ValueChanged<int> onDrop;
+  final ValueChanged<_ShotDrag> onDrop;
   final Widget child;
 
   const _ShotDropTarget({
@@ -1119,9 +1135,8 @@ class _ShotDropTarget extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return DragTarget<_ShotDrag>(
-      onWillAcceptWithDetails: (d) =>
-          d.data.sceneId == sceneId && d.data.shotId != shotId,
-      onAcceptWithDetails: (d) => onDrop(d.data.shotId),
+      onWillAcceptWithDetails: (d) => d.data.shotId != shotId,
+      onAcceptWithDetails: (d) => onDrop(d.data),
       builder: (context, candidates, rejected) => DecoratedBox(
         position: DecorationPosition.foreground,
         decoration: BoxDecoration(
@@ -1562,7 +1577,16 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
             width: cols.acciones - sheet.lineWidth,
             child: Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: side(_DeleteShotButton(shot: shot)),
+              child: side(
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _MoveShotButton(shot: shot),
+                    const SizedBox(height: 10),
+                    _DeleteShotButton(shot: shot),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -1662,6 +1686,48 @@ class _PlanCell extends StatelessWidget {
                   ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Fuera de la hoja: pasar el plano a otra escena.
+class _MoveShotButton extends ConsumerWidget {
+  final Shot shot;
+
+  const _MoveShotButton({required this.shot});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final scenes = _PlanDataScope.of(context).scenes;
+    final others = [
+      for (final s in scenes)
+        if (s.id != shot.sceneId) s,
+    ];
+    return PopupMenuButton<int>(
+      tooltip: 'Mover a otra escena',
+      padding: EdgeInsets.zero,
+      enabled: others.isNotEmpty,
+      color: palette.surfaceElevated,
+      onSelected: (sceneId) =>
+          ref.read(databaseProvider).moveShotToScene(shot.id, sceneId),
+      itemBuilder: (_) => [
+        for (final s in others)
+          PopupMenuItem(
+            value: s.id,
+            height: 36,
+            child: Text(
+              '${s.number}. ${s.locationCanonical}'
+              '${s.offScript ? ' · fuera del guion' : ''}',
+              style: AppTypography.bodyMedium(palette),
+            ),
+          ),
+      ],
+      child: Icon(
+        Icons.drive_file_move_outline,
+        size: 18,
+        color: others.isEmpty ? palette.textTertiary : palette.textSecondary,
       ),
     );
   }
