@@ -83,6 +83,9 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
   late final ScriptPreviewController _previewController;
   int? _activeSceneIndex;
 
+  /// Filtro de la lista de escenas.
+  final _sceneSearch = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -93,6 +96,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
   @override
   void dispose() {
     _previewController.dispose();
+    _sceneSearch.dispose();
     super.dispose();
   }
 
@@ -921,6 +925,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
 
     final result = await showImportSceneSheet(
       context,
+      projectId: widget.projectId,
       scene: prefilled,
       nextNumber: nextNumber,
       colorContext: colorCtx,
@@ -950,6 +955,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
   Future<void> _addScene(ProjectSceneColors colorCtx) async {
     final result = await showImportSceneSheet(
       context,
+      projectId: widget.projectId,
       nextNumber: _scenes.length + 1,
       colorContext: colorCtx,
     );
@@ -961,6 +967,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     final data = _scenes[index].data;
     final result = await showImportSceneSheet(
       context,
+      projectId: widget.projectId,
       scene: data,
       nextNumber: data.number,
       colorContext: colorCtx,
@@ -1061,11 +1068,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     setState(() => _loading = true);
 
     try {
-      await db.syncScenesFromWorkspace(
-        widget.projectId,
-        items,
-        links: links,
-      );
+      await db.syncScenesFromWorkspace(widget.projectId, items, links: links);
       _syncPendingColorsFromScenes();
       final siteBySetKey = {
         for (final item in _scenes)
@@ -1290,8 +1293,6 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
   }
 
   Widget _buildScenesPanel(AppPalette palette, ProjectSceneColors colorCtx) {
-    final indexEntries = _buildSceneIndexEntries(colorCtx);
-
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
@@ -1328,31 +1329,6 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
             const SizedBox(height: AppSpacing.md),
             Text(_status, style: AppTypography.bodyMedium(palette)),
           ],
-          if (_scenes.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.md),
-            SizedBox(
-              height: 180,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(color: palette.divider),
-                  borderRadius: BorderRadius.circular(8),
-                  color: palette.surfaceElevated,
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: ScriptSceneIndexPanel(
-                    entries: indexEntries,
-                    activeSceneIndex: _activeSceneIndex,
-                    compact: true,
-                    onSceneTap: (entry) => _scrollToScene(entry.sceneIndex),
-                    onEditActiveScene: _activeSceneIndex != null
-                        ? () => _editScene(_activeSceneIndex!, colorCtx)
-                        : null,
-                  ),
-                ),
-              ),
-            ),
-          ],
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
@@ -1377,9 +1353,29 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
           if (_scenes.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Arrastra para reordenar. Este orden define el guion técnico. '
-              'La detección automática es solo una ayuda inicial.',
+              'Este orden es el del guion técnico. La escena que se está '
+              'leyendo en el guion va resaltada; toca una para ir a ella.',
               style: AppTypography.caption(palette),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: _sceneSearch,
+              style: AppTypography.bodyMedium(
+                palette,
+              ).copyWith(color: palette.textPrimary),
+              decoration: InputDecoration(
+                isDense: true,
+                prefixIcon: const Icon(Icons.search, size: 18),
+                hintText: 'Buscar por número, lugar o personaje',
+                suffixIcon: _sceneSearch.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Borrar',
+                        icon: const Icon(Icons.close, size: 16),
+                        onPressed: () => setState(_sceneSearch.clear),
+                      ),
+              ),
+              onChanged: (_) => setState(() {}),
             ),
           ],
           const SizedBox(height: AppSpacing.md),
@@ -1392,6 +1388,33 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
                       style: AppTypography.bodyMedium(palette),
                       textAlign: TextAlign.center,
                     ),
+                  )
+                : _sceneSearch.text.trim().isNotEmpty
+                ? Builder(
+                    builder: (context) {
+                      final found = _matchingSceneIndexes();
+                      if (found.isEmpty) {
+                        return Center(
+                          child: Text(
+                            'Ninguna escena coincide.',
+                            style: AppTypography.bodyMedium(palette),
+                          ),
+                        );
+                      }
+                      // Con el filtro puesto no se reordena.
+                      return ListView(
+                        children: [
+                          for (final i in found)
+                            _sceneCard(
+                              palette,
+                              colorCtx,
+                              i,
+                              key: ValueKey(_scenes[i].id),
+                              draggable: false,
+                            ),
+                        ],
+                      );
+                    },
                   )
                 : SafeReorderableColumn(
                     overlayHandle: false,
@@ -1422,11 +1445,29 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     );
   }
 
+  /// Escenas que coinciden con el buscador, por número, lugar o personaje.
+  List<int> _matchingSceneIndexes() {
+    final q = _sceneSearch.text.trim().toLowerCase();
+    return [
+      for (var i = 0; i < _scenes.length; i++)
+        if ([
+          '${_scenes[i].data.number}',
+          _scenes[i].data.location,
+          _scenes[i].data.shootSet,
+          _scenes[i].data.locationSite,
+          _scenes[i].data.name ?? '',
+          ..._scenes[i].data.characters,
+        ].any((text) => text.toLowerCase().contains(q)))
+          i,
+    ];
+  }
+
   Widget _sceneCard(
     AppPalette palette,
     ProjectSceneColors colorCtx,
     int i, {
     required Key key,
+    bool draggable = true,
   }) {
     final s = _scenes[i].data;
     final color = colorCtx.effective(
@@ -1435,108 +1476,124 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
       locationSite: s.locationSite,
     );
 
-    return AppCard(
+    final active = i == _activeSceneIndex;
+    return Container(
       key: key,
-      child: InkWell(
-        onTap: _scenes[i].sourceStartIndex != null
-            ? () => _scrollToScene(i)
-            : null,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Builder(
-              builder: (context) => SafeReorderableColumn.handle(context, i),
-            ),
-            Container(
-              width: 4,
-              height: 44,
-              margin: const EdgeInsets.only(right: 10),
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(2),
+      foregroundDecoration: active
+          ? BoxDecoration(
+              border: Border.all(color: palette.accent, width: 1.5),
+              borderRadius: BorderRadius.circular(12),
+            )
+          : null,
+      child: AppCard(
+        child: InkWell(
+          onTap: _scenes[i].sourceStartIndex != null
+              ? () => _scrollToScene(i)
+              : null,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (draggable)
+                Builder(
+                  builder: (context) =>
+                      SafeReorderableColumn.handle(context, i),
+                ),
+              Container(
+                width: 4,
+                height: 44,
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            Text(
-              '${s.number}.',
-              style: AppTypography.mono(
-                palette,
-              ).copyWith(color: palette.accent),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (s.name != null &&
-                      s.name!.trim().isNotEmpty &&
-                      !isAutoGeneratedSceneName(
-                        name: s.name,
-                        intExt: s.intExt,
-                        dayNight: s.dayNight,
-                        location: s.location,
-                      )) ...[
-                    Text(s.name!, style: AppTypography.label(palette)),
-                    const SizedBox(height: 2),
+              Text(
+                '${s.number}.',
+                style: AppTypography.mono(
+                  palette,
+                ).copyWith(color: palette.accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (s.name != null &&
+                        s.name!.trim().isNotEmpty &&
+                        !isAutoGeneratedSceneName(
+                          name: s.name,
+                          intExt: s.intExt,
+                          dayNight: s.dayNight,
+                          location: s.location,
+                        )) ...[
+                      Text(s.name!, style: AppTypography.label(palette)),
+                      const SizedBox(height: 2),
+                    ],
+                    SceneMetaDisplay(
+                      intExt: s.intExt,
+                      dayNight: s.dayNight,
+                      location: s.location,
+                      style: AppTypography.bodyLarge(palette),
+                    ),
+                    if (s.shootSet != s.location ||
+                        s.locationSite != s.shootSet)
+                      Text(
+                        '${s.locationSite} › ${s.shootSet}',
+                        style: AppTypography.caption(
+                          palette,
+                        ).copyWith(color: palette.accent),
+                      ),
+                    if (s.characters.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      SceneCharacterChips(
+                        characters: s.characters,
+                        palette: palette,
+                        compact: true,
+                        characterColors: _characterColorMap,
+                      ),
+                    ],
+                    if (s.description != null && s.description!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        s.description!,
+                        style: AppTypography.caption(palette),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ],
-                  SceneMetaDisplay(
-                    intExt: s.intExt,
-                    dayNight: s.dayNight,
-                    location: s.location,
-                    style: AppTypography.bodyLarge(palette),
+                ),
+              ),
+              if (_scenes[i].sourceStartIndex != null)
+                IconButton(
+                  tooltip: 'Ir al guion',
+                  icon: Icon(
+                    Icons.my_location_outlined,
+                    color: palette.accent,
+                    size: 18,
                   ),
-                  if (s.shootSet != s.location || s.locationSite != s.shootSet)
-                    Text(
-                      '${s.locationSite} › ${s.shootSet}',
-                      style: AppTypography.caption(
-                        palette,
-                      ).copyWith(color: palette.accent),
-                    ),
-                  if (s.characters.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    SceneCharacterChips(
-                      characters: s.characters,
-                      palette: palette,
-                      compact: true,
-                      characterColors: _characterColorMap,
-                    ),
-                  ],
-                  if (s.description != null && s.description!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      s.description!,
-                      style: AppTypography.caption(palette),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (_scenes[i].sourceStartIndex != null)
+                  onPressed: () => _scrollToScene(i),
+                ),
               IconButton(
-                tooltip: 'Ir al guion',
+                tooltip: 'Editar',
                 icon: Icon(
-                  Icons.my_location_outlined,
-                  color: palette.accent,
+                  Icons.edit_outlined,
+                  color: palette.textSecondary,
                   size: 18,
                 ),
-                onPressed: () => _scrollToScene(i),
+                onPressed: () => _editScene(i, colorCtx),
               ),
-            IconButton(
-              tooltip: 'Editar',
-              icon: Icon(
-                Icons.edit_outlined,
-                color: palette.textSecondary,
-                size: 18,
+              IconButton(
+                tooltip: 'Eliminar',
+                icon: Icon(
+                  Icons.delete_outline,
+                  color: palette.error,
+                  size: 18,
+                ),
+                onPressed: () => _deleteScene(i),
               ),
-              onPressed: () => _editScene(i, colorCtx),
-            ),
-            IconButton(
-              tooltip: 'Eliminar',
-              icon: Icon(Icons.delete_outline, color: palette.error, size: 18),
-              onPressed: () => _deleteScene(i),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
