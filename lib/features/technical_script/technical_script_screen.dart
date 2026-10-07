@@ -26,12 +26,14 @@ import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
 import '../../shared/rich_text/script_markup.dart';
+import '../../shared/technical_script_export/technical_script_docx.dart';
 import '../locations/location_picker.dart';
 import '../locations/where_field.dart';
 import 'scene_form_sheet.dart';
 import 'table/editable_cell.dart';
 import 'table/reference_image_menu.dart';
 import 'table/script_sheet_theme.dart';
+import 'technical_script_export.dart';
 import 'technical_script_settings.dart';
 import '../../core/utils/shot_technical_options.dart';
 import '../../core/widgets/app_snackbar.dart';
@@ -90,26 +92,24 @@ class TechnicalScriptScreen extends ConsumerWidget {
             moduleType: GoodNotesModuleType.guionTecnico,
             filenameBase: 'guion_tecnico',
             buildPdfBytes: () async {
-              final db = ref.read(databaseProvider);
-              final project = await db.getProject(projectId);
-              if (project == null) return Uint8List(0);
-              final scenes = await db.watchScenesForProject(projectId).first;
-              final shotsByScene = <int, List<Shot>>{};
-              for (final scene in scenes) {
-                shotsByScene[scene.id] = await db
-                    .watchShotsForScene(scene.id)
-                    .first;
-              }
-              return TechnicalScriptPdfExporter.buildBytes(
-                project: project,
-                scenes: scenes,
-                shotsByScene: shotsByScene,
+              final doc = await buildNarrativeScriptDoc(
+                ref.read(databaseProvider),
+                projectId,
+                ref.read(technicalScriptSettingsProvider),
               );
+              if (doc == null) return Uint8List(0);
+              return TechnicalScriptPdfExporter.buildBytes(doc);
             },
           ),
-          IconButton(
-            icon: Icon(Icons.picture_as_pdf_outlined, color: palette.accent),
-            onPressed: () => _exportPdf(context, ref),
+          PopupMenuButton<bool>(
+            tooltip: 'Exportar el guion técnico',
+            icon: Icon(Icons.ios_share, color: palette.accent),
+            color: palette.surfaceElevated,
+            onSelected: (word) => _export(context, ref, word: word),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: false, child: Text('PDF')),
+              PopupMenuItem(value: true, child: Text('Word (.docx)')),
+            ],
           ),
           IconButton(
             tooltip: 'Añadir escena',
@@ -161,33 +161,37 @@ class TechnicalScriptScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _exportPdf(BuildContext context, WidgetRef ref) async {
+  Future<void> _export(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool word,
+  }) async {
     final db = ref.read(databaseProvider);
     try {
-      final project = await db.getProject(projectId);
-      if (project == null) return;
-
-      final scenes = await db.watchScenesForProject(projectId).first;
-      if (scenes.isEmpty) {
-        if (!context.mounted) return;
+      final doc = await buildNarrativeScriptDoc(
+        db,
+        projectId,
+        ref.read(technicalScriptSettingsProvider),
+      );
+      if (!context.mounted) return;
+      if (doc == null || doc.sections.isEmpty) {
         AppSnackBar.show(context, 'No hay escenas para exportar.');
         return;
       }
-
-      final shotsByScene = <int, List<Shot>>{};
-      for (final scene in scenes) {
-        shotsByScene[scene.id] = await db.watchShotsForScene(scene.id).first;
-      }
-
-      final path = await TechnicalScriptPdfExporter.exportAndSave(
-        project: project,
-        scenes: scenes,
-        shotsByScene: shotsByScene,
-      );
-
+      final project = await db.getProject(projectId);
+      final fileName = technicalScriptFileName(project?.name ?? '');
+      final path = word
+          ? await TechnicalScriptDocxExporter.exportAndSave(
+              doc,
+              fileName: fileName,
+            )
+          : await TechnicalScriptPdfExporter.exportAndSave(
+              doc,
+              fileName: fileName,
+            );
       if (!context.mounted) return;
       if (path != null) {
-        AppSnackBar.show(context, 'PDF guardado en $path');
+        AppSnackBar.show(context, '${word ? 'Word' : 'PDF'} guardado en $path');
       }
     } catch (e) {
       if (!context.mounted) return;
