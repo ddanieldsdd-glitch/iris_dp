@@ -180,4 +180,60 @@ void main() {
     expect((await shots(other)).map((s) => s.id), [x, b, y, a]);
     expect((await shots()).map((s) => s.number), [1]);
   });
+
+  test('solo se mueven a mano las escenas que no vienen del guion', () async {
+    Future<int> addScene(int order, String place, {bool linked = false}) =>
+        db.insertScene(
+          ScenesCompanion.insert(
+            projectId: projectId,
+            number: order,
+            name: place,
+            locationCanonical: 'INT. $place - DÍA',
+            locationPureName: place,
+            sortOrder: Value(order),
+            scriptLinked: Value(linked),
+          ),
+        );
+    await (db.update(db.scenes)..where((s) => s.id.equals(sceneId))).write(
+      const ScenesCompanion(sortOrder: Value(1), scriptLinked: Value(true)),
+    );
+    final linked = await addScene(2, 'KEBAB', linked: true);
+    final manual = await addScene(3, 'PLAZA');
+
+    Future<List<String>> order() async => [
+      for (final s in await db.watchScenesForProject(projectId).first)
+        s.locationPureName,
+    ];
+
+    await db.moveSceneBy(manual, -1);
+    expect(await order(), ['CALLE', 'PLAZA', 'KEBAB']);
+    await db.moveSceneBy(manual, -5);
+    expect(await order(), ['PLAZA', 'CALLE', 'KEBAB']);
+
+    // Una escena del guion no cambia de sitio a mano, ni de número.
+    await db.moveSceneBy(linked, -1);
+    expect(await order(), ['PLAZA', 'CALLE', 'KEBAB']);
+    expect((await db.getSceneById(linked))!.number, 2);
+  });
+
+  test('pasar todos los planos de una escena a otra la deja vacía', () async {
+    final other = await db.insertScene(
+      ScenesCompanion.insert(
+        projectId: projectId,
+        number: 2,
+        name: 'Otra',
+        locationCanonical: 'INT. KEBAB - NOCHE',
+        locationPureName: 'KEBAB',
+      ),
+    );
+    final a = await addShot(1);
+    final b = await addShot(2);
+    final x = await addShot(1, scene: other);
+
+    await db.moveAllShotsToScene(sceneId, other);
+
+    expect(await shots(), isEmpty);
+    expect((await shots(other)).map((s) => s.id), [x, a, b]);
+    expect((await shots(other)).map((s) => s.number), [1, 2, 3]);
+  });
 }

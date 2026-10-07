@@ -979,6 +979,44 @@ class _SceneHeader extends ConsumerWidget {
               ],
             ),
           ),
+          if (scene.offScript)
+            _MoveAllShotsButton(scene: scene, shotCount: shotCount)
+          else if (scene.scriptLinked)
+            Tooltip(
+              message:
+                  'Viene del guion literario: su número y su orden son '
+                  'los del guion.',
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Icon(
+                  Icons.lock_outline,
+                  size: 16,
+                  color: palette.textTertiary,
+                ),
+              ),
+            )
+          else ...[
+            IconButton(
+              tooltip: 'Subir escena',
+              icon: Icon(
+                Icons.arrow_upward,
+                color: palette.textSecondary,
+                size: 18,
+              ),
+              onPressed: () =>
+                  ref.read(databaseProvider).moveSceneBy(scene.id, -1),
+            ),
+            IconButton(
+              tooltip: 'Bajar escena',
+              icon: Icon(
+                Icons.arrow_downward,
+                color: palette.textSecondary,
+                size: 18,
+              ),
+              onPressed: () =>
+                  ref.read(databaseProvider).moveSceneBy(scene.id, 1),
+            ),
+          ],
           IconButton(
             tooltip: 'Editar escena',
             icon: Icon(
@@ -1685,6 +1723,50 @@ class _PlanCell extends StatelessWidget {
                     ),
                   ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// En una escena que ya no está en el guion: llevarse todos sus planos a
+/// otra, para poder eliminarla sin perder trabajo.
+class _MoveAllShotsButton extends ConsumerWidget {
+  final Scene scene;
+  final int shotCount;
+
+  const _MoveAllShotsButton({required this.scene, required this.shotCount});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final others = [
+      for (final s in _PlanDataScope.of(context).scenes)
+        if (s.id != scene.id && !s.offScript) s,
+    ];
+    return PopupMenuButton<int>(
+      tooltip: 'Pasar todos sus planos a otra escena',
+      enabled: shotCount > 0 && others.isNotEmpty,
+      color: palette.surfaceElevated,
+      onSelected: (target) =>
+          ref.read(databaseProvider).moveAllShotsToScene(scene.id, target),
+      itemBuilder: (_) => [
+        for (final s in others)
+          PopupMenuItem(
+            value: s.id,
+            height: 36,
+            child: Text(
+              '${s.number}. ${s.locationCanonical}',
+              style: AppTypography.bodyMedium(palette),
+            ),
+          ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Icon(
+          Icons.drive_file_move_outline,
+          size: 18,
+          color: shotCount > 0 ? palette.textSecondary : palette.textTertiary,
         ),
       ),
     );

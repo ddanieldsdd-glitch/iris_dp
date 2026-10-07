@@ -1432,6 +1432,54 @@ class AppDatabase extends _$AppDatabase {
     if (scene != null) await touchProjectContent(scene.projectId);
   }
 
+  /// Sube ([delta] negativo) o baja una escena que no viene del guion entre
+  /// las demás. Las vinculadas al guion no se mueven: su orden es el suyo.
+  Future<void> moveSceneBy(int sceneId, int delta) async {
+    final scene = await getSceneById(sceneId);
+    if (scene == null || scene.scriptLinked || scene.offScript) return;
+    final ordered =
+        await (select(scenes)
+              ..where(
+                (s) =>
+                    s.projectId.equals(scene.projectId) &
+                    s.offScript.equals(false),
+              )
+              ..orderBy([
+                (s) => OrderingTerm.asc(s.sortOrder),
+                (s) => OrderingTerm.asc(s.id),
+              ]))
+            .get();
+    final from = ordered.indexWhere((s) => s.id == sceneId);
+    final to = (from + delta).clamp(0, ordered.length - 1);
+    if (from < 0 || to == from) return;
+    ordered.insert(to, ordered.removeAt(from));
+    await transaction(() async {
+      for (var i = 0; i < ordered.length; i++) {
+        if (ordered[i].sortOrder == i + 1) continue;
+        await (update(scenes)..where((s) => s.id.equals(ordered[i].id))).write(
+          ScenesCompanion(sortOrder: Value(i + 1)),
+        );
+      }
+    });
+    await touchProjectContent(scene.projectId);
+  }
+
+  /// Pasa todos los planos de una escena al final de otra, en su orden.
+  Future<void> moveAllShotsToScene(int fromSceneId, int toSceneId) async {
+    if (fromSceneId == toSceneId) return;
+    final moving =
+        await (select(shots)
+              ..where((s) => s.sceneId.equals(fromSceneId))
+              ..orderBy([
+                (s) => OrderingTerm.asc(s.sortOrder),
+                (s) => OrderingTerm.asc(s.id),
+              ]))
+            .get();
+    for (final shot in moving) {
+      await moveShotToScene(shot.id, toSceneId);
+    }
+  }
+
   /// Pasa un plano a otra escena, delante del plano que ocupa [beforeIndex]
   /// en ella (nulo = al final). Los planos de las dos escenas se renumeran y
   /// los bloques de documentos de rodaje del plano pasan a la escena nueva.
