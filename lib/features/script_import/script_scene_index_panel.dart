@@ -56,11 +56,17 @@ class ScriptSceneIndexPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (active != null) ...[
-          _ActiveSceneBanner(
-            palette: palette,
-            entry: active,
-            compact: compact,
-            onEdit: onEditActiveScene,
+          // En un panel bajo, la ficha de la escena activa cede sitio y se
+          // desplaza en vez de desbordar.
+          Flexible(
+            child: SingleChildScrollView(
+              child: _ActiveSceneBanner(
+                palette: palette,
+                entry: active,
+                compact: compact,
+                onEdit: onEditActiveScene,
+              ),
+            ),
           ),
           Divider(height: 1, color: palette.divider),
         ] else if (entries.isNotEmpty) ...[
