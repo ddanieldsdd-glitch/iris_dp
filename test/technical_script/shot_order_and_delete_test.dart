@@ -92,51 +92,53 @@ void main() {
     expect(await db.getBlocksForShootDocument(docId), isEmpty);
   });
 
-  test('eliminar una escena borra sus planos y deja las demás como estaban',
-      () async {
-    final otherScene = await db.insertScene(
-      ScenesCompanion.insert(
-        projectId: projectId,
-        number: 15,
-        name: 'Otra',
-        locationCanonical: 'INT. KEBAB - NOCHE',
-        locationPureName: 'KEBAB',
-      ),
-    );
-    final a = await addShot(1);
-    final kept = await addShot(1, scene: otherScene);
-    await db.insertShotReference(
-      ShotReferencesCompanion.insert(shotId: a, imagePath: '/tmp/ref.jpg'),
-    );
-    final docId = await db.insertShootDocument(
-      ShootDocumentsCompanion.insert(projectId: projectId, name: 'Jornada'),
-    );
-    await db.insertShootDocumentBlock(
-      ShootDocumentBlocksCompanion.insert(
-        documentId: docId,
-        blockType: 'scene_header',
-        sceneId: Value(sceneId),
-      ),
-    );
-    await db.insertShootDocumentBlock(
-      ShootDocumentBlocksCompanion.insert(
-        documentId: docId,
-        blockType: 'shot',
-        sceneId: Value(otherScene),
-        shotId: Value(kept),
-      ),
-    );
+  test(
+    'eliminar una escena borra sus planos y deja las demás como estaban',
+    () async {
+      final otherScene = await db.insertScene(
+        ScenesCompanion.insert(
+          projectId: projectId,
+          number: 15,
+          name: 'Otra',
+          locationCanonical: 'INT. KEBAB - NOCHE',
+          locationPureName: 'KEBAB',
+        ),
+      );
+      final a = await addShot(1);
+      final kept = await addShot(1, scene: otherScene);
+      await db.insertShotReference(
+        ShotReferencesCompanion.insert(shotId: a, imagePath: '/tmp/ref.jpg'),
+      );
+      final docId = await db.insertShootDocument(
+        ShootDocumentsCompanion.insert(projectId: projectId, name: 'Jornada'),
+      );
+      await db.insertShootDocumentBlock(
+        ShootDocumentBlocksCompanion.insert(
+          documentId: docId,
+          blockType: 'scene_header',
+          sceneId: Value(sceneId),
+        ),
+      );
+      await db.insertShootDocumentBlock(
+        ShootDocumentBlocksCompanion.insert(
+          documentId: docId,
+          blockType: 'shot',
+          sceneId: Value(otherScene),
+          shotId: Value(kept),
+        ),
+      );
 
-    await db.deleteScene(sceneId);
+      await db.deleteScene(sceneId);
 
-    expect(await db.getShotById(a), isNull);
-    expect(await db.watchReferencesForShot(a).first, isEmpty);
-    final scenes = await db.watchScenesForProject(projectId).first;
-    expect(scenes.map((s) => s.number), [15]);
-    expect((await shots(otherScene)).map((s) => s.id), [kept]);
-    final blocks = await db.getBlocksForShootDocument(docId);
-    expect(blocks.map((b) => b.shotId), [kept]);
-  });
+      expect(await db.getShotById(a), isNull);
+      expect(await db.watchReferencesForShot(a).first, isEmpty);
+      final scenes = await db.watchScenesForProject(projectId).first;
+      expect(scenes.map((s) => s.number), [15]);
+      expect((await shots(otherScene)).map((s) => s.id), [kept]);
+      final blocks = await db.getBlocksForShootDocument(docId);
+      expect(blocks.map((b) => b.shotId), [kept]);
+    },
+  );
 
   test('mover un plano a otra escena renumera las dos y se lleva sus '
       'bloques de documento', () async {

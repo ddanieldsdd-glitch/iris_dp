@@ -18,6 +18,7 @@ import 'storyboard_shot_image_exporter.dart';
 import '../camera_plan/camera_plan_constants.dart';
 import '../camera_plan/floor_plan_repository.dart';
 import '../../shared/rich_text/script_markup.dart';
+import '../../core/utils/shot_reference_import.dart';
 
 /// PDF de plano único estilo Artemis (S2 Detail / S3 Shot Plan).
 class StoryboardShotSheetPdf {
@@ -40,7 +41,7 @@ class StoryboardShotSheetPdf {
       bold: fonts.bold,
     );
 
-    final imageBytes = await PdfSafeImage.loadFromPath(shot.referenceImagePath);
+    final imageBytes = await PdfSafeImage.loadFromPath(storyboardImageOf(shot));
     final paletteColors = imageBytes != null
         ? await StoryboardImagePalette.extractFromBytes(imageBytes)
         : List.filled(8, const Color(0xFF808080));

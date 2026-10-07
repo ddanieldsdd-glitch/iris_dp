@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/database/database_provider.dart';
 import 'package:iris_dp/core/theme/app_theme.dart';
+import 'package:iris_dp/core/utils/shot_reference_import.dart';
 import 'package:iris_dp/features/technical_script/table/editable_cell.dart';
 import 'package:iris_dp/features/technical_script/technical_script_screen.dart';
 
@@ -617,6 +618,82 @@ void main() {
     await settle(tester);
     shots = await db.getShotsForProject(projectId);
     expect(shots[1].cellStylesJson, isNull);
+    await unmount(tester);
+  });
+
+  test(
+    'referencia y storyboard se prestan la imagen cuando falta la propia',
+    () async {
+      final projectId = await db.insertProject(
+        ProjectsCompanion.insert(name: 'P'),
+      );
+      final sceneId = await db.insertScene(
+        ScenesCompanion.insert(
+          projectId: projectId,
+          number: 1,
+          name: 'E',
+          locationCanonical: 'INT. A - DÍA',
+          locationPureName: 'A',
+        ),
+      );
+      Future<Shot> shot({String? reference, String? story}) async {
+        final id = await db.insertShot(
+          ShotsCompanion.insert(
+            sceneId: sceneId,
+            projectId: projectId,
+            number: 1,
+            referenceImagePath: Value(reference),
+            storyboardImagePath: Value(story),
+          ),
+        );
+        return (await db.getShotById(id))!;
+      }
+
+      final onlyRef = await shot(reference: '/ref.jpg');
+      expect(referenceImageOf(onlyRef), '/ref.jpg');
+      expect(storyboardImageOf(onlyRef), '/ref.jpg');
+
+      final onlyStory = await shot(story: '/story.jpg');
+      expect(referenceImageOf(onlyStory), '/story.jpg');
+      expect(storyboardImageOf(onlyStory), '/story.jpg');
+
+      final both = await shot(reference: '/ref.jpg', story: '/story.jpg');
+      expect(referenceImageOf(both), '/ref.jpg');
+      expect(storyboardImageOf(both), '/story.jpg');
+
+      final none = await shot();
+      expect(referenceImageOf(none), isNull);
+      expect(storyboardImageOf(none), isNull);
+    },
+  );
+
+  testWidgets('la columna de storyboard se activa en Columnas y abre su menú', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+    expect(find.text('STORYBOARD'), findsNothing);
+
+    await tester.tap(find.text('Columnas'));
+    await settle(tester);
+    await tester.tap(find.text('Storyboard'), warnIfMissed: false);
+    await settle(tester);
+    expect(find.text('STORYBOARD'), findsOneWidget);
+    expect(find.text('Story'), findsNWidgets(3));
+
+    await tester.tap(find.text('Story').first);
+    await settle(tester);
+    expect(find.text('Storyboard · Plano 1'), findsOneWidget);
+    // Los orígenes de captura son solo de la referencia.
+    expect(find.text('Más orígenes'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byTooltip('Cerrar'));
+    await settle(tester);
     await unmount(tester);
   });
 }

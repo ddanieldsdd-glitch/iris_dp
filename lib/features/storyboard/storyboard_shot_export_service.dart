@@ -8,6 +8,7 @@ import 'storyboard_export_style.dart';
 import 'storyboard_shot_export_meta.dart';
 import 'storyboard_shot_image_exporter.dart';
 import 'storyboard_shot_sheet_pdf.dart';
+import '../../core/utils/shot_reference_import.dart';
 
 /// Exporta un único plano del storyboard según el estilo elegido.
 class StoryboardShotExportService {
@@ -89,7 +90,7 @@ class StoryboardShotExportService {
     String base,
     String suffix,
   ) async {
-    final path = shot.referenceImagePath;
+    final path = storyboardImageOf(shot);
     if (path == null || !File(path).existsSync()) return null;
 
     final ext = path.split('.').last.toLowerCase();

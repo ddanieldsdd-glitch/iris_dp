@@ -9,6 +9,7 @@ import '../../core/database/app_database.dart';
 import 'storyboard_export_helpers.dart';
 import 'storyboard_export_style.dart';
 import 'storyboard_image_palette.dart';
+import '../../core/utils/shot_reference_import.dart';
 
 /// Renderiza un fotograma a PNG estilo Artemis (RAW / S1).
 class StoryboardShotImageExporter {
@@ -22,7 +23,7 @@ class StoryboardShotImageExporter {
   }) async {
     if (style.singleShotUsesPdf) return null;
 
-    final path = shot.referenceImagePath;
+    final path = storyboardImageOf(shot);
     ui.Image? image;
     if (path != null && File(path).existsSync()) {
       try {

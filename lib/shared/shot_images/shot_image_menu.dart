@@ -7,14 +7,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
-import '../../../core/database/app_database.dart';
-import '../../../core/database/database_provider.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/app_typography.dart';
-import '../../../core/utils/clipboard_image_reader.dart';
-import '../../../core/utils/shot_reference_import.dart';
-import '../../../core/utils/user_error.dart';
+import '../../core/database/app_database.dart';
+import '../../core/database/database_provider.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_typography.dart';
+import '../../core/utils/clipboard_image_reader.dart';
+import '../../core/utils/export_file_saver.dart';
+import '../../core/utils/shot_reference_import.dart';
+import '../../core/utils/user_error.dart';
 
 const _imageExtensions = {
   '.jpg',
@@ -28,18 +29,26 @@ const _imageExtensions = {
   '.tiff',
 };
 
-/// Menú de la imagen de referencia de un plano: arrastrarla, pegarla con
-/// ⌘V, elegirla del ordenador o del moodboard, y quitarla.
-Future<void> showReferenceImageMenu(BuildContext context, Shot shot) {
+/// Qué imagen del plano se está eligiendo.
+enum ShotImageTarget { reference, storyboard }
+
+/// Menú de una imagen del plano (referencia o storyboard): arrastrarla,
+/// pegarla con ⌘V, elegirla del ordenador o del moodboard, y quitarla.
+Future<void> showShotImageMenu(
+  BuildContext context,
+  Shot shot, {
+  ShotImageTarget target = ShotImageTarget.reference,
+}) {
   return showDialog<void>(
     context: context,
-    builder: (_) => _ReferenceImageMenu(shot: shot),
+    builder: (_) => _ReferenceImageMenu(shot: shot, target: target),
   );
 }
 
 class _ReferenceImageMenu extends ConsumerStatefulWidget {
   final Shot shot;
-  const _ReferenceImageMenu({required this.shot});
+  final ShotImageTarget target;
+  const _ReferenceImageMenu({required this.shot, required this.target});
 
   @override
   ConsumerState<_ReferenceImageMenu> createState() =>
@@ -53,6 +62,10 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
   String? _notice;
 
   AppDatabase get _db => ref.read(databaseProvider);
+
+  bool get _story => widget.target == ShotImageTarget.storyboard;
+
+  String get _what => _story ? 'Storyboard' : 'Referencia';
 
   /// El plano tal como está ahora, no como estaba al abrir el menú.
   Future<Shot> _current() async =>
@@ -75,13 +88,27 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
   }
 
   Future<void> _fromComputer(String source) => _run(() async {
-    final path = await pickAndImportShotReference(
+    if (!_story) {
+      final path = await pickAndImportShotReference(
+        db: _db,
+        shot: await _current(),
+        source: source,
+        dialogTitle: 'Referencia · Plano ${widget.shot.number}',
+      );
+      return path != null;
+    }
+    final file = await UserFilePicker.pickImage(
+      dialogTitle: 'Storyboard · Plano ${widget.shot.number}',
+    );
+    final bytes = file?.bytes;
+    if (file == null || bytes == null || bytes.isEmpty) return false;
+    await importShotStoryboardImage(
       db: _db,
       shot: await _current(),
-      source: source,
-      dialogTitle: 'Referencia · Plano ${widget.shot.number}',
+      sourceBytes: bytes,
+      fileName: file.name,
     );
-    return path != null;
+    return true;
   });
 
   Future<void> _fromPath(String path, {String? notImageNotice}) =>
@@ -93,12 +120,20 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
           );
           return false;
         }
-        await importShotReferenceImage(
-          db: _db,
-          shot: await _current(),
-          sourcePath: path,
-          source: ShotReferenceSource.manual,
-        );
+        if (_story) {
+          await importShotStoryboardImage(
+            db: _db,
+            shot: await _current(),
+            sourcePath: path,
+          );
+        } else {
+          await importShotReferenceImage(
+            db: _db,
+            shot: await _current(),
+            sourcePath: path,
+            source: ShotReferenceSource.manual,
+          );
+        }
         return true;
       });
 
@@ -109,18 +144,34 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
       setState(() => _notice = 'No hay ninguna imagen en el portapapeles.');
       return false;
     }
-    await importShotReferenceImage(
-      db: _db,
-      shot: await _current(),
-      sourceBytes: payload.bytes,
-      fileName: 'pegada${payload.extension}',
-      source: ShotReferenceSource.manual,
-    );
+    if (_story) {
+      await importShotStoryboardImage(
+        db: _db,
+        shot: await _current(),
+        sourceBytes: payload.bytes,
+        fileName: 'pegada${payload.extension}',
+      );
+    } else {
+      await importShotReferenceImage(
+        db: _db,
+        shot: await _current(),
+        sourceBytes: payload.bytes,
+        fileName: 'pegada${payload.extension}',
+        source: ShotReferenceSource.manual,
+      );
+    }
     return true;
   });
 
   Future<void> _remove() => _run(() async {
     final shot = await _current();
+    if (_story) {
+      await _db.updateShotFields(
+        shot.id,
+        const ShotsCompanion(storyboardImagePath: Value(null)),
+      );
+      return true;
+    }
     final path = shot.referenceImagePath;
     if (path == null) return true;
     final refs = await _db.watchReferencesForShot(shot.id).first;
@@ -139,7 +190,16 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final path = widget.shot.referenceImagePath;
+    // La imagen propia de este uso; si no la tiene, se enseña la heredada
+    // del otro, que no se puede quitar desde aquí.
+    final own = _story
+        ? widget.shot.storyboardImagePath
+        : widget.shot.referenceImagePath;
+    final shown = _story
+        ? storyboardImageOf(widget.shot)
+        : referenceImageOf(widget.shot);
+    final path = shown;
+    final hasOwn = own != null && File(own).existsSync();
     final hasImage = path != null && File(path).existsSync();
 
     return CallbackShortcuts(
@@ -171,7 +231,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                         child: Text(
                           _moodboard
                               ? 'Elegir del moodboard'
-                              : 'Referencia · Plano ${widget.shot.number}',
+                              : '$_what · Plano ${widget.shot.number}',
                           style: AppTypography.titleMedium(palette),
                         ),
                       ),
@@ -187,6 +247,18 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                     _moodboardGrid(palette)
                   else ...[
                     _dropZone(palette, hasImage ? path : null),
+                    if (hasImage && !hasOwn) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _story
+                            ? 'Es la imagen de referencia del plano. Pon '
+                                  'otra aquí si el storyboard debe llevar una '
+                                  'distinta.'
+                            : 'Es la imagen del storyboard. Pon otra aquí si '
+                                  'la referencia debe ser distinta.',
+                        style: AppTypography.caption(palette),
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.md),
                     Wrap(
                       spacing: 8,
@@ -214,33 +286,34 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                           icon: const Icon(Icons.content_paste, size: 18),
                           label: const Text('Pegar'),
                         ),
-                        PopupMenuButton<String>(
-                          tooltip: 'Más orígenes',
-                          color: palette.surfaceElevated,
-                          enabled: !_busy,
-                          onSelected: _fromComputer,
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(
-                              value: ShotReferenceSource.artemisCapture,
-                              child: Text('Captura de Artemis'),
-                            ),
-                            PopupMenuItem(
-                              value: ShotReferenceSource.unrealRender,
-                              child: Text('Render de Unreal'),
-                            ),
-                          ],
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 10,
-                            ),
-                            child: Text(
-                              'Más orígenes',
-                              style: AppTypography.bodyMedium(palette),
+                        if (!_story)
+                          PopupMenuButton<String>(
+                            tooltip: 'Más orígenes',
+                            color: palette.surfaceElevated,
+                            enabled: !_busy,
+                            onSelected: _fromComputer,
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: ShotReferenceSource.artemisCapture,
+                                child: Text('Captura de Artemis'),
+                              ),
+                              PopupMenuItem(
+                                value: ShotReferenceSource.unrealRender,
+                                child: Text('Render de Unreal'),
+                              ),
+                            ],
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 10,
+                              ),
+                              child: Text(
+                                'Más orígenes',
+                                style: AppTypography.bodyMedium(palette),
+                              ),
                             ),
                           ),
-                        ),
-                        if (hasImage)
+                        if (hasOwn)
                           TextButton.icon(
                             onPressed: _busy ? null : _remove,
                             icon: Icon(

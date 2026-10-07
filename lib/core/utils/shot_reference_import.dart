@@ -140,3 +140,52 @@ Future<void> deleteShotReferenceEntry({
     ),
   );
 }
+
+/// Imagen que se enseña como referencia del plano: la suya o, si no tiene,
+/// la del storyboard.
+String? referenceImageOf(Shot shot) =>
+    shot.referenceImagePath ?? shot.storyboardImagePath;
+
+/// Imagen que se enseña en el storyboard: la suya o, si no tiene, la de
+/// referencia.
+String? storyboardImageOf(Shot shot) =>
+    shot.storyboardImagePath ?? shot.referenceImagePath;
+
+/// Guarda una imagen propia para el storyboard del plano, distinta de la de
+/// referencia.
+Future<String> importShotStoryboardImage({
+  required AppDatabase db,
+  required Shot shot,
+  String? sourcePath,
+  Uint8List? sourceBytes,
+  String? fileName,
+}) async {
+  final String stored;
+  if (sourceBytes != null) {
+    stored = await MediaStorage.writeShotReferenceBytes(
+      projectId: shot.projectId,
+      shotId: shot.id,
+      bytes: sourceBytes,
+      fileName: fileName ?? 'storyboard.jpg',
+    );
+  } else if (sourcePath != null) {
+    stored = await MediaStorage.copyShotReference(
+      projectId: shot.projectId,
+      shotId: shot.id,
+      sourcePath: sourcePath,
+    );
+  } else {
+    throw ArgumentError('Se requiere sourcePath o sourceBytes');
+  }
+
+  await db.updateShotFields(
+    shot.id,
+    ShotsCompanion(storyboardImagePath: Value(stored)),
+  );
+
+  final queue = MediaSyncBridge.uploadQueue;
+  if (queue != null) {
+    await queue.scanAndEnqueueProject(shot.projectId);
+  }
+  return stored;
+}

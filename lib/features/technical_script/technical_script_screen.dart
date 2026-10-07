@@ -25,13 +25,14 @@ import '../locations/locations_screen.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
+import '../../core/utils/shot_reference_import.dart';
 import '../../shared/rich_text/script_markup.dart';
+import '../../shared/shot_images/shot_image_menu.dart';
 import '../../shared/technical_script_export/technical_script_docx.dart';
 import '../locations/location_picker.dart';
 import '../locations/where_field.dart';
 import 'scene_form_sheet.dart';
 import 'table/editable_cell.dart';
-import 'table/reference_image_menu.dart';
 import 'table/script_sheet_theme.dart';
 import 'technical_script_export.dart';
 import 'technical_script_settings.dart';
@@ -749,6 +750,7 @@ class _Cols {
   final double duracion;
   final double action;
   final double referencia;
+  final double storyboard;
   final double planta;
   final double apuntes;
   final double acciones;
@@ -764,6 +766,7 @@ class _Cols {
     required this.duracion,
     required this.action,
     required this.referencia,
+    required this.storyboard,
     required this.planta,
     required this.apuntes,
     required this.acciones,
@@ -780,6 +783,7 @@ class _Cols {
     duracion: s.shows(ScriptColumn.duracion) ? 56 : 0,
     action: 220,
     referencia: 140,
+    storyboard: s.shows(ScriptColumn.storyboard) ? 140 : 0,
     planta: s.shows(ScriptColumn.planta) ? 110 : 0,
     apuntes: 140,
     acciones: 40,
@@ -796,6 +800,7 @@ class _Cols {
     duracion,
     action,
     referencia,
+    storyboard,
     planta,
     apuntes,
     acciones,
@@ -819,6 +824,7 @@ class _Cols {
       duracion: m.duracion,
       action: grow(m.action, 5),
       referencia: grow(m.referencia, 1),
+      storyboard: m.storyboard,
       planta: m.planta,
       apuntes: grow(m.apuntes, 3),
       acciones: m.acciones,
@@ -1239,6 +1245,7 @@ class _TableHeader extends StatelessWidget {
               cell('DUR.', cols.duracion),
               cell('ACCIÓN', cols.action),
               cell('REFERENCIA', cols.referencia),
+              cell('STORYBOARD', cols.storyboard),
               cell('PLANTA', cols.planta),
               cell('APUNTES', cols.apuntes),
             ],
@@ -1718,7 +1725,18 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                   padding: const EdgeInsets.all(4),
                   child: SizedBox(
                     width: double.infinity,
-                    child: _ReferenceCell(shot: shot),
+                    child: _ShotImageCell(shot: shot),
+                  ),
+                ),
+                _Cell(
+                  width: cols.storyboard,
+                  padding: const EdgeInsets.all(4),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: _ShotImageCell(
+                      shot: shot,
+                      target: ShotImageTarget.storyboard,
+                    ),
                   ),
                 ),
                 _Cell(
@@ -2045,19 +2063,28 @@ class _DeleteShotButton extends ConsumerWidget {
   }
 }
 
-/// Imagen de referencia del plano; tocarla abre su menú.
-class _ReferenceCell extends ConsumerWidget {
+/// Imagen de referencia o de storyboard del plano; tocarla abre su menú.
+class _ShotImageCell extends StatelessWidget {
   final Shot shot;
-  const _ReferenceCell({required this.shot});
+  final ShotImageTarget target;
+
+  const _ShotImageCell({
+    required this.shot,
+    this.target = ShotImageTarget.reference,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final sheet = ScriptSheet.of(context);
-    final path = shot.referenceImagePath;
+    final story = target == ShotImageTarget.storyboard;
+    final own = story ? shot.storyboardImagePath : shot.referenceImagePath;
+    final path = story ? storyboardImageOf(shot) : referenceImageOf(shot);
     final hasImage = path != null && File(path).existsSync();
+    // Sin imagen propia se enseña la del otro uso, con su rótulo.
+    final inherited = hasImage && own == null;
 
     return GestureDetector(
-      onTap: () => showReferenceImageMenu(context, shot),
+      onTap: () => showShotImageMenu(context, shot, target: target),
       child: Container(
         height: 84,
         decoration: BoxDecoration(
@@ -2069,7 +2096,27 @@ class _ReferenceCell extends ConsumerWidget {
         child: hasImage
             ? Stack(
                 fit: StackFit.expand,
-                children: [Image.file(File(path), fit: BoxFit.contain)],
+                children: [
+                  Image.file(File(path), fit: BoxFit.contain),
+                  if (inherited)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Text(
+                          story ? 'de la referencia' : 'del storyboard',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               )
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -2081,7 +2128,7 @@ class _ReferenceCell extends ConsumerWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Ref.',
+                    story ? 'Story' : 'Ref.',
                     style: sheet.hintText.copyWith(fontSize: 11),
                     textAlign: TextAlign.center,
                   ),

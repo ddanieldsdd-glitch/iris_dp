@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_characters.dart';
+import '../../core/utils/shot_reference_import.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
 import 'table/script_sheet_theme.dart';
 import 'technical_script_settings.dart';
@@ -88,7 +89,7 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
           fill: rowFill == null ? null : _rgb(rowFill),
           cellFills: cellFills,
           image: await PdfSafeImage.loadFromPathMaxEdge(
-            shot.referenceImagePath,
+            referenceImageOf(shot),
             maxEdge: 1200,
           ),
         ),

@@ -27,6 +27,7 @@ import 'storyboard_export_options_sheet.dart';
 import 'storyboard_shot_export_service.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../shared/rich_text/script_markup.dart';
+import '../../shared/shot_images/shot_image_menu.dart';
 
 enum _StoryboardLayout { linear, grid, list }
 
@@ -352,7 +353,7 @@ class _StoryboardBody extends ConsumerWidget {
   });
 
   bool _passesFilter(Shot shot) {
-    final path = shot.referenceImagePath;
+    final path = storyboardImageOf(shot);
     final hasImage = path != null && File(path).existsSync();
     return switch (filter) {
       _StoryboardFilter.all => true,
@@ -478,7 +479,7 @@ class _StoryboardContinuousGrid extends ConsumerWidget {
   });
 
   bool _passesFilter(Shot shot) {
-    final path = shot.referenceImagePath;
+    final path = storyboardImageOf(shot);
     final hasImage = path != null && File(path).existsSync();
     return switch (filter) {
       _StoryboardFilter.all => true,
@@ -667,7 +668,7 @@ class _StoryboardLinearStrip extends ConsumerWidget {
   });
 
   bool _passesFilter(Shot shot) {
-    final path = shot.referenceImagePath;
+    final path = storyboardImageOf(shot);
     final hasImage = path != null && File(path).existsSync();
     return switch (filter) {
       _StoryboardFilter.all => true,
@@ -985,7 +986,7 @@ class _StoryboardFrame extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final db = ref.watch(databaseProvider);
-    final path = shot.referenceImagePath;
+    final path = storyboardImageOf(shot);
     final hasImage = path != null && File(path).existsSync();
     final meta = _metaLine();
     final showSceneStrip =
@@ -1326,12 +1327,32 @@ class _FrameDetailSheet extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             AppButton(
+              label: shot.storyboardImagePath == null
+                  ? 'Imagen propia para el storyboard'
+                  : 'Cambiar la imagen del storyboard',
+              icon: Icons.photo_library_outlined,
+              variant: AppButtonVariant.secondary,
+              onTap: () {
+                // El menú se abre sobre la pantalla, no sobre esta hoja que
+                // se cierra.
+                final navigator = Navigator.of(context);
+                final screen = navigator.context;
+                navigator.pop();
+                showShotImageMenu(
+                  screen,
+                  shot,
+                  target: ShotImageTarget.storyboard,
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
               label: 'Añadir al documento de rodaje',
               icon: Icons.description_outlined,
               variant: AppButtonVariant.secondary,
               onTap: () async {
                 final db = ref.read(databaseProvider);
-                final path = shot.referenceImagePath;
+                final path = storyboardImageOf(shot);
                 if (path != null) {
                   await ShootDocumentImportActions.addImageBlock(
                     context: context,

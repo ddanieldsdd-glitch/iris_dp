@@ -3,6 +3,7 @@ import 'dart:io';
 import '../../core/database/app_database.dart';
 import '../luka_export/unreal_coords.dart';
 import 'storyboard_export_helpers.dart';
+import '../../core/utils/shot_reference_import.dart';
 
 /// Metadatos resueltos para exportar un plano (cámara, óptica, orientación).
 class StoryboardShotExportMeta {
@@ -40,7 +41,7 @@ class StoryboardShotExportMeta {
         sensorWidthMm: kDefaultSensorWidthMm,
         shotIndex: shot.number,
         totalShotsInScene: shot.number,
-        capturedAt: _fileModified(shot.referenceImagePath),
+        capturedAt: _fileModified(storyboardImageOf(shot)),
       );
     }
   }
@@ -82,7 +83,7 @@ class StoryboardShotExportMeta {
     }
 
     final orientationHeader = _orientationLabel(shot.angle, scene.dayNight);
-    final capturedAt = _fileModified(shot.referenceImagePath);
+    final capturedAt = _fileModified(storyboardImageOf(shot));
 
     return StoryboardShotExportMeta(
       cameraHeader: cameraHeader,

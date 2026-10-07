@@ -12,14 +12,16 @@ abstract final class ScriptColumn {
   static const personajes = 'pers';
   static const duracion = 'dur';
   static const planta = 'planta';
+  static const storyboard = 'story';
 
-  static const optional = [fStop, personajes, duracion, planta];
+  static const optional = [fStop, personajes, duracion, planta, storyboard];
 
   static String label(String column) => switch (column) {
     fStop => 'F',
     personajes => 'Personajes',
     duracion => 'Duración',
     planta => 'Planta',
+    storyboard => 'Storyboard',
     _ => column,
   };
 }
@@ -44,7 +46,7 @@ class TechnicalScriptSettings {
 
   const TechnicalScriptSettings({
     this.view = ScriptView.sheet,
-    this.hiddenColumns = const {ScriptColumn.duracion},
+    this.hiddenColumns = const {ScriptColumn.duracion, ScriptColumn.storyboard},
     this.customMovements = const [],
     this.customAngles = const [],
     this.fontFamily = 'Inter',
@@ -75,6 +77,7 @@ class TechnicalScriptSettings {
   Map<String, dynamic> toJson() => {
     'view': view.name,
     'hiddenColumns': hiddenColumns.toList(),
+    'storyboardSeen': true,
     'customMovements': customMovements,
     'customAngles': customAngles,
     'fontFamily': fontFamily,
@@ -95,7 +98,12 @@ class TechnicalScriptSettings {
           ? ScriptView.dark
           : ScriptView.sheet,
       hiddenColumns: json['hiddenColumns'] is List
-          ? strings(json['hiddenColumns']).toSet()
+          ? {
+              ...strings(json['hiddenColumns']),
+              // Guardado antes de existir la columna de storyboard: nace
+              // oculta, como en una instalación nueva.
+              if (json['storyboardSeen'] != true) ScriptColumn.storyboard,
+            }
           : d.hiddenColumns,
       customMovements: strings(json['customMovements']),
       customAngles: strings(json['customAngles']),

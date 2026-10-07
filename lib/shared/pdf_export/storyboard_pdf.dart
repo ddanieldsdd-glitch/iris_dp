@@ -21,6 +21,7 @@ import '../../features/storyboard/storyboard_shot_export_meta.dart';
 import '../../features/storyboard/storyboard_shot_sheet_pdf.dart';
 import '../../features/storyboard/storyboard_shot_image_exporter.dart';
 import '../rich_text/script_markup.dart';
+import '../../core/utils/shot_reference_import.dart';
 
 /// PDF de storyboard con estilos CLEAN / BASIC / DETAIL / SHOT PLAN.
 class StoryboardPdfExporter {
@@ -304,7 +305,7 @@ class StoryboardPdfExporter {
     final cache = <int, Uint8List>{};
     for (final shots in shotsByScene.values) {
       for (final shot in shots) {
-        final bytes = await PdfSafeImage.loadFromPath(shot.referenceImagePath);
+        final bytes = await PdfSafeImage.loadFromPath(storyboardImageOf(shot));
         if (bytes != null) cache[shot.id] = bytes;
       }
     }
@@ -737,7 +738,7 @@ class StoryboardPdfExporter {
     Map<int, Uint8List> imageCache = const {},
   }) {
     final bytes = imageCache[shot.id] ??
-        PdfSafeImage.loadFromPathSync(shot.referenceImagePath);
+        PdfSafeImage.loadFromPathSync(storyboardImageOf(shot));
     if (bytes != null) {
       return pw.Container(
         decoration: pw.BoxDecoration(
@@ -780,7 +781,7 @@ class StoryboardPdfExporter {
     final technical = formatShotTechnicalLine(shot);
     final planSummary = await _cameraPlanSummary(shot, db);
     final imageBytes = imageCache[shot.id] ??
-        PdfSafeImage.loadFromPathSync(shot.referenceImagePath);
+        PdfSafeImage.loadFromPathSync(storyboardImageOf(shot));
 
     return pw.Page(
       theme: theme,
