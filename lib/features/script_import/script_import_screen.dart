@@ -43,6 +43,8 @@ import 'script_fullscreen_reader.dart';
 import 'script_scene_index_panel.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../core/widgets/safe_reorderable_column.dart';
+import '../../core/script/script_scene_matcher.dart';
+import 'script_update_review.dart';
 
 class _SceneListItem {
   final String id;
@@ -124,7 +126,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
             ..addAll(decodeLineTextOverrides(project.characterColorsJson));
           _syncCharacterColorsFromScript(loaded.parseText);
           _scenes.clear();
-          for (final scene in dbScenes) {
+          for (final scene in dbScenes.where((s) => !s.offScript)) {
             final siteName = scene.locationSiteId != null
                 ? siteNameById[scene.locationSiteId] ?? scene.locationPureName
                 : scene.locationPureName;
@@ -1011,105 +1013,59 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     if (_scenes.isEmpty) return;
 
     final db = ref.read(databaseProvider);
-    final sourceIndices = _scenes
-        .map((item) => item.sourceStartIndex)
-        .toList(growable: false);
-
-    final scenesWithShots = await db.findScenesWithShotsToRemoveOnSync(
-      widget.projectId,
-      sourceIndices,
-      _scenes.length,
-    );
-
-    if (scenesWithShots.isNotEmpty && mounted) {
-      final palette = context.palette;
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          backgroundColor: palette.surfaceElevated,
-          title: Text(
-            'Escenas con planos',
-            style: AppTypography.titleLarge(palette),
-          ),
-          content: Text(
-            '${scenesWithShots.length} escena(s) dejarán de existir y se '
-            'eliminarán sus planos del guion técnico. ¿Continuar?',
-            style: AppTypography.bodyLarge(palette),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('Cancelar', style: AppTypography.bodyMedium(palette)),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(
-                'Sincronizar',
-                style: AppTypography.bodyMedium(
-                  palette,
-                ).copyWith(color: palette.accent),
-              ),
-            ),
-          ],
+    final texts = sceneTextsFromScript(_loadedScript?.parseText ?? '', [
+      for (final item in _scenes) item.sourceStartIndex,
+    ]);
+    final items = <WorkspaceScene>[
+      for (var i = 0; i < _scenes.length; i++)
+        (
+          intExt: _scenes[i].data.intExt,
+          dayNight: _scenes[i].data.dayNight,
+          location: _scenes[i].data.location,
+          shootSet: _scenes[i].data.shootSet,
+          locationSite: _scenes[i].data.locationSite,
+          name: _scenes[i].data.name,
+          description: _scenes[i].data.description,
+          locationColor: _scenes[i].data.locationColor,
+          charactersJson: encodeSceneCharacters(_scenes[i].data.characters),
+          sourceStartIndex: _scenes[i].sourceStartIndex,
+          sceneText: texts[i],
         ),
-      );
-      if (confirm != true) return;
-    } else if (_projectHasSyncedScenes && mounted) {
-      final palette = context.palette;
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          backgroundColor: palette.surfaceElevated,
-          title: Text(
-            'Sincronizar escenas',
-            style: AppTypography.titleLarge(palette),
-          ),
-          content: Text(
-            'Se actualizará el guion técnico con el orden y los datos actuales '
-            'de esta lista. Los planos de escenas que sigan presentes se conservan.',
-            style: AppTypography.bodyLarge(palette),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('Cancelar', style: AppTypography.bodyMedium(palette)),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(
-                'Sincronizar',
-                style: AppTypography.bodyMedium(
-                  palette,
-                ).copyWith(color: palette.accent),
-              ),
-            ),
-          ],
-        ),
-      );
-      if (confirm != true) return;
+    ];
+
+    // Con escenas ya en el proyecto, se enseña qué va a cambiar antes de
+    // tocar nada; un guion sin cambios de escenas pasa directo.
+    List<int?>? links;
+    if (_projectHasSyncedScenes) {
+      final match = await db.planScriptUpdate(widget.projectId, items);
+      if (!mounted) return;
+      if (!match.isTrivial) {
+        final existing = await db.watchScenesForProject(widget.projectId).first;
+        final shots = await db.getShotsForProject(widget.projectId);
+        if (!mounted) return;
+        final shotCounts = <int, int>{};
+        for (final shot in shots) {
+          shotCounts[shot.sceneId] = (shotCounts[shot.sceneId] ?? 0) + 1;
+        }
+        links = await showScriptUpdateReview(
+          context,
+          match: match,
+          incoming: items,
+          existing: existing,
+          shotCounts: shotCounts,
+        );
+        if (links == null) return;
+      }
     }
 
     setState(() => _loading = true);
 
     try {
-      final items = _scenes
-          .map(
-            (item) => (
-              intExt: item.data.intExt,
-              dayNight: item.data.dayNight,
-              location: item.data.location,
-              shootSet: item.data.shootSet,
-              locationSite: item.data.locationSite,
-              name: item.data.name,
-              description: item.data.description,
-              locationColor: item.data.locationColor,
-              charactersJson: encodeSceneCharacters(item.data.characters),
-              sourceStartIndex: item.sourceStartIndex,
-            ),
-          )
-          .toList(growable: false);
-
-      await db.syncScenesFromWorkspace(widget.projectId, items);
+      await db.syncScenesFromWorkspace(
+        widget.projectId,
+        items,
+        links: links,
+      );
       _syncPendingColorsFromScenes();
       final siteBySetKey = {
         for (final item in _scenes)

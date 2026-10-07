@@ -173,9 +173,21 @@ class ProjectContentBundle {
               ..where((s) => s.projectId.equals(projectId))
               ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
             .get();
-    final sceneKeyById = <int, String>{
-      for (final s in scenes) s.id: 'scene:${s.number}',
-    };
+    // La clave de escena es su número. Dos escenas pueden compartirlo (una
+    // fuera del guion conserva el suyo): la repetida lleva un sufijo, para
+    // que sus planos no acaben en la otra al importar.
+    final sceneKeyById = <int, String>{};
+    final seenSceneNumbers = <int, int>{};
+    for (final s in scenes) {
+      final times = seenSceneNumbers.update(
+        s.number,
+        (n) => n + 1,
+        ifAbsent: () => 1,
+      );
+      sceneKeyById[s.id] = times == 1
+          ? 'scene:${s.number}'
+          : 'scene:${s.number}#$times';
+    }
 
     final shots =
         await (db.select(db.shots)
@@ -586,6 +598,10 @@ class ProjectContentBundle {
               'durationMinutes': s.durationMinutes,
               'autoNumbering': s.autoNumbering,
               'sortOrder': s.sortOrder,
+              'scriptLinked': s.scriptLinked,
+              'scriptHeadingKey': s.scriptHeadingKey,
+              'scriptTextHash': s.scriptTextHash,
+              'offScript': s.offScript,
             },
           )
           .toList(),
@@ -609,6 +625,8 @@ class ProjectContentBundle {
           'scriptAnchorIndex': shot.scriptAnchorIndex,
           'sortOrder': shot.sortOrder,
           'lightOverridesJson': shot.lightOverridesJson,
+          'storyboardImagePath': shot.storyboardImagePath,
+          'cellStylesJson': shot.cellStylesJson,
           'lightSetupKey': shot.lightSetupId != null
               ? lightSetupKeyById[shot.lightSetupId!]
               : null,
@@ -1055,6 +1073,10 @@ class ProjectContentBundle {
               ),
               locationId: Value(setKey != null ? setKeyToId[setKey] : null),
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+              scriptLinked: Value(m['scriptLinked'] as bool? ?? false),
+              scriptHeadingKey: Value(m['scriptHeadingKey'] as String?),
+              scriptTextHash: Value(m['scriptTextHash'] as String?),
+              offScript: Value(m['offScript'] as bool? ?? false),
             ),
           );
       sceneKeyToId[m['sceneKey'] as String] = id;
@@ -1087,6 +1109,10 @@ class ProjectContentBundle {
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
               lightSetupId: Value(lightSetupKeyToId[m['lightSetupKey']]),
               lightOverridesJson: Value(m['lightOverridesJson'] as String?),
+              storyboardImagePath: Value(
+                m['storyboardImagePath'] as String?,
+              ),
+              cellStylesJson: Value(m['cellStylesJson'] as String?),
               locationBasePlanId: Value(setKeyToId[m['shotSetKey']]),
               routeJson: Value(
                 ShotRoute.encode([

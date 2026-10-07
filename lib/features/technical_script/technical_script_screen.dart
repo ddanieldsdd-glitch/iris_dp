@@ -927,6 +927,29 @@ class _SceneHeader extends ConsumerWidget {
                   ).copyWith(color: palette.textPrimary, letterSpacing: 0.5),
                   iconSize: 18,
                 ),
+                if (scene.offScript) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.inventory_2_outlined,
+                        size: 14,
+                        color: palette.highlightYellow.withValues(alpha: 1),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'Ya no está en el guion literario. Se conserva '
+                          'con sus planos; puedes eliminarla cuando no la '
+                          'necesites.',
+                          style: AppTypography.caption(palette).copyWith(
+                            color: palette.highlightYellow.withValues(alpha: 1),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 if (scene.description != null &&
                     scene.description!.trim().isNotEmpty) ...[
                   const SizedBox(height: 6),

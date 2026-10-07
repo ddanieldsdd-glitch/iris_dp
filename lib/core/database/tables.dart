@@ -81,6 +81,16 @@ class Scenes extends Table {
   IntColumn get durationMinutes => integer().withDefault(const Constant(0))();
   BoolColumn get autoNumbering => boolean().withDefault(const Constant(true))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  // Vínculo con el guion literario (schemaVersion 45). Una escena vinculada
+  // toma su número y su orden del guion.
+  BoolColumn get scriptLinked => boolean().withDefault(const Constant(false))();
+  // Cabecera normalizada con la que se reconoce la escena entre versiones
+  // del guion: "ext|calle raval|noche".
+  TextColumn get scriptHeadingKey => text().nullable()();
+  // Huella del texto de la escena, para saber si cambió la parte narrativa.
+  TextColumn get scriptTextHash => text().nullable()();
+  // Estaba en el guion y ya no: se conserva con sus planos, fuera del orden.
+  BoolColumn get offScript => boolean().withDefault(const Constant(false))();
 }
 
 class Shots extends Table {
@@ -119,6 +129,12 @@ class Shots extends Table {
   // Recorrido de un plano secuencia: tramos con su set y su esquema de luz
   // (schemaVersion 44). Nulo = no es secuencia.
   TextColumn get routeJson => text().nullable()();
+  // Imagen propia del storyboard; nula = usa la de referencia
+  // (schemaVersion 45).
+  TextColumn get storyboardImagePath => text().nullable()();
+  // Color de celdas sueltas del guion técnico: {"action": "green"}
+  // (schemaVersion 45).
+  TextColumn get cellStylesJson => text().nullable()();
 }
 
 /// Documento de rodaje (Plani, jornada, referencia en set).

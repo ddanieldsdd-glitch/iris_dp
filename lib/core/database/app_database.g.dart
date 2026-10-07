@@ -3191,6 +3191,58 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _scriptLinkedMeta = const VerificationMeta(
+    'scriptLinked',
+  );
+  @override
+  late final GeneratedColumn<bool> scriptLinked = GeneratedColumn<bool>(
+    'script_linked',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("script_linked" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _scriptHeadingKeyMeta = const VerificationMeta(
+    'scriptHeadingKey',
+  );
+  @override
+  late final GeneratedColumn<String> scriptHeadingKey = GeneratedColumn<String>(
+    'script_heading_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _scriptTextHashMeta = const VerificationMeta(
+    'scriptTextHash',
+  );
+  @override
+  late final GeneratedColumn<String> scriptTextHash = GeneratedColumn<String>(
+    'script_text_hash',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _offScriptMeta = const VerificationMeta(
+    'offScript',
+  );
+  @override
+  late final GeneratedColumn<bool> offScript = GeneratedColumn<bool>(
+    'off_script',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("off_script" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -3211,6 +3263,10 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
     durationMinutes,
     autoNumbering,
     sortOrder,
+    scriptLinked,
+    scriptHeadingKey,
+    scriptTextHash,
+    offScript,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3366,6 +3422,39 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
         sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
       );
     }
+    if (data.containsKey('script_linked')) {
+      context.handle(
+        _scriptLinkedMeta,
+        scriptLinked.isAcceptableOrUnknown(
+          data['script_linked']!,
+          _scriptLinkedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('script_heading_key')) {
+      context.handle(
+        _scriptHeadingKeyMeta,
+        scriptHeadingKey.isAcceptableOrUnknown(
+          data['script_heading_key']!,
+          _scriptHeadingKeyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('script_text_hash')) {
+      context.handle(
+        _scriptTextHashMeta,
+        scriptTextHash.isAcceptableOrUnknown(
+          data['script_text_hash']!,
+          _scriptTextHashMeta,
+        ),
+      );
+    }
+    if (data.containsKey('off_script')) {
+      context.handle(
+        _offScriptMeta,
+        offScript.isAcceptableOrUnknown(data['off_script']!, _offScriptMeta),
+      );
+    }
     return context;
   }
 
@@ -3447,6 +3536,22 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
       )!,
+      scriptLinked: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}script_linked'],
+      )!,
+      scriptHeadingKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}script_heading_key'],
+      ),
+      scriptTextHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}script_text_hash'],
+      ),
+      offScript: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}off_script'],
+      )!,
     );
   }
 
@@ -3475,6 +3580,10 @@ class Scene extends DataClass implements Insertable<Scene> {
   final int durationMinutes;
   final bool autoNumbering;
   final int sortOrder;
+  final bool scriptLinked;
+  final String? scriptHeadingKey;
+  final String? scriptTextHash;
+  final bool offScript;
   const Scene({
     required this.id,
     required this.projectId,
@@ -3494,6 +3603,10 @@ class Scene extends DataClass implements Insertable<Scene> {
     required this.durationMinutes,
     required this.autoNumbering,
     required this.sortOrder,
+    required this.scriptLinked,
+    this.scriptHeadingKey,
+    this.scriptTextHash,
+    required this.offScript,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3530,6 +3643,14 @@ class Scene extends DataClass implements Insertable<Scene> {
     map['duration_minutes'] = Variable<int>(durationMinutes);
     map['auto_numbering'] = Variable<bool>(autoNumbering);
     map['sort_order'] = Variable<int>(sortOrder);
+    map['script_linked'] = Variable<bool>(scriptLinked);
+    if (!nullToAbsent || scriptHeadingKey != null) {
+      map['script_heading_key'] = Variable<String>(scriptHeadingKey);
+    }
+    if (!nullToAbsent || scriptTextHash != null) {
+      map['script_text_hash'] = Variable<String>(scriptTextHash);
+    }
+    map['off_script'] = Variable<bool>(offScript);
     return map;
   }
 
@@ -3567,6 +3688,14 @@ class Scene extends DataClass implements Insertable<Scene> {
       durationMinutes: Value(durationMinutes),
       autoNumbering: Value(autoNumbering),
       sortOrder: Value(sortOrder),
+      scriptLinked: Value(scriptLinked),
+      scriptHeadingKey: scriptHeadingKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(scriptHeadingKey),
+      scriptTextHash: scriptTextHash == null && nullToAbsent
+          ? const Value.absent()
+          : Value(scriptTextHash),
+      offScript: Value(offScript),
     );
   }
 
@@ -3594,6 +3723,10 @@ class Scene extends DataClass implements Insertable<Scene> {
       durationMinutes: serializer.fromJson<int>(json['durationMinutes']),
       autoNumbering: serializer.fromJson<bool>(json['autoNumbering']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      scriptLinked: serializer.fromJson<bool>(json['scriptLinked']),
+      scriptHeadingKey: serializer.fromJson<String?>(json['scriptHeadingKey']),
+      scriptTextHash: serializer.fromJson<String?>(json['scriptTextHash']),
+      offScript: serializer.fromJson<bool>(json['offScript']),
     );
   }
   @override
@@ -3618,6 +3751,10 @@ class Scene extends DataClass implements Insertable<Scene> {
       'durationMinutes': serializer.toJson<int>(durationMinutes),
       'autoNumbering': serializer.toJson<bool>(autoNumbering),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'scriptLinked': serializer.toJson<bool>(scriptLinked),
+      'scriptHeadingKey': serializer.toJson<String?>(scriptHeadingKey),
+      'scriptTextHash': serializer.toJson<String?>(scriptTextHash),
+      'offScript': serializer.toJson<bool>(offScript),
     };
   }
 
@@ -3640,6 +3777,10 @@ class Scene extends DataClass implements Insertable<Scene> {
     int? durationMinutes,
     bool? autoNumbering,
     int? sortOrder,
+    bool? scriptLinked,
+    Value<String?> scriptHeadingKey = const Value.absent(),
+    Value<String?> scriptTextHash = const Value.absent(),
+    bool? offScript,
   }) => Scene(
     id: id ?? this.id,
     projectId: projectId ?? this.projectId,
@@ -3667,6 +3808,14 @@ class Scene extends DataClass implements Insertable<Scene> {
     durationMinutes: durationMinutes ?? this.durationMinutes,
     autoNumbering: autoNumbering ?? this.autoNumbering,
     sortOrder: sortOrder ?? this.sortOrder,
+    scriptLinked: scriptLinked ?? this.scriptLinked,
+    scriptHeadingKey: scriptHeadingKey.present
+        ? scriptHeadingKey.value
+        : this.scriptHeadingKey,
+    scriptTextHash: scriptTextHash.present
+        ? scriptTextHash.value
+        : this.scriptTextHash,
+    offScript: offScript ?? this.offScript,
   );
   Scene copyWithCompanion(ScenesCompanion data) {
     return Scene(
@@ -3710,6 +3859,16 @@ class Scene extends DataClass implements Insertable<Scene> {
           ? data.autoNumbering.value
           : this.autoNumbering,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      scriptLinked: data.scriptLinked.present
+          ? data.scriptLinked.value
+          : this.scriptLinked,
+      scriptHeadingKey: data.scriptHeadingKey.present
+          ? data.scriptHeadingKey.value
+          : this.scriptHeadingKey,
+      scriptTextHash: data.scriptTextHash.present
+          ? data.scriptTextHash.value
+          : this.scriptTextHash,
+      offScript: data.offScript.present ? data.offScript.value : this.offScript,
     );
   }
 
@@ -3733,13 +3892,17 @@ class Scene extends DataClass implements Insertable<Scene> {
           ..write('sourceStartIndex: $sourceStartIndex, ')
           ..write('durationMinutes: $durationMinutes, ')
           ..write('autoNumbering: $autoNumbering, ')
-          ..write('sortOrder: $sortOrder')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('scriptLinked: $scriptLinked, ')
+          ..write('scriptHeadingKey: $scriptHeadingKey, ')
+          ..write('scriptTextHash: $scriptTextHash, ')
+          ..write('offScript: $offScript')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     projectId,
     number,
@@ -3758,7 +3921,11 @@ class Scene extends DataClass implements Insertable<Scene> {
     durationMinutes,
     autoNumbering,
     sortOrder,
-  );
+    scriptLinked,
+    scriptHeadingKey,
+    scriptTextHash,
+    offScript,
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3780,7 +3947,11 @@ class Scene extends DataClass implements Insertable<Scene> {
           other.sourceStartIndex == this.sourceStartIndex &&
           other.durationMinutes == this.durationMinutes &&
           other.autoNumbering == this.autoNumbering &&
-          other.sortOrder == this.sortOrder);
+          other.sortOrder == this.sortOrder &&
+          other.scriptLinked == this.scriptLinked &&
+          other.scriptHeadingKey == this.scriptHeadingKey &&
+          other.scriptTextHash == this.scriptTextHash &&
+          other.offScript == this.offScript);
 }
 
 class ScenesCompanion extends UpdateCompanion<Scene> {
@@ -3802,6 +3973,10 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
   final Value<int> durationMinutes;
   final Value<bool> autoNumbering;
   final Value<int> sortOrder;
+  final Value<bool> scriptLinked;
+  final Value<String?> scriptHeadingKey;
+  final Value<String?> scriptTextHash;
+  final Value<bool> offScript;
   const ScenesCompanion({
     this.id = const Value.absent(),
     this.projectId = const Value.absent(),
@@ -3821,6 +3996,10 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     this.durationMinutes = const Value.absent(),
     this.autoNumbering = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.scriptLinked = const Value.absent(),
+    this.scriptHeadingKey = const Value.absent(),
+    this.scriptTextHash = const Value.absent(),
+    this.offScript = const Value.absent(),
   });
   ScenesCompanion.insert({
     this.id = const Value.absent(),
@@ -3841,6 +4020,10 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     this.durationMinutes = const Value.absent(),
     this.autoNumbering = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.scriptLinked = const Value.absent(),
+    this.scriptHeadingKey = const Value.absent(),
+    this.scriptTextHash = const Value.absent(),
+    this.offScript = const Value.absent(),
   }) : projectId = Value(projectId),
        number = Value(number),
        name = Value(name),
@@ -3865,6 +4048,10 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     Expression<int>? durationMinutes,
     Expression<bool>? autoNumbering,
     Expression<int>? sortOrder,
+    Expression<bool>? scriptLinked,
+    Expression<String>? scriptHeadingKey,
+    Expression<String>? scriptTextHash,
+    Expression<bool>? offScript,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -3885,6 +4072,10 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
       if (durationMinutes != null) 'duration_minutes': durationMinutes,
       if (autoNumbering != null) 'auto_numbering': autoNumbering,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (scriptLinked != null) 'script_linked': scriptLinked,
+      if (scriptHeadingKey != null) 'script_heading_key': scriptHeadingKey,
+      if (scriptTextHash != null) 'script_text_hash': scriptTextHash,
+      if (offScript != null) 'off_script': offScript,
     });
   }
 
@@ -3907,6 +4098,10 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     Value<int>? durationMinutes,
     Value<bool>? autoNumbering,
     Value<int>? sortOrder,
+    Value<bool>? scriptLinked,
+    Value<String?>? scriptHeadingKey,
+    Value<String?>? scriptTextHash,
+    Value<bool>? offScript,
   }) {
     return ScenesCompanion(
       id: id ?? this.id,
@@ -3927,6 +4122,10 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
       durationMinutes: durationMinutes ?? this.durationMinutes,
       autoNumbering: autoNumbering ?? this.autoNumbering,
       sortOrder: sortOrder ?? this.sortOrder,
+      scriptLinked: scriptLinked ?? this.scriptLinked,
+      scriptHeadingKey: scriptHeadingKey ?? this.scriptHeadingKey,
+      scriptTextHash: scriptTextHash ?? this.scriptTextHash,
+      offScript: offScript ?? this.offScript,
     );
   }
 
@@ -3987,6 +4186,18 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
+    if (scriptLinked.present) {
+      map['script_linked'] = Variable<bool>(scriptLinked.value);
+    }
+    if (scriptHeadingKey.present) {
+      map['script_heading_key'] = Variable<String>(scriptHeadingKey.value);
+    }
+    if (scriptTextHash.present) {
+      map['script_text_hash'] = Variable<String>(scriptTextHash.value);
+    }
+    if (offScript.present) {
+      map['off_script'] = Variable<bool>(offScript.value);
+    }
     return map;
   }
 
@@ -4010,7 +4221,11 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
           ..write('sourceStartIndex: $sourceStartIndex, ')
           ..write('durationMinutes: $durationMinutes, ')
           ..write('autoNumbering: $autoNumbering, ')
-          ..write('sortOrder: $sortOrder')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('scriptLinked: $scriptLinked, ')
+          ..write('scriptHeadingKey: $scriptHeadingKey, ')
+          ..write('scriptTextHash: $scriptTextHash, ')
+          ..write('offScript: $offScript')
           ..write(')'))
         .toString();
   }
@@ -5031,6 +5246,28 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _storyboardImagePathMeta =
+      const VerificationMeta('storyboardImagePath');
+  @override
+  late final GeneratedColumn<String> storyboardImagePath =
+      GeneratedColumn<String>(
+        'storyboard_image_path',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _cellStylesJsonMeta = const VerificationMeta(
+    'cellStylesJson',
+  );
+  @override
+  late final GeneratedColumn<String> cellStylesJson = GeneratedColumn<String>(
+    'cell_styles_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -5059,6 +5296,8 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
     lightSetupId,
     locationBasePlanId,
     routeJson,
+    storyboardImagePath,
+    cellStylesJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5267,6 +5506,24 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         routeJson.isAcceptableOrUnknown(data['route_json']!, _routeJsonMeta),
       );
     }
+    if (data.containsKey('storyboard_image_path')) {
+      context.handle(
+        _storyboardImagePathMeta,
+        storyboardImagePath.isAcceptableOrUnknown(
+          data['storyboard_image_path']!,
+          _storyboardImagePathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cell_styles_json')) {
+      context.handle(
+        _cellStylesJsonMeta,
+        cellStylesJson.isAcceptableOrUnknown(
+          data['cell_styles_json']!,
+          _cellStylesJsonMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -5380,6 +5637,14 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         DriftSqlType.string,
         data['${effectivePrefix}route_json'],
       ),
+      storyboardImagePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}storyboard_image_path'],
+      ),
+      cellStylesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cell_styles_json'],
+      ),
     );
   }
 
@@ -5416,6 +5681,8 @@ class Shot extends DataClass implements Insertable<Shot> {
   final int? lightSetupId;
   final int? locationBasePlanId;
   final String? routeJson;
+  final String? storyboardImagePath;
+  final String? cellStylesJson;
   const Shot({
     required this.id,
     required this.sceneId,
@@ -5443,6 +5710,8 @@ class Shot extends DataClass implements Insertable<Shot> {
     this.lightSetupId,
     this.locationBasePlanId,
     this.routeJson,
+    this.storyboardImagePath,
+    this.cellStylesJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -5513,6 +5782,12 @@ class Shot extends DataClass implements Insertable<Shot> {
     if (!nullToAbsent || routeJson != null) {
       map['route_json'] = Variable<String>(routeJson);
     }
+    if (!nullToAbsent || storyboardImagePath != null) {
+      map['storyboard_image_path'] = Variable<String>(storyboardImagePath);
+    }
+    if (!nullToAbsent || cellStylesJson != null) {
+      map['cell_styles_json'] = Variable<String>(cellStylesJson);
+    }
     return map;
   }
 
@@ -5580,6 +5855,12 @@ class Shot extends DataClass implements Insertable<Shot> {
       routeJson: routeJson == null && nullToAbsent
           ? const Value.absent()
           : Value(routeJson),
+      storyboardImagePath: storyboardImagePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(storyboardImagePath),
+      cellStylesJson: cellStylesJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cellStylesJson),
     );
   }
 
@@ -5621,6 +5902,10 @@ class Shot extends DataClass implements Insertable<Shot> {
       lightSetupId: serializer.fromJson<int?>(json['lightSetupId']),
       locationBasePlanId: serializer.fromJson<int?>(json['locationBasePlanId']),
       routeJson: serializer.fromJson<String?>(json['routeJson']),
+      storyboardImagePath: serializer.fromJson<String?>(
+        json['storyboardImagePath'],
+      ),
+      cellStylesJson: serializer.fromJson<String?>(json['cellStylesJson']),
     );
   }
   @override
@@ -5653,6 +5938,8 @@ class Shot extends DataClass implements Insertable<Shot> {
       'lightSetupId': serializer.toJson<int?>(lightSetupId),
       'locationBasePlanId': serializer.toJson<int?>(locationBasePlanId),
       'routeJson': serializer.toJson<String?>(routeJson),
+      'storyboardImagePath': serializer.toJson<String?>(storyboardImagePath),
+      'cellStylesJson': serializer.toJson<String?>(cellStylesJson),
     };
   }
 
@@ -5683,6 +5970,8 @@ class Shot extends DataClass implements Insertable<Shot> {
     Value<int?> lightSetupId = const Value.absent(),
     Value<int?> locationBasePlanId = const Value.absent(),
     Value<String?> routeJson = const Value.absent(),
+    Value<String?> storyboardImagePath = const Value.absent(),
+    Value<String?> cellStylesJson = const Value.absent(),
   }) => Shot(
     id: id ?? this.id,
     sceneId: sceneId ?? this.sceneId,
@@ -5726,6 +6015,12 @@ class Shot extends DataClass implements Insertable<Shot> {
         ? locationBasePlanId.value
         : this.locationBasePlanId,
     routeJson: routeJson.present ? routeJson.value : this.routeJson,
+    storyboardImagePath: storyboardImagePath.present
+        ? storyboardImagePath.value
+        : this.storyboardImagePath,
+    cellStylesJson: cellStylesJson.present
+        ? cellStylesJson.value
+        : this.cellStylesJson,
   );
   Shot copyWithCompanion(ShotsCompanion data) {
     return Shot(
@@ -5779,6 +6074,12 @@ class Shot extends DataClass implements Insertable<Shot> {
           ? data.locationBasePlanId.value
           : this.locationBasePlanId,
       routeJson: data.routeJson.present ? data.routeJson.value : this.routeJson,
+      storyboardImagePath: data.storyboardImagePath.present
+          ? data.storyboardImagePath.value
+          : this.storyboardImagePath,
+      cellStylesJson: data.cellStylesJson.present
+          ? data.cellStylesJson.value
+          : this.cellStylesJson,
     );
   }
 
@@ -5810,7 +6111,9 @@ class Shot extends DataClass implements Insertable<Shot> {
           ..write('lightOverridesJson: $lightOverridesJson, ')
           ..write('lightSetupId: $lightSetupId, ')
           ..write('locationBasePlanId: $locationBasePlanId, ')
-          ..write('routeJson: $routeJson')
+          ..write('routeJson: $routeJson, ')
+          ..write('storyboardImagePath: $storyboardImagePath, ')
+          ..write('cellStylesJson: $cellStylesJson')
           ..write(')'))
         .toString();
   }
@@ -5843,6 +6146,8 @@ class Shot extends DataClass implements Insertable<Shot> {
     lightSetupId,
     locationBasePlanId,
     routeJson,
+    storyboardImagePath,
+    cellStylesJson,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -5873,7 +6178,9 @@ class Shot extends DataClass implements Insertable<Shot> {
           other.lightOverridesJson == this.lightOverridesJson &&
           other.lightSetupId == this.lightSetupId &&
           other.locationBasePlanId == this.locationBasePlanId &&
-          other.routeJson == this.routeJson);
+          other.routeJson == this.routeJson &&
+          other.storyboardImagePath == this.storyboardImagePath &&
+          other.cellStylesJson == this.cellStylesJson);
 }
 
 class ShotsCompanion extends UpdateCompanion<Shot> {
@@ -5903,6 +6210,8 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
   final Value<int?> lightSetupId;
   final Value<int?> locationBasePlanId;
   final Value<String?> routeJson;
+  final Value<String?> storyboardImagePath;
+  final Value<String?> cellStylesJson;
   const ShotsCompanion({
     this.id = const Value.absent(),
     this.sceneId = const Value.absent(),
@@ -5930,6 +6239,8 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     this.lightSetupId = const Value.absent(),
     this.locationBasePlanId = const Value.absent(),
     this.routeJson = const Value.absent(),
+    this.storyboardImagePath = const Value.absent(),
+    this.cellStylesJson = const Value.absent(),
   });
   ShotsCompanion.insert({
     this.id = const Value.absent(),
@@ -5958,6 +6269,8 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     this.lightSetupId = const Value.absent(),
     this.locationBasePlanId = const Value.absent(),
     this.routeJson = const Value.absent(),
+    this.storyboardImagePath = const Value.absent(),
+    this.cellStylesJson = const Value.absent(),
   }) : sceneId = Value(sceneId),
        projectId = Value(projectId),
        number = Value(number);
@@ -5988,6 +6301,8 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     Expression<int>? lightSetupId,
     Expression<int>? locationBasePlanId,
     Expression<String>? routeJson,
+    Expression<String>? storyboardImagePath,
+    Expression<String>? cellStylesJson,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -6020,6 +6335,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
       if (locationBasePlanId != null)
         'location_base_plan_id': locationBasePlanId,
       if (routeJson != null) 'route_json': routeJson,
+      if (storyboardImagePath != null)
+        'storyboard_image_path': storyboardImagePath,
+      if (cellStylesJson != null) 'cell_styles_json': cellStylesJson,
     });
   }
 
@@ -6050,6 +6368,8 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     Value<int?>? lightSetupId,
     Value<int?>? locationBasePlanId,
     Value<String?>? routeJson,
+    Value<String?>? storyboardImagePath,
+    Value<String?>? cellStylesJson,
   }) {
     return ShotsCompanion(
       id: id ?? this.id,
@@ -6078,6 +6398,8 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
       lightSetupId: lightSetupId ?? this.lightSetupId,
       locationBasePlanId: locationBasePlanId ?? this.locationBasePlanId,
       routeJson: routeJson ?? this.routeJson,
+      storyboardImagePath: storyboardImagePath ?? this.storyboardImagePath,
+      cellStylesJson: cellStylesJson ?? this.cellStylesJson,
     );
   }
 
@@ -6164,6 +6486,14 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     if (routeJson.present) {
       map['route_json'] = Variable<String>(routeJson.value);
     }
+    if (storyboardImagePath.present) {
+      map['storyboard_image_path'] = Variable<String>(
+        storyboardImagePath.value,
+      );
+    }
+    if (cellStylesJson.present) {
+      map['cell_styles_json'] = Variable<String>(cellStylesJson.value);
+    }
     return map;
   }
 
@@ -6195,7 +6525,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
           ..write('lightOverridesJson: $lightOverridesJson, ')
           ..write('lightSetupId: $lightSetupId, ')
           ..write('locationBasePlanId: $locationBasePlanId, ')
-          ..write('routeJson: $routeJson')
+          ..write('routeJson: $routeJson, ')
+          ..write('storyboardImagePath: $storyboardImagePath, ')
+          ..write('cellStylesJson: $cellStylesJson')
           ..write(')'))
         .toString();
   }
@@ -38229,6 +38561,10 @@ typedef $$ScenesTableCreateCompanionBuilder =
       Value<int> durationMinutes,
       Value<bool> autoNumbering,
       Value<int> sortOrder,
+      Value<bool> scriptLinked,
+      Value<String?> scriptHeadingKey,
+      Value<String?> scriptTextHash,
+      Value<bool> offScript,
     });
 typedef $$ScenesTableUpdateCompanionBuilder =
     ScenesCompanion Function({
@@ -38250,6 +38586,10 @@ typedef $$ScenesTableUpdateCompanionBuilder =
       Value<int> durationMinutes,
       Value<bool> autoNumbering,
       Value<int> sortOrder,
+      Value<bool> scriptLinked,
+      Value<String?> scriptHeadingKey,
+      Value<String?> scriptTextHash,
+      Value<bool> offScript,
     });
 
 final class $$ScenesTableReferences
@@ -38439,6 +38779,26 @@ class $$ScenesTableFilterComposer
 
   ColumnFilters<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get scriptLinked => $composableBuilder(
+    column: $table.scriptLinked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get scriptHeadingKey => $composableBuilder(
+    column: $table.scriptHeadingKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get scriptTextHash => $composableBuilder(
+    column: $table.scriptTextHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get offScript => $composableBuilder(
+    column: $table.offScript,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -38646,6 +39006,26 @@ class $$ScenesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get scriptLinked => $composableBuilder(
+    column: $table.scriptLinked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get scriptHeadingKey => $composableBuilder(
+    column: $table.scriptHeadingKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get scriptTextHash => $composableBuilder(
+    column: $table.scriptTextHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get offScript => $composableBuilder(
+    column: $table.offScript,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ProjectsTableOrderingComposer get projectId {
     final $$ProjectsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -38787,6 +39167,24 @@ class $$ScenesTableAnnotationComposer
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<bool> get scriptLinked => $composableBuilder(
+    column: $table.scriptLinked,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get scriptHeadingKey => $composableBuilder(
+    column: $table.scriptHeadingKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get scriptTextHash => $composableBuilder(
+    column: $table.scriptTextHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get offScript =>
+      $composableBuilder(column: $table.offScript, builder: (column) => column);
 
   $$ProjectsTableAnnotationComposer get projectId {
     final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
@@ -38962,6 +39360,10 @@ class $$ScenesTableTableManager
                 Value<int> durationMinutes = const Value.absent(),
                 Value<bool> autoNumbering = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<bool> scriptLinked = const Value.absent(),
+                Value<String?> scriptHeadingKey = const Value.absent(),
+                Value<String?> scriptTextHash = const Value.absent(),
+                Value<bool> offScript = const Value.absent(),
               }) => ScenesCompanion(
                 id: id,
                 projectId: projectId,
@@ -38981,6 +39383,10 @@ class $$ScenesTableTableManager
                 durationMinutes: durationMinutes,
                 autoNumbering: autoNumbering,
                 sortOrder: sortOrder,
+                scriptLinked: scriptLinked,
+                scriptHeadingKey: scriptHeadingKey,
+                scriptTextHash: scriptTextHash,
+                offScript: offScript,
               ),
           createCompanionCallback:
               ({
@@ -39002,6 +39408,10 @@ class $$ScenesTableTableManager
                 Value<int> durationMinutes = const Value.absent(),
                 Value<bool> autoNumbering = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<bool> scriptLinked = const Value.absent(),
+                Value<String?> scriptHeadingKey = const Value.absent(),
+                Value<String?> scriptTextHash = const Value.absent(),
+                Value<bool> offScript = const Value.absent(),
               }) => ScenesCompanion.insert(
                 id: id,
                 projectId: projectId,
@@ -39021,6 +39431,10 @@ class $$ScenesTableTableManager
                 durationMinutes: durationMinutes,
                 autoNumbering: autoNumbering,
                 sortOrder: sortOrder,
+                scriptLinked: scriptLinked,
+                scriptHeadingKey: scriptHeadingKey,
+                scriptTextHash: scriptTextHash,
+                offScript: offScript,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -40036,6 +40450,8 @@ typedef $$ShotsTableCreateCompanionBuilder =
       Value<int?> lightSetupId,
       Value<int?> locationBasePlanId,
       Value<String?> routeJson,
+      Value<String?> storyboardImagePath,
+      Value<String?> cellStylesJson,
     });
 typedef $$ShotsTableUpdateCompanionBuilder =
     ShotsCompanion Function({
@@ -40065,6 +40481,8 @@ typedef $$ShotsTableUpdateCompanionBuilder =
       Value<int?> lightSetupId,
       Value<int?> locationBasePlanId,
       Value<String?> routeJson,
+      Value<String?> storyboardImagePath,
+      Value<String?> cellStylesJson,
     });
 
 final class $$ShotsTableReferences
@@ -40332,6 +40750,16 @@ class $$ShotsTableFilterComposer extends Composer<_$AppDatabase, $ShotsTable> {
 
   ColumnFilters<String> get routeJson => $composableBuilder(
     column: $table.routeJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get storyboardImagePath => $composableBuilder(
+    column: $table.storyboardImagePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cellStylesJson => $composableBuilder(
+    column: $table.cellStylesJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -40622,6 +41050,16 @@ class $$ShotsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get storyboardImagePath => $composableBuilder(
+    column: $table.storyboardImagePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cellStylesJson => $composableBuilder(
+    column: $table.cellStylesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ScenesTableOrderingComposer get sceneId {
     final $$ScenesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -40809,6 +41247,16 @@ class $$ShotsTableAnnotationComposer
 
   GeneratedColumn<String> get routeJson =>
       $composableBuilder(column: $table.routeJson, builder: (column) => column);
+
+  GeneratedColumn<String> get storyboardImagePath => $composableBuilder(
+    column: $table.storyboardImagePath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get cellStylesJson => $composableBuilder(
+    column: $table.cellStylesJson,
+    builder: (column) => column,
+  );
 
   $$ScenesTableAnnotationComposer get sceneId {
     final $$ScenesTableAnnotationComposer composer = $composerBuilder(
@@ -41043,6 +41491,8 @@ class $$ShotsTableTableManager
                 Value<int?> lightSetupId = const Value.absent(),
                 Value<int?> locationBasePlanId = const Value.absent(),
                 Value<String?> routeJson = const Value.absent(),
+                Value<String?> storyboardImagePath = const Value.absent(),
+                Value<String?> cellStylesJson = const Value.absent(),
               }) => ShotsCompanion(
                 id: id,
                 sceneId: sceneId,
@@ -41070,6 +41520,8 @@ class $$ShotsTableTableManager
                 lightSetupId: lightSetupId,
                 locationBasePlanId: locationBasePlanId,
                 routeJson: routeJson,
+                storyboardImagePath: storyboardImagePath,
+                cellStylesJson: cellStylesJson,
               ),
           createCompanionCallback:
               ({
@@ -41099,6 +41551,8 @@ class $$ShotsTableTableManager
                 Value<int?> lightSetupId = const Value.absent(),
                 Value<int?> locationBasePlanId = const Value.absent(),
                 Value<String?> routeJson = const Value.absent(),
+                Value<String?> storyboardImagePath = const Value.absent(),
+                Value<String?> cellStylesJson = const Value.absent(),
               }) => ShotsCompanion.insert(
                 id: id,
                 sceneId: sceneId,
@@ -41126,6 +41580,8 @@ class $$ShotsTableTableManager
                 lightSetupId: lightSetupId,
                 locationBasePlanId: locationBasePlanId,
                 routeJson: routeJson,
+                storyboardImagePath: storyboardImagePath,
+                cellStylesJson: cellStylesJson,
               ),
           withReferenceMapper: (p0) => p0
               .map(

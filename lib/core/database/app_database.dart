@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import '../storage/app_storage_config.dart';
 import '../utils/media_storage.dart';
 import '../utils/scene_color.dart';
+import '../script/script_scene_matcher.dart';
 import '../utils/scene_format.dart';
 import '../../shared/visual_bible/bible_section_fields.dart';
 import '../../shared/visual_bible/moodboard_association.dart';
@@ -67,13 +68,29 @@ part 'app_database.g.dart';
     VisualBibleDocuments,
   ],
 )
+/// Escena del guion tal como la deja el espacio de trabajo de importación.
+/// [sceneText] es su texto en el guion, de su cabecera a la siguiente.
+typedef WorkspaceScene = ({
+  String intExt,
+  String dayNight,
+  String location,
+  String shootSet,
+  String locationSite,
+  String? name,
+  String? description,
+  String? locationColor,
+  String? charactersJson,
+  int? sourceStartIndex,
+  String? sceneText,
+});
+
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 44;
+  int get schemaVersion => 45;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -428,6 +445,21 @@ class AppDatabase extends _$AppDatabase {
         // Set por plano y recorrido de los planos secuencia.
         await m.addColumn(shots, shots.locationBasePlanId);
         await m.addColumn(shots, shots.routeJson);
+      }
+      if (from < 45) {
+        // Vínculo de las escenas con el guion literario, e imagen de
+        // storyboard y color de celda de los planos.
+        await m.addColumn(scenes, scenes.scriptLinked);
+        await m.addColumn(scenes, scenes.scriptHeadingKey);
+        await m.addColumn(scenes, scenes.scriptTextHash);
+        await m.addColumn(scenes, scenes.offScript);
+        await m.addColumn(shots, shots.storyboardImagePath);
+        await m.addColumn(shots, shots.cellStylesJson);
+        // Las escenas que se detectaron en el guion ya venían de él.
+        await customStatement(
+          'UPDATE scenes SET script_linked = 1 '
+          'WHERE source_start_index IS NOT NULL',
+        );
       }
     },
   );
@@ -1104,29 +1136,81 @@ class AppDatabase extends _$AppDatabase {
     await touchProjectContent(projectId);
   }
 
-  /// Sincroniza escenas desde el espacio de trabajo preservando planos cuando es posible.
+  /// Empareja el guion del espacio de trabajo con las escenas del proyecto,
+  /// por contenido. No cambia nada: sirve para revisar antes de aplicar.
+  Future<ScriptSceneMatch> planScriptUpdate(
+    int projectId,
+    List<WorkspaceScene> items,
+  ) async {
+    final existing = await _scenesInScriptOrder(projectId);
+    return matchScriptScenes(
+      existing: [for (final s in existing) _existingScriptScene(s)],
+      incoming: [for (final s in items) _incomingScriptScene(s)],
+    );
+  }
+
+  Future<List<Scene>> _scenesInScriptOrder(int projectId) =>
+      (select(scenes)
+            ..where((s) => s.projectId.equals(projectId))
+            ..orderBy([
+              (s) => OrderingTerm.asc(s.offScript),
+              (s) => OrderingTerm.asc(s.sortOrder),
+              (s) => OrderingTerm.asc(s.id),
+            ]))
+          .get();
+
+  static ExistingScriptScene _existingScriptScene(Scene s) =>
+      ExistingScriptScene(
+        id: s.id,
+        // Las escenas de antes del esquema 45 no la guardaban: sale de sus
+        // propios datos.
+        headingKey:
+            s.scriptHeadingKey ??
+            scriptHeadingKey(
+              intExt: s.intExt,
+              location: locationFromCanonical(s.locationCanonical),
+              dayNight: s.dayNight,
+            ),
+        textHash: s.scriptTextHash,
+        text: s.actionText,
+      );
+
+  static IncomingScriptScene _incomingScriptScene(WorkspaceScene s) =>
+      IncomingScriptScene(
+        headingKey: scriptHeadingKey(
+          intExt: s.intExt,
+          location: s.location,
+          dayNight: s.dayNight,
+        ),
+        text: s.sceneText,
+      );
+
+  /// Lleva al proyecto las escenas del guion, en su orden.
+  ///
+  /// Cada escena del guion se une a la del proyecto que le corresponde
+  /// ([links], una por elemento de [items]; si no se da, se emparejan por
+  /// contenido). Las que no tienen pareja se crean. Las del proyecto que ya
+  /// no están en el guion se conservan con sus planos, marcadas como fuera
+  /// del guion; solo se borran las que no tienen ningún plano. Nunca se borra
+  /// un plano.
   Future<void> syncScenesFromWorkspace(
     int projectId,
-    List<
-      ({
-        String intExt,
-        String dayNight,
-        String location,
-        String shootSet,
-        String locationSite,
-        String? name,
-        String? description,
-        String? locationColor,
-        String? charactersJson,
-        int? sourceStartIndex,
-      })
-    >
-    items,
-  ) async {
+    List<WorkspaceScene> items, {
+    List<int?>? links,
+  }) async {
+    assert(links == null || links.length == items.length);
     await transaction(() async {
-      final existing = await (select(
-        scenes,
-      )..where((s) => s.projectId.equals(projectId))).get();
+      final existing = await _scenesInScriptOrder(projectId);
+      final byId = {for (final s in existing) s.id: s};
+      final resolved =
+          links ??
+          [
+            for (final l in matchScriptScenes(
+              existing: [for (final s in existing) _existingScriptScene(s)],
+              incoming: [for (final s in items) _incomingScriptScene(s)],
+            ).links)
+              l.existingId,
+          ];
 
       final matchedIds = <int>{};
 
@@ -1145,24 +1229,10 @@ class AppDatabase extends _$AppDatabase {
         );
         final siteId = site.id;
 
-        Scene? match;
-        if (s.sourceStartIndex != null) {
-          for (final candidate in existing) {
-            if (candidate.sourceStartIndex == s.sourceStartIndex) {
-              match = candidate;
-              break;
-            }
-          }
-        }
-        if (match == null) {
-          for (final candidate in existing) {
-            if (matchedIds.contains(candidate.id)) continue;
-            if (candidate.number == order || candidate.sortOrder == order) {
-              match = candidate;
-              break;
-            }
-          }
-        }
+        final linkedId = resolved[i];
+        final match = linkedId != null && !matchedIds.contains(linkedId)
+            ? byId[linkedId]
+            : null;
 
         final name = s.name != null && s.name!.trim().isNotEmpty
             ? s.name!.trim()
@@ -1172,6 +1242,15 @@ class AppDatabase extends _$AppDatabase {
                 location: s.location,
               );
         final canonical = '${s.intExt}. ${s.location} - ${s.dayNight}';
+        final headingKey = scriptHeadingKey(
+          intExt: s.intExt,
+          location: s.location,
+          dayNight: s.dayNight,
+        );
+        final text = s.sceneText?.trim();
+        final hasText = text != null && text.isNotEmpty;
+        // Una escena detectada en el texto del guion queda vinculada a él.
+        final fromScript = s.sourceStartIndex != null;
 
         if (match != null) {
           matchedIds.add(match.id);
@@ -1187,8 +1266,16 @@ class AppDatabase extends _$AppDatabase {
               locationColor: Value(s.locationColor),
               charactersJson: Value(s.charactersJson),
               description: Value(s.description),
+              // Sin texto nuevo se conserva el que hubiera.
+              actionText: hasText ? Value(text) : Value(match.actionText),
               sourceStartIndex: Value(s.sourceStartIndex),
               sortOrder: order,
+              scriptLinked: fromScript,
+              scriptHeadingKey: Value(headingKey),
+              scriptTextHash: hasText
+                  ? Value(scriptTextHash(text))
+                  : Value(match.scriptTextHash),
+              offScript: false,
             ),
           );
         } else {
@@ -1205,69 +1292,51 @@ class AppDatabase extends _$AppDatabase {
               locationColor: Value(s.locationColor),
               charactersJson: Value(s.charactersJson),
               description: Value(s.description),
+              actionText: Value(hasText ? text : null),
               sourceStartIndex: Value(s.sourceStartIndex),
               sortOrder: Value(order),
+              scriptLinked: Value(fromScript),
+              scriptHeadingKey: Value(headingKey),
+              scriptTextHash: Value(hasText ? scriptTextHash(text) : null),
             ),
           );
         }
       }
 
+      // Lo que ya no está en el guion: con planos se conserva aparte, al
+      // final; vacío no tiene nada que guardar.
+      var offOrder = items.length;
       for (final old in existing) {
         if (matchedIds.contains(old.id)) continue;
-        await (delete(shots)..where((sh) => sh.sceneId.equals(old.id))).go();
-        await (delete(scenes)..where((sc) => sc.id.equals(old.id))).go();
+        final shotCount =
+            await (selectOnly(shots)
+                  ..addColumns([shots.id.count()])
+                  ..where(shots.sceneId.equals(old.id)))
+                .map((row) => row.read(shots.id.count()) ?? 0)
+                .getSingle();
+        if (shotCount == 0) {
+          await (delete(
+            shootDocumentBlocks,
+          )..where((b) => b.sceneId.equals(old.id))).go();
+          await (update(moodboardImages)
+                ..where((m) => m.linkedSceneId.equals(old.id)))
+              .write(const MoodboardImagesCompanion(linkedSceneId: Value(null)));
+          await (delete(scenes)..where((sc) => sc.id.equals(old.id))).go();
+        } else {
+          offOrder++;
+          await (update(scenes)..where((sc) => sc.id.equals(old.id))).write(
+            ScenesCompanion(
+              offScript: const Value(true),
+              sortOrder: Value(offOrder),
+              sourceStartIndex: const Value(null),
+            ),
+          );
+        }
       }
 
       await linkScenesToLocations(projectId);
     });
     await touchProjectContent(projectId);
-  }
-
-  /// Escenas que se eliminarían al sincronizar y tienen planos.
-  Future<List<Scene>> findScenesWithShotsToRemoveOnSync(
-    int projectId,
-    List<int?> sourceStartIndices,
-    int newCount,
-  ) async {
-    final existing =
-        await (select(scenes)
-              ..where((s) => s.projectId.equals(projectId))
-              ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
-            .get();
-
-    final keepIds = <int>{};
-
-    for (var i = 0; i < newCount; i++) {
-      final order = i + 1;
-      final sourceIndex = i < sourceStartIndices.length
-          ? sourceStartIndices[i]
-          : null;
-
-      Scene? match;
-      if (sourceIndex != null) {
-        match = existing
-            .where((e) => e.sourceStartIndex == sourceIndex)
-            .firstOrNull;
-      }
-      match ??= existing
-          .where((e) => !keepIds.contains(e.id) && e.sortOrder == order)
-          .firstOrNull;
-      if (match != null) keepIds.add(match.id);
-    }
-
-    final toRemove = existing
-        .where((e) => !keepIds.contains(e.id))
-        .toList(growable: false);
-    if (toRemove.isEmpty) return [];
-
-    final result = <Scene>[];
-    for (final scene in toRemove) {
-      final shotCount = await (select(
-        shots,
-      )..where((s) => s.sceneId.equals(scene.id))).get();
-      if (shotCount.isNotEmpty) result.add(scene);
-    }
-    return result;
   }
 
   // Localizaciones únicas de un proyecto (para dropdown)
@@ -4283,6 +4352,41 @@ LazyDatabase _openConnection() {
       file = File(defaults.databaseFile);
     }
     await Directory(p.dirname(file.path)).create(recursive: true);
-    return NativeDatabase.createInBackground(file);
+    final path = file.path;
+    return NativeDatabase.createInBackground(
+      file,
+      setup: (raw) {
+        final version =
+            raw.select('PRAGMA user_version').first.values.first as int;
+        backupBeforeSchemaUpgrade(path, version);
+      },
+    );
   });
+}
+
+/// Versión de esquema a partir de la cual una app más antigua ya no puede
+/// abrir la base. Antes de pasar de ella se guarda una copia.
+const kSchemaBackupBefore = 45;
+
+/// Guarda una copia de la base junto a ella antes de migrarla al esquema
+/// [kSchemaBackupBefore], por si hay que volver a una versión anterior de la
+/// app. Devuelve la ruta de la copia, o nulo si no hacía falta.
+String? backupBeforeSchemaUpgrade(String databasePath, int storedVersion) {
+  // 0 = base recién creada: no hay nada que guardar.
+  if (storedVersion == 0 || storedVersion >= kSchemaBackupBefore) return null;
+  final source = File(databasePath);
+  if (!source.existsSync()) return null;
+  final copyPath = '$databasePath.antes-de-esquema-$kSchemaBackupBefore';
+  if (File(copyPath).existsSync()) return copyPath;
+  try {
+    source.copySync(copyPath);
+    // Lo escrito y aún no volcado al archivo principal vive en estos dos.
+    for (final suffix in ['-wal', '-shm']) {
+      final extra = File('$databasePath$suffix');
+      if (extra.existsSync()) extra.copySync('$copyPath$suffix');
+    }
+    return copyPath;
+  } catch (_) {
+    return null;
+  }
 }
