@@ -157,6 +157,7 @@ Añadida el 2026-10-06. Rama `plan/g1-guion-tecnico` (worktree `iris_dp_guion`).
 - [x] **L. Guion literario.** Actualizar el guion empareja las escenas por contenido, se revisa antes de aplicar y nunca borra un plano; escenas fuera del guion; mover planos entre escenas; personajes que aparecen en la acción; lista de escenas a todo el alto y menú de edición compacto.
 - [x] **G3. Exportar a PDF y Word** con la misma hoja.
 - [x] **G4. Sol y meteorología.** Cálculo del sol sin conexión y previsión de Open-Meteo (gratis solo para uso no comercial).
+- [x] **Ubicación en Localizaciones (2026-10-08):** la ubicación de cada localización se fija en su ficha de Localizaciones (buscador o coordenadas pegadas, sol de un día, abrir en Maps) y, más ligera, en la sección Localización de la biblia; la jornada solo la lee. Las migraciones 45 y 46 añaden cada columna solo si falta.
 - [x] **G5. Guion técnico de rodaje.** Jornada con fecha, lugar, meteorología y orden de rodaje, y su PDF y Word. Pendiente: ver una jornada desde la pantalla del guion técnico.
 
 ## Fase 4 — Material técnico (objetivo 2)

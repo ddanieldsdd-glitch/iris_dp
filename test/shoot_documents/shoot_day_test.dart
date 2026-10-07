@@ -258,7 +258,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
-  testWidgets('una localización sin ubicar se ubica con el buscador', (
+  testWidgets('la jornada no ubica: manda a Localizaciones y refleja el cambio', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1500, 1000);
@@ -288,12 +288,18 @@ void main() {
     expect(find.textContaining('Sin ubicar en el mapa'), findsOneWidget);
     expect(find.textContaining(RegExp(r'Amanecer \d')), findsNothing);
 
-    await tester.tap(find.text('Ubicar'));
+    // La ubicación se fija en Localizaciones, no aquí.
+    expect(find.text('Ubicar'), findsNothing);
+    expect(find.text('Abrir localización'), findsOneWidget);
+
+    await db.setSitePlace(
+      siteId,
+      latitude: 41.3874,
+      longitude: 2.1686,
+      placeLabel: 'Barcelona, Cataluña, España',
+    );
     await settle();
-    await tester.tap(find.byTooltip('Buscar'));
-    await settle();
-    await tester.tap(find.text('Barcelona, Cataluña, España'));
-    await settle();
+    expect(find.text('Abrir localización'), findsNothing);
 
     final site = await db.getSiteById(siteId);
     expect(site!.latitude, closeTo(41.39, 0.01));

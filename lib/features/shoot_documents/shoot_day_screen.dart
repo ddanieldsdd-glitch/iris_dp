@@ -15,6 +15,7 @@ import '../../core/widgets/safe_reorderable_column.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../../shared/technical_script_export/technical_script_docx.dart';
+import '../locations/locations_screen.dart';
 import '../technical_script/technical_script_export.dart';
 import '../technical_script/technical_script_settings.dart';
 import 'shoot_document_block_types.dart';
@@ -22,11 +23,6 @@ import 'shoot_document_script_picker.dart';
 
 /// Tipo de documento de rodaje que es una jornada con su guion técnico.
 const kShootDayKind = 'technical_day';
-
-/// De dónde sale la previsión; los tests ponen aquí uno de mentira.
-final weatherProviderProvider = Provider<WeatherProvider>(
-  (ref) => OpenMeteoWeather(),
-);
 
 /// Guion técnico de rodaje de una jornada: fecha, lugar, meteorología y los
 /// planos del guion técnico en el orden en que se van a rodar.
@@ -87,21 +83,6 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
       from
           ? day.copyWith(shootFromTime: Value(value))
           : day.copyWith(shootToTime: Value(value)),
-    );
-  }
-
-  Future<void> _locate(LocationSite site) async {
-    final place = await showDialog<PlaceResult>(
-      context: context,
-      builder: (_) => _PlaceSearchDialog(initialQuery: site.name),
-    );
-    if (place == null) return;
-    await _db.updateSite(
-      site.copyWith(
-        latitude: Value(place.latitude),
-        longitude: Value(place.longitude),
-        placeLabel: Value(place.label),
-      ),
     );
   }
 
@@ -398,15 +379,24 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
                 Expanded(
                   child: Text(
                     site.placeLabel ??
-                        'Sin ubicar en el mapa: hace falta para el sol y '
-                            'la previsión.',
+                        'Sin ubicar en el mapa. Se fija en Localizaciones; '
+                            'hace falta para el sol y la previsión.',
                     style: AppTypography.caption(palette),
                   ),
                 ),
-                TextButton(
-                  onPressed: () => _locate(site),
-                  child: Text(site.latitude == null ? 'Ubicar' : 'Cambiar'),
-                ),
+                if (site.latitude == null)
+                  TextButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => LocationsScreen(
+                          projectId: widget.projectId,
+                          initialSiteId: site.id,
+                        ),
+                      ),
+                    ),
+                    child: const Text('Abrir localización'),
+                  ),
               ],
             ),
           ],
@@ -691,138 +681,6 @@ class _OrderList extends ConsumerWidget {
           );
         },
       ),
-    );
-  }
-}
-
-/// Busca un lugar por su nombre para ubicar una localización.
-class _PlaceSearchDialog extends ConsumerStatefulWidget {
-  final String initialQuery;
-  const _PlaceSearchDialog({required this.initialQuery});
-
-  @override
-  ConsumerState<_PlaceSearchDialog> createState() => _PlaceSearchDialogState();
-}
-
-class _PlaceSearchDialogState extends ConsumerState<_PlaceSearchDialog> {
-  final _query = TextEditingController();
-  List<PlaceResult> _results = const [];
-  bool _searching = false;
-  String? _notice;
-
-  @override
-  void initState() {
-    super.initState();
-    // El nombre de la localización suele ser un lugar; sirve de partida.
-    _query.text = widget.initialQuery;
-  }
-
-  @override
-  void dispose() {
-    _query.dispose();
-    super.dispose();
-  }
-
-  Future<void> _search() async {
-    final text = _query.text.trim();
-    if (text.length < 2 || _searching) return;
-    setState(() {
-      _searching = true;
-      _notice = null;
-    });
-    try {
-      final results = await ref
-          .read(weatherProviderProvider)
-          .searchPlaces(text);
-      if (!mounted) return;
-      setState(() {
-        _results = results;
-        _notice = results.isEmpty ? 'No se ha encontrado ese lugar.' : null;
-      });
-    } catch (e) {
-      if (mounted) {
-        setState(
-          () => _notice =
-              'No se pudo buscar. Comprueba la conexión. '
-              '${userFriendlyError(e)}',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _searching = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return AlertDialog(
-      backgroundColor: palette.surfaceElevated,
-      title: Text(
-        '¿Dónde está la localización?',
-        style: AppTypography.titleMedium(palette),
-      ),
-      content: SizedBox(
-        width: 460,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Escribe la ciudad o el pueblo. Sirve para calcular el sol y '
-              'pedir la previsión.',
-              style: AppTypography.caption(palette),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextField(
-              controller: _query,
-              autofocus: true,
-              style: AppTypography.bodyLarge(palette),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: 'Ej. Barcelona',
-                suffixIcon: _searching
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : IconButton(
-                        tooltip: 'Buscar',
-                        icon: const Icon(Icons.search, size: 18),
-                        onPressed: _search,
-                      ),
-              ),
-              onSubmitted: (_) => _search(),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            if (_notice != null)
-              Text(_notice!, style: AppTypography.bodyMedium(palette)),
-            SizedBox(
-              height: 240,
-              child: ListView(
-                children: [
-                  for (final place in _results)
-                    ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.place_outlined, size: 18),
-                      title: Text(place.label),
-                      onTap: () => Navigator.pop(context, place),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text('Cancelar', style: AppTypography.bodyMedium(palette)),
-        ),
-      ],
     );
   }
 }

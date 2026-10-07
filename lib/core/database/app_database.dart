@@ -1707,6 +1707,31 @@ class AppDatabase extends _$AppDatabase {
     return ok;
   }
 
+  /// Fija (o quita, con nulos) dónde está la localización en el mapa. La
+  /// previsión guardada en sus jornadas era de otro punto y se borra.
+  Future<void> setSitePlace(
+    int siteId, {
+    required double? latitude,
+    required double? longitude,
+    required String? placeLabel,
+  }) async {
+    final site = await getSiteById(siteId);
+    if (site == null) return;
+    await transaction(() async {
+      await (update(locationSites)..where((s) => s.id.equals(siteId))).write(
+        LocationSitesCompanion(
+          latitude: Value(latitude),
+          longitude: Value(longitude),
+          placeLabel: Value(placeLabel),
+        ),
+      );
+      await (update(shootDocuments)
+            ..where((d) => d.locationSiteId.equals(siteId)))
+          .write(const ShootDocumentsCompanion(weatherSnapshotJson: Value(null)));
+    });
+    await touchProjectContent(site.projectId);
+  }
+
   Future<void> deleteSite(int id) async {
     final projectId = (await getSiteById(id))?.projectId;
     await transaction(() async {

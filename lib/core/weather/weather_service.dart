@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import 'weather_models.dart';
@@ -98,3 +99,9 @@ class OpenMeteoWeather implements WeatherProvider {
     ];
   }
 }
+
+/// De dónde salen la previsión y el buscador de lugares; los tests ponen
+/// aquí uno de mentira.
+final weatherProviderProvider = Provider<WeatherProvider>(
+  (ref) => OpenMeteoWeather(),
+);

@@ -16,6 +16,7 @@ import '../../core/widgets/scene_color_picker.dart';
 import 'location_form_sheet.dart';
 import 'location_site_form_sheet.dart';
 import 'location_site_tabs.dart';
+import 'site_place.dart';
 import '../../core/widgets/app_snackbar.dart';
 
 class LocationsScreen extends ConsumerStatefulWidget {
@@ -679,6 +680,14 @@ class _SiteListTile extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Icon(Icons.location_city_outlined,
               color: siteColor, size: 20),
+          if (site.latitude == null) ...[
+            const SizedBox(width: 4),
+            Tooltip(
+              message: 'Sin ubicar en el mapa',
+              child: Icon(Icons.location_off_outlined,
+                  color: palette.textTertiary, size: 14),
+            ),
+          ],
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
@@ -950,6 +959,8 @@ class _SiteDetailPanelState extends ConsumerState<_SiteDetailPanel> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                SitePlaceCard(site: site),
+                const SizedBox(height: AppSpacing.lg),
                 SiteSetsSection(
                   projectId: widget.projectId,
                   site: site,

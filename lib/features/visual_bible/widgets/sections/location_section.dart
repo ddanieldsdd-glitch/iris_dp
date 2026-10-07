@@ -22,6 +22,7 @@ import '../../visual_bible_model.dart';
 import '../../../../core/project/project_shoot_context.dart';
 import '../../../locations/location_form_sheet.dart';
 import '../../../locations/location_site_form_sheet.dart';
+import '../../../locations/site_place.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_paste_zone.dart';
 import '../moodboard_drag.dart';
@@ -171,9 +172,11 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
                 active ??= allSets.isNotEmpty ? allSets.first : null;
 
                 String? siteName;
+                LocationSite? activeSite;
                 if (active?.siteId != null) {
                   for (final s in sites) {
                     if (s.id == active!.siteId) {
+                      activeSite = s;
                       siteName = s.name;
                       break;
                     }
@@ -240,6 +243,7 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
                             bibleId: widget.bibleId,
                             plan: active,
                             siteName: siteName,
+                            site: activeSite,
                             extras: _planExtras(active.id),
                             model: model,
                             palette: palette,
@@ -293,6 +297,10 @@ class _FeaturedLocation extends ConsumerStatefulWidget {
   final int bibleId;
   final LocationBasePlan plan;
   final String? siteName;
+
+  /// La localización del set: su ubicación en el mapa se fija aquí o en
+  /// la pantalla de Localizaciones, y es la misma.
+  final LocationSite? site;
   final Map<String, dynamic> extras;
   final LocationRefModel model;
   final AppPalette palette;
@@ -304,6 +312,7 @@ class _FeaturedLocation extends ConsumerStatefulWidget {
     required this.bibleId,
     required this.plan,
     required this.siteName,
+    this.site,
     required this.extras,
     required this.model,
     required this.palette,
@@ -526,7 +535,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
 
   Future<void> _openMaps() async {
     final url = _s('mapsUrl');
-    final coords = _s('coords');
+    final coords = _coordsText();
     final uri = url.isNotEmpty
         ? Uri.tryParse(url)
         : coords.isNotEmpty
@@ -540,9 +549,62 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  /// Coordenadas de la localización si está ubicada; si no, las escritas
+  /// a mano en la biblia.
+  String _coordsText() {
+    final site = widget.site;
+    if (site?.latitude != null && site?.longitude != null) {
+      return formatCoordinates(site!.latitude!, site.longitude!);
+    }
+    return _s('coords');
+  }
+
+  Future<void> _locateSite() async {
+    final site = widget.site;
+    if (site == null) {
+      await _edit('Coordenadas', 'coords', _s('coords'));
+      return;
+    }
+    final typed = _s('coords');
+    await pickSitePlace(
+      context,
+      ref,
+      site,
+      initialQuery: site.latitude == null && parseCoordinates(typed) != null
+          ? typed
+          : null,
+    );
+  }
+
+  /// Rellena los campos de sol con lo calculado para un día en la
+  /// ubicación de la localización. Siguen siendo editables a mano.
+  Future<void> _fillSunFromPlace() async {
+    final site = widget.site;
+    final lat = site?.latitude;
+    final lon = site?.longitude;
+    if (lat == null || lon == null) return;
+    final now = DateTime.now();
+    final day = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(now.year - 2),
+      lastDate: DateTime(now.year + 5),
+      helpText: '¿Para qué día calculo el sol?',
+    );
+    if (day == null) return;
+    final sun = SunDaySummary.of(day, lat, lon);
+    await widget.onExtras({
+      'sunrise': sun.sunrise,
+      'sunset': sun.sunset,
+      'daylightWindow': sun.daylight,
+      'blueHour': sun.blueEvening,
+      'goldenHour': sun.goldenEvening,
+    });
+  }
+
   Future<void> _openEarth() async {
     final url = _s('earthUrl');
-    final coords = _s('coords');
+    final coords = _coordsText();
     final uri = url.isNotEmpty
         ? Uri.tryParse(url)
         : coords.isNotEmpty
@@ -577,7 +639,6 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     final goldenHour = _s('goldenHour', '18:20 – 19:15');
     final maxElev = _s('maxElevation', '48° @ 13:00');
     final shadow = _s('shadowRatio', '1 : 1.1');
-    final coords = _s('coords', '');
     final elevation = _s('elevation', '');
 
     final contrast = _s('contrastRatio', '1:8 (High)');
@@ -699,15 +760,23 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                         vertical: 10,
                       ),
                       child: InkWell(
-                        onTap: () async {
-                          await _edit('Coordenadas', 'coords', coords);
-                          await _edit('Elevación', 'elevation', elevation);
-                        },
+                        onTap: _locateSite,
+                        onLongPress: () =>
+                            _edit('Elevación', 'elevation', elevation),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
+                            if (widget.site?.placeLabel != null)
+                              Text(
+                                widget.site!.placeLabel!,
+                                style: AppTypography.mono(
+                                  palette,
+                                ).copyWith(fontSize: 11, color: Colors.white),
+                              ),
                             Text(
-                              coords.isEmpty ? 'Toca para coords' : coords,
+                              _coordsText().isEmpty
+                                  ? 'Ubicar en el mapa'
+                                  : _coordsText(),
                               style: AppTypography.mono(
                                 palette,
                               ).copyWith(fontSize: 11, color: Colors.white),
@@ -837,6 +906,9 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                   shadow: shadow,
                   solarNote: _model.solarOrientation ?? '',
                   palette: palette,
+                  onCalculate: widget.site?.latitude != null
+                      ? _fillSunFromPlace
+                      : null,
                   onEditAzimuth: () async {
                     final ctrl = TextEditingController(text: '$azimuth');
                     final v = await showDialog<String>(
@@ -1132,6 +1204,9 @@ class _SolarCard extends StatelessWidget {
   final void Function(String key, String title, String val) onEditField;
   final VoidCallback onEditSolarNote;
 
+  /// Nulo si la localización no está ubicada en el mapa.
+  final VoidCallback? onCalculate;
+
   const _SolarCard({
     required this.azimuth,
     required this.sunrise,
@@ -1148,6 +1223,7 @@ class _SolarCard extends StatelessWidget {
     required this.onEditAzimuth,
     required this.onEditField,
     required this.onEditSolarNote,
+    this.onCalculate,
   });
 
   @override
@@ -1161,6 +1237,15 @@ class _SolarCard extends StatelessWidget {
             label: 'Orientación Solar',
             palette: palette,
           ),
+          if (onCalculate != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: onCalculate,
+                icon: const Icon(Icons.wb_twilight_outlined, size: 16),
+                label: const Text('Calcular con la ubicación'),
+              ),
+            ),
           const SizedBox(height: 8),
           InkWell(
             onTap: onEditSolarNote,
