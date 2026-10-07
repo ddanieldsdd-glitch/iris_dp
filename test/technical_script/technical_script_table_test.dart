@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/database/database_provider.dart';
@@ -27,6 +28,7 @@ void main() {
   late AppDatabase db;
 
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
     db = _SlowDb();
   });
 
@@ -82,7 +84,7 @@ void main() {
     return projectId;
   }
 
-  for (final width in [900.0, 1146.0, 2000.0]) {
+  for (final width in [900.0, 1222.0, 2000.0]) {
     testWidgets('la tabla no desborda a $width px y enseña los planos', (
       tester,
     ) async {
@@ -102,7 +104,7 @@ void main() {
       expect(find.byTooltip('Eliminar escena'), findsOneWidget);
 
       // A todo el ancho, la tabla llega al borde derecho de la ventana.
-      if (width >= 1146) {
+      if (width >= 1222) {
         final header = tester.getRect(find.text('APUNTES'));
         expect(header.right, lessThanOrEqualTo(width));
         expect(header.left, greaterThan(width * 0.75));
@@ -324,4 +326,106 @@ void main() {
       await unmount(tester);
     });
   }
+
+  testWidgets('una celda es texto hasta que se toca, y al salir guarda', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+
+    // En reposo no hay ningún campo de texto montado.
+    expect(find.byType(TextField), findsNothing);
+
+    await tester.tap(find.text('PML de ALI 2'));
+    await tester.pump();
+    expect(find.byType(TextField), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'PP de DIEGO');
+    // Tocar otra celda saca el foco de la primera.
+    await tester.tap(find.text('PML de ALI 3'));
+    await settle(tester);
+
+    expect(find.byType(TextField), findsOneWidget);
+    final shots = await db.getShotsForProject(projectId);
+    expect(shots[1].framing, 'PP de DIEGO');
+    expect(find.text('PP de DIEGO'), findsOneWidget);
+    await unmount(tester);
+  });
+
+  testWidgets('la duración está oculta hasta que se activa en Columnas', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+    expect(find.text('DUR.'), findsNothing);
+
+    await tester.tap(find.text('Columnas'));
+    await settle(tester);
+    await tester.tap(find.text('Duración'));
+    await settle(tester);
+
+    expect(find.text('DUR.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmount(tester);
+  });
+
+  testWidgets('se puede añadir un movimiento de cámara propio', (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+
+    await tester.tap(find.text('Movimiento').first);
+    await settle(tester);
+    await tester.tap(find.text('Añadir movimiento…'));
+    await settle(tester);
+    await tester.enterText(find.byType(TextField), 'CAMERA CAR');
+    await tester.tap(find.text('Añadir'));
+    await settle(tester);
+
+    final shots = await db.getShotsForProject(projectId);
+    expect(shots.first.movement, 'CAMERA CAR');
+
+    // Queda en la lista para los demás planos.
+    await tester.tap(find.text('Movimiento').first);
+    await settle(tester);
+    expect(find.text('CAMERA CAR'), findsNWidgets(2));
+    await tester.tapAt(const Offset(5, 5));
+    await settle(tester);
+    await unmount(tester);
+  });
+
+  testWidgets('el color de la barra tiñe el plano en el que se trabaja', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+
+    await tester.tap(find.text('PML de ALI 2'));
+    await settle(tester);
+    await tester.tap(find.byTooltip('Azul'));
+    await settle(tester);
+
+    final shots = await db.getShotsForProject(projectId);
+    expect(shots.map((s) => s.notesHighlight), [null, 'blue', null]);
+    await unmount(tester);
+  });
 }

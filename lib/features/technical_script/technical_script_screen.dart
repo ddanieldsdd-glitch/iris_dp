@@ -10,7 +10,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/project_color_scheme.dart';
@@ -19,13 +18,18 @@ import '../../core/utils/shot_reference_import.dart';
 import '../../core/utils/scene_characters.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
-import '../camera_plan/camera_plan_status_cell.dart';
+import '../camera_plan/camera_plan_editor.dart';
+import '../camera_plan/plan_data.dart';
+import '../camera_plan/plan_thumbnail.dart';
+import '../locations/locations_screen.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
 import 'scene_form_sheet.dart';
+import 'table/editable_cell.dart';
+import 'table/script_sheet_theme.dart';
+import 'technical_script_settings.dart';
 import '../../core/utils/shot_technical_options.dart';
-import '../../core/widgets/inline_edit_field.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../core/widgets/scene_meta_display.dart';
 
@@ -33,14 +37,19 @@ import '../../core/widgets/scene_meta_display.dart';
 const kMovements = kShotMovements;
 const kAngles = kShotAngles;
 
+/// Plano en el que se está trabajando: el de la última celda tocada. La barra
+/// de formato actúa sobre él.
+final _activeShotProvider = StateProvider.autoDispose<int?>((ref) => null);
+
 class TechnicalScriptScreen extends ConsumerWidget {
   final int projectId;
   const TechnicalScriptScreen({super.key, required this.projectId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.watch(databaseProvider);
     final palette = context.palette;
+    final settings = ref.watch(technicalScriptSettingsProvider);
+    final theme = ScriptSheetTheme.resolve(settings, palette);
 
     return Scaffold(
       appBar: AppBar(
@@ -80,65 +89,45 @@ class TechnicalScriptScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: StreamBuilder<List<Scene>>(
-        stream: db.watchScenesForProject(projectId),
-        builder: (context, snap) {
-          if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final scenes = snap.data!;
-          if (scenes.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Sin escenas. Importa el guion o añade una manualmente.',
-                    style: AppTypography.bodyMedium(palette),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  AppButton(
-                    label: 'Añadir escena',
-                    icon: Icons.add,
-                    onTap: () =>
-                        showSceneFormSheet(context, projectId: projectId),
-                  ),
-                ],
-              ),
-            );
-          }
-          return StreamBuilder<List<LocationSite>>(
-            stream: db.watchSitesForProject(projectId),
-            builder: (context, siteSnap) {
-              return StreamBuilder<List<LocationBasePlan>>(
-                stream: db.watchLocationsForProject(projectId),
-                builder: (context, locSnap) {
-                  final colors = ProjectColorScheme.resolve(
-                    sites: siteSnap.data ?? [],
-                    sets: locSnap.data ?? [],
-                    scenes: scenes,
+      body: Column(
+        children: [
+          _FormatBar(settings: settings),
+          Expanded(
+            child: PlanDataBuilder(
+              projectId: projectId,
+              builder: (context, data) {
+                if (data.scenes.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Sin escenas. Importa el guion o añade una '
+                          'manualmente.',
+                          style: AppTypography.bodyMedium(palette),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        AppButton(
+                          label: 'Añadir escena',
+                          icon: Icons.add,
+                          onTap: () =>
+                              showSceneFormSheet(context, projectId: projectId),
+                        ),
+                      ],
+                    ),
                   );
-                  return StreamBuilder<List<Shot>>(
-                    stream: db.watchShotsForProject(projectId),
-                    builder: (context, shotSnap) {
-                      final shotsByScene = <int, List<Shot>>{};
-                      for (final shot in shotSnap.data ?? const <Shot>[]) {
-                        shotsByScene
-                            .putIfAbsent(shot.sceneId, () => [])
-                            .add(shot);
-                      }
-                      return _ScriptTable(
-                        scenes: scenes,
-                        shotsByScene: shotsByScene,
-                        colors: colors,
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          );
-        },
+                }
+                return ScriptSheet(
+                  theme: theme,
+                  child: _PlanDataScope(
+                    data: data,
+                    child: _ScriptTable(data: data, settings: settings),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -178,27 +167,266 @@ class TechnicalScriptScreen extends ConsumerWidget {
   }
 }
 
-/// Guion técnico: una tabla por escena, como hojas de un documento. Ocupa todo el ancho; por debajo del mínimo, se desplaza entera.
-class _ScriptTable extends StatelessWidget {
-  final List<Scene> scenes;
-  final Map<int, List<Shot>> shotsByScene;
-  final ProjectColorScheme colors;
+/// Datos de plantas del proyecto, al alcance de la celda de planta sin
+/// obligar a repintar la fila entera cuando cambian.
+class _PlanDataScope extends InheritedWidget {
+  final PlanProjectData data;
 
-  const _ScriptTable({
-    required this.scenes,
-    required this.shotsByScene,
-    required this.colors,
-  });
+  const _PlanDataScope({required this.data, required super.child});
+
+  static PlanProjectData of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_PlanDataScope>()!.data;
+
+  @override
+  bool updateShouldNotify(_PlanDataScope oldWidget) => oldWidget.data != data;
+}
+
+/// Barra de formato del guion técnico: vista, tipografía, columnas y color
+/// del plano en el que se está trabajando.
+class _FormatBar extends ConsumerWidget {
+  final TechnicalScriptSettings settings;
+  const _FormatBar({required this.settings});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final notifier = ref.read(technicalScriptSettingsProvider.notifier);
+    final activeShot = ref.watch(_activeShotProvider);
+    final label = AppTypography.bodyMedium(
+      palette,
+    ).copyWith(color: palette.textPrimary);
+
+    Widget divider() => Container(
+      width: 1,
+      height: 22,
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      color: palette.divider,
+    );
+
+    Widget iconButton({
+      required String tooltip,
+      required IconData icon,
+      required VoidCallback? onTap,
+    }) => IconButton(
+      tooltip: tooltip,
+      icon: Icon(icon, size: 18),
+      color: palette.textPrimary,
+      disabledColor: palette.textTertiary,
+      visualDensity: VisualDensity.compact,
+      onPressed: onTap,
+    );
+
+    Future<void> setRowColor(String? value) async {
+      if (activeShot == null) return;
+      await ref
+          .read(databaseProvider)
+          .updateShotFields(
+            activeShot,
+            ShotsCompanion(notesHighlight: Value(value)),
+          );
+    }
+
+    final swatches = ScriptSheetTheme.resolve(
+      settings.copyWith(view: ScriptView.sheet),
+      palette,
+    );
+
+    return Container(
+      height: 44,
+      width: double.infinity,
+      alignment: Alignment.centerLeft,
+      decoration: BoxDecoration(
+        color: palette.surface,
+        border: Border(bottom: BorderSide(color: palette.divider)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        child: Row(
+          children: [
+            SegmentedButton<ScriptView>(
+              showSelectedIcon: false,
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              segments: const [
+                ButtonSegment(
+                  value: ScriptView.sheet,
+                  icon: Icon(Icons.description_outlined, size: 16),
+                  label: Text('Hoja'),
+                ),
+                ButtonSegment(
+                  value: ScriptView.dark,
+                  icon: Icon(Icons.dark_mode_outlined, size: 16),
+                  label: Text('Oscura'),
+                ),
+              ],
+              selected: {settings.view},
+              onSelectionChanged: (s) =>
+                  notifier.update((v) => v.copyWith(view: s.first)),
+            ),
+            divider(),
+            PopupMenuButton<String>(
+              tooltip: 'Tipografía de la tabla',
+              color: palette.surfaceElevated,
+              onSelected: (f) =>
+                  notifier.update((v) => v.copyWith(fontFamily: f)),
+              itemBuilder: (_) => [
+                for (final f in kScriptFonts.entries)
+                  CheckedPopupMenuItem(
+                    value: f.key,
+                    checked: settings.fontFamily == f.key,
+                    child: Text(f.value),
+                  ),
+              ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    kScriptFonts[settings.fontFamily] ?? settings.fontFamily,
+                    style: label,
+                  ),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    size: 18,
+                    color: palette.textSecondary,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            iconButton(
+              tooltip: 'Letra más pequeña',
+              icon: Icons.remove,
+              onTap: settings.fontSize <= TechnicalScriptSettings.minFontSize
+                  ? null
+                  : () => notifier.update(
+                      (v) => v.copyWith(fontSize: v.fontSize - 1),
+                    ),
+            ),
+            Container(
+              width: 34,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              decoration: BoxDecoration(
+                border: Border.all(color: palette.border),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(settings.fontSize.round().toString(), style: label),
+            ),
+            iconButton(
+              tooltip: 'Letra más grande',
+              icon: Icons.add,
+              onTap: settings.fontSize >= TechnicalScriptSettings.maxFontSize
+                  ? null
+                  : () => notifier.update(
+                      (v) => v.copyWith(fontSize: v.fontSize + 1),
+                    ),
+            ),
+            divider(),
+            Tooltip(
+              message: activeShot == null
+                  ? 'Toca un plano para darle color'
+                  : 'Color del plano',
+              child: Opacity(
+                opacity: activeShot == null ? 0.4 : 1,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.format_color_fill,
+                      size: 18,
+                      color: palette.textPrimary,
+                    ),
+                    const SizedBox(width: 8),
+                    for (final c in kScriptRowColors)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 5),
+                        child: Tooltip(
+                          message: scriptRowColorLabel(c),
+                          child: InkResponse(
+                            radius: 14,
+                            onTap: activeShot == null
+                                ? null
+                                : () => setRowColor(c),
+                            child: Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: swatches.rowFill(c),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: palette.border),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    iconButton(
+                      tooltip: 'Quitar el color del plano',
+                      icon: Icons.format_color_reset_outlined,
+                      onTap: activeShot == null
+                          ? null
+                          : () => setRowColor(null),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            divider(),
+            PopupMenuButton<String>(
+              tooltip: 'Columnas visibles',
+              color: palette.surfaceElevated,
+              onSelected: notifier.toggleColumn,
+              itemBuilder: (_) => [
+                for (final c in ScriptColumn.optional)
+                  CheckedPopupMenuItem(
+                    value: c,
+                    checked: settings.shows(c),
+                    child: Text(ScriptColumn.label(c)),
+                  ),
+              ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.view_column_outlined,
+                    size: 18,
+                    color: palette.textPrimary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text('Columnas', style: label),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Guion técnico: una tabla por escena, como hojas de un documento. Ocupa
+/// todo el ancho; por debajo del mínimo, se desplaza entera.
+class _ScriptTable extends StatelessWidget {
+  final PlanProjectData data;
+  final TechnicalScriptSettings settings;
+
+  const _ScriptTable({required this.data, required this.settings});
 
   @override
   Widget build(BuildContext context) {
+    final shotsByScene = <int, List<Shot>>{};
+    for (final shot in data.shots) {
+      shotsByScene.putIfAbsent(shot.sceneId, () => []).add(shot);
+    }
+    final scenes = data.scenes;
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = math.max(
-          constraints.maxWidth,
-          AppLayout.technicalScriptTableWidth,
-        );
-        final cols = _Cols.forWidth(width);
+        final minWidth = _Cols.minWidth(settings);
+        final width = math.max(constraints.maxWidth, minWidth);
+        final cols = _Cols.forWidth(width, settings);
         final table = ListView.builder(
           padding: const EdgeInsets.only(bottom: AppSpacing.xl),
           itemCount: scenes.length,
@@ -206,7 +434,7 @@ class _ScriptTable extends StatelessWidget {
             key: ValueKey(scenes[i].id),
             scene: scenes[i],
             shots: shotsByScene[scenes[i].id] ?? const [],
-            colors: colors,
+            colors: data.colors,
             cols: cols,
           ),
         );
@@ -224,9 +452,10 @@ class _ScriptTable extends StatelessWidget {
   }
 }
 
-/// Anchos de columna para un ancho de tabla dado. Los mínimos suman
-/// [AppLayout.technicalScriptTableWidth]; lo que sobra se reparte entre las
-/// columnas de texto largo y la referencia.
+/// Anchos de columna para un ancho de tabla dado. Las columnas ocultas
+/// miden cero; lo que sobra se reparte entre las de texto largo y la
+/// referencia.
+@immutable
 class _Cols {
   final double handle;
   final double esc;
@@ -258,25 +487,68 @@ class _Cols {
     required this.acciones,
   });
 
-  factory _Cols.forWidth(double width) {
-    final extra = math.max(0.0, width - AppLayout.technicalScriptTableWidth);
+  static _Cols _min(TechnicalScriptSettings s) => _Cols._(
+    handle: 28,
+    esc: 40,
+    plano: 52,
+    encuadre: 150,
+    lens: 140,
+    fStop: s.shows(ScriptColumn.fStop) ? 52 : 0,
+    personajes: s.shows(ScriptColumn.personajes) ? 110 : 0,
+    duracion: s.shows(ScriptColumn.duracion) ? 56 : 0,
+    action: 220,
+    referencia: 140,
+    planta: s.shows(ScriptColumn.planta) ? 110 : 0,
+    apuntes: 140,
+    acciones: 40,
+  );
+
+  List<double> get _all => [
+    handle,
+    esc,
+    plano,
+    encuadre,
+    lens,
+    fStop,
+    personajes,
+    duracion,
+    action,
+    referencia,
+    planta,
+    apuntes,
+    acciones,
+  ];
+
+  static double minWidth(TechnicalScriptSettings s) =>
+      _min(s)._all.fold(0, (a, b) => a + b);
+
+  factory _Cols.forWidth(double width, TechnicalScriptSettings s) {
+    final m = _min(s);
+    final extra = math.max(0.0, width - minWidth(s));
     double grow(double base, int weight) => base + extra * weight / 12;
     return _Cols._(
-      handle: 28,
-      esc: 40,
-      plano: 52,
-      encuadre: grow(130, 3),
-      lens: 150,
-      fStop: 52,
-      personajes: 110,
-      duracion: 56,
-      action: grow(160, 5),
-      referencia: grow(104, 1),
-      planta: 64,
-      apuntes: grow(120, 3),
-      acciones: 80,
+      handle: m.handle,
+      esc: m.esc,
+      plano: m.plano,
+      encuadre: grow(m.encuadre, 3),
+      lens: m.lens,
+      fStop: m.fStop,
+      personajes: m.personajes,
+      duracion: m.duracion,
+      action: grow(m.action, 5),
+      referencia: grow(m.referencia, 1),
+      planta: m.planta,
+      apuntes: grow(m.apuntes, 3),
+      acciones: m.acciones,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      other is _Cols && listEquals(other._all, _all);
+
+  @override
+  int get hashCode => Object.hashAll(_all);
 }
 
 Future<bool> _confirmDelete(
@@ -352,6 +624,26 @@ class _SceneSectionState extends ConsumerState<_SceneSection> {
     return [for (final id in pending) byId[id]!];
   }
 
+  /// Filas ya construidas. Devolver el mismo widget cuando ni el plano, ni la
+  /// escena, ni las columnas han cambiado hace que Flutter no repinte esa
+  /// fila aunque cambie otra cosa del proyecto.
+  final _rows = <int, _ShotRow>{};
+
+  _ShotRow _rowFor(Shot shot) {
+    final cached = _rows[shot.id];
+    if (cached != null &&
+        cached.shot == shot &&
+        cached.scene == widget.scene &&
+        cached.cols == widget.cols) {
+      return cached;
+    }
+    return _rows[shot.id] = _ShotRow(
+      shot: shot,
+      scene: widget.scene,
+      cols: widget.cols,
+    );
+  }
+
   /// Coloca el plano arrastrado delante del que ocupa [beforeIndex]
   /// (`shots.length` = al final).
   void _moveBefore(List<Shot> shots, int draggedId, int beforeIndex) {
@@ -371,6 +663,7 @@ class _SceneSectionState extends ConsumerState<_SceneSection> {
     final palette = context.palette;
     final scene = widget.scene;
     final shots = _orderedShots;
+    _rows.removeWhere((id, _) => !shots.any((s) => s.id == id));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -381,7 +674,10 @@ class _SceneSectionState extends ConsumerState<_SceneSection> {
           colors: widget.colors,
         ),
         const SizedBox(height: AppSpacing.sm),
-        _TableHeader(cols: widget.cols),
+        _TableHeader(
+          cols: widget.cols,
+          sceneColor: widget.colors.sceneColor(scene),
+        ),
         // Columna con claves y no una lista reordenable: al cambiar el orden
         // las filas se mueven sin desmontarse, y lo que tengan a medias (foco,
         // avisos, menús) sigue en su sitio.
@@ -391,7 +687,7 @@ class _SceneSectionState extends ConsumerState<_SceneSection> {
             sceneId: scene.id,
             shotId: shots[i].id,
             onDrop: (draggedId) => _moveBefore(shots, draggedId, i),
-            child: _ShotRow(shot: shots[i], scene: scene, cols: widget.cols),
+            child: _rowFor(shots[i]),
           ),
         _ShotDropTarget(
           sceneId: scene.id,
@@ -539,123 +835,80 @@ class _SceneHeader extends ConsumerWidget {
   }
 }
 
-/// Colores de la hoja del guion técnico. Es papel: no cambian con el tema de
-/// la app, para que la pantalla se parezca al PDF y al Word.
-abstract final class ScriptSheetColors {
-  static const paper = Color(0xFFFFFFFF);
-  static const ink = Color(0xFF111111);
-  static const hint = Color(0xFFB0B0B0);
-  static const border = Color(0xFF000000);
-  static const header = Color(0xFFFCE5CD);
-  static const tile = Color(0xFFF2F2F2);
-  static const tileBorder = Color(0xFFCFCFCF);
-
-  /// Color de celda según `notesHighlight`.
-  static Color? highlight(String? value) => switch (value) {
-    'green' => const Color(0xFFD9EAD3),
-    'yellow' => const Color(0xFFFFF2CC),
-    'red' => const Color(0xFFF4CCCC),
-    _ => null,
-  };
-
-  static TextStyle text(AppPalette palette) =>
-      AppTypography.bodyMedium(palette).copyWith(color: ink);
-
-  static TextStyle hintText(AppPalette palette) =>
-      AppTypography.bodyMedium(palette).copyWith(color: hint);
-}
-
-const _sheetSide = BorderSide(color: ScriptSheetColors.border);
-
-/// Fila de títulos de columna, una por escena, como en el Word.
+/// Fila de títulos de columna, una por escena, con el color de la escena.
 class _TableHeader extends StatelessWidget {
   final _Cols cols;
-  const _TableHeader({required this.cols});
+  final Color sceneColor;
+  const _TableHeader({required this.cols, required this.sceneColor});
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
+    final sheet = ScriptSheet.of(context);
+    final side = sheet.side;
+
+    Widget cell(String text, double width) => width == 0
+        ? const SizedBox.shrink()
+        : Container(
+            width: width,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+            decoration: BoxDecoration(border: Border(right: side)),
+            child: Text(
+              text,
+              textAlign: TextAlign.center,
+              style: sheet.headerText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
 
     return Row(
       children: [
         SizedBox(width: cols.handle),
         Container(
-          decoration: const BoxDecoration(
-            color: ScriptSheetColors.header,
-            border: Border(
-              top: _sheetSide,
-              left: _sheetSide,
-              bottom: _sheetSide,
-            ),
+          decoration: BoxDecoration(
+            color: sheet.headerFill(sceneColor),
+            border: Border(top: side, left: side, bottom: side),
           ),
           child: Row(
             children: [
-              _HeaderCell('ESC', cols.esc, palette),
-              _HeaderCell('PLANO', cols.plano, palette),
-              _HeaderCell('Encuadre', cols.encuadre, palette),
-              _HeaderCell('LENTE/ANG/MOV', cols.lens, palette),
-              _HeaderCell('F', cols.fStop, palette),
-              _HeaderCell('PERS.', cols.personajes, palette),
-              _HeaderCell('DUR.', cols.duracion, palette),
-              _HeaderCell('ACCIÓN', cols.action, palette),
-              _HeaderCell('REFERENCIA', cols.referencia, palette),
-              _HeaderCell('PLANTA', cols.planta, palette),
-              _HeaderCell('APUNTES', cols.apuntes, palette),
+              cell('ESC', cols.esc),
+              cell('PLANO', cols.plano),
+              cell('Encuadre', cols.encuadre),
+              cell('LENTE/ANG/MOV', cols.lens),
+              cell('F', cols.fStop),
+              cell('PERS.', cols.personajes),
+              cell('DUR.', cols.duracion),
+              cell('ACCIÓN', cols.action),
+              cell('REFERENCIA', cols.referencia),
+              cell('PLANTA', cols.planta),
+              cell('APUNTES', cols.apuntes),
             ],
           ),
         ),
-        SizedBox(width: cols.acciones - 1),
       ],
     );
   }
 }
 
-class _HeaderCell extends StatelessWidget {
-  final String text;
-  final double width;
-  final AppPalette palette;
-
-  const _HeaderCell(this.text, this.width, this.palette);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-      decoration: const BoxDecoration(border: Border(right: _sheetSide)),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: AppTypography.label(
-          palette,
-        ).copyWith(color: ScriptSheetColors.ink, letterSpacing: 0.2),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
-  }
-}
-
-/// Celda de la hoja: línea negra a la derecha y, si lo que contiene tiene el
-/// foco, borde de acento.
+/// Celda de la hoja: línea a la derecha y, si lo que contiene tiene el foco,
+/// borde de acento.
 class _Cell extends StatelessWidget {
   final double width;
   final Widget child;
   final EdgeInsets padding;
-  final Color? color;
   final Alignment alignment;
 
   const _Cell({
     required this.width,
     required this.child,
     this.padding = const EdgeInsets.all(6),
-    this.color,
     this.alignment = Alignment.topLeft,
   });
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
+    if (width == 0) return const SizedBox.shrink();
+    final sheet = ScriptSheet.of(context);
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,
@@ -666,11 +919,10 @@ class _Cell extends StatelessWidget {
           return Container(
             width: width,
             padding: padding,
-            color: color,
             foregroundDecoration: BoxDecoration(
               border: focused
-                  ? Border.all(color: palette.accent, width: 2)
-                  : const Border(right: _sheetSide),
+                  ? Border.all(color: sheet.accent, width: 2)
+                  : Border(right: sheet.side),
             ),
             child: Align(alignment: alignment, child: child),
           );
@@ -728,52 +980,149 @@ class _ShotDropTarget extends StatelessWidget {
 }
 
 /// Valor de una lista (movimiento, ángulo) como texto de la hoja: al tocarlo
-/// abre sus opciones, sin flecha de desplegable.
-class _OptionText extends StatelessWidget {
+/// abre sus opciones, con «＋» para añadir una propia.
+class _OptionText extends ConsumerWidget {
   final String? value;
   final String hint;
-  final List<String> options;
+
+  /// true = movimiento de cámara; false = ángulo.
+  final bool movement;
   final ValueChanged<String?> onChanged;
 
   const _OptionText({
     required this.value,
     required this.hint,
-    required this.options,
+    required this.movement,
     required this.onChanged,
   });
 
-  static const _none = '\u0000';
+  static const _none = '\u0000none';
+  static const _add = '\u0000add';
+
+  Future<void> _addNew(BuildContext context, WidgetRef ref) async {
+    final palette = context.palette;
+    final ctrl = TextEditingController();
+    final what = movement ? 'movimiento' : 'ángulo';
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.surfaceElevated,
+        title: Text('Nuevo $what', style: AppTypography.titleMedium(palette)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          style: AppTypography.bodyLarge(palette),
+          decoration: InputDecoration(
+            hintText: movement ? 'Ej. CAMERA CAR, SLIDER' : 'Ej. Holandés',
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancelar', style: AppTypography.bodyMedium(palette)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            child: const Text('Añadir'),
+          ),
+        ],
+      ),
+    );
+    if (name == null) return;
+    final notifier = ref.read(technicalScriptSettingsProvider.notifier);
+    final saved = movement
+        ? await notifier.addMovement(name, kMovements)
+        : await notifier.addAngle(name, kAngles);
+    if (saved != null) onChanged(saved);
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
+    final sheet = ScriptSheet.of(context);
+    final custom = ref.watch(
+      technicalScriptSettingsProvider.select(
+        (s) => movement ? s.customMovements : s.customAngles,
+      ),
+    );
+    final builtIn = movement ? kMovements : kAngles;
     final current = (value ?? '').trim();
+    final menuText = AppTypography.bodyMedium(palette);
+
     return PopupMenuButton<String>(
       tooltip: hint,
       padding: EdgeInsets.zero,
       position: PopupMenuPosition.under,
       color: palette.surfaceElevated,
-      onSelected: (v) => onChanged(v == _none ? null : v),
-      itemBuilder: (_) => [
-        for (final o in {...options, if (current.isNotEmpty) current})
+      onSelected: (v) {
+        if (v == _add) {
+          _addNew(context, ref);
+        } else {
+          onChanged(v == _none ? null : v);
+        }
+      },
+      itemBuilder: (menuContext) => [
+        for (final o in {
+          ...builtIn,
+          ...custom,
+          if (current.isNotEmpty) current,
+        })
           PopupMenuItem(
             value: o,
             height: 36,
-            child: Text(o, style: AppTypography.bodyMedium(palette)),
+            child: Row(
+              children: [
+                Expanded(child: Text(o, style: menuText)),
+                if (custom.contains(o))
+                  InkResponse(
+                    radius: 14,
+                    onTap: () {
+                      Navigator.pop(menuContext);
+                      final notifier = ref.read(
+                        technicalScriptSettingsProvider.notifier,
+                      );
+                      movement
+                          ? notifier.removeMovement(o)
+                          : notifier.removeAngle(o);
+                    },
+                    child: Tooltip(
+                      message: 'Quitar de la lista',
+                      child: Icon(
+                        Icons.close,
+                        size: 14,
+                        color: palette.textTertiary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        if (current.isNotEmpty) ...[
-          const PopupMenuDivider(),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: _add,
+          height: 36,
+          child: Row(
+            children: [
+              Icon(Icons.add, size: 16, color: palette.accent),
+              const SizedBox(width: 6),
+              Text(
+                movement ? 'Añadir movimiento…' : 'Añadir ángulo…',
+                style: menuText.copyWith(color: palette.accent),
+              ),
+            ],
+          ),
+        ),
+        if (current.isNotEmpty)
           PopupMenuItem(
             value: _none,
             height: 36,
             child: Text(
               'Quitar',
-              style: AppTypography.bodyMedium(
-                palette,
-              ).copyWith(color: palette.textSecondary),
+              style: menuText.copyWith(color: palette.textSecondary),
             ),
           ),
-        ],
       ],
       child: SizedBox(
         width: double.infinity,
@@ -784,9 +1133,7 @@ class _OptionText extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: current.isEmpty
-                ? ScriptSheetColors.hintText(palette)
-                : ScriptSheetColors.text(palette),
+            style: current.isEmpty ? sheet.hintText : sheet.text,
           ),
         ),
       ),
@@ -794,6 +1141,7 @@ class _OptionText extends StatelessWidget {
   }
 }
 
+/// Fila de un plano.
 class _ShotRow extends ConsumerStatefulWidget {
   final Shot shot;
   final Scene scene;
@@ -819,11 +1167,11 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
   Widget build(BuildContext context) {
     final db = ref.read(databaseProvider);
     final palette = context.palette;
+    final sheet = ScriptSheet.of(context);
     final shot = widget.shot;
     final scene = widget.scene;
     final cols = widget.cols;
-    final text = ScriptSheetColors.text(palette);
-    final hint = ScriptSheetColors.hintText(palette);
+    final active = ref.watch(_activeShotProvider.select((id) => id == shot.id));
 
     Widget field({
       required String? value,
@@ -831,13 +1179,11 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
       required ValueChanged<String> onChanged,
       int minLines = 1,
       TextAlign align = TextAlign.start,
-    }) => InlineEditField(
-      flat: true,
+    }) => EditableCell(
       value: value,
       hint: hintText,
-      palette: palette,
-      style: text,
-      hintStyle: hint,
+      style: sheet.text,
+      hintStyle: sheet.hintText,
       minLines: minLines,
       textAlign: align,
       onChanged: onChanged,
@@ -848,153 +1194,156 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
     Widget side(Widget child) => ValueListenableBuilder<bool>(
       valueListenable: _hovered,
       builder: (context, hovered, child) => AnimatedOpacity(
-        opacity: hovered ? 1 : 0.35,
+        opacity: hovered || active ? 1 : 0.35,
         duration: const Duration(milliseconds: 120),
         child: child,
       ),
       child: child,
     );
 
-    final sheet = Container(
-      decoration: const BoxDecoration(
-        color: ScriptSheetColors.paper,
-        border: Border(left: _sheetSide, bottom: _sheetSide),
-      ),
-      child: IntrinsicHeight(
-        // El mínimo deja sitio a la celda de lente aunque su alto calculado
-        // por adelantado se quede corto.
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: _kRowMinHeight),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Cell(
-                width: cols.esc,
-                alignment: Alignment.center,
-                child: Text('${scene.number}', style: text),
-              ),
-              _Cell(
-                width: cols.plano,
-                alignment: Alignment.center,
-                child: Text('${shot.number}', style: text),
-              ),
-              _Cell(
-                width: cols.encuadre,
-                alignment: Alignment.center,
-                child: field(
-                  value: shot.framing,
-                  hintText: 'PD, PMC...',
-                  align: TextAlign.center,
-                  onChanged: (v) => write(ShotsCompanion(framing: Value(v))),
+    final sheetRow = Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (focused) {
+        if (focused) ref.read(_activeShotProvider.notifier).state = shot.id;
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: sheet.rowFill(shot.notesHighlight) ?? sheet.paper,
+          border: Border(left: sheet.side, bottom: sheet.side),
+        ),
+        child: IntrinsicHeight(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: _kRowMinHeight),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _Cell(
+                  width: cols.esc,
+                  alignment: Alignment.center,
+                  child: Text('${scene.number}', style: sheet.text),
                 ),
-              ),
-              _Cell(
-                width: cols.lens,
-                alignment: Alignment.center,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    field(
-                      value: shot.lens,
-                      hintText: '50mm',
-                      align: TextAlign.center,
-                      onChanged: (v) => write(ShotsCompanion(lens: Value(v))),
-                    ),
-                    _OptionText(
-                      value: shot.angle,
-                      hint: 'Ángulo',
-                      options: kAngles,
-                      onChanged: (v) => write(ShotsCompanion(angle: Value(v))),
-                    ),
-                    _OptionText(
-                      value: shot.movement,
-                      hint: 'Movimiento',
-                      options: kMovements,
-                      onChanged: (v) =>
-                          write(ShotsCompanion(movement: Value(v))),
-                    ),
-                  ],
+                _Cell(
+                  width: cols.plano,
+                  alignment: Alignment.center,
+                  child: Text('${shot.number}', style: sheet.text),
                 ),
-              ),
-              _Cell(
-                width: cols.fStop,
-                alignment: Alignment.center,
-                child: field(
-                  value: shot.fStop,
-                  hintText: 'T2.8',
-                  align: TextAlign.center,
-                  onChanged: (v) => write(ShotsCompanion(fStop: Value(v))),
+                _Cell(
+                  width: cols.encuadre,
+                  alignment: Alignment.center,
+                  child: field(
+                    value: shot.framing,
+                    hintText: 'PD, PMC...',
+                    align: TextAlign.center,
+                    onChanged: (v) => write(ShotsCompanion(framing: Value(v))),
+                  ),
                 ),
-              ),
-              _Cell(
-                width: cols.personajes,
-                child: field(
-                  value: decodeSceneCharacters(shot.charactersJson).join(', '),
-                  hintText: 'Ana, Luis…',
-                  minLines: 2,
-                  onChanged: (v) => write(
-                    ShotsCompanion(
-                      charactersJson: Value(
-                        encodeSceneCharacters(parseCharactersInput(v)),
+                _Cell(
+                  width: cols.lens,
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      field(
+                        value: shot.lens,
+                        hintText: '50mm',
+                        align: TextAlign.center,
+                        onChanged: (v) => write(ShotsCompanion(lens: Value(v))),
+                      ),
+                      _OptionText(
+                        value: shot.angle,
+                        hint: 'Ángulo',
+                        movement: false,
+                        onChanged: (v) =>
+                            write(ShotsCompanion(angle: Value(v))),
+                      ),
+                      _OptionText(
+                        value: shot.movement,
+                        hint: 'Movimiento',
+                        movement: true,
+                        onChanged: (v) =>
+                            write(ShotsCompanion(movement: Value(v))),
+                      ),
+                    ],
+                  ),
+                ),
+                _Cell(
+                  width: cols.fStop,
+                  alignment: Alignment.center,
+                  child: field(
+                    value: shot.fStop,
+                    hintText: 'T2.8',
+                    align: TextAlign.center,
+                    onChanged: (v) => write(ShotsCompanion(fStop: Value(v))),
+                  ),
+                ),
+                _Cell(
+                  width: cols.personajes,
+                  child: field(
+                    value: decodeSceneCharacters(
+                      shot.charactersJson,
+                    ).join(', '),
+                    hintText: 'Ana, Luis…',
+                    minLines: 2,
+                    onChanged: (v) => write(
+                      ShotsCompanion(
+                        charactersJson: Value(
+                          encodeSceneCharacters(parseCharactersInput(v)),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              _Cell(
-                width: cols.duracion,
-                alignment: Alignment.center,
-                child: field(
-                  value: shot.durationSeconds?.toString(),
-                  hintText: 'seg',
-                  align: TextAlign.center,
-                  onChanged: (v) => write(
-                    ShotsCompanion(
-                      durationSeconds: Value(int.tryParse(v.trim())),
+                _Cell(
+                  width: cols.duracion,
+                  alignment: Alignment.center,
+                  child: field(
+                    value: shot.durationSeconds?.toString(),
+                    hintText: 'seg',
+                    align: TextAlign.center,
+                    onChanged: (v) => write(
+                      ShotsCompanion(
+                        durationSeconds: Value(int.tryParse(v.trim())),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              _Cell(
-                width: cols.action,
-                child: field(
-                  value: shot.action,
-                  hintText: 'Descripción de la acción...',
-                  minLines: 3,
-                  onChanged: (v) => write(ShotsCompanion(action: Value(v))),
-                ),
-              ),
-              _Cell(
-                width: cols.referencia,
-                padding: const EdgeInsets.all(4),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: _ReferenceCell(shot: shot),
-                ),
-              ),
-              _Cell(
-                width: cols.planta,
-                padding: const EdgeInsets.all(4),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: CameraPlanStatusCell(
-                    shot: shot,
-                    sceneNumber: scene.number,
-                    scene: scene,
+                _Cell(
+                  width: cols.action,
+                  child: field(
+                    value: shot.action,
+                    hintText: 'Descripción de la acción...',
+                    minLines: 3,
+                    onChanged: (v) => write(ShotsCompanion(action: Value(v))),
                   ),
                 ),
-              ),
-              _Cell(
-                width: cols.apuntes,
-                color: ScriptSheetColors.highlight(shot.notesHighlight),
-                child: field(
-                  value: shot.notes,
-                  hintText: 'Apuntes...',
-                  minLines: 3,
-                  onChanged: (v) => write(ShotsCompanion(notes: Value(v))),
+                _Cell(
+                  width: cols.referencia,
+                  padding: const EdgeInsets.all(4),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: _ReferenceCell(shot: shot),
+                  ),
                 ),
-              ),
-            ],
+                _Cell(
+                  width: cols.planta,
+                  padding: const EdgeInsets.all(4),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: _PlanCell(shot: shot, scene: scene),
+                  ),
+                ),
+                _Cell(
+                  width: cols.apuntes,
+                  child: field(
+                    value: shot.notes,
+                    hintText: 'Apuntes...',
+                    minLines: 3,
+                    onChanged: (v) => write(ShotsCompanion(notes: Value(v))),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1044,7 +1393,7 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                       child: Icon(
                         Icons.drag_indicator,
                         size: 18,
-                        color: palette.textSecondary,
+                        color: active ? palette.accent : palette.textSecondary,
                       ),
                     ),
                   ),
@@ -1052,12 +1401,12 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
               ),
             ),
           ),
-          sheet,
+          sheetRow,
           SizedBox(
-            width: cols.acciones - 1,
+            width: cols.acciones - sheet.lineWidth,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(6, 6, 0, 0),
-              child: side(_ActionsCell(shot: shot)),
+              padding: const EdgeInsets.only(top: 8),
+              child: side(_DeleteShotButton(shot: shot)),
             ),
           ),
         ],
@@ -1066,11 +1415,107 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
   }
 }
 
-/// Fuera de la hoja: color de la celda de apuntes y eliminar el plano.
-class _ActionsCell extends ConsumerWidget {
+/// Miniatura de la planta del plano. Al tocarla abre la planta; si la escena
+/// aún no tiene set, lleva a la localización para elegirlo o crearlo.
+class _PlanCell extends StatelessWidget {
+  final Shot shot;
+  final Scene scene;
+
+  const _PlanCell({required this.shot, required this.scene});
+
+  @override
+  Widget build(BuildContext context) {
+    final sheet = ScriptSheet.of(context);
+    final data = _PlanDataScope.of(context);
+    final setId = shot.locationBasePlanId ?? scene.locationId;
+    final own = [...data.lightOfShot(shot), ...data.ownOfShot(shot)];
+    final base = data.baseOfShot(shot);
+    final hasDrawing = own.isNotEmpty || base.isNotEmpty;
+
+    final String caption;
+    final IconData icon;
+    if (setId != null) {
+      caption = 'Abrir planta';
+      icon = Icons.grid_on_outlined;
+    } else if (scene.locationSiteId != null) {
+      caption = 'Elegir set';
+      icon = Icons.add_location_alt_outlined;
+    } else {
+      caption = 'Elegir localización';
+      icon = Icons.add_location_alt_outlined;
+    }
+
+    void open() {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => setId != null
+              ? CameraPlanEditor.shot(
+                  projectId: shot.projectId,
+                  shotId: shot.id,
+                  shotLabel: 'Esc ${scene.number} · Plano ${shot.number}',
+                )
+              : LocationsScreen(
+                  projectId: shot.projectId,
+                  initialSiteId: scene.locationSiteId,
+                ),
+        ),
+      );
+    }
+
+    return Tooltip(
+      message: caption,
+      child: GestureDetector(
+        onTap: open,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: SizedBox(
+            height: 84,
+            child: hasDrawing
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: PlanThumbnail(
+                      elements: own,
+                      inherited: base,
+                      focus: data.zoneOf(data.set(setId)),
+                      emptyIcon: Icons.videocam_outlined,
+                    ),
+                  )
+                : DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: sheet.tile,
+                      border: Border.all(color: sheet.tileBorder),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(icon, color: sheet.hint, size: 20),
+                        const SizedBox(height: 2),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            caption,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: sheet.hintText.copyWith(fontSize: 11),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fuera de la hoja: eliminar el plano.
+class _DeleteShotButton extends ConsumerWidget {
   final Shot shot;
 
-  const _ActionsCell({required this.shot});
+  const _DeleteShotButton({required this.shot});
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
     final ok = await _confirmDelete(
@@ -1090,101 +1535,16 @@ class _ActionsCell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.read(databaseProvider);
     final palette = context.palette;
-
-    Widget dot(String value) => Tooltip(
-      message: 'Color de la celda de apuntes',
-      child: _HighlightDot(
-        color: ScriptSheetColors.highlight(value)!,
-        selected: shot.notesHighlight == value,
-        onTap: () => db.updateShotFields(
-          shot.id,
-          ShotsCompanion(
-            // Tocar el color que ya tiene lo quita.
-            notesHighlight: Value(shot.notesHighlight == value ? null : value),
-          ),
-        ),
-      ),
-    );
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            dot('green'),
-            const SizedBox(width: 4),
-            dot('yellow'),
-            const SizedBox(width: 4),
-            dot('red'),
-          ],
-        ),
-        const SizedBox(height: 8),
-        _RowAction(
-          tooltip: 'Eliminar plano',
-          icon: Icons.delete_outline,
-          color: palette.textSecondary,
-          onTap: () => _delete(context, ref),
-        ),
-      ],
-    );
-  }
-}
-
-class _RowAction extends StatelessWidget {
-  final String tooltip;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _RowAction({
-    required this.tooltip,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
     return Tooltip(
-      message: tooltip,
+      message: 'Eliminar plano',
       child: InkResponse(
-        onTap: onTap,
+        onTap: () => _delete(context, ref),
         radius: 14,
-        child: Icon(icon, size: 18, color: color),
-      ),
-    );
-  }
-}
-
-class _HighlightDot extends StatelessWidget {
-  final Color color;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _HighlightDot({
-    required this.color,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 18,
-        height: 18,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: selected ? 1 : 0.55),
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: selected ? Colors.white : color,
-            width: selected ? 2 : 1,
-          ),
+        child: Icon(
+          Icons.delete_outline,
+          size: 18,
+          color: palette.textSecondary,
         ),
       ),
     );
@@ -1325,7 +1685,7 @@ class _ReferenceCell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final palette = context.palette;
+    final sheet = ScriptSheet.of(context);
     final path = shot.referenceImagePath;
     final hasImage = path != null && File(path).existsSync();
 
@@ -1335,10 +1695,8 @@ class _ReferenceCell extends ConsumerWidget {
       child: Container(
         height: 84,
         decoration: BoxDecoration(
-          color: hasImage ? null : ScriptSheetColors.tile,
-          border: hasImage
-              ? null
-              : Border.all(color: ScriptSheetColors.tileBorder),
+          color: hasImage ? null : sheet.tile,
+          border: hasImage ? null : Border.all(color: sheet.tileBorder),
           borderRadius: BorderRadius.circular(4),
         ),
         clipBehavior: Clip.antiAlias,
@@ -1350,17 +1708,15 @@ class _ReferenceCell extends ConsumerWidget {
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.add_photo_alternate_outlined,
-                    color: ScriptSheetColors.hint,
+                    color: sheet.hint,
                     size: 20,
                   ),
                   const SizedBox(height: 2),
                   Text(
                     'Ref.',
-                    style: AppTypography.caption(
-                      palette,
-                    ).copyWith(color: ScriptSheetColors.hint),
+                    style: sheet.hintText.copyWith(fontSize: 11),
                     textAlign: TextAlign.center,
                   ),
                 ],

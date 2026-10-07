@@ -117,9 +117,7 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
       _setCtrl.text = s.locationPureName;
       _effectiveColor = effective;
       _pickedHex = hexFromColor(effective);
-      _colorScope = hasOverride
-          ? ColorEditScope.scene
-          : ColorEditScope.set;
+      _colorScope = hasOverride ? ColorEditScope.scene : ColorEditScope.set;
       if (linkedSet != null && !hasOverride) {
         _pickedHex = sceneColorForPicker(linkedSet.color);
       }
@@ -208,10 +206,12 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
 
     setState(() => _saving = true);
     final db = ref.read(databaseProvider);
-    final shootSet =
-        _setCtrl.text.trim().isEmpty ? slugLocation : _setCtrl.text.trim();
-    final siteName =
-        _siteCtrl.text.trim().isEmpty ? shootSet : _siteCtrl.text.trim();
+    final shootSet = _setCtrl.text.trim().isEmpty
+        ? slugLocation
+        : _setCtrl.text.trim();
+    final siteName = _siteCtrl.text.trim().isEmpty
+        ? shootSet
+        : _siteCtrl.text.trim();
     final intExt = _intExt;
     final dayNight = _dayNight;
     final name = _nameCtrl.text.trim().isEmpty
@@ -239,35 +239,39 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
     int? sceneId;
     if (_isEditing) {
       final s = widget.scene!;
-      await db.updateScene(s.copyWith(
-        number: number,
-        name: name,
-        locationCanonical: canonical,
-        locationPureName: shootSet,
-        locationSiteId: Value(site.id),
-        locationId: Value(setId),
-        intExt: intExt,
-        dayNight: dayNight,
-        locationColor: const Value(null),
-        description: Value(description.isEmpty ? null : description),
-        sortOrder: number,
-      ));
+      await db.updateScene(
+        s.copyWith(
+          number: number,
+          name: name,
+          locationCanonical: canonical,
+          locationPureName: shootSet,
+          locationSiteId: Value(site.id),
+          locationId: Value(setId),
+          intExt: intExt,
+          dayNight: dayNight,
+          locationColor: const Value(null),
+          description: Value(description.isEmpty ? null : description),
+          sortOrder: number,
+        ),
+      );
       sceneId = s.id;
     } else {
-      sceneId = await db.insertScene(ScenesCompanion.insert(
-        projectId: widget.projectId,
-        number: number,
-        name: name,
-        locationCanonical: canonical,
-        locationPureName: shootSet,
-        locationSiteId: Value(site.id),
-        locationId: Value(setId),
-        intExt: Value(intExt),
-        dayNight: Value(dayNight),
-        locationColor: const Value(null),
-        description: Value(description.isEmpty ? null : description),
-        sortOrder: Value(number),
-      ));
+      sceneId = await db.insertScene(
+        ScenesCompanion.insert(
+          projectId: widget.projectId,
+          number: number,
+          name: name,
+          locationCanonical: canonical,
+          locationPureName: shootSet,
+          locationSiteId: Value(site.id),
+          locationId: Value(setId),
+          intExt: Value(intExt),
+          dayNight: Value(dayNight),
+          locationColor: const Value(null),
+          description: Value(description.isEmpty ? null : description),
+          sortOrder: Value(number),
+        ),
+      );
     }
 
     await _applyColor(
@@ -302,7 +306,12 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
               style: AppTypography.titleLarge(palette),
             ),
             const SizedBox(height: AppSpacing.lg),
-            _field('Número', _numberCtrl, palette, keyboard: TextInputType.number),
+            _field(
+              'Número',
+              _numberCtrl,
+              palette,
+              keyboard: TextInputType.number,
+            ),
             const SizedBox(height: AppSpacing.md),
             _field('Nombre (opcional)', _nameCtrl, palette),
             const SizedBox(height: AppSpacing.md),
@@ -314,13 +323,21 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
               if (v != null) setState(() => _dayNight = v);
             }),
             const SizedBox(height: AppSpacing.md),
-            _field('Lugar en el guion', _slugCtrl, palette,
-                hint: 'Como aparece en la slugline'),
+            _field(
+              'Lugar en el guion',
+              _slugCtrl,
+              palette,
+              hint: 'Como aparece en la slugline',
+            ),
             const SizedBox(height: AppSpacing.md),
             _field('Localización', _siteCtrl, palette, hint: 'Ej. BOSQUE'),
             const SizedBox(height: AppSpacing.md),
-            _field('Set de rodaje', _setCtrl, palette,
-                hint: 'Ej. RÍO, ENTRADA DEL BOSQUE'),
+            _field(
+              'Set de rodaje',
+              _setCtrl,
+              palette,
+              hint: 'Ej. RÍO, ENTRADA DEL BOSQUE',
+            ),
             const SizedBox(height: AppSpacing.md),
             _field(
               'Descripción',
