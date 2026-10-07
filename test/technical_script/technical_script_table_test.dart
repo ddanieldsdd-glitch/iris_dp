@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -136,52 +137,49 @@ void main() {
   });
 
   for (final focusFirst in [false, true]) {
-    testWidgets(
-      'arrastrar un plano lo reordena sin romper la pantalla '
-      '(${focusFirst ? 'con' : 'sin'} una celda en edición)',
-      (tester) async {
-        tester.view.physicalSize = const Size(1600, 900);
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.reset);
+    testWidgets('arrastrar un plano lo reordena sin romper la pantalla '
+        '(${focusFirst ? 'con' : 'sin'} una celda en edición)', (tester) async {
+      tester.view.physicalSize = const Size(1600, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
 
-        final projectId = await seed(tester);
-        await tester.pumpWidget(
-          host(TechnicalScriptScreen(projectId: projectId)),
+      final projectId = await seed(tester);
+      await tester.pumpWidget(
+        host(TechnicalScriptScreen(projectId: projectId)),
+      );
+      await settle(tester);
+
+      if (focusFirst) {
+        await tester.tap(find.text('PML de ALI 1'));
+        await tester.pump();
+      }
+
+      final handles = find.byIcon(Icons.drag_indicator);
+      final from = tester.getCenter(handles.at(0));
+      // Soltar bajo la última fila lo lleva al final de la escena.
+      final to = tester.getCenter(find.text('Añadir plano'));
+      final gesture = await tester.startGesture(from);
+      await tester.pump(const Duration(milliseconds: 50));
+      for (var i = 1; i <= 10; i++) {
+        await gesture.moveTo(
+          Offset(from.dx, from.dy + (to.dy - from.dy) * i / 10),
         );
-        await settle(tester);
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      await gesture.up();
+      await settle(tester);
 
-        if (focusFirst) {
-          await tester.tap(find.text('PML de ALI 1'));
-          await tester.pump();
-        }
-
-        final handles = find.byIcon(Icons.drag_indicator);
-        final from = tester.getCenter(handles.at(0));
-        // Soltar bajo la última fila lo lleva al final de la escena.
-        final to = tester.getCenter(find.text('Añadir plano'));
-        final gesture = await tester.startGesture(from);
-        await tester.pump(const Duration(milliseconds: 50));
-        for (var i = 1; i <= 10; i++) {
-          await gesture.moveTo(
-            Offset(from.dx, from.dy + (to.dy - from.dy) * i / 10),
-          );
-          await tester.pump(const Duration(milliseconds: 30));
-        }
-        await gesture.up();
-        await settle(tester);
-
-        expect(tester.takeException(), isNull);
-        expect(find.byIcon(Icons.drag_indicator), findsNWidgets(3));
-        final shots = await db.getShotsForProject(projectId);
-        expect(shots.map((s) => s.framing), [
-          'PML de ALI 2',
-          'PML de ALI 3',
-          'PML de ALI 1',
-        ]);
-        expect(shots.map((s) => s.number), [1, 2, 3]);
-        await unmount(tester);
-      },
-    );
+      expect(tester.takeException(), isNull);
+      expect(find.byIcon(Icons.drag_indicator), findsNWidgets(3));
+      final shots = await db.getShotsForProject(projectId);
+      expect(shots.map((s) => s.framing), [
+        'PML de ALI 2',
+        'PML de ALI 3',
+        'PML de ALI 1',
+      ]);
+      expect(shots.map((s) => s.number), [1, 2, 3]);
+      await unmount(tester);
+    });
   }
 
   testWidgets('arrastrar con ratón, con el aviso del asa a la vista', (
@@ -207,9 +205,7 @@ void main() {
     await mouse.down(from);
     await tester.pump(const Duration(milliseconds: 50));
     for (var i = 1; i <= 10; i++) {
-      await mouse.moveTo(
-        Offset(from.dx, from.dy + (to.dy - from.dy) * i / 10),
-      );
+      await mouse.moveTo(Offset(from.dx, from.dy + (to.dy - from.dy) * i / 10));
       await tester.pump(const Duration(milliseconds: 30));
     }
     await mouse.up();
@@ -277,16 +273,20 @@ void main() {
     await settle(tester);
 
     final header = tester.getSize(
-      find.ancestor(
-        of: find.text('REFERENCIA'),
-        matching: find.byType(Container),
-      ).first,
+      find
+          .ancestor(
+            of: find.text('REFERENCIA'),
+            matching: find.byType(Container),
+          )
+          .first,
     );
     final ref = tester.getSize(
-      find.ancestor(
-        of: find.text('Ref.').first,
-        matching: find.byType(Container),
-      ).first,
+      find
+          .ancestor(
+            of: find.text('Ref.').first,
+            matching: find.byType(Container),
+          )
+          .first,
     );
     expect(ref.width, closeTo(header.width - 8, 0.5));
     await unmount(tester);
@@ -429,9 +429,16 @@ void main() {
     await unmount(tester);
   });
 
-  testWidgets('nueva escena: se crea la localización desde el propio menú', (
-    tester,
-  ) async {
+  Future<void> typeWhere(WidgetTester tester, String text) async {
+    await tester.enterText(
+      find.widgetWithText(TextField, '¿Dónde ocurre?'),
+      text,
+    );
+    await settle(tester);
+  }
+
+  testWidgets('menú de nueva escena: un nombre nuevo crea la localización '
+      'con Intro y la escena toma ese nombre', (tester) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -442,26 +449,14 @@ void main() {
 
     await tester.tap(find.byTooltip('Añadir escena'));
     await settle(tester);
-    expect(find.text('Nueva escena'), findsOneWidget);
-    // Sin localización no se puede crear.
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.ancestor(
-              of: find.text('Crear escena'),
-              matching: find.bySubtype<FilledButton>(),
-            ),
-          )
-          .onPressed,
-      isNull,
-    );
+    expect(find.text('Nueva escena'), findsWidgets);
 
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Nombre de la primera localización'),
-      'kebab khaled',
+    await typeWhere(tester, 'kebab khaled');
+    expect(
+      find.text('Crear «KEBAB KHALED» como localización nueva'),
+      findsOneWidget,
     );
-    await settle(tester);
-    await tester.tap(find.text('Crear «KEBAB KHALED»'));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await settle(tester);
     await tester.tap(find.text('NOCHE'));
     await settle(tester);
@@ -475,6 +470,58 @@ void main() {
     expect(created.locationId, isNotNull);
     final sites = await db.select(db.locationSites).get();
     expect(sites.map((s) => s.name), ['KEBAB KHALED']);
+    await unmount(tester);
+  });
+
+  testWidgets('fila «Nueva escena»: asociar a una localización que ya existe '
+      'no crea otra, y un set se crea dentro de ella', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    await db.ensureSite(projectId: projectId, siteName: 'CALLE RAVAL');
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+
+    await tester.tap(find.text('Nueva escena'));
+    await settle(tester);
+    // Vacío, enseña las localizaciones que ya hay.
+    expect(find.text('CALLE RAVAL'), findsWidgets);
+
+    // Elegir la que existe crea la escena y no otra localización.
+    await typeWhere(tester, 'raval');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await settle(tester);
+    var scenes = await db.select(db.scenes).get();
+    expect(scenes.map((s) => s.number), [1, 2]);
+    expect(scenes.last.locationCanonical, 'EXT. CALLE RAVAL - DÍA');
+    expect((await db.select(db.locationSites).get()).length, 1);
+
+    // Un nombre nuevo, como set dentro de la que existe.
+    await typeWhere(tester, 'portal');
+    await tester.tap(find.text('Crear «PORTAL» como set dentro de…'));
+    await settle(tester);
+    expect(
+      find.text('¿Dentro de qué localización está «PORTAL»?'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('aquí'));
+    await settle(tester);
+
+    scenes = await db.select(db.scenes).get();
+    expect(scenes.map((s) => s.number), [1, 2, 3]);
+    expect(scenes.last.locationCanonical, 'EXT. PORTAL - DÍA');
+    expect((await db.select(db.locationSites).get()).length, 1);
+    final sets = await db.select(db.locationBasePlans).get();
+    expect(
+      sets.map((s) => s.locationName),
+      containsAll(['CALLE RAVAL', 'PORTAL']),
+    );
+    expect(
+      sets.firstWhere((s) => s.locationName == 'PORTAL').siteId,
+      isNotNull,
+    );
     await unmount(tester);
   });
 

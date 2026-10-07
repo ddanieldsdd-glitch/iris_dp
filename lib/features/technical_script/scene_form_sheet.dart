@@ -14,6 +14,7 @@ import '../../core/utils/scene_format.dart';
 import '../../core/widgets/color_scope_prompt_dialog.dart';
 import '../../core/widgets/scene_color_editor.dart';
 import '../locations/location_picker.dart';
+import '../locations/where_field.dart';
 
 const kIntExtOptions = ['INT', 'EXT', 'INT/EXT'];
 const kDayNightOptions = ['DÍA', 'NOCHE', 'AMANECER', 'ATARDECER', 'CONTINUO'];
@@ -318,6 +319,20 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
                 style: AppTypography.titleLarge(palette),
               ),
               const SizedBox(height: AppSpacing.lg),
+              if (_isEditing && _loadingColor)
+                const SizedBox(
+                  height: 120,
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else
+                WhereField(
+                  projectId: widget.projectId,
+                  initial: _choice,
+                  autofocus: !_isEditing,
+                  onChanged: (c) => setState(() => _choice = c),
+                  onSubmitted: _save,
+                ),
+              const SizedBox(height: AppSpacing.lg),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -355,21 +370,6 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
                 _dayNight,
                 (v) => setState(() => _dayNight = v),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              Text('Localización', style: AppTypography.label(palette)),
-              const SizedBox(height: 6),
-              if (_isEditing && _loadingColor)
-                const SizedBox(
-                  height: 120,
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else
-                LocationPickerPanel(
-                  projectId: widget.projectId,
-                  initialSiteId: _choice?.site.id,
-                  initialSetId: _choice?.set.id,
-                  onChanged: (c) => setState(() => _choice = c),
-                ),
               const SizedBox(height: AppSpacing.sm),
               Theme(
                 data: Theme.of(
@@ -471,6 +471,46 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
       ],
     );
   }
+}
+
+/// Crea una escena en [choice] con el siguiente número libre (o [number]).
+/// El nombre y el título salen del lugar: no se escriben.
+Future<int> createSceneAt({
+  required AppDatabase db,
+  required int projectId,
+  required LocationChoice choice,
+  String intExt = 'INT',
+  String dayNight = 'DÍA',
+  int? number,
+}) async {
+  var n = number;
+  if (n == null) {
+    final scenes = await (db.select(
+      db.scenes,
+    )..where((s) => s.projectId.equals(projectId))).get();
+    n = scenes.isEmpty
+        ? 1
+        : scenes.map((s) => s.number).reduce((a, b) => a > b ? a : b) + 1;
+  }
+  final place = choice.placeName;
+  return db.insertScene(
+    ScenesCompanion.insert(
+      projectId: projectId,
+      number: n,
+      name: formatSceneDefaultName(
+        intExt: intExt,
+        dayNight: dayNight,
+        location: place,
+      ),
+      locationCanonical: '$intExt. $place - $dayNight',
+      locationPureName: choice.set.locationName,
+      locationSiteId: Value(choice.site.id),
+      locationId: Value(choice.set.id),
+      intExt: Value(intExt),
+      dayNight: Value(dayNight),
+      sortOrder: Value(n),
+    ),
+  );
 }
 
 void showSceneFormSheet(

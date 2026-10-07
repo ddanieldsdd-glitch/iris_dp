@@ -24,6 +24,8 @@ import '../locations/locations_screen.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
+import '../locations/location_picker.dart';
+import '../locations/where_field.dart';
 import 'scene_form_sheet.dart';
 import 'table/editable_cell.dart';
 import 'table/reference_image_menu.dart';
@@ -429,14 +431,31 @@ class _ScriptTable extends StatelessWidget {
         final cols = _Cols.forWidth(width, settings);
         final table = ListView.builder(
           padding: const EdgeInsets.only(bottom: AppSpacing.xl),
-          itemCount: scenes.length,
-          itemBuilder: (context, i) => _SceneSection(
-            key: ValueKey(scenes[i].id),
-            scene: scenes[i],
-            shots: shotsByScene[scenes[i].id] ?? const [],
-            colors: data.colors,
-            cols: cols,
-          ),
+          itemCount: scenes.length + 1,
+          // Al crear o borrar una escena las demás cambian de índice: con
+          // esto conservan su estado (y la fila de nueva escena sigue
+          // abierta para la siguiente).
+          findChildIndexCallback: (key) {
+            if (key == _newSceneKey) return scenes.length;
+            if (key is ValueKey<int>) {
+              final i = scenes.indexWhere((s) => s.id == key.value);
+              return i < 0 ? null : i;
+            }
+            return null;
+          },
+          itemBuilder: (context, i) => i == scenes.length
+              ? _NewSceneRow(
+                  key: _newSceneKey,
+                  projectId: scenes.first.projectId,
+                  last: scenes.last,
+                )
+              : _SceneSection(
+                  key: ValueKey(scenes[i].id),
+                  scene: scenes[i],
+                  shots: shotsByScene[scenes[i].id] ?? const [],
+                  colors: data.colors,
+                  cols: cols,
+                ),
         );
         if (width <= constraints.maxWidth) return table;
         return SingleChildScrollView(
@@ -448,6 +467,120 @@ class _ScriptTable extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+const _newSceneKey = ValueKey<String>('new-scene');
+
+/// Al final de la tabla: crear una escena diciendo solo dónde ocurre. Toma
+/// INT/EXT y el momento de la última escena; se cambian luego en la suya.
+class _NewSceneRow extends ConsumerStatefulWidget {
+  final int projectId;
+  final Scene last;
+
+  const _NewSceneRow({super.key, required this.projectId, required this.last});
+
+  @override
+  ConsumerState<_NewSceneRow> createState() => _NewSceneRowState();
+}
+
+class _NewSceneRowState extends ConsumerState<_NewSceneRow> {
+  final _where = GlobalKey<WhereFieldState>();
+  bool _open = false;
+  bool _creating = false;
+
+  Future<void> _create(LocationChoice choice) async {
+    if (_creating) return;
+    _creating = true;
+    try {
+      await createSceneAt(
+        db: ref.read(databaseProvider),
+        projectId: widget.projectId,
+        choice: choice,
+        intExt: widget.last.intExt,
+        dayNight: widget.last.dayNight,
+      );
+      // Listo para la siguiente.
+      _where.currentState?.clear();
+    } catch (e) {
+      if (mounted) AppSnackBar.showError(context, userFriendlyError(e));
+    } finally {
+      _creating = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    if (!_open) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: AppSpacing.sm),
+          child: TextButton.icon(
+            onPressed: () => setState(() => _open = true),
+            icon: Icon(Icons.add, color: palette.accent, size: 18),
+            label: Text(
+              'Nueva escena',
+              style: AppTypography.label(
+                palette,
+              ).copyWith(color: palette.accent),
+            ),
+          ),
+        ),
+      );
+    }
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        width: 520,
+        margin: const EdgeInsets.only(left: AppSpacing.lg),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: palette.surfaceElevated,
+          border: Border.all(color: palette.border),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Nueva escena',
+                    style: AppTypography.titleMedium(palette),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Cerrar',
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () => setState(() => _open = false),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            WhereField(
+              key: _where,
+              projectId: widget.projectId,
+              autofocus: true,
+              listHeight: 190,
+              onChanged: (choice) {
+                if (choice != null) _create(choice);
+              },
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Elige un lugar o escribe uno nuevo y pulsa Intro. La escena se '
+              'crea como ${widget.last.intExt} · ${widget.last.dayNight}; se '
+              'cambia después con el lápiz.',
+              style: AppTypography.caption(palette),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
