@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:iris_dp/core/weather/sun_calculator.dart';
 import 'package:iris_dp/core/weather/weather_models.dart';
 import 'package:iris_dp/core/weather/weather_service.dart';
+import 'package:iris_dp/core/weather/weather_summary.dart';
 
 Matcher _around(DateTime expected, {int minutes = 4}) => predicate<DateTime?>(
   (actual) =>
@@ -203,6 +204,87 @@ void main() {
       expect(places.single.label, 'Barcelona, Cataluña, España');
       expect(places.single.latitude, closeTo(41.39, 0.01));
       expect(await service.searchPlaces('b'), isEmpty);
+    });
+  });
+
+  group('resumen de la jornada', () {
+    final sun = SunCalculator.forDate(
+      year: 2026,
+      month: 10,
+      day: 12,
+      latitude: 41.3874,
+      longitude: 2.1686,
+    );
+    final forecast = WeatherSnapshot(
+      fetchedAt: DateTime.utc(2026, 10, 6),
+      date: '2026-10-12',
+      utcOffsetSeconds: 7200,
+      temperatureMin: 13.1,
+      temperatureMax: 22.4,
+      weatherCode: 61,
+      precipitationSum: 1.2,
+      precipitationProbabilityMax: 60,
+      windMax: 22,
+      gustsMax: 41.3,
+      hours: const [
+        WeatherHour(hour: 0, temperature: 14.2, weatherCode: 0, wind: 8),
+        WeatherHour(hour: 22, temperature: 17.5, weatherCode: 61, wind: 22),
+      ],
+    );
+
+    test('escribe lo pedido, con las horas en la hora del lugar', () {
+      final lines = weatherSummaryLines(
+        options: const WeatherOptions(hourly: false),
+        sun: sun,
+        forecast: forecast,
+        utcOffsetSeconds: 7200,
+      );
+      expect(
+        lines.first,
+        'Lluvia débil · 13–22 °C · Lluvia 60 % (1,2 mm) · '
+        'Viento 22 km/h, rachas 41',
+      );
+      // En Barcelona el 12 de octubre amanece hacia las 8 y anochece hacia
+      // las 19:15, hora local.
+      expect(
+        lines[1],
+        matches(RegExp(r'^Amanecer 08:0\d · Atardecer 19:1\d$')),
+      );
+      expect(lines[2], startsWith('Hora azul 07:'));
+      expect(lines.length, 3);
+    });
+
+    test('lo desactivado no sale, y la franja de noche va en su orden', () {
+      final lines = weatherSummaryLines(
+        options: const WeatherOptions(
+          rain: false,
+          wind: false,
+          sun: false,
+          blueAndGolden: false,
+        ),
+        sun: sun,
+        forecast: forecast,
+        utcOffsetSeconds: 7200,
+        fromHour: 22,
+        toHour: 2,
+      );
+      expect(lines, [
+        'Lluvia débil · 13–22 °C',
+        '22 h: 18 °C, Lluvia débil',
+        '00 h: 14 °C, Despejado',
+      ]);
+    });
+
+    test('sin previsión por estar lejos lo dice, y el sol sale igual', () {
+      final lines = weatherSummaryLines(
+        options: const WeatherOptions(),
+        sun: sun,
+        forecast: null,
+        utcOffsetSeconds: 7200,
+        forecastAvailable: false,
+      );
+      expect(lines.first, contains('Aún no hay previsión'));
+      expect(lines[1], startsWith('Amanecer'));
     });
   });
 }

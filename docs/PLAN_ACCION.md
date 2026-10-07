@@ -145,7 +145,19 @@ Añadido el 2026-10-04. Regla: **Biblia → Pantallas → Puntos.** Un punto tie
 
 - [ ] **3.1 Identidad estable.** `uid` en `Scenes` y `Shots`; el bundle deja de identificar por número; claves de media unificadas.
 - [ ] **3.2 Hub con salud.** Total de planos, con planta, con storyboard, con lente, y una siguiente acción.
-- [ ] **3.3 Jornada de rodaje.** `ShootDays` y `ShootDayShots` (plano, orden, estado).
+- [x] **3.3 Jornada de rodaje.** Sustituido por G5: la jornada es un documento de rodaje de tipo `technical_day`, sin tablas nuevas. Queda fuera el estado por plano (rodado, pendiente).
+
+## Fase G — Guion técnico, guion literario y jornadas (objetivos 1 y 4)
+
+Añadida el 2026-10-06. Rama `plan/g1-guion-tecnico` (worktree `iris_dp_guion`). Sube el esquema a 46; antes de pasar a 45 la app guarda sola una copia de la base (`iris_dp.db.antes-de-esquema-45`).
+
+- [x] **G1. Tabla del guion técnico.** A todo el ancho, reordenar planos con renumeración, eliminar planos y escenas sin dejar restos.
+- [x] **G2. Hoja como el Word.** Vista hoja u oscura, cabecera con el color de la escena, celdas ligeras, barra de formato (negrita, cursiva, subrayado, marcador, color de plano y de celda, fuente, columnas), movimientos propios, miniatura de planta, referencia y storyboard enlazados con menú de imagen (arrastrar, pegar, ordenador, moodboard), y escenas creadas con «¿Dónde ocurre?».
+- [x] **Listas reordenables que no colapsan.** `SafeReorderableColumn` sustituye a `ReorderableListView` en toda la app: mover una fila con avisos emergentes rompía la pantalla. No entra limpio en `main` por separado; llega con esta rama.
+- [x] **L. Guion literario.** Actualizar el guion empareja las escenas por contenido, se revisa antes de aplicar y nunca borra un plano; escenas fuera del guion; mover planos entre escenas; personajes que aparecen en la acción; lista de escenas a todo el alto y menú de edición compacto.
+- [x] **G3. Exportar a PDF y Word** con la misma hoja.
+- [x] **G4. Sol y meteorología.** Cálculo del sol sin conexión y previsión de Open-Meteo (gratis solo para uso no comercial).
+- [x] **G5. Guion técnico de rodaje.** Jornada con fecha, lugar, meteorología y orden de rodaje, y su PDF y Word. Pendiente: ver una jornada desde la pantalla del guion técnico.
 
 ## Fase 4 — Material técnico (objetivo 2)
 

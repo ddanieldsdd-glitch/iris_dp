@@ -8,6 +8,10 @@ import '../../core/utils/pdf_safe_image.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_characters.dart';
 import '../../core/utils/shot_reference_import.dart';
+import '../../core/weather/sun_calculator.dart';
+import '../../core/weather/weather_models.dart';
+import '../../core/weather/weather_service.dart';
+import '../../core/weather/weather_summary.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
 import 'table/script_sheet_theme.dart';
 import 'technical_script_settings.dart';
@@ -49,51 +53,7 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
   for (final scene in scenes) {
     final rows = <ScriptDocRow>[];
     for (final shot in shotsByScene[scene.id] ?? const <Shot>[]) {
-      final cellFills = <String, int>{};
-      final raw = shot.cellStylesJson;
-      if (raw != null && raw.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(raw);
-          if (decoded is Map) {
-            for (final entry in decoded.entries) {
-              final fill = sheet.rowFill(entry.value as String?);
-              // En el documento la celda de apuntes se llama «notes» y la
-              // de referencia «ref», igual que en la hoja.
-              if (fill != null) cellFills['${entry.key}'] = _rgb(fill);
-            }
-          }
-        } catch (_) {
-          // Un color ilegible no impide exportar.
-        }
-      }
-      final rowFill = sheet.rowFill(shot.notesHighlight);
-      rows.add(
-        ScriptDocRow(
-          cells: {
-            'esc': '${scene.number}',
-            'plano': '${shot.number}',
-            'encuadre': shot.framing ?? '',
-            'lens': [
-              shot.lens,
-              shot.angle,
-              shot.movement,
-            ].where((v) => v != null && v.trim().isNotEmpty).join('\n'),
-            'f': shot.fStop ?? '',
-            'pers': decodeSceneCharacters(shot.charactersJson).join(', '),
-            'dur': shot.durationSeconds == null
-                ? ''
-                : '${shot.durationSeconds} s',
-            'action': shot.action ?? '',
-            'notes': shot.notes ?? '',
-          },
-          fill: rowFill == null ? null : _rgb(rowFill),
-          cellFills: cellFills,
-          image: await PdfSafeImage.loadFromPathMaxEdge(
-            referenceImageOf(shot),
-            maxEdge: 1200,
-          ),
-        ),
-      );
+      rows.add(await _docRow(scene, shot, sheet));
     }
     sections.add(
       ScriptDocSection(
@@ -118,6 +78,229 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
         if (!settings.shows(ScriptColumn.duracion)) 'dur',
       },
     ),
+    sections: sections,
+  );
+}
+
+/// Fila del documento para un plano, con sus colores y su imagen. [order]
+/// es su puesto en el orden de rodaje, cuando el documento es una jornada.
+Future<ScriptDocRow> _docRow(
+  Scene scene,
+  Shot shot,
+  ScriptSheetTheme sheet, {
+  int? order,
+}) async {
+  final cellFills = <String, int>{};
+  final raw = shot.cellStylesJson;
+  if (raw != null && raw.isNotEmpty) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        for (final entry in decoded.entries) {
+          final fill = sheet.rowFill(entry.value as String?);
+          if (fill != null) cellFills['${entry.key}'] = _rgb(fill);
+        }
+      }
+    } catch (_) {
+      // Un color ilegible no impide exportar.
+    }
+  }
+  final rowFill = sheet.rowFill(shot.notesHighlight);
+  return ScriptDocRow(
+    cells: {
+      if (order != null) 'orden': '$order',
+      'esc': '${scene.number}',
+      'plano': '${shot.number}',
+      'encuadre': shot.framing ?? '',
+      'lens': [
+        shot.lens,
+        shot.angle,
+        shot.movement,
+      ].where((v) => v != null && v.trim().isNotEmpty).join('\n'),
+      'f': shot.fStop ?? '',
+      'pers': decodeSceneCharacters(shot.charactersJson).join(', '),
+      'dur': shot.durationSeconds == null ? '' : '${shot.durationSeconds} s',
+      'action': shot.action ?? '',
+      'notes': shot.notes ?? '',
+    },
+    fill: rowFill == null ? null : _rgb(rowFill),
+    cellFills: cellFills,
+    image: await PdfSafeImage.loadFromPathMaxEdge(
+      referenceImageOf(shot),
+      maxEdge: 1200,
+    ),
+  );
+}
+
+const _months = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+];
+const _weekdays = [
+  'lunes',
+  'martes',
+  'miércoles',
+  'jueves',
+  'viernes',
+  'sábado',
+  'domingo',
+];
+
+/// «lunes 12 de octubre de 2026» a partir de "2026-10-12".
+String formatShootDate(String? iso) {
+  final date = iso == null ? null : DateTime.tryParse(iso);
+  if (date == null) return iso ?? '';
+  return '${_weekdays[date.weekday - 1]} ${date.day} de '
+      '${_months[date.month - 1]} de ${date.year}';
+}
+
+/// Sol, previsión y resumen de una jornada, con lo que tenga guardado.
+({SunTimes? sun, WeatherSnapshot? forecast, List<String> lines})
+shootDayWeather(ShootDocument day, LocationSite? site, {DateTime? now}) {
+  final date = day.shootDate == null ? null : DateTime.tryParse(day.shootDate!);
+  final lat = site?.latitude;
+  final lon = site?.longitude;
+  final options = WeatherOptions.decode(day.weatherOptionsJson);
+  if (date == null || lat == null || lon == null) {
+    return (sun: null, forecast: null, lines: const []);
+  }
+  final sun = SunCalculator.forDate(
+    year: date.year,
+    month: date.month,
+    day: date.day,
+    latitude: lat,
+    longitude: lon,
+  );
+  var forecast = WeatherSnapshot.decode(day.weatherSnapshotJson);
+  // Una previsión de otra fecha (se cambió el día) ya no vale.
+  if (forecast != null && forecast.date != day.shootDate) forecast = null;
+  int? hour(String? hhmm) =>
+      hhmm == null ? null : int.tryParse(hhmm.split(':').first);
+  return (
+    sun: sun,
+    forecast: forecast,
+    lines: weatherSummaryLines(
+      options: options,
+      sun: sun,
+      forecast: forecast,
+      // Sin previsión no se conoce la hora del lugar: vale la del equipo.
+      utcOffsetSeconds:
+          forecast?.utcOffsetSeconds ??
+          DateTime(
+            date.year,
+            date.month,
+            date.day,
+            12,
+          ).timeZoneOffset.inSeconds,
+      fromHour: hour(day.shootFromTime),
+      toHour: hour(day.shootToTime),
+      forecastAvailable: isWithinForecast(date, now ?? DateTime.now()),
+    ),
+  );
+}
+
+/// Monta el guion técnico de una jornada: los planos elegidos en su orden de
+/// rodaje, agrupados bajo su escena mientras vayan seguidos, con la fecha,
+/// el lugar y la meteorología arriba. El número de plano es el del guion
+/// técnico.
+Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
+  AppDatabase db,
+  int documentId,
+  TechnicalScriptSettings settings,
+) async {
+  final day = await db.getShootDocument(documentId);
+  if (day == null) return null;
+  final project = await db.getProject(day.projectId);
+  final blocks = await db.getBlocksForShootDocument(documentId);
+  final scenes = await db.watchScenesForProject(day.projectId).first;
+  final shots = await db.getShotsForProject(day.projectId);
+  final sites = await db.watchSitesForProject(day.projectId).first;
+  final sets = await db.watchLocationsForProject(day.projectId).first;
+  final colors = ProjectColorScheme.resolve(
+    sites: sites,
+    sets: sets,
+    scenes: scenes,
+  );
+  final sheet = ScriptSheetTheme.resolve(
+    settings.copyWith(view: ScriptView.sheet),
+    AppPalette.dark,
+  );
+  final sceneById = {for (final s in scenes) s.id: s};
+  final shotById = {for (final s in shots) s.id: s};
+  final site = sites.where((s) => s.id == day.locationSiteId).firstOrNull;
+
+  final sections = <ScriptDocSection>[];
+  Scene? current;
+  var rows = <ScriptDocRow>[];
+  var order = 0;
+  void close() {
+    final scene = current;
+    if (scene == null || rows.isEmpty) return;
+    sections.add(
+      ScriptDocSection(
+        title: '${scene.number}. ${scene.locationCanonical}',
+        headerFill: _rgb(sheet.headerFill(colors.sceneColor(scene))),
+        rows: rows,
+      ),
+    );
+    rows = <ScriptDocRow>[];
+  }
+
+  for (final block in blocks) {
+    final shot = shotById[block.shotId];
+    if (shot == null) continue;
+    final scene = sceneById[shot.sceneId];
+    if (scene == null) continue;
+    if (current?.id != scene.id) {
+      close();
+      current = scene;
+    }
+    order++;
+    rows.add(await _docRow(scene, shot, sheet, order: order));
+  }
+  close();
+
+  final weather = shootDayWeather(day, site);
+  final place = [
+    if (site != null) site.name,
+    if (site?.placeLabel != null && site!.placeLabel!.trim().isNotEmpty)
+      site.placeLabel!,
+  ].join(' · ');
+  final window = day.shootFromTime != null && day.shootToTime != null
+      ? 'de ${day.shootFromTime} a ${day.shootToTime}'
+      : null;
+
+  return TechnicalScriptDoc(
+    title: 'GUION TÉCNICO DE RODAJE · ${(project?.name ?? '').toUpperCase()}',
+    subtitle: [
+      [
+        day.name,
+        if (day.shootDate != null) formatShootDate(day.shootDate),
+        if (window != null) window,
+      ].join(' · '),
+      if (place.isNotEmpty) place,
+      ...weather.lines,
+    ].join('\n'),
+    columns: [
+      const ScriptDocColumn('orden', 'ORDEN', 760, centered: true),
+      ...scriptDocColumns(
+        hidden: {
+          if (!settings.shows(ScriptColumn.fStop)) 'f',
+          if (!settings.shows(ScriptColumn.personajes)) 'pers',
+          if (!settings.shows(ScriptColumn.duracion)) 'dur',
+        },
+      ),
+    ],
     sections: sections,
   );
 }
