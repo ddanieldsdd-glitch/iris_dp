@@ -446,15 +446,27 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(shots, shots.locationBasePlanId);
         await m.addColumn(shots, shots.routeJson);
       }
+      // Desde aquí, cada columna se añade solo si falta: hay bases con
+      // columnas sobrantes de pruebas antiguas (latitude y longitude en
+      // location_sites) y una migración a medias no debe dejar la base
+      // sin abrir.
+      Future<void> add(TableInfo table, GeneratedColumn column) async {
+        final rows = await customSelect(
+          "SELECT 1 FROM pragma_table_info('${table.actualTableName}') "
+          "WHERE name = '${column.name}'",
+        ).get();
+        if (rows.isEmpty) await m.addColumn(table, column);
+      }
+
       if (from < 45) {
         // Vínculo de las escenas con el guion literario, e imagen de
         // storyboard y color de celda de los planos.
-        await m.addColumn(scenes, scenes.scriptLinked);
-        await m.addColumn(scenes, scenes.scriptHeadingKey);
-        await m.addColumn(scenes, scenes.scriptTextHash);
-        await m.addColumn(scenes, scenes.offScript);
-        await m.addColumn(shots, shots.storyboardImagePath);
-        await m.addColumn(shots, shots.cellStylesJson);
+        await add(scenes, scenes.scriptLinked);
+        await add(scenes, scenes.scriptHeadingKey);
+        await add(scenes, scenes.scriptTextHash);
+        await add(scenes, scenes.offScript);
+        await add(shots, shots.storyboardImagePath);
+        await add(shots, shots.cellStylesJson);
         // Las escenas que se detectaron en el guion ya venían de él.
         await customStatement(
           'UPDATE scenes SET script_linked = 1 '
@@ -463,15 +475,15 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 46) {
         // Ubicación de las localizaciones y jornadas de rodaje.
-        await m.addColumn(locationSites, locationSites.latitude);
-        await m.addColumn(locationSites, locationSites.longitude);
-        await m.addColumn(locationSites, locationSites.placeLabel);
-        await m.addColumn(shootDocuments, shootDocuments.kind);
-        await m.addColumn(shootDocuments, shootDocuments.locationSiteId);
-        await m.addColumn(shootDocuments, shootDocuments.shootFromTime);
-        await m.addColumn(shootDocuments, shootDocuments.shootToTime);
-        await m.addColumn(shootDocuments, shootDocuments.weatherOptionsJson);
-        await m.addColumn(shootDocuments, shootDocuments.weatherSnapshotJson);
+        await add(locationSites, locationSites.latitude);
+        await add(locationSites, locationSites.longitude);
+        await add(locationSites, locationSites.placeLabel);
+        await add(shootDocuments, shootDocuments.kind);
+        await add(shootDocuments, shootDocuments.locationSiteId);
+        await add(shootDocuments, shootDocuments.shootFromTime);
+        await add(shootDocuments, shootDocuments.shootToTime);
+        await add(shootDocuments, shootDocuments.weatherOptionsJson);
+        await add(shootDocuments, shootDocuments.weatherSnapshotJson);
       }
     },
   );
