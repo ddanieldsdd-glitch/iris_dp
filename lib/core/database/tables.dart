@@ -153,6 +153,18 @@ class ShootDocuments extends Table {
       boolean().withDefault(const Constant(true))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+  // Jornada de rodaje (schemaVersion 46). `technical_day` = guion técnico
+  // de rodaje: fecha, lugar, orden de planos y meteorología.
+  TextColumn get kind => text().withDefault(const Constant('freeform'))();
+  IntColumn get locationSiteId =>
+      integer().nullable().references(LocationSites, #id)();
+  // Franja de rodaje "HH:mm", para saber qué horas de la previsión enseñar.
+  TextColumn get shootFromTime => text().nullable()();
+  TextColumn get shootToTime => text().nullable()();
+  // Qué datos de meteorología salen en la jornada y en su export.
+  TextColumn get weatherOptionsJson => text().nullable()();
+  // Última previsión descargada, para que el documento salga igual sin red.
+  TextColumn get weatherSnapshotJson => text().nullable()();
 }
 
 /// Bloque composable dentro de un documento de rodaje.
@@ -252,6 +264,11 @@ class LocationSites extends Table {
   // luma_ai | polycam | cinetracer | manual
   TextColumn get scanMetadataJson => text().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  // Dónde está en el mapa (schemaVersion 46): para el sol y la previsión.
+  RealColumn get latitude => real().nullable()();
+  RealColumn get longitude => real().nullable()();
+  // Nombre del lugar elegido en el buscador: "Barcelona, Cataluña, España".
+  TextColumn get placeLabel => text().nullable()();
 }
 
 /// Imágenes de la localización contenedora (nivel sitio, no set).

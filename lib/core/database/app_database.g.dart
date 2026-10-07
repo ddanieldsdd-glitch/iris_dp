@@ -1584,6 +1584,39 @@ class $LocationSitesTable extends LocationSites
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _latitudeMeta = const VerificationMeta(
+    'latitude',
+  );
+  @override
+  late final GeneratedColumn<double> latitude = GeneratedColumn<double>(
+    'latitude',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _longitudeMeta = const VerificationMeta(
+    'longitude',
+  );
+  @override
+  late final GeneratedColumn<double> longitude = GeneratedColumn<double>(
+    'longitude',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _placeLabelMeta = const VerificationMeta(
+    'placeLabel',
+  );
+  @override
+  late final GeneratedColumn<String> placeLabel = GeneratedColumn<String>(
+    'place_label',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1596,6 +1629,9 @@ class $LocationSitesTable extends LocationSites
     scanSource,
     scanMetadataJson,
     sortOrder,
+    latitude,
+    longitude,
+    placeLabel,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1679,6 +1715,24 @@ class $LocationSitesTable extends LocationSites
         sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
       );
     }
+    if (data.containsKey('latitude')) {
+      context.handle(
+        _latitudeMeta,
+        latitude.isAcceptableOrUnknown(data['latitude']!, _latitudeMeta),
+      );
+    }
+    if (data.containsKey('longitude')) {
+      context.handle(
+        _longitudeMeta,
+        longitude.isAcceptableOrUnknown(data['longitude']!, _longitudeMeta),
+      );
+    }
+    if (data.containsKey('place_label')) {
+      context.handle(
+        _placeLabelMeta,
+        placeLabel.isAcceptableOrUnknown(data['place_label']!, _placeLabelMeta),
+      );
+    }
     return context;
   }
 
@@ -1728,6 +1782,18 @@ class $LocationSitesTable extends LocationSites
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
       )!,
+      latitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}latitude'],
+      ),
+      longitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}longitude'],
+      ),
+      placeLabel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}place_label'],
+      ),
     );
   }
 
@@ -1748,6 +1814,9 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
   final String? scanSource;
   final String? scanMetadataJson;
   final int sortOrder;
+  final double? latitude;
+  final double? longitude;
+  final String? placeLabel;
   const LocationSite({
     required this.id,
     required this.projectId,
@@ -1759,6 +1828,9 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
     this.scanSource,
     this.scanMetadataJson,
     required this.sortOrder,
+    this.latitude,
+    this.longitude,
+    this.placeLabel,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1785,6 +1857,15 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
       map['scan_metadata_json'] = Variable<String>(scanMetadataJson);
     }
     map['sort_order'] = Variable<int>(sortOrder);
+    if (!nullToAbsent || latitude != null) {
+      map['latitude'] = Variable<double>(latitude);
+    }
+    if (!nullToAbsent || longitude != null) {
+      map['longitude'] = Variable<double>(longitude);
+    }
+    if (!nullToAbsent || placeLabel != null) {
+      map['place_label'] = Variable<String>(placeLabel);
+    }
     return map;
   }
 
@@ -1812,6 +1893,15 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
           ? const Value.absent()
           : Value(scanMetadataJson),
       sortOrder: Value(sortOrder),
+      latitude: latitude == null && nullToAbsent
+          ? const Value.absent()
+          : Value(latitude),
+      longitude: longitude == null && nullToAbsent
+          ? const Value.absent()
+          : Value(longitude),
+      placeLabel: placeLabel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(placeLabel),
     );
   }
 
@@ -1831,6 +1921,9 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
       scanSource: serializer.fromJson<String?>(json['scanSource']),
       scanMetadataJson: serializer.fromJson<String?>(json['scanMetadataJson']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      latitude: serializer.fromJson<double?>(json['latitude']),
+      longitude: serializer.fromJson<double?>(json['longitude']),
+      placeLabel: serializer.fromJson<String?>(json['placeLabel']),
     );
   }
   @override
@@ -1847,6 +1940,9 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
       'scanSource': serializer.toJson<String?>(scanSource),
       'scanMetadataJson': serializer.toJson<String?>(scanMetadataJson),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'latitude': serializer.toJson<double?>(latitude),
+      'longitude': serializer.toJson<double?>(longitude),
+      'placeLabel': serializer.toJson<String?>(placeLabel),
     };
   }
 
@@ -1861,6 +1957,9 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
     Value<String?> scanSource = const Value.absent(),
     Value<String?> scanMetadataJson = const Value.absent(),
     int? sortOrder,
+    Value<double?> latitude = const Value.absent(),
+    Value<double?> longitude = const Value.absent(),
+    Value<String?> placeLabel = const Value.absent(),
   }) => LocationSite(
     id: id ?? this.id,
     projectId: projectId ?? this.projectId,
@@ -1876,6 +1975,9 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
         ? scanMetadataJson.value
         : this.scanMetadataJson,
     sortOrder: sortOrder ?? this.sortOrder,
+    latitude: latitude.present ? latitude.value : this.latitude,
+    longitude: longitude.present ? longitude.value : this.longitude,
+    placeLabel: placeLabel.present ? placeLabel.value : this.placeLabel,
   );
   LocationSite copyWithCompanion(LocationSitesCompanion data) {
     return LocationSite(
@@ -1897,6 +1999,11 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
           ? data.scanMetadataJson.value
           : this.scanMetadataJson,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      latitude: data.latitude.present ? data.latitude.value : this.latitude,
+      longitude: data.longitude.present ? data.longitude.value : this.longitude,
+      placeLabel: data.placeLabel.present
+          ? data.placeLabel.value
+          : this.placeLabel,
     );
   }
 
@@ -1912,7 +2019,10 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
           ..write('scanPath: $scanPath, ')
           ..write('scanSource: $scanSource, ')
           ..write('scanMetadataJson: $scanMetadataJson, ')
-          ..write('sortOrder: $sortOrder')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('latitude: $latitude, ')
+          ..write('longitude: $longitude, ')
+          ..write('placeLabel: $placeLabel')
           ..write(')'))
         .toString();
   }
@@ -1929,6 +2039,9 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
     scanSource,
     scanMetadataJson,
     sortOrder,
+    latitude,
+    longitude,
+    placeLabel,
   );
   @override
   bool operator ==(Object other) =>
@@ -1943,7 +2056,10 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
           other.scanPath == this.scanPath &&
           other.scanSource == this.scanSource &&
           other.scanMetadataJson == this.scanMetadataJson &&
-          other.sortOrder == this.sortOrder);
+          other.sortOrder == this.sortOrder &&
+          other.latitude == this.latitude &&
+          other.longitude == this.longitude &&
+          other.placeLabel == this.placeLabel);
 }
 
 class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
@@ -1957,6 +2073,9 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
   final Value<String?> scanSource;
   final Value<String?> scanMetadataJson;
   final Value<int> sortOrder;
+  final Value<double?> latitude;
+  final Value<double?> longitude;
+  final Value<String?> placeLabel;
   const LocationSitesCompanion({
     this.id = const Value.absent(),
     this.projectId = const Value.absent(),
@@ -1968,6 +2087,9 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
     this.scanSource = const Value.absent(),
     this.scanMetadataJson = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.latitude = const Value.absent(),
+    this.longitude = const Value.absent(),
+    this.placeLabel = const Value.absent(),
   });
   LocationSitesCompanion.insert({
     this.id = const Value.absent(),
@@ -1980,6 +2102,9 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
     this.scanSource = const Value.absent(),
     this.scanMetadataJson = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.latitude = const Value.absent(),
+    this.longitude = const Value.absent(),
+    this.placeLabel = const Value.absent(),
   }) : projectId = Value(projectId),
        name = Value(name);
   static Insertable<LocationSite> custom({
@@ -1993,6 +2118,9 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
     Expression<String>? scanSource,
     Expression<String>? scanMetadataJson,
     Expression<int>? sortOrder,
+    Expression<double>? latitude,
+    Expression<double>? longitude,
+    Expression<String>? placeLabel,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2005,6 +2133,9 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
       if (scanSource != null) 'scan_source': scanSource,
       if (scanMetadataJson != null) 'scan_metadata_json': scanMetadataJson,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (placeLabel != null) 'place_label': placeLabel,
     });
   }
 
@@ -2019,6 +2150,9 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
     Value<String?>? scanSource,
     Value<String?>? scanMetadataJson,
     Value<int>? sortOrder,
+    Value<double?>? latitude,
+    Value<double?>? longitude,
+    Value<String?>? placeLabel,
   }) {
     return LocationSitesCompanion(
       id: id ?? this.id,
@@ -2031,6 +2165,9 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
       scanSource: scanSource ?? this.scanSource,
       scanMetadataJson: scanMetadataJson ?? this.scanMetadataJson,
       sortOrder: sortOrder ?? this.sortOrder,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      placeLabel: placeLabel ?? this.placeLabel,
     );
   }
 
@@ -2067,6 +2204,15 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
+    if (latitude.present) {
+      map['latitude'] = Variable<double>(latitude.value);
+    }
+    if (longitude.present) {
+      map['longitude'] = Variable<double>(longitude.value);
+    }
+    if (placeLabel.present) {
+      map['place_label'] = Variable<String>(placeLabel.value);
+    }
     return map;
   }
 
@@ -2082,7 +2228,10 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
           ..write('scanPath: $scanPath, ')
           ..write('scanSource: $scanSource, ')
           ..write('scanMetadataJson: $scanMetadataJson, ')
-          ..write('sortOrder: $sortOrder')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('latitude: $latitude, ')
+          ..write('longitude: $longitude, ')
+          ..write('placeLabel: $placeLabel')
           ..write(')'))
         .toString();
   }
@@ -6674,6 +6823,74 @@ class $ShootDocumentsTable extends ShootDocuments
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('freeform'),
+  );
+  static const VerificationMeta _locationSiteIdMeta = const VerificationMeta(
+    'locationSiteId',
+  );
+  @override
+  late final GeneratedColumn<int> locationSiteId = GeneratedColumn<int>(
+    'location_site_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES location_sites (id)',
+    ),
+  );
+  static const VerificationMeta _shootFromTimeMeta = const VerificationMeta(
+    'shootFromTime',
+  );
+  @override
+  late final GeneratedColumn<String> shootFromTime = GeneratedColumn<String>(
+    'shoot_from_time',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _shootToTimeMeta = const VerificationMeta(
+    'shootToTime',
+  );
+  @override
+  late final GeneratedColumn<String> shootToTime = GeneratedColumn<String>(
+    'shoot_to_time',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _weatherOptionsJsonMeta =
+      const VerificationMeta('weatherOptionsJson');
+  @override
+  late final GeneratedColumn<String> weatherOptionsJson =
+      GeneratedColumn<String>(
+        'weather_options_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _weatherSnapshotJsonMeta =
+      const VerificationMeta('weatherSnapshotJson');
+  @override
+  late final GeneratedColumn<String> weatherSnapshotJson =
+      GeneratedColumn<String>(
+        'weather_snapshot_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -6687,6 +6904,12 @@ class $ShootDocumentsTable extends ShootDocuments
     includeCoverInPdf,
     createdAt,
     updatedAt,
+    kind,
+    locationSiteId,
+    shootFromTime,
+    shootToTime,
+    weatherOptionsJson,
+    weatherSnapshotJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -6782,6 +7005,57 @@ class $ShootDocumentsTable extends ShootDocuments
         updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
       );
     }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    }
+    if (data.containsKey('location_site_id')) {
+      context.handle(
+        _locationSiteIdMeta,
+        locationSiteId.isAcceptableOrUnknown(
+          data['location_site_id']!,
+          _locationSiteIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('shoot_from_time')) {
+      context.handle(
+        _shootFromTimeMeta,
+        shootFromTime.isAcceptableOrUnknown(
+          data['shoot_from_time']!,
+          _shootFromTimeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('shoot_to_time')) {
+      context.handle(
+        _shootToTimeMeta,
+        shootToTime.isAcceptableOrUnknown(
+          data['shoot_to_time']!,
+          _shootToTimeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('weather_options_json')) {
+      context.handle(
+        _weatherOptionsJsonMeta,
+        weatherOptionsJson.isAcceptableOrUnknown(
+          data['weather_options_json']!,
+          _weatherOptionsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('weather_snapshot_json')) {
+      context.handle(
+        _weatherSnapshotJsonMeta,
+        weatherSnapshotJson.isAcceptableOrUnknown(
+          data['weather_snapshot_json']!,
+          _weatherSnapshotJsonMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -6835,6 +7109,30 @@ class $ShootDocumentsTable extends ShootDocuments
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
       )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      locationSiteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}location_site_id'],
+      ),
+      shootFromTime: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}shoot_from_time'],
+      ),
+      shootToTime: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}shoot_to_time'],
+      ),
+      weatherOptionsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}weather_options_json'],
+      ),
+      weatherSnapshotJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}weather_snapshot_json'],
+      ),
     );
   }
 
@@ -6856,6 +7154,12 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
   final bool includeCoverInPdf;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String kind;
+  final int? locationSiteId;
+  final String? shootFromTime;
+  final String? shootToTime;
+  final String? weatherOptionsJson;
+  final String? weatherSnapshotJson;
   const ShootDocument({
     required this.id,
     required this.projectId,
@@ -6868,6 +7172,12 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
     required this.includeCoverInPdf,
     required this.createdAt,
     required this.updatedAt,
+    required this.kind,
+    this.locationSiteId,
+    this.shootFromTime,
+    this.shootToTime,
+    this.weatherOptionsJson,
+    this.weatherSnapshotJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6889,6 +7199,22 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
     map['include_cover_in_pdf'] = Variable<bool>(includeCoverInPdf);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['kind'] = Variable<String>(kind);
+    if (!nullToAbsent || locationSiteId != null) {
+      map['location_site_id'] = Variable<int>(locationSiteId);
+    }
+    if (!nullToAbsent || shootFromTime != null) {
+      map['shoot_from_time'] = Variable<String>(shootFromTime);
+    }
+    if (!nullToAbsent || shootToTime != null) {
+      map['shoot_to_time'] = Variable<String>(shootToTime);
+    }
+    if (!nullToAbsent || weatherOptionsJson != null) {
+      map['weather_options_json'] = Variable<String>(weatherOptionsJson);
+    }
+    if (!nullToAbsent || weatherSnapshotJson != null) {
+      map['weather_snapshot_json'] = Variable<String>(weatherSnapshotJson);
+    }
     return map;
   }
 
@@ -6911,6 +7237,22 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
       includeCoverInPdf: Value(includeCoverInPdf),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      kind: Value(kind),
+      locationSiteId: locationSiteId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSiteId),
+      shootFromTime: shootFromTime == null && nullToAbsent
+          ? const Value.absent()
+          : Value(shootFromTime),
+      shootToTime: shootToTime == null && nullToAbsent
+          ? const Value.absent()
+          : Value(shootToTime),
+      weatherOptionsJson: weatherOptionsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(weatherOptionsJson),
+      weatherSnapshotJson: weatherSnapshotJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(weatherSnapshotJson),
     );
   }
 
@@ -6933,6 +7275,16 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
       includeCoverInPdf: serializer.fromJson<bool>(json['includeCoverInPdf']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      kind: serializer.fromJson<String>(json['kind']),
+      locationSiteId: serializer.fromJson<int?>(json['locationSiteId']),
+      shootFromTime: serializer.fromJson<String?>(json['shootFromTime']),
+      shootToTime: serializer.fromJson<String?>(json['shootToTime']),
+      weatherOptionsJson: serializer.fromJson<String?>(
+        json['weatherOptionsJson'],
+      ),
+      weatherSnapshotJson: serializer.fromJson<String?>(
+        json['weatherSnapshotJson'],
+      ),
     );
   }
   @override
@@ -6952,6 +7304,12 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
       'includeCoverInPdf': serializer.toJson<bool>(includeCoverInPdf),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'kind': serializer.toJson<String>(kind),
+      'locationSiteId': serializer.toJson<int?>(locationSiteId),
+      'shootFromTime': serializer.toJson<String?>(shootFromTime),
+      'shootToTime': serializer.toJson<String?>(shootToTime),
+      'weatherOptionsJson': serializer.toJson<String?>(weatherOptionsJson),
+      'weatherSnapshotJson': serializer.toJson<String?>(weatherSnapshotJson),
     };
   }
 
@@ -6967,6 +7325,12 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
     bool? includeCoverInPdf,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? kind,
+    Value<int?> locationSiteId = const Value.absent(),
+    Value<String?> shootFromTime = const Value.absent(),
+    Value<String?> shootToTime = const Value.absent(),
+    Value<String?> weatherOptionsJson = const Value.absent(),
+    Value<String?> weatherSnapshotJson = const Value.absent(),
   }) => ShootDocument(
     id: id ?? this.id,
     projectId: projectId ?? this.projectId,
@@ -6981,6 +7345,20 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
     includeCoverInPdf: includeCoverInPdf ?? this.includeCoverInPdf,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    kind: kind ?? this.kind,
+    locationSiteId: locationSiteId.present
+        ? locationSiteId.value
+        : this.locationSiteId,
+    shootFromTime: shootFromTime.present
+        ? shootFromTime.value
+        : this.shootFromTime,
+    shootToTime: shootToTime.present ? shootToTime.value : this.shootToTime,
+    weatherOptionsJson: weatherOptionsJson.present
+        ? weatherOptionsJson.value
+        : this.weatherOptionsJson,
+    weatherSnapshotJson: weatherSnapshotJson.present
+        ? weatherSnapshotJson.value
+        : this.weatherSnapshotJson,
   );
   ShootDocument copyWithCompanion(ShootDocumentsCompanion data) {
     return ShootDocument(
@@ -7005,6 +7383,22 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
           : this.includeCoverInPdf,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      locationSiteId: data.locationSiteId.present
+          ? data.locationSiteId.value
+          : this.locationSiteId,
+      shootFromTime: data.shootFromTime.present
+          ? data.shootFromTime.value
+          : this.shootFromTime,
+      shootToTime: data.shootToTime.present
+          ? data.shootToTime.value
+          : this.shootToTime,
+      weatherOptionsJson: data.weatherOptionsJson.present
+          ? data.weatherOptionsJson.value
+          : this.weatherOptionsJson,
+      weatherSnapshotJson: data.weatherSnapshotJson.present
+          ? data.weatherSnapshotJson.value
+          : this.weatherSnapshotJson,
     );
   }
 
@@ -7021,7 +7415,13 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
           ..write('isPrimaryOnSet: $isPrimaryOnSet, ')
           ..write('includeCoverInPdf: $includeCoverInPdf, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('kind: $kind, ')
+          ..write('locationSiteId: $locationSiteId, ')
+          ..write('shootFromTime: $shootFromTime, ')
+          ..write('shootToTime: $shootToTime, ')
+          ..write('weatherOptionsJson: $weatherOptionsJson, ')
+          ..write('weatherSnapshotJson: $weatherSnapshotJson')
           ..write(')'))
         .toString();
   }
@@ -7039,6 +7439,12 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
     includeCoverInPdf,
     createdAt,
     updatedAt,
+    kind,
+    locationSiteId,
+    shootFromTime,
+    shootToTime,
+    weatherOptionsJson,
+    weatherSnapshotJson,
   );
   @override
   bool operator ==(Object other) =>
@@ -7054,7 +7460,13 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
           other.isPrimaryOnSet == this.isPrimaryOnSet &&
           other.includeCoverInPdf == this.includeCoverInPdf &&
           other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.kind == this.kind &&
+          other.locationSiteId == this.locationSiteId &&
+          other.shootFromTime == this.shootFromTime &&
+          other.shootToTime == this.shootToTime &&
+          other.weatherOptionsJson == this.weatherOptionsJson &&
+          other.weatherSnapshotJson == this.weatherSnapshotJson);
 }
 
 class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
@@ -7069,6 +7481,12 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
   final Value<bool> includeCoverInPdf;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
+  final Value<String> kind;
+  final Value<int?> locationSiteId;
+  final Value<String?> shootFromTime;
+  final Value<String?> shootToTime;
+  final Value<String?> weatherOptionsJson;
+  final Value<String?> weatherSnapshotJson;
   const ShootDocumentsCompanion({
     this.id = const Value.absent(),
     this.projectId = const Value.absent(),
@@ -7081,6 +7499,12 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
     this.includeCoverInPdf = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.locationSiteId = const Value.absent(),
+    this.shootFromTime = const Value.absent(),
+    this.shootToTime = const Value.absent(),
+    this.weatherOptionsJson = const Value.absent(),
+    this.weatherSnapshotJson = const Value.absent(),
   });
   ShootDocumentsCompanion.insert({
     this.id = const Value.absent(),
@@ -7094,6 +7518,12 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
     this.includeCoverInPdf = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.locationSiteId = const Value.absent(),
+    this.shootFromTime = const Value.absent(),
+    this.shootToTime = const Value.absent(),
+    this.weatherOptionsJson = const Value.absent(),
+    this.weatherSnapshotJson = const Value.absent(),
   }) : projectId = Value(projectId),
        name = Value(name);
   static Insertable<ShootDocument> custom({
@@ -7108,6 +7538,12 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
     Expression<bool>? includeCoverInPdf,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
+    Expression<String>? kind,
+    Expression<int>? locationSiteId,
+    Expression<String>? shootFromTime,
+    Expression<String>? shootToTime,
+    Expression<String>? weatherOptionsJson,
+    Expression<String>? weatherSnapshotJson,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -7122,6 +7558,14 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
       if (includeCoverInPdf != null) 'include_cover_in_pdf': includeCoverInPdf,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (kind != null) 'kind': kind,
+      if (locationSiteId != null) 'location_site_id': locationSiteId,
+      if (shootFromTime != null) 'shoot_from_time': shootFromTime,
+      if (shootToTime != null) 'shoot_to_time': shootToTime,
+      if (weatherOptionsJson != null)
+        'weather_options_json': weatherOptionsJson,
+      if (weatherSnapshotJson != null)
+        'weather_snapshot_json': weatherSnapshotJson,
     });
   }
 
@@ -7137,6 +7581,12 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
     Value<bool>? includeCoverInPdf,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
+    Value<String>? kind,
+    Value<int?>? locationSiteId,
+    Value<String?>? shootFromTime,
+    Value<String?>? shootToTime,
+    Value<String?>? weatherOptionsJson,
+    Value<String?>? weatherSnapshotJson,
   }) {
     return ShootDocumentsCompanion(
       id: id ?? this.id,
@@ -7151,6 +7601,12 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
       includeCoverInPdf: includeCoverInPdf ?? this.includeCoverInPdf,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      kind: kind ?? this.kind,
+      locationSiteId: locationSiteId ?? this.locationSiteId,
+      shootFromTime: shootFromTime ?? this.shootFromTime,
+      shootToTime: shootToTime ?? this.shootToTime,
+      weatherOptionsJson: weatherOptionsJson ?? this.weatherOptionsJson,
+      weatherSnapshotJson: weatherSnapshotJson ?? this.weatherSnapshotJson,
     );
   }
 
@@ -7192,6 +7648,26 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (locationSiteId.present) {
+      map['location_site_id'] = Variable<int>(locationSiteId.value);
+    }
+    if (shootFromTime.present) {
+      map['shoot_from_time'] = Variable<String>(shootFromTime.value);
+    }
+    if (shootToTime.present) {
+      map['shoot_to_time'] = Variable<String>(shootToTime.value);
+    }
+    if (weatherOptionsJson.present) {
+      map['weather_options_json'] = Variable<String>(weatherOptionsJson.value);
+    }
+    if (weatherSnapshotJson.present) {
+      map['weather_snapshot_json'] = Variable<String>(
+        weatherSnapshotJson.value,
+      );
+    }
     return map;
   }
 
@@ -7208,7 +7684,13 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
           ..write('isPrimaryOnSet: $isPrimaryOnSet, ')
           ..write('includeCoverInPdf: $includeCoverInPdf, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('kind: $kind, ')
+          ..write('locationSiteId: $locationSiteId, ')
+          ..write('shootFromTime: $shootFromTime, ')
+          ..write('shootToTime: $shootToTime, ')
+          ..write('weatherOptionsJson: $weatherOptionsJson, ')
+          ..write('weatherSnapshotJson: $weatherSnapshotJson')
           ..write(')'))
         .toString();
   }
@@ -36099,6 +36581,9 @@ typedef $$LocationSitesTableCreateCompanionBuilder =
       Value<String?> scanSource,
       Value<String?> scanMetadataJson,
       Value<int> sortOrder,
+      Value<double?> latitude,
+      Value<double?> longitude,
+      Value<String?> placeLabel,
     });
 typedef $$LocationSitesTableUpdateCompanionBuilder =
     LocationSitesCompanion Function({
@@ -36112,6 +36597,9 @@ typedef $$LocationSitesTableUpdateCompanionBuilder =
       Value<String?> scanSource,
       Value<String?> scanMetadataJson,
       Value<int> sortOrder,
+      Value<double?> latitude,
+      Value<double?> longitude,
+      Value<String?> placeLabel,
     });
 
 final class $$LocationSitesTableReferences
@@ -36203,6 +36691,27 @@ final class $$LocationSitesTableReferences
     ).filter((f) => f.locationSiteId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_lightSetupsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ShootDocumentsTable, List<ShootDocument>>
+  _shootDocumentsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.shootDocuments,
+    aliasName: $_aliasNameGenerator(
+      db.locationSites.id,
+      db.shootDocuments.locationSiteId,
+    ),
+  );
+
+  $$ShootDocumentsTableProcessedTableManager get shootDocumentsRefs {
+    final manager = $$ShootDocumentsTableTableManager(
+      $_db,
+      $_db.shootDocuments,
+    ).filter((f) => f.locationSiteId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_shootDocumentsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -36330,6 +36839,21 @@ class $$LocationSitesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<double> get latitude => $composableBuilder(
+    column: $table.latitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get longitude => $composableBuilder(
+    column: $table.longitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get placeLabel => $composableBuilder(
+    column: $table.placeLabel,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$ProjectsTableFilterComposer get projectId {
     final $$ProjectsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -36419,6 +36943,31 @@ class $$LocationSitesTableFilterComposer
           }) => $$LightSetupsTableFilterComposer(
             $db: $db,
             $table: $db.lightSetups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> shootDocumentsRefs(
+    Expression<bool> Function($$ShootDocumentsTableFilterComposer f) f,
+  ) {
+    final $$ShootDocumentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.shootDocuments,
+      getReferencedColumn: (t) => t.locationSiteId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShootDocumentsTableFilterComposer(
+            $db: $db,
+            $table: $db.shootDocuments,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -36559,6 +37108,21 @@ class $$LocationSitesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get latitude => $composableBuilder(
+    column: $table.latitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get longitude => $composableBuilder(
+    column: $table.longitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get placeLabel => $composableBuilder(
+    column: $table.placeLabel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ProjectsTableOrderingComposer get projectId {
     final $$ProjectsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -36626,6 +37190,17 @@ class $$LocationSitesTableAnnotationComposer
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<double> get latitude =>
+      $composableBuilder(column: $table.latitude, builder: (column) => column);
+
+  GeneratedColumn<double> get longitude =>
+      $composableBuilder(column: $table.longitude, builder: (column) => column);
+
+  GeneratedColumn<String> get placeLabel => $composableBuilder(
+    column: $table.placeLabel,
+    builder: (column) => column,
+  );
 
   $$ProjectsTableAnnotationComposer get projectId {
     final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
@@ -36717,6 +37292,31 @@ class $$LocationSitesTableAnnotationComposer
           }) => $$LightSetupsTableAnnotationComposer(
             $db: $db,
             $table: $db.lightSetups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> shootDocumentsRefs<T extends Object>(
+    Expression<T> Function($$ShootDocumentsTableAnnotationComposer a) f,
+  ) {
+    final $$ShootDocumentsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.shootDocuments,
+      getReferencedColumn: (t) => t.locationSiteId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShootDocumentsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.shootDocuments,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -36822,6 +37422,7 @@ class $$LocationSitesTableTableManager
             bool locationBasePlansRefs,
             bool scenesRefs,
             bool lightSetupsRefs,
+            bool shootDocumentsRefs,
             bool siteImagesRefs,
             bool visualBibleLocationRefsRefs,
             bool lightingSetupsRefs,
@@ -36850,6 +37451,9 @@ class $$LocationSitesTableTableManager
                 Value<String?> scanSource = const Value.absent(),
                 Value<String?> scanMetadataJson = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<double?> latitude = const Value.absent(),
+                Value<double?> longitude = const Value.absent(),
+                Value<String?> placeLabel = const Value.absent(),
               }) => LocationSitesCompanion(
                 id: id,
                 projectId: projectId,
@@ -36861,6 +37465,9 @@ class $$LocationSitesTableTableManager
                 scanSource: scanSource,
                 scanMetadataJson: scanMetadataJson,
                 sortOrder: sortOrder,
+                latitude: latitude,
+                longitude: longitude,
+                placeLabel: placeLabel,
               ),
           createCompanionCallback:
               ({
@@ -36874,6 +37481,9 @@ class $$LocationSitesTableTableManager
                 Value<String?> scanSource = const Value.absent(),
                 Value<String?> scanMetadataJson = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<double?> latitude = const Value.absent(),
+                Value<double?> longitude = const Value.absent(),
+                Value<String?> placeLabel = const Value.absent(),
               }) => LocationSitesCompanion.insert(
                 id: id,
                 projectId: projectId,
@@ -36885,6 +37495,9 @@ class $$LocationSitesTableTableManager
                 scanSource: scanSource,
                 scanMetadataJson: scanMetadataJson,
                 sortOrder: sortOrder,
+                latitude: latitude,
+                longitude: longitude,
+                placeLabel: placeLabel,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -36900,6 +37513,7 @@ class $$LocationSitesTableTableManager
                 locationBasePlansRefs = false,
                 scenesRefs = false,
                 lightSetupsRefs = false,
+                shootDocumentsRefs = false,
                 siteImagesRefs = false,
                 visualBibleLocationRefsRefs = false,
                 lightingSetupsRefs = false,
@@ -36910,6 +37524,7 @@ class $$LocationSitesTableTableManager
                     if (locationBasePlansRefs) db.locationBasePlans,
                     if (scenesRefs) db.scenes,
                     if (lightSetupsRefs) db.lightSetups,
+                    if (shootDocumentsRefs) db.shootDocuments,
                     if (siteImagesRefs) db.siteImages,
                     if (visualBibleLocationRefsRefs) db.visualBibleLocationRefs,
                     if (lightingSetupsRefs) db.lightingSetups,
@@ -37013,6 +37628,27 @@ class $$LocationSitesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (shootDocumentsRefs)
+                        await $_getPrefetchedData<
+                          LocationSite,
+                          $LocationSitesTable,
+                          ShootDocument
+                        >(
+                          currentTable: table,
+                          referencedTable: $$LocationSitesTableReferences
+                              ._shootDocumentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$LocationSitesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).shootDocumentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.locationSiteId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (siteImagesRefs)
                         await $_getPrefetchedData<
                           LocationSite,
@@ -37101,6 +37737,7 @@ typedef $$LocationSitesTableProcessedTableManager =
         bool locationBasePlansRefs,
         bool scenesRefs,
         bool lightSetupsRefs,
+        bool shootDocumentsRefs,
         bool siteImagesRefs,
         bool visualBibleLocationRefsRefs,
         bool lightingSetupsRefs,
@@ -41785,6 +42422,12 @@ typedef $$ShootDocumentsTableCreateCompanionBuilder =
       Value<bool> includeCoverInPdf,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
+      Value<String> kind,
+      Value<int?> locationSiteId,
+      Value<String?> shootFromTime,
+      Value<String?> shootToTime,
+      Value<String?> weatherOptionsJson,
+      Value<String?> weatherSnapshotJson,
     });
 typedef $$ShootDocumentsTableUpdateCompanionBuilder =
     ShootDocumentsCompanion Function({
@@ -41799,6 +42442,12 @@ typedef $$ShootDocumentsTableUpdateCompanionBuilder =
       Value<bool> includeCoverInPdf,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
+      Value<String> kind,
+      Value<int?> locationSiteId,
+      Value<String?> shootFromTime,
+      Value<String?> shootToTime,
+      Value<String?> weatherOptionsJson,
+      Value<String?> weatherSnapshotJson,
     });
 
 final class $$ShootDocumentsTableReferences
@@ -41822,6 +42471,28 @@ final class $$ShootDocumentsTableReferences
       $_db.projects,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $LocationSitesTable _locationSiteIdTable(_$AppDatabase db) =>
+      db.locationSites.createAlias(
+        $_aliasNameGenerator(
+          db.shootDocuments.locationSiteId,
+          db.locationSites.id,
+        ),
+      );
+
+  $$LocationSitesTableProcessedTableManager? get locationSiteId {
+    final $_column = $_itemColumn<int>('location_site_id');
+    if ($_column == null) return null;
+    final manager = $$LocationSitesTableTableManager(
+      $_db,
+      $_db.locationSites,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_locationSiteIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -41915,6 +42586,31 @@ class $$ShootDocumentsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get shootFromTime => $composableBuilder(
+    column: $table.shootFromTime,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get shootToTime => $composableBuilder(
+    column: $table.shootToTime,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get weatherOptionsJson => $composableBuilder(
+    column: $table.weatherOptionsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get weatherSnapshotJson => $composableBuilder(
+    column: $table.weatherSnapshotJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$ProjectsTableFilterComposer get projectId {
     final $$ProjectsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -41929,6 +42625,29 @@ class $$ShootDocumentsTableFilterComposer
           }) => $$ProjectsTableFilterComposer(
             $db: $db,
             $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationSitesTableFilterComposer get locationSiteId {
+    final $$LocationSitesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationSiteId,
+      referencedTable: $db.locationSites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationSitesTableFilterComposer(
+            $db: $db,
+            $table: $db.locationSites,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -42023,6 +42742,31 @@ class $$ShootDocumentsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get shootFromTime => $composableBuilder(
+    column: $table.shootFromTime,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get shootToTime => $composableBuilder(
+    column: $table.shootToTime,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get weatherOptionsJson => $composableBuilder(
+    column: $table.weatherOptionsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get weatherSnapshotJson => $composableBuilder(
+    column: $table.weatherSnapshotJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ProjectsTableOrderingComposer get projectId {
     final $$ProjectsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -42037,6 +42781,29 @@ class $$ShootDocumentsTableOrderingComposer
           }) => $$ProjectsTableOrderingComposer(
             $db: $db,
             $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationSitesTableOrderingComposer get locationSiteId {
+    final $$LocationSitesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationSiteId,
+      referencedTable: $db.locationSites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationSitesTableOrderingComposer(
+            $db: $db,
+            $table: $db.locationSites,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -42096,6 +42863,29 @@ class $$ShootDocumentsTableAnnotationComposer
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get shootFromTime => $composableBuilder(
+    column: $table.shootFromTime,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get shootToTime => $composableBuilder(
+    column: $table.shootToTime,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get weatherOptionsJson => $composableBuilder(
+    column: $table.weatherOptionsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get weatherSnapshotJson => $composableBuilder(
+    column: $table.weatherSnapshotJson,
+    builder: (column) => column,
+  );
+
   $$ProjectsTableAnnotationComposer get projectId {
     final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -42110,6 +42900,29 @@ class $$ShootDocumentsTableAnnotationComposer
           }) => $$ProjectsTableAnnotationComposer(
             $db: $db,
             $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationSitesTableAnnotationComposer get locationSiteId {
+    final $$LocationSitesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationSiteId,
+      referencedTable: $db.locationSites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationSitesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.locationSites,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -42159,7 +42972,11 @@ class $$ShootDocumentsTableTableManager
           $$ShootDocumentsTableUpdateCompanionBuilder,
           (ShootDocument, $$ShootDocumentsTableReferences),
           ShootDocument,
-          PrefetchHooks Function({bool projectId, bool shootDocumentBlocksRefs})
+          PrefetchHooks Function({
+            bool projectId,
+            bool locationSiteId,
+            bool shootDocumentBlocksRefs,
+          })
         > {
   $$ShootDocumentsTableTableManager(
     _$AppDatabase db,
@@ -42187,6 +43004,12 @@ class $$ShootDocumentsTableTableManager
                 Value<bool> includeCoverInPdf = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<int?> locationSiteId = const Value.absent(),
+                Value<String?> shootFromTime = const Value.absent(),
+                Value<String?> shootToTime = const Value.absent(),
+                Value<String?> weatherOptionsJson = const Value.absent(),
+                Value<String?> weatherSnapshotJson = const Value.absent(),
               }) => ShootDocumentsCompanion(
                 id: id,
                 projectId: projectId,
@@ -42199,6 +43022,12 @@ class $$ShootDocumentsTableTableManager
                 includeCoverInPdf: includeCoverInPdf,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                kind: kind,
+                locationSiteId: locationSiteId,
+                shootFromTime: shootFromTime,
+                shootToTime: shootToTime,
+                weatherOptionsJson: weatherOptionsJson,
+                weatherSnapshotJson: weatherSnapshotJson,
               ),
           createCompanionCallback:
               ({
@@ -42213,6 +43042,12 @@ class $$ShootDocumentsTableTableManager
                 Value<bool> includeCoverInPdf = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<int?> locationSiteId = const Value.absent(),
+                Value<String?> shootFromTime = const Value.absent(),
+                Value<String?> shootToTime = const Value.absent(),
+                Value<String?> weatherOptionsJson = const Value.absent(),
+                Value<String?> weatherSnapshotJson = const Value.absent(),
               }) => ShootDocumentsCompanion.insert(
                 id: id,
                 projectId: projectId,
@@ -42225,6 +43060,12 @@ class $$ShootDocumentsTableTableManager
                 includeCoverInPdf: includeCoverInPdf,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                kind: kind,
+                locationSiteId: locationSiteId,
+                shootFromTime: shootFromTime,
+                shootToTime: shootToTime,
+                weatherOptionsJson: weatherOptionsJson,
+                weatherSnapshotJson: weatherSnapshotJson,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -42235,7 +43076,11 @@ class $$ShootDocumentsTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({projectId = false, shootDocumentBlocksRefs = false}) {
+              ({
+                projectId = false,
+                locationSiteId = false,
+                shootDocumentBlocksRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
@@ -42268,6 +43113,21 @@ class $$ShootDocumentsTableTableManager
                                     referencedColumn:
                                         $$ShootDocumentsTableReferences
                                             ._projectIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (locationSiteId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.locationSiteId,
+                                    referencedTable:
+                                        $$ShootDocumentsTableReferences
+                                            ._locationSiteIdTable(db),
+                                    referencedColumn:
+                                        $$ShootDocumentsTableReferences
+                                            ._locationSiteIdTable(db)
                                             .id,
                                   )
                                   as T;
@@ -42318,7 +43178,11 @@ typedef $$ShootDocumentsTableProcessedTableManager =
       $$ShootDocumentsTableUpdateCompanionBuilder,
       (ShootDocument, $$ShootDocumentsTableReferences),
       ShootDocument,
-      PrefetchHooks Function({bool projectId, bool shootDocumentBlocksRefs})
+      PrefetchHooks Function({
+        bool projectId,
+        bool locationSiteId,
+        bool shootDocumentBlocksRefs,
+      })
     >;
 typedef $$ShootDocumentBlocksTableCreateCompanionBuilder =
     ShootDocumentBlocksCompanion Function({

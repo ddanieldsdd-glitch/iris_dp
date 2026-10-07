@@ -22,6 +22,22 @@ import 'tables.dart';
 
 part 'app_database.g.dart';
 
+/// Escena del guion tal como la deja el espacio de trabajo de importación.
+/// [sceneText] es su texto en el guion, de su cabecera a la siguiente.
+typedef WorkspaceScene = ({
+  String intExt,
+  String dayNight,
+  String location,
+  String shootSet,
+  String locationSite,
+  String? name,
+  String? description,
+  String? locationColor,
+  String? charactersJson,
+  int? sourceStartIndex,
+  String? sceneText,
+});
+
 @DriftDatabase(
   tables: [
     ProjectGroups,
@@ -68,29 +84,13 @@ part 'app_database.g.dart';
     VisualBibleDocuments,
   ],
 )
-/// Escena del guion tal como la deja el espacio de trabajo de importación.
-/// [sceneText] es su texto en el guion, de su cabecera a la siguiente.
-typedef WorkspaceScene = ({
-  String intExt,
-  String dayNight,
-  String location,
-  String shootSet,
-  String locationSite,
-  String? name,
-  String? description,
-  String? locationColor,
-  String? charactersJson,
-  int? sourceStartIndex,
-  String? sceneText,
-});
-
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 45;
+  int get schemaVersion => 46;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -460,6 +460,18 @@ class AppDatabase extends _$AppDatabase {
           'UPDATE scenes SET script_linked = 1 '
           'WHERE source_start_index IS NOT NULL',
         );
+      }
+      if (from < 46) {
+        // Ubicación de las localizaciones y jornadas de rodaje.
+        await m.addColumn(locationSites, locationSites.latitude);
+        await m.addColumn(locationSites, locationSites.longitude);
+        await m.addColumn(locationSites, locationSites.placeLabel);
+        await m.addColumn(shootDocuments, shootDocuments.kind);
+        await m.addColumn(shootDocuments, shootDocuments.locationSiteId);
+        await m.addColumn(shootDocuments, shootDocuments.shootFromTime);
+        await m.addColumn(shootDocuments, shootDocuments.shootToTime);
+        await m.addColumn(shootDocuments, shootDocuments.weatherOptionsJson);
+        await m.addColumn(shootDocuments, shootDocuments.weatherSnapshotJson);
       }
     },
   );

@@ -530,6 +530,9 @@ class ProjectContentBundle {
               'scanSource': s.scanSource,
               'scanMetadataJson': s.scanMetadataJson,
               'sortOrder': s.sortOrder,
+              'latitude': s.latitude,
+              'longitude': s.longitude,
+              'placeLabel': s.placeLabel,
             },
           )
           .toList(),
@@ -660,6 +663,14 @@ class ProjectContentBundle {
               'shootDate': d.shootDate,
               'isPrimaryOnSet': d.isPrimaryOnSet,
               'includeCoverInPdf': d.includeCoverInPdf,
+              'kind': d.kind,
+              'siteKey': d.locationSiteId != null
+                  ? siteKeyById[d.locationSiteId!]
+                  : null,
+              'shootFromTime': d.shootFromTime,
+              'shootToTime': d.shootToTime,
+              'weatherOptionsJson': d.weatherOptionsJson,
+              'weatherSnapshotJson': d.weatherSnapshotJson,
             },
           )
           .toList(),
@@ -958,6 +969,9 @@ class ProjectContentBundle {
           scanSource: Value(m['scanSource'] as String?),
           scanMetadataJson: Value(m['scanMetadataJson'] as String?),
           sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+          latitude: Value((m['latitude'] as num?)?.toDouble()),
+          longitude: Value((m['longitude'] as num?)?.toDouble()),
+          placeLabel: Value(m['placeLabel'] as String?),
         ),
       );
       siteKeyToId[m['siteKey'] as String] = id;
@@ -1203,6 +1217,12 @@ class ProjectContentBundle {
           shootDate: Value(m['shootDate'] as String?),
           isPrimaryOnSet: Value(m['isPrimaryOnSet'] as bool? ?? false),
           includeCoverInPdf: Value(m['includeCoverInPdf'] as bool? ?? true),
+          kind: Value(m['kind'] as String? ?? 'freeform'),
+          locationSiteId: Value(siteKeyToId[m['siteKey']]),
+          shootFromTime: Value(m['shootFromTime'] as String?),
+          shootToTime: Value(m['shootToTime'] as String?),
+          weatherOptionsJson: Value(m['weatherOptionsJson'] as String?),
+          weatherSnapshotJson: Value(m['weatherSnapshotJson'] as String?),
         ),
       );
       docKeyToId[m['documentKey'] as String] = id;
