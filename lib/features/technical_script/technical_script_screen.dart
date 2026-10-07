@@ -14,7 +14,6 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_format.dart';
-import '../../core/utils/shot_reference_import.dart';
 import '../../core/utils/scene_characters.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
@@ -27,6 +26,7 @@ import '../look_bible/look_bible_model.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
 import 'scene_form_sheet.dart';
 import 'table/editable_cell.dart';
+import 'table/reference_image_menu.dart';
 import 'table/script_sheet_theme.dart';
 import 'technical_script_settings.dart';
 import '../../core/utils/shot_technical_options.dart';
@@ -788,7 +788,7 @@ class _SceneHeader extends ConsumerWidget {
                 SceneMetaDisplay(
                   intExt: scene.intExt,
                   dayNight: scene.dayNight,
-                  location: locationName,
+                  location: '${scene.number}. $locationName',
                   style: AppTypography.titleMedium(
                     palette,
                   ).copyWith(color: palette.textPrimary, letterSpacing: 0.5),
@@ -1551,137 +1551,10 @@ class _DeleteShotButton extends ConsumerWidget {
   }
 }
 
+/// Imagen de referencia del plano; tocarla abre su menú.
 class _ReferenceCell extends ConsumerWidget {
   final Shot shot;
   const _ReferenceCell({required this.shot});
-
-  Future<void> _import(
-    BuildContext context,
-    WidgetRef ref, {
-    required String source,
-  }) async {
-    final db = ref.read(databaseProvider);
-    try {
-      await pickAndImportShotReference(
-        db: db,
-        shot: shot,
-        source: source,
-        dialogTitle: 'Referencia · Plano ${shot.number}',
-      );
-    } catch (e) {
-      if (context.mounted) {
-        AppSnackBar.showError(context, userFriendlyError(e));
-      }
-    }
-  }
-
-  void _showImportOptions(BuildContext context, WidgetRef ref) {
-    final palette = context.palette;
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: palette.surfaceElevated,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Referencia · Plano ${shot.number}',
-                style: AppTypography.titleMedium(palette),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              ListTile(
-                leading: Icon(
-                  Icons.photo_camera_outlined,
-                  color: palette.accent,
-                ),
-                title: Text(
-                  'Captura Artemis',
-                  style: AppTypography.bodyLarge(palette),
-                ),
-                subtitle: Text(
-                  'Exportada desde la app Artemis',
-                  style: AppTypography.caption(palette),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _import(
-                    context,
-                    ref,
-                    source: ShotReferenceSource.artemisCapture,
-                  );
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  Icons.add_photo_alternate_outlined,
-                  color: palette.textSecondary,
-                ),
-                title: Text(
-                  'Imagen manual',
-                  style: AppTypography.bodyLarge(palette),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _import(context, ref, source: ShotReferenceSource.manual);
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.view_in_ar_outlined, color: palette.accent),
-                title: Text(
-                  'Render Unreal',
-                  style: AppTypography.bodyLarge(palette),
-                ),
-                subtitle: Text(
-                  'Frame PNG del Movie Render Queue',
-                  style: AppTypography.caption(palette),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _import(
-                    context,
-                    ref,
-                    source: ShotReferenceSource.unrealRender,
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _removeImage(BuildContext context, WidgetRef ref) async {
-    final db = ref.read(databaseProvider);
-    final path = shot.referenceImagePath;
-    if (path == null) return;
-
-    final refs = await db.watchReferencesForShot(shot.id).first;
-    ShotReference? match;
-    for (final r in refs) {
-      if (r.imagePath == path) {
-        match = r;
-        break;
-      }
-    }
-
-    try {
-      if (match != null) {
-        final current = await db.getShotById(shot.id) ?? shot;
-        await deleteShotReferenceEntry(db: db, shot: current, reference: match);
-      } else {
-        await db.updateShot(
-          shot.copyWith(referenceImagePath: const Value(null)),
-        );
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      AppSnackBar.show(context, userFriendlyError(e));
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1690,8 +1563,7 @@ class _ReferenceCell extends ConsumerWidget {
     final hasImage = path != null && File(path).existsSync();
 
     return GestureDetector(
-      onTap: () => _showImportOptions(context, ref),
-      onLongPress: hasImage ? () => _removeImage(context, ref) : null,
+      onTap: () => showReferenceImageMenu(context, shot),
       child: Container(
         height: 84,
         decoration: BoxDecoration(

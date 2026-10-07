@@ -428,4 +428,83 @@ void main() {
     expect(shots.map((s) => s.notesHighlight), [null, 'blue', null]);
     await unmount(tester);
   });
+
+  testWidgets('nueva escena: se crea la localización desde el propio menú', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+
+    await tester.tap(find.byTooltip('Añadir escena'));
+    await settle(tester);
+    expect(find.text('Nueva escena'), findsOneWidget);
+    // Sin localización no se puede crear.
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.ancestor(
+              of: find.text('Crear escena'),
+              matching: find.bySubtype<FilledButton>(),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Nombre de la primera localización'),
+      'kebab khaled',
+    );
+    await settle(tester);
+    await tester.tap(find.text('Crear «KEBAB KHALED»'));
+    await settle(tester);
+    await tester.tap(find.text('NOCHE'));
+    await settle(tester);
+    await tester.tap(find.text('Crear escena'));
+    await settle(tester);
+
+    final scenes = await db.select(db.scenes).get();
+    final created = scenes.firstWhere((s) => s.number == 2);
+    expect(created.locationCanonical, 'INT. KEBAB KHALED - NOCHE');
+    expect(created.locationSiteId, isNotNull);
+    expect(created.locationId, isNotNull);
+    final sites = await db.select(db.locationSites).get();
+    expect(sites.map((s) => s.name), ['KEBAB KHALED']);
+    await unmount(tester);
+  });
+
+  testWidgets('la referencia abre su menú con arrastrar, pegar y moodboard', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+
+    await tester.tap(find.text('Ref.').first);
+    await settle(tester);
+    expect(find.text('Referencia · Plano 1'), findsOneWidget);
+    expect(find.text('Arrastra una imagen aquí'), findsOneWidget);
+    expect(find.text('Del ordenador'), findsOneWidget);
+    expect(find.text('Pegar'), findsOneWidget);
+
+    await tester.tap(find.text('Del moodboard'));
+    await settle(tester);
+    expect(
+      find.text('El moodboard de este proyecto aún no tiene imágenes.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byTooltip('Cerrar'));
+    await settle(tester);
+    await unmount(tester);
+  });
 }

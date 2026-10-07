@@ -11,9 +11,9 @@ import '../../core/utils/color_edit_scope.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_color.dart';
 import '../../core/utils/scene_format.dart';
-import '../../core/widgets/app_button.dart';
 import '../../core/widgets/color_scope_prompt_dialog.dart';
 import '../../core/widgets/scene_color_editor.dart';
+import '../locations/location_picker.dart';
 
 const kIntExtOptions = ['INT', 'EXT', 'INT/EXT'];
 const kDayNightOptions = ['DÍA', 'NOCHE', 'AMANECER', 'ATARDECER', 'CONTINUO'];
@@ -31,9 +31,6 @@ class SceneFormSheet extends ConsumerStatefulWidget {
 class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
   late final TextEditingController _numberCtrl;
   late final TextEditingController _nameCtrl;
-  late final TextEditingController _slugCtrl;
-  late final TextEditingController _siteCtrl;
-  late final TextEditingController _setCtrl;
   late final TextEditingController _descriptionCtrl;
   late String _intExt;
   late String _dayNight;
@@ -48,6 +45,12 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
   String _linkedSetName = '';
   String _linkedSiteName = '';
 
+  /// Localización y set elegidos; sin ellos no se puede guardar.
+  LocationChoice? _choice;
+
+  /// Solo se toca el color si el usuario lo ha cambiado aquí.
+  bool _colorTouched = false;
+
   bool get _isEditing => widget.scene != null;
 
   @override
@@ -55,12 +58,18 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
     super.initState();
     final s = widget.scene;
     _numberCtrl = TextEditingController(text: '${s?.number ?? ''}');
-    _nameCtrl = TextEditingController(text: s?.name ?? '');
-    _slugCtrl = TextEditingController(
-      text: s != null ? locationFromCanonical(s.locationCanonical) : '',
+    // Un nombre igual al que se genera solo no cuenta como nombre propio:
+    // así sigue al lugar si este cambia.
+    final autoName = s == null
+        ? null
+        : formatSceneDefaultName(
+            intExt: s.intExt,
+            dayNight: s.dayNight,
+            location: locationFromCanonical(s.locationCanonical),
+          );
+    _nameCtrl = TextEditingController(
+      text: s == null || s.name == autoName ? '' : s.name,
     );
-    _siteCtrl = TextEditingController(text: s?.locationPureName ?? '');
-    _setCtrl = TextEditingController(text: s?.locationPureName ?? '');
     _descriptionCtrl = TextEditingController(text: s?.description ?? '');
     _intExt = s?.intExt ?? 'INT';
     _dayNight = s?.dayNight ?? 'DÍA';
@@ -90,8 +99,9 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
     );
 
     String siteName = s.locationPureName;
+    LocationSite? site;
     if (s.locationSiteId != null) {
-      final site = await db.getSiteById(s.locationSiteId!);
+      site = await db.getSiteById(s.locationSiteId!);
       if (site != null) siteName = site.name;
     }
 
@@ -113,8 +123,9 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
 
     if (!mounted) return;
     setState(() {
-      _siteCtrl.text = siteName;
-      _setCtrl.text = s.locationPureName;
+      if (site != null && linkedSet != null) {
+        _choice = LocationChoice(site: site, set: linkedSet);
+      }
       _effectiveColor = effective;
       _pickedHex = hexFromColor(effective);
       _colorScope = hasOverride ? ColorEditScope.scene : ColorEditScope.set;
@@ -149,29 +160,34 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
         _pickedHex = result.colorHex;
         _colorScope = result.scope;
         _colorCustomizationConfirmed = true;
+        _colorTouched = true;
       });
       return;
     }
 
-    setState(() => _pickedHex = hex);
+    setState(() {
+      _pickedHex = hex;
+      _colorTouched = true;
+    });
   }
 
   Future<void> _prefillNextNumber() async {
     final db = ref.read(databaseProvider);
-    final scenes = await db.watchScenesForProject(widget.projectId).first;
+    final scenes = await (db.select(
+      db.scenes,
+    )..where((s) => s.projectId.equals(widget.projectId))).get();
     final next = scenes.isEmpty
         ? 1
         : scenes.map((s) => s.number).reduce((a, b) => a > b ? a : b) + 1;
-    if (mounted) _numberCtrl.text = '$next';
+    if (!mounted) return;
+    // Repintar: el botón de crear depende de que haya número.
+    setState(() => _numberCtrl.text = '$next');
   }
 
   @override
   void dispose() {
     _numberCtrl.dispose();
     _nameCtrl.dispose();
-    _slugCtrl.dispose();
-    _siteCtrl.dispose();
-    _setCtrl.dispose();
     _descriptionCtrl.dispose();
     super.dispose();
   }
@@ -201,42 +217,23 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
 
   Future<void> _save() async {
     final number = int.tryParse(_numberCtrl.text.trim());
-    final slugLocation = _slugCtrl.text.trim();
-    if (number == null || slugLocation.isEmpty) return;
+    final choice = _choice;
+    if (number == null || choice == null || _saving) return;
 
     setState(() => _saving = true);
     final db = ref.read(databaseProvider);
-    final shootSet = _setCtrl.text.trim().isEmpty
-        ? slugLocation
-        : _setCtrl.text.trim();
-    final siteName = _siteCtrl.text.trim().isEmpty
-        ? shootSet
-        : _siteCtrl.text.trim();
-    final intExt = _intExt;
-    final dayNight = _dayNight;
+    final place = choice.placeName;
     final name = _nameCtrl.text.trim().isEmpty
         ? formatSceneDefaultName(
-            intExt: intExt,
-            dayNight: dayNight,
-            location: slugLocation,
+            intExt: _intExt,
+            dayNight: _dayNight,
+            location: place,
           )
         : _nameCtrl.text.trim();
-    final canonical = '$intExt. $slugLocation - $dayNight';
+    final canonical = '$_intExt. $place - $_dayNight';
     final description = _descriptionCtrl.text.trim();
-    final colorHex = sceneColorForPicker(_pickedHex);
 
-    final site = await db.ensureSite(
-      projectId: widget.projectId,
-      siteName: siteName,
-    );
-    final ensured = await db.ensureSiteAndSet(
-      projectId: widget.projectId,
-      siteName: siteName,
-      setName: shootSet,
-    );
-    final setId = ensured.set.id;
-
-    int? sceneId;
+    int sceneId;
     if (_isEditing) {
       final s = widget.scene!;
       await db.updateScene(
@@ -244,12 +241,11 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
           number: number,
           name: name,
           locationCanonical: canonical,
-          locationPureName: shootSet,
-          locationSiteId: Value(site.id),
-          locationId: Value(setId),
-          intExt: intExt,
-          dayNight: dayNight,
-          locationColor: const Value(null),
+          locationPureName: choice.set.locationName,
+          locationSiteId: Value(choice.site.id),
+          locationId: Value(choice.set.id),
+          intExt: _intExt,
+          dayNight: _dayNight,
           description: Value(description.isEmpty ? null : description),
           sortOrder: number,
         ),
@@ -262,25 +258,26 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
           number: number,
           name: name,
           locationCanonical: canonical,
-          locationPureName: shootSet,
-          locationSiteId: Value(site.id),
-          locationId: Value(setId),
-          intExt: Value(intExt),
-          dayNight: Value(dayNight),
-          locationColor: const Value(null),
+          locationPureName: choice.set.locationName,
+          locationSiteId: Value(choice.site.id),
+          locationId: Value(choice.set.id),
+          intExt: Value(_intExt),
+          dayNight: Value(_dayNight),
           description: Value(description.isEmpty ? null : description),
           sortOrder: Value(number),
         ),
       );
     }
 
-    await _applyColor(
-      db: db,
-      sceneId: sceneId,
-      setId: setId,
-      siteId: site.id,
-      colorHex: colorHex,
-    );
+    if (_colorTouched) {
+      await _applyColor(
+        db: db,
+        sceneId: sceneId,
+        setId: choice.set.id,
+        siteId: choice.site.id,
+        colorHex: sceneColorForPicker(_pickedHex),
+      );
+    }
 
     if (mounted) Navigator.pop(context);
   }
@@ -288,89 +285,165 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final canSave =
+        _choice != null && int.tryParse(_numberCtrl.text.trim()) != null;
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: AppSpacing.xl,
-        right: AppSpacing.xl,
-        top: AppSpacing.xl,
-        bottom: MediaQuery.viewInsetsOf(context).bottom + AppSpacing.xl,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              _isEditing ? 'Editar escena' : 'Añadir escena',
-              style: AppTypography.titleLarge(palette),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            _field(
-              'Número',
-              _numberCtrl,
-              palette,
-              keyboard: TextInputType.number,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _field('Nombre (opcional)', _nameCtrl, palette),
-            const SizedBox(height: AppSpacing.md),
-            _dropdown('INT/EXT', _intExt, kIntExtOptions, palette, (v) {
-              if (v != null) setState(() => _intExt = v);
-            }),
-            const SizedBox(height: AppSpacing.md),
-            _dropdown('Día / Noche', _dayNight, kDayNightOptions, palette, (v) {
-              if (v != null) setState(() => _dayNight = v);
-            }),
-            const SizedBox(height: AppSpacing.md),
-            _field(
-              'Lugar en el guion',
-              _slugCtrl,
-              palette,
-              hint: 'Como aparece en la slugline',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _field('Localización', _siteCtrl, palette, hint: 'Ej. BOSQUE'),
-            const SizedBox(height: AppSpacing.md),
-            _field(
-              'Set de rodaje',
-              _setCtrl,
-              palette,
-              hint: 'Ej. RÍO, ENTRADA DEL BOSQUE',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _field(
-              'Descripción',
-              _descriptionCtrl,
-              palette,
-              hint: 'Resumen de la escena, tono, personajes…',
-              minLines: 3,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            if (_loadingColor)
-              const Center(child: CircularProgressIndicator())
-            else
-              SceneColorEditor(
-                palette: palette,
-                effectiveColor: _effectiveColor,
-                selectedHex: _pickedHex,
-                scope: _colorScope,
-                scenesInSet: _scenesInSet,
-                setsInSite: _setsInSite,
-                onColorChanged: _onColorChanged,
-                onScopeChanged: (scope) => setState(() {
-                  _colorScope = scope;
-                  _colorCustomizationConfirmed = true;
-                }),
+    Widget segmented(
+      List<String> options,
+      String value,
+      ValueChanged<String> onChanged,
+    ) => SegmentedButton<String>(
+      showSelectedIcon: false,
+      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+      segments: [
+        for (final o in options) ButtonSegment(value: o, label: Text(o)),
+      ],
+      selected: {options.contains(value) ? value : options.first},
+      onSelectionChanged: (s) => onChanged(s.first),
+    );
+
+    return Dialog(
+      backgroundColor: palette.surfaceElevated,
+      insetPadding: const EdgeInsets.all(AppSpacing.xl),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                _isEditing ? 'Editar escena' : 'Nueva escena',
+                style: AppTypography.titleLarge(palette),
               ),
-            const SizedBox(height: AppSpacing.xl),
-            AppButton(
-              label: _isEditing ? 'Guardar cambios' : 'Añadir escena',
-              icon: Icons.check,
-              loading: _saving,
-              onTap: _save,
-            ),
-          ],
+              const SizedBox(height: AppSpacing.lg),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    width: 84,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Escena', style: AppTypography.label(palette)),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _numberCtrl,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: AppTypography.bodyLarge(palette),
+                          decoration: const InputDecoration(isDense: true),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: segmented(
+                      kIntExtOptions,
+                      _intExt,
+                      (v) => setState(() => _intExt = v),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              segmented(
+                kDayNightOptions,
+                _dayNight,
+                (v) => setState(() => _dayNight = v),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text('Localización', style: AppTypography.label(palette)),
+              const SizedBox(height: 6),
+              if (_isEditing && _loadingColor)
+                const SizedBox(
+                  height: 120,
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else
+                LocationPickerPanel(
+                  projectId: widget.projectId,
+                  initialSiteId: _choice?.site.id,
+                  initialSetId: _choice?.set.id,
+                  onChanged: (c) => setState(() => _choice = c),
+                ),
+              const SizedBox(height: AppSpacing.sm),
+              Theme(
+                data: Theme.of(
+                  context,
+                ).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: const EdgeInsets.only(bottom: AppSpacing.md),
+                  title: Text(
+                    'Más opciones',
+                    style: AppTypography.label(palette),
+                  ),
+                  subtitle: Text(
+                    _isEditing
+                        ? 'Nombre, descripción y color'
+                        : 'Nombre y descripción',
+                    style: AppTypography.caption(palette),
+                  ),
+                  children: [
+                    _field(
+                      'Nombre (opcional)',
+                      _nameCtrl,
+                      palette,
+                      hint: 'Si lo dejas vacío, se compone solo',
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _field(
+                      'Descripción',
+                      _descriptionCtrl,
+                      palette,
+                      hint: 'Resumen de la escena, tono, personajes…',
+                      minLines: 3,
+                    ),
+                    if (_isEditing && !_loadingColor) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      SceneColorEditor(
+                        palette: palette,
+                        effectiveColor: _effectiveColor,
+                        selectedHex: _pickedHex,
+                        scope: _colorScope,
+                        scenesInSet: _scenesInSet,
+                        setsInSite: _setsInSite,
+                        onColorChanged: _onColorChanged,
+                        onScopeChanged: (scope) => setState(() {
+                          _colorScope = scope;
+                          _colorCustomizationConfirmed = true;
+                          _colorTouched = true;
+                        }),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      'Cancelar',
+                      style: AppTypography.bodyMedium(palette),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  FilledButton.icon(
+                    onPressed: canSave && !_saving ? _save : null,
+                    icon: const Icon(Icons.check, size: 18),
+                    label: Text(_isEditing ? 'Guardar' : 'Crear escena'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -381,7 +454,6 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
     TextEditingController ctrl,
     AppPalette palette, {
     String? hint,
-    TextInputType? keyboard,
     int minLines = 1,
   }) {
     return Column(
@@ -391,36 +463,10 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
         const SizedBox(height: 6),
         TextField(
           controller: ctrl,
-          keyboardType: keyboard,
           minLines: minLines,
           maxLines: minLines > 1 ? null : 1,
           style: AppTypography.bodyLarge(palette),
           decoration: InputDecoration(hintText: hint ?? label),
-        ),
-      ],
-    );
-  }
-
-  Widget _dropdown(
-    String label,
-    String value,
-    List<String> options,
-    AppPalette palette,
-    ValueChanged<String?> onChanged,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: AppTypography.label(palette)),
-        const SizedBox(height: 6),
-        DropdownButtonFormField<String>(
-          initialValue: options.contains(value) ? value : options.first,
-          dropdownColor: palette.surfaceElevated,
-          style: AppTypography.bodyLarge(palette),
-          items: options
-              .map((o) => DropdownMenuItem(value: o, child: Text(o)))
-              .toList(),
-          onChanged: onChanged,
         ),
       ],
     );
@@ -432,10 +478,8 @@ void showSceneFormSheet(
   required int projectId,
   Scene? scene,
 }) {
-  showModalBottomSheet(
+  showDialog<void>(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: context.palette.surfaceElevated,
     builder: (_) => SceneFormSheet(projectId: projectId, scene: scene),
   );
 }
