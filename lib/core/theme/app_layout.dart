@@ -12,6 +12,7 @@ abstract final class AppLayout {
   static bool isWide(BuildContext context) =>
       MediaQuery.sizeOf(context).width >= wideBreakpoint;
 
-  /// Suma de columnas (936) + padding horizontal md×2 (32).
-  static const double technicalScriptTableWidth = 968;
+  /// Ancho mínimo de la tabla del guion técnico: la suma de los anchos
+  /// mínimos de sus columnas. Por encima, la tabla ocupa todo el ancho.
+  static const double technicalScriptTableWidth = 1146;
 }

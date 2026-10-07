@@ -1065,11 +1065,26 @@ class AppDatabase extends _$AppDatabase {
     return ok;
   }
 
+  /// Borra la escena con sus planos y lo que cuelga de ellos. Los números de
+  /// las demás escenas no cambian: son los del guion.
   Future<int> deleteScene(int id) async {
     final scene = await (select(
       scenes,
     )..where((s) => s.id.equals(id))).getSingleOrNull();
-    final count = await (delete(scenes)..where((s) => s.id.equals(id))).go();
+    final count = await transaction(() async {
+      final sceneShots = await (select(
+        shots,
+      )..where((s) => s.sceneId.equals(id))).get();
+      for (final shot in sceneShots) {
+        await _deleteShotRows(shot.id);
+      }
+      await (delete(
+        shootDocumentBlocks,
+      )..where((b) => b.sceneId.equals(id))).go();
+      await (update(moodboardImages)..where((m) => m.linkedSceneId.equals(id)))
+          .write(const MoodboardImagesCompanion(linkedSceneId: Value(null)));
+      return (delete(scenes)..where((s) => s.id.equals(id))).go();
+    });
     if (scene != null) await touchProjectContent(scene.projectId);
     return count;
   }
@@ -1296,17 +1311,75 @@ class AppDatabase extends _$AppDatabase {
     return ok;
   }
 
+  /// Escribe solo las columnas dadas. Para editar una celda sin pisar el
+  /// resto del plano con una copia vieja (el orden o el número, por ejemplo).
+  Future<void> updateShotFields(int id, ShotsCompanion fields) async {
+    final shot = await getShotById(id);
+    if (shot == null) return;
+    await (update(shots)..where((s) => s.id.equals(id))).write(fields);
+    await touchProjectContent(shot.projectId);
+  }
+
+  /// Borra el plano con sus referencias, su planta y sus bloques en documentos
+  /// de rodaje, y renumera los planos que quedan en la escena.
   Future<int> deleteShot(int id) async {
     final shot = await (select(
       shots,
     )..where((s) => s.id.equals(id))).getSingleOrNull();
+    final count = await transaction(() async {
+      final deleted = await _deleteShotRows(id);
+      if (shot != null) await _renumberShotsInScene(shot.sceneId);
+      return deleted;
+    });
+    if (shot != null) await touchProjectContent(shot.projectId);
+    return count;
+  }
+
+  Future<int> _deleteShotRows(int id) async {
     final elements = await getCameraPlanElementsForShot(id);
     for (final el in elements) {
       await deleteCameraPlanElement(el.id);
     }
-    final count = await (delete(shots)..where((s) => s.id.equals(id))).go();
-    if (shot != null) await touchProjectContent(shot.projectId);
-    return count;
+    await (delete(shotReferences)..where((r) => r.shotId.equals(id))).go();
+    await (delete(
+      shootDocumentBlocks,
+    )..where((b) => b.shotId.equals(id))).go();
+    return (delete(shots)..where((s) => s.id.equals(id))).go();
+  }
+
+  /// Guarda el orden de los planos de una escena. El número de plano sigue al
+  /// orden, salvo en los planos con numeración manual.
+  Future<void> reorderShotsInScene(int sceneId, List<int> shotIdsInOrder) async {
+    final scene = await getSceneById(sceneId);
+    await transaction(() async {
+      for (var i = 0; i < shotIdsInOrder.length; i++) {
+        await (update(shots)..where(
+              (s) => s.id.equals(shotIdsInOrder[i]) & s.sceneId.equals(sceneId),
+            ))
+            .write(ShotsCompanion(sortOrder: Value(i)));
+      }
+      await _renumberShotsInScene(sceneId);
+    });
+    if (scene != null) await touchProjectContent(scene.projectId);
+  }
+
+  Future<void> _renumberShotsInScene(int sceneId) async {
+    final sceneShots =
+        await (select(shots)
+              ..where((s) => s.sceneId.equals(sceneId))
+              ..orderBy([
+                (s) => OrderingTerm.asc(s.sortOrder),
+                (s) => OrderingTerm.asc(s.id),
+              ]))
+            .get();
+    for (var i = 0; i < sceneShots.length; i++) {
+      final shot = sceneShots[i];
+      final number = shot.autoNumbering ? i + 1 : shot.number;
+      if (shot.sortOrder == i && shot.number == number) continue;
+      await (update(shots)..where((s) => s.id.equals(shot.id))).write(
+        ShotsCompanion(sortOrder: Value(i), number: Value(number)),
+      );
+    }
   }
 
   Future<int> countShotsWithCameraPlan(int projectId) async {

@@ -18,16 +18,11 @@ class ResolvedShootBlock {
     required this.overrides,
   });
 
-  String? get lens =>
-      overrides['lens'] as String? ?? shot?.lens;
-  String? get movement =>
-      overrides['movement'] as String? ?? shot?.movement;
-  String? get framing =>
-      overrides['framing'] as String? ?? shot?.framing;
-  String? get action =>
-      overrides['action'] as String? ?? shot?.action;
-  String? get imagePath =>
-      block.imagePath ?? shot?.referenceImagePath;
+  String? get lens => overrides['lens'] as String? ?? shot?.lens;
+  String? get movement => overrides['movement'] as String? ?? shot?.movement;
+  String? get framing => overrides['framing'] as String? ?? shot?.framing;
+  String? get action => overrides['action'] as String? ?? shot?.action;
+  String? get imagePath => block.imagePath ?? shot?.referenceImagePath;
   List<String> get characters {
     final fromBlock = decodeSceneCharacters(block.charactersJson);
     if (fromBlock.isNotEmpty) return fromBlock;
@@ -36,18 +31,26 @@ class ResolvedShootBlock {
     return decodeSceneCharacters(scene?.charactersJson);
   }
 
-  int? get durationSeconds =>
-      block.durationSeconds ?? shot?.durationSeconds;
+  int? get durationSeconds => block.durationSeconds ?? shot?.durationSeconds;
 
   String get title {
     return switch (block.blockType) {
-      ShootBlockType.sectionHeader ||
+      ShootBlockType.sectionHeader => block.customLabel ?? 'Sección',
       ShootBlockType.sceneHeader =>
-        block.customLabel ?? scene?.locationCanonical ?? 'Sección',
+        block.customLabel ??
+            (scene != null
+                ? '${scene!.number}. ${scene!.locationCanonical}'
+                : 'Sección'),
       ShootBlockType.characterList => 'Personajes',
       ShootBlockType.scriptExcerpt => 'Guion',
+      // Número de escena y de plano del guion técnico, no la posición en el
+      // documento.
       ShootBlockType.shot =>
-        shot != null ? 'Plano ${shot!.number}' : 'Plano',
+        shot == null
+            ? 'Plano'
+            : scene != null
+            ? 'Esc. ${scene!.number} · Plano ${shot!.number}'
+            : 'Plano ${shot!.number}',
       ShootBlockType.note => 'Nota',
       ShootBlockType.image => 'Imagen',
       ShootBlockType.pageBreak => 'Salto de página',
