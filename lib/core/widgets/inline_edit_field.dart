@@ -10,6 +10,7 @@ class InlineEditField extends StatefulWidget {
   final int minLines;
   final int? maxLines;
   final TextStyle? style;
+  final TextStyle? hintStyle;
   final TextAlign textAlign;
   final AppPalette palette;
   final ValueChanged<String> onChanged;
@@ -28,6 +29,7 @@ class InlineEditField extends StatefulWidget {
     this.minLines = 1,
     this.maxLines,
     this.style,
+    this.hintStyle,
     this.textAlign = TextAlign.start,
     this.onExpand,
     this.flat = false,
@@ -134,6 +136,7 @@ class _InlineEditFieldState extends State<InlineEditField> {
             ).copyWith(color: widget.palette.textPrimary),
         decoration: InputDecoration(
           hintText: widget.hint,
+          hintStyle: widget.hintStyle,
           border: InputBorder.none,
           enabledBorder: widget.flat ? InputBorder.none : null,
           focusedBorder: widget.flat ? InputBorder.none : null,
