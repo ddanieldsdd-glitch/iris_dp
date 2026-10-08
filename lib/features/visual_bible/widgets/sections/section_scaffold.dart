@@ -69,6 +69,7 @@ class BibleSectionScaffold extends ConsumerStatefulWidget {
 class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
   static const _contentPadding = EdgeInsets.all(AppSpacing.lg);
   static const double _sectionGap = AppSpacing.xl;
+  static const double _rowBreakpoint = 1100;
 
   /// Veces que se ha reiniciado la pantalla desde que está abierta.
   int _resetCount = 0;
@@ -83,14 +84,18 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
     final values = BibleSectionFieldsConfig.parseValues(
       widget.sectionContentJson,
     );
-    final items = <Widget>[];
+    final points = <(BiblePointWidth, Widget)>[];
     for (final field in fields) {
       final w = _buildField(context, field);
       if (w == null) continue;
-      items.add(
+      points.add((
+        field.width,
         widget.data.id > 0 ? _framed(fields, values, field, w) : w,
-      );
+      ));
     }
+    // En estrecho no hay sitio para dos puntos por fila.
+    final wide = MediaQuery.sizeOf(context).width >= _rowBreakpoint;
+    final items = _rows(points, wide: wide);
 
     return ListView(
       padding: _contentPadding,
@@ -112,7 +117,7 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
           // Tras reiniciar, los campos se montan de nuevo: no deben
           // conservar el texto que tenían.
           KeyedSubtree(
-            key: ValueKey('point_${_resetCount}_$i'),
+            key: ValueKey('point_${_resetCount}_${wide}_$i'),
             child: items[i],
           ),
         ],
@@ -122,6 +127,48 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
         ],
       ],
     );
+  }
+
+  /// Agrupa los puntos estrechos que van seguidos en filas de seis sextos.
+  static List<Widget> _rows(
+    List<(BiblePointWidth, Widget)> points, {
+    required bool wide,
+  }) {
+    if (!wide) return [for (final (_, w) in points) w];
+    final rows = <Widget>[];
+    var row = <(BiblePointWidth, Widget)>[];
+    var used = 0;
+    void flush() {
+      if (row.isEmpty) return;
+      if (row.length == 1 && row.first.$1 == BiblePointWidth.full) {
+        rows.add(row.first.$2);
+      } else {
+        rows.add(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < row.length; i++) ...[
+                if (i > 0) const SizedBox(width: _sectionGap),
+                Expanded(flex: row[i].$1.sixths, child: row[i].$2),
+              ],
+              // Una fila a medias no estira su último punto.
+              if (used < 6) Spacer(flex: 6 - used),
+            ],
+          ),
+        );
+      }
+      row = [];
+      used = 0;
+    }
+
+    for (final point in points) {
+      if (used + point.$1.sixths > 6) flush();
+      row.add(point);
+      used += point.$1.sixths;
+      if (used == 6) flush();
+    }
+    flush();
+    return rows;
   }
 
   /// Valor con el que se duplica [field], o `null` si no se puede.
@@ -159,6 +206,15 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
           ? null
           : () => _duplicate(fields, field, copyValue, extras),
       onRemove: () => _remove(fields, field),
+      width: field.width,
+      onWidthChanged: (width) => db.saveBibleSectionFields(
+        widget.data.id,
+        widget.sectionId,
+        [
+          for (final f in fields)
+            f.key == field.key ? f.copyWith(width: width) : f,
+        ],
+      ),
       child: point,
     );
   }

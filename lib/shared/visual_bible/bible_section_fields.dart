@@ -80,6 +80,27 @@ abstract final class BibleSectionPointValue {
         ]);
 }
 
+/// Ancho de un punto en la pantalla. Varios puntos estrechos seguidos
+/// comparten fila; en pantallas estrechas y en el PDF van uno bajo otro.
+enum BiblePointWidth {
+  full('Completo', 6),
+  twoThirds('Dos tercios', 4),
+  half('Medio', 3),
+  third('Un tercio', 2);
+
+  const BiblePointWidth(this.label, this.sixths);
+
+  final String label;
+
+  /// Sextos de fila que ocupa.
+  final int sixths;
+
+  static BiblePointWidth parse(Object? name) => values.firstWhere(
+    (w) => w.name == name,
+    orElse: () => BiblePointWidth.full,
+  );
+}
+
 /// Sub-apartado configurable (nombre, orden, hint).
 class BibleSectionField {
   final String key;
@@ -92,6 +113,8 @@ class BibleSectionField {
   /// (p. ej. paleta maestra o compacta). Se fija al crear el punto.
   final String? widget;
 
+  final BiblePointWidth width;
+
   const BibleSectionField({
     required this.key,
     required this.label,
@@ -99,6 +122,7 @@ class BibleSectionField {
     this.maxLines = 3,
     this.type = BibleSectionFieldType.text,
     this.widget,
+    this.width = BiblePointWidth.full,
   });
 
   Map<String, dynamic> toJson() => {
@@ -108,6 +132,7 @@ class BibleSectionField {
         'maxLines': maxLines,
         'type': type.name,
         if (widget != null) 'widget': widget,
+        if (width != BiblePointWidth.full) 'width': width.name,
       };
 
   factory BibleSectionField.fromJson(Map<String, dynamic> json) {
@@ -121,6 +146,7 @@ class BibleSectionField {
         orElse: () => BibleSectionFieldType.text,
       ),
       widget: json['widget'] as String?,
+      width: BiblePointWidth.parse(json['width']),
     );
   }
 
@@ -129,6 +155,7 @@ class BibleSectionField {
     String? hint,
     int? maxLines,
     BibleSectionFieldType? type,
+    BiblePointWidth? width,
   }) {
     return BibleSectionField(
       key: key,
@@ -137,6 +164,7 @@ class BibleSectionField {
       maxLines: maxLines ?? this.maxLines,
       type: type ?? this.type,
       widget: widget,
+      width: width ?? this.width,
     );
   }
 }

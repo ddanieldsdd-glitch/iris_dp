@@ -1,3 +1,4 @@
+import '../../../shared/visual_bible/bible_section_fields.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -24,7 +25,7 @@ class BiblePointFrameScope extends InheritedWidget {
   bool updateShouldNotify(BiblePointFrameScope oldWidget) => false;
 }
 
-enum _PointAction { duplicate, images, text, remove }
+enum _PointAction { duplicate, images, text, remove, widthFull, widthTwoThirds, widthHalf, widthThird }
 
 /// Marco común de un punto de la biblia: su menú «⋯» (duplicar, añadir
 /// imágenes, añadir texto complementario, eliminar) y, bajo el punto, los
@@ -39,6 +40,11 @@ class BiblePointFrame extends StatelessWidget {
   /// `null` si el punto no se puede duplicar.
   final VoidCallback? onDuplicate;
   final VoidCallback onRemove;
+
+  /// Ancho actual del punto y cómo cambiarlo; sin [onWidthChanged] el menú
+  /// no lo ofrece.
+  final BiblePointWidth width;
+  final ValueChanged<BiblePointWidth>? onWidthChanged;
   final Widget child;
 
   const BiblePointFrame({
@@ -51,6 +57,8 @@ class BiblePointFrame extends StatelessWidget {
     required this.onRemove,
     required this.child,
     this.onDuplicate,
+    this.width = BiblePointWidth.full,
+    this.onWidthChanged,
   });
 
   Future<void> _pickImages(BuildContext context) async {
@@ -74,6 +82,14 @@ class BiblePointFrame extends StatelessWidget {
         onExtrasChanged(extras.withText(extras.hasText ? null : ''));
       case _PointAction.remove:
         onRemove();
+      case _PointAction.widthFull:
+        onWidthChanged?.call(BiblePointWidth.full);
+      case _PointAction.widthTwoThirds:
+        onWidthChanged?.call(BiblePointWidth.twoThirds);
+      case _PointAction.widthHalf:
+        onWidthChanged?.call(BiblePointWidth.half);
+      case _PointAction.widthThird:
+        onWidthChanged?.call(BiblePointWidth.third);
     }
   }
 
@@ -137,6 +153,22 @@ class BiblePointFrame extends StatelessWidget {
                         ? 'Quitar texto complementario'
                         : 'Añadir texto complementario',
                   ),
+                  if (onWidthChanged != null) ...[
+                    const PopupMenuDivider(),
+                    for (final (action, w) in const [
+                      (_PointAction.widthFull, BiblePointWidth.full),
+                      (_PointAction.widthTwoThirds, BiblePointWidth.twoThirds),
+                      (_PointAction.widthHalf, BiblePointWidth.half),
+                      (_PointAction.widthThird, BiblePointWidth.third),
+                    ])
+                      item(
+                        action,
+                        w == width
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked,
+                        'Ancho: ${w.label.toLowerCase()}',
+                      ),
+                  ],
                   const PopupMenuDivider(),
                   item(
                     _PointAction.duplicate,
