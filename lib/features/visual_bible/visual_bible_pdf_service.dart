@@ -14,6 +14,7 @@ import '../../shared/visual_bible/bible_point_extras.dart';
 import '../../shared/visual_bible/bible_text_specs.dart';
 import '../../shared/visual_bible/camera_points.dart';
 import '../../shared/visual_bible/concept_points.dart';
+import '../../shared/visual_bible/exposure_points.dart';
 import '../../shared/visual_bible/optics_points.dart';
 import '../../shared/visual_bible/direction_points.dart';
 import '../../shared/visual_bible/bible_reference.dart';
@@ -606,77 +607,41 @@ class VisualBiblePdfService {
       );
     }
 
-    if (!isPitch &&
-        _sectionAllowed(sections, BibleSectionId.exposure) &&
-        (data.exposureNarrativeIntent?.isNotEmpty == true ||
-            exposureBlocks.isNotEmpty ||
-            data.highlightBehavior != null ||
-            data.shadowBehavior != null ||
-            data.nativeIso != null ||
-            data.recordingFormat != null ||
-            _hasCustomContent(
-              BibleSectionId.exposure,
-              sectionContentJsonById,
-            ) ||
-            MoodboardExportGrouper.imagesForSection(
-              moodboard,
-              BibleSectionId.exposure,
-            ).isNotEmpty)) {
-      final exposureCells = await _loadMoodboardCells(
-        MoodboardExportGrouper.imagesForSection(
-          moodboard,
-          BibleSectionId.exposure,
-        ),
-        boardLayout,
-      );
-      addSection(
+    if (!isPitch && _sectionAllowed(sections, BibleSectionId.exposure)) {
+      final exposureJson = sectionContentJsonById[BibleSectionId.exposure];
+      final exposureAssets = await _loadSectionAssets(
         BibleSectionId.exposure,
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => _sectionPage(
-            title: 'EXPOSICIÓN',
-            sectionId: BibleSectionId.exposure,
-            fontBold: fonts.bold,
-            font: fonts.regular,
-            content: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                if (data.exposureNarrativeIntent?.isNotEmpty == true)
-                  pw.Text(data.exposureNarrativeIntent!),
-                pw.SizedBox(height: 12),
-                pw.Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (data.highlightBehavior != null)
-                      _techChip('Highlights', data.highlightBehavior!, fonts),
-                    if (data.shadowBehavior != null)
-                      _techChip('Sombras', data.shadowBehavior!, fonts),
-                    if (data.nativeIso != null)
-                      _techChip('ISO nativo', '${data.nativeIso}', fonts),
-                    if (data.recordingFormat != null)
-                      _techChip('Formato', data.recordingFormat!, fonts),
-                  ],
-                ),
-                if (exposureBlocks.isNotEmpty) ...[
-                  pw.SizedBox(height: 12),
-                  ...exposureBlocks.map(
-                    (b) =>
-                        pw.Text('${b.blockName}: K:F ${b.keyFillRatio ?? "—"}'),
-                  ),
-                ],
-                _customFieldsWidget(
-                  BibleSectionId.exposure,
-                  sectionContentJsonById,
-                  fonts,
-                ),
-                ..._stillStrip(exposureCells, fonts),
-              ],
-            ),
-          ),
-        ),
+        exposureJson,
+        moodboard,
+        boardLayout,
+        fonts,
       );
+      final exposureContent = _exposureContent(
+        data,
+        exposureJson,
+        exposureBlocks,
+        kit,
+        exposureAssets,
+      );
+      if (exposureContent.isNotEmpty) {
+        addSection(
+          BibleSectionId.exposure,
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader(
+                _renamed[BibleSectionId.exposure] ?? 'Exposición',
+                image: _heroes[BibleSectionId.exposure],
+                accent: _heroColors[BibleSectionId.exposure],
+              ),
+              pw.SizedBox(height: 24),
+              ...exposureContent,
+            ],
+          ),
+        );
+      }
     }
 
     if (!isPitch && _sectionAllowed(sections, BibleSectionId.camera)) {
@@ -1893,6 +1858,112 @@ class VisualBiblePdfService {
           if (meters.isNotEmpty) out.add(kit.metersPoint(field.label, meters));
         case OpticsPoints.maintenance:
           final table = OpticsPoints.maintenanceValue(values, config);
+          if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
+        case 'references':
+          final stills = assets.stills;
+          if (stills != null) {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            out.add(stills);
+            out.add(pw.SizedBox(height: 10));
+          }
+        default:
+          add(kit.point(field, values[field.key]));
+      }
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Exposición: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _exposureContent(
+    VisualBibleData data,
+    String? contentJson,
+    List<ExposureBlockModel> exposureBlocks,
+    BiblePdfKit kit,
+    _SectionAssets assets,
+  ) {
+    final blob = ExposurePoints.blob(contentJson);
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final out = <pw.Widget>[];
+    void add(pw.Widget? point) {
+      if (point != null) out.add(point);
+    }
+
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.exposure,
+    )) {
+      switch (field.key) {
+        case 'narrative':
+          final intent = ExposurePoints.narrative(
+            blob,
+            data.exposureNarrativeIntent,
+          );
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+          final tags = ExposurePoints.intentTags(blob);
+          if (tags.isNotEmpty) out.add(kit.tagRow(tags));
+        case ExposurePoints.global:
+          final value = ExposurePoints.globalValue(
+            values,
+            blob,
+            defaultTStop: data.defaultTStop,
+            ndNotes: data.ndNotes,
+            highlightBehavior: data.highlightBehavior,
+            shadowBehavior: data.shadowBehavior,
+          );
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              // El ISO nativo de la cámara, si no se ha escrito otro.
+              value.copyWith(
+                rows: [
+                  for (final (label, text) in value.rows)
+                    (
+                      label,
+                      text.trim().isEmpty &&
+                              label == ExposurePoints.rowIso &&
+                              data.nativeIso != null
+                          ? '${data.nativeIso}'
+                          : text,
+                    ),
+                ],
+              ),
+            ),
+          );
+        case ExposurePoints.chain:
+          final cards = ExposurePoints.chainCards(values, blob)
+              .where((c) => c.body.trim().isNotEmpty || c.imageIds.isNotEmpty)
+              .toList();
+          if (cards.isNotEmpty) {
+            out.add(kit.cardsPoint(field.label, cards, columns: true));
+          }
+        case ExposurePoints.signal:
+          final meters = ExposurePoints.signalMeters(
+            values,
+            blob,
+          ).where((m) => m.value.trim().isNotEmpty).toList();
+          if (meters.isNotEmpty) out.add(kit.metersPoint(field.label, meters));
+        case ExposurePoints.blocks:
+          final table = ExposurePoints.blocksValue(values, [
+            for (final b in exposureBlocks)
+              (
+                name: b.blockName,
+                intent: b.narrativeIntent,
+                keyFill: b.keyFillRatio,
+                highlights: b.highlightStrategy,
+                shadows: b.shadowStrategy,
+              ),
+          ]);
+          if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
+        case ExposurePoints.byLocation:
+          final table = ExposurePoints.byLocationValue(values, blob);
           if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
         case 'references':
           final stills = assets.stills;

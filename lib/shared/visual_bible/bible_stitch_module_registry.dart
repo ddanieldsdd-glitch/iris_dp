@@ -348,11 +348,21 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'globalExposure', label: 'Exposición global'),
             StitchModule(
-              key: 'blocks',
-              label: 'Bloques de exposición',
-              type: BibleSectionFieldType.blocks,
+              key: 'globalExposure',
+              label: 'Exposición de trabajo',
+              width: BiblePointWidth.twoThirds,
+            ),
+            StitchModule(
+              key: 'signalLevels',
+              label: 'Niveles de señal',
+              width: BiblePointWidth.third,
+            ),
+            StitchModule(key: 'exposureChain', label: 'Cadena de exposición'),
+            StitchModule(key: 'blocks', label: 'Bloques de exposición'),
+            StitchModule(
+              key: 'byLocation',
+              label: 'Exposición por localización',
             ),
             StitchModule(
               key: 'references',
@@ -539,6 +549,27 @@ abstract final class BibleStitchModuleRegistry {
             ?add('character'),
             ?add('focalTable'),
             ?add('maintenance'),
+          ] else
+            field,
+      ];
+    }
+
+    // Exposición se partió en la versión 6, igual que Cámara y Óptica.
+    if (layoutVersion < 6 &&
+        sectionId == BibleSectionId.exposure &&
+        keys.contains('globalExposure')) {
+      BibleSectionField? add(String key) =>
+          keys.contains(key) ? null : module(sectionId, key)?.toField();
+      return [
+        for (final field in fields)
+          if (field.key == 'globalExposure') ...[
+            field.copyWith(label: 'Exposición de trabajo'),
+            ?add('signalLevels'),
+            ?add('exposureChain'),
+          ] else if (field.key == 'blocks') ...[
+            // Antes era un tipo propio; ahora es una tabla de la pantalla.
+            module(sectionId, 'blocks')!.toField().copyWith(label: field.label),
+            ?add('byLocation'),
           ] else
             field,
       ];
