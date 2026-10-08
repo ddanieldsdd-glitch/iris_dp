@@ -42,6 +42,12 @@ enum BibleSectionFieldType {
 
   /// Etiquetas. El valor es un array JSON de textos.
   tags,
+
+  /// Tabla. El valor es `{columns, rows}` en JSON (`BibleTableValue`).
+  table,
+
+  /// Medidores. El valor es un array JSON de `BibleMeter`.
+  meters,
 }
 
 /// Codifica el valor de los puntos `list` y `specs` dentro de `values[key]`.
@@ -484,6 +490,8 @@ abstract final class BibleSectionFieldsConfig {
         BibleSectionFieldType.cards => 'Puntos con título',
         BibleSectionFieldType.acts => 'División por actos',
         BibleSectionFieldType.tags => 'Etiquetas',
+        BibleSectionFieldType.table => 'Tabla',
+        BibleSectionFieldType.meters => 'Medidores',
       };
 
   static String labelFor(

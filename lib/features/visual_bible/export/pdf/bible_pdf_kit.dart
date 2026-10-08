@@ -1,3 +1,4 @@
+import '../../../../shared/visual_bible/bible_table.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -918,6 +919,151 @@ class BiblePdfKit {
     ),
   );
 
+  /// Tabla con su fila de títulos; solo las filas con algo escrito.
+  pw.Widget tablePoint(String label, BibleTableValue table) => pw.Padding(
+    padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        this.label(label),
+        pw.SizedBox(height: 4),
+        pw.Table(
+          border: const pw.TableBorder(
+            horizontalInside: pw.BorderSide(
+              color: BiblePdfTokens.rule,
+              width: 0.5,
+            ),
+            bottom: pw.BorderSide(color: BiblePdfTokens.rule, width: 0.5),
+          ),
+          children: [
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(color: BiblePdfTokens.panel),
+              children: [
+                for (final column in table.columns)
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(4),
+                    child: pw.Text(
+                      column.toUpperCase(),
+                      style: pw.TextStyle(
+                        font: regular,
+                        fontSize: 7,
+                        letterSpacing: 0.6,
+                        color: BiblePdfTokens.secondary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            for (final row in table.filledRows)
+              pw.TableRow(
+                children: [
+                  for (var c = 0; c < row.length; c++)
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text(
+                        row[c],
+                        style: pw.TextStyle(
+                          font: c == 0 ? bold : regular,
+                          fontSize: 9,
+                          color: BiblePdfTokens.ink,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  /// Medidores: dato, valor, barra de escala si la hay y nota.
+  pw.Widget metersPoint(String label, List<BibleMeter> meters) =>
+      pw.Inseparable(
+        child: pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              this.label(label),
+              pw.SizedBox(height: 4),
+              for (final meter in meters)
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 6),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Row(
+                        children: [
+                          pw.Expanded(
+                            child: pw.Text(
+                              meter.label.toUpperCase(),
+                              style: pw.TextStyle(
+                                font: regular,
+                                fontSize: 8,
+                                letterSpacing: 0.6,
+                                color: BiblePdfTokens.secondary,
+                              ),
+                            ),
+                          ),
+                          pw.Text(
+                            meter.value,
+                            style: pw.TextStyle(
+                              font: bold,
+                              fontSize: 10,
+                              color: BiblePdfTokens.ink,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (meter.fraction != null) ...[
+                        pw.SizedBox(height: 2),
+                        pw.Stack(
+                          children: [
+                            pw.Container(height: 2, color: BiblePdfTokens.rule),
+                            pw.Row(
+                              children: [
+                                pw.Expanded(
+                                  flex: (meter.fraction! * 1000).round().clamp(
+                                    1,
+                                    1000,
+                                  ),
+                                  child: pw.Container(
+                                    height: 2,
+                                    color: BiblePdfTokens.accent,
+                                  ),
+                                ),
+                                pw.Spacer(
+                                  flex: 1000 -
+                                      (meter.fraction! * 1000).round().clamp(
+                                        1,
+                                        999,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (meter.note.trim().isNotEmpty) ...[
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          meter.note.trim(),
+                          style: pw.TextStyle(
+                            font: regular,
+                            fontSize: 8,
+                            color: BiblePdfTokens.secondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+
   /// Pinta un punto según su tipo. `null` si no tiene contenido.
   pw.Widget? point(BibleSectionField field, String? raw) {
     if (raw == null || raw.trim().isEmpty) return null;
@@ -979,6 +1125,14 @@ class BiblePdfKit {
               ),
           ],
         );
+      case BibleSectionFieldType.table:
+        final table = BibleTableValue.decode(raw);
+        return table.isEmpty ? null : tablePoint(field.label, table);
+      case BibleSectionFieldType.meters:
+        final meters = BibleMeter.listFrom(
+          raw,
+        ).where((m) => !m.isEmpty).toList();
+        return meters.isEmpty ? null : metersPoint(field.label, meters);
       case BibleSectionFieldType.gallery:
         final shots = _loaded([
           for (final id in BibleSectionPointValue.decodeList(raw))

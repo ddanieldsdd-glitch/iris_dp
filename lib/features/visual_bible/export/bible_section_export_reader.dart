@@ -1,3 +1,4 @@
+import '../../../shared/visual_bible/bible_table.dart';
 import 'dart:convert';
 
 import '../../../core/database/app_database.dart';
@@ -354,7 +355,9 @@ abstract final class BibleSectionExportReader {
           field.type == BibleSectionFieldType.gallery ||
           field.type == BibleSectionFieldType.cards ||
           field.type == BibleSectionFieldType.acts ||
-          field.type == BibleSectionFieldType.tags);
+          field.type == BibleSectionFieldType.tags ||
+          field.type == BibleSectionFieldType.table ||
+          field.type == BibleSectionFieldType.meters);
 
   /// Valor de un punto del usuario como texto plano, para listados de filas.
   static String userPointText(BibleUserPoint point) => switch (point.field.type) {
@@ -383,6 +386,14 @@ abstract final class BibleSectionExportReader {
         BibleSectionFieldType.tags => BibleSectionPointValue.decodeList(
             point.value,
           ).join(' · '),
+        BibleSectionFieldType.table => [
+            for (final row in BibleTableValue.decode(point.value).filledRows)
+              row.where((c) => c.trim().isNotEmpty).join(' · '),
+          ].join('\n'),
+        BibleSectionFieldType.meters => [
+            for (final m in BibleMeter.listFrom(point.value))
+              if (!m.isEmpty) '${m.label}: ${m.value}',
+          ].join('\n'),
         _ => point.value.trim(),
       };
 

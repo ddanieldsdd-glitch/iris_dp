@@ -19,6 +19,8 @@ import '../bible_palette_widget.dart';
 import '../bible_point_images.dart';
 import '../bible_point_panel.dart';
 import '../bible_references_deck.dart';
+import '../bible_table_widget.dart';
+import '../../../../shared/visual_bible/bible_table.dart';
 
 /// Lo que un widget del catálogo necesita para pintarse y guardar su valor.
 class BibleWidgetContext {
@@ -321,6 +323,25 @@ abstract final class BibleWidgetCatalog {
       icon: Icons.tune,
       build: _generic,
     ),
+    BibleWidgetEntry(
+      id: 'table',
+      type: BibleSectionFieldType.table,
+      category: BibleWidgetCategory.data,
+      label: 'Tabla',
+      description: 'Columnas con nombre y filas que se añaden.',
+      icon: Icons.table_rows_outlined,
+      initialValue: BibleTableValue.initial(const ['Dato', 'Valor', 'Notas']),
+      build: _table,
+    ),
+    const BibleWidgetEntry(
+      id: 'meters',
+      type: BibleSectionFieldType.meters,
+      category: BibleWidgetCategory.data,
+      label: 'Medidores',
+      description: 'Datos con su valor, una barra de escala y una nota.',
+      icon: Icons.speed_outlined,
+      build: _meters,
+    ),
   ];
 
   /// Widgets que se proponen primero en [sectionId].
@@ -463,6 +484,28 @@ abstract final class BibleWidgetCatalog {
           onChanged: (value) => ctx.onChanged(value.encode()),
           sharedActs: ctx.sharedActs,
           onSharedActsChanged: ctx.onSharedActsChanged,
+        ),
+      );
+
+  static Widget _table(BuildContext context, BibleWidgetContext ctx) =>
+      BiblePointPanel(
+        label: ctx.field.label,
+        icon: Icons.table_rows_outlined,
+        child: BibleTableWidget(
+          key: ValueKey('table_${ctx.sectionId}_${ctx.field.key}'),
+          value: BibleTableValue.decode(ctx.value),
+          onChanged: (value) => ctx.onChanged(value.encode()),
+        ),
+      );
+
+  static Widget _meters(BuildContext context, BibleWidgetContext ctx) =>
+      BiblePointPanel(
+        label: ctx.field.label,
+        icon: Icons.speed_outlined,
+        child: BibleMetersWidget(
+          key: ValueKey('meters_${ctx.sectionId}_${ctx.field.key}'),
+          meters: BibleMeter.listFrom(ctx.value),
+          onChanged: (meters) => ctx.onChanged(BibleMeter.encode(meters)),
         ),
       );
 

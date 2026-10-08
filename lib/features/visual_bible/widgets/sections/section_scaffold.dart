@@ -394,6 +394,8 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
       BibleSectionFieldType.cards ||
       BibleSectionFieldType.acts ||
       BibleSectionFieldType.tags ||
+      BibleSectionFieldType.table ||
+      BibleSectionFieldType.meters ||
       BibleSectionFieldType.referenceDeck => _catalogPoint(field),
       // Módulo del catálogo cuyo widget dedicado aún no está conectado.
       BibleSectionFieldType.blocks => _MissingModulePlaceholder(
