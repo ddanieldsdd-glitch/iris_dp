@@ -177,6 +177,213 @@ class _CameraPickerDialogState extends State<_CameraPickerDialog> {
   }
 }
 
+/// Un juego de lentes del catálogo: las lentes de una misma serie.
+class BibleLensSet {
+  final String name;
+  final List<Lense> lenses;
+
+  const BibleLensSet(this.name, this.lenses);
+
+  /// Agrupa el catálogo por marca y serie. Sin serie, la serie es el
+  /// modelo sin su focal («Master Prime 35mm» → «Master Prime»).
+  static List<BibleLensSet> group(List<Lense> lenses) {
+    final sets = <String, List<Lense>>{};
+    for (final lens in lenses) {
+      final series = (lens.series ?? '').trim().isNotEmpty
+          ? lens.series!.trim()
+          : lens.model
+                .replaceFirst(
+                  RegExp(r'\s*\d+(?:[.,]\d+)?(?:\s*-\s*\d+)?\s*mm\s*$'),
+                  '',
+                )
+                .trim();
+      final name = series.toLowerCase().startsWith(lens.brand.toLowerCase())
+          ? series
+          : '${lens.brand} $series';
+      sets.putIfAbsent(name, () => []).add(lens);
+    }
+    return [
+      for (final entry in sets.entries)
+        BibleLensSet(
+          entry.key,
+          entry.value..sort((a, b) => a.focalLength.compareTo(b.focalLength)),
+        ),
+    ]..sort((a, b) => a.name.compareTo(b.name));
+  }
+
+  String _num(double v) => v.toStringAsFixed(v % 1 == 0 ? 0 : 1);
+
+  /// Datos de la ficha del juego, con los rótulos de la biblia.
+  Map<String, String> get facts {
+    final first = lenses.first;
+    final anamorphic = lenses.any((l) => l.isAnamorphic);
+    final squeeze = lenses
+        .map((l) => l.squeezeRatio)
+        .whereType<double>()
+        .fold<double?>(null, (a, b) => a == null || b > a ? b : a);
+    final focals = [
+      for (final l in lenses)
+        if (l.focalLength > 0) _num(l.focalLength),
+    ];
+    final fastest = lenses
+        .map((l) => l.minTStop)
+        .reduce((a, b) => a < b ? a : b);
+    return {
+      'Tipo': anamorphic ? 'Anamórfica' : 'Esférica',
+      if (anamorphic && squeeze != null) 'Factor anamórfico': '${_num(squeeze)}x',
+      'T': 'T${_num(fastest)}',
+      if (first.formatCoverage.isNotEmpty) 'Cobertura': first.formatCoverage,
+      if ((first.mountType ?? '').isNotEmpty) 'Montura': first.mountType!,
+      if (focals.isNotEmpty) 'Focales': '${focals.join(', ')} mm',
+    };
+  }
+}
+
+/// Selector de juego de lentes: los del proyecto primero, después el
+/// catálogo, y siempre la opción de usar lo escrito tal cual.
+Future<BibleEquipmentPick?> pickBibleLensSet(
+  BuildContext context, {
+  required AppDatabase db,
+  required int projectId,
+}) async {
+  final lenses = await db.select(db.lenses).get();
+  final assigned = await db.getProjectEquipment(projectId);
+  final inProject = {
+    for (final e in assigned)
+      if (e.equipmentType == 'lens') e.equipmentId,
+  };
+  if (!context.mounted) return null;
+  return showDialog<BibleEquipmentPick>(
+    context: context,
+    builder: (_) => _PickerDialog(
+      title: 'Elegir juego de lentes',
+      options: [
+        for (final set in BibleLensSet.group(lenses))
+          _PickerOption(
+            pick: BibleEquipmentPick(
+              catalogId: set.lenses.first.id,
+              name: set.name,
+              facts: set.facts,
+            ),
+            subtitle: [set.facts['Tipo'], set.facts['T'], set.facts['Cobertura']]
+                .whereType<String>()
+                .join(' · '),
+            inProject: set.lenses.any((l) => inProject.contains(l.id)),
+          ),
+      ],
+    ),
+  );
+}
+
+class _PickerOption {
+  final BibleEquipmentPick pick;
+  final String subtitle;
+  final bool inProject;
+
+  const _PickerOption({
+    required this.pick,
+    required this.subtitle,
+    this.inProject = false,
+  });
+}
+
+class _PickerDialog extends StatefulWidget {
+  final String title;
+  final List<_PickerOption> options;
+  const _PickerDialog({required this.title, required this.options});
+
+  @override
+  State<_PickerDialog> createState() => _PickerDialogState();
+}
+
+class _PickerDialogState extends State<_PickerDialog> {
+  final _query = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _query.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final text = _query.text.trim();
+    final needle = text.toLowerCase();
+    final matches = [
+      for (final o in widget.options)
+        if (needle.isEmpty || o.pick.name.toLowerCase().contains(needle)) o,
+    ]..sort((a, b) {
+      if (a.inProject != b.inProject) return a.inProject ? -1 : 1;
+      return a.pick.name.compareTo(b.pick.name);
+    });
+    return Dialog(
+      backgroundColor: palette.surfaceElevated,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 560),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(widget.title, style: AppTypography.titleMedium(palette)),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                controller: _query,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  hintText: 'Buscar en el equipo, o escribir un nombre',
+                  prefixIcon: Icon(Icons.search, size: 18),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Expanded(
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: ListView(
+                    children: [
+                      for (final option in matches.take(60))
+                        ListTile(
+                          dense: true,
+                          title: Text(option.pick.name),
+                          subtitle: Text(
+                            [
+                              if (option.inProject) 'En el proyecto',
+                              option.subtitle,
+                            ].where((e) => e.isNotEmpty).join(' · '),
+                          ),
+                          onTap: () => Navigator.pop(context, option.pick),
+                        ),
+                      if (text.isNotEmpty)
+                        ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.edit_outlined, size: 18),
+                          title: Text('Usar «$text» tal cual'),
+                          subtitle: const Text('Sin ficha del catálogo'),
+                          onTap: () => Navigator.pop(
+                            context,
+                            BibleEquipmentPick(name: text),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Equipo del proyecto en la biblia: cada pieza con su papel, si es
 /// tentativa o definitiva, una nota y, si se quiere, una alternativa.
 class BibleEquipmentWidget extends StatefulWidget {
@@ -336,9 +543,16 @@ class _BibleEquipmentWidgetState extends State<BibleEquipmentWidget> {
               children: [
                 Row(
                   children: [
-                    SizedBox(
-                      width: 34,
-                      child: TextFormField(
+                    // El papel puede ser una letra o «B-Cam»: ocupa lo suyo.
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        minWidth: 34,
+                        maxWidth: 120,
+                      ),
+                      child: IntrinsicWidth(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 10),
+                          child: TextFormField(
                         key: ValueKey('eq_role_${_shape}_$i'),
                         initialValue: _items[i].role,
                         style: AppTypography.titleLarge(
@@ -351,6 +565,8 @@ class _BibleEquipmentWidgetState extends State<BibleEquipmentWidget> {
                         ),
                         onChanged: (v) =>
                             _typed(i, _items[i].copyWith(role: v.trim())),
+                          ),
+                        ),
                       ),
                     ),
                     Expanded(
@@ -415,7 +631,8 @@ class _BibleEquipmentWidgetState extends State<BibleEquipmentWidget> {
                     style: note,
                     decoration: _bare(
                       palette,
-                      'Por qué esta ${widget.noun}, para qué unidad…',
+                      'Por qué ${widget.feminine ? 'esta' : 'este'} ${widget.noun}, '
+                          'para qué unidad…',
                       note,
                     ),
                     onChanged: (v) => _typed(i, _items[i].copyWith(note: v)),

@@ -14,6 +14,7 @@ import '../../shared/visual_bible/bible_point_extras.dart';
 import '../../shared/visual_bible/bible_text_specs.dart';
 import '../../shared/visual_bible/camera_points.dart';
 import '../../shared/visual_bible/concept_points.dart';
+import '../../shared/visual_bible/optics_points.dart';
 import '../../shared/visual_bible/direction_points.dart';
 import '../../shared/visual_bible/bible_reference.dart';
 import '../../shared/visual_bible/format_pilot_resolve.dart';
@@ -1145,36 +1146,35 @@ class VisualBiblePdfService {
       }
     }
 
-    if (!isPitch &&
-        _sectionAllowed(sections, BibleSectionId.optics) &&
-        (BibleSectionExportReader.hasOpticsExportContent(
-              data.opticsConfigJson,
-              narrativeIntent: data.opticsNarrativeIntent,
-              lensPhilosophy: data.lensPhilosophy,
-            ) ||
-            _hasUserPoints(BibleSectionId.optics, sectionContentJsonById))) {
-      final opticsRows = BibleSectionExportReader.rowsFromOpticsConfigJson(
-        data.opticsConfigJson,
-        narrativeIntent: data.opticsNarrativeIntent,
-        lensPhilosophy: data.lensPhilosophy,
-      );
-      addSection(
+    if (!isPitch && _sectionAllowed(sections, BibleSectionId.optics)) {
+      final opticsJson = sectionContentJsonById[BibleSectionId.optics];
+      final opticsAssets = await _loadSectionAssets(
         BibleSectionId.optics,
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => _sectionPage(
-            title: 'ÓPTICA',
-            sectionId: BibleSectionId.optics,
-            fontBold: fonts.bold,
-            font: fonts.regular,
-            content: _textFieldsContent([
-              ...opticsRows.map((row) => (row.label, row.value)),
-              ..._userPointRows(BibleSectionId.optics, sectionContentJsonById),
-            ], fonts),
-          ),
-        ),
+        opticsJson,
+        moodboard,
+        boardLayout,
+        fonts,
       );
+      final opticsContent = _opticsContent(data, opticsJson, kit, opticsAssets);
+      if (opticsContent.isNotEmpty) {
+        addSection(
+          BibleSectionId.optics,
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader(
+                _renamed[BibleSectionId.optics] ?? 'Óptica',
+                image: _heroes[BibleSectionId.optics],
+                accent: _heroColors[BibleSectionId.optics],
+              ),
+              pw.SizedBox(height: 24),
+              ...opticsContent,
+            ],
+          ),
+        );
+      }
     }
 
     // Pantallas creadas por el usuario. El selector de secciones del export
@@ -1809,6 +1809,94 @@ class VisualBiblePdfService {
         case 'references' || 'specsReference':
           final stills = assets.stills;
           if (stills != null && field.key == 'references') {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            out.add(stills);
+            out.add(pw.SizedBox(height: 10));
+          }
+        default:
+          add(kit.point(field, values[field.key]));
+      }
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Óptica: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _opticsContent(
+    VisualBibleData data,
+    String? contentJson,
+    BiblePdfKit kit,
+    _SectionAssets assets,
+  ) {
+    final config = OpticsPoints.config(data.opticsConfigJson);
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final out = <pw.Widget>[];
+    void add(pw.Widget? point) {
+      if (point != null) out.add(point);
+    }
+
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.optics,
+    )) {
+      switch (field.key) {
+        case 'narrative':
+          final intent = data.opticsNarrativeIntent?.trim() ?? '';
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+        case OpticsPoints.kit:
+          final items = OpticsPoints.kitItems(
+            values,
+            config,
+            legacyLensId: data.primaryLensId,
+          ).where((item) => !item.isEmpty).toList();
+          if (items.isNotEmpty) {
+            out.add(kit.equipmentPoint(field.label, items, feminine: false));
+          }
+        case OpticsPoints.philosophy:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              OpticsPoints.philosophyValue(
+                values,
+                config,
+                lensPhilosophy: data.lensPhilosophy,
+              ),
+            ),
+          );
+        case OpticsPoints.character:
+          final cards = OpticsPoints.characterCards(values, config)
+              .where((c) => c.body.trim().isNotEmpty || c.imageIds.isNotEmpty)
+              .toList();
+          if (cards.isNotEmpty) {
+            out.add(kit.cardsPoint(field.label, cards, columns: true));
+          }
+        case OpticsPoints.focals:
+          final table = OpticsPoints.focalsValue(
+            values,
+            config,
+            legacyFocals: data.primaryFocalLengths,
+          );
+          if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
+        case OpticsPoints.filtration:
+          final meters = OpticsPoints.filtrationMeters(
+            values,
+            config,
+            filtrationNotes: data.filtrationNotes,
+          ).where((m) => !m.isEmpty || m.note.trim().isNotEmpty).toList();
+          if (meters.isNotEmpty) out.add(kit.metersPoint(field.label, meters));
+        case OpticsPoints.maintenance:
+          final table = OpticsPoints.maintenanceValue(values, config);
+          if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
+        case 'references':
+          final stills = assets.stills;
+          if (stills != null) {
             out.add(kit.label(field.label));
             out.add(pw.SizedBox(height: 6));
             out.add(stills);

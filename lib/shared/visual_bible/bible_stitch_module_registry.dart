@@ -313,7 +313,28 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'opticSettings', label: 'Filosofía y kit de lentes'),
+            StitchModule(
+              key: 'lensKit',
+              label: 'Juegos de lentes',
+              width: BiblePointWidth.twoThirds,
+            ),
+            StitchModule(
+              key: 'filtration',
+              label: 'Filtros',
+              width: BiblePointWidth.third,
+            ),
+            StitchModule(key: 'opticSettings', label: 'Filosofía de lentes'),
+            StitchModule(key: 'character', label: 'Carácter óptico'),
+            StitchModule(
+              key: 'focalTable',
+              label: 'Tabla de focales',
+              width: BiblePointWidth.twoThirds,
+            ),
+            StitchModule(
+              key: 'maintenance',
+              label: 'Revisión del juego',
+              width: BiblePointWidth.third,
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
@@ -500,6 +521,27 @@ abstract final class BibleStitchModuleRegistry {
         }
       }
       return [...out, ...tail];
+    }
+
+    // Óptica se partió en la versión 5: lo que iba dentro de «Filosofía y
+    // kit de lentes» son ahora puntos propios, añadidos una sola vez.
+    if (layoutVersion < 5 &&
+        sectionId == BibleSectionId.optics &&
+        keys.contains('opticSettings')) {
+      BibleSectionField? add(String key) =>
+          keys.contains(key) ? null : module(sectionId, key)?.toField();
+      return [
+        for (final field in fields)
+          if (field.key == 'opticSettings') ...[
+            ?add('lensKit'),
+            ?add('filtration'),
+            field.copyWith(label: 'Filosofía de lentes'),
+            ?add('character'),
+            ?add('focalTable'),
+            ?add('maintenance'),
+          ] else
+            field,
+      ];
     }
 
     if (sectionId == BibleSectionId.texture) {
