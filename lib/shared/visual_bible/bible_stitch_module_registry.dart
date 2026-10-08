@@ -22,6 +22,9 @@ class StitchModule {
   /// Kind del catálogo de sub-apartados (nombre + icono reutilizable).
   final BibleSubsectionKindId? subsectionKind;
 
+  /// Ancho con el que nace el punto.
+  final BiblePointWidth width;
+
   const StitchModule({
     required this.key,
     required this.label,
@@ -33,6 +36,7 @@ class StitchModule {
     this.optional = false,
     this.widgetId,
     this.subsectionKind,
+    this.width = BiblePointWidth.full,
   });
 
   BibleSubsectionKind get catalogKind {
@@ -50,6 +54,7 @@ class StitchModule {
         maxLines: maxLines,
         type: type,
         widget: type == BibleSectionFieldType.text ? null : widgetId,
+        width: width,
       );
 }
 
@@ -64,29 +69,39 @@ abstract final class BibleStitchModuleRegistry {
               maxLines: 4,
             ),
             StitchModule(
+              key: 'lightPhilosophy',
+              label: 'Filosofía de luz',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(
+              key: 'shadowTreatment',
+              label: 'Tratamiento de sombras',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(
               key: 'colorPalette',
               label: 'Paleta maestra',
               widgetId: 'palette_master',
+              width: BiblePointWidth.half,
             ),
             StitchModule(
               key: 'colorSymbolism',
               label: 'Simbología de color',
               widgetId: 'palette_symbolism',
+              width: BiblePointWidth.half,
             ),
-            StitchModule(key: 'lightPhilosophy', label: 'Filosofía de luz'),
-            StitchModule(key: 'shadowTreatment', label: 'Tratamiento de sombras'),
             StitchModule(key: 'composition', label: 'Composición'),
             StitchModule(
               key: 'actNotes',
               label: 'Intención visual por acto',
               widgetId: 'acts',
             ),
-            StitchModule(key: 'keyFrame', label: 'Key Frame'),
             StitchModule(
               key: 'references',
-              label: 'Referencias clave',
+              label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
             ),
+            StitchModule(key: 'keyFrame', label: 'Key Frame', optional: true),
             StitchModule(
               key: 'actComposition',
               label: 'Composición por actos',

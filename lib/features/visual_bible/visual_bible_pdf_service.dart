@@ -11,6 +11,7 @@ import '../../shared/visual_bible/camera_pilot_resolve.dart';
 import '../../shared/visual_bible/bible_acts.dart';
 import '../../shared/visual_bible/bible_cards.dart';
 import '../../shared/visual_bible/bible_point_extras.dart';
+import '../../shared/visual_bible/bible_text_specs.dart';
 import '../../shared/visual_bible/concept_points.dart';
 import '../../shared/visual_bible/direction_points.dart';
 import '../../shared/visual_bible/bible_reference.dart';
@@ -1727,101 +1728,79 @@ class VisualBiblePdfService {
                 : data.visualConcept,
           );
           if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
-        case 'colorPalette':
-          // Paleta propia de Concepto; si no se ha definido, la de los
-          // bloques de Color e imagen.
-          final own = [
-            if (blob['masterPalette'] is List)
-              for (final e in blob['masterPalette'] as List)
-                if (e is Map && text(e['hex']).isNotEmpty)
-                  (text(e['hex']), text(e['name'])),
-          ];
-          final colors = own.isNotEmpty
-              ? own
-              : [
-                  for (final block in colorBlocks)
-                    for (final hex in block.dominantColors.take(3)) (hex, ''),
-                ];
-          if (colors.isNotEmpty) out.add(kit.swatchRow(field.label, colors));
-        case 'colorSymbolism':
-          final symbols = [
-            if (blob['colorSymbols'] is List)
-              for (final e in blob['colorSymbols'] as List)
-                if (e is Map)
-                  (
-                    hex: text(e['hex']),
-                    title: text(e['poeticName']),
-                    text: text(e['narrativeMeaning']),
-                  ),
-          ].where((s) => s.title.isNotEmpty || s.text.isNotEmpty).toList();
-          if (symbols.isNotEmpty) {
-            out.add(kit.swatchList(field.label, symbols));
-          }
-        case 'lightPhilosophy':
-          final philosophy = text(data.lightingPhilosophy);
-          final metrics = {
-            if (data.contrastStyle?.trim().isNotEmpty == true)
-              'contrast': data.contrastStyle!.trim(),
-            ...strings(blob['lightingMetrics']),
-          };
-          final rows = [
-            for (final (key, label) in kConceptLightMetrics)
-              if (metrics[key]?.isNotEmpty == true) (label, metrics[key]!),
-          ];
-          if (philosophy.isNotEmpty) {
-            out.add(kit.textPoint(field.label, philosophy));
-          }
-          if (rows.isNotEmpty) {
-            out.add(
-              kit.specsPoint(philosophy.isEmpty ? field.label : '', rows),
-            );
-          }
-        case 'shadowTreatment':
-          final shadows = text(blob['shadowTreatment']);
+          final tags = ConceptPoints.atmosphereTags(blob);
+          if (tags.isNotEmpty) out.add(kit.tagRow(tags));
+        case ConceptPoints.palette:
+          final point = kit.point(
+            BibleSectionField(
+              key: field.key,
+              label: field.label,
+              type: BibleSectionFieldType.palette,
+              widget: 'palette_master',
+            ),
+            ConceptPoints.paletteValue(values, blob).encode(),
+          );
+          if (point != null) out.add(point);
+        case ConceptPoints.symbolism:
+          final point = kit.point(
+            BibleSectionField(
+              key: field.key,
+              label: field.label,
+              type: BibleSectionFieldType.palette,
+              widget: 'palette_symbolism',
+            ),
+            ConceptPoints.symbolismValue(values, blob).encode(),
+          );
+          if (point != null) out.add(point);
+        case ConceptPoints.light:
+          final point = kit.textSpecsPoint(
+            field.label,
+            ConceptPoints.lightValue(
+              values,
+              blob,
+              philosophy: data.lightingPhilosophy,
+              contrast: data.contrastStyle,
+            ),
+          );
+          if (point != null) out.add(point);
+        case ConceptPoints.shadows:
+          final shadows = ConceptPoints.shadowsText(values, blob);
           if (shadows.isNotEmpty) out.add(kit.textPoint(field.label, shadows));
-        case 'composition':
-          final composition = text(blob['composition']);
-          final metrics = strings(blob['compositionMetrics']);
-          final rows = [
-            for (final (key, label) in kConceptCompositionMetrics)
-              if (metrics[key]?.isNotEmpty == true) (label, metrics[key]!),
-          ];
-          if (composition.isNotEmpty) {
-            out.add(kit.textPoint(field.label, composition));
-          }
-          if (rows.isNotEmpty) {
-            out.add(
-              kit.specsPoint(composition.isEmpty ? field.label : '', rows),
-            );
-          }
-        case 'actNotes':
-          final titles = {...kConceptActTitles, ...strings(blob['actTitles'])};
-          const numerals = ['I', 'II', 'III'];
-          final acts = [
-            for (var n = 1; n <= 3; n++)
-              if (text(blob['act${n}Intent']).isNotEmpty)
-                (
-                  kicker: 'Acto ${numerals[n - 1]}',
-                  title: titles['$n'] ?? '',
-                  text: text(blob['act${n}Intent']),
-                ),
-          ];
-          if (acts.isNotEmpty) out.add(kit.columnsPoint(field.label, acts));
-        case 'actComposition':
-          final composition = strings(blob['actComposition']);
-          const numerals = ['I', 'II', 'III'];
-          final rows = [
-            for (var n = 1; n <= 3; n++)
-              if (composition['$n']?.isNotEmpty == true)
-                ('Acto ${numerals[n - 1]}', composition['$n']!),
-          ];
-          if (rows.isNotEmpty) out.add(kit.specsPoint(field.label, rows));
-        case 'keyFrame':
-          final tech = text(blob['keyFrameTech']);
-          if (tech.isNotEmpty) {
-            final title = text(blob['keyFrameTitle']);
-            out.add(kit.textPoint(title.isEmpty ? field.label : title, tech));
-          }
+        case ConceptPoints.composition:
+          final point = kit.textSpecsPoint(
+            field.label,
+            ConceptPoints.compositionValue(values, blob),
+          );
+          if (point != null) out.add(point);
+        case ConceptPoints.acts:
+          final acts = kit.actsPointOf(
+            field.label,
+            ConceptPoints.actsValue(values, blob),
+          );
+          if (acts != null) out.add(acts);
+        case ConceptPoints.actComposition:
+          final point = kit.textSpecsPoint(
+            field.label,
+            values.containsKey(ConceptPoints.actComposition)
+                ? BibleTextSpecsValue.decode(
+                    values[ConceptPoints.actComposition],
+                  )
+                : BibleTextSpecsValue(
+                    rows: ConceptPoints.actCompositionRows(blob),
+                  ),
+          );
+          if (point != null) out.add(point);
+        case ConceptPoints.keyFrame:
+          final (title, tech) = ConceptPoints.keyFrameOf(blob);
+          final point = kit.textSpecsPoint(
+            field.label,
+            values.containsKey(ConceptPoints.keyFrame)
+                ? BibleTextSpecsValue.decode(values[ConceptPoints.keyFrame])
+                : BibleTextSpecsValue(
+                    text: [title, tech].where((e) => e.isNotEmpty).join('\n'),
+                  ),
+          );
+          if (point != null) out.add(point);
         case 'references':
           final references = assets.references;
           if (references.isNotEmpty || stills != null) {

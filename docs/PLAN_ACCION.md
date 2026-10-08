@@ -186,3 +186,13 @@ Los Excel viven en `Desktop/LISTA DE MATERIAL TECNICO/`:
 ## Fuera de este plan
 
 Motor de decisión técnica, trabajo nuevo en V2, Unreal/LUKA de ida y vuelta, permisos por módulo.
+
+## Fase B — Biblia: todas las pantallas sobre la versión nueva
+
+Añadida el 2026-10-08. Rama `plan/b1-biblia-pantallas`. Orden del lateral; se conservan los puntos de cada pantalla y lo escrito, se pintan con widgets del catálogo, sin diálogos, sin inglés y sin datos de ejemplo; el PDF lee lo mismo. Daniel revisa después pantalla a pantalla.
+
+- [x] **B0.1 Ancho por punto** (W5): completo, dos tercios, medio o tercio desde el menú «⋯»; los estrechos comparten fila a partir de 1.100 px.
+- [x] **B0.2 Widgets nuevos:** «Tabla», «Medidores» y «Texto con datos», con su versión en PDF.
+- [ ] **B0.3 Equipo tentativo y definitivo** (se hace con Cámara).
+- [x] **B1 Concepto.** Orden: intención narrativa con etiquetas de atmósfera · filosofía de luz junto a tratamiento de sombras · paleta maestra junto a simbología · composición · intención visual por acto (actos del proyecto) · referencias. Key Frame y «Composición por actos» pasan a opcionales. Fuera diálogos, paleta de partida y títulos de acto de ejemplo. Lectura de lo antiguo en `ConceptPoints`. Pendiente: «Contraste y textura» como resumen de Textura (cuando Textura esté hecha).
+- [ ] B2 Cámara y sensor · B3 Óptica · B4 Exposición · B5 Iluminación · B6 Color e imagen · B7 Formato · B8 Textura · B9 Localización · B10 Pruebas de cámara · B11 Workflow · B12 Moodboard.

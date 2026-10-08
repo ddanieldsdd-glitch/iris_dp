@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/visual_bible/bible_table.dart';
+import '../../../shared/visual_bible/bible_text_specs.dart';
 import 'bible_point_panel.dart';
 
 InputDecoration _bare(AppPalette palette, String hint, TextStyle style) =>
@@ -308,6 +309,148 @@ class _BibleMetersWidgetState extends State<BibleMetersWidget>
             icon: Icon(Icons.add, size: 16, color: palette.textSecondary),
             label: Text('AÑADIR DATO', style: labelStyle),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Un desarrollo escrito y, debajo, datos sueltos (dato y valor) en
+/// casillas. Todo se escribe en el sitio.
+class BibleTextSpecsWidget extends StatefulWidget {
+  final BibleTextSpecsValue value;
+  final String hint;
+  final ValueChanged<BibleTextSpecsValue> onChanged;
+
+  const BibleTextSpecsWidget({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.hint = 'Escribe aquí…',
+  });
+
+  @override
+  State<BibleTextSpecsWidget> createState() => _BibleTextSpecsWidgetState();
+}
+
+class _BibleTextSpecsWidgetState extends State<BibleTextSpecsWidget>
+    with _DebouncedSave {
+  late BibleTextSpecsValue _value = widget.value;
+  int _shape = 0;
+
+  void _edit(BibleTextSpecsValue next) {
+    _value = next;
+    saveSoon(() => widget.onChanged(_value));
+  }
+
+  void _reshape(BibleTextSpecsValue next) {
+    setState(() {
+      _value = next;
+      _shape++;
+    });
+    widget.onChanged(next);
+  }
+
+  List<(String, String)> _withRow(int index, (String, String) row) => [
+    for (var i = 0; i < _value.rows.length; i++)
+      i == index ? row : _value.rows[i],
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final body = AppTypography.bodyLarge(palette);
+    final labelStyle = BiblePointPanel.labelStyle(palette);
+    final valueStyle = AppTypography.bodyMedium(palette);
+    final rows = _value.rows;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          initialValue: _value.text,
+          minLines: 1,
+          maxLines: null,
+          style: body,
+          decoration: _bare(palette, widget.hint, body),
+          onChanged: (v) => _edit(_value.copyWith(text: v)),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (var i = 0; i < rows.length; i++)
+              Container(
+                width: 168,
+                padding: const EdgeInsets.fromLTRB(10, 6, 2, 6),
+                decoration: BoxDecoration(
+                  color: palette.background.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: palette.divider),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextFormField(
+                            key: ValueKey('ts_label_${_shape}_$i'),
+                            initialValue: rows[i].$1,
+                            style: labelStyle,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: _bare(palette, 'DATO', labelStyle),
+                            onChanged: (v) => _edit(
+                              _value.copyWith(
+                                rows: _withRow(i, (v, _value.rows[i].$2)),
+                              ),
+                            ),
+                          ),
+                          TextFormField(
+                            key: ValueKey('ts_value_${_shape}_$i'),
+                            initialValue: rows[i].$2,
+                            minLines: 1,
+                            maxLines: null,
+                            style: valueStyle,
+                            decoration: _bare(palette, '—', valueStyle),
+                            onChanged: (v) => _edit(
+                              _value.copyWith(
+                                rows: _withRow(i, (_value.rows[i].$1, v)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.close,
+                        size: 12,
+                        color: palette.textTertiary,
+                      ),
+                      tooltip: 'Quitar dato',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 22,
+                        height: 22,
+                      ),
+                      onPressed: () => _reshape(
+                        _value.copyWith(rows: [...rows]..removeAt(i)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            TextButton.icon(
+              onPressed: () =>
+                  _reshape(_value.copyWith(rows: [...rows, ('', '')])),
+              icon: Icon(Icons.add, size: 16, color: palette.textSecondary),
+              label: Text('AÑADIR DATO', style: labelStyle),
+            ),
+          ],
         ),
       ],
     );

@@ -1,4 +1,5 @@
 import '../../../../shared/visual_bible/bible_table.dart';
+import '../../../../shared/visual_bible/bible_text_specs.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -919,6 +920,20 @@ class BiblePdfKit {
     ),
   );
 
+  /// Texto con datos: el desarrollo y, debajo, los datos con valor.
+  pw.Widget? textSpecsPoint(String label, BibleTextSpecsValue value) {
+    if (value.isEmpty) return null;
+    final text = value.text.trim();
+    final rows = value.filledRows;
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (text.isNotEmpty) textPoint(label, text),
+        if (rows.isNotEmpty) specsPoint(text.isEmpty ? label : '', rows),
+      ],
+    );
+  }
+
   /// Tabla con su fila de títulos; solo las filas con algo escrito.
   pw.Widget tablePoint(String label, BibleTableValue table) => pw.Padding(
     padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
@@ -1074,6 +1089,9 @@ class BiblePdfKit {
         ).where((e) => e.trim().isNotEmpty).toList();
         return items.isEmpty ? null : listPoint(field.label, items);
       case BibleSectionFieldType.specs:
+        if (field.widget == 'text_specs') {
+          return textSpecsPoint(field.label, BibleTextSpecsValue.decode(raw));
+        }
         final rows = BibleSectionPointValue.decodeSpecs(raw)
             .where((r) => r.$1.trim().isNotEmpty || r.$2.trim().isNotEmpty)
             .toList();

@@ -21,6 +21,7 @@ import '../bible_point_panel.dart';
 import '../bible_references_deck.dart';
 import '../bible_table_widget.dart';
 import '../../../../shared/visual_bible/bible_table.dart';
+import '../../../../shared/visual_bible/bible_text_specs.dart';
 
 /// Lo que un widget del catálogo necesita para pintarse y guardar su valor.
 class BibleWidgetContext {
@@ -323,6 +324,15 @@ abstract final class BibleWidgetCatalog {
       icon: Icons.tune,
       build: _generic,
     ),
+    const BibleWidgetEntry(
+      id: 'text_specs',
+      type: BibleSectionFieldType.specs,
+      category: BibleWidgetCategory.data,
+      label: 'Texto con datos',
+      description: 'Un desarrollo escrito y, debajo, datos sueltos.',
+      icon: Icons.notes_outlined,
+      build: _textSpecs,
+    ),
     BibleWidgetEntry(
       id: 'table',
       type: BibleSectionFieldType.table,
@@ -484,6 +494,18 @@ abstract final class BibleWidgetCatalog {
           onChanged: (value) => ctx.onChanged(value.encode()),
           sharedActs: ctx.sharedActs,
           onSharedActsChanged: ctx.onSharedActsChanged,
+        ),
+      );
+
+  static Widget _textSpecs(BuildContext context, BibleWidgetContext ctx) =>
+      BiblePointPanel(
+        label: ctx.field.label,
+        icon: Icons.notes_outlined,
+        child: BibleTextSpecsWidget(
+          key: ValueKey('text_specs_${ctx.sectionId}_${ctx.field.key}'),
+          value: BibleTextSpecsValue.decode(ctx.value),
+          hint: ctx.field.hint ?? 'Escribe aquí…',
+          onChanged: (value) => ctx.onChanged(value.encode()),
         ),
       );
 
