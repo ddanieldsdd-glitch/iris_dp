@@ -94,12 +94,12 @@ class FormatSection extends ConsumerWidget {
 
   String _ratioLabel(String ratio) {
     if (ratio.contains('2.39') || ratio.contains('2.40')) {
-      return 'Widescreen Cinemascope';
+      return 'Panorámico anamórfico';
     }
-    if (ratio.contains('1.85')) return 'Flat Theatrical';
-    if (ratio.contains('1.78') || ratio.contains('16:9')) return 'HD / Broadcast';
-    if (ratio.contains('1.33') || ratio.contains('4:3')) return 'Academy / Vintage';
-    return 'Custom Format';
+    if (ratio.contains('1.85')) return 'Panorámico plano';
+    if (ratio.contains('1.78') || ratio.contains('16:9')) return 'Televisión';
+    if (ratio.contains('1.33') || ratio.contains('4:3')) return 'Académico';
+    return 'Formato propio';
   }
 
   @override
@@ -110,9 +110,6 @@ class FormatSection extends ConsumerWidget {
 
     final sensorModeTitle = FormatSensorModeResolve.displayTitle(custom);
     final sensorDetail = FormatSensorModeResolve.displayDetail(custom);
-    final squeezeFactor = custom['squeezeFactor'] as String? ?? '2.0x';
-    final squeezeDetail =
-        custom['squeezeDetail'] as String? ?? 'Anamorphic S35';
     final aspectForOptics = FormatPilotResolve.activeRatio(custom, data);
 
     final ratioName = custom['ratioName'] as String? ??
@@ -139,6 +136,14 @@ class FormatSection extends ConsumerWidget {
     );
     final squeezeForRatio =
         opticsCtxSync.isAnamorphic ? opticsCtxSync.squeezeRatio : 1.0;
+    // Sin dato propio, el factor y el tipo salen de los juegos de lentes
+    // de Óptica: no se inventa una anamórfica.
+    final squeezeFactor =
+        custom['squeezeFactor'] as String? ??
+        '${squeezeForRatio.toStringAsFixed(squeezeForRatio % 1 == 0 ? 1 : 2)}x';
+    final squeezeDetail =
+        custom['squeezeDetail'] as String? ??
+        (opticsCtxSync.isAnamorphic ? 'Anamórfica' : 'Esférica');
     final activeRatio = aspectForOptics ??
         FormatRatioFormat.format(sensorR * squeezeForRatio);
 
@@ -148,7 +153,7 @@ class FormatSection extends ConsumerWidget {
     final intentReinforce = custom['intentReinforce'] as String? ?? '';
 
     final overlayCam =
-        custom['overlayCam'] as String? ?? 'ARRI 35 | 40MM ANAMORPHIC';
+        custom['overlayCam'] as String? ?? '';
     final imageCircle = custom['imageCircle'] as String? ?? '';
     final cropFactor = custom['cropFactor'] as String? ?? '';
     final resolvedResolution = FormatPilotResolve.resolution(custom, data);
@@ -163,15 +168,10 @@ class FormatSection extends ConsumerWidget {
       narrativeHint:
           '¿Cómo afecta el encuadre a la relación del personaje con el espacio?',
       sectionNumber: null,
-      sectionTitle: 'Aspect Ratio',
+      sectionTitle: 'Formato',
       fieldWidgets: {
-        'header': Text(
-          'Cámara, Sensor & Aspect Ratio',
-          style: AppTypography.displayMedium(palette).copyWith(
-            fontSize: 32,
-            letterSpacing: -0.6,
-          ),
-        ),
+        // Punto de biblias anteriores: la cabecera común ya pone el título.
+        'header': const SizedBox.shrink(),
         // Mismo concepto que Director's Intent → intentNarrative (blob).
         // El módulo stitch «narrative» escribía formatNarrativeIntent (columna).
         'narrative': const SizedBox.shrink(),
@@ -219,7 +219,7 @@ class FormatSection extends ConsumerWidget {
                               size: 16, color: palette.accent),
                           const SizedBox(width: 8),
                           Text(
-                            'SENSOR & OPTICS LOGIC',
+                            'SENSOR Y ÓPTICA',
                             style: AppTypography.label(palette).copyWith(
                               fontSize: 11,
                               letterSpacing: 1.5,
@@ -240,7 +240,7 @@ class FormatSection extends ConsumerWidget {
                               ),
                             ),
                             child: Text(
-                              'ACTIVE',
+                              'ACTIVO',
                               style: AppTypography.mono(palette).copyWith(
                                 fontSize: 10,
                               ),
@@ -271,7 +271,7 @@ class FormatSection extends ConsumerWidget {
                             children: [
                               Expanded(
                                 child: _LogicTile(
-                                  eyebrow: 'SENSOR MODE',
+                                  eyebrow: 'MODO DE SENSOR',
                                   title: sensorModeTitle,
                                   detail: sensorDetail,
                                   palette: palette,
@@ -334,7 +334,7 @@ class FormatSection extends ConsumerWidget {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: _LogicTile(
-                                    eyebrow: 'LENS SQUEEZE',
+                                    eyebrow: 'FACTOR ANAMÓRFICO',
                                     title: squeezeFactor,
                                     detail: squeezeDetail,
                                     palette: palette,
@@ -347,7 +347,7 @@ class FormatSection extends ConsumerWidget {
                                       );
                                       final ok = await _promptPair(
                                         context,
-                                        'Lens Squeeze',
+                                        'Factor anamórfico',
                                         t,
                                         d,
                                         aLabel: 'Factor (2.0x)',
@@ -389,7 +389,7 @@ class FormatSection extends ConsumerWidget {
                               TextEditingController(text: ratioName);
                           final ok = await _promptPair(
                             context,
-                            'Aspect Ratio',
+                            'Relación de aspecto',
                             r,
                             n,
                             aLabel: 'Ratio (2.39:1)',
@@ -419,7 +419,7 @@ class FormatSection extends ConsumerWidget {
                           child: Column(
                             children: [
                               Text(
-                                'CALCULATED ASPECT RATIO',
+                                'RELACIÓN DE ASPECTO CALCULADA',
                                 style: AppTypography.mono(palette).copyWith(
                                   fontSize: 10,
                                   letterSpacing: 1.5,
@@ -463,7 +463,7 @@ class FormatSection extends ConsumerWidget {
                           Icon(Icons.memory, size: 16, color: palette.textTertiary),
                           const SizedBox(width: 8),
                           Text(
-                            'SYSTEM SPECIFICATIONS',
+                            'DATOS DEL SISTEMA',
                             style: AppTypography.label(palette).copyWith(
                               fontSize: 11,
                               letterSpacing: 1.5,
@@ -474,14 +474,14 @@ class FormatSection extends ConsumerWidget {
                       ),
                       const SizedBox(height: 14),
                       _SpecRow(
-                        label: 'Camera Body',
+                        label: 'Cuerpo',
                         value: body,
                         palette: palette,
                         onTap: () async {
                           final c = TextEditingController(
                             text: custom['cameraBody']?.toString() ?? body,
                           );
-                          final v = await _prompt(context, 'Camera Body', c);
+                          final v = await _prompt(context, 'Cuerpo', c);
                           if (v != null) {
                             await _updateCustomData(
                               ref,
@@ -491,21 +491,21 @@ class FormatSection extends ConsumerWidget {
                         },
                       ),
                       _SpecRow(
-                        label: 'Lens Mount',
+                        label: 'Montura',
                         value: mount,
                         palette: palette,
                         onTap: () async {
                           final c = TextEditingController(
                             text: custom['lensMount']?.toString() ?? mount,
                           );
-                          final v = await _prompt(context, 'Lens Mount', c);
+                          final v = await _prompt(context, 'Montura', c);
                           if (v != null) {
                             await _updateCustomData(ref, {'lensMount': v});
                           }
                         },
                       ),
                       _SpecRow(
-                        label: 'Sensor Dims',
+                        label: 'Sensor',
                         value: sensorDims,
                         accent: true,
                         palette: palette,
@@ -513,7 +513,7 @@ class FormatSection extends ConsumerWidget {
                           final c =
                               TextEditingController(text: sensorDims);
                           final v =
-                              await _prompt(context, 'Sensor Dims', c);
+                              await _prompt(context, 'Sensor', c);
                           if (v != null) {
                             await _updateCustomData(
                               ref,
@@ -523,7 +523,7 @@ class FormatSection extends ConsumerWidget {
                         },
                       ),
                       _SpecRow(
-                        label: 'Resolution',
+                        label: 'Resolución',
                         value: resolution,
                         accent: true,
                         palette: palette,
@@ -531,20 +531,20 @@ class FormatSection extends ConsumerWidget {
                           final c =
                               TextEditingController(text: resolution);
                           final v =
-                              await _prompt(context, 'Resolution', c);
+                              await _prompt(context, 'Resolución', c);
                           if (v != null) {
                             await _updateCustomData(ref, {'resolution': v});
                           }
                         },
                       ),
                       _SpecRow(
-                        label: 'Image Circle',
+                        label: 'Círculo de imagen',
                         value: circle,
                         palette: palette,
                         onTap: () async {
                           final c = TextEditingController(text: circle);
                           final v =
-                              await _prompt(context, 'Image Circle', c);
+                              await _prompt(context, 'Círculo de imagen', c);
                           if (v != null) {
                             await _updateCustomData(
                               ref,
@@ -554,14 +554,14 @@ class FormatSection extends ConsumerWidget {
                         },
                       ),
                       _SpecRow(
-                        label: 'Crop Factor',
+                        label: 'Factor de recorte',
                         value: crop,
                         palette: palette,
                         last: true,
                         onTap: () async {
                           final c = TextEditingController(text: crop);
                           final v =
-                              await _prompt(context, 'Crop Factor', c);
+                              await _prompt(context, 'Factor de recorte', c);
                           if (v != null) {
                             await _updateCustomData(
                               ref,
@@ -766,7 +766,7 @@ class FormatSection extends ConsumerWidget {
     );
     final ok = await _promptPair(
       context,
-      'Sensor Mode',
+      'Modo de sensor',
       t,
       d,
       aLabel: 'Ratio (4:3) o nombre',
@@ -1256,7 +1256,7 @@ class _FramePreview extends ConsumerWidget {
                             left: 8,
                             bottom: 8,
                             child: Text(
-                              'FILM BIBLE',
+                              'BIBLIA DE FOTOGRAFÍA',
                               style: AppTypography.mono(palette).copyWith(
                                 fontSize: 10,
                                 letterSpacing: 1.2,

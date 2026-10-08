@@ -379,19 +379,23 @@ abstract final class BibleStitchModuleRegistry {
             ),
           ],
         BibleSectionId.format => const [
-            StitchModule(key: 'header', label: 'Cabecera'),
             StitchModule(
               key: 'narrative',
               label: 'Intención narrativa',
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'formatSettings', label: 'Aspect ratio y entrega'),
+            StitchModule(
+              key: 'formatSettings',
+              label: 'Relación de aspecto y sistema',
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
             ),
+            // La cabecera común pone ya el título de la pantalla.
+            StitchModule(key: 'header', label: 'Cabecera', legacyOnly: true),
           ],
         BibleSectionId.workflow => const [
             StitchModule(
@@ -560,6 +564,14 @@ abstract final class BibleStitchModuleRegistry {
           ] else
             field,
       ];
+    }
+
+    // Formato ya no lleva su propia cabecera: la pone la pantalla.
+    if (sectionId == BibleSectionId.format && keys.contains('header')) {
+      return normalizeFields(sectionId, [
+        for (final field in fields)
+          if (field.key != 'header') field,
+      ], layoutVersion: layoutVersion);
     }
 
     // Exposición se partió en la versión 6, igual que Cámara y Óptica.
