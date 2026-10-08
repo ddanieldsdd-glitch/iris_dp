@@ -684,7 +684,7 @@ class _ContainerEditorSheetState extends State<_ContainerEditorSheet> {
             ),
             const SizedBox(height: 20),
             Text(
-              'TAGS QUE QUIERES QUE APAREZCAN',
+              'ETIQUETAS QUE QUIERES QUE APAREZCAN',
               style: AppTypography.mono(palette).copyWith(
                 fontSize: 11,
                 letterSpacing: 1.2,

@@ -1,3 +1,4 @@
+import '../bible_cards_widget.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -50,41 +51,6 @@ class _LightingGlobalMetricsPanelState extends State<LightingGlobalMetricsPanel>
   String get _tintLabel {
     final sign = _tint >= 0 ? '+' : '';
     return '$sign${_tint.toStringAsFixed(2)} G';
-  }
-
-  Future<void> _editFixtureTypes() async {
-    final current = BibleLightingData.fixtureTypeLabels(widget.lightingData);
-    final ctrl = TextEditingController(text: current.join(', '));
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Tipos de fixture principales'),
-        content: TextField(
-          controller: ctrl,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: 'HMI Par, LED Panels, Practicals…',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    final types = ctrl.text
-        .split(',')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-    await widget.onUpdate({'fixtureTypes': types});
   }
 
   @override
@@ -232,61 +198,20 @@ class _LightingGlobalMetricsPanelState extends State<LightingGlobalMetricsPanel>
             ),
           ),
           const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'FIXTURES PRINCIPALES',
-                  style: AppTypography.mono(palette).copyWith(
-                    fontSize: 10,
-                    letterSpacing: 1.2,
-                    color: palette.textTertiary,
-                  ),
-                ),
-              ),
-              TextButton(
-                onPressed: _editFixtureTypes,
-                child: Text(
-                  'Editar',
-                  style: TextStyle(color: palette.accent, fontSize: 12),
-                ),
-              ),
-            ],
+          Text(
+            'FUENTES PRINCIPALES',
+            style: AppTypography.mono(palette).copyWith(
+              fontSize: 10,
+              letterSpacing: 1.2,
+              color: palette.textTertiary,
+            ),
           ),
           const SizedBox(height: 6),
-          if (types.isEmpty)
-            Text(
-              'HMI, LED, prácticos…',
-              style: AppTypography.bodyMedium(palette).copyWith(
-                fontSize: 12,
-                color: palette.textTertiary,
-              ),
-            )
-          else
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final t in types)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: palette.surfaceElevated,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.06),
-                      ),
-                    ),
-                    child: Text(
-                      t,
-                      style: AppTypography.mono(palette).copyWith(fontSize: 11),
-                    ),
-                  ),
-              ],
-            ),
+          // Se escriben aquí mismo: HMI, LED, prácticos…
+          BibleTagsWidget(
+            tags: types,
+            onChanged: (tags) => widget.onUpdate({'fixtureTypes': tags}),
+          ),
         ],
       ),
     );

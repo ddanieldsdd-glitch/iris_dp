@@ -415,7 +415,7 @@ class _NarrativeCardDetailPageState
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'STILLS COINCIDENTES',
+                    'IMÁGENES COINCIDENTES',
                     style: AppTypography.mono(palette).copyWith(
                       fontSize: 11,
                       letterSpacing: 1.2,

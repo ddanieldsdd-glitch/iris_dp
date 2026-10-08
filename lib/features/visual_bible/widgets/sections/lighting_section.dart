@@ -1,6 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
@@ -161,41 +161,6 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
         ),
       );
     }
-  }
-
-  List<Map<String, dynamic>> _fixtureList(dynamic raw) {
-    if (raw is! List) return [];
-    return raw.map((e) {
-      if (e is Map) {
-        return Map<String, dynamic>.from(e);
-      }
-      return <String, dynamic>{'name': e.toString()};
-    }).toList();
-  }
-
-  List<Map<String, String>> _behaviorCards(dynamic raw) {
-    if (raw is! List) return [];
-    return raw.map((e) {
-      if (e is Map) {
-        return {
-          'title': e['title']?.toString() ?? '',
-          'meta': e['meta']?.toString() ?? '',
-          'tag': e['tag']?.toString() ?? '',
-          'note': e['note']?.toString() ?? '',
-        };
-      }
-      return {'title': e.toString(), 'meta': '', 'tag': '', 'note': ''};
-    }).toList();
-  }
-
-  int _parseContrast(String raw) {
-    final m = RegExp(r'(\d+)').firstMatch(raw);
-    return int.tryParse(m?.group(1) ?? '') ?? 8;
-  }
-
-  double _parseTint(String raw) {
-    final m = RegExp(r'([+-]?\d+(?:\.\d+)?)').firstMatch(raw);
-    return double.tryParse(m?.group(1) ?? '') ?? 0;
   }
 
   @override
@@ -405,69 +370,6 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
     );
   }
 
-  static Future<String?> _prompt(
-    BuildContext context,
-    String title,
-    TextEditingController c, {
-    int maxLines = 1,
-  }) {
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(controller: c, autofocus: true, maxLines: maxLines),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, c.text.trim()),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Future<bool?> _promptPair(
-    BuildContext context,
-    String title,
-    TextEditingController a,
-    TextEditingController b, {
-    String aLabel = 'Título',
-    String bLabel = 'Detalle',
-  }) {
-    return showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: a,
-              decoration: InputDecoration(labelText: aLabel),
-            ),
-            TextField(
-              controller: b,
-              decoration: InputDecoration(labelText: bLabel),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 /// Panel técnico colapsable dentro del detalle de localización (luz).
@@ -516,67 +418,29 @@ class _LocationTechnicalPanel extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _EditableTextBlock(
+          key: ValueKey('light_behavior_$planId'),
           icon: Icons.wb_twilight_outlined,
           label: 'Comportamiento de luz',
           text: lightBehavior,
           emptyHint: 'Cómo se comporta la luz en este set…',
           palette: palette,
-          maxLines: 4,
-          onEdit: () async {
+          onSaved: (v) async {
             if (planId == null) return;
-            final c = TextEditingController(text: lightBehavior);
-            final v = await showDialog<String>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Comportamiento de luz'),
-                content: TextField(controller: c, maxLines: 5),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Cancelar'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, c.text),
-                    child: const Text('Guardar'),
-                  ),
-                ],
-              ),
-            );
-            if (v == null) return;
-            await onUpdatePlan(planId!, {'lightBehavior': v.trim()});
-            await onSyncLightingNote(planId!, v.trim());
+            await onUpdatePlan(planId!, {'lightBehavior': v});
+            await onSyncLightingNote(planId!, v);
           },
         ),
         const SizedBox(height: 12),
         _EditableTextBlock(
+          key: ValueKey('day_night_$planId'),
           icon: Icons.nights_stay_outlined,
           label: 'Intención día / noche',
           text: dayNightIntent,
-          emptyHint: 'Diferencias de tratamiento día vs noche…',
+          emptyHint: 'Qué cambia en el tratamiento entre el día y la noche…',
           palette: palette,
-          maxLines: 3,
-          onEdit: () async {
+          onSaved: (v) async {
             if (planId == null) return;
-            final c = TextEditingController(text: dayNightIntent);
-            final v = await showDialog<String>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Intención día / noche'),
-                content: TextField(controller: c, maxLines: 4),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Cancelar'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, c.text),
-                    child: const Text('Guardar'),
-                  ),
-                ],
-              ),
-            );
-            if (v == null) return;
-            await onUpdatePlan(planId!, {'dayNightIntent': v.trim()});
+            await onUpdatePlan(planId!, {'dayNightIntent': v});
           },
         ),
         const SizedBox(height: 16),
@@ -608,366 +472,87 @@ class _LocationTechnicalPanel extends ConsumerWidget {
 
 // ─── Editable text slot ───────────────────────────────────────────────────────
 
-class _EditableTextBlock extends StatelessWidget {
+class _EditableTextBlock extends StatefulWidget {
   final IconData icon;
   final String label;
   final String text;
   final String emptyHint;
   final AppPalette palette;
-  final int maxLines;
-  final VoidCallback onEdit;
-  final Widget? trailing;
+
+  /// Recibe lo escrito poco después de dejar de teclear.
+  final ValueChanged<String> onSaved;
 
   const _EditableTextBlock({
+    super.key,
     required this.icon,
     required this.label,
     required this.text,
     required this.emptyHint,
     required this.palette,
-    required this.maxLines,
-    required this.onEdit,
-    this.trailing,
+    required this.onSaved,
   });
 
   @override
+  State<_EditableTextBlock> createState() => _EditableTextBlockState();
+}
+
+class _EditableTextBlockState extends State<_EditableTextBlock> {
+  Timer? _debounce;
+  String? _pending;
+
+  void _typed(String value) {
+    _pending = value.trim();
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), _flush);
+  }
+
+  void _flush() {
+    final value = _pending;
+    _pending = null;
+    if (value != null) widget.onSaved(value);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _flush();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final palette = widget.palette;
+    final style = AppTypography.bodyMedium(
+      palette,
+    ).copyWith(fontSize: 15, height: 1.55, color: palette.textSecondary);
     return _GlassPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _SectionHead(icon: icon, label: label, palette: palette),
-              if (trailing != null) ...[
-                const Spacer(),
-                trailing!,
-              ],
-            ],
+          _SectionHead(
+            icon: widget.icon,
+            label: widget.label,
+            palette: palette,
           ),
           const SizedBox(height: 12),
-          InkWell(
-            onTap: onEdit,
-            child: Text(
-              text.isEmpty ? emptyHint : text,
-              style: AppTypography.bodyMedium(palette).copyWith(
-                fontSize: 15,
-                height: 1.55,
-                color: text.isEmpty ? palette.textTertiary : palette.textSecondary,
-              ),
+          TextFormField(
+            initialValue: widget.text,
+            minLines: 1,
+            maxLines: null,
+            style: style,
+            decoration: InputDecoration(
+              hintText: widget.emptyHint,
+              hintStyle: style.copyWith(color: palette.textTertiary),
+              isDense: true,
+              filled: false,
+              contentPadding: EdgeInsets.zero,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
             ),
+            onChanged: _typed,
           ),
         ],
-      ),
-    );
-  }
-}
-
-
-
-// ─── Hero (texto, sin imagen fija) ───────────────────────────────────────────
-
-class _HeroTextBanner extends StatelessWidget {
-  final String badge;
-  final String title;
-  final String subtitle;
-  final AppPalette palette;
-  final VoidCallback onEditBadge;
-  final VoidCallback onEditTitle;
-
-  const _HeroTextBanner({
-    required this.badge,
-    required this.title,
-    required this.subtitle,
-    required this.palette,
-    required this.onEditBadge,
-    required this.onEditTitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: SizedBox(
-        height: 200,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            ColoredBox(color: palette.surfaceOverlay),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    palette.background.withValues(alpha: 0.55),
-                    palette.background,
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              left: 28,
-              right: 28,
-              bottom: 28,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  InkWell(
-                    onTap: onEditBadge,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: palette.surface.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.08),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: palette.accent,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            badge.toUpperCase(),
-                            style: AppTypography.mono(palette).copyWith(
-                              fontSize: 11,
-                              letterSpacing: 1.4,
-                              color: palette.accent,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  InkWell(
-                    onTap: onEditTitle,
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '$title\n',
-                            style: AppTypography.displayMedium(palette)
-                                .copyWith(
-                                  fontSize: 32,
-                                  height: 1.15,
-                                  letterSpacing: -0.8,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                          TextSpan(
-                            text: subtitle,
-                            style: AppTypography.displayMedium(palette)
-                                .copyWith(
-                                  fontSize: 26,
-                                  height: 1.2,
-                                  letterSpacing: -0.6,
-                                  color: palette.textTertiary,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Tarjetas de atmósfera (texto, sin slots de imagen) ──────────────────────
-
-class _BehaviorTextCards extends StatelessWidget {
-  final List<Map<String, String>> behaviors;
-  final String contrastRatio;
-  final int colorTemp;
-  final String tintStr;
-  final AppPalette palette;
-  final void Function(int index) onEditCard;
-
-  const _BehaviorTextCards({
-    required this.behaviors,
-    required this.contrastRatio,
-    required this.colorTemp,
-    required this.tintStr,
-    required this.palette,
-    required this.onEditCard,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final wide = c.maxWidth >= 700;
-        final cards = <Widget>[
-          for (var i = 0; i < math.min(3, behaviors.length); i++)
-            _BehaviorTextCard(
-              title: behaviors[i]['title'] ?? '',
-              meta: behaviors[i]['meta'] ?? '',
-              tag: behaviors[i]['tag'] ?? '',
-              note: behaviors[i]['note'] ?? '',
-              tall: wide && i == 0,
-              showTech: i == 0,
-              contrastRatio: contrastRatio,
-              palette: palette,
-              onTap: () => onEditCard(i),
-            ),
-        ];
-        if (!wide) {
-          return Column(
-            children: [
-              for (var i = 0; i < cards.length; i++) ...[
-                if (i > 0) const SizedBox(height: 12),
-                cards[i],
-              ],
-            ],
-          );
-        }
-        if (cards.isEmpty) return const SizedBox.shrink();
-        return SizedBox(
-          height: 200,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (cards.isNotEmpty)
-                Expanded(flex: 8, child: cards[0]),
-              if (cards.length > 1) ...[
-                const SizedBox(width: 14),
-                Expanded(
-                  flex: 4,
-                  child: Column(
-                    children: [
-                      if (cards.length > 1)
-                        Expanded(child: cards[1]),
-                      if (cards.length > 2) ...[
-                        const SizedBox(height: 14),
-                        Expanded(child: cards[2]),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _BehaviorTextCard extends StatelessWidget {
-  final String title;
-  final String meta;
-  final String tag;
-  final String note;
-  final bool tall;
-  final bool showTech;
-  final String contrastRatio;
-  final AppPalette palette;
-  final VoidCallback onTap;
-
-  const _BehaviorTextCard({
-    required this.title,
-    required this.meta,
-    required this.tag,
-    required this.note,
-    required this.tall,
-    required this.showTech,
-    required this.contrastRatio,
-    required this.palette,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        constraints: BoxConstraints(minHeight: tall ? 200 : 88),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0D0D0D),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (showTech)
-              Row(
-                children: [
-                  const Spacer(),
-                  Text(
-                    'RATIO $contrastRatio',
-                    style: AppTypography.mono(palette).copyWith(
-                      fontSize: 10,
-                      color: palette.accent.withValues(alpha: 0.85),
-                    ),
-                  ),
-                ],
-              ),
-            Text(
-              title.toUpperCase(),
-              style: AppTypography.mono(palette).copyWith(
-                fontSize: 11,
-                letterSpacing: 1.3,
-                color: palette.accent,
-              ),
-            ),
-            const SizedBox(height: 6),
-            if (note.isNotEmpty)
-              Text(
-                note,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodyMedium(palette).copyWith(
-                  fontSize: 13,
-                  color: palette.textSecondary,
-                  height: 1.4,
-                ),
-              )
-            else
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      meta,
-                      style: AppTypography.mono(palette).copyWith(
-                        fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.9),
-                      ),
-                    ),
-                  ),
-                  if (tag.isNotEmpty)
-                    Text(
-                      tag,
-                      style: AppTypography.mono(palette).copyWith(
-                        fontSize: 12,
-                        color: palette.textTertiary,
-                      ),
-                    ),
-                ],
-              ),
-          ],
-        ),
       ),
     );
   }
@@ -1065,7 +650,7 @@ class _TelemetryPanelState extends State<_TelemetryPanel> {
           Row(
             children: [
               Text(
-                'TELEMETRY METRICS',
+                'MÉTRICAS DEL SET',
                 style: AppTypography.mono(palette).copyWith(
                   fontSize: 12,
                   letterSpacing: 1.5,
@@ -1208,7 +793,7 @@ class _TelemetryPanelState extends State<_TelemetryPanel> {
           Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
           const SizedBox(height: 16),
           Text(
-            'ACTIVE FIXTURES',
+            'APARATOS ENCENDIDOS',
             style: AppTypography.mono(
               palette,
             ).copyWith(fontSize: 10, letterSpacing: 1.4, color: palette.accent),
@@ -1618,7 +1203,7 @@ class _SetupsBlock extends ConsumerWidget {
         Row(
           children: [
             Text(
-              'LIGHTING SETUPS',
+              'ESQUEMAS DE LUZ',
               style: AppTypography.mono(palette).copyWith(
                 fontSize: 12,
                 letterSpacing: 1.4,
