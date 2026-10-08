@@ -761,8 +761,6 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                       ),
                       child: InkWell(
                         onTap: _locateSite,
-                        onLongPress: () =>
-                            _edit('Elevación', 'elevation', elevation),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
@@ -781,14 +779,19 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                                 palette,
                               ).copyWith(fontSize: 11, color: Colors.white),
                             ),
-                            if (elevation.isNotEmpty)
-                              Text(
-                                elevation,
+                            InkWell(
+                              onTap: () =>
+                                  _edit('Elevación', 'elevation', elevation),
+                              child: Text(
+                                elevation.isEmpty
+                                    ? 'Añadir elevación'
+                                    : elevation,
                                 style: AppTypography.mono(palette).copyWith(
                                   fontSize: 10,
                                   color: palette.textTertiary,
                                 ),
                               ),
+                            ),
                           ],
                         ),
                       ),
