@@ -188,7 +188,7 @@ abstract final class BibleSectionFieldsConfig {
   /// Versión de la lista de puntos. Las migraciones que añaden puntos de
   /// fábrica solo se aplican a contenidos guardados con una versión menor,
   /// para no reinsertar lo que el usuario quitó.
-  static const layoutVersion = 6;
+  static const layoutVersion = 7;
 
   static List<BibleSectionField> defaultsFor(String sectionId) =>
       BibleStitchModuleRegistry.defaultFieldsFor(sectionId);

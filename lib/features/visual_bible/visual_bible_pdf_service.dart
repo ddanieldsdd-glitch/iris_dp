@@ -18,6 +18,7 @@ import '../../shared/visual_bible/concept_points.dart';
 import '../../shared/visual_bible/exposure_points.dart';
 import '../../shared/visual_bible/optics_points.dart';
 import '../../shared/visual_bible/texture_points.dart';
+import '../../shared/visual_bible/workflow_points.dart';
 import '../../shared/visual_bible/direction_points.dart';
 import '../../shared/visual_bible/bible_reference.dart';
 import '../../shared/visual_bible/format_pilot_resolve.dart';
@@ -762,43 +763,40 @@ class VisualBiblePdfService {
       }
     }
 
-    if (!isPitch &&
-        _sectionAllowed(sections, BibleSectionId.workflow) &&
-        (_hasAny([
-              data.workflowPipeline,
-              data.codec,
-              data.deliveryColorSpace,
-              data.resolutionNotes,
-              data.frameRateNotes,
-            ]) ||
-            _hasCustomContent(
-              BibleSectionId.workflow,
-              sectionContentJsonById,
-            ))) {
-      addSection(
+    if (!isPitch && _sectionAllowed(sections, BibleSectionId.workflow)) {
+      final workflowJson = sectionContentJsonById[BibleSectionId.workflow];
+      final workflowAssets = await _loadSectionAssets(
         BibleSectionId.workflow,
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => _sectionPage(
-            title: 'WORKFLOW',
-            sectionId: BibleSectionId.workflow,
-            fontBold: fonts.bold,
-            font: fonts.regular,
-            content: _textFieldsContent([
-              ('Pipeline', data.workflowPipeline),
-              ('Códec', data.codec),
-              ('Espacio de color de entrega', data.deliveryColorSpace),
-              ('Resolución', data.resolutionNotes),
-              ('Frame rate', data.frameRateNotes),
-              ..._customFieldRows(
-                BibleSectionId.workflow,
-                sectionContentJsonById,
-              ),
-            ], fonts),
-          ),
-        ),
+        workflowJson,
+        moodboard,
+        boardLayout,
+        fonts,
       );
+      final workflowContent = _workflowContent(
+        data,
+        workflowJson,
+        kit,
+        workflowAssets,
+      );
+      if (workflowContent.isNotEmpty) {
+        addSection(
+          BibleSectionId.workflow,
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader(
+                _renamed[BibleSectionId.workflow] ?? 'Workflow',
+                image: _heroes[BibleSectionId.workflow],
+                accent: _heroColors[BibleSectionId.workflow],
+              ),
+              pw.SizedBox(height: 24),
+              ...workflowContent,
+            ],
+          ),
+        );
+      }
     }
 
     if (!isPitch &&
@@ -2089,6 +2087,75 @@ class VisualBiblePdfService {
                 blob,
                 highlightBehavior: data.highlightBehavior,
                 shadowBehavior: data.shadowBehavior,
+              ),
+            ),
+          );
+        case 'references':
+          final stills = assets.stills;
+          if (stills != null) {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            out.add(stills);
+            out.add(pw.SizedBox(height: 10));
+          }
+        default:
+          add(kit.point(field, values[field.key]));
+      }
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Workflow: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _workflowContent(
+    VisualBibleData data,
+    String? contentJson,
+    BiblePdfKit kit,
+    _SectionAssets assets,
+  ) {
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final out = <pw.Widget>[];
+    void add(pw.Widget? point) {
+      if (point != null) out.add(point);
+    }
+
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.workflow,
+    )) {
+      switch (field.key) {
+        case 'narrative':
+          final intent = values['narrative']?.trim() ?? '';
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+        case WorkflowPoints.steps:
+          final table = WorkflowPoints.stepsValue(values);
+          // Una tabla con solo los nombres de los pasos está sin rellenar.
+          if (WorkflowPoints.stepsFilled(table)) {
+            out.add(kit.tablePoint(field.label, table));
+          }
+        case WorkflowPoints.team:
+          add(kit.textSpecsPoint(field.label, WorkflowPoints.teamValue(values)));
+        case WorkflowPoints.delivery:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              WorkflowPoints.withFacts(
+                WorkflowPoints.deliveryValue(
+                  values,
+                  deliveryColorSpace: data.deliveryColorSpace,
+                  resolutionNotes: data.resolutionNotes,
+                  workflowPipeline: data.workflowPipeline,
+                ),
+                WorkflowPoints.fromCamera(
+                  codec: data.codec,
+                  frameRate: data.frameRateNotes,
+                ),
               ),
             ),
           );

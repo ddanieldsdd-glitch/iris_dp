@@ -412,7 +412,20 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'workflowSettings', label: 'Pipeline de workflow'),
+            StitchModule(
+              key: 'workflowSettings',
+              label: 'Del rodaje a la entrega',
+            ),
+            StitchModule(
+              key: 'dataTeam',
+              label: 'Equipo de datos',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(
+              key: 'delivery',
+              label: 'Formatos y entrega',
+              width: BiblePointWidth.half,
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
@@ -589,6 +602,25 @@ abstract final class BibleStitchModuleRegistry {
             field.copyWith(label: renamed[field.label]),
         ], layoutVersion: layoutVersion);
       }
+    }
+
+    // Workflow ganó dos puntos en la versión 7, añadidos una sola vez.
+    if (layoutVersion < 7 &&
+        sectionId == BibleSectionId.workflow &&
+        keys.contains('workflowSettings')) {
+      BibleSectionField? add(String key) =>
+          keys.contains(key) ? null : module(sectionId, key)?.toField();
+      return [
+        for (final field in fields)
+          if (field.key == 'workflowSettings') ...[
+            field.label == 'Pipeline de workflow'
+                ? field.copyWith(label: 'Del rodaje a la entrega')
+                : field,
+            ?add('dataTeam'),
+            ?add('delivery'),
+          ] else
+            field,
+      ];
     }
 
     // Formato ya no lleva su propia cabecera: la pone la pantalla.
