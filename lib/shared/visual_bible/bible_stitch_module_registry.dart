@@ -142,13 +142,21 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'lut', label: 'LUT y color science'),
+            StitchModule(
+              key: 'lut',
+              label: 'LUT y ciencia de color',
+              width: BiblePointWidth.twoThirds,
+            ),
+            StitchModule(
+              key: 'baseTemp',
+              label: 'Temperatura base',
+              width: BiblePointWidth.third,
+            ),
             StitchModule(
               key: 'blocks',
               label: 'Paletas por bloque',
               type: BibleSectionFieldType.blocks,
             ),
-            StitchModule(key: 'baseTemp', label: 'Temperatura base (K)'),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',

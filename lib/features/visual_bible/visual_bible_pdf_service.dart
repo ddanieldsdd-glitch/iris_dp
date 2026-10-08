@@ -13,6 +13,7 @@ import '../../shared/visual_bible/bible_cards.dart';
 import '../../shared/visual_bible/bible_point_extras.dart';
 import '../../shared/visual_bible/bible_text_specs.dart';
 import '../../shared/visual_bible/camera_points.dart';
+import '../../shared/visual_bible/color_points.dart';
 import '../../shared/visual_bible/concept_points.dart';
 import '../../shared/visual_bible/exposure_points.dart';
 import '../../shared/visual_bible/optics_points.dart';
@@ -439,85 +440,41 @@ class VisualBiblePdfService {
       }
     }
 
-    if (!isTech &&
-        _sectionAllowed(sections, BibleSectionId.colorImage) &&
-        (colorBlocks.isNotEmpty ||
-            _hasCustomContent(
-              BibleSectionId.colorImage,
-              sectionContentJsonById,
-            ))) {
-      addSection(
+    if (!isTech && _sectionAllowed(sections, BibleSectionId.colorImage)) {
+      final colorJson = sectionContentJsonById[BibleSectionId.colorImage];
+      final colorAssets = await _loadSectionAssets(
         BibleSectionId.colorImage,
-        pw.MultiPage(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (context) => [
-            _sectionHeader(
-              'COLOR E IMAGEN',
-              fonts.bold,
-              sectionId: BibleSectionId.colorImage,
-            ),
-            ...colorBlocks.map(
-              (block) => pw.Container(
-                margin: const pw.EdgeInsets.only(bottom: 20),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      block.blockName,
-                      style: pw.TextStyle(font: fonts.bold, fontSize: 15),
-                    ),
-                    if (block.emotionalIntent?.isNotEmpty == true)
-                      pw.Text(
-                        block.emotionalIntent!,
-                        style: const pw.TextStyle(
-                          fontSize: 11,
-                          color: PdfColors.grey700,
-                        ),
-                      ),
-                    pw.SizedBox(height: 10),
-                    pw.Row(
-                      children: [
-                        ...block.dominantColors.map(
-                          (hex) => pw.Container(
-                            width: 56,
-                            height: 56,
-                            margin: const pw.EdgeInsets.only(right: 6),
-                            decoration: pw.BoxDecoration(
-                              color: _hexToPdf(hex),
-                              borderRadius: pw.BorderRadius.circular(6),
-                            ),
-                          ),
-                        ),
-                        if (block.colorTempKelvin != null)
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.only(left: 12),
-                            child: pw.Text(
-                              '${block.colorTempKelvin}K',
-                              style: pw.TextStyle(
-                                font: fonts.bold,
-                                fontSize: 18,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (data.workingLutName != null)
-              _techChip('LUT trabajo', data.workingLutName!, fonts),
-            if (data.creativeLutName != null)
-              _techChip('LUT creativo', data.creativeLutName!, fonts),
-            _customFieldsWidget(
-              BibleSectionId.colorImage,
-              sectionContentJsonById,
-              fonts,
-            ),
-          ],
-        ),
+        colorJson,
+        moodboard,
+        boardLayout,
+        fonts,
       );
+      final colorContent = _colorContent(
+        data,
+        colorJson,
+        colorBlocks,
+        kit,
+        colorAssets,
+      );
+      if (colorContent.isNotEmpty) {
+        addSection(
+          BibleSectionId.colorImage,
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader(
+                _renamed[BibleSectionId.colorImage] ?? 'Color e imagen',
+                image: _heroes[BibleSectionId.colorImage],
+                accent: _heroColors[BibleSectionId.colorImage],
+              ),
+              pw.SizedBox(height: 24),
+              ...colorContent,
+            ],
+          ),
+        );
+      }
     }
 
     if (!isPitch &&
@@ -1965,6 +1922,107 @@ class VisualBiblePdfService {
         case ExposurePoints.byLocation:
           final table = ExposurePoints.byLocationValue(values, blob);
           if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
+        case 'references':
+          final stills = assets.stills;
+          if (stills != null) {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            out.add(stills);
+            out.add(pw.SizedBox(height: 10));
+          }
+        default:
+          add(kit.point(field, values[field.key]));
+      }
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Color e imagen: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _colorContent(
+    VisualBibleData data,
+    String? contentJson,
+    List<ColorBlockModel> colorBlocks,
+    BiblePdfKit kit,
+    _SectionAssets assets,
+  ) {
+    final blob = ColorPoints.blob(contentJson);
+    final names = ColorPoints.swatchNames(blob);
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final out = <pw.Widget>[];
+    void add(pw.Widget? point) {
+      if (point != null) out.add(point);
+    }
+
+    List<(String, String)> swatches(List<String> stored) => [
+      for (final c in ColorPoints.swatches(stored, names: names))
+        (c.hex, c.name),
+    ];
+
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.colorImage,
+    )) {
+      switch (field.key) {
+        case 'narrative':
+          final intent = data.colorNarrativeIntent?.trim() ?? '';
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+        case ColorPoints.lut:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              ColorPoints.lutValue(
+                values,
+                blob,
+                workingLut: data.workingLutName,
+                showLut: data.creativeLutName,
+              ),
+            ),
+          );
+        case ColorPoints.baseTemp:
+          final meters = ColorPoints.baseTempMeters(
+            values,
+            blob,
+            firstBlockKelvin: colorBlocks.firstOrNull?.colorTempKelvin,
+          ).where((m) => m.value.trim().isNotEmpty).toList();
+          if (meters.isNotEmpty) out.add(kit.metersPoint(field.label, meters));
+        case ColorPoints.blocks:
+          final filled = [
+            for (final block in colorBlocks)
+              if (block.blockName.trim().isNotEmpty ||
+                  block.dominantColors.isNotEmpty ||
+                  block.accentColors.isNotEmpty ||
+                  block.prohibitedColors.isNotEmpty ||
+                  (block.emotionalIntent ?? '').trim().isNotEmpty)
+                block,
+          ];
+          if (filled.isNotEmpty) {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+          }
+          for (final block in filled) {
+            final title = [
+              block.blockName.trim(),
+              if (block.colorTempKelvin != null) '${block.colorTempKelvin} K',
+            ].where((e) => e.isNotEmpty).join(' · ');
+            final intent = (block.emotionalIntent ?? '').trim();
+            if (title.isNotEmpty || intent.isNotEmpty) {
+              out.add(kit.textPoint(title, intent));
+            }
+            for (final (name, colors) in [
+              ('Dominantes', swatches(block.dominantColors)),
+              ('Acentos', swatches(block.accentColors)),
+              ('Se evitan', swatches(block.prohibitedColors)),
+            ]) {
+              if (colors.isNotEmpty) out.add(kit.swatchRow(name, colors));
+            }
+          }
         case 'references':
           final stills = assets.stills;
           if (stills != null) {
