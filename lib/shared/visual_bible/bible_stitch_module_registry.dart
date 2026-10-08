@@ -212,14 +212,43 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'cameraBody', label: 'Cámara y formato'),
+            StitchModule(
+              key: 'equipment',
+              label: 'Cámaras',
+              width: BiblePointWidth.twoThirds,
+            ),
+            StitchModule(
+              key: 'cameraBody',
+              label: 'Ficha del cuerpo',
+              width: BiblePointWidth.third,
+            ),
+            StitchModule(
+              key: 'recording',
+              label: 'Formato y cadencia',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(
+              key: 'colorPipeline',
+              label: 'Color en cámara',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(key: 'recordingMatrix', label: 'Matriz de grabación'),
             StitchModule(key: 'philosophy', label: 'Filosofía de cámara'),
             StitchModule(key: 'movements', label: 'Movimientos de cámara'),
-            StitchModule(key: 'specsReference', label: 'Fichas técnicas'),
+            StitchModule(
+              key: 'accessories',
+              label: 'Filtros, soportes y accesorios',
+            ),
+            StitchModule(key: 'dataManagement', label: 'Gestión de datos'),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
+            ),
+            StitchModule(
+              key: 'specsReference',
+              label: 'Referencias técnicas',
+              optional: true,
             ),
           ],
         BibleSectionId.lighting => const [
@@ -436,6 +465,41 @@ abstract final class BibleStitchModuleRegistry {
             module(sectionId, 'composition')!.toField(),
         ],
       ];
+    }
+
+    // Cámara se partió en la versión 4: lo que iba dentro de «Cámara y
+    // formato» son ahora puntos propios. Se añaden una sola vez a las
+    // biblias guardadas antes, para que nada de lo escrito quede sin
+    // pantalla. Si el usuario quita alguno después, no vuelve.
+    if (layoutVersion < 4 &&
+        sectionId == BibleSectionId.camera &&
+        keys.contains('cameraBody')) {
+      BibleSectionField? add(String key) =>
+          keys.contains(key) ? null : module(sectionId, key)?.toField();
+      final tail = [
+        ?add('accessories'),
+        ?add('dataManagement'),
+      ];
+      final out = <BibleSectionField>[];
+      for (final field in fields) {
+        if (field.key == 'cameraBody') {
+          out.addAll([
+            ?add('equipment'),
+            field.copyWith(label: 'Ficha del cuerpo'),
+            ?add('recording'),
+            ?add('colorPipeline'),
+            ?add('recordingMatrix'),
+          ]);
+        } else if (field.key == 'references') {
+          out
+            ..addAll(tail)
+            ..add(field);
+          tail.clear();
+        } else {
+          out.add(field);
+        }
+      }
+      return [...out, ...tail];
     }
 
     if (sectionId == BibleSectionId.texture) {

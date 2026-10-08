@@ -315,6 +315,7 @@ class _CustomBibleSectionState extends State<CustomBibleSection> {
       BibleSectionFieldType.tags ||
       BibleSectionFieldType.table ||
       BibleSectionFieldType.meters ||
+      BibleSectionFieldType.equipment ||
       BibleSectionFieldType.referenceDeck => _catalogPoint(field),
     };
   }

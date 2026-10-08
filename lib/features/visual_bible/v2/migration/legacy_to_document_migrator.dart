@@ -195,6 +195,7 @@ abstract final class LegacyToDocumentMigrator {
       BibleSectionFieldType.tags ||
       BibleSectionFieldType.table ||
       BibleSectionFieldType.meters ||
+      BibleSectionFieldType.equipment ||
       BibleSectionFieldType.palette => BibleBlockKind.text,
       BibleSectionFieldType.gallery ||
       BibleSectionFieldType.referenceDeck => BibleBlockKind.moodboardRefs,

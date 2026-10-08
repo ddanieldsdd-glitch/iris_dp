@@ -12,6 +12,7 @@ import '../../shared/visual_bible/bible_acts.dart';
 import '../../shared/visual_bible/bible_cards.dart';
 import '../../shared/visual_bible/bible_point_extras.dart';
 import '../../shared/visual_bible/bible_text_specs.dart';
+import '../../shared/visual_bible/camera_points.dart';
 import '../../shared/visual_bible/concept_points.dart';
 import '../../shared/visual_bible/direction_points.dart';
 import '../../shared/visual_bible/bible_reference.dart';
@@ -678,41 +679,37 @@ class VisualBiblePdfService {
     }
 
     if (!isPitch && _sectionAllowed(sections, BibleSectionId.camera)) {
-      final cameraBlob = CameraPilotResolve.parseBlob(
-        BibleSectionExportReader.withoutUserPoints(
-          sectionContentJsonById[BibleSectionId.camera],
-          BibleSectionId.camera,
-        ),
+      final cameraJson = sectionContentJsonById[BibleSectionId.camera];
+      final cameraAssets = await _loadSectionAssets(
+        BibleSectionId.camera,
+        cameraJson,
+        moodboard,
+        boardLayout,
+        fonts,
       );
-      if (CameraPilotResolve.hasExportablePilotContent(
-            data,
-            cameraBlob,
-            primaryCameraLabel: primaryCameraLabel,
-          ) ||
-          _hasUserPoints(BibleSectionId.camera, sectionContentJsonById)) {
+      final cameraContent = _cameraContent(
+        data,
+        cameraJson,
+        kit,
+        cameraAssets,
+        primaryCameraLabel: primaryCameraLabel,
+      );
+      if (cameraContent.isNotEmpty) {
         addSection(
           BibleSectionId.camera,
-          pw.Page(
+          pw.MultiPage(
             theme: theme,
             pageFormat: PdfPageFormat.a4,
-            build: (_) => _sectionPage(
-              title: 'CÁMARA Y SENSOR',
-              sectionId: BibleSectionId.camera,
-              fontBold: fonts.bold,
-              font: fonts.regular,
-              content: _textFieldsContent([
-                ...CameraPilotResolve.fixedSlotsForPdf(
-                  data,
-                  cameraBlob,
-                  primaryCameraLabel: primaryCameraLabel,
-                ),
-                ...CameraPilotResolve.customRowsForPdf(cameraBlob),
-                ..._userPointRows(
-                  BibleSectionId.camera,
-                  sectionContentJsonById,
-                ),
-              ], fonts),
-            ),
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader(
+                _renamed[BibleSectionId.camera] ?? 'Cámara y sensor',
+                image: _heroes[BibleSectionId.camera],
+                accent: _heroColors[BibleSectionId.camera],
+              ),
+              pw.SizedBox(height: 24),
+              ...cameraContent,
+            ],
           ),
         );
       }
@@ -1687,6 +1684,139 @@ class VisualBiblePdfService {
           if (point != null) out.add(point);
       }
       // Complementos del punto: imágenes y texto.
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Cámara y sensor: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _cameraContent(
+    VisualBibleData data,
+    String? contentJson,
+    BiblePdfKit kit,
+    _SectionAssets assets, {
+    String? primaryCameraLabel,
+  }) {
+    final blob = CameraPilotResolve.parseBlob(
+      BibleSectionExportReader.withoutUserPoints(
+        contentJson,
+        BibleSectionId.camera,
+      ),
+    );
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final equipment = CameraPoints.equipmentItems(
+      values,
+      legacyCameraId: data.primaryCameraId,
+      legacyCameraName: primaryCameraLabel,
+    ).where((item) => !item.isEmpty).toList();
+    final facts = equipment.isEmpty
+        ? const <String, String>{}
+        : equipment.first.facts;
+
+    final out = <pw.Widget>[];
+    void add(pw.Widget? point) {
+      if (point != null) out.add(point);
+    }
+
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.camera,
+    )) {
+      switch (field.key) {
+        case 'narrative':
+          final intent = data.cameraNarrativeIntent?.trim() ?? '';
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+        case CameraPoints.equipment:
+          if (equipment.isNotEmpty) {
+            out.add(kit.equipmentPoint(field.label, equipment));
+          }
+        case CameraPoints.body:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              CameraPoints.withFacts(
+                CameraPoints.bodyValue(values, blob, nativeIso: data.nativeIso),
+                facts,
+              ),
+            ),
+          );
+        case CameraPoints.recording:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              CameraPoints.recordingValue(
+                values,
+                blob,
+                captureResolution: CameraPilotResolve.captureResolution(
+                  blob,
+                  data,
+                ),
+                codec: data.codec ?? data.recordingFormat,
+                colorScience: data.colorScienceNotes,
+                frameRate: data.frameRateNotes,
+              ),
+            ),
+          );
+        case CameraPoints.matrix:
+          final table = CameraPoints.matrixValue(values);
+          if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
+        case CameraPoints.colorPipeline:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              CameraPoints.colorPipelineValue(
+                values,
+                blob,
+                showLut: data.creativeLutName,
+              ),
+            ),
+          );
+        case CameraPoints.accessories:
+          final table = CameraPoints.accessoriesValue(values, blob);
+          if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
+        case CameraPoints.dataFlow:
+          final cards = CameraPoints.dataFlowCards(
+            values,
+            blob,
+            workflowPipeline: data.workflowPipeline,
+          ).where((card) => !card.isEmpty).toList();
+          if (cards.isNotEmpty) out.add(kit.cardsPoint(field.label, cards));
+        case CameraPoints.philosophy:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              CameraPoints.philosophyValue(
+                values,
+                philosophy: data.cameraPhilosophy,
+                movementStyle: data.movementStyle,
+              ),
+            ),
+          );
+        case CameraPoints.movements:
+          final cards = CameraPoints.movementCards(
+            values,
+            data.cameraMovements,
+          ).where((card) => !card.isEmpty).toList();
+          if (cards.isNotEmpty) {
+            out.add(kit.cardsPoint(field.label, cards, columns: true));
+          }
+        case 'references' || 'specsReference':
+          final stills = assets.stills;
+          if (stills != null && field.key == 'references') {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            out.add(stills);
+            out.add(pw.SizedBox(height: 10));
+          }
+        default:
+          add(kit.point(field, values[field.key]));
+      }
       out.addAll(
         kit.extras(
           values,

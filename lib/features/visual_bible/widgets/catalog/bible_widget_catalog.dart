@@ -18,7 +18,9 @@ import '../bible_navigation_scope.dart';
 import '../bible_palette_widget.dart';
 import '../bible_point_images.dart';
 import '../bible_point_panel.dart';
+import '../bible_equipment_widget.dart';
 import '../bible_references_deck.dart';
+import '../../../../shared/visual_bible/bible_equipment.dart';
 import '../bible_table_widget.dart';
 import '../../../../shared/visual_bible/bible_table.dart';
 import '../../../../shared/visual_bible/bible_text_specs.dart';
@@ -325,6 +327,17 @@ abstract final class BibleWidgetCatalog {
       build: _generic,
     ),
     const BibleWidgetEntry(
+      id: 'equipment',
+      type: BibleSectionFieldType.equipment,
+      category: BibleWidgetCategory.data,
+      label: 'Cámaras del proyecto',
+      description:
+          'Cada cámara, tentativa o definitiva, con su alternativa.',
+      icon: Icons.videocam_outlined,
+      screens: {BibleSectionId.camera},
+      build: _equipment,
+    ),
+    const BibleWidgetEntry(
       id: 'text_specs',
       type: BibleSectionFieldType.specs,
       category: BibleWidgetCategory.data,
@@ -506,6 +519,19 @@ abstract final class BibleWidgetCatalog {
           value: BibleTextSpecsValue.decode(ctx.value),
           hint: ctx.field.hint ?? 'Escribe aquí…',
           onChanged: (value) => ctx.onChanged(value.encode()),
+        ),
+      );
+
+  static Widget _equipment(BuildContext context, BibleWidgetContext ctx) =>
+      BiblePointPanel(
+        label: ctx.field.label,
+        icon: Icons.videocam_outlined,
+        child: BibleCameraEquipmentPoint(
+          key: ValueKey('equipment_${ctx.sectionId}_${ctx.field.key}'),
+          projectId: ctx.projectId,
+          items: BibleEquipmentItem.listFrom(ctx.value),
+          onChanged: (items) =>
+              ctx.onChanged(BibleEquipmentItem.encode(items)),
         ),
       );
 

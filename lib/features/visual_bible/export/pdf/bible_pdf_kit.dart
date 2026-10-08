@@ -1,3 +1,4 @@
+import '../../../../shared/visual_bible/bible_equipment.dart';
 import '../../../../shared/visual_bible/bible_table.dart';
 import '../../../../shared/visual_bible/bible_text_specs.dart';
 import 'package:pdf/pdf.dart';
@@ -920,6 +921,109 @@ class BiblePdfKit {
     ),
   );
 
+  /// Equipo: cada pieza con su papel, su estado y su alternativa.
+  pw.Widget equipmentPoint(
+    String label,
+    List<BibleEquipmentItem> items, {
+    bool feminine = true,
+  }) => pw.Padding(
+    padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        this.label(label),
+        pw.SizedBox(height: 4),
+        for (final item in items)
+          pw.Container(
+            margin: const pw.EdgeInsets.only(bottom: 6),
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              color: BiblePdfTokens.panel,
+              borderRadius: pw.BorderRadius.circular(BiblePdfTokens.radius),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Row(
+                  children: [
+                    if (item.role.isNotEmpty) ...[
+                      pw.Text(
+                        item.role,
+                        style: pw.TextStyle(
+                          font: bold,
+                          fontSize: 12,
+                          color: BiblePdfTokens.accent,
+                        ),
+                      ),
+                      pw.SizedBox(width: 8),
+                    ],
+                    pw.Expanded(
+                      child: pw.Text(
+                        item.name,
+                        style: pw.TextStyle(
+                          font: bold,
+                          fontSize: 11,
+                          color: BiblePdfTokens.ink,
+                        ),
+                      ),
+                    ),
+                    pw.Text(
+                      (feminine ? item.status.feminine : item.status.masculine)
+                          .toUpperCase(),
+                      style: pw.TextStyle(
+                        font: bold,
+                        fontSize: 7,
+                        letterSpacing: 0.8,
+                        color: item.status == BibleEquipmentStatus.definitive
+                            ? BiblePdfTokens.accent
+                            : BiblePdfTokens.secondary,
+                      ),
+                    ),
+                  ],
+                ),
+                if (item.facts.isNotEmpty) ...[
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    item.facts.entries
+                        .map((e) => '${e.key}: ${e.value}')
+                        .join('  ·  '),
+                    style: pw.TextStyle(
+                      font: regular,
+                      fontSize: 8,
+                      color: BiblePdfTokens.secondary,
+                    ),
+                  ),
+                ],
+                if (item.note.trim().isNotEmpty) ...[
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    item.note.trim(),
+                    style: pw.TextStyle(
+                      font: regular,
+                      fontSize: 9,
+                      color: BiblePdfTokens.ink,
+                    ),
+                  ),
+                ],
+                if (item.hasAlternative) ...[
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'ALTERNATIVA · ${item.altName}'
+                    '${item.altNote.trim().isEmpty ? '' : ' — ${item.altNote.trim()}'}',
+                    style: pw.TextStyle(
+                      font: regular,
+                      fontSize: 8,
+                      color: BiblePdfTokens.secondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
+
   /// Texto con datos: el desarrollo y, debajo, los datos con valor.
   pw.Widget? textSpecsPoint(String label, BibleTextSpecsValue value) {
     if (value.isEmpty) return null;
@@ -1143,6 +1247,11 @@ class BiblePdfKit {
               ),
           ],
         );
+      case BibleSectionFieldType.equipment:
+        final items = BibleEquipmentItem.listFrom(
+          raw,
+        ).where((item) => !item.isEmpty).toList();
+        return items.isEmpty ? null : equipmentPoint(field.label, items);
       case BibleSectionFieldType.table:
         final table = BibleTableValue.decode(raw);
         return table.isEmpty ? null : tablePoint(field.label, table);

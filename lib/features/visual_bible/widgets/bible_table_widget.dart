@@ -322,11 +322,16 @@ class BibleTextSpecsWidget extends StatefulWidget {
   final String hint;
   final ValueChanged<BibleTextSpecsValue> onChanged;
 
+  /// Valor que toma cada dato mientras no se escriba otro: rótulo → valor
+  /// (p. ej. los de la ficha de la cámara). Se ve en gris.
+  final Map<String, String> placeholders;
+
   const BibleTextSpecsWidget({
     super.key,
     required this.value,
     required this.onChanged,
     this.hint = 'Escribe aquí…',
+    this.placeholders = const {},
   });
 
   @override
@@ -382,7 +387,7 @@ class _BibleTextSpecsWidgetState extends State<BibleTextSpecsWidget>
           children: [
             for (var i = 0; i < rows.length; i++)
               Container(
-                width: 168,
+                width: 184,
                 padding: const EdgeInsets.fromLTRB(10, 6, 2, 6),
                 decoration: BoxDecoration(
                   color: palette.background.withValues(alpha: 0.35),
@@ -399,6 +404,9 @@ class _BibleTextSpecsWidgetState extends State<BibleTextSpecsWidget>
                           TextFormField(
                             key: ValueKey('ts_label_${_shape}_$i'),
                             initialValue: rows[i].$1,
+                            // Un rótulo largo baja de línea: no se corta.
+                            minLines: 1,
+                            maxLines: null,
                             style: labelStyle,
                             textCapitalization: TextCapitalization.characters,
                             decoration: _bare(palette, 'DATO', labelStyle),
@@ -414,7 +422,11 @@ class _BibleTextSpecsWidgetState extends State<BibleTextSpecsWidget>
                             minLines: 1,
                             maxLines: null,
                             style: valueStyle,
-                            decoration: _bare(palette, '—', valueStyle),
+                            decoration: _bare(
+                              palette,
+                              widget.placeholders[rows[i].$1] ?? '—',
+                              valueStyle,
+                            ),
                             onChanged: (v) => _edit(
                               _value.copyWith(
                                 rows: _withRow(i, (_value.rows[i].$1, v)),
