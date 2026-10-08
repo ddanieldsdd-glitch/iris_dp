@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:drift/drift.dart' as drift;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
@@ -367,7 +368,68 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
         .map((m) => '#${m.group(1)!.toUpperCase()}')
         .toList();
     if (fromNote.isNotEmpty) return fromNote;
-    return const ['#1A1C1E', '#3B4045', '#6C7075', '#A58D70', '#CC9B52'];
+    // Sin colores propios no se inventa una paleta.
+    return const [];
+  }
+
+  /// Edición rápida de un dato: se guarda con Intro o al cerrar; Esc lo
+  /// deja como estaba.
+  Future<String?> _quickEdit(
+    String title,
+    String current, {
+    int lines = 1,
+  }) async {
+    final c = TextEditingController(text: current);
+    var cancelled = false;
+    final submitted = await showDialog<String>(
+      context: context,
+      builder: (ctx) => CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () {
+            cancelled = true;
+            Navigator.pop(ctx);
+          },
+        },
+        child: Dialog(
+          backgroundColor: context.palette.surfaceElevated,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    title.toUpperCase(),
+                    style: AppTypography.mono(context.palette).copyWith(
+                      fontSize: 11,
+                      letterSpacing: 0.66,
+                      color: context.palette.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: c,
+                    autofocus: true,
+                    minLines: lines > 1 ? 3 : 1,
+                    maxLines: lines > 1 ? null : 1,
+                    textInputAction: lines > 1
+                        ? TextInputAction.newline
+                        : TextInputAction.done,
+                    onSubmitted: (v) => Navigator.pop(ctx, v),
+                    decoration: const InputDecoration(isDense: true),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (cancelled) return null;
+    // Tocar fuera cierra y guarda lo escrito.
+    return submitted ?? c.text;
   }
 
   Future<void> _edit(
@@ -377,56 +439,23 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     int lines = 1,
     void Function(String)? also,
   }) async {
-    final c = TextEditingController(text: current);
-    final v = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(controller: c, autofocus: true, maxLines: lines),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, c.text.trim()),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    );
-    if (v == null) return;
+    final raw = await _quickEdit(title, current, lines: lines);
+    if (raw == null) return;
+    final v = raw.trim();
+    if (v == current.trim()) return;
     await widget.onExtras({key: v});
     also?.call(v);
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   Future<void> _editList(String title, String key, List<String> current) async {
-    final c = TextEditingController(text: current.join('\n'));
-    final v = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: c,
-          autofocus: true,
-          maxLines: 6,
-          decoration: const InputDecoration(hintText: 'Una línea por ítem'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, c.text),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
+    final raw = await _quickEdit(
+      '$title · una línea por elemento',
+      current.join('\n'),
+      lines: 6,
     );
-    if (v == null) return;
-    final items = v
+    if (raw == null) return;
+    final items = raw
         .split('\n')
         .map((e) => e.replaceFirst(RegExp(r'^[\s•\-]+'), '').trim())
         .where((e) => e.isNotEmpty)
@@ -625,31 +654,31 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
       'locLabel',
       (widget.siteName ?? widget.plan.locationName).toUpperCase(),
     );
-    final intExt = _s('intExt', 'EXT. DÍA');
-    final azimuth = (x['azimuth'] as num?)?.toDouble() ?? 134;
-    final sunrise = _s('sunrise', '06:42 AM');
-    final sunriseAz = _s('sunriseAz', '72°');
-    final sunset = _s('sunset', '19:15 PM');
-    final sunsetAz = _s('sunsetAz', '288°');
+    final intExt = _s('intExt', '');
+    final azimuth = (x['azimuth'] as num?)?.toDouble() ?? 0;
+    final sunrise = _s('sunrise', '');
+    final sunriseAz = _s('sunriseAz', '');
+    final sunset = _s('sunset', '');
+    final sunsetAz = _s('sunsetAz', '');
     final daylight = _s(
       'daylightWindow',
-      _model.availableLightHours ?? '12h 33m',
+      _model.availableLightHours ?? '',
     );
-    final blueHour = _s('blueHour', '19:15 – 19:43');
-    final goldenHour = _s('goldenHour', '18:20 – 19:15');
-    final maxElev = _s('maxElevation', '48° @ 13:00');
-    final shadow = _s('shadowRatio', '1 : 1.1');
+    final blueHour = _s('blueHour', '');
+    final goldenHour = _s('goldenHour', '');
+    final maxElev = _s('maxElevation', '');
+    final shadow = _s('shadowRatio', '');
     final elevation = _s('elevation', '');
 
-    final contrast = _s('contrastRatio', '1:8 (High)');
-    final quality = _s('lightQuality', 'Hard / Directional');
-    final bounce = _s('bouncePotential', 'Low (Dark surfaces)');
+    final contrast = _s('contrastRatio', '');
+    final quality = _s('lightQuality', '');
+    final bounce = _s('bouncePotential', '');
     final siteLightNote = _s('siteLightNote', _model.lightingNote ?? '');
 
-    final weather = _s('weather', 'Partly Cloudy, 15°C');
-    final humidity = _s('humidity', '65% / Medium Diffusion');
-    final sky = _s('skyQuality', 'Bortle Class 5');
-    final wind = _s('wind', '12 km/h NW');
+    final weather = _s('weather', '');
+    final humidity = _s('humidity', '');
+    final sky = _s('skyQuality', '');
+    final wind = _s('wind', '');
 
     final psychology = _s('spatialPsychology', _model.stagingNote ?? '');
     final strategy = _s('strategy', '');
@@ -658,14 +687,8 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     final soundscape = _s('soundscape', '');
     final practicals = _s('practicalsDetail', _model.existingPracticals ?? '');
 
-    final gear = _list('extraGear', const [
-      '2x HMI 18K + Lentes',
-      '4x Skypanel S60',
-    ]);
-    final critical = _list('criticalPoints', const [
-      'Reflejos en ventanales',
-      'Acceso limitado para generador',
-    ]);
+    final gear = _list('extraGear', const []);
+    final critical = _list('criticalPoints', const []);
     final colors = _paletteColors();
 
     final heroPath = _model.referenceImages.isNotEmpty
@@ -680,7 +703,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: BibleTargetZone(
-              hint: 'Clic aquí → ⌘V para pegar foto de hero',
+              hint: 'Clic aquí y ⌘V para pegar la foto principal',
               minHeight: 0,
               onPaste: _pastePhoto,
               onMoodboardDropped: _dropMoodboardPhoto,
@@ -804,7 +827,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                       children: [
                         _Pill(
                           icon: Icons.wb_sunny_outlined,
-                          label: intExt,
+                          label: intExt.isEmpty ? 'INT / EXT' : intExt,
                           palette: palette,
                           onTap: () => _edit('INT/EXT', 'intExt', intExt),
                         ),
@@ -812,7 +835,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                         _Pill(
                           label: 'LOC: $locLabel',
                           palette: palette,
-                          onTap: () => _edit('Label LOC', 'locLabel', locLabel),
+                          onTap: () => _edit('Nombre del lugar', 'locLabel', locLabel),
                         ),
                       ],
                     ),
@@ -835,27 +858,27 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                     children: [
                       _CardHead(
                         icon: Icons.light_mode_outlined,
-                        label: 'Luz del Sitio',
+                        label: 'Luz del sitio',
                         palette: palette,
                       ),
                       const SizedBox(height: 14),
                       _Kv(
-                        label: 'Contrast Ratio',
+                        label: 'Contraste',
                         value: contrast,
                         onTap: () =>
-                            _edit('Contrast Ratio', 'contrastRatio', contrast),
+                            _edit('Contraste', 'contrastRatio', contrast),
                         palette: palette,
                       ),
                       _Kv(
-                        label: 'Quality of Light',
+                        label: 'Calidad de la luz',
                         value: quality,
-                        onTap: () => _edit('Quality', 'lightQuality', quality),
+                        onTap: () => _edit('Calidad de la luz', 'lightQuality', quality),
                         palette: palette,
                       ),
                       _Kv(
-                        label: 'Bounce Potential',
+                        label: 'Rebote del lugar',
                         value: bounce,
-                        onTap: () => _edit('Bounce', 'bouncePotential', bounce),
+                        onTap: () => _edit('Rebote del lugar', 'bouncePotential', bounce),
                         palette: palette,
                       ),
                       const SizedBox(height: 10),
@@ -917,7 +940,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                     final v = await showDialog<String>(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                        title: const Text('Azimuth (°)'),
+                        title: const Text('Acimut (°)'),
                         content: TextField(
                           controller: ctrl,
                           keyboardType: TextInputType.number,
@@ -976,33 +999,33 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                     children: [
                       _CardHead(
                         icon: Icons.cloud_outlined,
-                        label: 'Condiciones Atmosféricas',
+                        label: 'Condiciones atmosféricas',
                         palette: palette,
                       ),
                       const SizedBox(height: 12),
                       _Kv(
-                        label: 'Weather',
+                        label: 'Tiempo',
                         value: weather,
-                        onTap: () => _edit('Weather', 'weather', weather),
+                        onTap: () => _edit('Tiempo', 'weather', weather),
                         palette: palette,
                       ),
                       _Kv(
-                        label: 'Humidity / Haze',
+                        label: 'Humedad y bruma',
                         value: humidity,
-                        onTap: () => _edit('Humidity', 'humidity', humidity),
+                        onTap: () => _edit('Humedad y bruma', 'humidity', humidity),
                         palette: palette,
                       ),
                       _Kv(
-                        label: 'Sky Quality',
+                        label: 'Cielo',
                         value: sky,
-                        onTap: () => _edit('Sky', 'skyQuality', sky),
+                        onTap: () => _edit('Cielo', 'skyQuality', sky),
                         palette: palette,
                         accent: true,
                       ),
                       _Kv(
-                        label: 'Wind',
+                        label: 'Viento',
                         value: wind,
-                        onTap: () => _edit('Wind', 'wind', wind),
+                        onTap: () => _edit('Viento', 'wind', wind),
                         palette: palette,
                       ),
                     ],
@@ -1023,7 +1046,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                   critical: critical,
                   palette: palette,
                   onEditPsychology: () => _edit(
-                    'Spatial Psychology',
+                    'Psicología del espacio',
                     'spatialPsychology',
                     psychology,
                     lines: 5,
@@ -1064,7 +1087,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                     children: [
                       _CardHead(
                         icon: Icons.lightbulb_outline,
-                        label: 'Practical Light Sources',
+                        label: 'Luces del propio lugar',
                         palette: palette,
                       ),
                       const SizedBox(height: 12),
@@ -1288,7 +1311,7 @@ class _SolarCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'AZIMUTH',
+                          'ACIMUT',
                           style: AppTypography.mono(
                             palette,
                           ).copyWith(fontSize: 10, color: palette.textTertiary),
@@ -1305,26 +1328,26 @@ class _SolarCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _MiniStat(
-                  label: 'Sunrise',
+                  label: 'Amanecer',
                   value: sunrise,
-                  sub: 'Az: $sunriseAz',
+                  sub: sunriseAz.isEmpty ? null : 'Acimut $sunriseAz',
                   palette: palette,
                   onTap: () {
-                    onEditField('sunrise', 'Sunrise', sunrise);
-                    onEditField('sunriseAz', 'Sunrise Az', sunriseAz);
+                    onEditField('sunrise', 'Amanecer', sunrise);
+                    onEditField('sunriseAz', 'Acimut del amanecer', sunriseAz);
                   },
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _MiniStat(
-                  label: 'Sunset',
+                  label: 'Atardecer',
                   value: sunset,
-                  sub: 'Az: $sunsetAz',
+                  sub: sunsetAz.isEmpty ? null : 'Acimut $sunsetAz',
                   palette: palette,
                   onTap: () {
-                    onEditField('sunset', 'Sunset', sunset);
-                    onEditField('sunsetAz', 'Sunset Az', sunsetAz);
+                    onEditField('sunset', 'Atardecer', sunset);
+                    onEditField('sunsetAz', 'Acimut del atardecer', sunsetAz);
                   },
                 ),
               ),
@@ -1342,27 +1365,27 @@ class _SolarCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _Kv(
-            label: 'Blue Hour',
+            label: 'Hora azul',
             value: blueHour,
-            onTap: () => onEditField('blueHour', 'Blue Hour', blueHour),
+            onTap: () => onEditField('blueHour', 'Hora azul', blueHour),
             palette: palette,
           ),
           _Kv(
-            label: 'Golden Hour',
+            label: 'Hora dorada',
             value: goldenHour,
-            onTap: () => onEditField('goldenHour', 'Golden Hour', goldenHour),
+            onTap: () => onEditField('goldenHour', 'Hora dorada', goldenHour),
             palette: palette,
           ),
           _Kv(
-            label: 'Max Elevation',
+            label: 'Altura máxima del sol',
             value: maxElev,
-            onTap: () => onEditField('maxElevation', 'Max Elevation', maxElev),
+            onTap: () => onEditField('maxElevation', 'Altura máxima del sol', maxElev),
             palette: palette,
           ),
           _Kv(
-            label: 'Shadow Ratio (Noon)',
+            label: 'Largo de sombra a mediodía',
             value: shadow,
-            onTap: () => onEditField('shadowRatio', 'Shadow Ratio', shadow),
+            onTap: () => onEditField('shadowRatio', 'Largo de sombra a mediodía', shadow),
             palette: palette,
           ),
         ],
@@ -1414,7 +1437,7 @@ class _NarrativeStagingCard extends StatelessWidget {
         children: [
           _CardHead(
             icon: Icons.psychology_outlined,
-            label: 'Refuerzo Narrativo & Staging',
+            label: 'Refuerzo narrativo y puesta en escena',
             palette: palette,
           ),
           const SizedBox(height: 16),
@@ -1422,16 +1445,16 @@ class _NarrativeStagingCard extends StatelessWidget {
             builder: (context, c) {
               final wide = c.maxWidth >= 520;
               final a = _NarrativeBlock(
-                title: 'Spatial Psychology',
+                title: 'Psicología del espacio',
                 body: psychology,
-                hint: 'Toca para definir…',
+                hint: 'Qué le hace el lugar al personaje…',
                 onTap: onEditPsychology,
                 palette: palette,
               );
               final b = _NarrativeBlock(
-                title: 'Estrategia General',
+                title: 'Estrategia general',
                 body: strategy,
-                hint: 'Toca para estrategia de luz/staging…',
+                hint: 'Cómo se va a iluminar y a mover la cámara aquí…',
                 onTap: onEditStrategy,
                 palette: palette,
               );
@@ -1450,23 +1473,23 @@ class _NarrativeStagingCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _NarrativeBlock(
-            title: 'Geografía Narrativa',
+            title: 'Geografía narrativa',
             body: narrativeGeo,
-            hint: 'Cómo el espacio fuerza el blocking…',
+            hint: 'Cómo el espacio condiciona los movimientos de los actores…',
             onTap: onEditGeo,
             palette: palette,
           ),
           const SizedBox(height: 12),
           _NarrativeBlock(
-            title: 'Textura y Materialidad',
+            title: 'Textura y materiales',
             body: textureMat,
-            hint: 'Concreto, metal, absorción…',
+            hint: 'Hormigón, metal, cuánto absorbe o devuelve la luz…',
             onTap: onEditTexture,
             palette: palette,
           ),
           const SizedBox(height: 12),
           _NarrativeBlock(
-            title: 'Paisaje Sonoro',
+            title: 'Paisaje sonoro',
             body: soundscape,
             hint: 'Reverberación, ritmo de cámara…',
             onTap: onEditSound,
@@ -1685,7 +1708,7 @@ class _MapsCard extends StatelessWidget {
         children: [
           _CardHead(
             icon: Icons.map_outlined,
-            label: 'Google Earth Location',
+            label: 'En el mapa',
             palette: palette,
           ),
           const SizedBox(height: 12),
@@ -1775,7 +1798,7 @@ class _RefsGallery extends StatelessWidget {
               Expanded(
                 child: _CardHead(
                   icon: Icons.collections_outlined,
-                  label: 'Referencias de Ángulo',
+                  label: 'Referencias de ángulo',
                   palette: palette,
                 ),
               ),
@@ -1950,7 +1973,7 @@ class _Kv extends StatelessWidget {
             ),
             Flexible(
               child: Text(
-                value,
+                value.isEmpty ? '—' : value,
                 textAlign: TextAlign.right,
                 style: AppTypography.mono(palette).copyWith(
                   fontSize: 12,
@@ -2006,7 +2029,7 @@ class _MiniStat extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              value,
+              value.isEmpty ? '—' : value,
               style: AppTypography.mono(palette).copyWith(
                 fontSize: 13,
                 color: accentValue ? palette.accent : Colors.white,
