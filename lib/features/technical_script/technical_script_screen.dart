@@ -1024,6 +1024,165 @@ class _SceneSectionState extends ConsumerState<_SceneSection> {
   }
 }
 
+/// Título de la escena con sus tres datos cambiables al toque: INT/EXT,
+/// lugar y momento. El resto (nombre, descripción, color) va en «Editar».
+class _SceneTitle extends ConsumerWidget {
+  final Scene scene;
+  const _SceneTitle({required this.scene});
+
+  Future<void> _save(
+    WidgetRef ref, {
+    String? intExt,
+    String? dayNight,
+    LocationChoice? place,
+  }) async {
+    final db = ref.read(databaseProvider);
+    final fresh = await db.getSceneById(scene.id);
+    if (fresh == null) return;
+    final oldPlace = locationFromCanonical(fresh.locationCanonical);
+    final newIntExt = intExt ?? fresh.intExt;
+    final newDayNight = dayNight ?? fresh.dayNight;
+    final newPlace = place?.placeName ?? oldPlace;
+    // El nombre sigue al título mientras nadie le haya puesto uno propio.
+    final hadDefaultName =
+        fresh.name ==
+        formatSceneDefaultName(
+          intExt: fresh.intExt,
+          dayNight: fresh.dayNight,
+          location: oldPlace,
+        );
+    await db.updateScene(
+      fresh.copyWith(
+        intExt: newIntExt,
+        dayNight: newDayNight,
+        locationCanonical: '$newIntExt. $newPlace - $newDayNight',
+        name: hadDefaultName
+            ? formatSceneDefaultName(
+                intExt: newIntExt,
+                dayNight: newDayNight,
+                location: newPlace,
+              )
+            : fresh.name,
+        locationPureName: place?.set.locationName ?? fresh.locationPureName,
+        locationSiteId: place != null
+            ? Value(place.site.id)
+            : Value(fresh.locationSiteId),
+        locationId: place != null
+            ? Value(place.set.id)
+            : Value(fresh.locationId),
+      ),
+    );
+  }
+
+  Future<void> _pickPlace(BuildContext context, WidgetRef ref) async {
+    final palette = context.palette;
+    final choice = await showDialog<LocationChoice>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: palette.surfaceElevated,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '¿Dónde ocurre la escena ${scene.number}?',
+                  style: AppTypography.titleMedium(palette),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                WhereField(
+                  projectId: scene.projectId,
+                  autofocus: true,
+                  onChanged: (choice) {
+                    if (choice != null) Navigator.pop(dialogContext, choice);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (choice != null) await _save(ref, place: choice);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final style = AppTypography.titleMedium(
+      palette,
+    ).copyWith(color: palette.textPrimary, letterSpacing: 0.5);
+
+    Widget chip(String text, String tooltip) => Tooltip(
+      message: tooltip,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+        child: Text(text, style: style),
+      ),
+    );
+
+    Widget menu(
+      String value,
+      List<String> options,
+      String tooltip,
+      ValueChanged<String> onSelected,
+    ) => PopupMenuButton<String>(
+      tooltip: tooltip,
+      initialValue: value,
+      padding: EdgeInsets.zero,
+      onSelected: (v) {
+        if (v != value) onSelected(v);
+      },
+      itemBuilder: (_) => [
+        for (final o in options) PopupMenuItem(value: o, child: Text(o)),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+        child: Text(value, style: style),
+      ),
+    );
+
+    return Row(
+      children: [
+        Text('${scene.number}.', style: style),
+        const SizedBox(width: 3),
+        menu(
+          scene.intExt,
+          kIntExtOptions,
+          'Cambiar interior o exterior',
+          (v) => _save(ref, intExt: v),
+        ),
+        Flexible(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: () => _pickPlace(context, ref),
+            child: chip(
+              locationFromCanonical(scene.locationCanonical),
+              'Cambiar el lugar',
+            ),
+          ),
+        ),
+        Text('-', style: style),
+        menu(
+          scene.dayNight,
+          kDayNightOptions,
+          'Cambiar el momento',
+          (v) => _save(ref, dayNight: v),
+        ),
+        const SizedBox(width: 6),
+        DayNightIcon(
+          dayNight: scene.dayNight,
+          size: 18,
+          color: palette.textSecondary,
+        ),
+      ],
+    );
+  }
+}
+
 class _SceneHeader extends ConsumerWidget {
   final Scene scene;
   final int shotCount;
@@ -1060,7 +1219,6 @@ class _SceneHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final accent = colors.sceneColor(scene);
-    final locationName = locationFromCanonical(scene.locationCanonical);
 
     return Container(
       decoration: BoxDecoration(
@@ -1089,15 +1247,7 @@ class _SceneHeader extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SceneMetaDisplay(
-                  intExt: scene.intExt,
-                  dayNight: scene.dayNight,
-                  location: '${scene.number}. $locationName',
-                  style: AppTypography.titleMedium(
-                    palette,
-                  ).copyWith(color: palette.textPrimary, letterSpacing: 0.5),
-                  iconSize: 18,
-                ),
+                _SceneTitle(scene: scene),
                 if (scene.offScript) ...[
                   const SizedBox(height: 6),
                   Row(

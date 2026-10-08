@@ -359,6 +359,37 @@ void main() {
     await unmount(tester);
   });
 
+  testWidgets('la cabecera de la escena cambia INT/EXT y momento al toque', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+
+    await tester.tap(find.byTooltip('Cambiar el momento'));
+    await settle(tester);
+    await tester.tap(find.text('ATARDECER').last);
+    await settle(tester);
+    await tester.tap(find.byTooltip('Cambiar interior o exterior'));
+    await settle(tester);
+    await tester.tap(find.text('EXT').last);
+    await settle(tester);
+
+    final scene = (await db.select(db.scenes).get()).single;
+    expect(scene.dayNight, 'ATARDECER');
+    expect(scene.intExt, 'EXT');
+    expect(scene.locationCanonical, 'EXT. CALLE RAVAL - ATARDECER');
+    // El nombre propio de la escena no se toca.
+    expect(scene.name, 'Escena');
+    expect(find.byTooltip('Cambiar el lugar'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmount(tester);
+  });
+
   testWidgets('la duración está oculta hasta que se activa en Columnas', (
     tester,
   ) async {
