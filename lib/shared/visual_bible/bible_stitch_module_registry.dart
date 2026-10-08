@@ -120,10 +120,18 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'macroPreview', label: 'Vista macro grano / ruido'),
-            StitchModule(key: 'filmGrain', label: 'Film Grain'),
-            StitchModule(key: 'diffusion', label: 'Diffusion Optics'),
-            StitchModule(key: 'sensorNoise', label: 'Sensor Noise Floor'),
+            StitchModule(key: 'macroPreview', label: 'Comparación de textura'),
+            StitchModule(
+              key: 'filmGrain',
+              label: 'Grano',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(
+              key: 'diffusion',
+              label: 'Difusión',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(key: 'sensorNoise', label: 'Ruido del sensor'),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
@@ -564,6 +572,23 @@ abstract final class BibleStitchModuleRegistry {
           ] else
             field,
       ];
+    }
+
+    // Textura tenía sus puntos rotulados en inglés: los que conserven el
+    // rótulo de fábrica pasan al nuevo; los que el usuario renombró, no.
+    if (sectionId == BibleSectionId.texture) {
+      const renamed = {
+        'Vista macro grano / ruido': 'Comparación de textura',
+        'Film Grain': 'Grano',
+        'Diffusion Optics': 'Difusión',
+        'Sensor Noise Floor': 'Ruido del sensor',
+      };
+      if (fields.any((f) => renamed.containsKey(f.label))) {
+        return normalizeFields(sectionId, [
+          for (final field in fields)
+            field.copyWith(label: renamed[field.label]),
+        ], layoutVersion: layoutVersion);
+      }
     }
 
     // Formato ya no lleva su propia cabecera: la pone la pantalla.

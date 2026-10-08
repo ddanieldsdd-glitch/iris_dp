@@ -344,7 +344,43 @@ abstract final class BibleSectionExportReader {
         ))
           ...card.imageIds,
     ],
+    // Puntos propios de las pantallas pasadas al catálogo (tarjetas, actos,
+    // paletas y tiras de imágenes): guardan su valor en `values[clave]`.
+    for (final field in BibleSectionFieldsConfig.parse(contentJson, sectionId))
+      if (BibleStitchModuleRegistry.module(sectionId, field.key) != null)
+        ..._imageIdsIn(
+          BibleSectionFieldsConfig.parseValues(contentJson)[field.key],
+        ),
   };
+
+  /// Imágenes del moodboard que usa un valor, sea cual sea su widget.
+  static Iterable<int> _imageIdsIn(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return const [];
+    Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } catch (_) {
+      return const [];
+    }
+    if (decoded is Map) {
+      if (decoded.containsKey('layers') || decoded.containsKey('own')) {
+        return BibleActsValue.decode(raw).imageIds;
+      }
+      if (decoded.containsKey('colors') || decoded.containsKey('show')) {
+        return BiblePaletteValue.decode(raw).imageIds;
+      }
+      return const [];
+    }
+    if (decoded is! List) return const [];
+    return [
+      for (final entry in decoded)
+        // Tarjetas con sus imágenes, o una tira de identificadores.
+        if (entry is Map)
+          ...BibleCard.fromJson(entry).imageIds
+        else if (int.tryParse(entry.toString()) != null)
+          int.parse(entry.toString()),
+    ];
+  }
 
   static bool _isUserPoint(String sectionId, BibleSectionField field) =>
       BibleStitchModuleRegistry.module(sectionId, field.key) == null &&

@@ -17,6 +17,7 @@ import '../../shared/visual_bible/color_points.dart';
 import '../../shared/visual_bible/concept_points.dart';
 import '../../shared/visual_bible/exposure_points.dart';
 import '../../shared/visual_bible/optics_points.dart';
+import '../../shared/visual_bible/texture_points.dart';
 import '../../shared/visual_bible/direction_points.dart';
 import '../../shared/visual_bible/bible_reference.dart';
 import '../../shared/visual_bible/format_pilot_resolve.dart';
@@ -725,57 +726,40 @@ class VisualBiblePdfService {
       }
     }
 
-    if (!isPitch &&
-        _sectionAllowed(sections, BibleSectionId.texture) &&
-        (_hasAny([
-              data.imageTexture,
-              data.grainLevel,
-              data.diffusionNotes,
-              data.textureNarrativeIntent,
-              data.filtrationNotes,
-            ]) ||
-            _hasCustomContent(BibleSectionId.texture, sectionContentJsonById) ||
-            MoodboardExportGrouper.imagesForSection(
-              moodboard,
-              BibleSectionId.texture,
-            ).isNotEmpty)) {
-      final textureCells = await _loadMoodboardCells(
-        MoodboardExportGrouper.imagesForSection(
-          moodboard,
-          BibleSectionId.texture,
-        ),
-        boardLayout,
-      );
-      addSection(
+    if (!isPitch && _sectionAllowed(sections, BibleSectionId.texture)) {
+      final textureJson = sectionContentJsonById[BibleSectionId.texture];
+      final textureAssets = await _loadSectionAssets(
         BibleSectionId.texture,
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => _sectionPage(
-            title: 'TEXTURA',
-            sectionId: BibleSectionId.texture,
-            fontBold: fonts.bold,
-            font: fonts.regular,
-            content: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                _textFieldsContent([
-                  ('Textura de imagen', data.imageTexture),
-                  ('Grano', data.grainLevel),
-                  ('Difusión', data.diffusionNotes),
-                  ('Filtración', data.filtrationNotes),
-                  ('Intención narrativa', data.textureNarrativeIntent),
-                  ..._customFieldRows(
-                    BibleSectionId.texture,
-                    sectionContentJsonById,
-                  ),
-                ], fonts),
-                ..._stillStrip(textureCells, fonts),
-              ],
-            ),
-          ),
-        ),
+        textureJson,
+        moodboard,
+        boardLayout,
+        fonts,
       );
+      final textureContent = _textureContent(
+        data,
+        textureJson,
+        kit,
+        textureAssets,
+      );
+      if (textureContent.isNotEmpty) {
+        addSection(
+          BibleSectionId.texture,
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader(
+                _renamed[BibleSectionId.texture] ?? 'Textura',
+                image: _heroes[BibleSectionId.texture],
+                accent: _heroColors[BibleSectionId.texture],
+              ),
+              pw.SizedBox(height: 24),
+              ...textureContent,
+            ],
+          ),
+        );
+      }
     }
 
     if (!isPitch &&
@@ -2023,6 +2007,91 @@ class VisualBiblePdfService {
               if (colors.isNotEmpty) out.add(kit.swatchRow(name, colors));
             }
           }
+        case 'references':
+          final stills = assets.stills;
+          if (stills != null) {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            out.add(stills);
+            out.add(pw.SizedBox(height: 10));
+          }
+        default:
+          add(kit.point(field, values[field.key]));
+      }
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Textura: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _textureContent(
+    VisualBibleData data,
+    String? contentJson,
+    BiblePdfKit kit,
+    _SectionAssets assets,
+  ) {
+    final blob = TexturePoints.blob(contentJson);
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final out = <pw.Widget>[];
+    void add(pw.Widget? point) {
+      if (point != null) out.add(point);
+    }
+
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.texture,
+    )) {
+      switch (field.key) {
+        case 'narrative':
+          final intent = data.textureNarrativeIntent?.trim() ?? '';
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+        case TexturePoints.comparison:
+          add(
+            kit.point(
+              BibleSectionField(
+                key: field.key,
+                label: field.label,
+                type: BibleSectionFieldType.gallery,
+              ),
+              values[field.key],
+            ),
+          );
+        case TexturePoints.grain:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              TexturePoints.grainValue(
+                values,
+                blob,
+                grainLevel: data.grainLevel,
+              ),
+            ),
+          );
+        case TexturePoints.diffusion:
+          final meters = TexturePoints.diffusionMeters(
+            values,
+            blob,
+            diffusionNotes: data.diffusionNotes,
+          ).where((m) => m.label.trim().isNotEmpty).toList();
+          if (meters.isNotEmpty) out.add(kit.metersPoint(field.label, meters));
+        case TexturePoints.noise:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              TexturePoints.noiseValue(
+                values,
+                blob,
+                highlightBehavior: data.highlightBehavior,
+                shadowBehavior: data.shadowBehavior,
+              ),
+            ),
+          );
         case 'references':
           final stills = assets.stills;
           if (stills != null) {
