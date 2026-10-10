@@ -836,7 +836,30 @@ class _ColorLights extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Text(colors[i].hex, style: mono),
+                    // Se puede escribir el color: #RRGGBB.
+                    SizedBox(
+                      width: 78,
+                      child: TextFormField(
+                        key: ValueKey('hex_${i}_${colors[i].rgb}'),
+                        initialValue: colors[i].hex,
+                        style: mono,
+                        textAlign: TextAlign.end,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          filled: false,
+                          contentPadding: EdgeInsets.zero,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                        ),
+                        onChanged: (text) {
+                          final rgb = LightColor.parseHex(text);
+                          if (rgb != null && rgb != colors[i].rgb) {
+                            _set(i, colors[i].copyWith(rgb: rgb, name: ''));
+                          }
+                        },
+                      ),
+                    ),
                     IconButton(
                       icon: Icon(
                         Icons.close,

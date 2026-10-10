@@ -81,7 +81,30 @@ class NarrativeDeckBlock extends ConsumerWidget {
                 ],
               ),
             ),
-            if (allowAdd)
+            // Una referencia de cine es una película o un grupo de stills.
+            if (allowAdd && kind == NarrativeCardKind.filmRef)
+              PopupMenuButton<String>(
+                tooltip: 'Añadir referencia',
+                onSelected: (type) => _addCard(context, ref, refType: type),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'film', child: Text('Una película')),
+                  PopupMenuItem(
+                    value: 'stills',
+                    child: Text('Un grupo de stills'),
+                  ),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.add, color: palette.accent, size: 18),
+                      const SizedBox(width: 6),
+                      Text('Añadir', style: TextStyle(color: palette.accent)),
+                    ],
+                  ),
+                ),
+              )
+            else if (allowAdd)
               TextButton.icon(
                 onPressed: () => _addCard(context, ref),
                 icon: Icon(Icons.add, color: palette.accent, size: 18),
@@ -137,7 +160,7 @@ class NarrativeDeckBlock extends ConsumerWidget {
                     crossAxisCount: cross,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
-                    childAspectRatio: 0.85,
+                    childAspectRatio: 0.78,
                   ),
                   itemBuilder: (context, i) {
                     final card = cards[i];
@@ -159,7 +182,11 @@ class NarrativeDeckBlock extends ConsumerWidget {
     );
   }
 
-  Future<void> _addCard(BuildContext context, WidgetRef ref) async {
+  Future<void> _addCard(
+    BuildContext context,
+    WidgetRef ref, {
+    String? refType,
+  }) async {
     final db = ref.read(databaseProvider);
     final existing = await db
         .watchNarrativeCardsForSection(bibleId, sectionId, kind: kind)
@@ -168,8 +195,9 @@ class NarrativeDeckBlock extends ConsumerWidget {
         ? 0
         : existing.map((c) => c.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
     final defaultTitle = switch (kind) {
-      NarrativeCardKind.style => 'Nuevo estilo de luz',
-      NarrativeCardKind.filmRef => 'Nueva referencia',
+      NarrativeCardKind.style => 'Nueva idea de luz',
+      NarrativeCardKind.filmRef =>
+        refType == 'stills' ? 'Grupo de stills' : 'Nueva película',
       NarrativeCardKind.locationLight => 'Localización',
       _ => 'Nueva carta',
     };
@@ -179,6 +207,9 @@ class NarrativeDeckBlock extends ConsumerWidget {
         sectionId: sectionId,
         kind: kind,
         title: defaultTitle,
+        metaJson: Value(
+          refType == 'stills' ? jsonEncode({'refType': 'stills'}) : null,
+        ),
         sortOrder: Value(nextOrder),
       ),
     );

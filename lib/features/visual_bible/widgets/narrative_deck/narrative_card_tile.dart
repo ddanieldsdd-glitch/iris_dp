@@ -1,3 +1,4 @@
+import '../../../../shared/visual_bible/lighting_card_page.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -26,6 +27,17 @@ class NarrativeCardTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final db = ref.watch(databaseProvider);
+    final page = LightingCardPage.of(
+      kind: card.kind,
+      body: card.body,
+      meta: card.meta,
+    );
+    final metrics = page.metrics;
+    final ratio = metrics.ratioOption;
+    final mono = AppTypography.mono(
+      palette,
+    ).copyWith(fontSize: 11, color: palette.textSecondary);
+    final summary = (card.body ?? '').trim();
 
     return Material(
       color: Colors.transparent,
@@ -48,7 +60,8 @@ class NarrativeCardTile extends ConsumerWidget {
                   ),
                   child: _Cover(
                     db: db,
-                    coverId: card.coverMoodboardImageId,
+                    // Sin portada, la primera imagen de su mosaico.
+                    coverId: card.coverMoodboardImageId ?? page.firstImageId,
                     palette: palette,
                   ),
                 ),
@@ -58,14 +71,72 @@ class NarrativeCardTile extends ConsumerWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        card.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.bodyMedium(palette).copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: palette.textPrimary,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            card.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodyMedium(palette).copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: palette.textPrimary,
+                            ),
+                          ),
+                          if (summary.isNotEmpty)
+                            Text(
+                              summary,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.caption(palette),
+                            ),
+                          // El dato de luz de la ficha, a la vista.
+                          if (metrics.usesColors ||
+                              metrics.kelvin != null ||
+                              ratio != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Row(
+                                children: [
+                                  if (metrics.usesColors)
+                                    for (final c in metrics.colors.take(5))
+                                      Container(
+                                        width: 10,
+                                        height: 10,
+                                        margin: const EdgeInsets.only(right: 3),
+                                        decoration: BoxDecoration(
+                                          color: Color(0xFF000000 | c.rgb),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      )
+                                  else if (metrics.kelvin != null) ...[
+                                    Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: Color(
+                                          0xFF000000 | metrics.color!,
+                                        ),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text('${metrics.kelvin} K', style: mono),
+                                  ],
+                                  if (ratio != null) ...[
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      ratio.label,
+                                      style: mono.copyWith(
+                                        color: palette.accent,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     if (onDelete != null)
