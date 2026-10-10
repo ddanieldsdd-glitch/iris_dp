@@ -210,7 +210,7 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
           bibleId: widget.bibleId,
           sectionId: BibleSectionId.lighting,
           kind: NarrativeCardKind.style,
-          title: 'Comportamiento de la luz',
+          title: 'Ideas de luz',
           subtitle:
               'Textura, calidad, color y cómo se comporta la luz en el proyecto',
         ),
@@ -223,7 +223,7 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
           bibleId: widget.bibleId,
           sectionId: BibleSectionId.lighting,
           kind: NarrativeCardKind.filmRef,
-          title: 'Referencias fílmicas',
+          title: 'Referencias de cine',
           subtitle: 'Películas que nos inspiran y nos ayudan a definir la luz',
         ),
         'locationLights': NarrativeDeckBlock(
@@ -231,8 +231,8 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
           bibleId: widget.bibleId,
           sectionId: BibleSectionId.lighting,
           kind: NarrativeCardKind.locationLight,
-          title: 'Localizaciones',
-          subtitle: 'Cómo afrontamos la luz en cada set',
+          title: 'Luz por localización',
+          subtitle: 'Cómo imaginamos y afrontamos la luz en cada lugar',
           allowAdd: false,
           allowDelete: false,
           technicalPanelBuilder: (card) => _LocationTechnicalPanel(

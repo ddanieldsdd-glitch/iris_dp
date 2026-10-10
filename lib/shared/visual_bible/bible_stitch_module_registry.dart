@@ -277,19 +277,19 @@ abstract final class BibleStitchModuleRegistry {
             ),
             StitchModule(
               key: 'lightBehaviors',
-              label: 'Comportamiento de la luz',
+              label: 'Ideas de luz',
               type: BibleSectionFieldType.blocks,
               subsectionKind: BibleSubsectionKindId.behaviorMosaic,
             ),
             StitchModule(
               key: 'filmRefs',
-              label: 'Referencias fílmicas',
+              label: 'Referencias de cine',
               type: BibleSectionFieldType.blocks,
               subsectionKind: BibleSubsectionKindId.cardDeck,
             ),
             StitchModule(
               key: 'locationLights',
-              label: 'Localizaciones (luz)',
+              label: 'Luz por localización',
               type: BibleSectionFieldType.blocks,
               subsectionKind: BibleSubsectionKindId.cardDeck,
             ),

@@ -55,7 +55,7 @@ abstract final class LightingWidgetCatalog {
     LightingWidgetCatalogEntry(
       id: 'slot_lightBehaviors',
       slotKey: 'lightBehaviors',
-      label: 'Comportamiento de la luz',
+      label: 'Ideas de luz',
       contentFamily: BibleWidgetContentFamily.cinematic,
       subsectionKind: BibleSubsectionKindId.behaviorMosaic,
       widgetName: 'LightingBehaviorsBlock',
@@ -64,7 +64,7 @@ abstract final class LightingWidgetCatalog {
     LightingWidgetCatalogEntry(
       id: 'slot_filmRefs',
       slotKey: 'filmRefs',
-      label: 'Referencias fílmicas',
+      label: 'Referencias de cine',
       contentFamily: BibleWidgetContentFamily.cinematic,
       subsectionKind: BibleSubsectionKindId.cardDeck,
       widgetName: 'NarrativeDeckBlock',
@@ -74,7 +74,7 @@ abstract final class LightingWidgetCatalog {
     LightingWidgetCatalogEntry(
       id: 'slot_locationLights',
       slotKey: 'locationLights',
-      label: 'Localizaciones (luz)',
+      label: 'Luz por localización',
       contentFamily: BibleWidgetContentFamily.cinematic,
       subsectionKind: BibleSubsectionKindId.cardDeck,
       widgetName: 'NarrativeDeckBlock',

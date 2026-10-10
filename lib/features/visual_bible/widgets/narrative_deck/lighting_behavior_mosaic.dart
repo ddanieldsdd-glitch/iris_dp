@@ -281,7 +281,7 @@ class _MosaicHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'COMPORTAMIENTO DE LA LUZ',
+                'IDEAS DE LUZ',
                 style: AppTypography.mono(palette).copyWith(
                   fontSize: 12,
                   letterSpacing: 1.4,
