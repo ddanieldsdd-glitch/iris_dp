@@ -10,6 +10,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/visual_bible/bible_equipment.dart';
 import 'bible_point_panel.dart';
+import 'camera_modes_widgets.dart';
 
 /// Lo que devuelve un selector de equipo.
 class BibleEquipmentPick {
@@ -96,10 +97,17 @@ class _CameraPickerDialogState extends State<_CameraPickerDialog> {
     final palette = context.palette;
     final text = _query.text.trim();
     final needle = text.toLowerCase();
+    // Una cámara repetida sin ficha de catálogo se esconde si hay otra
+    // con el mismo nombre que sí la tiene.
+    String nameOf(Camera c) => '${c.brand} ${c.model}'.toLowerCase().trim();
+    final withCatalog = {
+      for (final c in _all)
+        if (c.externalId != null) nameOf(c),
+    };
     final matches = [
       for (final c in _all)
-        if (needle.isEmpty ||
-            '${c.brand} ${c.model}'.toLowerCase().contains(needle))
+        if ((needle.isEmpty || nameOf(c).contains(needle)) &&
+            (c.externalId != null || !withCatalog.contains(nameOf(c))))
           c,
     ]..sort((a, b) {
       final pa = _inProject.contains(a.id) ? 0 : 1;
@@ -145,14 +153,22 @@ class _CameraPickerDialogState extends State<_CameraPickerDialog> {
                               cameraFacts(camera)['Sensor']!,
                             ].join(' · '),
                           ),
-                          onTap: () => Navigator.pop(
-                            context,
-                            BibleEquipmentPick(
-                              catalogId: camera.id,
-                              name: '${camera.brand} ${camera.model}',
-                              facts: cameraFacts(camera),
-                            ),
-                          ),
+                          onTap: () async {
+                            // La ficha completa: base y catálogo de la app.
+                            final full = await loadCameraFacts(
+                              widget.db,
+                              cameraId: camera.id,
+                            );
+                            if (!context.mounted) return;
+                            Navigator.pop(
+                              context,
+                              BibleEquipmentPick(
+                                catalogId: camera.id,
+                                name: '${camera.brand} ${camera.model}',
+                                facts: full?.bodyFacts ?? cameraFacts(camera),
+                              ),
+                            );
+                          },
                         ),
                       if (text.isNotEmpty)
                         ListTile(

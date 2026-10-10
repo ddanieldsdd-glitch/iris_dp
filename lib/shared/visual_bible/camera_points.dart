@@ -27,6 +27,12 @@ abstract final class CameraPoints {
   static const rowRange = 'Rango dinámico';
   static const rowNativeIso = 'ISO nativo';
   static const rowDualIso = 'ISO dual';
+  static const rowMode = 'Modo de grabación';
+  static const rowSensorUsed = 'Sensor usado';
+  static const rowAspect = 'Relación de aspecto';
+  static const rowModeFps = 'fps máximos del modo';
+  static const rowLog = 'Curva log';
+  static const rowWeight = 'Peso del cuerpo';
   static const rowResolution = 'Resolución de captura';
   static const rowCodec = 'Códec';
   static const rowBitDepth = 'Profundidad de bits';
@@ -104,6 +110,8 @@ abstract final class CameraPoints {
         (rowRange, _text(blob['dynamicRange'])),
         (rowNativeIso, nativeIso == null ? '' : '$nativeIso'),
         (rowDualIso, _text(blob['dualIso'])),
+        (rowLog, ''),
+        (rowWeight, ''),
       ],
     ),
   );
@@ -131,6 +139,7 @@ abstract final class CameraPoints {
     recording,
     () => BibleTextSpecsValue(
       rows: [
+        (rowMode, ''),
         (rowResolution, _text(captureResolution)),
         (rowCodec, _text(codec)),
         (rowBitDepth, _text(blob['bitDepth'])),
@@ -147,6 +156,25 @@ abstract final class CameraPoints {
     ),
   );
 
+  /// [value] con las filas de [changes] puestas: las que existen se
+  /// sobrescriben en su sitio y las que no, se añaden al principio.
+  static BibleTextSpecsValue withRows(
+    BibleTextSpecsValue value,
+    Map<String, String> changes,
+  ) {
+    final pending = {...changes};
+    final rows = [
+      for (final (label, text) in value.rows)
+        (label, pending.remove(label) ?? text),
+    ];
+    return value.copyWith(
+      rows: [
+        for (final e in pending.entries) (e.key, e.value),
+        ...rows,
+      ],
+    );
+  }
+
   static BibleTableValue matrixValue(Map<String, String> values) =>
       values.containsKey(matrix)
       ? BibleTableValue.decode(values[matrix])
@@ -161,6 +189,8 @@ abstract final class CameraPoints {
     colorPipeline,
     () => BibleTextSpecsValue(
       rows: [
+        (rowLog, ''),
+        ('Gamma de monitorado', ''),
         ('Flujo de color', _text(blob['pipeline'])),
         ('Gamut', _text(blob['gamut'])),
         (

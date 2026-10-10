@@ -240,7 +240,7 @@ abstract final class BibleStitchModuleRegistry {
             ),
             StitchModule(
               key: 'recording',
-              label: 'Formato y cadencia',
+              label: 'Formato de grabación',
               width: BiblePointWidth.half,
             ),
             StitchModule(
@@ -585,6 +585,17 @@ abstract final class BibleStitchModuleRegistry {
           ] else
             field,
       ];
+    }
+
+    // «Formato y cadencia» pasó a llamarse «Formato de grabación».
+    if (sectionId == BibleSectionId.camera &&
+        fields.any((f) => f.key == 'recording' && f.label == 'Formato y cadencia')) {
+      return normalizeFields(sectionId, [
+        for (final field in fields)
+          field.key == 'recording' && field.label == 'Formato y cadencia'
+              ? field.copyWith(label: 'Formato de grabación')
+              : field,
+      ], layoutVersion: layoutVersion);
     }
 
     // Textura tenía sus puntos rotulados en inglés: los que conserven el

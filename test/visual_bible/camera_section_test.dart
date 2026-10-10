@@ -6,6 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:iris_dp/core/catalog/equipment_facts.dart';
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/database/database_provider.dart';
 import 'package:iris_dp/core/theme/app_theme.dart';
@@ -129,6 +130,8 @@ void main() {
           }),
         );
         contentJson = await stored();
+        // El catálogo de la app se lee una vez, con tiempo real.
+        await EquipmentCatalog.camera(externalId: 'arri_alexa35');
       });
 
       await tester.pumpWidget(
@@ -180,6 +183,32 @@ void main() {
       ]) {
         expect(find.textContaining(example), findsNothing, reason: example);
       }
+
+      // Lo técnico sale del catálogo: ficha, modos y matriz.
+      expect(find.textContaining('LogC4'), findsWidgets);
+      expect(find.text('MODO DE GRABACIÓN · ARRI ALEXA 35'), findsOneWidget);
+      expect(find.text('4.6K 3:2 Open Gate'), findsOneWidget);
+      expect(find.text('3K 1:1'), findsOneWidget);
+      expect(find.text('ARRIRAW/ProRes'), findsWidgets);
+
+      // Elegir un modo que recorta el sensor avisa de lo que supone.
+      await tester.tap(find.byTooltip('Elegir modo de grabación'));
+      await settle();
+      await tester.tap(find.text('4K 16:9').last);
+      await settle();
+      late String? picked;
+      await tester.runAsync(() async => picked = await stored());
+      final recording = BibleTextSpecsValue.decode(
+        BibleSectionFieldsConfig.parseValues(picked)[CameraPoints.recording],
+      );
+      expect(CameraPoints.row(recording, CameraPoints.rowMode), '4K 16:9');
+      expect(
+        CameraPoints.row(recording, CameraPoints.rowResolution),
+        '4096 × 2304',
+      );
+      expect(CameraPoints.row(recording, CameraPoints.rowModeFps), '120 fps');
+      // Lo que ya estaba escrito (obturador) no se pierde.
+      expect(CameraPoints.row(recording, CameraPoints.rowShutter), '172,8°');
 
       // Pasa a definitiva con un toque, sin diálogo.
       await tester.tap(find.text('DEFINITIVA'));

@@ -12,6 +12,8 @@ import '../../bible_section_fields.dart';
 import '../../visual_bible_model.dart';
 import '../bible_card_editor.dart';
 import '../bible_cards_widget.dart';
+import '../camera_modes_widgets.dart';
+import '../../../../core/catalog/equipment_facts.dart';
 import '../bible_equipment_widget.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_point_panel.dart';
@@ -127,6 +129,19 @@ class CameraSensorSection extends ConsumerWidget {
       );
     }
 
+    // La cámara A con todo lo que el catálogo sabe de ella.
+    Widget withFacts(
+      Widget Function(List<BibleEquipmentItem> items, CameraFacts? facts)
+      builder,
+    ) => withLegacyCamera((items) {
+      if (items.isEmpty) return builder(items, null);
+      final key = (cameraId: items.first.catalogId, name: items.first.name);
+      return Consumer(
+        builder: (context, ref, _) =>
+            builder(items, ref.watch(cameraFactsProvider(key)).value),
+      );
+    });
+
     final equipment = BiblePointPanel(
       label: label(CameraPoints.equipment, 'Cámaras'),
       icon: Icons.videocam_outlined,
@@ -155,13 +170,18 @@ class CameraSensorSection extends ConsumerWidget {
     final body = BiblePointPanel(
       label: label(CameraPoints.body, 'Ficha del cuerpo'),
       icon: Icons.memory_outlined,
-      child: withLegacyCamera((items) {
-        final facts = items.isEmpty
-            ? const <String, String>{}
-            : items.first.facts;
+      child: withFacts((items, cam) {
+        // Lo del catálogo completo; si no llega, lo guardado al elegirla.
+        final facts = {
+          if (items.isNotEmpty) ...items.first.facts,
+          ...?cam?.bodyFacts,
+        };
         return BibleTextSpecsWidget(
           // Al cambiar de cámara cambian los datos de su ficha.
-          key: ValueKey('camera_body_${items.isEmpty ? '' : items.first.name}'),
+          key: ValueKey(
+            'camera_body_${items.isEmpty ? '' : items.first.name}_'
+            '${facts.length}',
+          ),
           value: bodyValue,
           placeholders: facts,
           hint:
@@ -181,49 +201,94 @@ class CameraSensorSection extends ConsumerWidget {
       }),
     );
 
+    void saveRecording(BibleTextSpecsValue value) {
+      _saveValue(ref, CameraPoints.recording, value.encode());
+      // Columnas que leen Formato, Workflow y el resumen del proyecto.
+      data
+        ..captureResolution = _orNull(
+          CameraPoints.row(value, CameraPoints.rowResolution),
+        )
+        ..codec = _orNull(CameraPoints.row(value, CameraPoints.rowCodec))
+        ..colorScienceNotes = _orNull(
+          CameraPoints.row(value, CameraPoints.rowColorSpace),
+        )
+        ..frameRateNotes = _orNull(
+          CameraPoints.row(value, CameraPoints.rowFrameRate),
+        );
+      onChanged(data);
+    }
+
     final recording = BiblePointPanel(
-      label: label(CameraPoints.recording, 'Formato y cadencia'),
+      label: label(CameraPoints.recording, 'Formato de grabación'),
       icon: Icons.movie_creation_outlined,
-      child: BibleTextSpecsWidget(
-        key: const ValueKey('camera_recording'),
-        value: recordingValue,
-        hint: 'En qué se graba y por qué: resolución, códec, cadencia…',
-        onChanged: (value) {
-          _saveValue(ref, CameraPoints.recording, value.encode());
-          // Columnas que leen Formato, Workflow y el resumen del proyecto.
-          data
-            ..captureResolution = _orNull(
-              CameraPoints.row(value, CameraPoints.rowResolution),
-            )
-            ..codec = _orNull(CameraPoints.row(value, CameraPoints.rowCodec))
-            ..colorScienceNotes = _orNull(
-              CameraPoints.row(value, CameraPoints.rowColorSpace),
-            )
-            ..frameRateNotes = _orNull(
-              CameraPoints.row(value, CameraPoints.rowFrameRate),
-            );
-          onChanged(data);
-        },
+      child: withFacts(
+        (items, cam) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CameraModePicker(
+              facts: cam,
+              selected: CameraPoints.row(recordingValue, CameraPoints.rowMode),
+              wantedFps: [
+                CameraPoints.row(recordingValue, CameraPoints.rowFrameRate),
+                CameraPoints.row(recordingValue, CameraPoints.rowSlowMo),
+              ],
+              // Elegir un modo rellena sus datos; se pueden corregir abajo.
+              onSelected: (mode) => saveRecording(
+                CameraPoints.withRows(recordingValue, {
+                  CameraPoints.rowMode: mode.name,
+                  if (mode.resolution != null)
+                    CameraPoints.rowResolution: mode.resolution!,
+                  if (mode.codec != null) CameraPoints.rowCodec: mode.codec!,
+                  if (mode.sensorArea != null)
+                    CameraPoints.rowSensorUsed: mode.sensorArea!,
+                  if (mode.aspectRatio != null)
+                    CameraPoints.rowAspect: mode.aspectRatio!,
+                  if (mode.fpsLabel != null)
+                    CameraPoints.rowModeFps: mode.fpsLabel!,
+                }),
+              ),
+            ),
+            const SizedBox(height: 14),
+            BibleTextSpecsWidget(
+              // Al elegir otro modo cambian los datos: se vuelve a montar.
+              key: ValueKey(
+                'camera_recording_'
+                '${CameraPoints.row(recordingValue, CameraPoints.rowMode)}',
+              ),
+              value: recordingValue,
+              hint: 'Por qué este formato y a qué cadencias se rueda…',
+              onChanged: saveRecording,
+            ),
+          ],
+        ),
       ),
     );
 
     final matrix = BiblePointPanel(
       label: label(CameraPoints.matrix, 'Matriz de grabación'),
       icon: Icons.table_rows_outlined,
-      child: BibleTableWidget(
-        key: const ValueKey('camera_matrix'),
-        value: matrixValue,
-        onChanged: (value) =>
-            _saveValue(ref, CameraPoints.matrix, value.encode()),
+      child: withFacts(
+        (items, cam) => CameraRecordingMatrix(
+          facts: cam,
+          value: matrixValue,
+          onChanged: (value) =>
+              _saveValue(ref, CameraPoints.matrix, value.encode()),
+        ),
       ),
     );
 
     final pipeline = BiblePointPanel(
       label: label(CameraPoints.colorPipeline, 'Color en cámara'),
       icon: Icons.gradient_outlined,
-      child: BibleTextSpecsWidget(
-        key: const ValueKey('camera_pipeline'),
+      child: withFacts(
+        (items, cam) => BibleTextSpecsWidget(
+        key: ValueKey('camera_pipeline_${cam?.logFormats}'),
         value: pipelineValue,
+        // La curva log es de la cámara; gamma y gamut no están en el
+        // catálogo y se escriben.
+        placeholders: {
+          if (cam?.logFormats != null) CameraPoints.rowLog: cam!.logFormats!,
+        },
         hint: 'Cómo se ve la imagen en el set y qué se entrega a color…',
         onChanged: (value) {
           _saveValue(ref, CameraPoints.colorPipeline, value.encode());
@@ -232,6 +297,7 @@ class CameraSensorSection extends ConsumerWidget {
           );
           onChanged(data);
         },
+      ),
       ),
     );
 
