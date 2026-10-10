@@ -249,8 +249,7 @@ abstract final class BibleStitchModuleRegistry {
               width: BiblePointWidth.half,
             ),
             StitchModule(key: 'recordingMatrix', label: 'Matriz de grabación'),
-            StitchModule(key: 'philosophy', label: 'Filosofía de cámara'),
-            StitchModule(key: 'movements', label: 'Movimientos de cámara'),
+            StitchModule(key: 'cameraBehavior', label: 'Cómo actúa la cámara'),
             StitchModule(
               key: 'accessories',
               label: 'Filtros, soportes y accesorios',
@@ -264,6 +263,17 @@ abstract final class BibleStitchModuleRegistry {
             StitchModule(
               key: 'specsReference',
               label: 'Referencias técnicas',
+              optional: true,
+            ),
+            // Antes de «Cómo actúa la cámara»: se pueden volver a añadir.
+            StitchModule(
+              key: 'philosophy',
+              label: 'Filosofía de cámara',
+              optional: true,
+            ),
+            StitchModule(
+              key: 'movements',
+              label: 'Movimientos de cámara',
               optional: true,
             ),
           ],
@@ -563,7 +573,8 @@ abstract final class BibleStitchModuleRegistry {
           out.add(field);
         }
       }
-      return [...out, ...tail];
+      // Sigue con los cambios posteriores a la versión 4.
+      return normalizeFields(sectionId, [...out, ...tail], layoutVersion: 4);
     }
 
     // Óptica se partió en la versión 5: lo que iba dentro de «Filosofía y
@@ -585,6 +596,27 @@ abstract final class BibleStitchModuleRegistry {
           ] else
             field,
       ];
+    }
+
+    // Versión 8: filosofía y movimientos de cámara se funden en «Cómo
+    // actúa la cámara», que nace con lo que tuvieran escrito.
+    if (layoutVersion < 8 &&
+        sectionId == BibleSectionId.camera &&
+        !keys.contains('cameraBehavior') &&
+        (keys.contains('philosophy') || keys.contains('movements'))) {
+      final behavior = module(sectionId, 'cameraBehavior')!.toField();
+      var placed = false;
+      return normalizeFields(sectionId, [
+        for (final field in fields)
+          if (field.key == 'philosophy' || field.key == 'movements') ...[
+            if (!placed)
+              () {
+                placed = true;
+                return behavior;
+              }(),
+          ] else
+            field,
+      ], layoutVersion: layoutVersion);
     }
 
     // «Formato y cadencia» pasó a llamarse «Formato de grabación».

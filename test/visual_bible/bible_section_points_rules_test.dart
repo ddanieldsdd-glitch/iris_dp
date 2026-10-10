@@ -186,8 +186,8 @@ void main() {
           'recording',
           'colorPipeline',
           'recordingMatrix',
-          'philosophy',
-          'movements',
+          // Filosofía y movimientos, fundidos en un solo punto.
+          'cameraBehavior',
           'specsReference',
           'accessories',
           'dataManagement',

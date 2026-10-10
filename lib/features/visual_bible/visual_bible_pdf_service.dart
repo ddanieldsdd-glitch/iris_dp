@@ -1656,6 +1656,14 @@ class VisualBiblePdfService {
               ),
             ),
           );
+        case CameraPoints.behavior:
+          final cards = CameraPoints.behaviorCards(
+            values,
+            philosophy: data.cameraPhilosophy,
+            movementStyle: data.movementStyle,
+            legacyMovements: data.cameraMovements,
+          ).where((card) => !card.isEmpty).toList();
+          if (cards.isNotEmpty) out.add(kit.cardsPoint(field.label, cards));
         case CameraPoints.movements:
           final cards = CameraPoints.movementCards(
             values,

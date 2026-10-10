@@ -32,12 +32,20 @@ class BibleCardsWidget extends StatelessWidget {
   /// las tarjetas son solo texto.
   final BibleCardImageSource? imageSource;
 
+  /// Textos de la ficha que se abre; nulo, los del diseño elegido.
+  final BibleCardEditorCopy? copy;
+
+  /// Rótulo del botón de añadir en el mosaico.
+  final String? addLabel;
+
   const BibleCardsWidget({
     super.key,
     required this.cards,
     required this.onChanged,
     this.layout = BibleCardsLayout.list,
     this.imageSource,
+    this.copy,
+    this.addLabel,
   });
 
   /// Abre la ficha de la tarjeta [index], o la de una nueva.
@@ -46,9 +54,11 @@ class BibleCardsWidget extends StatelessWidget {
     cards: cards,
     index: index,
     onChanged: onChanged,
-    copy: layout == BibleCardsLayout.mosaic
-        ? BibleCardEditorCopy.mosaic
-        : BibleCardEditorCopy.card,
+    copy:
+        copy ??
+        (layout == BibleCardsLayout.mosaic
+            ? BibleCardEditorCopy.mosaic
+            : BibleCardEditorCopy.card),
     imageSource: imageSource,
   );
 
@@ -115,7 +125,7 @@ class BibleCardsWidget extends StatelessWidget {
                 width: cards.isEmpty ? width : unit,
                 height: cards.isEmpty ? 120 : 240,
                 child: _AddCard(
-                  label: 'AÑADIR IMAGEN CON NOTA',
+                  label: addLabel ?? 'AÑADIR IMAGEN CON NOTA',
                   onTap: () => _edit(context, null),
                 ),
               ),

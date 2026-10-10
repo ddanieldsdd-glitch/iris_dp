@@ -19,6 +19,9 @@ abstract final class CameraPoints {
   static const dataFlow = 'dataManagement';
   static const philosophy = 'philosophy';
   static const movements = 'movements';
+  static const behavior = 'cameraBehavior';
+  static const weight = 'rigWeight';
+  static const philosophyCard = 'Filosofía de cámara';
 
   // Rótulos de los datos de fábrica; algunos se copian a columnas de la
   // biblia que leen otras pantallas.
@@ -274,6 +277,35 @@ abstract final class CameraPoints {
       rows: [(rowMovementStyle, _text(movementStyle))],
     ),
   );
+
+  /// «Cómo actúa la cámara»: las ideas de cámara del proyecto. En biblias
+  /// anteriores eran un texto de filosofía y una lista de movimientos:
+  /// pasan a ser las primeras ideas.
+  static List<BibleCard> behaviorCards(
+    Map<String, String> values, {
+    String? philosophy,
+    String? movementStyle,
+    List<Map<String, String>> legacyMovements = const [],
+  }) {
+    if (values.containsKey(behavior)) {
+      return BibleCard.listFrom(values[behavior]);
+    }
+    final old = philosophyValue(
+      values,
+      philosophy: philosophy,
+      movementStyle: movementStyle,
+    );
+    final style = row(old, rowMovementStyle);
+    return [
+      if (old.text.trim().isNotEmpty || style.isNotEmpty)
+        BibleCard(
+          title: philosophyCard,
+          kicker: style,
+          body: old.text.trim(),
+        ),
+      ...movementCards(values, legacyMovements),
+    ];
+  }
 
   static List<BibleCard> movementCards(
     Map<String, String> values,

@@ -372,6 +372,51 @@ class CameraSensorSection extends ConsumerWidget {
       ),
     );
 
+    // La parte creativa: varias ideas de cámara, cada una con su ficha
+    // (cuándo se usa, desarrollo, imágenes y puntos), como los actos.
+    final behaviorCards = CameraPoints.behaviorCards(
+      values,
+      philosophy: data.cameraPhilosophy,
+      movementStyle: data.movementStyle,
+      legacyMovements: data.cameraMovements,
+    );
+    final behavior = BiblePointPanel(
+      label: label(CameraPoints.behavior, 'Cómo actúa la cámara'),
+      icon: Icons.control_camera_outlined,
+      child: BibleCardsWidget(
+        imageSource: imageSource,
+        layout: BibleCardsLayout.mosaic,
+        copy: BibleCardEditorCopy.cameraIdea,
+        addLabel: 'AÑADIR IDEA DE CÁMARA',
+        cards: behaviorCards,
+        onChanged: (cards) {
+          _saveValue(
+            ref,
+            CameraPoints.behavior,
+            BibleCard.encode(cards) ?? '[]',
+          );
+          // Dirección y el resumen leen la filosofía y los movimientos.
+          BibleCard? main;
+          for (final card in cards) {
+            if (card.title == CameraPoints.philosophyCard) main = card;
+          }
+          main ??= cards.firstOrNull;
+          data
+            ..cameraPhilosophy = _orNull(main?.body ?? '')
+            ..cameraMovements = [
+              for (final card in cards)
+                if (!identical(card, main) && !card.isEmpty)
+                  {
+                    'movement': card.title,
+                    'narrative': card.body,
+                    'reference': '',
+                  },
+            ];
+          onChanged(data);
+        },
+      ),
+    );
+
     return BibleSectionScaffold(
       sectionId: _sectionId,
       projectId: projectId,
@@ -392,6 +437,7 @@ class CameraSensorSection extends ConsumerWidget {
         CameraPoints.dataFlow: BibleCard.encode(dataFlowCards),
         CameraPoints.philosophy: philosophyValue.encode(),
         CameraPoints.movements: BibleCard.encode(movementCards),
+        CameraPoints.behavior: BibleCard.encode(behaviorCards),
       },
       fieldWidgets: {
         CameraPoints.equipment: equipment,
@@ -403,6 +449,7 @@ class CameraSensorSection extends ConsumerWidget {
         CameraPoints.dataFlow: dataFlow,
         CameraPoints.philosophy: philosophy,
         CameraPoints.movements: movements,
+        CameraPoints.behavior: behavior,
         // Punto de biblias anteriores: eran las imágenes de la pantalla.
         if (data.id > 0)
           'specsReference': BibleReferencesPanel(

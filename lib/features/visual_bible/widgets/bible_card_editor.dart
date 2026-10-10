@@ -61,6 +61,18 @@ class BibleCardEditorCopy {
 
   static const card = BibleCardEditorCopy(pageTitle: 'Tarjeta');
 
+  /// Una idea de cómo actúa la cámara: cuándo, cómo y con qué imágenes.
+  static const cameraIdea = BibleCardEditorCopy(
+    pageTitle: 'Cómo actúa la cámara',
+    titleHint: 'La idea: «Cámara que respira con él», «Travelling lento»…',
+    bodyLabel: 'Desarrollo',
+    bodyHint:
+        'Cómo se mueve, a qué distancia y altura, con qué soporte, y qué '
+        'cuenta eso en este momento de la historia…',
+    kickerHint: 'CUÁNDO: SIGUIENDO A ALI · ACTO II · EN EL KEBAB',
+    points: true,
+  );
+
   /// Tarjeta de un mosaico: imagen, datos cortos, texto y puntos.
   static const mosaic = BibleCardEditorCopy(
     pageTitle: 'Imagen con nota',
