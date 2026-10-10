@@ -1,8 +1,5 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,17 +8,14 @@ import '../../../../core/database/database_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../shared/visual_bible/bible_palette.dart';
 import '../../../../shared/visual_bible/bible_section_ids.dart';
 import '../../../../shared/visual_bible/lighting_metrics.dart';
 import '../../../../shared/visual_bible/narrative_card_kind.dart';
 import '../../services/lighting_narrative_cards_service.dart';
 import '../../visual_bible_model.dart';
-import '../bible_palette_widget.dart';
-import '../bible_point_images.dart';
 import '../bible_point_panel.dart';
 import '../narrative_deck/narrative_card_detail.dart';
-import 'lighting_metrics_widget.dart';
+import 'lighting_card_view.dart';
 
 /// Una localización con las fichas de luz de sus sets.
 class LightingSiteGroup {
@@ -92,27 +86,6 @@ class LightingSiteGroup {
     return groups;
   }
 }
-
-Map<String, dynamic> _meta(VisualBibleNarrativeCard? card) {
-  final raw = card?.metaJson;
-  if (raw == null || raw.isEmpty) return {};
-  try {
-    final decoded = jsonDecode(raw);
-    if (decoded is Map<String, dynamic>) return decoded;
-  } catch (_) {}
-  return {};
-}
-
-List<int> _imageIds(Map<String, dynamic> meta) => [
-  if (meta['imageIds'] is List)
-    for (final id in meta['imageIds'] as List)
-      if (id is num) id.toInt(),
-];
-
-LightingMetrics _metrics(Map<String, dynamic> meta) =>
-    meta.containsKey('light')
-    ? LightingMetrics.fromJson(meta['light'])
-    : const LightingMetrics();
 
 /// «Luz por localización»: cada localización una sola vez, con su imagen y
 /// sus métricas a la vista; al abrirla, sus sets uno debajo de otro.
@@ -249,14 +222,15 @@ class _SiteTile extends StatelessWidget {
     var written = 0;
     for (final set in group.sets) {
       final card = group.cardBySet[set.id];
-      final meta = _meta(card);
+      if (card == null) continue;
+      final page = lightingCardPageOf(card);
       final ids = [
-        if (card?.coverMoodboardImageId != null) card!.coverMoodboardImageId!,
-        ..._imageIds(meta),
+        if (card.coverMoodboardImageId != null) card.coverMoodboardImageId!,
+        if (page.firstImageId != null) page.firstImageId!,
       ];
       cover ??= ids.map((id) => paths[id]).whereType<String>().firstOrNull;
-      if (metrics.isEmpty) metrics = _metrics(meta);
-      if ((card?.body ?? '').trim().isNotEmpty || ids.isNotEmpty) written++;
+      if (metrics.isEmpty) metrics = page.metrics;
+      if ((card.body ?? '').trim().isNotEmpty || ids.isNotEmpty) written++;
     }
     final zones = group.sets.where((s) => !group.isWholeSite(s)).length;
     final ratio = metrics.ratioOption;
@@ -427,16 +401,35 @@ class LightingSitePage extends ConsumerWidget {
                             padding: const EdgeInsets.only(
                               bottom: AppSpacing.xl,
                             ),
-                            child: _SetLight(
+                            child: LightingCardView(
                               key: ValueKey('set_light_${set.id}'),
                               projectId: projectId,
                               bibleId: bibleId,
-                              title: group.isWholeSite(set)
-                                  ? 'Toda la localización'
+                              cardId: group.cardBySet[set.id]!.id,
+                              fixedTitle: group.isWholeSite(set)
+                                  ? '${group.name} · toda la localización'
                                   : set.locationName,
-                              card: group.cardBySet[set.id]!,
                               globalMetrics: globalMetrics,
-                              technicalPanelBuilder: technicalPanelBuilder,
+                              actions: [
+                                // Esquemas y notas técnicas del set.
+                                TextButton(
+                                  onPressed: () => NarrativeCardDetailPage.open(
+                                    context,
+                                    projectId: projectId,
+                                    bibleId: bibleId,
+                                    cardId: group.cardBySet[set.id]!.id,
+                                    technicalPanel: technicalPanelBuilder?.call(
+                                      NarrativeCardModel.fromRow(
+                                        group.cardBySet[set.id]!,
+                                      ),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Ficha técnica',
+                                    style: TextStyle(color: Colors.white70),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                     ],
@@ -444,151 +437,6 @@ class LightingSitePage extends ConsumerWidget {
                 },
               ),
         ),
-      ),
-    );
-  }
-}
-
-class _SetLight extends ConsumerStatefulWidget {
-  final int projectId;
-  final int bibleId;
-  final String title;
-  final VisualBibleNarrativeCard card;
-  final LightingMetrics? globalMetrics;
-  final Widget Function(NarrativeCardModel card)? technicalPanelBuilder;
-
-  const _SetLight({
-    super.key,
-    required this.projectId,
-    required this.bibleId,
-    required this.title,
-    required this.card,
-    this.globalMetrics,
-    this.technicalPanelBuilder,
-  });
-
-  @override
-  ConsumerState<_SetLight> createState() => _SetLightState();
-}
-
-class _SetLightState extends ConsumerState<_SetLight> {
-  Timer? _debounce;
-  String? _pendingBody;
-
-  AppDatabase get _db => ref.read(databaseProvider);
-
-  /// Guarda sobre la fila más reciente: texto y meta se editan por separado.
-  Future<void> _write({String? body, Map<String, dynamic>? metaPatch}) async {
-    final fresh = await _db.getNarrativeCard(widget.card.id);
-    if (fresh == null) return;
-    final meta = {..._meta(fresh), ...?metaPatch};
-    await _db.updateNarrativeCard(
-      fresh.copyWith(
-        body: body == null
-            ? Value(fresh.body)
-            : Value(body.trim().isEmpty ? null : body.trim()),
-        metaJson: Value(meta.isEmpty ? null : jsonEncode(meta)),
-      ),
-    );
-  }
-
-  void _typed(String text) {
-    _pendingBody = text;
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), _flush);
-  }
-
-  void _flush() {
-    final body = _pendingBody;
-    _pendingBody = null;
-    if (body != null) _write(body: body);
-  }
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _flush();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final card = widget.card;
-    final meta = _meta(card);
-    final body = AppTypography.bodyLarge(palette);
-    final label = BiblePointPanel.labelStyle(palette);
-
-    return BiblePointPanel(
-      label: widget.title,
-      icon: Icons.wb_twilight_outlined,
-      trailing: TextButton(
-        onPressed: () => NarrativeCardDetailPage.open(
-          context,
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-          cardId: card.id,
-          technicalPanel: widget.technicalPanelBuilder?.call(
-            NarrativeCardModel.fromRow(card),
-          ),
-        ),
-        child: const Text('Ficha técnica'),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('CÓMO LA IMAGINAMOS', style: label),
-          const SizedBox(height: 6),
-          BiblePointImages(
-            projectId: widget.projectId,
-            bibleId: widget.bibleId,
-            sectionId: BibleSectionId.lighting,
-            imageIds: _imageIds(meta),
-            height: 180,
-            onChanged: (ids) => _write(metaPatch: {'imageIds': ids}),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          TextFormField(
-            initialValue: card.body ?? '',
-            minLines: 2,
-            maxLines: null,
-            style: body,
-            decoration: InputDecoration(
-              hintText:
-                  'Qué luz tiene este lugar en la película y por qué: de '
-                  'dónde viene, qué deja en sombra, qué cambia de día a '
-                  'noche…',
-              hintStyle: body.copyWith(color: palette.textTertiary),
-              isDense: true,
-              filled: false,
-              contentPadding: EdgeInsets.zero,
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-            ),
-            onChanged: _typed,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          LightingMetricsWidget(
-            value: _metrics(meta),
-            reference: widget.globalMetrics,
-            onChanged: (next) => _write(metaPatch: {'light': next.toJson()}),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text('PALETA DE ESTA LUZ', style: label),
-          const SizedBox(height: 6),
-          BiblePaletteWidget(
-            projectId: widget.projectId,
-            bibleId: widget.bibleId,
-            sectionId: BibleSectionId.lighting,
-            swatchSize: 56,
-            preferredImageIds: _imageIds(meta),
-            colors: BiblePaletteColor.listFrom(meta['palette']),
-            onChanged: (colors) => _write(
-              metaPatch: {'palette': BiblePaletteColor.toJsonList(colors)},
-            ),
-          ),
-        ],
       ),
     );
   }

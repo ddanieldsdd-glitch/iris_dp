@@ -22,7 +22,7 @@ void main() {
   ) async {
     SharedPreferences.setMockInitialValues({});
     await loadSnapshotFonts();
-    tester.view.physicalSize = const Size(1300, 2400);
+    tester.view.physicalSize = const Size(1300, 4200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
@@ -120,10 +120,47 @@ void main() {
     );
     await settle();
     expect(tester.takeException(), isNull);
-    expect(find.text('TODA LA LOCALIZACIÓN'), findsOneWidget);
+    expect(find.textContaining('toda la localización'), findsOneWidget);
     expect(find.text('PORTAL'), findsOneWidget);
+    // Lo que la ficha ya tenía sale en sus puntos nuevos.
     expect(find.text('Sodio de farola y sombras largas'), findsOneWidget);
-    expect(find.text('CÓMO LA IMAGINAMOS'), findsNWidgets(2));
+    expect(find.text('2100 K'), findsWidgets);
+    // Cada set es una ficha completa, con su plantilla de puntos.
+    for (final point in [
+      'CÓMO LA IMAGINAMOS',
+      'LA LUZ DEL LUGAR',
+      'DE DÍA',
+      'DE NOCHE',
+      'PALETA DE ESTA LUZ',
+      'FUENTES Y APARATOS',
+      'PROBLEMAS Y SOLUCIONES',
+    ]) {
+      expect(find.text(point), findsNWidgets(2), reason: point);
+    }
+    expect(find.byTooltip('Opciones del punto'), findsWidgets);
+
+    // Escribir en un punto de un set lo guarda en su ficha y no en la otra.
+    await tester.enterText(
+      find
+          .byWidgetPredicate(
+            (w) =>
+                w is TextField &&
+                (w.decoration?.hintText ?? '').startsWith('Cómo entra el sol'),
+          )
+          .first,
+      'Sol rasante hasta las 11',
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+    await settle();
+    late List<VisualBibleNarrativeCard> cards;
+    await tester.runAsync(
+      () async => cards = await db.select(db.visualBibleNarrativeCards).get(),
+    );
+    final withDay = cards
+        .where((c) => (c.metaJson ?? '').contains('Sol rasante hasta las 11'))
+        .toList();
+    expect(withDay.length, 1);
+    expect(withDay.single.body, 'Sodio de farola y sombras largas');
 
     await saveSnapshot(tester, 'luz_localizacion');
     await tester.pumpWidget(const SizedBox());

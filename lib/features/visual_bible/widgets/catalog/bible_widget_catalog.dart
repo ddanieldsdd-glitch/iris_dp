@@ -20,6 +20,8 @@ import '../bible_point_images.dart';
 import '../bible_point_panel.dart';
 import '../bible_equipment_widget.dart';
 import '../bible_references_deck.dart';
+import '../lighting/lighting_metrics_widget.dart';
+import '../../../../shared/visual_bible/lighting_metrics.dart';
 import '../../../../shared/visual_bible/bible_equipment.dart';
 import '../bible_table_widget.dart';
 import '../../../../shared/visual_bible/bible_table.dart';
@@ -212,6 +214,17 @@ abstract final class BibleWidgetCatalog {
       build: _acts,
     ),
     const BibleWidgetEntry(
+      id: 'cards_mosaic',
+      type: BibleSectionFieldType.cards,
+      category: BibleWidgetCategory.image,
+      label: 'Mosaico de imágenes con nota',
+      description:
+          'Imágenes grandes con su título, sus datos cortos y su texto; '
+          'cada una se abre en su ficha.',
+      icon: Icons.auto_awesome_mosaic_outlined,
+      build: _mosaic,
+    ),
+    const BibleWidgetEntry(
       id: 'cards_pillars',
       type: BibleSectionFieldType.cards,
       category: BibleWidgetCategory.structure,
@@ -325,6 +338,18 @@ abstract final class BibleWidgetCatalog {
       description: 'Pares de dato y valor.',
       icon: Icons.tune,
       build: _generic,
+    ),
+    const BibleWidgetEntry(
+      id: 'light_metrics',
+      type: BibleSectionFieldType.specs,
+      category: BibleWidgetCategory.data,
+      label: 'Luz: color y contraste',
+      description:
+          'Temperatura o colores, tinte, ratio de contraste y qué hace '
+          'falta para conseguirlos.',
+      icon: Icons.wb_incandescent_outlined,
+      screens: {BibleSectionId.lighting},
+      build: _lightMetrics,
     ),
     const BibleWidgetEntry(
       id: 'equipment',
@@ -520,6 +545,23 @@ abstract final class BibleWidgetCatalog {
           hint: ctx.field.hint ?? 'Escribe aquí…',
           onChanged: (value) => ctx.onChanged(value.encode()),
         ),
+      );
+
+  static Widget _lightMetrics(BuildContext context, BibleWidgetContext ctx) =>
+      BiblePointPanel(
+        label: ctx.field.label,
+        icon: Icons.wb_incandescent_outlined,
+        child: LightingMetricsWidget(
+          value: LightingMetrics.fromJson(ctx.value),
+          onChanged: (value) => ctx.onChanged(value.encode()),
+        ),
+      );
+
+  static Widget _mosaic(BuildContext context, BibleWidgetContext ctx) =>
+      _cardsPoint(
+        ctx,
+        icon: Icons.auto_awesome_mosaic_outlined,
+        layout: BibleCardsLayout.mosaic,
       );
 
   static Widget _equipment(BuildContext context, BibleWidgetContext ctx) =>

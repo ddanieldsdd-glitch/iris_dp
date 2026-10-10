@@ -41,6 +41,13 @@ class BibleCardEditorCopy {
   /// El acto es del proyecto: fase, título y orden se comparten.
   final bool sharedAct;
 
+  /// Pie del campo de datos cortos sobre el título (p. ej. «CONTRASTE 8:1
+  /// · CAÍDA RÁPIDA»). Nulo: la ficha no lo lleva, salvo que sea un acto.
+  final String? kickerHint;
+
+  /// La ficha admite puntos que la desarrollan, como los actos.
+  final bool points;
+
   const BibleCardEditorCopy({
     required this.pageTitle,
     this.titleHint = 'Título',
@@ -48,9 +55,21 @@ class BibleCardEditorCopy {
     this.bodyHint = 'Escribe aquí…',
     this.act = false,
     this.sharedAct = false,
+    this.kickerHint,
+    this.points = false,
   });
 
   static const card = BibleCardEditorCopy(pageTitle: 'Tarjeta');
+
+  /// Tarjeta de un mosaico: imagen, datos cortos, texto y puntos.
+  static const mosaic = BibleCardEditorCopy(
+    pageTitle: 'Imagen con nota',
+    titleHint: 'Qué se ve o qué idea es',
+    bodyLabel: 'Nota',
+    bodyHint: 'Por qué está aquí, qué nos llevamos de ella…',
+    kickerHint: 'DATOS CORTOS: CONTRASTE 8:1 · CAÍDA RÁPIDA · 3200 K',
+    points: true,
+  );
 
   static BibleCardEditorCopy forAct({required bool shared}) =>
       BibleCardEditorCopy(
@@ -504,14 +523,14 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
               style: AppTypography.caption(palette),
             ),
           ),
-        if (copy.act) ...[
+        if (copy.act || copy.kickerHint != null) ...[
           TextField(
             controller: _phase,
             style: phaseStyle,
             textCapitalization: TextCapitalization.characters,
             decoration: _bare(
               palette,
-              'FASE: PLANTEAMIENTO, NUDO, DESENLACE…',
+              copy.kickerHint ?? 'FASE: PLANTEAMIENTO, NUDO, DESENLACE…',
               phaseStyle,
             ),
             onChanged: (_) => _touch(),
@@ -541,7 +560,7 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
             onChanged: (_) => _touch(),
           ),
         ),
-        if (copy.act) ...[
+        if (copy.act || copy.points) ...[
           const SizedBox(height: AppSpacing.md),
           for (var i = 0; i < _points.length; i++) _pointPanel(palette, i),
           Align(

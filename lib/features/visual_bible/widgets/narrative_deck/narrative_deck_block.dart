@@ -1,3 +1,4 @@
+import '../lighting/lighting_card_view.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -17,7 +18,6 @@ import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_paste_zone.dart';
-import 'narrative_card_detail.dart';
 import 'narrative_card_tile.dart';
 import 'lighting_global_metrics_panel.dart';
 
@@ -183,7 +183,7 @@ class NarrativeDeckBlock extends ConsumerWidget {
       ),
     );
     if (!context.mounted) return;
-    await NarrativeCardDetailPage.open(
+    await openLightingCard(
       context,
       projectId: projectId,
       bibleId: bibleId,
@@ -210,7 +210,7 @@ class NarrativeDeckBlock extends ConsumerWidget {
     WidgetRef ref,
     NarrativeCardModel card,
   ) {
-    return NarrativeCardDetailPage.open(
+    return openLightingCard(
       context,
       projectId: projectId,
       bibleId: bibleId,
