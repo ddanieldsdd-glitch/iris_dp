@@ -67,8 +67,17 @@ class LightingMetricsWidget extends StatelessWidget {
     final label = BiblePointPanel.labelStyle(palette);
     final mono = AppTypography.mono(palette);
     final caption = AppTypography.caption(palette);
-    final light = _color(value.color ?? 0xFFFFFF);
+    final usesColors = value.usesColors;
+    // En modo color, la clave es la primera luz con ese papel.
+    final keyColor = usesColors
+        ? value.colors
+              .where((c) => c.role == LightColorRole.key)
+              .followedBy(value.colors)
+              .first
+        : null;
+    final light = _color(keyColor?.rgb ?? value.color ?? 0xFFFFFF);
     final option = value.ratioOption;
+    final sceneColors = usesColors ? value.colors : const <LightColor>[];
 
     Widget head(String text, String? current, VoidCallback? onClear) => Row(
       children: [
@@ -92,19 +101,39 @@ class LightingMetricsWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // ── Luz blanca o color ────────────────────────────────────────
+        Row(
+          children: [
+            _ModeTab(
+              label: 'Luz blanca',
+              icon: Icons.wb_sunny_outlined,
+              selected: !value.colorMode,
+              onTap: () => onChanged(value.copyWith(colorMode: false)),
+            ),
+            const SizedBox(width: 6),
+            _ModeTab(
+              label: 'Color',
+              icon: Icons.color_lens_outlined,
+              selected: value.colorMode,
+              onTap: () => onChanged(value.copyWith(colorMode: true)),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (value.colorMode) ...[
+          _ColorLights(
+            colors: value.colors,
+            onChanged: (colors) => onChanged(value.copyWith(colors: colors)),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ] else ...[
         // ── Temperatura ───────────────────────────────────────────────
         head(
           'TEMPERATURA DE COLOR',
           value.kelvin == null ? null : '${value.kelvin} K',
           value.kelvin == null
               ? null
-              : () => onChanged(
-                  LightingMetrics(
-                    tint: value.tint,
-                    ratio: value.ratio,
-                    sourceKelvin: value.sourceKelvin,
-                  ),
-                ),
+              : () => onChanged(value.without(kelvin: true)),
         ),
         const SizedBox(height: 6),
         _ScaleBar(
@@ -142,13 +171,7 @@ class LightingMetricsWidget extends StatelessWidget {
           value.tint == null ? null : value.tintLabel,
           value.tint == null
               ? null
-              : () => onChanged(
-                  LightingMetrics(
-                    kelvin: value.kelvin,
-                    ratio: value.ratio,
-                    sourceKelvin: value.sourceKelvin,
-                  ),
-                ),
+              : () => onChanged(value.without(tint: true)),
         ),
         const SizedBox(height: 6),
         _ScaleBar(
@@ -228,6 +251,7 @@ class LightingMetricsWidget extends StatelessWidget {
             ),
           ),
         if (value.kelvin != null) const SizedBox(height: AppSpacing.md),
+        ],
 
         // ── Contraste ─────────────────────────────────────────────────
         head(
@@ -235,13 +259,7 @@ class LightingMetricsWidget extends StatelessWidget {
           option == null ? null : '${option.label} · ${option.stopsLabel}',
           value.ratio == null
               ? null
-              : () => onChanged(
-                  LightingMetrics(
-                    kelvin: value.kelvin,
-                    tint: value.tint,
-                    sourceKelvin: value.sourceKelvin,
-                  ),
-                ),
+              : () => onChanged(value.without(ratio: true)),
         ),
         const SizedBox(height: 8),
         Row(
@@ -254,7 +272,11 @@ class LightingMetricsWidget extends StatelessWidget {
                     width: 132,
                     height: 132,
                     child: CustomPaint(
-                      painter: _SpherePainter(ratio: option.ratio, light: light),
+                      painter: _SpherePainter(
+                        ratio: option.ratio,
+                        light: light,
+                        colors: sceneColors,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -272,6 +294,7 @@ class LightingMetricsWidget extends StatelessWidget {
                     _RatioTile(
                       option: o,
                       light: light,
+                      colors: sceneColors,
                       selected: option?.ratio == o.ratio,
                       isReference: reference?.ratioOption?.ratio == o.ratio,
                       onTap: () => onChanged(value.copyWith(ratio: o.ratio)),
@@ -283,7 +306,42 @@ class LightingMetricsWidget extends StatelessWidget {
         ),
 
         // ── Qué hace falta ────────────────────────────────────────────
-        if (!compact && value.kelvin != null) ...[
+        if (!compact && usesColors) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Text('PARA PROGRAMAR LOS APARATOS', style: label),
+          const SizedBox(height: 6),
+          for (final c in value.colors)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: _color(c.rgb),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${c.role.label}'
+                      '${c.name.trim().isEmpty ? '' : ' · ${c.name.trim()}'}',
+                      style: AppTypography.bodyMedium(palette),
+                    ),
+                  ),
+                  Text('${c.hsiLabel}   ${c.rgbLabel}', style: mono),
+                ],
+              ),
+            ),
+          Text(
+            'Con LED RGB se programan estos valores. Con gelatina de color '
+            'sobre una fuente blanca se pierde mucha luz: conviene probarlo.',
+            style: caption,
+          ),
+        ],
+        if (!compact && !value.colorMode && value.kelvin != null) ...[
           const SizedBox(height: AppSpacing.lg),
           Text('QUÉ HACE FALTA PARA LLEGAR A ESE COLOR', style: label),
           const SizedBox(height: 6),
@@ -456,6 +514,7 @@ class _Chip extends StatelessWidget {
 class _RatioTile extends StatelessWidget {
   final ContrastRatioOption option;
   final Color light;
+  final List<LightColor> colors;
   final bool selected;
   final bool isReference;
   final VoidCallback onTap;
@@ -463,6 +522,7 @@ class _RatioTile extends StatelessWidget {
   const _RatioTile({
     required this.option,
     required this.light,
+    this.colors = const [],
     required this.selected,
     required this.isReference,
     required this.onTap,
@@ -501,7 +561,11 @@ class _RatioTile extends StatelessWidget {
                 width: 46,
                 height: 46,
                 child: CustomPaint(
-                  painter: _SpherePainter(ratio: option.ratio, light: light),
+                  painter: _SpherePainter(
+                    ratio: option.ratio,
+                    light: light,
+                    colors: colors,
+                  ),
                 ),
               ),
               const SizedBox(height: 6),
@@ -533,7 +597,28 @@ class _SpherePainter extends CustomPainter {
   final double ratio;
   final Color light;
 
-  const _SpherePainter({required this.ratio, required this.light});
+  /// Luces de color de la escena. Vacío: una sola luz, [light].
+  final List<LightColor> colors;
+
+  const _SpherePainter({
+    required this.ratio,
+    required this.light,
+    this.colors = const [],
+  });
+
+  // Lo que el ojo ve no es lineal: 1/8 de luz no es 1/8 de brillo.
+  static double _seen(double linear) =>
+      math.pow(linear.clamp(0.0, 1.0), 1 / 2.2).toDouble();
+
+  static Color _lit(Color color, double linear) {
+    final v = _seen(linear);
+    return Color.fromARGB(
+      255,
+      (color.r * 255 * v).round(),
+      (color.g * 255 * v).round(),
+      (color.b * 255 * v).round(),
+    );
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -542,45 +627,369 @@ class _SpherePainter extends CustomPainter {
     final rect = Rect.fromCircle(center: center, radius: radius);
     canvas.save();
     canvas.clipPath(Path()..addOval(rect));
+    final fill = 1 / ratio;
 
-    // Lo que el ojo ve no es lineal: 1/8 de luz no es 1/8 de brillo.
-    double seen(double linear) =>
-        math.pow(linear.clamp(0.0, 1.0), 1 / 2.2).toDouble();
-    Color lit(double linear) {
-      final v = seen(linear);
-      return Color.fromARGB(
-        255,
-        (light.r * 255 * v).round(),
-        (light.g * 255 * v).round(),
-        (light.b * 255 * v).round(),
+    if (colors.isEmpty) {
+      // De la clave al relleno, de izquierda a derecha.
+      canvas.drawRect(
+        rect,
+        Paint()
+          ..shader = LinearGradient(
+            colors: [
+              _lit(light, 1),
+              _lit(light, 1),
+              _lit(light, fill),
+              _lit(light, fill),
+            ],
+            stops: const [0, 0.38, 0.62, 1],
+          ).createShader(rect),
+      );
+    } else {
+      // Cada luz ilumina desde su lado y los colores se suman, como la
+      // luz de verdad. El relleno baja lo que diga el ratio.
+      canvas.drawRect(rect, Paint()..color = Colors.black);
+      for (final c in colors) {
+        final color = _color(c.rgb);
+        final level = c.intensity;
+        final paint = Paint()..blendMode = BlendMode.plus;
+        switch (c.role) {
+          case LightColorRole.key:
+            paint.shader = LinearGradient(
+              colors: [_lit(color, level), Colors.black],
+              stops: const [0.25, 0.75],
+            ).createShader(rect);
+          case LightColorRole.fill:
+            paint.shader = LinearGradient(
+              colors: [Colors.black, _lit(color, level * fill)],
+              stops: const [0.25, 0.8],
+            ).createShader(rect);
+          case LightColorRole.back:
+            paint.shader = RadialGradient(
+              colors: [Colors.black, Colors.black, _lit(color, level)],
+              stops: const [0, 0.72, 1],
+            ).createShader(rect);
+          case LightColorRole.ambient:
+            paint.color = _lit(color, level * 0.18);
+          case LightColorRole.practical:
+            paint.shader = RadialGradient(
+              center: const Alignment(0.45, -0.5),
+              radius: 0.45,
+              colors: [_lit(color, level), Colors.black],
+            ).createShader(rect);
+        }
+        canvas.drawRect(rect, paint);
+      }
+    }
+    // Volumen: el borde se apaga como en una esfera. El contraluz se
+    // queda fuera de este apagado para que se vea el filo.
+    if (!colors.any((c) => c.role == LightColorRole.back)) {
+      canvas.drawRect(
+        rect,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [Colors.transparent, Colors.black.withValues(alpha: 0.55)],
+            stops: const [0.55, 1],
+          ).createShader(rect),
       );
     }
-
-    final fill = 1 / ratio;
-    // De la clave al relleno, de izquierda a derecha.
-    canvas.drawRect(
-      rect,
-      Paint()
-        ..shader = LinearGradient(
-          colors: [lit(1), lit(1), lit(fill), lit(fill)],
-          stops: const [0, 0.38, 0.62, 1],
-        ).createShader(rect),
-    );
-    // Volumen: el borde se apaga como en una esfera.
-    canvas.drawRect(
-      rect,
-      Paint()
-        ..shader = RadialGradient(
-          colors: [Colors.transparent, Colors.black.withValues(alpha: 0.55)],
-          stops: const [0.55, 1],
-        ).createShader(rect),
-    );
     canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant _SpherePainter old) =>
-      old.ratio != ratio || old.light != light;
+      old.ratio != ratio || old.light != light || old.colors != colors;
+}
+
+class _ModeTab extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ModeTab({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: selected ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? palette.accent.withValues(alpha: 0.16)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? palette.accent : palette.divider,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: selected ? palette.accent : palette.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: AppTypography.bodyMedium(palette).copyWith(
+                color: selected ? palette.textPrimary : palette.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Las luces de color de la escena: se añaden desde los colores de
+/// partida y cada una se afina con tono, saturación, intensidad y papel.
+class _ColorLights extends StatelessWidget {
+  final List<LightColor> colors;
+  final ValueChanged<List<LightColor>> onChanged;
+
+  const _ColorLights({required this.colors, required this.onChanged});
+
+  void _set(int index, LightColor next) =>
+      onChanged([...colors]..[index] = next);
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final label = BiblePointPanel.labelStyle(palette);
+    final mono = AppTypography.mono(palette).copyWith(fontSize: 11);
+    // El primero es la clave; los siguientes, relleno y contra.
+    LightColorRole nextRole() => switch (colors.length) {
+      0 => LightColorRole.key,
+      1 => LightColorRole.fill,
+      2 => LightColorRole.back,
+      _ => LightColorRole.ambient,
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('COLORES DE LA ESCENA', style: label),
+        const SizedBox(height: 6),
+        if (colors.isNotEmpty)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 18,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final c in colors)
+                    Expanded(
+                      flex: (c.intensity * 100).round().clamp(5, 100),
+                      child: ColoredBox(color: _color(c.rgb)),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        for (var i = 0; i < colors.length; i++)
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: palette.background.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: palette.divider),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: _color(colors[i].rgb),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          for (final role in LightColorRole.values)
+                            _RoleChip(
+                              label: role.label,
+                              selected: colors[i].role == role,
+                              onTap: () =>
+                                  _set(i, colors[i].copyWith(role: role)),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Text(colors[i].hex, style: mono),
+                    IconButton(
+                      icon: Icon(
+                        Icons.close,
+                        size: 12,
+                        color: palette.textTertiary,
+                      ),
+                      tooltip: 'Quitar color',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => onChanged([...colors]..removeAt(i)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _ScaleBar(
+                  semanticLabel: 'Tono ${i + 1}',
+                  position: colors[i].hueSaturation.$1 / 360,
+                  colors: [
+                    for (var h = 0; h <= 12; h++)
+                      _color(LightColor.fromHueSaturation(h * 30.0, 1)),
+                  ],
+                  onChanged: (x) => _set(
+                    i,
+                    colors[i].copyWith(
+                      name: '',
+                      rgb: LightColor.fromHueSaturation(
+                        x * 360,
+                        // Un color sin saturación no tiene tono que mover.
+                        math.max(colors[i].hueSaturation.$2, 0.5),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ScaleBar(
+                        semanticLabel: 'Saturación ${i + 1}',
+                        position: colors[i].hueSaturation.$2,
+                        colors: [
+                          Colors.white,
+                          _color(
+                            LightColor.fromHueSaturation(
+                              colors[i].hueSaturation.$1,
+                              1,
+                            ),
+                          ),
+                        ],
+                        onChanged: (x) => _set(
+                          i,
+                          colors[i].copyWith(
+                            name: '',
+                            rgb: LightColor.fromHueSaturation(
+                              colors[i].hueSaturation.$1,
+                              x,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _ScaleBar(
+                        semanticLabel: 'Intensidad ${i + 1}',
+                        position: colors[i].intensity,
+                        colors: [Colors.black, _color(colors[i].rgb)],
+                        onChanged: (x) => _set(
+                          i,
+                          colors[i].copyWith(
+                            intensity: (x * 20).round() / 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Tono · saturación · intensidad   ${colors[i].hsiLabel}',
+                  style: AppTypography.caption(palette),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          children: [
+            for (final (name, rgb) in kPartyColors)
+              _Chip(
+                label: name,
+                detail: '+',
+                dot: _color(rgb),
+                selected: false,
+                onTap: () => onChanged([
+                  ...colors,
+                  LightColor(rgb: rgb, name: name, role: nextRole()),
+                ]),
+              ),
+          ],
+        ),
+        if (colors.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Añade los colores que quieres en la escena: el primero es la '
+              'clave, el segundo el relleno, el tercero el contra.',
+              style: AppTypography.caption(palette),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _RoleChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _RoleChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: selected ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: selected
+              ? palette.accent.withValues(alpha: 0.16)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? palette.accent : palette.divider,
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.caption(palette).copyWith(
+            color: selected ? palette.textPrimary : palette.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _RecipeView extends StatelessWidget {

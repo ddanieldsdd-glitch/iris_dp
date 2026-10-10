@@ -350,13 +350,35 @@ class _Header extends ConsumerWidget {
                           ),
                           onChanged: onTitle,
                         ),
-                      if (metrics.kelvin != null || ratio != null) ...[
+                      if (metrics.kelvin != null ||
+                          ratio != null ||
+                          metrics.usesColors) ...[
                         const SizedBox(height: 10),
                         Wrap(
                           spacing: 6,
                           runSpacing: 6,
                           children: [
-                            if (metrics.kelvin != null)
+                            // Diseñada con colores: se enseñan sus colores.
+                            if (metrics.usesColors)
+                              pill(
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    for (final c in metrics.colors)
+                                      Container(
+                                        width: 12,
+                                        height: 12,
+                                        margin: const EdgeInsets.only(right: 4),
+                                        decoration: BoxDecoration(
+                                          color: Color(0xFF000000 | c.rgb),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    Text('Color', style: mono),
+                                  ],
+                                ),
+                              )
+                            else if (metrics.kelvin != null)
                               pill(
                                 Row(
                                   mainAxisSize: MainAxisSize.min,

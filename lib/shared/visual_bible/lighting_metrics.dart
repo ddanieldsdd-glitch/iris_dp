@@ -108,6 +108,144 @@ class ColorRecipe {
   bool get needsNothing => gels.isEmpty && tintGel == null;
 }
 
+/// Papel de una luz de color en la escena: decide desde dónde ilumina la
+/// esfera de muestra.
+enum LightColorRole {
+  key('Clave'),
+  fill('Relleno'),
+  back('Contra'),
+  ambient('Ambiente'),
+  practical('Práctico');
+
+  const LightColorRole(this.label);
+  final String label;
+
+  static LightColorRole parse(Object? name) =>
+      values.firstWhere((r) => r.name == name, orElse: () => key);
+}
+
+/// Una luz de color de la escena (un interior de fiesta, un neón…).
+class LightColor {
+  final String name;
+
+  /// 0xRRGGBB.
+  final int rgb;
+  final LightColorRole role;
+
+  /// De 0 a 1.
+  final double intensity;
+
+  const LightColor({
+    required this.rgb,
+    this.name = '',
+    this.role = LightColorRole.key,
+    this.intensity = 1,
+  });
+
+  int get red => (rgb >> 16) & 0xFF;
+  int get green => (rgb >> 8) & 0xFF;
+  int get blue => rgb & 0xFF;
+
+  String get hex =>
+      '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+
+  /// Tono (0–360) y saturación (0–1): con la intensidad, es como se
+  /// programa un LED en modo HSI.
+  (double hue, double saturation) get hueSaturation {
+    final r = red / 255, g = green / 255, b = blue / 255;
+    final max = [r, g, b].reduce((a, c) => a > c ? a : c);
+    final min = [r, g, b].reduce((a, c) => a < c ? a : c);
+    final delta = max - min;
+    if (delta == 0) return (0, 0);
+    double hue;
+    if (max == r) {
+      hue = 60 * (((g - b) / delta) % 6);
+    } else if (max == g) {
+      hue = 60 * ((b - r) / delta + 2);
+    } else {
+      hue = 60 * ((r - g) / delta + 4);
+    }
+    return (hue < 0 ? hue + 360 : hue, max == 0 ? 0 : delta / max);
+  }
+
+  String get hsiLabel {
+    final (hue, saturation) = hueSaturation;
+    return 'H ${hue.round()}° · S ${(saturation * 100).round()} % · '
+        'I ${(intensity * 100).round()} %';
+  }
+
+  String get rgbLabel => 'R $red · G $green · B $blue';
+
+  /// Color pleno de un tono y una saturación.
+  static int fromHueSaturation(double hue, double saturation) {
+    final h = (hue % 360) / 60;
+    final c = saturation.clamp(0.0, 1.0);
+    final x = c * (1 - ((h % 2) - 1).abs());
+    final (r, g, b) = switch (h.floor()) {
+      0 => (c, x, 0.0),
+      1 => (x, c, 0.0),
+      2 => (0.0, c, x),
+      3 => (0.0, x, c),
+      4 => (x, 0.0, c),
+      _ => (c, 0.0, x),
+    };
+    final m = 1 - c;
+    int v(double n) => ((n + m) * 255).round().clamp(0, 255);
+    return (v(r) << 16) | (v(g) << 8) | v(b);
+  }
+
+  static int? parseHex(String text) {
+    final clean = text.trim().replaceFirst('#', '');
+    if (clean.length != 6) return null;
+    return int.tryParse(clean, radix: 16);
+  }
+
+  LightColor copyWith({
+    String? name,
+    int? rgb,
+    LightColorRole? role,
+    double? intensity,
+  }) => LightColor(
+    name: name ?? this.name,
+    rgb: rgb ?? this.rgb,
+    role: role ?? this.role,
+    intensity: intensity ?? this.intensity,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'rgb': hex,
+    if (name.isNotEmpty) 'name': name,
+    'role': role.name,
+    'intensity': intensity,
+  };
+
+  static List<LightColor> listFrom(Object? raw) => [
+    if (raw is List)
+      for (final e in raw)
+        if (e is Map && parseHex(e['rgb']?.toString() ?? '') != null)
+          LightColor(
+            rgb: parseHex(e['rgb'].toString())!,
+            name: e['name']?.toString() ?? '',
+            role: LightColorRole.parse(e['role']),
+            intensity: ((e['intensity'] as num?)?.toDouble() ?? 1).clamp(
+              0.0,
+              1.0,
+            ),
+          ),
+  ];
+}
+
+/// Colores de partida habituales en escenas de fiesta, club o neón.
+const kPartyColors = <(String, int)>[
+  ('Magenta', 0xFF1FA2),
+  ('Rojo', 0xFF1E1E),
+  ('Ámbar', 0xFF9A1F),
+  ('Verde láser', 0x2BFF4E),
+  ('Cian', 0x19E3FF),
+  ('Azul profundo', 0x1F3BFF),
+  ('Violeta', 0x8A2BFF),
+];
+
 /// Métricas de luz de la biblia: temperatura, tinte y contraste. Vale para
 /// el proyecto entero, para una idea de luz o para una localización.
 ///
@@ -126,24 +264,58 @@ class LightingMetrics {
   /// Temperatura de la fuente de la que se parte.
   final int? sourceKelvin;
 
-  const LightingMetrics({this.kelvin, this.tint, this.ratio, this.sourceKelvin});
+  /// Luces de color de la escena. Con [colorMode], mandan sobre la
+  /// temperatura: la escena se diseña con colores, no con kelvin.
+  final List<LightColor> colors;
+  final bool colorMode;
+
+  const LightingMetrics({
+    this.kelvin,
+    this.tint,
+    this.ratio,
+    this.sourceKelvin,
+    this.colors = const [],
+    this.colorMode = false,
+  });
 
   static const minKelvin = 1800;
   static const maxKelvin = 10000;
   static const maxTint = 30.0;
 
-  bool get isEmpty => kelvin == null && tint == null && ratio == null;
+  bool get isEmpty =>
+      kelvin == null && tint == null && ratio == null && colors.isEmpty;
+
+  /// Se está diseñando con colores y hay alguno puesto.
+  bool get usesColors => colorMode && colors.isNotEmpty;
 
   LightingMetrics copyWith({
     int? kelvin,
     double? tint,
     double? ratio,
     int? sourceKelvin,
+    List<LightColor>? colors,
+    bool? colorMode,
   }) => LightingMetrics(
     kelvin: kelvin ?? this.kelvin,
     tint: tint ?? this.tint,
     ratio: ratio ?? this.ratio,
     sourceKelvin: sourceKelvin ?? this.sourceKelvin,
+    colors: colors ?? this.colors,
+    colorMode: colorMode ?? this.colorMode,
+  );
+
+  /// Lo mismo, con uno de los valores quitado.
+  LightingMetrics without({
+    bool kelvin = false,
+    bool tint = false,
+    bool ratio = false,
+  }) => LightingMetrics(
+    kelvin: kelvin ? null : this.kelvin,
+    tint: tint ? null : this.tint,
+    ratio: ratio ? null : this.ratio,
+    sourceKelvin: sourceKelvin,
+    colors: colors,
+    colorMode: colorMode,
   );
 
   Map<String, dynamic> toJson() => {
@@ -151,6 +323,8 @@ class LightingMetrics {
     if (tint != null) 'tint': tint,
     if (ratio != null) 'ratio': ratio,
     if (sourceKelvin != null) 'source': sourceKelvin,
+    if (colors.isNotEmpty) 'colors': [for (final c in colors) c.toJson()],
+    if (colorMode) 'colorMode': true,
   };
 
   factory LightingMetrics.fromJson(Object? raw) {
@@ -168,6 +342,8 @@ class LightingMetrics {
       tint: (value['tint'] as num?)?.toDouble(),
       ratio: (value['ratio'] as num?)?.toDouble(),
       sourceKelvin: (value['source'] as num?)?.round(),
+      colors: LightColor.listFrom(value['colors']),
+      colorMode: value['colorMode'] == true,
     );
   }
 
