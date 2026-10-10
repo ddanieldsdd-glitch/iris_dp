@@ -53,7 +53,7 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
   for (final scene in scenes) {
     final rows = <ScriptDocRow>[];
     for (final shot in shotsByScene[scene.id] ?? const <Shot>[]) {
-      rows.add(await _docRow(scene, shot, sheet));
+      rows.add(await _docRow(db, scene, shot, sheet));
     }
     sections.add(
       ScriptDocSection(
@@ -85,6 +85,7 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
 /// Fila del documento para un plano, con sus colores y su imagen. [order]
 /// es su puesto en el orden de rodaje, cuando el documento es una jornada.
 Future<ScriptDocRow> _docRow(
+  AppDatabase db,
   Scene scene,
   Shot shot,
   ScriptSheetTheme sheet, {
@@ -106,6 +107,16 @@ Future<ScriptDocRow> _docRow(
     }
   }
   final rowFill = sheet.rowFill(shot.notesHighlight);
+  // Todas las referencias propias; sin ninguna, la heredada del storyboard.
+  final own = referenceImagesOf(
+    shot,
+    await db.watchReferencesForShot(shot.id).first,
+  );
+  final images = <Uint8List>[];
+  for (final path in own.isEmpty ? [referenceImageOf(shot)] : own) {
+    final bytes = await PdfSafeImage.loadFromPathMaxEdge(path, maxEdge: 1200);
+    if (bytes != null) images.add(bytes);
+  }
   return ScriptDocRow(
     cells: {
       if (order != null) 'orden': '$order',
@@ -125,10 +136,7 @@ Future<ScriptDocRow> _docRow(
     },
     fill: rowFill == null ? null : _rgb(rowFill),
     cellFills: cellFills,
-    image: await PdfSafeImage.loadFromPathMaxEdge(
-      referenceImageOf(shot),
-      maxEdge: 1200,
-    ),
+    images: images,
   );
 }
 
@@ -266,7 +274,7 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
       current = scene;
     }
     order++;
-    rows.add(await _docRow(scene, shot, sheet, order: order));
+    rows.add(await _docRow(db, scene, shot, sheet, order: order));
   }
   close();
 

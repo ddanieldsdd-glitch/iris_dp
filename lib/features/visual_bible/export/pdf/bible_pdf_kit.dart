@@ -1,3 +1,4 @@
+import '../../../../shared/visual_bible/lighting_metrics.dart';
 import '../../../../shared/visual_bible/bible_equipment.dart';
 import '../../../../shared/visual_bible/bible_table.dart';
 import '../../../../shared/visual_bible/bible_text_specs.dart';
@@ -921,6 +922,60 @@ class BiblePdfKit {
     ),
   );
 
+  /// Luz: color y contraste. La temperatura (o los colores de la escena),
+  /// el tinte, el ratio con sus stops y la corrección que hace falta.
+  pw.Widget? lightMetricsPoint(
+    String label,
+    LightingMetrics metrics, {
+    List<CorrectionGel> gels = const [],
+  }) {
+    if (metrics.isEmpty) return null;
+    String hex(int rgb) =>
+        '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+    final ratio = metrics.ratioOption;
+    final recipe = metrics.usesColors ? null : metrics.recipe(gels);
+    final rows = <(String, String)>[
+      if (!metrics.usesColors && metrics.kelvin != null)
+        ('Temperatura', '${metrics.kelvin} K'),
+      if (!metrics.usesColors &&
+          metrics.tint != null &&
+          metrics.tint!.abs() >= 0.5)
+        ('Tinte', metrics.tintLabel),
+      if (ratio != null)
+        ('Contraste', '${ratio.label} · ${ratio.stopsLabel} · ${ratio.use}'),
+      if (recipe != null && !recipe.needsNothing)
+        (
+          'Corrección desde ${recipe.sourceKelvin} K',
+          [
+            ...recipe.gels.map((g) => g.name),
+            if (recipe.tintGel != null) recipe.tintGel!,
+          ].join(' + '),
+        ),
+      if (metrics.usesColors)
+        for (final c in metrics.colors)
+          (
+            [c.role.label, if (c.name.trim().isNotEmpty) c.name.trim()].join(
+              ' · ',
+            ),
+            '${c.hsiLabel}   ${c.rgbLabel}',
+          ),
+    ];
+    final swatches = <(String, String)>[
+      if (metrics.usesColors)
+        for (final c in metrics.colors) (hex(c.rgb), c.role.label)
+      else if (metrics.color != null)
+        (hex(metrics.color!), '${metrics.kelvin} K'),
+    ];
+    if (rows.isEmpty && swatches.isEmpty) return null;
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (swatches.isNotEmpty) swatchRow(label, swatches),
+        if (rows.isNotEmpty) specsPoint(swatches.isEmpty ? label : '', rows),
+      ],
+    );
+  }
+
   /// Equipo: cada pieza con su papel, su estado y su alternativa.
   pw.Widget equipmentPoint(
     String label,
@@ -1193,6 +1248,9 @@ class BiblePdfKit {
         ).where((e) => e.trim().isNotEmpty).toList();
         return items.isEmpty ? null : listPoint(field.label, items);
       case BibleSectionFieldType.specs:
+        if (field.widget == 'light_metrics') {
+          return lightMetricsPoint(field.label, LightingMetrics.fromJson(raw));
+        }
         if (field.widget == 'text_specs') {
           return textSpecsPoint(field.label, BibleTextSpecsValue.decode(raw));
         }
@@ -1208,7 +1266,9 @@ class BiblePdfKit {
         return cardsPoint(
           field.label,
           cards,
-          columns: field.widget == 'cards_pillars',
+          // El mosaico sale como tarjetas con su imagen, en columnas.
+          columns:
+              field.widget == 'cards_pillars' || field.widget == 'cards_mosaic',
         );
       case BibleSectionFieldType.acts:
         return actsPointOf(field.label, BibleActsValue.decode(raw));

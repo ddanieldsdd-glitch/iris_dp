@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' show max;
 import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show Value;
@@ -16,6 +17,8 @@ abstract final class ShotReferenceSource {
 }
 
 /// Importa una imagen y la vincula al plano (miniatura + registro en [ShotReferences]).
+/// Con [keepPrimary], la imagen se añade a las que ya tenga el plano sin
+/// quitarle el puesto a la principal.
 Future<String> importShotReferenceImage({
   required AppDatabase db,
   required Shot shot,
@@ -23,6 +26,7 @@ Future<String> importShotReferenceImage({
   Uint8List? sourceBytes,
   String? fileName,
   required String source,
+  bool keepPrimary = false,
 }) async {
   final String stored;
   if (sourceBytes != null) {
@@ -42,17 +46,27 @@ Future<String> importShotReferenceImage({
     throw ArgumentError('Se requiere sourcePath o sourceBytes');
   }
 
-  final existing = await db.watchReferencesForShot(shot.id).first;
+  // La principal de antes puede no tener fila propia (datos antiguos).
+  final existing = await ensureShotReferencesSynced(db: db, shot: shot);
   await db.insertShotReference(
     ShotReferencesCompanion.insert(
       shotId: shot.id,
       imagePath: stored,
       source: Value(source),
-      sortOrder: Value(existing.length),
+      sortOrder: Value(
+        existing.isEmpty ? 0 : existing.map((r) => r.sortOrder).reduce(max) + 1,
+      ),
     ),
   );
 
-  await db.updateShot(shot.copyWith(referenceImagePath: Value(stored)));
+  final primary = shot.referenceImagePath;
+  final hasPrimary = primary != null && File(primary).existsSync();
+  if (!keepPrimary || !hasPrimary) {
+    await db.updateShotFields(
+      shot.id,
+      ShotsCompanion(referenceImagePath: Value(stored)),
+    );
+  }
 
   final queue = MediaSyncBridge.uploadQueue;
   if (queue != null) {
@@ -139,6 +153,18 @@ Future<void> deleteShotReferenceEntry({
           : Value(remaining.first.imagePath),
     ),
   );
+}
+
+/// Imágenes de referencia propias del plano, en su orden: un plano con
+/// varios encuadres lleva una por encuadre. Solo las que existen en disco.
+List<String> referenceImagesOf(Shot shot, List<ShotReference> references) {
+  final primary = shot.referenceImagePath;
+  return [
+    // Una principal antigua, sin fila propia, va la primera.
+    if (primary != null && !references.any((r) => r.imagePath == primary))
+      primary,
+    for (final reference in references) reference.imagePath,
+  ].where((path) => File(path).existsSync()).toList();
 }
 
 /// Imagen que se enseña como referencia del plano: la suya o, si no tiene,

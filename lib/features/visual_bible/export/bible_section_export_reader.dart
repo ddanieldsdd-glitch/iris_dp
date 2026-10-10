@@ -354,6 +354,8 @@ abstract final class BibleSectionExportReader {
   };
 
   /// Imágenes del moodboard que usa un valor, sea cual sea su widget.
+  static Iterable<int> imageIdsInValue(String? raw) => _imageIdsIn(raw);
+
   static Iterable<int> _imageIdsIn(String? raw) {
     if (raw == null || raw.trim().isEmpty) return const [];
     Object? decoded;

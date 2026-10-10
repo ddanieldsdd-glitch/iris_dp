@@ -158,11 +158,20 @@ class TechnicalScriptPdfExporter {
                     children: [
                       for (final column in doc.columns)
                         cell(
-                          column.key == 'ref' && row.image != null
-                              ? pw.Image(
-                                  pw.MemoryImage(row.image!),
-                                  fit: pw.BoxFit.contain,
-                                  height: 70,
+                          column.key == 'ref' && row.images.isNotEmpty
+                              ? pw.Column(
+                                  mainAxisSize: pw.MainAxisSize.min,
+                                  children: [
+                                    for (final (i, image)
+                                        in row.images.indexed) ...[
+                                      if (i > 0) pw.SizedBox(height: 3),
+                                      pw.Image(
+                                        pw.MemoryImage(image),
+                                        fit: pw.BoxFit.contain,
+                                        height: 70,
+                                      ),
+                                    ],
+                                  ],
                                 )
                               : rich(
                                   row.cells[column.key] ?? '',

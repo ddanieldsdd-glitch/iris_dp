@@ -155,9 +155,12 @@ class TechnicalScriptDocxExporter {
         for (var i = 0; i < doc.columns.length; i++) {
           final column = doc.columns[i];
           String content;
-          if (column.key == 'ref' && row.image != null) {
-            final picture = _fitImage(row.image!, widths[i] - 200);
-            if (picture != null) {
+          if (column.key == 'ref' && row.images.isNotEmpty) {
+            // Un párrafo por imagen: los encuadres van uno debajo de otro.
+            final paragraphs = StringBuffer();
+            for (final bytes in row.images) {
+              final picture = _fitImage(bytes, widths[i] - 200);
+              if (picture == null) continue;
               imageIndex++;
               final relId = 'rIdImg$imageIndex';
               media['word/media/referencia$imageIndex.jpg'] = picture.bytes;
@@ -166,13 +169,19 @@ class TechnicalScriptDocxExporter {
                 'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
                 'Target="media/referencia$imageIndex.jpg"/>',
               );
-              content = _paragraph(
-                _image(relId, imageIndex, picture.widthEmu, picture.heightEmu),
-                centered: true,
+              paragraphs.write(
+                _paragraph(
+                  _image(
+                    relId,
+                    imageIndex,
+                    picture.widthEmu,
+                    picture.heightEmu,
+                  ),
+                  centered: true,
+                ),
               );
-            } else {
-              content = _paragraph('');
             }
+            content = paragraphs.isEmpty ? _paragraph('') : '$paragraphs';
           } else {
             content = _paragraph(
               _runs(row.cells[column.key] ?? ''),

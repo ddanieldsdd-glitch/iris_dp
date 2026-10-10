@@ -79,16 +79,19 @@ class ScriptDocRow {
   /// Color propio de algunas celdas (0xRRGGBB), por clave de columna.
   final Map<String, int> cellFills;
 
-  /// Imagen de la celda de referencia, ya en un formato que PDF y Word
-  /// admiten (PNG o JPEG).
-  final Uint8List? image;
+  /// Imágenes de la celda de referencia (una por encuadre), ya en un
+  /// formato que PDF y Word admiten (PNG o JPEG).
+  final List<Uint8List> images;
 
   const ScriptDocRow({
     required this.cells,
     this.fill,
     this.cellFills = const {},
-    this.image,
+    this.images = const [],
   });
+
+  /// La primera imagen, si hay alguna.
+  Uint8List? get image => images.isEmpty ? null : images.first;
 
   int? fillOf(String column) => cellFills[column] ?? fill;
 }
