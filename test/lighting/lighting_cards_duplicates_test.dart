@@ -45,7 +45,7 @@ void main() {
     expect(all.where((c) => c.kind == NarrativeCardKind.overview).length, 1);
   });
 
-  test('las fichas repetidas se funden en la que tiene contenido', () async {
+  test('las fichas repetidas se funden sin perder texto ni imágenes', () async {
     Future<int> card({String? body}) => db.insertNarrativeCard(
       VisualBibleNarrativeCardsCompanion.insert(
         bibleId: bibleId,
@@ -75,12 +75,13 @@ void main() {
     );
     expect(removed, greaterThanOrEqualTo(2));
     final left = await locationCards();
-    expect(left.single.id, written);
+    // Queda una sola, con el texto de una y la imagen de otra.
     expect(left.single.body, 'Sodio y sombras largas');
     // La imagen de la ficha borrada pasa a la que queda.
     final image = (await db.select(db.moodboardImages).get())
         .firstWhere((m) => m.id == imageId);
-    expect(jsonDecode(image.assignedCardIds!), [written]);
+    expect(jsonDecode(image.assignedCardIds!), [left.single.id]);
+    expect(left.single.id, anyOf(written, withImage));
     expect(left.any((c) => c.id == empty), isFalse);
 
     // Sin repetidas no toca nada.
