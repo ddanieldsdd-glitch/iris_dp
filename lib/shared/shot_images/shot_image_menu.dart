@@ -334,12 +334,12 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
       // La base se coge ya: el menú puede cerrarse antes de acabar.
       final db = _db;
       final shot = widget.shot;
-      _references = () async* {
+      _references = db.watchReferencesForShot(shot.id);
+      () async {
         await ensureShotReferencesSynced(
           db: db,
           shot: await db.getShotById(shot.id) ?? shot,
         );
-        yield* db.watchReferencesForShot(shot.id);
       }();
     }
   }

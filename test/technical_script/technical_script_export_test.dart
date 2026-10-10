@@ -122,6 +122,38 @@ void main() {
     },
   );
 
+  test('un plano con varios encuadres lleva todas sus imágenes al PDF y al '
+      'Word', () async {
+    final shot = (await db.getShotsForProject(projectId)).first;
+    final second = img.Image(width: 320, height: 180);
+    img.fill(second, color: img.ColorRgb8(120, 40, 40));
+    final paths = [shot.referenceImagePath!, '${tmp.path}/ref2.png'];
+    File(paths[1]).writeAsBytesSync(img.encodePng(second));
+    for (final (i, path) in paths.indexed) {
+      await db.insertShotReference(
+        ShotReferencesCompanion.insert(
+          shotId: shot.id,
+          imagePath: path,
+          sortOrder: Value(i),
+        ),
+      );
+    }
+
+    final doc = await build();
+    expect(doc.sections.first.rows.first.images, hasLength(2));
+    final pdf = await TechnicalScriptPdfExporter.buildBytes(doc);
+    expect(ascii.decode(pdf.sublist(0, 5)), '%PDF-');
+    final out = Platform.environment['EXPORT_OUT'];
+    if (out != null) File('$out/guion_encuadres.pdf').writeAsBytesSync(pdf);
+    final archive = ZipDecoder().decodeBytes(
+      TechnicalScriptDocxExporter.buildBytes(doc),
+    );
+    expect(
+      archive.files.where((f) => f.name.startsWith('word/media/')),
+      hasLength(2),
+    );
+  });
+
   test('el PDF se genera', () async {
     final bytes = await TechnicalScriptPdfExporter.buildBytes(await build());
     expect(ascii.decode(bytes.sublist(0, 5)), '%PDF-');

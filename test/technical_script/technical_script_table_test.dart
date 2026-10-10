@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
@@ -5,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iris_dp/core/database/app_database.dart';
@@ -555,6 +558,77 @@ void main() {
       sets.firstWhere((s) => s.locationName == 'PORTAL').siteId,
       isNotNull,
     );
+    await unmount(tester);
+  });
+
+  testWidgets('un plano con varios encuadres enseña todas sus referencias y '
+      'el menú deja quitarlas una a una', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    final tmp = Directory.systemTemp.createTempSync('iris_encuadres');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    late int shotId;
+    await tester.runAsync(() async {
+      final shot = (await db.getShotsForProject(projectId)).first;
+      shotId = shot.id;
+      final paths = <String>[];
+      for (var i = 0; i < 3; i++) {
+        final image = img.Image(width: 32, height: 18);
+        img.fill(image, color: img.ColorRgb8(40 * i, 60, 110));
+        paths.add('${tmp.path}/encuadre$i.png');
+        File(paths.last).writeAsBytesSync(img.encodePng(image));
+        await db.insertShotReference(
+          ShotReferencesCompanion.insert(
+            shotId: shot.id,
+            imagePath: paths.last,
+            sortOrder: Value(i),
+          ),
+        );
+      }
+      await db.updateShotFields(
+        shot.id,
+        ShotsCompanion(referenceImagePath: Value(paths.first)),
+      );
+    });
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+
+    // Las tres, una debajo de otra, y los otros planos siguen vacíos.
+    final images = find.byType(Image);
+    expect(images, findsNWidgets(3));
+    expect(
+      tester.getTopLeft(images.at(1)).dy,
+      greaterThan(tester.getBottomLeft(images.at(0)).dy),
+    );
+    expect(find.text('Ref.'), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(images.first);
+    await settle(tester);
+    expect(find.text('Referencia · Plano 1'), findsOneWidget);
+    expect(find.byTooltip('Quitar esta imagen'), findsNWidgets(3));
+    // El borrado consulta la base con tiempo de verdad.
+    await tester.runAsync(() async {
+      await tester.tap(find.byTooltip('Quitar esta imagen').first);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await settle(tester);
+    // El menú sigue abierto con las que quedan.
+    expect(find.byTooltip('Quitar esta imagen'), findsNWidgets(2));
+    late List<ShotReference> left;
+    late Shot shot;
+    await tester.runAsync(() async {
+      left = await db.watchReferencesForShot(shotId).first;
+      shot = (await db.getShotById(shotId))!;
+    });
+    expect(left, hasLength(2));
+    expect(shot.referenceImagePath, left.first.imagePath);
+
+    await tester.tap(find.byTooltip('Cerrar'));
+    await settle(tester);
     await unmount(tester);
   });
 

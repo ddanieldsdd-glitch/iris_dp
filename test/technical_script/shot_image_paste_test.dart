@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/database/database_provider.dart';
 import 'package:iris_dp/core/theme/app_theme.dart';
+import 'package:iris_dp/core/utils/shot_reference_import.dart';
 import 'package:iris_dp/shared/shot_images/shot_image_menu.dart';
 
 /// Un PNG de 1 × 1.
@@ -141,6 +142,33 @@ void main() {
     final path = (await db.getShotById(id))!.referenceImagePath;
     expect(path, isNotNull);
     expect(File(path!).readAsBytesSync(), _png);
+
+    // Pegar otra la añade: el plano lleva una imagen por encuadre y la
+    // primera sigue siendo la principal.
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    expect(
+      await pasteShotImageFromClipboard(db, (await db.getShotById(id))!),
+      isNull,
+    );
+    final after = (await db.getShotById(id))!;
+    final references = await db.watchReferencesForShot(id).first;
+    expect(references, hasLength(2));
+    expect(after.referenceImagePath, path);
+    expect(referenceImagesOf(after, references), [
+      path,
+      references.last.imagePath,
+    ]);
+
+    // Al quitar la principal, pasa a serlo la siguiente.
+    await deleteShotReferenceEntry(
+      db: db,
+      shot: after,
+      reference: references.first,
+    );
+    expect(
+      (await db.getShotById(id))!.referenceImagePath,
+      references.last.imagePath,
+    );
 
     // Un enlace que no se puede descargar se explica, no se calla.
     clipboard = {'kind': 'empty', 'types': <String>[]};
