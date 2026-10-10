@@ -82,6 +82,7 @@ Future<String?> pickAndImportShotReference({
   required Shot shot,
   required String source,
   String? dialogTitle,
+  bool keepPrimary = false,
 }) async {
   final file = await UserFilePicker.pickImage(
     dialogTitle: dialogTitle ?? 'Referencia · Plano ${shot.number}',
@@ -99,6 +100,7 @@ Future<String?> pickAndImportShotReference({
     sourceBytes: bytes,
     fileName: file.name,
     source: source,
+    keepPrimary: keepPrimary,
   );
 }
 

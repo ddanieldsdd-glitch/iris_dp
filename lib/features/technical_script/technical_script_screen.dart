@@ -2214,7 +2214,7 @@ class _DeleteShotButton extends ConsumerWidget {
 }
 
 /// Imagen de referencia o de storyboard del plano; tocarla abre su menú.
-class _ShotImageCell extends StatelessWidget {
+class _ShotImageCell extends ConsumerWidget {
   final Shot shot;
   final ShotImageTarget target;
 
@@ -2224,7 +2224,7 @@ class _ShotImageCell extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final sheet = ScriptSheet.of(context);
     final story = target == ShotImageTarget.storyboard;
     final own = story ? shot.storyboardImagePath : shot.referenceImagePath;
@@ -2232,11 +2232,43 @@ class _ShotImageCell extends StatelessWidget {
     final hasImage = path != null && File(path).existsSync();
     // Sin imagen propia se enseña la del otro uso, con su rótulo.
     final inherited = hasImage && own == null;
+    final single = _body(context, sheet, story, path, hasImage, inherited);
 
     return ShotImagePasteTarget(
       shot: shot,
       target: target,
-      child: _body(context, sheet, story, path, hasImage, inherited),
+      // La referencia puede llevar varias imágenes, una por encuadre: se
+      // enseñan todas, una debajo de otra.
+      child: story
+          ? single
+          : StreamBuilder<List<ShotReference>>(
+              stream: ref
+                  .watch(databaseProvider)
+                  .watchReferencesForShot(shot.id),
+              builder: (context, snap) {
+                final paths = referenceImagesOf(shot, snap.data ?? const []);
+                if (paths.length < 2) return single;
+                return GestureDetector(
+                  onTap: () => showShotImageMenu(context, shot, target: target),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final (i, image) in paths.indexed) ...[
+                        if (i > 0) const SizedBox(height: 4),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: SizedBox(
+                            height: 84,
+                            width: double.infinity,
+                            child: Image.file(File(image), fit: BoxFit.contain),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
     );
   }
 

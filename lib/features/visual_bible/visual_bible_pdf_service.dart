@@ -2258,6 +2258,16 @@ class VisualBiblePdfService {
       }
     }
 
+    // Puntos que el usuario añadió a la pantalla.
+    for (final point in BibleSectionExportReader.userPoints(
+      contentJson,
+      BibleSectionId.lighting,
+    )) {
+      final widget = kit.point(point.field, point.value);
+      if (widget != null) out.add(widget);
+      out.addAll(kit.extras(values, point.field.key));
+    }
+
     if (lightingSetups.isNotEmpty) {
       out.add(pw.SizedBox(height: 10));
       out.add(kit.label('Esquemas de luz'));
