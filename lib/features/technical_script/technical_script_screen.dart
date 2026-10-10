@@ -1992,7 +1992,8 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
 }
 
 /// Miniatura de la planta del plano. Al tocarla abre la planta; si la escena
-/// aún no tiene set, lleva a la localización para elegirlo o crearlo.
+/// aún no tiene set, lleva a la localización para elegirlo o crearlo. Admite
+/// además bocetos: imágenes que hacen de planta mientras no está dibujada.
 class _PlanCell extends StatelessWidget {
   final Shot shot;
   final Scene scene;
@@ -2038,50 +2039,139 @@ class _PlanCell extends StatelessWidget {
       );
     }
 
-    return Tooltip(
-      message: caption,
-      child: GestureDetector(
-        onTap: open,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: SizedBox(
-            height: 84,
-            child: hasDrawing
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: PlanThumbnail(
-                      elements: own,
-                      inherited: base,
-                      focus: data.zoneOf(data.set(setId)),
-                      emptyIcon: Icons.videocam_outlined,
-                    ),
-                  )
-                : DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: sheet.tile,
-                      border: Border.all(color: sheet.tileBorder),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(icon, color: sheet.hint, size: 20),
-                        const SizedBox(height: 2),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Text(
-                            caption,
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: sheet.hintText.copyWith(fontSize: 11),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+    final sketches = planSketchesOf(shot);
+    void sketchMenu() =>
+        showShotImageMenu(context, shot, target: ShotImageTarget.planSketch);
+
+    Widget tappable(String message, VoidCallback onTap, Widget child) {
+      return Tooltip(
+        message: message,
+        child: GestureDetector(
+          onTap: onTap,
+          child: MouseRegion(cursor: SystemMouseCursors.click, child: child),
+        ),
+      );
+    }
+
+    // La planta dibujada, o su hueco. Con bocetos y sin dibujo, el hueco se
+    // queda en una línea: lo que se ve es el boceto.
+    final Widget plan;
+    if (hasDrawing) {
+      plan = SizedBox(
+        height: 84,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: PlanThumbnail(
+            elements: own,
+            inherited: base,
+            focus: data.zoneOf(data.set(setId)),
+            emptyIcon: Icons.videocam_outlined,
           ),
         ),
+      );
+    } else if (sketches.isNotEmpty) {
+      plan = Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: sheet.hint, size: 13),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                caption,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: sheet.hintText.copyWith(fontSize: 11),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      plan = SizedBox(
+        height: 84,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: sheet.tile,
+            border: Border.all(color: sheet.tileBorder),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: sheet.hint, size: 20),
+              const SizedBox(height: 2),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  caption,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: sheet.hintText.copyWith(fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final planTile = tappable(caption, open, plan);
+
+    return ShotImagePasteTarget(
+      shot: shot,
+      target: ShotImageTarget.planSketch,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (sketches.isEmpty || hasDrawing)
+            Stack(
+              children: [
+                planTile,
+                // Sin bocetos aún: la entrada para poner el primero.
+                if (sketches.isEmpty)
+                  Positioned(
+                    top: 2,
+                    right: 2,
+                    child: tappable(
+                      'Añadir un boceto de planta (imagen)',
+                      sketchMenu,
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: sheet.tile.withValues(alpha: 0.9),
+                          border: Border.all(color: sheet.tileBorder),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Icon(
+                          Icons.add_photo_alternate_outlined,
+                          size: 14,
+                          color: sheet.hint,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          for (final (i, sketch) in sketches.indexed) ...[
+            if (i > 0 || hasDrawing) const SizedBox(height: 4),
+            tappable(
+              'Boceto de planta · clic para añadir o quitar',
+              sketchMenu,
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: SizedBox(
+                  height: 84,
+                  child: Image.file(File(sketch), fit: BoxFit.contain),
+                ),
+              ),
+            ),
+          ],
+          if (sketches.isNotEmpty && !hasDrawing) planTile,
+        ],
       ),
     );
   }

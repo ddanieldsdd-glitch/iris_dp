@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:math' show max;
 import 'dart:typed_data';
 
@@ -216,4 +217,86 @@ Future<String> importShotStoryboardImage({
     await queue.scanAndEnqueueProject(shot.projectId);
   }
   return stored;
+}
+
+/// Bocetos de la planta del plano: imágenes (una foto de la libreta, un
+/// esquema de otra película) que hacen de planta mientras no está dibujada.
+/// Se guardan en `cameraPlanImagePath`: una ruta o una lista en JSON. Solo
+/// los que existen en disco.
+List<String> planSketchesOf(Shot shot) =>
+    _storedPlanSketches(shot).where((path) => File(path).existsSync()).toList();
+
+List<String> _storedPlanSketches(Shot shot) {
+  final raw = shot.cameraPlanImagePath?.trim();
+  if (raw == null || raw.isEmpty) return const [];
+  if (!raw.startsWith('[')) return [raw];
+  try {
+    return [
+      for (final path in jsonDecode(raw) as List)
+        if (path is String && path.isNotEmpty) path,
+    ];
+  } catch (_) {
+    return const [];
+  }
+}
+
+Future<void> _savePlanSketches(AppDatabase db, int shotId, List<String> paths) {
+  return db.updateShotFields(
+    shotId,
+    ShotsCompanion(
+      cameraPlanImagePath: Value(paths.isEmpty ? null : jsonEncode(paths)),
+    ),
+  );
+}
+
+/// Añade un boceto de planta al plano, detrás de los que ya tenga.
+Future<String> importShotPlanSketch({
+  required AppDatabase db,
+  required Shot shot,
+  String? sourcePath,
+  Uint8List? sourceBytes,
+  String? fileName,
+}) async {
+  final String stored;
+  if (sourceBytes != null) {
+    stored = await MediaStorage.writeShotReferenceBytes(
+      projectId: shot.projectId,
+      shotId: shot.id,
+      bytes: sourceBytes,
+      fileName: fileName ?? 'planta.jpg',
+    );
+  } else if (sourcePath != null) {
+    stored = await MediaStorage.copyShotReference(
+      projectId: shot.projectId,
+      shotId: shot.id,
+      sourcePath: sourcePath,
+    );
+  } else {
+    throw ArgumentError('Se requiere sourcePath o sourceBytes');
+  }
+
+  final current = await db.getShotById(shot.id) ?? shot;
+  await _savePlanSketches(db, shot.id, [
+    ..._storedPlanSketches(current).where((path) => path != stored),
+    stored,
+  ]);
+
+  final queue = MediaSyncBridge.uploadQueue;
+  if (queue != null) {
+    await queue.scanAndEnqueueProject(shot.projectId);
+  }
+  return stored;
+}
+
+/// Quita un boceto de planta del plano.
+Future<void> removeShotPlanSketch({
+  required AppDatabase db,
+  required Shot shot,
+  required String path,
+}) async {
+  final current = await db.getShotById(shot.id) ?? shot;
+  await _savePlanSketches(db, shot.id, [
+    for (final other in _storedPlanSketches(current))
+      if (other != path) other,
+  ]);
 }

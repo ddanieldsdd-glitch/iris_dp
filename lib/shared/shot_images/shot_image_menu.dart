@@ -30,7 +30,13 @@ const _imageExtensions = {
 };
 
 /// Qué imagen del plano se está eligiendo.
-enum ShotImageTarget { reference, storyboard }
+enum ShotImageTarget {
+  reference,
+  storyboard,
+
+  /// Boceto de la planta: imagen que hace de planta mientras no se dibuja.
+  planSketch,
+}
 
 /// Pega en el plano la imagen que haya en el portapapeles. Como referencia
 /// se añade a las que ya tenga (un plano puede llevar una por encuadre);
@@ -59,7 +65,14 @@ Future<String?> pasteShotImageFromClipboard(
     };
   }
   final current = await db.getShotById(shot.id) ?? shot;
-  if (target == ShotImageTarget.storyboard) {
+  if (target == ShotImageTarget.planSketch) {
+    await importShotPlanSketch(
+      db: db,
+      shot: current,
+      sourceBytes: payload.bytes,
+      fileName: 'pegada${payload.extension}',
+    );
+  } else if (target == ShotImageTarget.storyboard) {
     await importShotStoryboardImage(
       db: db,
       shot: current,
@@ -129,11 +142,17 @@ class _ShotImagePasteTargetState extends ConsumerState<ShotImagePasteTarget> {
         SnackBar(
           content: Text(
             problem ??
-                (widget.target == ShotImageTarget.storyboard
-                    ? 'Imagen pegada en el storyboard del plano '
-                          '${widget.shot.number}.'
-                    : 'Imagen añadida a las referencias del plano '
-                          '${widget.shot.number}.'),
+                switch (widget.target) {
+                  ShotImageTarget.storyboard =>
+                    'Imagen pegada en el storyboard del plano '
+                        '${widget.shot.number}.',
+                  ShotImageTarget.planSketch =>
+                    'Boceto añadido a la planta del plano '
+                        '${widget.shot.number}.',
+                  ShotImageTarget.reference =>
+                    'Imagen añadida a las referencias del plano '
+                        '${widget.shot.number}.',
+                },
           ),
         ),
       );
@@ -213,7 +232,17 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
 
   bool get _story => widget.target == ShotImageTarget.storyboard;
 
-  String get _what => _story ? 'Storyboard' : 'Referencia';
+  bool get _sketch => widget.target == ShotImageTarget.planSketch;
+
+  String get _what => switch (widget.target) {
+    ShotImageTarget.storyboard => 'Storyboard',
+    ShotImageTarget.planSketch => 'Boceto de planta',
+    ShotImageTarget.reference => 'Referencia',
+  };
+
+  /// Bocetos de planta del plano, al día: los da la base en [build].
+  List<String> _sketches = const [];
+  Stream<Shot?>? _shotChanges;
 
   /// El plano tal como está ahora, no como estaba al abrir el menú.
   Future<Shot> _current() async =>
@@ -236,7 +265,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
   }
 
   Future<void> _fromComputer(String source) => _run(() async {
-    if (!_story) {
+    if (!_story && !_sketch) {
       final path = await pickAndImportShotReference(
         db: _db,
         shot: await _current(),
@@ -247,10 +276,19 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
       return path != null;
     }
     final file = await UserFilePicker.pickImage(
-      dialogTitle: 'Storyboard · Plano ${widget.shot.number}',
+      dialogTitle: '$_what · Plano ${widget.shot.number}',
     );
     final bytes = file?.bytes;
     if (file == null || bytes == null || bytes.isEmpty) return false;
+    if (_sketch) {
+      await importShotPlanSketch(
+        db: _db,
+        shot: await _current(),
+        sourceBytes: bytes,
+        fileName: file.name,
+      );
+      return false;
+    }
     await importShotStoryboardImage(
       db: _db,
       shot: await _current(),
@@ -281,6 +319,16 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
       );
       return true;
     }
+    if (_sketch) {
+      for (final path in images) {
+        await importShotPlanSketch(
+          db: _db,
+          shot: await _current(),
+          sourcePath: path,
+        );
+      }
+      return false;
+    }
     for (final path in images) {
       await importShotReferenceImage(
         db: _db,
@@ -301,8 +349,14 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
       await _current(),
       target: widget.target,
     );
-    if (problem == null) return true;
+    if (problem == null) return !_sketch;
     setState(() => _notice = problem);
+    return false;
+  });
+
+  /// Quita uno de los bocetos de planta; el menú sigue abierto.
+  Future<void> _removeSketch(String path) => _run(() async {
+    await removeShotPlanSketch(db: _db, shot: await _current(), path: path);
     return false;
   });
 
@@ -328,6 +382,12 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
   @override
   void initState() {
     super.initState();
+    if (_sketch) {
+      final db = _db;
+      _shotChanges = (db.select(
+        db.shots,
+      )..where((s) => s.id.equals(widget.shot.id))).watchSingleOrNull();
+    }
     if (widget.target == ShotImageTarget.reference) {
       // Una referencia antigua puede no tener fila propia: se le da para que
       // salga en la lista y se pueda quitar.
@@ -348,6 +408,15 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
 
   @override
   Widget build(BuildContext context) {
+    if (_sketch) {
+      return StreamBuilder<Shot?>(
+        stream: _shotChanges,
+        builder: (context, snap) {
+          _sketches = planSketchesOf(snap.data ?? widget.shot);
+          return _dialog(context, const []);
+        },
+      );
+    }
     if (_story) return _dialog(context, const []);
     return StreamBuilder<List<ShotReference>>(
       stream: _references,
@@ -364,14 +433,18 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
     final palette = context.palette;
     // La imagen propia de este uso; si no la tiene, se enseña la heredada
     // del otro, que no se puede quitar desde aquí.
-    final own = _story
-        ? widget.shot.storyboardImagePath
-        : references.firstOrNull?.imagePath;
+    final own = switch (widget.target) {
+      ShotImageTarget.storyboard => widget.shot.storyboardImagePath,
+      ShotImageTarget.planSketch => _sketches.lastOrNull,
+      ShotImageTarget.reference => references.firstOrNull?.imagePath,
+    };
     final path =
         own ??
-        (_story
-            ? widget.shot.referenceImagePath
-            : widget.shot.storyboardImagePath);
+        switch (widget.target) {
+          ShotImageTarget.storyboard => widget.shot.referenceImagePath,
+          ShotImageTarget.planSketch => null,
+          ShotImageTarget.reference => widget.shot.storyboardImagePath,
+        };
     final hasOwn = own != null && File(own).existsSync();
     final hasImage = path != null && File(path).existsSync();
 
@@ -422,7 +495,23 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                     _dropZone(palette, hasImage ? path : null),
                     if (references.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.md),
-                      _referenceStrip(palette, references),
+                      _imageStrip(
+                        [for (final r in references) r.imagePath],
+                        (i) => _removeReference(references[i]),
+                      ),
+                    ],
+                    if (_sketch && _sketches.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      _imageStrip(_sketches, (i) => _removeSketch(_sketches[i])),
+                    ],
+                    if (_sketch) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Una foto de la libreta o un esquema ya hecho: hace '
+                        'de planta del plano mientras no esté dibujada, y '
+                        'sale también en Plantas de cámara y luz.',
+                        style: AppTypography.caption(palette),
+                      ),
                     ],
                     if (hasImage && !hasOwn) ...[
                       const SizedBox(height: 6),
@@ -463,7 +552,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                           icon: const Icon(Icons.content_paste, size: 18),
                           label: const Text('Pegar'),
                         ),
-                        if (!_story)
+                        if (!_story && !_sketch)
                           PopupMenuButton<String>(
                             tooltip: 'Más orígenes',
                             color: palette.surfaceElevated,
@@ -592,11 +681,16 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                         color: Colors.black.withValues(alpha: 0.55),
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Text(
-                          _story
-                              ? 'Arrastra otra imagen aquí o pégala con ⌘V '
-                                    'para cambiarla'
-                              : 'Arrastra o pega con ⌘V más imágenes: una '
-                                    'por encuadre',
+                          switch (widget.target) {
+                            ShotImageTarget.storyboard =>
+                              'Arrastra otra imagen aquí o pégala con ⌘V '
+                                  'para cambiarla',
+                            ShotImageTarget.planSketch =>
+                              'Arrastra o pega con ⌘V más bocetos',
+                            ShotImageTarget.reference =>
+                              'Arrastra o pega con ⌘V más imágenes: una '
+                                  'por encuadre',
+                          },
                           textAlign: TextAlign.center,
                           style: AppTypography.caption(
                             palette,
@@ -610,22 +704,22 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
     );
   }
 
-  /// Las referencias del plano en su orden, cada una con su «quitar».
-  Widget _referenceStrip(AppPalette palette, List<ShotReference> references) {
+  /// Las imágenes del plano en su orden, cada una con su «quitar».
+  Widget _imageStrip(List<String> paths, void Function(int index) onRemove) {
     return SizedBox(
       height: 64,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: references.length,
+        itemCount: paths.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
-          final reference = references[i];
+          final path = paths[i];
           return Stack(
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(6),
                 child: Image.file(
-                  File(reference.imagePath),
+                  File(path),
                   width: 104,
                   height: 64,
                   fit: BoxFit.cover,
@@ -653,7 +747,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                 child: Tooltip(
                   message: 'Quitar esta imagen',
                   child: InkWell(
-                    onTap: _busy ? null : () => _removeReference(reference),
+                    onTap: _busy ? null : () => onRemove(i),
                     child: Container(
                       padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(

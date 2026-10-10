@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/scene_format.dart';
+import '../../core/utils/shot_reference_import.dart';
 import '../../core/widgets/scene_meta_display.dart';
 import 'camera_plan_scene_badge.dart';
 import 'floor_plan_repository.dart';
@@ -17,6 +20,7 @@ import 'plan_target.dart';
 import 'plan_thumbnail.dart';
 import 'shot_route.dart';
 import '../../shared/rich_text/script_markup.dart';
+import '../../shared/shot_images/shot_image_menu.dart';
 
 /// Tablero de una escena: sus planos repartidos por set y por esquema de
 /// luz. Cada plano es una tarjeta que se arrastra a la columna que toque.
@@ -567,6 +571,11 @@ class _ShotCard extends StatelessWidget {
       if (shot.lens?.isNotEmpty == true) shot.lens!,
       if (shot.movement?.isNotEmpty == true) shot.movement!,
     ].join(' · ');
+    // Sin planta dibujada, el boceto (una imagen) ocupa su sitio.
+    final sketches = planSketchesOf(shot);
+    final drawn = [...data.lightOfShot(shot), ...data.ownOfShot(shot)];
+    void sketchMenu() =>
+        showShotImageMenu(context, shot, target: ShotImageTarget.planSketch);
 
     final card = Material(
       color: palette.surfaceElevated,
@@ -592,12 +601,24 @@ class _ShotCard extends StatelessWidget {
             SizedBox(
               width: 64,
               height: 48,
-              child: PlanThumbnail(
-                elements: [...data.lightOfShot(shot), ...data.ownOfShot(shot)],
-                inherited: data.baseOfShot(shot),
-                focus: data.zoneOf(data.set(data.setIdOfShot(shot))),
-                emptyIcon: Icons.videocam_outlined,
-              ),
+              child: drawn.isEmpty && sketches.isNotEmpty
+                  ? Tooltip(
+                      message: 'Boceto de planta · clic para verlo',
+                      child: GestureDetector(
+                        onTap: sketchMenu,
+                        child: Image.file(
+                          File(sketches.last),
+                          fit: BoxFit.cover,
+                          cacheWidth: 200,
+                        ),
+                      ),
+                    )
+                  : PlanThumbnail(
+                      elements: drawn,
+                      inherited: data.baseOfShot(shot),
+                      focus: data.zoneOf(data.set(data.setIdOfShot(shot))),
+                      emptyIcon: Icons.videocam_outlined,
+                    ),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -628,12 +649,21 @@ class _ShotCard extends StatelessWidget {
                 onSelected: (action) => switch (action) {
                   'open' => onOpen(),
                   'pick' => onPick(),
+                  'sketch' => sketchMenu(),
                   _ => onSequence(),
                 },
                 itemBuilder: (_) => [
                   const PopupMenuItem(
                     value: 'open',
                     child: Text('Abrir planta'),
+                  ),
+                  PopupMenuItem(
+                    value: 'sketch',
+                    child: Text(
+                      sketches.isEmpty
+                          ? 'Añadir boceto (imagen)'
+                          : 'Bocetos de planta (${sketches.length})',
+                    ),
                   ),
                   PopupMenuItem(
                     value: 'pick',

@@ -18,6 +18,7 @@ import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_color.dart';
 import '../../shared/annotations/annotation_canvas.dart';
 import '../../shared/annotations/annotation_document.dart';
+import '../../shared/shot_images/shot_image_menu.dart';
 import 'camera_plan_grouping.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
@@ -2593,6 +2594,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 ],
               ),
         actions: [
+          if (_isShotMode && _shot != null)
+            IconButton(
+              tooltip: 'Bocetos de planta del plano (imágenes)',
+              icon: Icon(Icons.image_outlined, color: palette.textSecondary),
+              onPressed: () => showShotImageMenu(
+                context,
+                _shot!,
+                target: ShotImageTarget.planSketch,
+              ),
+            ),
           IconButton(
             tooltip: _annotationMode
                 ? 'Volver a editar elementos'

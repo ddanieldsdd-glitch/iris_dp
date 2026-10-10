@@ -772,6 +772,75 @@ void main() {
     },
   );
 
+  testWidgets('la planta admite bocetos: imágenes que se ven en la casilla y '
+      'se quitan desde su menú', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    final tmp = Directory.systemTemp.createTempSync('iris_bocetos');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    late int shotId;
+    final paths = <String>[];
+    await tester.runAsync(() async {
+      final shot = (await db.getShotsForProject(projectId)).first;
+      shotId = shot.id;
+      for (var i = 0; i < 2; i++) {
+        final image = img.Image(width: 32, height: 18);
+        img.fill(image, color: img.ColorRgb8(200, 60 * i, 40));
+        paths.add('${tmp.path}/boceto$i.png');
+        File(paths.last).writeAsBytesSync(img.encodePng(image));
+      }
+      // Una ruta suelta (como se guardaba antes) también vale.
+      await db.updateShotFields(
+        shot.id,
+        ShotsCompanion(cameraPlanImagePath: Value(paths.first)),
+      );
+      expect(planSketchesOf((await db.getShotById(shot.id))!), [paths.first]);
+      await db.updateShotFields(
+        shot.id,
+        ShotsCompanion(
+          cameraPlanImagePath: Value('["${paths[0]}","${paths[1]}"]'),
+        ),
+      );
+    });
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+
+    // Los dos bocetos del plano 1; los otros planos ofrecen añadir el suyo.
+    expect(find.byType(Image), findsNWidgets(2));
+    expect(
+      find.byTooltip('Añadir un boceto de planta (imagen)'),
+      findsNWidgets(2),
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byType(Image).first);
+    await settle(tester);
+    expect(find.text('Boceto de planta · Plano 1'), findsOneWidget);
+    expect(find.text('Más orígenes'), findsNothing);
+    expect(find.byTooltip('Quitar esta imagen'), findsNWidgets(2));
+    await tester.runAsync(() async {
+      await tester.tap(find.byTooltip('Quitar esta imagen').first);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await settle(tester);
+    late Shot shot;
+    await tester.runAsync(() async {
+      shot = (await db.getShotById(shotId))!;
+    });
+    expect(planSketchesOf(shot), [paths[1]]);
+    await settle(tester);
+    expect(find.byTooltip('Quitar esta imagen'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Cerrar'));
+    await settle(tester);
+    // La casilla se queda con el que queda.
+    expect(find.byType(Image), findsOneWidget);
+    await unmount(tester);
+  });
+
   testWidgets('la columna de storyboard se activa en Columnas y abre su menú', (
     tester,
   ) async {
