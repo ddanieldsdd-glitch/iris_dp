@@ -2233,6 +2233,21 @@ class _ShotImageCell extends StatelessWidget {
     // Sin imagen propia se enseña la del otro uso, con su rótulo.
     final inherited = hasImage && own == null;
 
+    return ShotImagePasteTarget(
+      shot: shot,
+      target: target,
+      child: _body(context, sheet, story, path, hasImage, inherited),
+    );
+  }
+
+  Widget _body(
+    BuildContext context,
+    ScriptSheetTheme sheet,
+    bool story,
+    String? path,
+    bool hasImage,
+    bool inherited,
+  ) {
     return GestureDetector(
       onTap: () => showShotImageMenu(context, shot, target: target),
       child: Container(
@@ -2247,7 +2262,7 @@ class _ShotImageCell extends StatelessWidget {
             ? Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.file(File(path), fit: BoxFit.contain),
+                  Image.file(File(path!), fit: BoxFit.contain),
                   if (inherited)
                     Positioned(
                       left: 0,

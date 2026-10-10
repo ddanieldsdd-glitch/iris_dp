@@ -32,6 +32,152 @@ const _imageExtensions = {
 /// Qué imagen del plano se está eligiendo.
 enum ShotImageTarget { reference, storyboard }
 
+/// Pega en el plano la imagen que haya en el portapapeles, como referencia
+/// o como storyboard. Devuelve `null` si ha ido bien y, si no, por qué no
+/// se ha podido, dicho para el usuario.
+Future<String?> pasteShotImageFromClipboard(
+  AppDatabase db,
+  Shot shot, {
+  ShotImageTarget target = ShotImageTarget.reference,
+}) async {
+  final result = await ClipboardImageReader.read();
+  final payload = result.payload;
+  if (result.status != ClipboardImageReadStatus.success || payload == null) {
+    return switch (result.status) {
+      ClipboardImageReadStatus.downloadFailed =>
+        'Lo copiado es un enlace a una imagen y no se ha podido descargar. '
+            'Copia la imagen en sí («Copiar imagen») o arrástrala aquí.',
+      ClipboardImageReadStatus.invalidUrl =>
+        'Lo copiado es un enlace, pero no lleva a una imagen.',
+      ClipboardImageReadStatus.pluginUnavailable =>
+        'La app no puede leer el portapapeles hasta que se cierre y se '
+            'vuelva a abrir del todo.',
+      _ =>
+        'En el portapapeles no hay una imagen (hay texto u otra cosa). '
+            'Copia la imagen y vuelve a pegar.',
+    };
+  }
+  final current = await db.getShotById(shot.id) ?? shot;
+  if (target == ShotImageTarget.storyboard) {
+    await importShotStoryboardImage(
+      db: db,
+      shot: current,
+      sourceBytes: payload.bytes,
+      fileName: 'pegada${payload.extension}',
+    );
+  } else {
+    await importShotReferenceImage(
+      db: db,
+      shot: current,
+      sourceBytes: payload.bytes,
+      fileName: 'pegada${payload.extension}',
+      source: ShotReferenceSource.manual,
+    );
+  }
+  return null;
+}
+
+/// Envuelve la casilla de imagen de un plano para poder pegar en ella sin
+/// abrir su menú: con el ratón encima (o tras tocarla), ⌘V pega ahí.
+class ShotImagePasteTarget extends ConsumerStatefulWidget {
+  final Shot shot;
+  final ShotImageTarget target;
+  final Widget child;
+
+  const ShotImagePasteTarget({
+    super.key,
+    required this.shot,
+    required this.child,
+    this.target = ShotImageTarget.reference,
+  });
+
+  @override
+  ConsumerState<ShotImagePasteTarget> createState() =>
+      _ShotImagePasteTargetState();
+}
+
+class _ShotImagePasteTargetState extends ConsumerState<ShotImagePasteTarget> {
+  final _focus = FocusNode(debugLabel: 'imagen del plano');
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _paste() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    String? problem;
+    try {
+      problem = await pasteShotImageFromClipboard(
+        ref.read(databaseProvider),
+        widget.shot,
+        target: widget.target,
+      );
+    } catch (e) {
+      problem = userFriendlyError(e);
+    }
+    if (!mounted) return;
+    setState(() => _busy = false);
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            problem ??
+                (widget.target == ShotImageTarget.storyboard
+                    ? 'Imagen pegada en el storyboard del plano '
+                          '${widget.shot.number}.'
+                    : 'Imagen pegada como referencia del plano '
+                          '${widget.shot.number}.'),
+          ),
+        ),
+      );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyV, meta: true): _paste,
+        const SingleActivator(LogicalKeyboardKey.keyV, control: true): _paste,
+      },
+      child: Focus(
+        focusNode: _focus,
+        onFocusChange: (_) => setState(() {}),
+        child: MouseRegion(
+          // Con el ratón encima, la casilla coge el foco (salvo que se esté
+          // escribiendo en otra): ⌘V pega aquí.
+          onEnter: (_) {
+            final focused = FocusManager.instance.primaryFocus?.context?.widget;
+            if (focused is! EditableText) _focus.requestFocus();
+          },
+          onExit: (_) {
+            if (_focus.hasPrimaryFocus) _focus.unfocus();
+          },
+          child: Tooltip(
+            message: '⌘V pega aquí la imagen copiada · clic para más opciones',
+            waitDuration: const Duration(milliseconds: 700),
+            child: DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                border: _focus.hasPrimaryFocus
+                    ? Border.all(color: palette.accent, width: 2)
+                    : null,
+              ),
+              child: Opacity(opacity: _busy ? 0.5 : 1, child: widget.child),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Menú de una imagen del plano (referencia o storyboard): arrastrarla,
 /// pegarla con ⌘V, elegirla del ordenador o del moodboard, y quitarla.
 Future<void> showShotImageMenu(
@@ -138,29 +284,14 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
       });
 
   Future<void> _paste() => _run(() async {
-    final result = await ClipboardImageReader.read();
-    final payload = result.payload;
-    if (result.status != ClipboardImageReadStatus.success || payload == null) {
-      setState(() => _notice = 'No hay ninguna imagen en el portapapeles.');
-      return false;
-    }
-    if (_story) {
-      await importShotStoryboardImage(
-        db: _db,
-        shot: await _current(),
-        sourceBytes: payload.bytes,
-        fileName: 'pegada${payload.extension}',
-      );
-    } else {
-      await importShotReferenceImage(
-        db: _db,
-        shot: await _current(),
-        sourceBytes: payload.bytes,
-        fileName: 'pegada${payload.extension}',
-        source: ShotReferenceSource.manual,
-      );
-    }
-    return true;
+    final problem = await pasteShotImageFromClipboard(
+      _db,
+      await _current(),
+      target: widget.target,
+    );
+    if (problem == null) return true;
+    setState(() => _notice = problem);
+    return false;
   });
 
   Future<void> _remove() => _run(() async {
