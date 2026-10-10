@@ -41,4 +41,23 @@ void main() {
       );
     });
   });
+
+  test('un HTML copiado de Google Docs: enlaces con &amp; e imágenes '
+      'incrustadas', () {
+    const html =
+        '<meta charset="utf-8"><b id="docs-internal-guid-1">'
+        '<img src="https://lh7-rt.googleusercontent.com/docsz/AD_4nX?key=abc&amp;w=600" '
+        'width="602" height="339" /></b>'
+        '<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ'
+        'AAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==">';
+    final images = ClipboardImageReader.imagesInHtml(html);
+    expect(images, hasLength(2));
+    expect(
+      images.first.url.toString(),
+      'https://lh7-rt.googleusercontent.com/docsz/AD_4nX?key=abc&w=600',
+    );
+    expect(images.last.inline, isNotNull);
+    expect(images.last.inline!.extension, '.png');
+    expect(images.last.inline!.bytes.take(4), [0x89, 0x50, 0x4E, 0x47]);
+  });
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -142,6 +143,96 @@ abstract final class ClipboardImageReader {
     return Uri.tryParse(match.group(0)!);
   }
 
+  /// Todas las imágenes que trae un HTML copiado, en orden: las incrustadas
+  /// (`data:`) ya decodificadas y las demás como enlace. Google Docs, por
+  /// ejemplo, copia la imagen así y no como imagen suelta.
+  @visibleForTesting
+  static List<({Uri? url, ClipboardImagePayload? inline})> imagesInHtml(
+    String html,
+  ) {
+    final found = <({Uri? url, ClipboardImagePayload? inline})>[];
+    final sources = RegExp(
+      r'''<img[^>]+src\s*=\s*["']([^"']+)["']''',
+      caseSensitive: false,
+    ).allMatches(html);
+    for (final match in sources) {
+      // En HTML, los «&» de un enlace van escritos «&amp;».
+      final raw = match
+          .group(1)!
+          .trim()
+          .replaceAll('&amp;', '&')
+          .replaceAll('&#38;', '&');
+      if (raw.startsWith('data:')) {
+        final inline = _payloadFromDataUrl(raw);
+        if (inline != null) found.add((url: null, inline: inline));
+        continue;
+      }
+      final url = _resolveUrl(raw);
+      if (url != null) found.add((url: url, inline: null));
+    }
+    return found;
+  }
+
+  static ClipboardImagePayload? _payloadFromDataUrl(String dataUrl) {
+    final match = RegExp(
+      r'^data:image/([a-zA-Z0-9.+-]+);base64,(.+)$',
+      dotAll: true,
+    ).firstMatch(dataUrl);
+    if (match == null) return null;
+    try {
+      final bytes = base64Decode(match.group(2)!.replaceAll(RegExp(r'\s'), ''));
+      if (bytes.isEmpty) return null;
+      return ClipboardImagePayload(
+        bytes: bytes,
+        extension: _extensionFromContentType(
+              'image/${match.group(1)!.toLowerCase()}',
+            ) ??
+            _extensionFromBytes(bytes) ??
+            '.png',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Qué imagen es, mirando cómo empieza el archivo.
+  static String? _extensionFromBytes(List<int> b) {
+    if (b.length < 12) return null;
+    if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) {
+      return '.png';
+    }
+    if (b[0] == 0xFF && b[1] == 0xD8) return '.jpg';
+    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46) return '.gif';
+    if (b[0] == 0x52 && b[1] == 0x49 && b[8] == 0x57 && b[9] == 0x45) {
+      return '.webp';
+    }
+    if (b[4] == 0x66 && b[5] == 0x74 && b[6] == 0x79 && b[7] == 0x70) {
+      return '.heic';
+    }
+    return null;
+  }
+
+  /// Lee la primera imagen de un HTML copiado que se deje: incrustada o
+  /// descargada. `null` si el HTML no trae ninguna.
+  static Future<ClipboardImageReadResult?> _readFromHtml(String html) async {
+    final images = imagesInHtml(html);
+    if (images.isEmpty) return null;
+    for (final image in images) {
+      final payload =
+          image.inline ??
+          (image.url == null ? null : await _downloadImage(image.url!));
+      if (payload != null) {
+        return ClipboardImageReadResult(
+          status: ClipboardImageReadStatus.success,
+          payload: payload,
+        );
+      }
+    }
+    return const ClipboardImageReadResult(
+      status: ClipboardImageReadStatus.downloadFailed,
+    );
+  }
+
   @visibleForTesting
   static Uri? extractImageUrlFromHtml(String html) {
     final srcMatch = RegExp(
@@ -187,6 +278,8 @@ abstract final class ClipboardImageReader {
 
     if (kind == 'html') {
       final html = map['html'] as String?;
+      final fromHtml = html == null ? null : await _readFromHtml(html);
+      if (fromHtml != null) return fromHtml;
       final url = html != null ? extractImageUrlFromHtml(html) : null;
       if (url != null) {
         final downloaded = await _downloadImage(url);
@@ -265,11 +358,15 @@ abstract final class ClipboardImageReader {
       final contentType =
           response.headers['content-type']?.split(';').first.trim().toLowerCase() ??
               '';
-      if (!contentType.startsWith('image/') && !_looksLikeImageUrl(uri)) {
+      final sniffed = _extensionFromBytes(response.bodyBytes);
+      if (!contentType.startsWith('image/') &&
+          !_looksLikeImageUrl(uri) &&
+          sniffed == null) {
         return null;
       }
 
       final ext = _extensionFromContentType(contentType) ??
+          sniffed ??
           _extensionFromPath(uri.path);
       return ClipboardImagePayload(
         bytes: response.bodyBytes,
