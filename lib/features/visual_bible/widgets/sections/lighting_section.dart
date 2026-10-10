@@ -1,3 +1,5 @@
+import '../lighting/lighting_locations_block.dart';
+import '../narrative_deck/lighting_global_metrics_panel.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -226,15 +228,10 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
           title: 'Referencias de cine',
           subtitle: 'Películas que nos inspiran y nos ayudan a definir la luz',
         ),
-        'locationLights': NarrativeDeckBlock(
+        'locationLights': LightingLocationsBlock(
           projectId: widget.projectId,
           bibleId: widget.bibleId,
-          sectionId: BibleSectionId.lighting,
-          kind: NarrativeCardKind.locationLight,
-          title: 'Luz por localización',
-          subtitle: 'Cómo imaginamos y afrontamos la luz en cada lugar',
-          allowAdd: false,
-          allowDelete: false,
+          globalMetrics: LightingGlobalMetricsPanel.metricsOf(custom),
           technicalPanelBuilder: (card) => _LocationTechnicalPanel(
             projectId: widget.projectId,
             bibleId: widget.bibleId,
