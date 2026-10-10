@@ -331,7 +331,6 @@ class _LightingOverviewBlockState extends ConsumerState<LightingOverviewBlock> {
             const SizedBox(height: 16),
             LayoutBuilder(
               builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 880;
                 final narrative = _OverviewNarrativePanel(
                   palette: palette,
                   story: story,
@@ -353,16 +352,7 @@ class _LightingOverviewBlockState extends ConsumerState<LightingOverviewBlock> {
                   lightingData: data,
                   onUpdate: widget.onUpdateLightingData,
                 );
-                if (wide) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 3, child: narrative),
-                      const SizedBox(width: 16),
-                      Expanded(flex: 2, child: metrics),
-                    ],
-                  );
-                }
+                // Las métricas van a todo el ancho: enseñan todos los ratios.
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
