@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
@@ -19,6 +19,8 @@ import '../../core/utils/scene_characters.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
 import '../camera_plan/camera_plan_editor.dart';
+import '../../shared/history/edit_history.dart';
+import '../../shared/history/shot_edits.dart';
 import '../camera_plan/plan_data.dart';
 import '../camera_plan/plan_sketch.dart';
 import '../camera_plan/plan_thumbnail.dart';
@@ -120,45 +122,49 @@ class TechnicalScriptScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _FormatBar(settings: settings),
-          Expanded(
-            child: PlanDataBuilder(
-              projectId: projectId,
-              builder: (context, data) {
-                if (data.scenes.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Sin escenas. Importa el guion o añade una '
-                          'manualmente.',
-                          style: AppTypography.bodyMedium(palette),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        AppButton(
-                          label: 'Añadir escena',
-                          icon: Icons.add,
-                          onTap: () =>
-                              showSceneFormSheet(context, projectId: projectId),
-                        ),
-                      ],
+      body: _HistoryKeys(
+        child: Column(
+          children: [
+            _FormatBar(settings: settings),
+            Expanded(
+              child: PlanDataBuilder(
+                projectId: projectId,
+                builder: (context, data) {
+                  if (data.scenes.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Sin escenas. Importa el guion o añade una '
+                            'manualmente.',
+                            style: AppTypography.bodyMedium(palette),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          AppButton(
+                            label: 'Añadir escena',
+                            icon: Icons.add,
+                            onTap: () => showSceneFormSheet(
+                              context,
+                              projectId: projectId,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return ScriptSheet(
+                    theme: theme,
+                    child: _PlanDataScope(
+                      data: data,
+                      child: _ScriptTable(data: data, settings: settings),
                     ),
                   );
-                }
-                return ScriptSheet(
-                  theme: theme,
-                  child: _PlanDataScope(
-                    data: data,
-                    child: _ScriptTable(data: data, settings: settings),
-                  ),
-                );
-              },
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -200,6 +206,73 @@ class TechnicalScriptScreen extends ConsumerWidget {
       AppSnackBar.show(context, userFriendlyError(e));
     }
   }
+}
+
+/// ⌘Z deshace y ⇧⌘Z rehace el último cambio de la tabla. Dentro de una
+/// celda que se está escribiendo manda el deshacer del propio texto.
+class _HistoryKeys extends ConsumerStatefulWidget {
+  final Widget child;
+
+  const _HistoryKeys({required this.child});
+
+  @override
+  ConsumerState<_HistoryKeys> createState() => _HistoryKeysState();
+}
+
+class _HistoryKeysState extends ConsumerState<_HistoryKeys> {
+  @override
+  void initState() {
+    super.initState();
+    // El historial es de esta visita a la pantalla.
+    final history = ref.read(editHistoryProvider);
+    Future.microtask(history.clear);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    void undo() => _stepHistory(context, ref, redo: false);
+    void redo() => _stepHistory(context, ref, redo: true);
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): undo,
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): undo,
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
+            redo,
+        const SingleActivator(
+          LogicalKeyboardKey.keyZ,
+          control: true,
+          shift: true,
+        ): redo,
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): redo,
+      },
+      child: Focus(autofocus: true, child: widget.child),
+    );
+  }
+}
+
+/// Deshace o rehace un paso y dice cuál ha sido.
+Future<void> _stepHistory(
+  BuildContext context,
+  WidgetRef ref, {
+  required bool redo,
+}) async {
+  final history = ref.read(editHistoryProvider);
+  final label = redo ? await history.redo() : await history.undo();
+  if (!context.mounted) return;
+  ScaffoldMessenger.maybeOf(context)
+    ?..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        duration: const Duration(milliseconds: 1400),
+        content: Text(
+          label == null
+              ? (redo
+                    ? 'No hay nada que rehacer.'
+                    : 'No hay nada que deshacer.')
+              : '${redo ? 'Rehecho' : 'Deshecho'}: $label',
+        ),
+      ),
+    );
 }
 
 /// Datos de plantas del proyecto, al alcance de la celda de planta sin
@@ -251,6 +324,7 @@ class _FormatBar extends ConsumerWidget {
       onPressed: onTap,
     );
 
+    final history = ref.watch(editHistoryProvider);
     final cellTarget = ref.watch(_colorTargetIsCellProvider);
     final activeCell = ref.watch(_activeCellProvider);
     final canColor = cellTarget ? activeCell != null : activeShot != null;
@@ -259,9 +333,12 @@ class _FormatBar extends ConsumerWidget {
       final db = ref.read(databaseProvider);
       if (!cellTarget) {
         if (activeShot == null) return;
-        await db.updateShotFields(
+        await writeShotFields(
+          db,
+          history,
           activeShot,
           ShotsCompanion(notesHighlight: Value(value)),
+          label: 'color del plano',
         );
         return;
       }
@@ -271,11 +348,14 @@ class _FormatBar extends ConsumerWidget {
       if (shot == null) return;
       final styles = {..._cellStyles(shot)};
       value == null ? styles.remove(cell.column) : styles[cell.column] = value;
-      await db.updateShotFields(
+      await writeShotFields(
+        db,
+        history,
         cell.shotId,
         ShotsCompanion(
           cellStylesJson: Value(styles.isEmpty ? null : jsonEncode(styles)),
         ),
+        label: 'color de la celda',
       );
     }
 
@@ -299,6 +379,21 @@ class _FormatBar extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           child: Row(
             children: [
+              iconButton(
+                tooltip: 'Deshacer (⌘Z)',
+                icon: Icons.undo,
+                onTap: history.canUndo
+                    ? () => _stepHistory(context, ref, redo: false)
+                    : null,
+              ),
+              iconButton(
+                tooltip: 'Rehacer (⇧⌘Z)',
+                icon: Icons.redo,
+                onTap: history.canRedo
+                    ? () => _stepHistory(context, ref, redo: true)
+                    : null,
+              ),
+              divider(),
               SegmentedButton<ScriptView>(
                 showSelectedIcon: false,
                 style: const ButtonStyle(
@@ -957,9 +1052,21 @@ class _SceneSectionState extends ConsumerState<_SceneSection> {
     if (from < 0) return;
     final to = beforeIndex > from ? beforeIndex - 1 : beforeIndex;
     if (to == from) return;
+    final before = [...ids];
     ids.insert(to, ids.removeAt(from));
     setState(() => _pendingOrder = ids);
-    ref.read(databaseProvider).reorderShotsInScene(widget.scene.id, ids);
+    final db = ref.read(databaseProvider);
+    final sceneId = widget.scene.id;
+    db.reorderShotsInScene(sceneId, ids);
+    ref
+        .read(editHistoryProvider)
+        .record(
+          EditStep(
+            label: 'orden de los planos',
+            undo: () => db.reorderShotsInScene(sceneId, before),
+            redo: () => db.reorderShotsInScene(sceneId, ids),
+          ),
+        );
   }
 
   @override
@@ -1052,27 +1159,33 @@ class _SceneTitle extends ConsumerWidget {
           dayNight: fresh.dayNight,
           location: oldPlace,
         );
-    await db.updateScene(
-      fresh.copyWith(
-        intExt: newIntExt,
-        dayNight: newDayNight,
-        locationCanonical: '$newIntExt. $newPlace - $newDayNight',
-        name: hadDefaultName
-            ? formatSceneDefaultName(
-                intExt: newIntExt,
-                dayNight: newDayNight,
-                location: newPlace,
-              )
-            : fresh.name,
-        locationPureName: place?.set.locationName ?? fresh.locationPureName,
-        locationSiteId: place != null
-            ? Value(place.site.id)
-            : Value(fresh.locationSiteId),
-        locationId: place != null
-            ? Value(place.set.id)
-            : Value(fresh.locationId),
-      ),
+    final changed = fresh.copyWith(
+      intExt: newIntExt,
+      dayNight: newDayNight,
+      locationCanonical: '$newIntExt. $newPlace - $newDayNight',
+      name: hadDefaultName
+          ? formatSceneDefaultName(
+              intExt: newIntExt,
+              dayNight: newDayNight,
+              location: newPlace,
+            )
+          : fresh.name,
+      locationPureName: place?.set.locationName ?? fresh.locationPureName,
+      locationSiteId: place != null
+          ? Value(place.site.id)
+          : Value(fresh.locationSiteId),
+      locationId: place != null ? Value(place.set.id) : Value(fresh.locationId),
     );
+    await db.updateScene(changed);
+    ref
+        .read(editHistoryProvider)
+        .record(
+          EditStep(
+            label: 'cabecera de la escena ${fresh.number}',
+            undo: () => db.updateScene(fresh),
+            redo: () => db.updateScene(changed),
+          ),
+        );
   }
 
   Future<void> _pickPlace(BuildContext context, WidgetRef ref) async {
@@ -1729,7 +1842,13 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
       onChanged: onChanged,
     );
 
-    void write(ShotsCompanion fields) => db.updateShotFields(shot.id, fields);
+    void write(ShotsCompanion fields) => writeShotFields(
+      db,
+      ref.read(editHistoryProvider),
+      shot.id,
+      fields,
+      label: 'plano ${shot.number}',
+    );
 
     Widget side(Widget child) => ValueListenableBuilder<bool>(
       valueListenable: _hovered,

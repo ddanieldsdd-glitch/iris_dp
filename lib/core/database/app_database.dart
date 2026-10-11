@@ -1406,11 +1406,39 @@ class AppDatabase extends _$AppDatabase {
 
   /// Escribe solo las columnas dadas. Para editar una celda sin pisar el
   /// resto del plano con una copia vieja (el orden o el número, por ejemplo).
-  Future<void> updateShotFields(int id, ShotsCompanion fields) async {
+  Future<void> updateShotFields(int id, Insertable<Shot> fields) async {
     final shot = await getShotById(id);
     if (shot == null) return;
     await (update(shots)..where((s) => s.id.equals(id))).write(fields);
     await touchProjectContent(shot.projectId);
+  }
+
+  /// Lo que el plano tiene ahora en las columnas que [fields] va a cambiar:
+  /// escribirlo con [updateShotFields] deshace ese cambio.
+  Future<Insertable<Shot>?> shotFieldsBefore(
+    int id,
+    ShotsCompanion fields,
+  ) async {
+    final shot = await getShotById(id);
+    if (shot == null) return null;
+    final now = shot.toCompanion(false).toColumns(false);
+    return RawValuesInsertable({
+      for (final column in fields.toColumns(false).keys)
+        column: now[column] ?? const Constant<Object>(null),
+    });
+  }
+
+  /// Los planos de la escena en su orden, para poder volver a él.
+  Future<List<int>> shotOrderInScene(int sceneId) async {
+    final rows =
+        await (select(shots)
+              ..where((s) => s.sceneId.equals(sceneId))
+              ..orderBy([
+                (s) => OrderingTerm.asc(s.sortOrder),
+                (s) => OrderingTerm.asc(s.number),
+              ]))
+            .get();
+    return [for (final s in rows) s.id];
   }
 
   /// Borra el plano con sus referencias, su planta y sus bloques en documentos
@@ -3014,6 +3042,13 @@ class AppDatabase extends _$AppDatabase {
 
   Future<int> insertShotReference(ShotReferencesCompanion ref) =>
       into(shotReferences).insert(ref);
+
+  /// Deja el plano con exactamente estas referencias (para deshacer).
+  Future<void> replaceShotReferences(int shotId, List<ShotReference> rows) =>
+      batch((b) {
+        b.deleteWhere(shotReferences, (r) => r.shotId.equals(shotId));
+        b.insertAll(shotReferences, rows);
+      });
 
   /// Deja las referencias en el orden de [ids].
   Future<void> setShotReferenceOrder(List<int> ids) => batch((b) {

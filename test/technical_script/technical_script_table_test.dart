@@ -970,6 +970,45 @@ void main() {
     await unmount(tester);
   });
 
+  testWidgets('deshacer y rehacer: el botón y ⌘Z devuelven una celda a como '
+      'estaba', (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+
+    Future<String?> framing() async {
+      late String? value;
+      await tester.runAsync(() async {
+        value = (await db.getShotsForProject(projectId))[1].framing;
+      });
+      return value;
+    }
+
+    await tester.tap(find.text('PML de ALI 2'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'PP de DIEGO');
+    await tester.tap(find.text('mirar planta cam y corregir').first);
+    await flush(tester);
+    await settle(tester);
+    expect(await framing(), 'PP de DIEGO');
+
+    await tester.tap(find.byTooltip('Deshacer (⌘Z)'));
+    await flush(tester);
+    await settle(tester);
+    expect(await framing(), 'PML de ALI 2');
+
+    await tester.tap(find.byTooltip('Rehacer (⇧⌘Z)'));
+    await flush(tester);
+    await settle(tester);
+    expect(await framing(), 'PP de DIEGO');
+    expect(tester.takeException(), isNull);
+    await unmount(tester);
+  });
+
   testWidgets('la columna de storyboard se activa en Columnas y abre su menú', (
     tester,
   ) async {

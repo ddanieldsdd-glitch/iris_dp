@@ -16,6 +16,8 @@ import '../../core/utils/clipboard_image_reader.dart';
 import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/shot_reference_import.dart';
 import '../../core/utils/user_error.dart';
+import '../history/edit_history.dart';
+import '../history/shot_edits.dart';
 
 const _imageExtensions = {
   '.jpg',
@@ -126,10 +128,14 @@ class _ShotImagePasteTargetState extends ConsumerState<ShotImagePasteTarget> {
     setState(() => _busy = true);
     String? problem;
     try {
-      problem = await pasteShotImageFromClipboard(
-        ref.read(databaseProvider),
-        widget.shot,
-        target: widget.target,
+      final db = ref.read(databaseProvider);
+      problem = await recordShotImages(
+        db,
+        ref.read(editHistoryProvider),
+        widget.shot.id,
+        () =>
+            pasteShotImageFromClipboard(db, widget.shot, target: widget.target),
+        label: 'imagen pegada',
       );
     } catch (e) {
       problem = userFriendlyError(e);
@@ -319,7 +325,12 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
       _info = null;
     });
     try {
-      final done = await action();
+      final done = await recordShotImages(
+        _db,
+        ref.read(editHistoryProvider),
+        widget.shot.id,
+        action,
+      );
       if (done && mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) setState(() => _notice = userFriendlyError(e));

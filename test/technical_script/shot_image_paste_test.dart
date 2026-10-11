@@ -106,7 +106,12 @@ void main() {
     await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
-    await tester.pump(const Duration(milliseconds: 100));
+    // Pegar consulta la base (para poder deshacerlo): necesita tiempo de
+    // verdad además de repintados.
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.runAsync(() => db.getShotById(shot.id));
+    }
     await tester.pump(const Duration(milliseconds: 100));
   }
 
