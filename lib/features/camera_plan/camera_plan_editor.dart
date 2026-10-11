@@ -3292,6 +3292,11 @@ class _PlanAnnotationToolbar extends StatelessWidget {
                 tooltip: 'Flecha',
                 value: AnnotationToolType.arrow,
               ),
+              _annotationToolButton(
+                icon: Icons.auto_fix_normal_outlined,
+                tooltip: 'Goma',
+                value: AnnotationToolType.eraser,
+              ),
               const VerticalDivider(indent: 12, endIndent: 12),
               for (final choice in _colors)
                 Padding(

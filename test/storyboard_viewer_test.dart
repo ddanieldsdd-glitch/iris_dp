@@ -109,6 +109,20 @@ void main() {
     }
     expect(shot.framing, 'General del bar');
 
+    // Un plano nuevo desde aquí: queda en la escena y se salta a él.
+    await tester.tap(find.text('Plano nuevo'));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.runAsync(() => db.getShotsForProject(projectId));
+    }
+    await settle(tester);
+    expect(find.text('Esc 1 · Plano 2'), findsOneWidget);
+    late List<Shot> all;
+    await tester.runAsync(() async {
+      all = await db.getShotsForProject(projectId);
+    });
+    expect(all, hasLength(3));
+
     // «Cerrar» está en la barra, lejos de las flechas.
     final close = tester.getCenter(find.text('Cerrar'));
     final arrow = tester.getRect(find.byTooltip('Plano siguiente (→)'));

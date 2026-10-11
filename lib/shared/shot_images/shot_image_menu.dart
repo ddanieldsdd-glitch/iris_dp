@@ -16,6 +16,8 @@ import '../../core/utils/clipboard_image_reader.dart';
 import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/shot_reference_import.dart';
 import '../../core/utils/user_error.dart';
+import '../annotations/annotation_document.dart';
+import '../annotations/sketch_pad.dart';
 import '../history/edit_history.dart';
 import '../history/shot_edits.dart';
 
@@ -438,6 +440,83 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
     return false;
   });
 
+  /// Abre el lienzo blanco y guarda el dibujo como imagen del plano. Con
+  /// [editing], sigue un dibujo que ya estaba: el nuevo ocupa su sitio.
+  Future<void> _draw({String? editing}) async {
+    if (_busy) return;
+    final result = await showSketchPad(
+      context,
+      title: '$_what · Plano ${widget.shot.number}',
+      initial: editing == null
+          ? const AnnotationDocument()
+          : readSketchDocument(editing),
+      aspectRatio: _sketch ? 4 / 3 : 16 / 9,
+    );
+    if (result == null || !mounted) return;
+    await _run(() async {
+      final shot = await _current();
+      final String stored;
+      switch (widget.target) {
+        case ShotImageTarget.storyboard:
+          stored = await importShotStoryboardImage(
+            db: _db,
+            shot: shot,
+            sourceBytes: result.png,
+            fileName: 'dibujo.png',
+          );
+        case ShotImageTarget.planSketch:
+          final at = editing == null
+              ? -1
+              : planSketchEntriesOf(shot).indexOf(editing);
+          stored = await importShotPlanSketch(
+            db: _db,
+            shot: shot,
+            sourceBytes: result.png,
+            fileName: 'dibujo.png',
+          );
+          if (at >= 0) {
+            await reorderShotPlanSketches(
+              db: _db,
+              shot: shot,
+              path: stored,
+              to: at,
+            );
+            await removeShotPlanSketch(db: _db, shot: shot, path: editing!);
+          }
+        case ShotImageTarget.reference:
+          final before = await _db.watchReferencesForShot(shot.id).first;
+          final old = before.where((r) => r.imagePath == editing).firstOrNull;
+          stored = await importShotReferenceImage(
+            db: _db,
+            shot: shot,
+            sourceBytes: result.png,
+            fileName: 'dibujo.png',
+            source: ShotReferenceSource.manual,
+            keepPrimary: true,
+          );
+          if (old != null) {
+            final after = await _db.watchReferencesForShot(shot.id).first;
+            final fresh = after.where((r) => r.imagePath == stored).firstOrNull;
+            if (fresh != null) {
+              await reorderShotReference(
+                db: _db,
+                shot: await _current(),
+                reference: fresh,
+                to: before.indexOf(old),
+              );
+            }
+            await deleteShotReferenceEntry(
+              db: _db,
+              shot: await _current(),
+              reference: old,
+            );
+          }
+      }
+      await writeSketchDocument(stored, result.document);
+      return false;
+    });
+  }
+
   /// Cambia de sitio una referencia; la primera es la principal.
   Future<void> _moveReference(ShotReference reference, int to) =>
       _run(() async {
@@ -684,6 +763,17 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                           icon: const Icon(Icons.content_paste, size: 18),
                           label: const Text('Pegar'),
                         ),
+                        FilledButton.tonalIcon(
+                          onPressed: _busy ? null : _draw,
+                          icon: const Icon(Icons.draw_outlined, size: 18),
+                          label: const Text('Dibujar'),
+                        ),
+                        if (_story && hasOwn && isEditableSketch(own))
+                          FilledButton.tonalIcon(
+                            onPressed: _busy ? null : () => _draw(editing: own),
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            label: const Text('Editar dibujo'),
+                          ),
                         if (!_story && !_sketch)
                           PopupMenuButton<String>(
                             tooltip: 'Más orígenes',
@@ -961,6 +1051,14 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                         i == paths.length - 1 ? null : () => onMove(i, i + 1),
                       ),
                       const Spacer(),
+                      if (setupId == null && isEditableSketch(path)) ...[
+                        chip(
+                          'Editar dibujo',
+                          Icons.edit_outlined,
+                          () => _draw(editing: path),
+                        ),
+                        const SizedBox(width: 2),
+                      ],
                       if (setupId == null)
                         chip(
                           'Copiar esta imagen',

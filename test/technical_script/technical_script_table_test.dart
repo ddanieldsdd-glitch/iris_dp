@@ -684,6 +684,7 @@ void main() {
     expect(find.text('Arrastra una imagen aquí'), findsOneWidget);
     expect(find.text('Del ordenador'), findsOneWidget);
     expect(find.text('Pegar'), findsOneWidget);
+    expect(find.text('Dibujar'), findsOneWidget);
 
     await tester.tap(find.text('Del moodboard'));
     await settle(tester);

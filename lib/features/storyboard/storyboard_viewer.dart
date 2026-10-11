@@ -56,6 +56,28 @@ List<({Scene scene, Shot shot})> storyboardSequence(
   ];
 }
 
+/// Añade un plano al final de [scene]; [shots] son los que ya tiene.
+Future<int> createStoryboardShot(
+  AppDatabase db,
+  Scene scene,
+  List<Shot> shots, {
+  String? title,
+}) {
+  final last = shots.fold<int>(
+    -1,
+    (max, s) => s.sortOrder > max ? s.sortOrder : max,
+  );
+  return db.insertShot(
+    ShotsCompanion.insert(
+      sceneId: scene.id,
+      projectId: scene.projectId,
+      number: shots.length + 1,
+      sortOrder: Value(last + 1),
+      framing: Value(title == null || title.trim().isEmpty ? null : title),
+    ),
+  );
+}
+
 /// Visor del storyboard. La barra de arriba es fija (título del plano y
 /// «Cerrar»), y las flechas pasan de un plano al siguiente.
 class StoryboardViewer extends ConsumerStatefulWidget {
@@ -88,6 +110,23 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
     if (index < 0 || next < 0 || next >= sequence.length) return;
     setState(() {
       _shotId = sequence[next].shot.id;
+      _picked = null;
+    });
+  }
+
+  /// Crea un plano al final de la escena que se está viendo y salta a él:
+  /// queda listo para ponerle título e imagen, y ya está en el guion técnico.
+  Future<void> _newShot(
+    Scene scene,
+    List<({Scene scene, Shot shot})> sequence,
+  ) async {
+    final id = await createStoryboardShot(ref.read(databaseProvider), scene, [
+      for (final e in sequence)
+        if (e.scene.id == scene.id) e.shot,
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _shotId = id;
       _picked = null;
     });
   }
@@ -187,6 +226,11 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
                         ),
                         icon: const Icon(Icons.image_outlined, size: 18),
                         label: const Text('Imagen'),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _newShot(scene, sequence),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Plano nuevo'),
                       ),
                       if (widget.onMore != null)
                         IconButton(
