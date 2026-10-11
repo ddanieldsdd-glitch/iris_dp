@@ -1,3 +1,4 @@
+import '../../../locations/location_manage_menu.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -74,6 +75,20 @@ class LightingSiteGroup {
     final siteIds = {for (final s in sites) s.id};
     for (final set in sets) {
       if (set.siteId != null && siteIds.contains(set.siteId)) continue;
+      // Un set suelto que se llama como una localización es esa misma
+      // localización repetida: va con ella, no en otra tarjeta.
+      final twin = groups
+          .where(
+            (g) =>
+                g.site != null &&
+                g.name.trim().toLowerCase() ==
+                    set.locationName.trim().toLowerCase(),
+          )
+          .firstOrNull;
+      if (twin != null) {
+        twin.sets.add(set);
+        continue;
+      }
       groups.add(
         LightingSiteGroup(
           site: null,
@@ -173,6 +188,7 @@ class _LightingLocationsBlockState
                           children: [
                             for (final group in groups)
                               _SiteTile(
+                                projectId: widget.projectId,
                                 group: group,
                                 paths: paths,
                                 onTap: () => Navigator.of(context).push(
@@ -203,11 +219,13 @@ class _LightingLocationsBlockState
 }
 
 class _SiteTile extends StatelessWidget {
+  final int projectId;
   final LightingSiteGroup group;
   final Map<int, String> paths;
   final VoidCallback onTap;
 
   const _SiteTile({
+    required this.projectId,
     required this.group,
     required this.paths,
     required this.onTap,
@@ -251,20 +269,41 @@ class _SiteTile extends StatelessWidget {
           children: [
             SizedBox(
               height: 130,
-              child: cover == null
-                  ? ColoredBox(
-                      color: Colors.black26,
-                      child: Icon(
-                        Icons.add_photo_alternate_outlined,
-                        color: palette.textTertiary,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  cover == null
+                      ? ColoredBox(
+                          color: Colors.black26,
+                          child: Icon(
+                            Icons.add_photo_alternate_outlined,
+                            color: palette.textTertiary,
+                          ),
+                        )
+                      : Image.file(
+                          File(cover),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) =>
+                              const ColoredBox(color: Colors.black26),
+                        ),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        shape: BoxShape.circle,
                       ),
-                    )
-                  : Image.file(
-                      File(cover),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) =>
-                          const ColoredBox(color: Colors.black26),
+                      child: LocationManageMenu(
+                        projectId: projectId,
+                        site: group.site,
+                        looseSet: group.site == null ? group.sets.first : null,
+                        iconColor: Colors.white,
+                      ),
                     ),
+                  ),
+                ],
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
