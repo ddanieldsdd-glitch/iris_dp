@@ -25,6 +25,7 @@ import '../shoot_documents/shoot_document_import_actions.dart';
 import '../technical_script/technical_script_screen.dart';
 import 'storyboard_export_options_sheet.dart';
 import 'storyboard_shot_export_service.dart';
+import 'storyboard_viewer.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
@@ -882,49 +883,6 @@ class _StoryboardFrame extends ConsumerWidget {
     }
   }
 
-  Future<void> _openPrimaryViewer(BuildContext context, WidgetRef ref) async {
-    final db = ref.read(databaseProvider);
-    try {
-      final current = await db.getShotById(shot.id) ?? shot;
-      final path = current.referenceImagePath;
-      final hasImage = path != null && File(path).existsSync();
-
-      if (!hasImage) {
-        if (!context.mounted) return;
-        _openFrameSheet(context, ref);
-        return;
-      }
-
-      final refs = await ensureShotReferencesSynced(db: db, shot: current);
-      if (refs.isEmpty) {
-        if (!context.mounted) return;
-        _openFrameSheet(context, ref);
-        return;
-      }
-
-      var initial = refs.first;
-      for (final r in refs) {
-        if (r.imagePath == path) {
-          initial = r;
-          break;
-        }
-      }
-      if (!context.mounted) return;
-
-      await showShotReferenceViewer(
-        context,
-        ref: ref,
-        scene: scene,
-        shot: current,
-        initialReference: initial,
-        onImport: (source) => _import(context, ref, source: source),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      AppSnackBar.showError(context, userFriendlyError(e));
-    }
-  }
-
   void _openFrameSheet(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     showModalBottomSheet<void>(
@@ -974,9 +932,16 @@ class _StoryboardFrame extends ConsumerWidget {
     }
   }
 
+  /// «Plano 2 · PP de ALI»: el número y el título (su encuadre).
+  String _title() {
+    final framing = scriptMarkupToPlain(shot.framing).trim();
+    return framing.isEmpty
+        ? 'Plano ${shot.number}'
+        : 'Plano ${shot.number} · $framing';
+  }
+
   String _metaLine() {
     return [
-      if (shot.framing?.isNotEmpty == true) scriptMarkupToPlain(shot.framing),
       if (shot.lens?.isNotEmpty == true) shot.lens,
       if (shot.movement?.isNotEmpty == true) shot.movement,
     ].whereType<String>().join(' · ');
@@ -1071,13 +1036,11 @@ class _StoryboardFrame extends ConsumerWidget {
     final interactiveImage = Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {
-          if (hasImage) {
-            _openPrimaryViewer(context, ref);
-          } else {
-            _openFrameSheet(context, ref);
-          }
-        },
+        onTap: () => showStoryboardViewer(
+          context,
+          projectId: scene.projectId,
+          shot: shot,
+        ),
         borderRadius: BorderRadius.circular(8),
         child: imageArea,
       ),
@@ -1099,7 +1062,7 @@ class _StoryboardFrame extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Plano ${shot.number}',
+                      _title(),
                       style: AppTypography.titleMedium(palette),
                     ),
                     if (meta.isNotEmpty)
@@ -1137,9 +1100,9 @@ class _StoryboardFrame extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Plano ${shot.number}',
+                    _title(),
                     style: AppTypography.label(palette),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (meta.isNotEmpty)
@@ -1205,9 +1168,9 @@ class _StoryboardFrame extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Plano ${shot.number}',
+                  _title(),
                   style: AppTypography.label(palette),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (meta.isNotEmpty)

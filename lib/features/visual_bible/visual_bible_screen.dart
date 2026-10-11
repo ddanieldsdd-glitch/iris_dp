@@ -18,7 +18,6 @@ import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../look_bible/look_bible_model.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
-import 'moodboard_association.dart';
 import '../locations/locations_screen.dart';
 import 'bible_edit_history.dart';
 import 'bible_preset_bundle.dart';
@@ -493,11 +492,9 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
   void _openMoodboard({String? sectionId, String? moodboardFilter}) {
     setState(() {
       _activeSection = BibleSectionId.moodboard;
-      _moodboardInitialFilter =
-          moodboardFilter ??
-          (sectionId != null
-              ? MoodboardAssociation.categoryForSection(sectionId)
-              : null);
+      // Solo se filtra cuando se pide un filtro; venir de una sección no
+      // esconde el resto del moodboard.
+      _moodboardInitialFilter = moodboardFilter;
     });
   }
 
