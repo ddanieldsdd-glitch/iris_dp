@@ -265,11 +265,16 @@ Future<void> showShotImageMenu(
   Shot shot, {
   ShotImageTarget target = ShotImageTarget.reference,
   ShotSketchDelegate? sketches,
+  WidgetBuilder? footer,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) =>
-        _ReferenceImageMenu(shot: shot, target: target, sketches: sketches),
+    builder: (_) => _ReferenceImageMenu(
+      shot: shot,
+      target: target,
+      sketches: sketches,
+      footer: footer,
+    ),
   );
 }
 
@@ -277,10 +282,14 @@ class _ReferenceImageMenu extends ConsumerStatefulWidget {
   final Shot shot;
   final ShotImageTarget target;
   final ShotSketchDelegate? sketches;
+
+  /// Algo más al pie del menú, propio de quien lo abre.
+  final WidgetBuilder? footer;
   const _ReferenceImageMenu({
     required this.shot,
     required this.target,
     this.sketches,
+    this.footer,
   });
 
   @override
@@ -571,7 +580,8 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
           backgroundColor: palette.surfaceElevated,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
-            child: Padding(
+            // Con bocetos y opciones el menú crece: que se pueda recorrer.
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(AppSpacing.xl),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -718,6 +728,10 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                           ),
                       ],
                     ),
+                  ],
+                  if (widget.footer != null && !_moodboard) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    widget.footer!(context),
                   ],
                   if (_info != null && _notice == null) ...[
                     const SizedBox(height: AppSpacing.md),

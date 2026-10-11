@@ -26,6 +26,41 @@ abstract final class ScriptColumn {
   };
 }
 
+/// Qué enseña la casilla Planta: la planta dibujada del plano, sus bocetos
+/// o las dos cosas.
+enum ScriptPlanView {
+  both('Planta y boceto'),
+  plan('Solo planta'),
+  sketch('Solo boceto');
+
+  final String label;
+  const ScriptPlanView(this.label);
+
+  bool get showsPlan => this != sketch;
+  bool get showsSketch => this != plan;
+
+  static ScriptPlanView? parse(Object? name) {
+    for (final v in values) {
+      if (v.name == name) return v;
+    }
+    return null;
+  }
+
+  /// Clave, dentro de `Shots.cellStylesJson`, de la excepción de un plano.
+  static const shotKey = '_planView';
+
+  /// Lo que vale para un plano: su excepción o, si no tiene, [general].
+  static ScriptPlanView of(String? cellStylesJson, ScriptPlanView general) {
+    if (cellStylesJson == null || cellStylesJson.isEmpty) return general;
+    try {
+      final decoded = jsonDecode(cellStylesJson);
+      return (decoded is Map ? parse(decoded[shotKey]) : null) ?? general;
+    } catch (_) {
+      return general;
+    }
+  }
+}
+
 /// Fuentes de la tabla. La clave es el nombre en Google Fonts.
 const kScriptFonts = {
   'Inter': 'Inter',
@@ -43,6 +78,7 @@ class TechnicalScriptSettings {
   final List<String> customAngles;
   final String fontFamily;
   final double fontSize;
+  final ScriptPlanView planView;
 
   const TechnicalScriptSettings({
     this.view = ScriptView.sheet,
@@ -51,6 +87,7 @@ class TechnicalScriptSettings {
     this.customAngles = const [],
     this.fontFamily = 'Inter',
     this.fontSize = 13,
+    this.planView = ScriptPlanView.both,
   });
 
   static const minFontSize = 10.0;
@@ -65,6 +102,7 @@ class TechnicalScriptSettings {
     List<String>? customAngles,
     String? fontFamily,
     double? fontSize,
+    ScriptPlanView? planView,
   }) => TechnicalScriptSettings(
     view: view ?? this.view,
     hiddenColumns: hiddenColumns ?? this.hiddenColumns,
@@ -72,6 +110,7 @@ class TechnicalScriptSettings {
     customAngles: customAngles ?? this.customAngles,
     fontFamily: fontFamily ?? this.fontFamily,
     fontSize: fontSize ?? this.fontSize,
+    planView: planView ?? this.planView,
   );
 
   Map<String, dynamic> toJson() => {
@@ -82,6 +121,7 @@ class TechnicalScriptSettings {
     'customAngles': customAngles,
     'fontFamily': fontFamily,
     'fontSize': fontSize,
+    'planView': planView.name,
   };
 
   factory TechnicalScriptSettings.fromJson(Map<String, dynamic> json) {
@@ -113,6 +153,7 @@ class TechnicalScriptSettings {
       fontSize: size is num
           ? size.toDouble().clamp(minFontSize, maxFontSize)
           : d.fontSize,
+      planView: ScriptPlanView.parse(json['planView']) ?? d.planView,
     );
   }
 }

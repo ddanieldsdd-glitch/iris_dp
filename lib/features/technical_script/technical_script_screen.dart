@@ -621,6 +621,33 @@ class _FormatBar extends ConsumerWidget {
                 ),
               ),
               divider(),
+              PopupMenuButton<ScriptPlanView>(
+                tooltip: 'Qué enseña la casilla Planta (y el PDF/Word)',
+                color: palette.surfaceElevated,
+                onSelected: (v) =>
+                    notifier.update((s) => s.copyWith(planView: v)),
+                itemBuilder: (_) => [
+                  for (final v in ScriptPlanView.values)
+                    CheckedPopupMenuItem(
+                      value: v,
+                      checked: settings.planView == v,
+                      child: Text(v.label),
+                    ),
+                ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.grid_on_outlined,
+                      size: 18,
+                      color: palette.textPrimary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(settings.planView.label, style: label),
+                  ],
+                ),
+              ),
+              divider(),
               PopupMenuButton<String>(
                 tooltip: 'Columnas visibles',
                 color: palette.surfaceElevated,
@@ -2114,21 +2141,29 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
 /// Miniatura de la planta del plano. Al tocarla abre la planta; si la escena
 /// aún no tiene set, lleva a la localización para elegirlo o crearlo. Admite
 /// además bocetos: imágenes que hacen de planta mientras no está dibujada.
-class _PlanCell extends StatelessWidget {
+class _PlanCell extends ConsumerWidget {
   final Shot shot;
   final Scene scene;
 
   const _PlanCell({required this.shot, required this.scene});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final sheet = ScriptSheet.of(context);
     final data = _PlanDataScope.of(context);
     final setId = shot.locationBasePlanId ?? scene.locationId;
     final own = [...data.lightOfShot(shot), ...data.ownOfShot(shot)];
     final base = data.baseOfShot(shot);
     final drawings = data.drawingsOfShot(shot);
-    final hasDrawing = own.isNotEmpty || base.isNotEmpty || drawings.isNotEmpty;
+    // Planta, boceto o las dos: lo que diga la tabla o, si la tiene, la
+    // excepción de este plano.
+    final view = ScriptPlanView.of(
+      shot.cellStylesJson,
+      ref.watch(technicalScriptSettingsProvider.select((s) => s.planView)),
+    );
+    final hasDrawing =
+        view.showsPlan &&
+        (own.isNotEmpty || base.isNotEmpty || drawings.isNotEmpty);
 
     final String caption;
     final IconData icon;
@@ -2162,7 +2197,8 @@ class _PlanCell extends StatelessWidget {
 
     // Imágenes y bocetos dibujados que el plano ha elegido enseñar.
     final sketches = [
-      for (final entry in planSketchEntriesOf(shot))
+      for (final entry
+          in view.showsSketch ? planSketchEntriesOf(shot) : const <String>[])
         if (planSketchSetupId(entry) case final id?)
           if (data.setup(id) != null) entry else ...const <String>[]
         else
@@ -2173,6 +2209,7 @@ class _PlanCell extends StatelessWidget {
       shot,
       target: ShotImageTarget.planSketch,
       sketches: planSketchDelegate,
+      footer: (_) => _PlanViewChoice(shotId: shot.id),
     );
 
     Widget tappable(String message, VoidCallback onTap, Widget child) {
@@ -2312,6 +2349,88 @@ class _PlanCell extends StatelessWidget {
           if (sketches.isNotEmpty && !hasDrawing) planTile,
         ],
       ),
+    );
+  }
+}
+
+/// En el menú de la casilla Planta: qué enseña este plano, si no es lo que
+/// dice la tabla.
+class _PlanViewChoice extends ConsumerWidget {
+  final int shotId;
+
+  const _PlanViewChoice({required this.shotId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final db = ref.watch(databaseProvider);
+    final general = ref.watch(
+      technicalScriptSettingsProvider.select((s) => s.planView),
+    );
+    return StreamBuilder<Shot?>(
+      stream: (db.select(
+        db.shots,
+      )..where((s) => s.id.equals(shotId))).watchSingleOrNull(),
+      builder: (context, snap) {
+        final shot = snap.data;
+        if (shot == null) return const SizedBox.shrink();
+        final own = ScriptPlanView.parse(
+          _cellStyles(shot)[ScriptPlanView.shotKey],
+        );
+
+        Future<void> choose(ScriptPlanView? value) async {
+          final styles = {..._cellStyles(shot)};
+          value == null
+              ? styles.remove(ScriptPlanView.shotKey)
+              : styles[ScriptPlanView.shotKey] = value.name;
+          await writeShotFields(
+            db,
+            ref.read(editHistoryProvider),
+            shotId,
+            ShotsCompanion(
+              cellStylesJson: Value(styles.isEmpty ? null : jsonEncode(styles)),
+            ),
+            label: 'qué enseña la planta del plano ${shot.number}',
+          );
+        }
+
+        return Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              'En este plano se ve:',
+              style: AppTypography.bodyMedium(palette),
+            ),
+            SizedBox(
+              width: 250,
+              child: DropdownButton<ScriptPlanView?>(
+                value: own,
+                isDense: true,
+                isExpanded: true,
+                underline: const SizedBox.shrink(),
+                dropdownColor: palette.surfaceElevated,
+                onChanged: choose,
+                items: [
+                  DropdownMenuItem(
+                    value: null,
+                    child: Text(
+                      'Como la tabla (${general.label.toLowerCase()})',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  for (final v in ScriptPlanView.values)
+                    DropdownMenuItem(
+                      value: v,
+                      child: Text(v.label, overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

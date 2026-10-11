@@ -58,7 +58,16 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
   for (final scene in scenes) {
     final rows = <ScriptDocRow>[];
     for (final shot in shotsByScene[scene.id] ?? const <Shot>[]) {
-      rows.add(await _docRow(db, scene, shot, sheet, plans: plans));
+      rows.add(
+        await _docRow(
+          db,
+          scene,
+          shot,
+          sheet,
+          plans: plans,
+          planView: settings.planView,
+        ),
+      );
     }
     sections.add(
       ScriptDocSection(
@@ -97,6 +106,7 @@ Future<ScriptDocRow> _docRow(
   ScriptSheetTheme sheet, {
   int? order,
   PlanProjectData? plans,
+  ScriptPlanView planView = ScriptPlanView.both,
 }) async {
   final cellFills = <String, int>{};
   final raw = shot.cellStylesJson;
@@ -144,7 +154,13 @@ Future<ScriptDocRow> _docRow(
     fill: rowFill == null ? null : _rgb(rowFill),
     cellFills: cellFills,
     images: images,
-    planImages: plans == null ? const [] : await _planImages(plans, shot),
+    planImages: plans == null
+        ? const []
+        : await _planImages(
+            plans,
+            shot,
+            ScriptPlanView.of(shot.cellStylesJson, planView),
+          ),
   );
 }
 
@@ -169,11 +185,15 @@ Future<PlanProjectData?> _loadPlans(
 
 /// Lo que sale en la celda de planta de un plano: su planta dibujada, si
 /// tiene algo propio, y después sus bocetos en su orden.
-Future<List<Uint8List>> _planImages(PlanProjectData plans, Shot shot) async {
+Future<List<Uint8List>> _planImages(
+  PlanProjectData plans,
+  Shot shot,
+  ScriptPlanView view,
+) async {
   final images = <Uint8List>[];
   final own = [...plans.lightOfShot(shot), ...plans.ownOfShot(shot)];
   final drawings = plans.drawingsOfShot(shot);
-  if (own.isNotEmpty || drawings.isNotEmpty) {
+  if (view.showsPlan && (own.isNotEmpty || drawings.isNotEmpty)) {
     final png = await PlanThumbnail.renderPng(
       elements: own,
       inherited: plans.baseOfShot(shot),
@@ -182,7 +202,8 @@ Future<List<Uint8List>> _planImages(PlanProjectData plans, Shot shot) async {
     );
     if (png != null) images.add(png);
   }
-  for (final entry in planSketchEntriesOf(shot)) {
+  for (final entry
+      in view.showsSketch ? planSketchEntriesOf(shot) : const <String>[]) {
     final setupId = planSketchSetupId(entry);
     if (setupId == null) {
       final bytes = await PdfSafeImage.loadFromPathMaxEdge(
@@ -340,7 +361,17 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
       current = scene;
     }
     order++;
-    rows.add(await _docRow(db, scene, shot, sheet, order: order, plans: plans));
+    rows.add(
+      await _docRow(
+        db,
+        scene,
+        shot,
+        sheet,
+        order: order,
+        plans: plans,
+        planView: settings.planView,
+      ),
+    );
   }
   close();
 

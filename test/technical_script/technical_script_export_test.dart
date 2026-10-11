@@ -203,6 +203,28 @@ void main() {
     // La referencia del plano 1 y las tres de planta.
     expect(media, hasLength(4));
 
+    // Solo la planta: los bocetos se quedan fuera; y al revés.
+    final onlyPlan = await build(
+      const TechnicalScriptSettings(planView: ScriptPlanView.plan),
+    );
+    expect(onlyPlan.sections.first.rows[0].planImages, hasLength(1));
+    expect(onlyPlan.sections.first.rows[1].planImages, isEmpty);
+    final onlySketch = await build(
+      const TechnicalScriptSettings(planView: ScriptPlanView.sketch),
+    );
+    expect(onlySketch.sections.first.rows[0].planImages, isEmpty);
+    expect(onlySketch.sections.first.rows[1].planImages, hasLength(2));
+    // La excepción de un plano manda sobre la tabla.
+    await db.updateShotFields(
+      shots[1].id,
+      const ShotsCompanion(cellStylesJson: Value('{"_planView":"both"}')),
+    );
+    final withException = await build(
+      const TechnicalScriptSettings(planView: ScriptPlanView.plan),
+    );
+    expect(withException.sections.first.rows[1].planImages, hasLength(2));
+    expect(withException.sections.first.rows[1].cellFills, isEmpty);
+
     final hidden = await build(
       const TechnicalScriptSettings(hiddenColumns: {ScriptColumn.planta}),
     );
