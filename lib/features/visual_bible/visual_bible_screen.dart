@@ -57,7 +57,6 @@ import 'widgets/sections/optics_section.dart';
 import 'widgets/sections/texture_section.dart';
 import 'widgets/sections/workflow_section.dart';
 import 'widgets/bible_live_customize_panel.dart';
-import '../../core/project/project_shoot_context.dart';
 import 'widgets/sections/bible_settings_section.dart';
 
 class VisualBibleScreen extends ConsumerStatefulWidget {
@@ -890,29 +889,6 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                       ),
                     ),
                   ),
-                Consumer(
-                  builder: (context, ref, _) {
-                    final shoot = ref.watch(
-                      activeShootLocationProvider(widget.projectId),
-                    );
-                    return shoot.when(
-                      data: (loc) {
-                        final label = loc.set?.locationName ??
-                            loc.site?.name;
-                        if (label == null) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: ActionChip(
-                            label: Text('Set: $label'),
-                            onPressed: () => _openSection(BibleSectionId.location),
-                          ),
-                        );
-                      },
-                      loading: () => const SizedBox.shrink(),
-                      error: (_, __) => const SizedBox.shrink(),
-                    );
-                  },
-                ),
                 if (_saving && !compactAppBar)
                   const Padding(
                     padding: EdgeInsets.all(16),

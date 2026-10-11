@@ -20,10 +20,16 @@ import '../../bible_paste_helpers.dart';
 import '../../bible_section_fields.dart';
 import '../../services/color_extraction_service.dart';
 import '../../visual_bible_model.dart';
-import '../../../../core/project/project_shoot_context.dart';
 import '../../../locations/location_form_sheet.dart';
 import '../../../locations/location_site_form_sheet.dart';
 import '../../../locations/site_place.dart';
+import '../../../../core/weather/weather_models.dart';
+import '../../../../core/weather/weather_service.dart';
+import '../../../../core/weather/weather_summary.dart';
+import '../../../../shared/visual_bible/narrative_card_kind.dart';
+import '../../../locations/location_manage_menu.dart';
+import '../lighting/lighting_card_view.dart';
+import '../lighting/lighting_locations_block.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_paste_zone.dart';
 import '../moodboard_drag.dart';
@@ -53,8 +59,6 @@ class LocationSection extends ConsumerStatefulWidget {
 }
 
 class _LocationSectionState extends ConsumerState<LocationSection> {
-  int? _selectedPlanId;
-
   Map<String, dynamic> _getCustom() {
     final raw = widget.sectionContentJson;
     if (raw == null || raw.isEmpty) return {};
@@ -123,6 +127,14 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
     await _updateCustom({'byPlan': byPlan, 'selectedPlanId': planId});
   }
 
+  /// La localización abierta: `site:<id>` o `set:<id>` (un set suelto).
+  /// Nulo = se ven todas, en tarjetas.
+  String? _open;
+
+  static String _keyOf(LightingSiteGroup group) => group.site != null
+      ? 'site:${group.site!.id}'
+      : 'set:${group.sets.first.id}';
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -130,168 +142,579 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
 
     return StreamBuilder<List<LocationSite>>(
       stream: db.watchSitesForProject(widget.projectId),
-      builder: (context, siteSnap) {
-        final sites = siteSnap.data ?? [];
-        return StreamBuilder<List<LocationBasePlan>>(
-          stream: db.watchLocationsForProject(widget.projectId),
-          builder: (context, locSnap) {
-            final allSets = locSnap.data ?? [];
-            if (sites.isEmpty && allSets.isEmpty) {
-              return Center(
-                child: Text(
-                  'Las localizaciones se generan al importar el guion.',
-                  style: AppTypography.bodyMedium(
-                    palette,
-                  ).copyWith(color: palette.textTertiary),
-                ),
-              );
-            }
-
-            return StreamBuilder<List<VisualBibleLocationRef>>(
+      builder: (context, siteSnap) => StreamBuilder<List<LocationBasePlan>>(
+        stream: db.watchLocationsForProject(widget.projectId),
+        builder: (context, locSnap) =>
+            StreamBuilder<List<VisualBibleLocationRef>>(
               stream: db.watchLocationRefsForBible(widget.bibleId),
-              builder: (context, refSnap) {
-                final refsByPlanId = {
-                  for (final r in refSnap.data ?? [])
-                    if (r.locationBasePlanId != null) r.locationBasePlanId!: r,
-                };
-                final refsByName = {
-                  for (final r in refSnap.data ?? []) r.locationName: r,
-                };
-
-                final custom = _getCustom();
-                final preferred =
-                    _selectedPlanId ??
-                    (custom['selectedPlanId'] as num?)?.toInt() ??
-                    (allSets.isNotEmpty ? allSets.first.id : null);
-                LocationBasePlan? active;
-                for (final s in allSets) {
-                  if (s.id == preferred) {
-                    active = s;
-                    break;
-                  }
-                }
-                active ??= allSets.isNotEmpty ? allSets.first : null;
-
-                String? siteName;
-                LocationSite? activeSite;
-                if (active?.siteId != null) {
-                  for (final s in sites) {
-                    if (s.id == active!.siteId) {
-                      activeSite = s;
-                      siteName = s.name;
-                      break;
-                    }
-                  }
-                }
-
-                return ListView(
-                  padding: const EdgeInsets.all(24),
-                  children: [
-                    BibleSectionHero(
-                      projectId: widget.projectId,
-                      bibleId: widget.bibleId,
-                      sectionId: BibleSectionId.location,
-                      title: 'Localización',
+              builder: (context, refSnap) =>
+                  StreamBuilder<List<VisualBibleNarrativeCard>>(
+                    stream: db.watchNarrativeCardsForSection(
+                      widget.bibleId,
+                      BibleSectionId.lighting,
+                      kind: NarrativeCardKind.locationLight,
                     ),
-                    _LocationHubHeader(
-                      palette: palette,
-                      projectId: widget.projectId,
-                      sites: sites,
-                      allSets: allSets,
-                      activeSet: active,
-                      onSelectSet: (set) {
-                        setState(() => _selectedPlanId = set.id);
-                        _updateCustom({'selectedPlanId': set.id});
-                        ref.read(projectShootContextProvider(widget.projectId).notifier).setActive(
-                              siteId: set.siteId,
-                              setId: set.id,
-                            );
-                      },
-                      onCreateSite: () async {
-                        await showLocationSiteFormSheet(
-                          context,
-                          projectId: widget.projectId,
+                    builder: (context, cardSnap) => StreamBuilder<List<Scene>>(
+                      stream: db.watchScenesForProject(widget.projectId),
+                      builder: (context, sceneSnap) {
+                        final groups = LightingSiteGroup.group(
+                          sites: siteSnap.data ?? const [],
+                          sets: locSnap.data ?? const [],
+                          cards: cardSnap.data ?? const [],
                         );
-                      },
-                      onCreateSet: (siteId) async {
-                        await showLocationFormSheet(
-                          context,
-                          projectId: widget.projectId,
-                          siteId: siteId,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    if (active != null) ...[
-                      Builder(
-                        builder: (_) {
-                          final refRow =
-                              refsByPlanId[active!.id] ??
-                              refsByName[active.locationName];
-                          final model = refRow != null
-                              ? LocationRefModel.fromRow(refRow)
-                              : LocationRefModel(
-                                  id: 0,
-                                  bibleId: widget.bibleId,
-                                  locationName: active.locationName,
-                                  locationSiteId: active.siteId,
-                                  locationBasePlanId: active.id,
-                                );
-                          model.locationBasePlanId ??= active.id;
-                          model.locationSiteId ??= active.siteId;
-                          return _FeaturedLocation(
-                            projectId: widget.projectId,
-                            bibleId: widget.bibleId,
-                            plan: active,
-                            siteName: siteName,
-                            site: activeSite,
-                            extras: _planExtras(active.id),
-                            model: model,
-                            palette: palette,
-                            onExtras: (patch) =>
-                                _updatePlanExtras(active!.id, patch),
-                            onSaveRef: (m) =>
-                                db.upsertLocationRef(m.toCompanion()),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 28),
-                    ],
-                    for (final site in sites) ...[
-                      _SiteFolderHeader(
-                        siteName: site.name,
-                        onOpenLocations: () =>
-                            BibleNavigationScope.openLocationSet(
-                              context,
-                              siteId: site.id,
+                        final open = groups
+                            .where((g) => _keyOf(g) == _open)
+                            .firstOrNull;
+                        return ListView(
+                          padding: const EdgeInsets.all(24),
+                          children: [
+                            BibleSectionHero(
+                              projectId: widget.projectId,
+                              bibleId: widget.bibleId,
+                              sectionId: BibleSectionId.location,
+                              title: 'Localización',
                             ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    if (sites.isEmpty)
-                      TextButton.icon(
-                        onPressed: () =>
-                            BibleNavigationScope.openLocationSet(context),
-                        icon: Icon(
-                          Icons.open_in_new,
-                          size: 16,
-                          color: palette.accent,
-                        ),
-                        label: Text(
-                          'Abrir pantalla Localizaciones',
-                          style: TextStyle(color: palette.accent),
-                        ),
-                      ),
-                  ],
-                );
-              },
+                            if (open == null)
+                              _hub(
+                                palette,
+                                groups,
+                                refSnap.data ?? const [],
+                                sceneSnap.data ?? const [],
+                              )
+                            else
+                              ..._page(
+                                palette,
+                                db,
+                                open,
+                                refSnap.data ?? const [],
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+            ),
+      ),
+    );
+  }
+
+  /// Todas las localizaciones, una tarjeta cada una.
+  Widget _hub(
+    AppPalette palette,
+    List<LightingSiteGroup> groups,
+    List<VisualBibleLocationRef> refs,
+    List<Scene> scenes,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                groups.isEmpty
+                    ? 'Aún no hay localizaciones: aparecen al importar el '
+                          'guion o al crearlas.'
+                    : 'Toca una localización para entrar en ella: ubicación, '
+                          'sol, meteorología, su luz y cada uno de sus sets.',
+                style: AppTypography.bodyMedium(
+                  palette,
+                ).copyWith(color: palette.textSecondary),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => showLocationSiteFormSheet(
+                context,
+                projectId: widget.projectId,
+              ),
+              icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+              label: const Text('Nueva localización'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            for (final group in groups)
+              _LocationTile(
+                projectId: widget.projectId,
+                group: group,
+                cover: _coverOf(group, refs),
+                scenes: scenes
+                    .where(
+                      (s) =>
+                          (group.site != null &&
+                              s.locationSiteId == group.site!.id) ||
+                          group.sets.any((set) => set.id == s.locationId),
+                    )
+                    .length,
+                onTap: () => setState(() => _open = _keyOf(group)),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// La primera foto que tenga alguno de sus sets.
+  String? _coverOf(LightingSiteGroup group, List<VisualBibleLocationRef> refs) {
+    for (final set in group.sets) {
+      final extras = _planExtras(set.id);
+      final candidates = [
+        extras['heroImage'],
+        ...?(extras['photos'] as List?),
+        set.imagePath,
+        for (final r in refs)
+          if (r.locationBasePlanId == set.id)
+            ...LocationRefModel.fromRow(r).referenceImages,
+      ];
+      for (final path in candidates) {
+        if (path is String && path.isNotEmpty && File(path).existsSync()) {
+          return path;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// La página de una localización: lo suyo y, debajo, cada set.
+  List<Widget> _page(
+    AppPalette palette,
+    AppDatabase db,
+    LightingSiteGroup group,
+    List<VisualBibleLocationRef> refs,
+  ) {
+    final site = group.site;
+    final refsByPlanId = {
+      for (final r in refs)
+        if (r.locationBasePlanId != null) r.locationBasePlanId!: r,
+    };
+    final refsByName = {for (final r in refs) r.locationName: r};
+    final wholeCard = group.sets
+        .map((set) => group.cardBySet[set.id])
+        .whereType<VisualBibleNarrativeCard>()
+        .firstOrNull;
+
+    return [
+      Row(
+        children: [
+          TextButton.icon(
+            onPressed: () => setState(() => _open = null),
+            icon: const Icon(Icons.arrow_back, size: 18),
+            label: const Text('Todas las localizaciones'),
+          ),
+          const Spacer(),
+          TextButton.icon(
+            onPressed: () => BibleNavigationScope.openLocationSet(
+              context,
+              siteId: site?.id,
+            ),
+            icon: const Icon(Icons.open_in_new, size: 16),
+            label: const Text('Abrir en Localizaciones'),
+          ),
+          LocationManageMenu(
+            projectId: widget.projectId,
+            site: site,
+            looseSet: site == null ? group.sets.first : null,
+          ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Text(group.name, style: AppTypography.displayMedium(palette)),
+      const SizedBox(height: 16),
+      if (site != null)
+        _SiteFactsCard(site: site)
+      else
+        Text(
+          'Este set no está dentro de ninguna localización, así que no '
+          'tiene ubicación, sol ni meteorología. Mételo en una desde el '
+          'menú «⋯» de arriba.',
+          style: AppTypography.bodyMedium(
+            palette,
+          ).copyWith(color: palette.textSecondary),
+        ),
+      const SizedBox(height: 24),
+      Text('LA LUZ DEL LUGAR', style: AppTypography.label(palette)),
+      const SizedBox(height: 4),
+      Text(
+        'Es la misma ficha que «Luz por localización» de Iluminación: lo '
+        'que escribas aquí aparece allí.',
+        style: AppTypography.caption(palette),
+      ),
+      const SizedBox(height: 10),
+      if (wholeCard != null)
+        LightingCardView(
+          key: ValueKey('loc_light_${wholeCard.id}'),
+          projectId: widget.projectId,
+          bibleId: widget.bibleId,
+          cardId: wholeCard.id,
+          fixedTitle: group.name,
+        )
+      else
+        TextButton.icon(
+          onPressed: () async {
+            await LightingNarrativeCardsService.ensureSeeded(
+              db: db,
+              bibleId: widget.bibleId,
+              projectId: widget.projectId,
             );
           },
-        );
-      },
+          icon: const Icon(Icons.wb_incandescent_outlined, size: 18),
+          label: const Text('Crear la ficha de luz de esta localización'),
+        ),
+      const SizedBox(height: 28),
+      for (final set in group.sets) ...[
+        Text(
+          group.isWholeSite(set)
+              ? 'FICHA DE LA LOCALIZACIÓN'
+              : 'SET · ${set.locationName.toUpperCase()}',
+          style: AppTypography.label(palette),
+        ),
+        const SizedBox(height: 10),
+        Builder(
+          builder: (_) {
+            final refRow = refsByPlanId[set.id] ?? refsByName[set.locationName];
+            final model = refRow != null
+                ? LocationRefModel.fromRow(refRow)
+                : LocationRefModel(
+                    id: 0,
+                    bibleId: widget.bibleId,
+                    locationName: set.locationName,
+                    locationSiteId: set.siteId,
+                    locationBasePlanId: set.id,
+                  );
+            model.locationBasePlanId ??= set.id;
+            model.locationSiteId ??= set.siteId;
+            return _FeaturedLocation(
+              // Cada set con su propia ficha: sin la clave, todas enseñaban
+              // lo del primero.
+              key: ValueKey('featured_${set.id}'),
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+              plan: set,
+              siteName: site?.name,
+              site: site,
+              extras: _planExtras(set.id),
+              model: model,
+              palette: palette,
+              onExtras: (patch) => _updatePlanExtras(set.id, patch),
+              onSaveRef: (m) => db.upsertLocationRef(m.toCompanion()),
+            );
+          },
+        ),
+        const SizedBox(height: 28),
+      ],
+      if (site != null)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => showLocationFormSheet(
+              context,
+              projectId: widget.projectId,
+              siteId: site.id,
+            ),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Añadir un set a esta localización'),
+          ),
+        ),
+    ];
+  }
+}
+
+/// Tarjeta de una localización en la entrada de la pantalla.
+class _LocationTile extends StatelessWidget {
+  final int projectId;
+  final LightingSiteGroup group;
+  final String? cover;
+  final int scenes;
+  final VoidCallback onTap;
+
+  const _LocationTile({
+    required this.projectId,
+    required this.group,
+    required this.cover,
+    required this.scenes,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final site = group.site;
+    final zones = group.sets.where((s) => !group.isWholeSite(s)).length;
+    final located = site?.latitude != null && site?.longitude != null;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Container(
+        width: 280,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: palette.surfaceElevated,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: palette.divider),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: 140,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  cover == null
+                      ? ColoredBox(
+                          color: Colors.black26,
+                          child: Icon(
+                            Icons.place_outlined,
+                            color: palette.textTertiary,
+                            size: 32,
+                          ),
+                        )
+                      : Image.file(
+                          File(cover!),
+                          fit: BoxFit.cover,
+                          cacheWidth: 600,
+                          errorBuilder: (_, _, _) =>
+                              const ColoredBox(color: Colors.black26),
+                        ),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: LocationManageMenu(
+                        projectId: projectId,
+                        site: site,
+                        looseSet: site == null ? group.sets.first : null,
+                        iconColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    group.name,
+                    style: AppTypography.titleMedium(palette),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      if (site == null) 'Set suelto',
+                      if (zones > 0) '$zones ${zones == 1 ? 'set' : 'sets'}',
+                      '$scenes ${scenes == 1 ? 'escena' : 'escenas'}',
+                    ].join(' · '),
+                    style: AppTypography.caption(palette),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        located
+                            ? Icons.place_outlined
+                            : Icons.location_off_outlined,
+                        size: 13,
+                        color: located ? palette.accent : palette.textTertiary,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          located
+                              ? (site!.placeLabel ?? 'Ubicada')
+                              : 'Sin ubicar en el mapa',
+                          style: AppTypography.caption(palette),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
+
+/// Dónde está la localización, cómo llegar, el sol de un día y la
+/// previsión. La ubicación es la misma que en la pantalla Localizaciones.
+class _SiteFactsCard extends ConsumerStatefulWidget {
+  final LocationSite site;
+
+  const _SiteFactsCard({required this.site});
+
+  @override
+  ConsumerState<_SiteFactsCard> createState() => _SiteFactsCardState();
+}
+
+class _SiteFactsCardState extends ConsumerState<_SiteFactsCard> {
+  DateTime _day = DateTime.now();
+  Future<WeatherSnapshot?>? _forecast;
+  String? _forecastKey;
+
+  static String _iso(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
+  void _open(String url) =>
+      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final site = widget.site;
+    final lat = site.latitude;
+    final lon = site.longitude;
+    final located = lat != null && lon != null;
+    final within = isWithinForecast(_day, DateTime.now());
+
+    if (located && within) {
+      final key = '$lat,$lon,${_iso(_day)}';
+      if (key != _forecastKey) {
+        _forecastKey = key;
+        _forecast = ref
+            .read(weatherProviderProvider)
+            .forecast(latitude: lat, longitude: lon, date: _iso(_day))
+            .catchError((Object _) => null);
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SitePlaceCard(site: site),
+        if (located) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final (label, url) in locationMapLinks(lat, lon))
+                OutlinedButton.icon(
+                  onPressed: () => _open(url),
+                  icon: const Icon(Icons.open_in_new, size: 15),
+                  label: Text(label),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: palette.surfaceElevated,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: palette.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.cloud_outlined, size: 18, color: palette.accent),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Meteorología del ${_day.day}/${_day.month}/${_day.year}',
+                        style: AppTypography.bodyLarge(palette),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _day,
+                          firstDate: now,
+                          lastDate: now.add(
+                            const Duration(days: kForecastHorizonDays - 1),
+                          ),
+                          helpText: '¿Qué día ruedas aquí?',
+                        );
+                        if (picked != null) setState(() => _day = picked);
+                      },
+                      child: const Text('Cambiar día'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                if (!within)
+                  Text(
+                    'Solo hay previsión para los próximos '
+                    '$kForecastHorizonDays días.',
+                    style: AppTypography.caption(palette),
+                  )
+                else
+                  FutureBuilder<WeatherSnapshot?>(
+                    future: _forecast,
+                    builder: (context, snap) {
+                      if (snap.connectionState != ConnectionState.done) {
+                        return Text(
+                          'Consultando la previsión…',
+                          style: AppTypography.caption(palette),
+                        );
+                      }
+                      final forecast = snap.data;
+                      if (forecast == null) {
+                        return Text(
+                          'No se ha podido descargar la previsión (sin '
+                          'conexión o sin datos para ese día).',
+                          style: AppTypography.caption(palette),
+                        );
+                      }
+                      final lines = weatherSummaryLines(
+                        options: const WeatherOptions(
+                          sun: false,
+                          blueAndGolden: false,
+                          hourly: false,
+                        ),
+                        sun: null,
+                        forecast: forecast,
+                        utcOffsetSeconds: forecast.utcOffsetSeconds,
+                      );
+                      return Text(
+                        lines.join('\n'),
+                        style: AppTypography.bodyMedium(palette),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Enlaces para abrir unas coordenadas en las apps de mapas.
+List<(String, String)> locationMapLinks(double latitude, double longitude) => [
+  (
+    'Google Maps',
+    'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+  ),
+  ('Waze', 'https://waze.com/ul?ll=$latitude,$longitude&navigate=yes'),
+  (
+    'Google Earth',
+    'https://earth.google.com/web/search/$latitude,$longitude',
+  ),
+  ('Apple Mapas', 'https://maps.apple.com/?ll=$latitude,$longitude&q=Rodaje'),
+];
 
 class _FeaturedLocation extends ConsumerStatefulWidget {
   final int projectId;
@@ -309,6 +732,7 @@ class _FeaturedLocation extends ConsumerStatefulWidget {
   final Future<void> Function(LocationRefModel) onSaveRef;
 
   const _FeaturedLocation({
+    super.key,
     required this.projectId,
     required this.bibleId,
     required this.plan,
@@ -1863,35 +2287,6 @@ class _RefsGallery extends StatelessWidget {
   }
 }
 
-class _SiteFolderHeader extends StatelessWidget {
-  final String siteName;
-  final VoidCallback onOpenLocations;
-
-  const _SiteFolderHeader({
-    required this.siteName,
-    required this.onOpenLocations,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Row(
-      children: [
-        Icon(Icons.folder_outlined, size: 18, color: palette.accent),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(siteName, style: AppTypography.titleMedium(palette)),
-        ),
-        TextButton.icon(
-          onPressed: onOpenLocations,
-          icon: const Icon(Icons.open_in_new, size: 16),
-          label: const Text('Localizaciones'),
-        ),
-      ],
-    );
-  }
-}
-
 class _Glass extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
@@ -2184,120 +2579,6 @@ class _AzimuthDialPainter extends CustomPainter {
   bool shouldRepaint(covariant _AzimuthDialPainter oldDelegate) =>
       oldDelegate.azimuth != azimuth || oldDelegate.accent != accent;
 }
-
-class _LocationHubHeader extends StatelessWidget {
-  final AppPalette palette;
-  final int projectId;
-  final List<LocationSite> sites;
-  final List<LocationBasePlan> allSets;
-  final LocationBasePlan? activeSet;
-  final ValueChanged<LocationBasePlan> onSelectSet;
-  final VoidCallback onCreateSite;
-  final void Function(int siteId) onCreateSet;
-
-  const _LocationHubHeader({
-    required this.palette,
-    required this.projectId,
-    required this.sites,
-    required this.allSets,
-    required this.activeSet,
-    required this.onSelectSet,
-    required this.onCreateSite,
-    required this.onCreateSet,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final orphanSets = allSets.where((s) => s.siteId == null).toList();
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: palette.surfaceElevated,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: palette.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'LOCALIZACIONES DEL PROYECTO',
-                  style: AppTypography.mono(palette).copyWith(
-                    fontSize: 10,
-                    letterSpacing: 1.2,
-                    color: palette.textSecondary,
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: onCreateSite,
-                icon: const Icon(Icons.add_location_alt_outlined, size: 16),
-                label: const Text('Nueva localización'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (sites.isEmpty && allSets.isEmpty)
-            Text(
-              'Crea una localización (site) y añade sets de rodaje dentro.',
-              style: AppTypography.caption(palette),
-            ),
-          for (final site in sites) ...[
-            Text(
-              site.name.toUpperCase(),
-              style: AppTypography.label(palette).copyWith(
-                fontSize: 11,
-                color: palette.success,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final set in allSets.where((s) => s.siteId == site.id))
-                  ChoiceChip(
-                    label: Text(set.locationName),
-                    selected: activeSet?.id == set.id,
-                    onSelected: (_) => onSelectSet(set),
-                    selectedColor: palette.accent.withValues(alpha: 0.2),
-                  ),
-                ActionChip(
-                  avatar: Icon(Icons.add, size: 16, color: palette.accent),
-                  label: const Text('Añadir set'),
-                  onPressed: () => onCreateSet(site.id),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-          ],
-          if (orphanSets.isNotEmpty) ...[
-            Text(
-              'SETS SIN LOCALIZACIÓN',
-              style: AppTypography.label(palette).copyWith(fontSize: 11),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final set in orphanSets)
-                  ChoiceChip(
-                    label: Text(set.locationName),
-                    selected: activeSet?.id == set.id,
-                    onSelected: (_) => onSelectSet(set),
-                  ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 
 /// Pincelada de luz sincronizada desde Iluminación + CTA de drill-down.
 class _LightingIdeaFromBible extends ConsumerWidget {
