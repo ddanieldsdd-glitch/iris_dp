@@ -16,6 +16,7 @@ import 'camera_plan_scene_badge.dart';
 import 'floor_plan_repository.dart';
 import 'light_setup_actions.dart';
 import 'plan_data.dart';
+import 'plan_sketch.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
 import 'shot_route.dart';
@@ -89,6 +90,36 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
         setId: set?.id,
         siteId: set == null ? _data.siteIdOfScene(_scene) : null,
       );
+
+  /// Crea un boceto en el set y lo abre para dibujarlo. Con [shot], el
+  /// boceto queda además a la vista en ese plano (en el guion técnico).
+  Future<void> _newSketch(LocationBasePlan? set, {Shot? shot}) async {
+    final created = await createPlanSketch(
+      context,
+      _db,
+      projectId: widget.projectId,
+      setId: set?.id,
+      siteId: _data.siteIdOfScene(_scene),
+      label: shot == null
+          ? 'Esc ${_scene.number}'
+          : 'Esc ${_scene.number} P${shot.number}',
+    );
+    if (created == null) return;
+    if (shot != null) {
+      await addShotPlanSketchSetup(
+        db: _db,
+        shot: shot,
+        setupId: created.setup.id,
+      );
+    }
+    widget.onOpen(
+      PlanTarget.lightSetup(
+        created.setup.id,
+        created.setup.name,
+        draw: created.freehand,
+      ),
+    );
+  }
 
   Future<void> _makeSequence(Shot shot) async {
     final setId = _data.setIdOfShot(shot);
@@ -280,6 +311,7 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
                 _column(palette, set: set, setup: setup),
               _NewSetupColumn(
                 onTap: () => _newSetup(set),
+                onSketch: () => _newSketch(set),
                 onDrop: (shots) async =>
                     _move(shots, set, await _newSetup(set)),
               ),
@@ -389,6 +421,7 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
                           ..._data.ownOfShot(shot, tagged: true),
                       ],
                       inherited: _data.inheritedOfSetup(setup),
+                      drawings: _data.drawingsOfSetup(setup),
                       focus: _data.zoneOf(set),
                       emptyIcon: Icons.wb_incandescent_outlined,
                     ),
@@ -412,6 +445,7 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
                     if (!_picked.remove(shot.id)) _picked.add(shot.id);
                   }),
                   onSequence: () => _makeSequence(shot),
+                  onSketch: () => _newSketch(set, shot: shot),
                 ),
               ),
             if (shots.isEmpty)
@@ -496,13 +530,37 @@ class _MasterPlanChip extends StatelessWidget {
 /// con ellos dentro.
 class _NewSetupColumn extends StatelessWidget {
   final VoidCallback onTap;
+
+  /// Crear un boceto: un esquema para dibujar a mano o con elementos.
+  final VoidCallback onSketch;
   final ValueChanged<List<Shot>> onDrop;
 
-  const _NewSetupColumn({required this.onTap, required this.onDrop});
+  const _NewSetupColumn({
+    required this.onTap,
+    required this.onSketch,
+    required this.onDrop,
+  });
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _target(palette),
+        SizedBox(
+          width: 120,
+          child: TextButton.icon(
+            onPressed: onSketch,
+            icon: const Icon(Icons.draw_outlined, size: 15),
+            label: const Text('Boceto nuevo'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _target(AppPalette palette) {
     return DragTarget<List<Shot>>(
       onAcceptWithDetails: (d) => onDrop(d.data),
       builder: (context, candidate, _) => InkWell(
@@ -551,6 +609,9 @@ class _ShotCard extends StatelessWidget {
   final VoidCallback onPick;
   final VoidCallback onSequence;
 
+  /// Dibujar un boceto para este plano.
+  final VoidCallback onSketch;
+
   const _ShotCard({
     required this.shot,
     required this.data,
@@ -559,6 +620,7 @@ class _ShotCard extends StatelessWidget {
     required this.onOpen,
     required this.onPick,
     required this.onSequence,
+    required this.onSketch,
   });
 
   static const double width = 168;
@@ -573,9 +635,15 @@ class _ShotCard extends StatelessWidget {
     ].join(' · ');
     // Sin planta dibujada, el boceto (una imagen) ocupa su sitio.
     final sketches = planSketchesOf(shot);
+    final entries = planSketchEntriesOf(shot);
     final drawn = [...data.lightOfShot(shot), ...data.ownOfShot(shot)];
-    void sketchMenu() =>
-        showShotImageMenu(context, shot, target: ShotImageTarget.planSketch);
+    final drawings = data.drawingsOfShot(shot);
+    void sketchMenu() => showShotImageMenu(
+      context,
+      shot,
+      target: ShotImageTarget.planSketch,
+      sketches: planSketchDelegate,
+    );
 
     final card = Material(
       color: palette.surfaceElevated,
@@ -601,7 +669,7 @@ class _ShotCard extends StatelessWidget {
             SizedBox(
               width: 64,
               height: 48,
-              child: drawn.isEmpty && sketches.isNotEmpty
+              child: drawn.isEmpty && drawings.isEmpty && sketches.isNotEmpty
                   ? Tooltip(
                       message: 'Boceto de planta · clic para verlo',
                       child: GestureDetector(
@@ -615,6 +683,7 @@ class _ShotCard extends StatelessWidget {
                     )
                   : PlanThumbnail(
                       elements: drawn,
+                      drawings: drawings,
                       inherited: data.baseOfShot(shot),
                       focus: data.zoneOf(data.set(data.setIdOfShot(shot))),
                       emptyIcon: Icons.videocam_outlined,
@@ -650,6 +719,7 @@ class _ShotCard extends StatelessWidget {
                   'open' => onOpen(),
                   'pick' => onPick(),
                   'sketch' => sketchMenu(),
+                  'draw' => onSketch(),
                   _ => onSequence(),
                 },
                 itemBuilder: (_) => [
@@ -660,10 +730,14 @@ class _ShotCard extends StatelessWidget {
                   PopupMenuItem(
                     value: 'sketch',
                     child: Text(
-                      sketches.isEmpty
+                      entries.isEmpty
                           ? 'Añadir boceto (imagen)'
-                          : 'Bocetos de planta (${sketches.length})',
+                          : 'Bocetos de planta (${entries.length})',
                     ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'draw',
+                    child: Text('Dibujar un boceto para este plano'),
                   ),
                   PopupMenuItem(
                     value: 'pick',

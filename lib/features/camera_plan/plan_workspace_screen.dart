@@ -60,6 +60,7 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
         projectId: widget.projectId,
         lightSetupId: _target.id,
         setupName: _target.label,
+        startDrawing: _target.draw,
         onNavigate: _open,
       ),
       FloorPlanScope.shot => CameraPlanEditor.shot(
@@ -374,6 +375,7 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
       thumbnail: PlanThumbnail(
         elements: _data.ownOfSetup(setup),
         inherited: _data.inheritedOfSetup(setup),
+        drawings: _data.drawingsOfSetup(setup),
         inheritedOpacity: 0.22,
         focus: _data.zoneOf(_data.set(setup.locationBasePlanId)),
         emptyIcon: Icons.wb_incandescent_outlined,

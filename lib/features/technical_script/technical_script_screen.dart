@@ -20,6 +20,7 @@ import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
 import '../camera_plan/camera_plan_editor.dart';
 import '../camera_plan/plan_data.dart';
+import '../camera_plan/plan_sketch.dart';
 import '../camera_plan/plan_thumbnail.dart';
 import '../locations/locations_screen.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
@@ -2007,7 +2008,8 @@ class _PlanCell extends StatelessWidget {
     final setId = shot.locationBasePlanId ?? scene.locationId;
     final own = [...data.lightOfShot(shot), ...data.ownOfShot(shot)];
     final base = data.baseOfShot(shot);
-    final hasDrawing = own.isNotEmpty || base.isNotEmpty;
+    final drawings = data.drawingsOfShot(shot);
+    final hasDrawing = own.isNotEmpty || base.isNotEmpty || drawings.isNotEmpty;
 
     final String caption;
     final IconData icon;
@@ -2039,9 +2041,20 @@ class _PlanCell extends StatelessWidget {
       );
     }
 
-    final sketches = planSketchesOf(shot);
-    void sketchMenu() =>
-        showShotImageMenu(context, shot, target: ShotImageTarget.planSketch);
+    // Imágenes y bocetos dibujados que el plano ha elegido enseñar.
+    final sketches = [
+      for (final entry in planSketchEntriesOf(shot))
+        if (planSketchSetupId(entry) case final id?)
+          if (data.setup(id) != null) entry else ...const <String>[]
+        else
+          entry,
+    ];
+    void sketchMenu() => showShotImageMenu(
+      context,
+      shot,
+      target: ShotImageTarget.planSketch,
+      sketches: planSketchDelegate,
+    );
 
     Widget tappable(String message, VoidCallback onTap, Widget child) {
       return Tooltip(
@@ -2064,6 +2077,7 @@ class _PlanCell extends StatelessWidget {
           child: PlanThumbnail(
             elements: own,
             inherited: base,
+            drawings: drawings,
             focus: data.zoneOf(data.set(setId)),
             emptyIcon: Icons.videocam_outlined,
           ),
@@ -2165,7 +2179,13 @@ class _PlanCell extends StatelessWidget {
                 borderRadius: BorderRadius.circular(4),
                 child: SizedBox(
                   height: 84,
-                  child: Image.file(File(sketch), fit: BoxFit.contain),
+                  child: switch (planSketchSetupId(sketch)) {
+                    final id? => PlanSketchThumbnail(
+                      data: data,
+                      setup: data.setup(id)!,
+                    ),
+                    null => Image.file(File(sketch), fit: BoxFit.contain),
+                  },
                 ),
               ),
             ),

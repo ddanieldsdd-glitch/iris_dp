@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/utils/project_color_scheme.dart';
+import '../../shared/annotations/annotation_document.dart';
 import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
 import 'camera_plan_grouping.dart';
@@ -33,7 +34,11 @@ class PlanProjectData {
 
   /// Elementos de planta de todos los planos.
   final List<CameraPlanElement> elementRows;
+
+  /// Dibujos a mano de las plantas (bocetos), uno por planta.
+  final List<ProjectAnnotationDocument> drawingRows;
   final ProjectColorScheme colors;
+  final _drawings = <String, AnnotationDocument>{};
 
   PlanProjectData({
     required this.sites,
@@ -42,6 +47,7 @@ class PlanProjectData {
     required this.scenes,
     required this.shots,
     this.elementRows = const [],
+    this.drawingRows = const [],
   }) : colors = ProjectColorScheme.resolve(
          sites: sites,
          sets: sets,
@@ -197,6 +203,54 @@ class PlanProjectData {
                     : '$sceneNumber·${shot.number}',
             }),
     ];
+  }
+
+  AnnotationDocument? _drawing(String type, int id) {
+    final key = '$type:$id';
+    final cached = _drawings[key];
+    if (cached != null) return cached.isEmpty ? null : cached;
+    var document = const AnnotationDocument();
+    for (final row in drawingRows) {
+      if (row.targetType == type && row.targetId == '$id') {
+        document = AnnotationDocument.decode(row.documentJson);
+        break;
+      }
+    }
+    _drawings[key] = document;
+    return document.isEmpty ? null : document;
+  }
+
+  /// Lo dibujado a mano en un esquema de luz.
+  List<AnnotationDocument> drawingsOfSetup(LightSetup setup) => [
+    ?_drawing('camera_plan_light_setup', setup.id),
+  ];
+
+  /// Lo dibujado a mano que se ve en un plano: lo de su esquema y lo suyo.
+  List<AnnotationDocument> drawingsOfShot(Shot shot) => [
+    if (setup(shot.lightSetupId) case final own?) ...drawingsOfSetup(own),
+    ?_drawing('camera_plan_shot', shot.id),
+  ];
+
+  /// ¿Tiene el esquema algo dibujado, con elementos o a mano?
+  bool setupHasDrawing(LightSetup setup) =>
+      ownOfSetup(setup).isNotEmpty || drawingsOfSetup(setup).isNotEmpty;
+
+  /// Bocetos que se pueden enseñar en una escena: esquemas en estado
+  /// «boceto» con algo dibujado, primero los del set de la escena.
+  List<LightSetup> sketchesForScene(Scene scene) {
+    final list = [
+      for (final s in setupsForScene(scene))
+        if (s.status == 'boceto' && setupHasDrawing(s)) s,
+    ];
+    final siteId = scene.locationSiteId ?? set(scene.locationId)?.siteId;
+    // Y los de los demás sets de su localización.
+    for (final s in setups) {
+      if (list.contains(s) || s.status != 'boceto' || !setupHasDrawing(s)) {
+        continue;
+      }
+      if (siteId != null && siteIdOfSetup(s) == siteId) list.add(s);
+    }
+    return list;
   }
 
   /// La luz de un plano: la de su esquema, con sus ajustes propios.
@@ -403,27 +457,33 @@ class PlanDataBuilder extends ConsumerWidget {
               builder: (context, shots) =>
                   StreamBuilder<List<CameraPlanElement>>(
                     stream: db.watchCameraPlanElementsForProject(projectId),
-                    builder: (context, elements) {
-                      if (!sites.hasData ||
-                          !sets.hasData ||
-                          !setups.hasData ||
-                          !scenes.hasData ||
-                          !shots.hasData ||
-                          !elements.hasData) {
-                        return loading();
-                      }
-                      return builder(
-                        context,
-                        PlanProjectData(
-                          sites: sites.data!,
-                          sets: sets.data!,
-                          setups: setups.data!,
-                          scenes: scenes.data!,
-                          shots: shots.data!,
-                          elementRows: elements.data!,
+                    builder: (context, elements) =>
+                        StreamBuilder<List<ProjectAnnotationDocument>>(
+                          stream: db.watchPlanAnnotationDocuments(projectId),
+                          builder: (context, drawings) {
+                            if (!sites.hasData ||
+                                !sets.hasData ||
+                                !setups.hasData ||
+                                !scenes.hasData ||
+                                !shots.hasData ||
+                                !elements.hasData ||
+                                !drawings.hasData) {
+                              return loading();
+                            }
+                            return builder(
+                              context,
+                              PlanProjectData(
+                                sites: sites.data!,
+                                sets: sets.data!,
+                                setups: setups.data!,
+                                scenes: scenes.data!,
+                                shots: shots.data!,
+                                elementRows: elements.data!,
+                                drawingRows: drawings.data!,
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
                   ),
             ),
           ),

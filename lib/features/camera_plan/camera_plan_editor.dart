@@ -69,6 +69,9 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   /// Tramo de un plano secuencia: su set, su luz y lo colocado en él.
   final int? leg;
 
+  /// Abrir ya con el lápiz en la mano (un boceto a mano alzada).
+  final bool startDrawing;
+
   /// En la pantalla de trabajo, abrir otra planta cambia la que se ve en
   /// lugar de apilar una pantalla nueva.
   final void Function(PlanTarget target)? onNavigate;
@@ -84,6 +87,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     this.shotId,
     this.leg,
     this.onNavigate,
+    this.startDrawing = false,
   });
 
   /// Plano maestro de localización.
@@ -94,6 +98,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required String siteName,
     this.onNavigate,
   }) : label = siteName,
+       startDrawing = false,
        scope = FloorPlanScope.site,
        setId = null,
        lightSetupId = null,
@@ -108,6 +113,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required String setName,
     this.onNavigate,
   }) : label = setName,
+       startDrawing = false,
        scope = FloorPlanScope.set,
        siteId = null,
        lightSetupId = null,
@@ -121,6 +127,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required int this.lightSetupId,
     required String setupName,
     this.onNavigate,
+    this.startDrawing = false,
   }) : label = setupName,
        scope = FloorPlanScope.lightSetup,
        siteId = null,
@@ -137,6 +144,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     this.leg,
     this.onNavigate,
   }) : label = shotLabel,
+       startDrawing = false,
        scope = FloorPlanScope.shot,
        siteId = null,
        setId = null,
@@ -325,7 +333,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   ui.Image? _backgroundImage;
   Rect? _backgroundRect;
   double _backgroundOpacity = 0.85;
-  bool _annotationMode = false;
+  late bool _annotationMode = widget.startDrawing;
   AnnotationToolType _annotationTool = AnnotationToolType.pen;
   Color _annotationColor = const Color(0xFF007AFF);
   double _annotationWidth = 6;
@@ -2607,7 +2615,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           IconButton(
             tooltip: _annotationMode
                 ? 'Volver a editar elementos'
-                : 'Anotar con Apple Pencil',
+                : 'Dibujar a mano (ratón o Apple Pencil)',
             icon: Icon(
               _annotationMode ? Icons.edit_off_outlined : Icons.draw_outlined,
               color: _annotationMode ? palette.accent : palette.textSecondary,

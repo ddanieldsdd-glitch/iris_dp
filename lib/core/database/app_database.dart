@@ -4431,6 +4431,17 @@ class AppDatabase extends _$AppDatabase {
           ))
           .getSingleOrNull();
 
+  /// Los dibujos a mano de las plantas del proyecto (uno por planta).
+  Stream<List<ProjectAnnotationDocument>> watchPlanAnnotationDocuments(
+    int projectId,
+  ) =>
+      (select(projectAnnotationDocuments)..where(
+            (a) =>
+                a.projectId.equals(projectId) &
+                a.targetType.like('camera_plan_%'),
+          ))
+          .watch();
+
   Stream<ProjectAnnotationDocument?> watchProjectAnnotationDocument({
     required int projectId,
     required String targetType,

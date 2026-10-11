@@ -232,23 +232,50 @@ class _ShotImagePasteTargetState extends ConsumerState<ShotImagePasteTarget> {
   }
 }
 
+/// Lo que el menú de bocetos necesita de las plantas de cámara y luz, para
+/// enseñar y ofrecer los bocetos dibujados allí (entradas `setup:<id>`).
+class ShotSketchDelegate {
+  /// Miniatura de un boceto dibujado.
+  final Widget Function(BuildContext context, Shot shot, int setupId) thumbnail;
+
+  /// El apartado «Bocetos de la planta»: los que hay y dibujar uno nuevo.
+  final Widget Function(BuildContext context, Shot shot) section;
+
+  /// Abre el boceto en el editor de planta.
+  final Future<void> Function(BuildContext context, Shot shot, int setupId)
+  open;
+
+  const ShotSketchDelegate({
+    required this.thumbnail,
+    required this.section,
+    required this.open,
+  });
+}
+
 /// Menú de una imagen del plano (referencia o storyboard): arrastrarla,
 /// pegarla con ⌘V, elegirla del ordenador o del moodboard, y quitarla.
 Future<void> showShotImageMenu(
   BuildContext context,
   Shot shot, {
   ShotImageTarget target = ShotImageTarget.reference,
+  ShotSketchDelegate? sketches,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) => _ReferenceImageMenu(shot: shot, target: target),
+    builder: (_) =>
+        _ReferenceImageMenu(shot: shot, target: target, sketches: sketches),
   );
 }
 
 class _ReferenceImageMenu extends ConsumerStatefulWidget {
   final Shot shot;
   final ShotImageTarget target;
-  const _ReferenceImageMenu({required this.shot, required this.target});
+  final ShotSketchDelegate? sketches;
+  const _ReferenceImageMenu({
+    required this.shot,
+    required this.target,
+    this.sketches,
+  });
 
   @override
   ConsumerState<_ReferenceImageMenu> createState() =>
@@ -481,7 +508,11 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
       return StreamBuilder<Shot?>(
         stream: _shotChanges,
         builder: (context, snap) {
-          _sketches = planSketchesOf(snap.data ?? widget.shot);
+          _sketches = [
+            for (final entry in planSketchEntriesOf(snap.data ?? widget.shot))
+              if (planSketchSetupId(entry) == null || widget.sketches != null)
+                entry,
+          ];
           return _dialog(context, const []);
         },
       );
@@ -504,7 +535,8 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
     // del otro, que no se puede quitar desde aquí.
     final own = switch (widget.target) {
       ShotImageTarget.storyboard => widget.shot.storyboardImagePath,
-      ShotImageTarget.planSketch => _sketches.lastOrNull,
+      ShotImageTarget.planSketch =>
+        _sketches.where((e) => planSketchSetupId(e) == null).firstOrNull,
       ShotImageTarget.reference => references.firstOrNull?.imagePath,
     };
     final path =
@@ -578,6 +610,10 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                         onRemove: (i) => _removeSketch(_sketches[i]),
                         onMove: (from, to) => _moveSketch(_sketches[from], to),
                       ),
+                    ],
+                    if (_sketch && widget.sketches != null) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      widget.sketches!.section(context, widget.shot),
                     ],
                     if (_sketch) ...[
                       const SizedBox(height: 6),
@@ -815,6 +851,8 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
         onReorderItem: onMove,
         itemBuilder: (context, i) {
           final path = paths[i];
+          // Un boceto dibujado en la planta, no una imagen.
+          final setupId = planSketchSetupId(path);
           return Padding(
             key: ValueKey(path),
             padding: const EdgeInsets.only(right: 8),
@@ -826,13 +864,33 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                     cursor: SystemMouseCursors.grab,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(6),
-                      child: Image.file(
-                        File(path),
-                        width: 124,
-                        height: 76,
-                        fit: BoxFit.cover,
-                        cacheWidth: 300,
-                      ),
+                      child: setupId == null
+                          ? Image.file(
+                              File(path),
+                              width: 124,
+                              height: 76,
+                              fit: BoxFit.cover,
+                              cacheWidth: 300,
+                            )
+                          : Tooltip(
+                              message: 'Abrir el boceto en la planta',
+                              child: GestureDetector(
+                                onTap: () => widget.sketches?.open(
+                                  context,
+                                  widget.shot,
+                                  setupId,
+                                ),
+                                child: SizedBox(
+                                  width: 124,
+                                  height: 76,
+                                  child: widget.sketches?.thumbnail(
+                                    context,
+                                    widget.shot,
+                                    setupId,
+                                  ),
+                                ),
+                              ),
+                            ),
                     ),
                   ),
                 ),
@@ -878,7 +936,12 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                         i == paths.length - 1 ? null : () => onMove(i, i + 1),
                       ),
                       const Spacer(),
-                      chip('Copiar esta imagen', Icons.copy, () => _copy(path)),
+                      if (setupId == null)
+                        chip(
+                          'Copiar esta imagen',
+                          Icons.copy,
+                          () => _copy(path),
+                        ),
                     ],
                   ),
                 ),

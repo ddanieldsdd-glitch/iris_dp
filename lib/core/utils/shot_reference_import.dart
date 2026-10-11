@@ -226,6 +226,33 @@ Future<String> importShotStoryboardImage({
 List<String> planSketchesOf(Shot shot) =>
     _storedPlanSketches(shot).where((path) => File(path).existsSync()).toList();
 
+/// Todo lo que el plano enseña como boceto de planta, en su orden: imágenes
+/// (su ruta) y bocetos dibujados en Plantas de cámara y luz (`setup:<id>`,
+/// ver [planSketchSetupId]).
+List<String> planSketchEntriesOf(Shot shot) => [
+  for (final entry in _storedPlanSketches(shot))
+    if (planSketchSetupId(entry) != null || File(entry).existsSync()) entry,
+];
+
+/// El esquema de luz al que apunta una entrada `setup:<id>`; nulo si la
+/// entrada es una imagen.
+int? planSketchSetupId(String entry) =>
+    entry.startsWith('setup:') ? int.tryParse(entry.substring(6)) : null;
+
+/// Enseña en el plano un boceto dibujado (un esquema de luz en boceto). No
+/// cambia el esquema de luz del plano.
+Future<void> addShotPlanSketchSetup({
+  required AppDatabase db,
+  required Shot shot,
+  required int setupId,
+}) async {
+  final current = await db.getShotById(shot.id) ?? shot;
+  final entry = 'setup:$setupId';
+  final stored = _storedPlanSketches(current);
+  if (stored.contains(entry)) return;
+  await _savePlanSketches(db, shot.id, [...stored, entry]);
+}
+
 List<String> _storedPlanSketches(Shot shot) {
   final raw = shot.cameraPlanImagePath?.trim();
   if (raw == null || raw.isEmpty) return [];
@@ -288,7 +315,7 @@ Future<String> importShotPlanSketch({
   return stored;
 }
 
-/// Quita un boceto de planta del plano.
+/// Quita un boceto de planta del plano: [path] es su ruta o `setup:<id>`.
 Future<void> removeShotPlanSketch({
   required AppDatabase db,
   required Shot shot,
@@ -301,7 +328,8 @@ Future<void> removeShotPlanSketch({
   ]);
 }
 
-/// Cambia de sitio un boceto de planta: [from] pasa al puesto [to].
+/// Cambia de sitio un boceto de planta ([path]: ruta o `setup:<id>`): pasa
+/// al puesto [to] entre los que se ven ([planSketchEntriesOf]).
 Future<void> reorderShotPlanSketches({
   required AppDatabase db,
   required Shot shot,
@@ -309,7 +337,7 @@ Future<void> reorderShotPlanSketches({
   required int to,
 }) async {
   final current = await db.getShotById(shot.id) ?? shot;
-  final paths = _storedPlanSketches(current);
+  final paths = planSketchEntriesOf(current);
   if (!paths.remove(path)) return;
   paths.insert(to.clamp(0, paths.length), path);
   await _savePlanSketches(db, shot.id, paths);

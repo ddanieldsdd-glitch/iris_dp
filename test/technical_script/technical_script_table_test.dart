@@ -912,6 +912,64 @@ void main() {
     await unmount(tester);
   });
 
+  testWidgets('un boceto dibujado en la planta se elige en la casilla y sale '
+      'con su rótulo', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final projectId = await seed(tester);
+    late int shotId;
+    late int setupId;
+    await tester.runAsync(() async {
+      shotId = (await db.getShotsForProject(projectId)).first.id;
+      setupId = await db.insertLightSetup(
+        LightSetupsCompanion.insert(
+          projectId: projectId,
+          name: 'Boceto · Esc 1',
+        ),
+      );
+      await db.saveProjectAnnotationDocument(
+        projectId: projectId,
+        targetType: 'camera_plan_light_setup',
+        targetId: '$setupId',
+        documentJson:
+            '{"strokes":[{"id":"a","tool":"pen","colorArgb":4294901760,'
+            '"width":6,"points":[{"x":0.2,"y":0.2},{"x":0.6,"y":0.5}]}]}',
+        documentSchemaVersion: 1,
+      );
+    });
+    await tester.pumpWidget(host(TechnicalScriptScreen(projectId: projectId)));
+    await settle(tester);
+    // Nada llega solo: hay que elegirlo.
+    expect(find.text('BOCETO'), findsNothing);
+
+    await tester.tap(
+      find.byTooltip('Añadir un boceto de planta (imagen)').first,
+    );
+    await settle(tester);
+    expect(find.text('Bocetos de la planta'), findsOneWidget);
+    expect(find.text('Dibujar un boceto nuevo'), findsOneWidget);
+    await tester.runAsync(() async {
+      await tester.tap(find.byTooltip('Enseñar este boceto en el plano'));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await flush(tester);
+    await settle(tester);
+    late Shot shot;
+    await tester.runAsync(() async {
+      shot = (await db.getShotById(shotId))!;
+    });
+    expect(planSketchEntriesOf(shot), ['setup:$setupId']);
+    expect(shot.lightSetupId, isNull);
+
+    await tester.tap(find.byTooltip('Cerrar'));
+    await settle(tester);
+    expect(find.text('BOCETO'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmount(tester);
+  });
+
   testWidgets('la columna de storyboard se activa en Columnas y abre su menú', (
     tester,
   ) async {
