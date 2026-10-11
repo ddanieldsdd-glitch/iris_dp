@@ -54,6 +54,17 @@ void main() {
     }
   }
 
+  /// Deja acabar una acción con varias escrituras seguidas: cada una
+  /// necesita tiempo de verdad y un repintado.
+  Future<void> flush(WidgetTester tester) async {
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+    }
+  }
+
   /// Desmonta la pantalla para que Drift cierre sus consultas dentro del test.
   Future<void> unmount(WidgetTester tester) async {
     await tester.pumpWidget(const SizedBox());
@@ -610,6 +621,30 @@ void main() {
     await settle(tester);
     expect(find.text('Referencia · Plano 1'), findsOneWidget);
     expect(find.byTooltip('Quitar esta imagen'), findsNWidgets(3));
+    // La primera pasa detrás y la segunda queda de principal.
+    late List<ShotReference> reordered;
+    late Shot afterMove;
+    late List<ShotReference> before;
+    await tester.runAsync(() async {
+      before = await db.watchReferencesForShot(shotId).first;
+    });
+    await tester.runAsync(() async {
+      await tester.tap(find.byTooltip('Mover detrás').first);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    // Son dos escrituras: la segunda sale tras repintar.
+    await flush(tester);
+    await tester.runAsync(() async {
+      reordered = await db.watchReferencesForShot(shotId).first;
+      afterMove = (await db.getShotById(shotId))!;
+    });
+    expect(reordered.map((r) => r.id), [
+      before[1].id,
+      before[0].id,
+      before[2].id,
+    ]);
+    expect(afterMove.referenceImagePath, reordered.first.imagePath);
+    await settle(tester);
     // El borrado consulta la base con tiempo de verdad.
     await tester.runAsync(() async {
       await tester.tap(find.byTooltip('Quitar esta imagen').first);
@@ -821,16 +856,52 @@ void main() {
     expect(find.text('Boceto de planta · Plano 1'), findsOneWidget);
     expect(find.text('Más orígenes'), findsNothing);
     expect(find.byTooltip('Quitar esta imagen'), findsNWidgets(2));
+
+    // Copiar deja la imagen lista para pegarla en otra casilla.
+    const channel = MethodChannel('com.iris_dp/export_file_saver');
+    final copied = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      if (call.method != 'writeClipboardImage') return null;
+      copied.add((call.arguments as Map)['path']);
+      return true;
+    });
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    await tester.tap(find.byTooltip('Copiar esta imagen').first);
+    await settle(tester);
+    expect(copied, [paths[0]]);
+    expect(find.textContaining('Imagen copiada'), findsOneWidget);
+
+    // La primera pasa detrás: el orden es la prioridad.
+    late Shot moved;
+    await tester.runAsync(() async {
+      await tester.tap(find.byTooltip('Mover detrás').first);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await flush(tester);
+    await settle(tester);
+    await tester.runAsync(() async {
+      moved = (await db.getShotById(shotId))!;
+    });
+    expect(planSketchesOf(moved), [paths[1], paths[0]]);
+
     await tester.runAsync(() async {
       await tester.tap(find.byTooltip('Quitar esta imagen').first);
       await Future<void>.delayed(const Duration(milliseconds: 300));
     });
+    await flush(tester);
     await settle(tester);
     late Shot shot;
     await tester.runAsync(() async {
       shot = (await db.getShotById(shotId))!;
     });
-    expect(planSketchesOf(shot), [paths[1]]);
+    expect(planSketchesOf(shot), [paths[0]]);
     await settle(tester);
     expect(find.byTooltip('Quitar esta imagen'), findsOneWidget);
 

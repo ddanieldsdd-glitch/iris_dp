@@ -3015,6 +3015,17 @@ class AppDatabase extends _$AppDatabase {
   Future<int> insertShotReference(ShotReferencesCompanion ref) =>
       into(shotReferences).insert(ref);
 
+  /// Deja las referencias en el orden de [ids].
+  Future<void> setShotReferenceOrder(List<int> ids) => batch((b) {
+    for (final (i, id) in ids.indexed) {
+      b.update(
+        shotReferences,
+        ShotReferencesCompanion(sortOrder: Value(i)),
+        where: (r) => r.id.equals(id),
+      );
+    }
+  });
+
   Future<int> deleteShotReference(int id) =>
       (delete(shotReferences)..where((r) => r.id.equals(id))).go();
 

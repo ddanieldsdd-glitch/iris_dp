@@ -11,10 +11,7 @@ class ClipboardImagePayload {
   final Uint8List bytes;
   final String extension;
 
-  const ClipboardImagePayload({
-    required this.bytes,
-    required this.extension,
-  });
+  const ClipboardImagePayload({required this.bytes, required this.extension});
 }
 
 /// Resultado al intentar pegar una imagen.
@@ -30,10 +27,7 @@ class ClipboardImageReadResult {
   final ClipboardImageReadStatus status;
   final ClipboardImagePayload? payload;
 
-  const ClipboardImageReadResult({
-    required this.status,
-    this.payload,
-  });
+  const ClipboardImageReadResult({required this.status, this.payload});
 }
 
 /// Lee imágenes del portapapeles: datos binarios, URL remota o ruta local.
@@ -61,6 +55,28 @@ abstract final class ClipboardImageReader {
 
     final textData = await Clipboard.getData(Clipboard.kTextPlain);
     return _readFromText(textData?.text);
+  }
+
+  /// Copia al portapapeles la imagen de [path], para pegarla en otra
+  /// casilla o en otra aplicación. Donde no hay portapapeles de imagen se
+  /// copia su ruta, que [read] también sabe pegar. Devuelve si se ha copiado.
+  static Future<bool> copyImageFile(String path) async {
+    if (!File(path).existsSync()) return false;
+    if (!kIsWeb && (Platform.isMacOS || Platform.isIOS)) {
+      try {
+        final done = await _macChannel.invokeMethod<Object?>(
+          'writeClipboardImage',
+          {'path': path},
+        );
+        if (done == true) return true;
+      } on MissingPluginException {
+        // Sin la parte nativa: se copia la ruta.
+      } on PlatformException {
+        // Ídem.
+      }
+    }
+    await Clipboard.setData(ClipboardData(text: path));
+    return true;
   }
 
   static Future<ClipboardImageReadResult?> _readNativeClipboard() async {
@@ -137,8 +153,10 @@ abstract final class ClipboardImageReader {
         uri.host.isNotEmpty) {
       return uri;
     }
-    final match =
-        RegExp(r'https?://[^\s)\]"<>]+', caseSensitive: false).firstMatch(trimmed);
+    final match = RegExp(
+      r'https?://[^\s)\]"<>]+',
+      caseSensitive: false,
+    ).firstMatch(trimmed);
     if (match == null) return null;
     return Uri.tryParse(match.group(0)!);
   }
@@ -184,7 +202,8 @@ abstract final class ClipboardImageReader {
       if (bytes.isEmpty) return null;
       return ClipboardImagePayload(
         bytes: bytes,
-        extension: _extensionFromContentType(
+        extension:
+            _extensionFromContentType(
               'image/${match.group(1)!.toLowerCase()}',
             ) ??
             _extensionFromBytes(bytes) ??
@@ -356,8 +375,12 @@ abstract final class ClipboardImageReader {
       }
 
       final contentType =
-          response.headers['content-type']?.split(';').first.trim().toLowerCase() ??
-              '';
+          response.headers['content-type']
+              ?.split(';')
+              .first
+              .trim()
+              .toLowerCase() ??
+          '';
       final sniffed = _extensionFromBytes(response.bodyBytes);
       if (!contentType.startsWith('image/') &&
           !_looksLikeImageUrl(uri) &&
@@ -365,13 +388,11 @@ abstract final class ClipboardImageReader {
         return null;
       }
 
-      final ext = _extensionFromContentType(contentType) ??
+      final ext =
+          _extensionFromContentType(contentType) ??
           sniffed ??
           _extensionFromPath(uri.path);
-      return ClipboardImagePayload(
-        bytes: response.bodyBytes,
-        extension: ext,
-      );
+      return ClipboardImagePayload(bytes: response.bodyBytes, extension: ext);
     } catch (_) {
       return null;
     }

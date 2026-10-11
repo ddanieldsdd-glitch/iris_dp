@@ -158,6 +158,35 @@ class _ShotImagePasteTargetState extends ConsumerState<ShotImagePasteTarget> {
       );
   }
 
+  /// Copia la primera imagen de la casilla, para pegarla en otra.
+  Future<void> _copy() async {
+    final db = ref.read(databaseProvider);
+    final shot = await db.getShotById(widget.shot.id) ?? widget.shot;
+    final path = switch (widget.target) {
+      ShotImageTarget.storyboard => storyboardImageOf(shot),
+      ShotImageTarget.planSketch => planSketchesOf(shot).firstOrNull,
+      ShotImageTarget.reference =>
+        referenceImagesOf(
+              shot,
+              await db.watchReferencesForShot(shot.id).first,
+            ).firstOrNull ??
+            referenceImageOf(shot),
+    };
+    final done = path != null && await ClipboardImageReader.copyImageFile(path);
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            done
+                ? 'Imagen copiada. Pégala con ⌘V sobre otra casilla.'
+                : 'Esta casilla no tiene imagen que copiar.',
+          ),
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -165,6 +194,8 @@ class _ShotImagePasteTargetState extends ConsumerState<ShotImagePasteTarget> {
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyV, meta: true): _paste,
         const SingleActivator(LogicalKeyboardKey.keyV, control: true): _paste,
+        const SingleActivator(LogicalKeyboardKey.keyC, meta: true): _copy,
+        const SingleActivator(LogicalKeyboardKey.keyC, control: true): _copy,
       },
       child: Focus(
         focusNode: _focus,
@@ -180,7 +211,9 @@ class _ShotImagePasteTargetState extends ConsumerState<ShotImagePasteTarget> {
             if (_focus.hasPrimaryFocus) _focus.unfocus();
           },
           child: Tooltip(
-            message: '⌘V pega aquí la imagen copiada · clic para más opciones',
+            message:
+                '⌘V pega aquí la imagen copiada · ⌘C la copia · clic para '
+                'más opciones',
             waitDuration: const Duration(milliseconds: 700),
             child: DecoratedBox(
               position: DecorationPosition.foreground,
@@ -228,6 +261,9 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
   bool _moodboard = false;
   String? _notice;
 
+  /// Aviso que no es un error («Imagen copiada»).
+  String? _info;
+
   AppDatabase get _db => ref.read(databaseProvider);
 
   bool get _story => widget.target == ShotImageTarget.storyboard;
@@ -253,6 +289,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
     setState(() {
       _busy = true;
       _notice = null;
+      _info = null;
     });
     try {
       final done = await action();
@@ -353,6 +390,38 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
     setState(() => _notice = problem);
     return false;
   });
+
+  /// Cambia de sitio una referencia; la primera es la principal.
+  Future<void> _moveReference(ShotReference reference, int to) =>
+      _run(() async {
+        await reorderShotReference(
+          db: _db,
+          shot: await _current(),
+          reference: reference,
+          to: to,
+        );
+        return false;
+      });
+
+  Future<void> _moveSketch(String path, int to) => _run(() async {
+    await reorderShotPlanSketches(
+      db: _db,
+      shot: await _current(),
+      path: path,
+      to: to,
+    );
+    return false;
+  });
+
+  /// Copia una imagen al portapapeles, para pegarla en otra casilla.
+  Future<void> _copy(String path) async {
+    final done = await ClipboardImageReader.copyImageFile(path);
+    if (!mounted) return;
+    setState(() {
+      _notice = done ? null : 'No se ha podido copiar la imagen.';
+      _info = done ? 'Imagen copiada. Pégala con ⌘V sobre otra casilla.' : null;
+    });
+  }
 
   /// Quita uno de los bocetos de planta; el menú sigue abierto.
   Future<void> _removeSketch(String path) => _run(() async {
@@ -497,12 +566,18 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                       const SizedBox(height: AppSpacing.md),
                       _imageStrip(
                         [for (final r in references) r.imagePath],
-                        (i) => _removeReference(references[i]),
+                        onRemove: (i) => _removeReference(references[i]),
+                        onMove: (from, to) =>
+                            _moveReference(references[from], to),
                       ),
                     ],
                     if (_sketch && _sketches.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.md),
-                      _imageStrip(_sketches, (i) => _removeSketch(_sketches[i])),
+                      _imageStrip(
+                        _sketches,
+                        onRemove: (i) => _removeSketch(_sketches[i]),
+                        onMove: (from, to) => _moveSketch(_sketches[from], to),
+                      ),
                     ],
                     if (_sketch) ...[
                       const SizedBox(height: 6),
@@ -596,6 +671,10 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                           ),
                       ],
                     ),
+                  ],
+                  if (_info != null && _notice == null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Text(_info!, style: AppTypography.bodyMedium(palette)),
                   ],
                   if (_notice != null) ...[
                     const SizedBox(height: AppSpacing.md),
@@ -705,65 +784,106 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
   }
 
   /// Las imágenes del plano en su orden, cada una con su «quitar».
-  Widget _imageStrip(List<String> paths, void Function(int index) onRemove) {
+  Widget _imageStrip(
+    List<String> paths, {
+    required void Function(int index) onRemove,
+    required void Function(int from, int to) onMove,
+  }) {
+    Widget chip(String tooltip, IconData icon, VoidCallback? onTap) {
+      return Tooltip(
+        message: tooltip,
+        child: InkWell(
+          onTap: _busy ? null : onTap,
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: onTap == null ? 0.25 : 0.6),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 14, color: Colors.white),
+          ),
+        ),
+      );
+    }
+
     return SizedBox(
-      height: 64,
-      child: ListView.separated(
+      height: 76,
+      child: ReorderableListView.builder(
         scrollDirection: Axis.horizontal,
+        buildDefaultDragHandles: false,
         itemCount: paths.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        onReorderItem: onMove,
         itemBuilder: (context, i) {
           final path = paths[i];
-          return Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.file(
-                  File(path),
-                  width: 104,
-                  height: 64,
-                  fit: BoxFit.cover,
-                  cacheWidth: 300,
-                ),
-              ),
-              Positioned(
-                left: 4,
-                bottom: 4,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${i + 1}',
-                    style: const TextStyle(fontSize: 11, color: Colors.white),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 2,
-                right: 2,
-                child: Tooltip(
-                  message: 'Quitar esta imagen',
-                  child: InkWell(
-                    onTap: _busy ? null : () => onRemove(i),
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.close,
-                        size: 14,
-                        color: Colors.white,
+          return Padding(
+            key: ValueKey(path),
+            padding: const EdgeInsets.only(right: 8),
+            child: Stack(
+              children: [
+                ReorderableDragStartListener(
+                  index: i,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.grab,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Image.file(
+                        File(path),
+                        width: 124,
+                        height: 76,
+                        fit: BoxFit.cover,
+                        cacheWidth: 300,
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+                Positioned(
+                  left: 4,
+                  top: 4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${i + 1}',
+                      style: const TextStyle(fontSize: 11, color: Colors.white),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 2,
+                  right: 2,
+                  child: chip(
+                    'Quitar esta imagen',
+                    Icons.close,
+                    () => onRemove(i),
+                  ),
+                ),
+                Positioned(
+                  left: 2,
+                  right: 2,
+                  bottom: 2,
+                  child: Row(
+                    children: [
+                      chip(
+                        'Mover delante',
+                        Icons.chevron_left,
+                        i == 0 ? null : () => onMove(i, i - 1),
+                      ),
+                      const SizedBox(width: 2),
+                      chip(
+                        'Mover detrás',
+                        Icons.chevron_right,
+                        i == paths.length - 1 ? null : () => onMove(i, i + 1),
+                      ),
+                      const Spacer(),
+                      chip('Copiar esta imagen', Icons.copy, () => _copy(path)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),

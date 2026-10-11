@@ -228,7 +228,7 @@ List<String> planSketchesOf(Shot shot) =>
 
 List<String> _storedPlanSketches(Shot shot) {
   final raw = shot.cameraPlanImagePath?.trim();
-  if (raw == null || raw.isEmpty) return const [];
+  if (raw == null || raw.isEmpty) return [];
   if (!raw.startsWith('[')) return [raw];
   try {
     return [
@@ -236,7 +236,7 @@ List<String> _storedPlanSketches(Shot shot) {
         if (path is String && path.isNotEmpty) path,
     ];
   } catch (_) {
-    return const [];
+    return [];
   }
 }
 
@@ -299,4 +299,37 @@ Future<void> removeShotPlanSketch({
     for (final other in _storedPlanSketches(current))
       if (other != path) other,
   ]);
+}
+
+/// Cambia de sitio un boceto de planta: [from] pasa al puesto [to].
+Future<void> reorderShotPlanSketches({
+  required AppDatabase db,
+  required Shot shot,
+  required String path,
+  required int to,
+}) async {
+  final current = await db.getShotById(shot.id) ?? shot;
+  final paths = _storedPlanSketches(current);
+  if (!paths.remove(path)) return;
+  paths.insert(to.clamp(0, paths.length), path);
+  await _savePlanSketches(db, shot.id, paths);
+}
+
+/// Cambia de sitio una referencia del plano: pasa al puesto [to]. La que
+/// queda primera es la principal.
+Future<void> reorderShotReference({
+  required AppDatabase db,
+  required Shot shot,
+  required ShotReference reference,
+  required int to,
+}) async {
+  final refs = await db.watchReferencesForShot(shot.id).first;
+  final ordered = [...refs]..removeWhere((r) => r.id == reference.id);
+  if (ordered.length == refs.length) return;
+  ordered.insert(to.clamp(0, ordered.length), reference);
+  await db.updateShotFields(
+    shot.id,
+    ShotsCompanion(referenceImagePath: Value(ordered.first.imagePath)),
+  );
+  await db.setShotReferenceOrder([for (final r in ordered) r.id]);
 }
