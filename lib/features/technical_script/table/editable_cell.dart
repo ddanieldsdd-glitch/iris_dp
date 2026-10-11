@@ -15,6 +15,67 @@ const kScriptMarkerFills = {
   'b': Color(0xFF90CAF9),
 };
 
+/// Limpia un texto pegado: los espacios «duros» y tabuladores de Word o de
+/// un PDF pasan a espacio normal, los repetidos se juntan, las líneas no
+/// acaban en espacio y no quedan más de dos saltos seguidos.
+String cleanPastedText(String text) => text
+    .replaceAll('\r\n', '\n')
+    .replaceAll('\r', '\n')
+    .replaceAll(RegExp('[\t   ​]'), ' ')
+    .replaceAll(RegExp(' {2,}'), ' ')
+    .replaceAll(RegExp(r' *\n *'), '\n')
+    .replaceAll(RegExp(r'\n{3,}'), '\n\n');
+
+/// Aplica [cleanPastedText] a lo que entra de golpe en un campo (pegar);
+/// lo que se teclea letra a letra no se toca.
+class PastedTextCleaner extends TextInputFormatter {
+  const PastedTextCleaner();
+
+  static final _blank = RegExp(r'\s');
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final from = oldValue.selection;
+    final to = newValue.selection;
+    if (!from.isValid || !to.isValid || !to.isCollapsed) return newValue;
+    if (newValue.composing.isValid && !newValue.composing.isCollapsed) {
+      return newValue;
+    }
+    final start = from.start;
+    final end = to.end;
+    // Lo que queda detrás del cursor tiene que ser lo que ya había.
+    final tail = oldValue.text.substring(from.end);
+    if (end - start < 2 ||
+        end > newValue.text.length ||
+        newValue.text.substring(end) != tail ||
+        newValue.text.substring(0, start) !=
+            oldValue.text.substring(0, start)) {
+      return newValue;
+    }
+    final before = newValue.text.substring(0, start);
+    var pasted = cleanPastedText(newValue.text.substring(start, end));
+    // Al principio de la celda o tras un espacio, sin blancos delante; al
+    // final de la celda, sin blancos detrás.
+    if (before.isEmpty || _blank.hasMatch(before[before.length - 1])) {
+      pasted = pasted.trimLeft();
+    }
+    if (tail.isEmpty) {
+      pasted = pasted.trimRight();
+    } else if (pasted.endsWith('\n')) {
+      pasted = '${pasted.trimRight()}${_blank.hasMatch(tail[0]) ? '' : ' '}';
+    }
+    final text = '$before$pasted$tail';
+    if (text == newValue.text) return newValue;
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: before.length + pasted.length),
+    );
+  }
+}
+
 /// Pone o quita un formato en la selección de [controller].
 void applyScriptMark(
   TextEditingController controller,
@@ -225,6 +286,7 @@ class _EditableCellState extends State<EditableCell> {
     textAlign: widget.textAlign,
     keyboardType: TextInputType.multiline,
     textInputAction: TextInputAction.newline,
+    inputFormatters: const [PastedTextCleaner()],
     style: widget.style,
     cursorColor: widget.style.color,
     decoration: const InputDecoration(
