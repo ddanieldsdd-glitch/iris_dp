@@ -9,6 +9,7 @@ import 'package:image/image.dart' as img;
 import 'package:xml/xml.dart';
 
 import 'package:iris_dp/core/database/app_database.dart';
+import 'package:iris_dp/core/utils/shot_reference_import.dart';
 import 'package:iris_dp/features/technical_script/technical_script_export.dart';
 import 'package:iris_dp/features/technical_script/technical_script_settings.dart';
 import 'package:iris_dp/shared/pdf_export/technical_script_pdf.dart';
@@ -152,6 +153,61 @@ void main() {
       archive.files.where((f) => f.name.startsWith('word/media/')),
       hasLength(2),
     );
+  });
+
+  test('la planta sale en el PDF y el Word: la dibujada y sus bocetos, y se '
+      'va con su columna', () async {
+    final shots = await db.getShotsForProject(projectId);
+    const strokes =
+        '{"strokes":[{"id":"a","tool":"pen","colorArgb":4294901760,'
+        '"width":6,"points":[{"x":0.2,"y":0.2},{"x":0.6,"y":0.5},'
+        '{"x":0.3,"y":0.7}]}]}';
+    Future<void> draw(String type, int id) => db.saveProjectAnnotationDocument(
+      projectId: projectId,
+      targetType: type,
+      targetId: '$id',
+      documentJson: strokes,
+      documentSchemaVersion: 1,
+    );
+    // Plano 1: planta dibujada a mano. Plano 2: una imagen y un boceto
+    // dibujado en Plantas de cámara y luz.
+    await draw('camera_plan_shot', shots[0].id);
+    final setupId = await db.insertLightSetup(
+      LightSetupsCompanion.insert(projectId: projectId, name: 'Boceto'),
+    );
+    await draw('camera_plan_light_setup', setupId);
+    await db.updateShotFields(
+      shots[1].id,
+      ShotsCompanion(cameraPlanImagePath: Value(shots[0].referenceImagePath)),
+    );
+    await addShotPlanSketchSetup(db: db, shot: shots[1], setupId: setupId);
+
+    final doc = await build();
+    expect(doc.columns.map((c) => c.key), contains('planta'));
+    final rows = doc.sections.first.rows;
+    expect(rows[0].planImages, hasLength(1));
+    expect(rows[1].planImages, hasLength(2));
+    // Un PNG de verdad.
+    expect(rows[0].planImages.single.sublist(1, 4), ascii.encode('PNG'));
+
+    final pdf = await TechnicalScriptPdfExporter.buildBytes(doc);
+    expect(ascii.decode(pdf.sublist(0, 5)), '%PDF-');
+    final out = Platform.environment['EXPORT_OUT'];
+    if (out != null) File('$out/guion_planta.pdf').writeAsBytesSync(pdf);
+    final docx = TechnicalScriptDocxExporter.buildBytes(doc);
+    if (out != null) File('$out/guion_planta.docx').writeAsBytesSync(docx);
+    final media = ZipDecoder()
+        .decodeBytes(docx)
+        .files
+        .where((f) => f.name.startsWith('word/media/'));
+    // La referencia del plano 1 y las tres de planta.
+    expect(media, hasLength(4));
+
+    final hidden = await build(
+      const TechnicalScriptSettings(hiddenColumns: {ScriptColumn.planta}),
+    );
+    expect(hidden.columns.map((c) => c.key), isNot(contains('planta')));
+    expect(hidden.sections.first.rows[0].planImages, isEmpty);
   });
 
   test('el PDF se genera', () async {

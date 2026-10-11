@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -84,6 +86,104 @@ class PlanThumbnail extends StatelessWidget {
     return bounds;
   }
 
+  /// Escala y desplazamiento para que todo quepa en [size].
+  static ({double scale, Offset offset}) _frame(
+    Size size, {
+    required List<PlanElement> all,
+    required Rect? focus,
+    required List<PlanZone> zones,
+    required Rect? drawn,
+  }) {
+    var bounds =
+        focus ??
+        (all.isNotEmpty
+            ? Rect.fromCircle(center: all.first.position, radius: 1)
+            : zones.isNotEmpty
+            ? zones.first.rect
+            : drawn!);
+    for (final el in focus == null ? all : const <PlanElement>[]) {
+      bounds = bounds.expandToInclude(
+        Rect.fromCircle(center: el.position, radius: 1),
+      );
+      if (PlanSegment.isSegment(el)) {
+        bounds = bounds.expandToInclude(
+          Rect.fromCircle(center: PlanSegment.end(el), radius: 1),
+        );
+      }
+      for (final p in el.pathPoints) {
+        bounds = bounds.expandToInclude(Rect.fromCircle(center: p, radius: 1));
+      }
+    }
+    if (focus == null) {
+      for (final zone in zones) {
+        bounds = bounds.expandToInclude(zone.rect);
+      }
+    }
+    // Lo dibujado a mano entra siempre en el encuadre, aunque se salga de
+    // la zona del set.
+    if (drawn != null) bounds = bounds.expandToInclude(drawn);
+    bounds = bounds.inflate(focus == null ? _margin : 30);
+    final scale = math.min(
+      1.0,
+      math.min(size.width / bounds.width, size.height / bounds.height),
+    );
+    return (
+      scale: scale,
+      offset: size.center(Offset.zero) - bounds.center * scale,
+    );
+  }
+
+  /// La planta en una imagen PNG sobre papel blanco, para el PDF y el Word.
+  /// Nulo si no hay nada que pintar.
+  static Future<Uint8List?> renderPng({
+    required List<PlanElement> elements,
+    List<PlanElement> inherited = const [],
+    List<AnnotationDocument> drawings = const [],
+    Rect? focus,
+    Size size = const Size(640, 420),
+  }) async {
+    final all = [...inherited, ...elements];
+    final drawn = drawingBounds(drawings);
+    if (all.isEmpty && drawn == null) return null;
+    final (:scale, :offset) = _frame(
+      size,
+      all: all,
+      focus: focus,
+      zones: const [],
+      drawn: drawn,
+    );
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder, Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, Paint()..color = Colors.white);
+    canvas.clipRect(Offset.zero & size);
+    CameraPlanPainter(
+      elements: elements,
+      inheritedElements: inherited,
+      inheritedOpacity: 0.55,
+      showGrid: false,
+      palette: AppPalette.light,
+      scale: scale,
+      offset: offset,
+    ).paint(canvas, size);
+    for (final drawing in drawings) {
+      AnnotationPainter(
+        document: drawing,
+        viewport: AnnotationViewport(
+          documentSize: drawingSheet,
+          offset: offset,
+          scale: scale,
+        ),
+      ).paint(canvas, size);
+    }
+    final image = await recorder.endRecording().toImage(
+      size.width.round(),
+      size.height.round(),
+    );
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    return data?.buffer.asUint8List();
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -101,42 +201,13 @@ class PlanThumbnail extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
-        var bounds =
-            focus ??
-            (all.isNotEmpty
-                ? Rect.fromCircle(center: all.first.position, radius: 1)
-                : zones.isNotEmpty
-                ? zones.first.rect
-                : drawn!);
-        for (final el in focus == null ? all : const <PlanElement>[]) {
-          bounds = bounds.expandToInclude(
-            Rect.fromCircle(center: el.position, radius: 1),
-          );
-          if (PlanSegment.isSegment(el)) {
-            bounds = bounds.expandToInclude(
-              Rect.fromCircle(center: PlanSegment.end(el), radius: 1),
-            );
-          }
-          for (final p in el.pathPoints) {
-            bounds = bounds.expandToInclude(
-              Rect.fromCircle(center: p, radius: 1),
-            );
-          }
-        }
-        if (focus == null) {
-          for (final zone in zones) {
-            bounds = bounds.expandToInclude(zone.rect);
-          }
-        }
-        // Lo dibujado a mano entra siempre en el encuadre, aunque se salga
-        // de la zona del set.
-        if (drawn != null) bounds = bounds.expandToInclude(drawn);
-        bounds = bounds.inflate(focus == null ? _margin : 30);
-        final scale = math.min(
-          1.0,
-          math.min(size.width / bounds.width, size.height / bounds.height),
+        final (:scale, :offset) = _frame(
+          size,
+          all: all,
+          focus: focus,
+          zones: zones,
+          drawn: drawn,
         );
-        final offset = size.center(Offset.zero) - bounds.center * scale;
 
         final plan = CustomPaint(
           size: size,

@@ -14,6 +14,8 @@ import '../../core/weather/weather_models.dart';
 import '../../core/weather/weather_service.dart';
 import '../../core/weather/weather_summary.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
+import '../camera_plan/plan_data.dart';
+import '../camera_plan/plan_thumbnail.dart';
 import 'table/script_sheet_theme.dart';
 import 'technical_script_settings.dart';
 
@@ -45,6 +47,8 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
     AppPalette.dark,
   );
 
+  final plans = await _loadPlans(db, projectId, settings);
+
   final shotsByScene = <int, List<Shot>>{};
   for (final shot in shots) {
     shotsByScene.putIfAbsent(shot.sceneId, () => []).add(shot);
@@ -54,7 +58,7 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
   for (final scene in scenes) {
     final rows = <ScriptDocRow>[];
     for (final shot in shotsByScene[scene.id] ?? const <Shot>[]) {
-      rows.add(await _docRow(db, scene, shot, sheet));
+      rows.add(await _docRow(db, scene, shot, sheet, plans: plans));
     }
     sections.add(
       ScriptDocSection(
@@ -77,6 +81,7 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
         if (!settings.shows(ScriptColumn.fStop)) 'f',
         if (!settings.shows(ScriptColumn.personajes)) 'pers',
         if (!settings.shows(ScriptColumn.duracion)) 'dur',
+        if (!settings.shows(ScriptColumn.planta)) 'planta',
       },
     ),
     sections: sections,
@@ -91,6 +96,7 @@ Future<ScriptDocRow> _docRow(
   Shot shot,
   ScriptSheetTheme sheet, {
   int? order,
+  PlanProjectData? plans,
 }) async {
   final cellFills = <String, int>{};
   final raw = shot.cellStylesJson;
@@ -138,7 +144,65 @@ Future<ScriptDocRow> _docRow(
     fill: rowFill == null ? null : _rgb(rowFill),
     cellFills: cellFills,
     images: images,
+    planImages: plans == null ? const [] : await _planImages(plans, shot),
   );
+}
+
+/// Las plantas del proyecto, para pintar la columna de planta; nulo si la
+/// columna está oculta.
+Future<PlanProjectData?> _loadPlans(
+  AppDatabase db,
+  int projectId,
+  TechnicalScriptSettings settings,
+) async {
+  if (!settings.shows(ScriptColumn.planta)) return null;
+  return PlanProjectData(
+    sites: await db.watchSitesForProject(projectId).first,
+    sets: await db.watchLocationsForProject(projectId).first,
+    setups: await db.getLightSetupsForProject(projectId),
+    scenes: await db.watchScenesForProject(projectId).first,
+    shots: await db.getShotsForProject(projectId),
+    elementRows: await db.watchCameraPlanElementsForProject(projectId).first,
+    drawingRows: await db.watchPlanAnnotationDocuments(projectId).first,
+  );
+}
+
+/// Lo que sale en la celda de planta de un plano: su planta dibujada, si
+/// tiene algo propio, y después sus bocetos en su orden.
+Future<List<Uint8List>> _planImages(PlanProjectData plans, Shot shot) async {
+  final images = <Uint8List>[];
+  final own = [...plans.lightOfShot(shot), ...plans.ownOfShot(shot)];
+  final drawings = plans.drawingsOfShot(shot);
+  if (own.isNotEmpty || drawings.isNotEmpty) {
+    final png = await PlanThumbnail.renderPng(
+      elements: own,
+      inherited: plans.baseOfShot(shot),
+      drawings: drawings,
+      focus: plans.zoneOf(plans.set(plans.setIdOfShot(shot))),
+    );
+    if (png != null) images.add(png);
+  }
+  for (final entry in planSketchEntriesOf(shot)) {
+    final setupId = planSketchSetupId(entry);
+    if (setupId == null) {
+      final bytes = await PdfSafeImage.loadFromPathMaxEdge(
+        entry,
+        maxEdge: 1200,
+      );
+      if (bytes != null) images.add(bytes);
+      continue;
+    }
+    final setup = plans.setup(setupId);
+    if (setup == null) continue;
+    final png = await PlanThumbnail.renderPng(
+      elements: plans.ownOfSetup(setup),
+      inherited: plans.inheritedOfSetup(setup),
+      drawings: plans.drawingsOfSetup(setup),
+      focus: plans.zoneOf(plans.set(setup.locationBasePlanId)),
+    );
+    if (png != null) images.add(png);
+  }
+  return images;
 }
 
 const _months = [
@@ -244,6 +308,7 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
     settings.copyWith(view: ScriptView.sheet),
     AppPalette.dark,
   );
+  final plans = await _loadPlans(db, day.projectId, settings);
   final sceneById = {for (final s in scenes) s.id: s};
   final shotById = {for (final s in shots) s.id: s};
   final site = sites.where((s) => s.id == day.locationSiteId).firstOrNull;
@@ -275,7 +340,7 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
       current = scene;
     }
     order++;
-    rows.add(await _docRow(db, scene, shot, sheet, order: order));
+    rows.add(await _docRow(db, scene, shot, sheet, order: order, plans: plans));
   }
   close();
 
@@ -307,6 +372,7 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
           if (!settings.shows(ScriptColumn.fStop)) 'f',
           if (!settings.shows(ScriptColumn.personajes)) 'pers',
           if (!settings.shows(ScriptColumn.duracion)) 'dur',
+          if (!settings.shows(ScriptColumn.planta)) 'planta',
         },
       ),
     ],

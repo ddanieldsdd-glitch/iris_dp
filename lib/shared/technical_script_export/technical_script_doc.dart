@@ -46,6 +46,7 @@ const kScriptDocColumns = [
   ScriptDocColumn('dur', 'DUR.', 700, centered: true),
   ScriptDocColumn('action', 'ACCIÓN', 3570),
   ScriptDocColumn('ref', 'REFERENCIA', 2625, centered: true),
+  ScriptDocColumn('planta', 'PLANTA', 2100, centered: true),
   ScriptDocColumn('notes', 'APUNTES', 2190),
 ];
 
@@ -83,12 +84,23 @@ class ScriptDocRow {
   /// formato que PDF y Word admiten (PNG o JPEG).
   final List<Uint8List> images;
 
+  /// Imágenes de la celda de planta: la planta dibujada y sus bocetos.
+  final List<Uint8List> planImages;
+
   const ScriptDocRow({
     required this.cells,
     this.fill,
     this.cellFills = const {},
     this.images = const [],
+    this.planImages = const [],
   });
+
+  /// Imágenes de una columna de imágenes; nulo si la columna es de texto.
+  List<Uint8List>? imagesOf(String column) => switch (column) {
+    'ref' => images,
+    'planta' => planImages,
+    _ => null,
+  };
 
   /// La primera imagen, si hay alguna.
   Uint8List? get image => images.isEmpty ? null : images.first;

@@ -158,12 +158,14 @@ class TechnicalScriptPdfExporter {
                     children: [
                       for (final column in doc.columns)
                         cell(
-                          column.key == 'ref' && row.images.isNotEmpty
+                          (row.imagesOf(column.key) ?? const []).isNotEmpty
                               ? pw.Column(
                                   mainAxisSize: pw.MainAxisSize.min,
                                   children: [
                                     for (final (i, image)
-                                        in row.images.indexed) ...[
+                                        in row
+                                            .imagesOf(column.key)!
+                                            .indexed) ...[
                                       if (i > 0) pw.SizedBox(height: 3),
                                       pw.Image(
                                         pw.MemoryImage(image),

@@ -155,10 +155,11 @@ class TechnicalScriptDocxExporter {
         for (var i = 0; i < doc.columns.length; i++) {
           final column = doc.columns[i];
           String content;
-          if (column.key == 'ref' && row.images.isNotEmpty) {
+          final pictures = row.imagesOf(column.key) ?? const [];
+          if (pictures.isNotEmpty) {
             // Un párrafo por imagen: los encuadres van uno debajo de otro.
             final paragraphs = StringBuffer();
-            for (final bytes in row.images) {
+            for (final bytes in pictures) {
               final picture = _fitImage(bytes, widths[i] - 200);
               if (picture == null) continue;
               imageIndex++;

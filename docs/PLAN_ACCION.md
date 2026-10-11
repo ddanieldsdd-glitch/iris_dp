@@ -160,6 +160,8 @@ Añadida el 2026-10-06. Rama `plan/g1-guion-tecnico` (worktree `iris_dp_guion`).
 - [x] **Ubicación en Localizaciones (2026-10-08):** la ubicación de cada localización se fija en su ficha de Localizaciones (buscador o coordenadas pegadas, sol de un día, abrir en Maps) y, más ligera, en la sección Localización de la biblia; la jornada solo la lee. Las migraciones 45 y 46 añaden cada columna solo si falta.
 - [x] **G5. Guion técnico de rodaje.** Jornada con fecha, lugar, meteorología y orden de rodaje, y su PDF y Word. Pendiente: ver una jornada desde la pantalla del guion técnico.
 
+- [x] **G6. Planta y bocetos en el guion técnico (2026-10-11).** La casilla Planta admite bocetos: imágenes (pegar, arrastrar, moodboard) y bocetos dibujados en Plantas de cámara y luz («Boceto nuevo», a mano alzada o con elementos; son esquemas de luz en estado `boceto`, guardados en el plano como `setup:<id>` sin cambiar su esquema de luz, nunca automáticos). Las imágenes de una casilla se ordenan y se copian al portapapeles (⌘C/⌘V). El texto pegado entra limpio. El PDF y el Word llevan la columna PLANTA (planta dibujada + bocetos) cuando está visible. Pendiente: la planta exportada sale con el fondo oscuro del lienzo; versión clara para papel si Daniel la pide.
+
 ## Fase 4 — Material técnico (objetivo 2)
 
 Añadida el 2026-10-03. Se hace después de Concepto y antes de las secciones técnicas de la biblia (Cámara, Óptica, Exposición, Formato), para que estas lean datos reales.
