@@ -226,6 +226,17 @@ class SyncPlanBuilder {
 
       if (cloudHash == localHash ||
           ProjectContentBundle.contentMatchesSnapshot(localHash, snap)) {
+        // Iguales: este es el nuevo punto de partida. Guardarlo deja las
+        // huellas en la base (y en SHA-256) aunque no haya nada que subir.
+        final synced = ContentSyncBase(
+          localHash: localHash,
+          cloudHash: cloudHash ?? localHash,
+        );
+        final base = await ContentSyncBaseStore.load(_db, local.id);
+        if (base?.localHash != synced.localHash ||
+            base?.cloudHash != synced.cloudHash) {
+          await ContentSyncBaseStore.save(_db, local.id, synced);
+        }
         continue;
       }
 
