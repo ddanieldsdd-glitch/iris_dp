@@ -412,34 +412,62 @@ void main() {
     expect(shots.first.cellStylesJson, '{"action":"green"}');
   });
 
-  test('la copia antes de migrar se hace una vez y solo si hace falta', () {
+  test('la copia antes de migrar se hace una vez por día y solo si hace falta',
+      () {
     final dir = Directory.systemTemp.createTempSync('iris_backup_test');
     addTearDown(() => dir.deleteSync(recursive: true));
     final path = '${dir.path}/iris_dp.db';
+    final today = DateTime(2026, 10, 15);
     File(path).writeAsStringSync('datos');
 
     // Base recién creada o ya migrada: nada que copiar.
-    expect(backupBeforeSchemaUpgrade(path, 0), isNull);
-    expect(backupBeforeSchemaUpgrade(path, kSchemaVersion), isNull);
+    expect(backupBeforeSchemaUpgrade(path, 0, now: today), isNull);
+    expect(backupBeforeSchemaUpgrade(path, kSchemaVersion, now: today), isNull);
 
-    final copy = backupBeforeSchemaUpgrade(path, kSchemaVersion - 1);
-    expect(copy, '$path.antes-de-esquema-$kSchemaVersion');
+    final copy = backupBeforeSchemaUpgrade(path, kSchemaVersion - 1, now: today);
+    expect(copy, '$path.antes-de-esquema-$kSchemaVersion-2026-10-15');
     expect(File(copy!).readAsStringSync(), 'datos');
 
-    // Una segunda apertura no pisa la copia buena.
+    // Una segunda apertura el mismo día no pisa la copia buena.
     File(path).writeAsStringSync('datos ya migrados');
-    backupBeforeSchemaUpgrade(path, kSchemaVersion - 1);
+    backupBeforeSchemaUpgrade(path, kSchemaVersion - 1, now: today);
     expect(File(copy).readAsStringSync(), 'datos');
   });
 
-  test('cada subida de esquema deja copia y se guardan las tres últimas', () {
+  test('una copia vieja de la misma versión no sustituye a la de hoy', () {
+    // Pasó el 2026-10-15: una app anterior rebajó el número de versión y al
+    // volver a migrar se reutilizó la copia del día 8.
     final dir = Directory.systemTemp.createTempSync('iris_backup_test');
     addTearDown(() => dir.deleteSync(recursive: true));
     final path = '${dir.path}/iris_dp.db';
-    for (var target = 45; target <= 49; target++) {
+    File('$path.antes-de-esquema-46').writeAsStringSync('del día 8');
+    File(path).writeAsStringSync('de hoy');
+
+    final copy = backupBeforeSchemaUpgrade(
+      path,
+      44,
+      targetVersion: 46,
+      now: DateTime(2026, 10, 15),
+    );
+
+    expect(File(copy!).readAsStringSync(), 'de hoy');
+    expect(File('$path.antes-de-esquema-46').existsSync(), isTrue);
+  });
+
+  test('se guardan las tres copias más recientes', () {
+    final dir = Directory.systemTemp.createTempSync('iris_backup_test');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final path = '${dir.path}/iris_dp.db';
+    File('$path.antes-de-esquema-45').writeAsStringSync('sin día');
+    for (var target = 46; target <= 49; target++) {
       File(path).writeAsStringSync('esquema ${target - 1}');
       File('$path-wal').writeAsStringSync('wal ${target - 1}');
-      backupBeforeSchemaUpgrade(path, target - 1, targetVersion: target);
+      backupBeforeSchemaUpgrade(
+        path,
+        target - 1,
+        targetVersion: target,
+        now: DateTime(2026, 10, target - 30),
+      );
     }
     final copies =
         dir
@@ -449,15 +477,15 @@ void main() {
             .toList()
           ..sort();
     expect(copies, [
-      'iris_dp.db.antes-de-esquema-47',
-      'iris_dp.db.antes-de-esquema-47-wal',
-      'iris_dp.db.antes-de-esquema-48',
-      'iris_dp.db.antes-de-esquema-48-wal',
-      'iris_dp.db.antes-de-esquema-49',
-      'iris_dp.db.antes-de-esquema-49-wal',
+      'iris_dp.db.antes-de-esquema-47-2026-10-17',
+      'iris_dp.db.antes-de-esquema-47-2026-10-17-wal',
+      'iris_dp.db.antes-de-esquema-48-2026-10-18',
+      'iris_dp.db.antes-de-esquema-48-2026-10-18-wal',
+      'iris_dp.db.antes-de-esquema-49-2026-10-19',
+      'iris_dp.db.antes-de-esquema-49-2026-10-19-wal',
     ]);
     expect(
-      File('$path.antes-de-esquema-49').readAsStringSync(),
+      File('$path.antes-de-esquema-49-2026-10-19').readAsStringSync(),
       'esquema 48',
     );
   });
