@@ -84,18 +84,40 @@ class CloudMediaService {
       );
     }
 
-    final uploadResponse = await _uploadToCloudinary(
-      bytes: optimized.bytes,
-      publicId: publicId,
-      extension: optimized.extension,
-    );
-    if (uploadResponse == null) return null;
+    // La misma imagen ya está en la nube con otra clave (p. ej. la de posición
+    // de antes de los uid): se registra con esta sin volver a subirla.
+    final same = existing == null
+        ? await _client
+              .from('media_assets')
+              .select('public_id, delivery_url, bytes_stored')
+              .eq('project_id', projectCloudId)
+              .eq('content_hash', contentHash)
+              .not('public_id', 'is', null)
+              .limit(1)
+              .maybeSingle()
+        : null;
 
-    final storedBytes =
-        (uploadResponse['bytes'] as num?)?.toInt() ?? optimized.optimizedBytes;
-    final returnedPublicId =
-        uploadResponse['public_id'] as String? ?? publicId;
-    final deliveryUrl = CloudinaryConfig.deliveryUrl(returnedPublicId);
+    final String returnedPublicId;
+    final int storedBytes;
+    if (same != null) {
+      returnedPublicId = same['public_id'] as String;
+      storedBytes =
+          (same['bytes_stored'] as num?)?.toInt() ?? optimized.optimizedBytes;
+    } else {
+      final uploadResponse = await _uploadToCloudinary(
+        bytes: optimized.bytes,
+        publicId: publicId,
+        extension: optimized.extension,
+      );
+      if (uploadResponse == null) return null;
+      storedBytes =
+          (uploadResponse['bytes'] as num?)?.toInt() ??
+          optimized.optimizedBytes;
+      returnedPublicId = uploadResponse['public_id'] as String? ?? publicId;
+    }
+    final deliveryUrl =
+        same?['delivery_url'] as String? ??
+        CloudinaryConfig.deliveryUrl(returnedPublicId);
 
     final row = {
       'project_id': projectCloudId,
