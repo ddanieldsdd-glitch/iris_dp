@@ -233,7 +233,7 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
     final db = ref.read(databaseProvider);
     final locs = await db.watchLocationsForProject(projectId).first;
     final scenes = await db.watchScenesForProject(projectId).first;
-    final catalog = await MoodboardCatalogService.loadForProject(projectId);
+    final catalog = await MoodboardCatalogService.loadForProject(db, projectId);
     if (!mounted) return;
 
     final intExt = <String>{
@@ -487,6 +487,7 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
     );
     if (value == null || value.isEmpty || !mounted) return;
     await MoodboardCatalogService.addCustomOption(
+      db: ref.read(databaseProvider),
       projectId: projectId,
       key: key,
       value: value,

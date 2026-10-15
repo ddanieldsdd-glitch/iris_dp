@@ -505,6 +505,14 @@ class AppDatabase extends _$AppDatabase {
           );
         }
       }
+      if (from < 48) {
+        // Huellas de sincronización y catálogo del moodboard: de las
+        // preferencias del equipo a la base (B2). Se copian la primera vez
+        // que se leen.
+        await add(projects, projects.contentSyncBaseLocal);
+        await add(projects, projects.contentSyncBaseCloud);
+        await add(projects, projects.moodboardCatalogJson);
+      }
     },
   );
 
@@ -4624,7 +4632,7 @@ LazyDatabase _openConnection() {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 47;
+const kSchemaVersion = 48;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

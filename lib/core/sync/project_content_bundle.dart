@@ -551,6 +551,9 @@ class ProjectContentBundle {
         'shootingStartDate': project.shootingStartDate,
         'shootingEndDate': project.shootingEndDate,
         'scriptFileName': project.scriptFileName,
+        // Solo si hay: no cambia la huella de los proyectos que no lo usan.
+        if (project.moodboardCatalogJson != null)
+          'moodboardCatalogJson': project.moodboardCatalogJson,
       },
       'locationSites': sites
           .map(
@@ -1023,6 +1026,9 @@ class ProjectContentBundle {
           ),
           shootingEndDate: Value(projectFields['shootingEndDate'] as String?),
           scriptFileName: Value(projectFields['scriptFileName'] as String?),
+          moodboardCatalogJson: projectFields.containsKey('moodboardCatalogJson')
+              ? Value(projectFields['moodboardCatalogJson'] as String?)
+              : const Value.absent(),
         ),
       );
     }

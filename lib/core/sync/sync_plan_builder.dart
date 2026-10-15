@@ -254,7 +254,7 @@ class SyncPlanBuilder {
       // Quién ha cambiado desde la última sincronización se decide por las
       // huellas guardadas entonces, no por horas: una descarga reemplaza el
       // contenido local y no puede depender del reloj.
-      final base = await ContentSyncBaseStore.load(local.id);
+      final base = await ContentSyncBaseStore.load(_db, local.id);
       if (base == null) {
         if (localSummary.isEmpty &&
             !await ProjectContentBundle.hasLocalContent(_db, local.id)) {

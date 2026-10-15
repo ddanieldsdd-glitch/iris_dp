@@ -125,8 +125,7 @@ void main() {
       'content': bundle,
       'content_hash': hash,
     };
-    await ContentSyncBaseStore.save(
-      projectId,
+    await ContentSyncBaseStore.save(db, projectId,
       ContentSyncBase(localHash: hash, cloudHash: hash),
     );
     return hash;
@@ -189,7 +188,7 @@ void main() {
       );
       expect(cloud.rows[cloudId]!['content_hash'], localHash);
       expect(
-        (await ContentSyncBaseStore.load(projectId))!.cloudHash,
+        (await ContentSyncBaseStore.load(db, projectId))!.cloudHash,
         localHash,
       );
       expect(await pendingQueue(), isEmpty);

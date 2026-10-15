@@ -79,8 +79,7 @@ class ProjectContentSyncService {
     ));
     // Este dispositivo y la nube quedan iguales: punto de partida para
     // saber quién cambia después.
-    await ContentSyncBaseStore.save(
-      localProjectId,
+    await ContentSyncBaseStore.save(_db, localProjectId,
       ContentSyncBase(localHash: hash, cloudHash: hash),
     );
   }
@@ -150,8 +149,7 @@ class ProjectContentSyncService {
     }
 
     await ProjectContentBundle.importBundle(_db, localProjectId, bundle);
-    await ContentSyncBaseStore.save(
-      localProjectId,
+    await ContentSyncBaseStore.save(_db, localProjectId,
       ContentSyncBase(
         localHash: await ProjectContentBundle.computeLocalHash(
           _db,
@@ -267,7 +265,7 @@ class CloudSyncQueueService {
 
         // Sin sincronización previa no se sabe quién tiene la buena: lo
         // decide el usuario en el plan.
-        final base = await ContentSyncBaseStore.load(localId);
+        final base = await ContentSyncBaseStore.load(_db, localId);
         if (base == null) continue;
         final local = await ProjectContentBundle.export(_db, localId);
         if (!ProjectContentBundle.bundleMatchesHash(local, base.localHash)) {
