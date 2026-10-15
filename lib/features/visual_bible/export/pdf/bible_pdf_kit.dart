@@ -398,10 +398,7 @@ class BiblePdfKit {
                     gradient: pw.LinearGradient(
                       begin: pw.Alignment.topCenter,
                       end: pw.Alignment.bottomCenter,
-                      colors: [
-                        PdfColor(0, 0, 0, 0.1),
-                        PdfColor(0, 0, 0, 0.8),
-                      ],
+                      colors: [PdfColor(0, 0, 0, 0.1), PdfColor(0, 0, 0, 0.8)],
                     ),
                   ),
                 ),
@@ -950,9 +947,35 @@ class BiblePdfKit {
         '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
     final ratio = metrics.ratioOption;
     final recipe = metrics.usesColors ? null : metrics.recipe(gels);
+    final cct = !metrics.usesColors && metrics.sources.isNotEmpty;
+    String stops(double s) => s == 0
+        ? 'clave'
+        : '${s > 0 ? '+' : ''}${s % 1 == 0 ? s.toInt() : s} st'.replaceAll(
+            '.',
+            ',',
+          );
     final rows = <(String, String)>[
-      if (!metrics.usesColors && metrics.kelvin != null)
-        ('Temperatura', '${metrics.kelvin} K'),
+      if (cct)
+        for (final s in metrics.sources)
+          (
+            [
+              s.role.label,
+              if (s.name.trim().isNotEmpty) s.name.trim(),
+            ].join(' · '),
+            [
+              'CCT ${s.kelvin} K',
+              if (s.tint.abs() >= 0.5) LightingMetrics(tint: s.tint).tintLabel,
+              stops(s.stops),
+              s.soft ? 'suave' : 'dura',
+            ].join(' · '),
+          )
+      else if (!metrics.usesColors && metrics.kelvin != null)
+        ('Temperatura', 'CCT ${metrics.kelvin} K'),
+      if (!cct &&
+          !metrics.usesColors &&
+          metrics.tint != null &&
+          metrics.tint!.abs() >= 0.5)
+        ('Tinte', metrics.tintLabel),
       if (!metrics.usesColors &&
           metrics.tint != null &&
           metrics.tint!.abs() >= 0.5)
@@ -970,15 +993,18 @@ class BiblePdfKit {
       if (metrics.usesColors)
         for (final c in metrics.colors)
           (
-            [c.role.label, if (c.name.trim().isNotEmpty) c.name.trim()].join(
-              ' · ',
-            ),
-            '${c.hsiLabel}   ${c.rgbLabel}',
+            [
+              c.role.label,
+              if (c.name.trim().isNotEmpty) c.name.trim(),
+            ].join(' · '),
+            'HSI · ${c.hsiLabel}   ${c.rgbLabel}',
           ),
     ];
     final swatches = <(String, String)>[
       if (metrics.usesColors)
         for (final c in metrics.colors) (hex(c.rgb), c.role.label)
+      else if (cct)
+        for (final s in metrics.sources) (hex(s.rgb), '${s.kelvin} K')
       else if (metrics.color != null)
         (hex(metrics.color!), '${metrics.kelvin} K'),
     ];
@@ -1224,7 +1250,8 @@ class BiblePdfKit {
                                   ),
                                 ),
                                 pw.Spacer(
-                                  flex: 1000 -
+                                  flex:
+                                      1000 -
                                       (meter.fraction! * 1000).round().clamp(
                                         1,
                                         999,

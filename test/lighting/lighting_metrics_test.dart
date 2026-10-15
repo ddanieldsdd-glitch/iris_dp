@@ -7,6 +7,46 @@ import 'package:iris_dp/shared/visual_bible/lighting_metrics.dart';
 import '../support/snapshot.dart';
 
 void main() {
+  test('fuentes CCT: se guardan, lo antiguo es la clave y el ratio sale de '
+      'clave y relleno', () {
+    const legacy = LightingMetrics(kelvin: 3200, tint: 6);
+    expect(legacy.cctSources.single.kelvin, 3200);
+    expect(legacy.cctSources.single.tint, 6);
+
+    final withFill = legacy.withSources([
+      ...legacy.cctSources,
+      const CctSource(
+        role: LightColorRole.fill,
+        kelvin: 5600,
+        stops: -2,
+        soft: true,
+        name: 'Rebote',
+      ),
+    ]);
+    expect(withFill.derivedRatio, 4);
+    expect(withFill.effectiveRatio, 4);
+    expect(withFill.ratioOption?.ratio, 4);
+    expect(withFill.kelvin, 3200);
+    expect(withFill.mix.map((m) => (m.$2 * 100).round()), [80, 20]);
+
+    final back = LightingMetrics.fromJson(withFill.encode());
+    expect(back.sources, hasLength(2));
+    expect(back.sources.last.name, 'Rebote');
+    expect(back.sources.last.soft, isTrue);
+    expect(back.sources.last.stops, -2);
+    // Un ratio fijado a mano manda.
+    expect(back.copyWith(ratio: 8).effectiveRatio, 8);
+  });
+
+  test('las escenas de partida rellenan fuentes o colores', () {
+    final sodium = kLightingPresets.first.applyTo(const LightingMetrics());
+    expect(sodium.colorMode, isFalse);
+    expect(sodium.kelvin, 2000);
+    expect(sodium.sources, hasLength(2));
+    final party = kLightingPresets.last.applyTo(const LightingMetrics());
+    expect(party.usesColors, isTrue);
+  });
+
   test('el ratio se da también en stops', () {
     expect(kContrastRatios.first.stopsLabel, 'sin diferencia');
     expect(const ContrastRatioOption(2, '').stopsLabel, '1 stop');
@@ -90,7 +130,12 @@ void main() {
   });
 
   test('lo guardado va y vuelve; de lo antiguo solo lo que se tocó', () {
-    const m = LightingMetrics(kelvin: 4300, tint: -8, ratio: 4, sourceKelvin: 3200);
+    const m = LightingMetrics(
+      kelvin: 4300,
+      tint: -8,
+      ratio: 4,
+      sourceKelvin: 3200,
+    );
     final back = LightingMetrics.fromJson(m.encode());
     expect(back.kelvin, 4300);
     expect(back.tint, -8);
@@ -172,11 +217,16 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.text('Color'));
+    // Configurado, nace plegado: una tira con lo puesto.
+    expect(find.text('CCT'), findsOneWidget);
+    expect(find.textContaining('Clave · 3200 K'), findsOneWidget);
+    await tester.tap(find.text('Editar'));
+    await tester.pump();
+    await tester.tap(find.text('HSI'));
     await tester.pump();
     expect(value.colorMode, isTrue);
-    // La temperatura deja de verse, pero sigue guardada.
-    expect(find.text('TEMPERATURA DE COLOR'), findsNothing);
+    // Las fuentes CCT dejan de verse, pero siguen guardadas.
+    expect(find.text('FUENTES DE LUZ'), findsNothing);
     expect(value.kelvin, 3200);
 
     await tester.tap(find.text('Magenta'));
@@ -205,11 +255,19 @@ void main() {
 
     await saveSnapshot(tester, 'luz_color');
 
-    // Volver a luz blanca no borra los colores.
-    await tester.tap(find.text('Luz blanca'));
+    // Volver a CCT no borra los colores.
+    await tester.tap(find.text('CCT'));
     await tester.pump();
-    expect(find.text('TEMPERATURA DE COLOR'), findsOneWidget);
+    expect(find.text('FUENTES DE LUZ'), findsOneWidget);
     expect(value.colors.length, 3);
+
+    // «Listo» lo pliega en su tira.
+    await tester.tap(find.text('HSI'));
+    await tester.pump();
+    await tester.tap(find.text('Listo'));
+    await tester.pump();
+    expect(find.text('PARA PROGRAMAR LOS APARATOS'), findsNothing);
+    expect(find.textContaining('Clave · HSI'), findsOneWidget);
   });
 
   testWidgets('el widget nace vacío, enseña todos los ratios y se elige '
@@ -243,26 +301,35 @@ void main() {
       ),
     );
     expect(tester.takeException(), isNull);
-    // Vacío: ni valor ni receta.
-    expect(find.text('EL COLOR DE ESTA LUZ'), findsNothing);
+    // Vacío: abierto, sin fuentes y con todos los ratios.
+    expect(find.text('FUENTES DE LUZ'), findsOneWidget);
     for (final option in kContrastRatios) {
       expect(find.text(option.label), findsOneWidget);
     }
 
-    await tester.tap(find.text('Tungsteno'));
+    // La clave: una fuente, con su temperatura.
+    await tester.tap(find.text('Fuente (clave)'));
+    await tester.pump();
+    expect(value.sources.single.role, LightColorRole.key);
+    await tester.tap(find.byTooltip('Temperatura, tinte y gelatina'));
+    await tester.pump();
+    await tester.tap(find.text('Sodio'));
+    await tester.pump();
+    expect(value.kelvin, 2100);
+    await tester.tap(find.text('Tungsteno').first);
     await tester.pump();
     expect(value.kelvin, 3200);
-    expect(find.text('EL COLOR DE ESTA LUZ'), findsOneWidget);
     expect(find.textContaining('muy cálida'), findsOneWidget);
 
     await tester.tap(find.text('8:1'));
     await tester.pump();
     expect(value.ratio, 8);
-    expect(find.textContaining('3 stops'), findsOneWidget);
+    expect(find.textContaining('3 stops'), findsWidgets);
 
+    // De qué parte el aparato: la gelatina para llegar.
     await tester.tap(find.text('HMI / luz día'));
     await tester.pump();
-    expect(value.sourceKelvin, 5600);
+    expect(value.sources.single.nativeKelvin, 5600);
     expect(find.textContaining('CTO'), findsWidgets);
     expect(find.textContaining('mired'), findsOneWidget);
 
@@ -270,7 +337,15 @@ void main() {
     final tint = find.bySemanticsLabel('Tinte');
     await tester.tapAt(tester.getTopRight(tint) + const Offset(-20, 12));
     await tester.pump();
+    expect(value.sources.single.tint, greaterThan(0));
     expect(value.tint, greaterThan(0));
+
+    // Un relleno dos stops por debajo: la mezcla de la escena.
+    await tester.tap(find.text('Fuente (relleno)'));
+    await tester.pump();
+    expect(value.sources.last.role, LightColorRole.fill);
+    expect(value.derivedRatio, 4);
+    expect(find.text('MEZCLA DE LA ESCENA'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await saveSnapshot(tester, 'luz_metricas');

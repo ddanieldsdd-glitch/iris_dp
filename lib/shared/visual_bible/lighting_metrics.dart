@@ -146,8 +146,7 @@ class LightColor {
   int get green => (rgb >> 8) & 0xFF;
   int get blue => rgb & 0xFF;
 
-  String get hex =>
-      '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+  String get hex => '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
 
   /// Tono (0–360) y saturación (0–1): con la intensidad, es como se
   /// programa un LED en modo HSI.
@@ -235,6 +234,220 @@ class LightColor {
   ];
 }
 
+/// Una fuente de luz blanca (CCT) de la escena: su papel, su temperatura,
+/// su tinte, cuánto da respecto a la clave y cómo es.
+class CctSource {
+  final LightColorRole role;
+  final int kelvin;
+
+  /// Unidades CC: positivo hacia verde, negativo hacia magenta.
+  final double tint;
+
+  /// Stops respecto a la clave (0 = la clave; −2 = dos stops menos).
+  final double stops;
+
+  /// Suave (difusa) o dura.
+  final bool soft;
+
+  /// Qué es: «Farola de sodio», «Skypanel S60»…
+  final String name;
+
+  /// Temperatura de partida del aparato, para calcular la gelatina.
+  final int? nativeKelvin;
+
+  const CctSource({
+    required this.kelvin,
+    this.role = LightColorRole.key,
+    this.tint = 0,
+    this.stops = 0,
+    this.soft = false,
+    this.name = '',
+    this.nativeKelvin,
+  });
+
+  int get rgb => LightingMetrics.colorOf(kelvin, tint: tint);
+
+  /// Luz relativa a la clave (1 = la clave).
+  double get level => math.pow(2, stops).toDouble();
+
+  /// La misma fuente como luz de color, para la esfera de muestra.
+  LightColor get asLightColor => LightColor(
+    rgb: rgb,
+    name: name,
+    role: role,
+    intensity: level.clamp(0.05, 1.0),
+  );
+
+  /// Gelatina para llegar a [kelvin] desde [nativeKelvin].
+  ColorRecipe? recipe(List<CorrectionGel> gels) => nativeKelvin == null
+      ? null
+      : LightingMetrics(
+          kelvin: kelvin,
+          tint: tint,
+          sourceKelvin: nativeKelvin,
+        ).recipe(gels);
+
+  CctSource copyWith({
+    LightColorRole? role,
+    int? kelvin,
+    double? tint,
+    double? stops,
+    bool? soft,
+    String? name,
+    int? nativeKelvin,
+  }) => CctSource(
+    role: role ?? this.role,
+    kelvin: kelvin ?? this.kelvin,
+    tint: tint ?? this.tint,
+    stops: stops ?? this.stops,
+    soft: soft ?? this.soft,
+    name: name ?? this.name,
+    nativeKelvin: nativeKelvin ?? this.nativeKelvin,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'role': role.name,
+    'kelvin': kelvin,
+    if (tint != 0) 'tint': tint,
+    if (stops != 0) 'stops': stops,
+    if (soft) 'soft': true,
+    if (name.isNotEmpty) 'name': name,
+    if (nativeKelvin != null) 'native': nativeKelvin,
+  };
+
+  static List<CctSource> listFrom(Object? raw) => [
+    if (raw is List)
+      for (final e in raw)
+        if (e is Map && e['kelvin'] is num)
+          CctSource(
+            role: LightColorRole.parse(e['role']),
+            kelvin: (e['kelvin'] as num).round().clamp(1000, 20000),
+            tint: (e['tint'] as num?)?.toDouble() ?? 0,
+            stops: (e['stops'] as num?)?.toDouble() ?? 0,
+            soft: e['soft'] == true,
+            name: e['name']?.toString() ?? '',
+            nativeKelvin: (e['native'] as num?)?.round(),
+          ),
+  ];
+}
+
+/// Escenas de partida: rellenan las fuentes de golpe.
+class LightingPreset {
+  final String name;
+  final bool hsi;
+  final List<CctSource> sources;
+  final List<LightColor> colors;
+  final double? ratio;
+
+  const LightingPreset({
+    required this.name,
+    this.hsi = false,
+    this.sources = const [],
+    this.colors = const [],
+    this.ratio,
+  });
+
+  LightingMetrics applyTo(LightingMetrics base) => hsi
+      ? base.copyWith(colorMode: true, colors: colors, ratio: ratio)
+      : base.withSources(sources).copyWith(colorMode: false, ratio: ratio);
+}
+
+const kLightingPresets = <LightingPreset>[
+  LightingPreset(
+    name: 'Noche de sodio',
+    ratio: 8,
+    sources: [
+      CctSource(
+        role: LightColorRole.key,
+        kelvin: 2000,
+        name: 'Farola de sodio',
+      ),
+      CctSource(
+        role: LightColorRole.back,
+        kelvin: 6500,
+        stops: -2,
+        name: 'Rebote frío',
+      ),
+    ],
+  ),
+  LightingPreset(
+    name: 'Día nublado',
+    ratio: 2,
+    sources: [
+      CctSource(
+        role: LightColorRole.key,
+        kelvin: 6500,
+        soft: true,
+        name: 'Cielo cubierto',
+      ),
+      CctSource(
+        role: LightColorRole.fill,
+        kelvin: 6500,
+        stops: -1,
+        soft: true,
+        name: 'Rebote del suelo',
+      ),
+    ],
+  ),
+  LightingPreset(
+    name: 'Fluorescente',
+    ratio: 2,
+    sources: [
+      CctSource(
+        role: LightColorRole.key,
+        kelvin: 4000,
+        tint: 12,
+        soft: true,
+        name: 'Tubos fluorescentes',
+      ),
+    ],
+  ),
+  LightingPreset(
+    name: 'Interior tungsteno',
+    ratio: 4,
+    sources: [
+      CctSource(
+        role: LightColorRole.key,
+        kelvin: 3200,
+        name: 'Lámpara de mesa',
+      ),
+      CctSource(
+        role: LightColorRole.fill,
+        kelvin: 3200,
+        stops: -2,
+        soft: true,
+        name: 'Rebote en pared',
+      ),
+      CctSource(
+        role: LightColorRole.practical,
+        kelvin: 2700,
+        stops: -1,
+        name: 'Prácticos',
+      ),
+    ],
+  ),
+  LightingPreset(
+    name: 'Fiesta',
+    hsi: true,
+    ratio: 4,
+    colors: [
+      LightColor(rgb: 0xFF1FA2, name: 'Magenta', role: LightColorRole.key),
+      LightColor(
+        rgb: 0x19E3FF,
+        name: 'Cian',
+        role: LightColorRole.back,
+        intensity: 0.7,
+      ),
+      LightColor(
+        rgb: 0x8A2BFF,
+        name: 'Violeta',
+        role: LightColorRole.ambient,
+        intensity: 0.4,
+      ),
+    ],
+  ),
+];
+
 /// Colores de partida habituales en escenas de fiesta, club o neón.
 const kPartyColors = <(String, int)>[
   ('Magenta', 0xFF1FA2),
@@ -269,6 +482,9 @@ class LightingMetrics {
   final List<LightColor> colors;
   final bool colorMode;
 
+  /// Fuentes de luz blanca (CCT). La primera clave da [kelvin] y [tint].
+  final List<CctSource> sources;
+
   const LightingMetrics({
     this.kelvin,
     this.tint,
@@ -276,6 +492,7 @@ class LightingMetrics {
     this.sourceKelvin,
     this.colors = const [],
     this.colorMode = false,
+    this.sources = const [],
   });
 
   static const minKelvin = 1800;
@@ -283,7 +500,76 @@ class LightingMetrics {
   static const maxTint = 30.0;
 
   bool get isEmpty =>
-      kelvin == null && tint == null && ratio == null && colors.isEmpty;
+      kelvin == null &&
+      tint == null &&
+      ratio == null &&
+      colors.isEmpty &&
+      sources.isEmpty;
+
+  /// Las fuentes CCT; sin ninguna puesta, la temperatura de siempre hace de
+  /// clave (así no se pierde lo guardado antes de haber fuentes).
+  List<CctSource> get cctSources => sources.isNotEmpty
+      ? sources
+      : [
+          if (kelvin != null)
+            CctSource(
+              kelvin: kelvin!,
+              tint: tint ?? 0,
+              nativeKelvin: sourceKelvin,
+            ),
+        ];
+
+  /// La clave de las fuentes CCT, si la hay.
+  CctSource? get keySource {
+    final list = cctSources;
+    if (list.isEmpty) return null;
+    return list.where((s) => s.role == LightColorRole.key).firstOrNull ??
+        list.first;
+  }
+
+  /// Ratio que sale de la clave y el relleno (2 stops = 4:1).
+  double? get derivedRatio {
+    final key = keySource;
+    final fill = cctSources
+        .where((s) => s.role == LightColorRole.fill)
+        .firstOrNull;
+    if (key == null || fill == null) return null;
+    return math.pow(2, key.stops - fill.stops).toDouble();
+  }
+
+  /// El ratio fijado o, si no, el que sale de las fuentes.
+  double? get effectiveRatio => ratio ?? derivedRatio;
+
+  /// Luces de la escena para la esfera de muestra: las de color en HSI, las
+  /// fuentes en CCT.
+  List<LightColor> get sceneLights =>
+      colorMode ? colors : [for (final s in sources) s.asLightColor];
+
+  /// Qué parte de la luz de la escena pone cada fuente (color, parte).
+  List<(int rgb, double share)> get mix {
+    final parts = colorMode
+        ? [for (final c in colors) (c.rgb, c.intensity)]
+        : [for (final s in cctSources) (s.rgb, s.level)];
+    final total = parts.fold<double>(0, (a, p) => a + p.$2);
+    if (total <= 0) return const [];
+    return [for (final p in parts) (p.$1, p.$2 / total)];
+  }
+
+  /// Con estas fuentes; la clave fija también la temperatura y el tinte.
+  LightingMetrics withSources(List<CctSource> next) {
+    final key =
+        next.where((s) => s.role == LightColorRole.key).firstOrNull ??
+        next.firstOrNull;
+    return LightingMetrics(
+      kelvin: key?.kelvin ?? kelvin,
+      tint: key?.tint ?? tint,
+      ratio: ratio,
+      sourceKelvin: sourceKelvin,
+      colors: colors,
+      colorMode: colorMode,
+      sources: next,
+    );
+  }
 
   /// Se está diseñando con colores y hay alguno puesto.
   bool get usesColors => colorMode && colors.isNotEmpty;
@@ -295,6 +581,7 @@ class LightingMetrics {
     int? sourceKelvin,
     List<LightColor>? colors,
     bool? colorMode,
+    List<CctSource>? sources,
   }) => LightingMetrics(
     kelvin: kelvin ?? this.kelvin,
     tint: tint ?? this.tint,
@@ -302,6 +589,7 @@ class LightingMetrics {
     sourceKelvin: sourceKelvin ?? this.sourceKelvin,
     colors: colors ?? this.colors,
     colorMode: colorMode ?? this.colorMode,
+    sources: sources ?? this.sources,
   );
 
   /// Lo mismo, con uno de los valores quitado.
@@ -316,6 +604,7 @@ class LightingMetrics {
     sourceKelvin: sourceKelvin,
     colors: colors,
     colorMode: colorMode,
+    sources: sources,
   );
 
   Map<String, dynamic> toJson() => {
@@ -325,6 +614,7 @@ class LightingMetrics {
     if (sourceKelvin != null) 'source': sourceKelvin,
     if (colors.isNotEmpty) 'colors': [for (final c in colors) c.toJson()],
     if (colorMode) 'colorMode': true,
+    if (sources.isNotEmpty) 'sources': [for (final s in sources) s.toJson()],
   };
 
   factory LightingMetrics.fromJson(Object? raw) {
@@ -344,6 +634,7 @@ class LightingMetrics {
       sourceKelvin: (value['source'] as num?)?.round(),
       colors: LightColor.listFrom(value['colors']),
       colorMode: value['colorMode'] == true,
+      sources: CctSource.listFrom(value['sources']),
     );
   }
 
@@ -366,7 +657,7 @@ class LightingMetrics {
   }
 
   ContrastRatioOption? get ratioOption {
-    final r = ratio;
+    final r = effectiveRatio;
     if (r == null) return null;
     return kContrastRatios.reduce(
       (a, b) => (b.ratio - r).abs() < (a.ratio - r).abs() ? b : a,
@@ -466,9 +757,7 @@ class LightingMetrics {
       miredShift: needed,
       gels: best,
       resultKelvin: (1e6 / mired).round(),
-      stopsLost: transmission >= 1
-          ? 0
-          : -math.log(transmission) / math.ln2,
+      stopsLost: transmission >= 1 ? 0 : -math.log(transmission) / math.ln2,
       tintGel: tintGel,
     );
   }

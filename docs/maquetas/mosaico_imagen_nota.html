@@ -1,0 +1,274 @@
+<title>Mosaico con nota · maquetas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: dos láminas de app (A y B) una debajo de otra, cada una como una pantalla oscura de IRIS DP. */
+:root {
+  color-scheme: dark;
+  --bg: #050506;
+  --panel: #121214;
+  --panel-2: #1a1a1d;
+  --line: #2a2a2f;
+  --fg: #ececf0;
+  --muted: #9a9aa3;
+  --faint: #66666e;
+  --accent: #2997ff;
+  --warm: #ff9d42;
+  --cool: #4fb3ff;
+  --magenta: #ff3db8;
+  --ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--ui); padding-inline: 16px; padding-block: 28px 64px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 56px; }
+header.intro { display: grid; gap: 8px; max-width: 70ch; }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; color: var(--accent); text-transform: uppercase; }
+h1 { font-size: clamp(26px, 4vw, 38px); margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+p { margin: 0; color: var(--muted); line-height: 1.55; }
+.option { display: grid; gap: 14px; }
+.option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 16px; }
+.tag { font-family: var(--mono); font-size: 12px; padding: 3px 9px; border: 1px solid var(--accent); color: var(--accent); border-radius: 999px; }
+.screen { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.bar { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.bar strong { color: var(--fg); font-weight: 600; }
+.bar .sp { flex: 1; }
+.btn { font-size: 12px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); color: var(--fg); background: var(--panel-2); white-space: nowrap; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.label { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--fg); background: rgba(0,0,0,.35); white-space: nowrap; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.still { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 2.39 / 1; max-width: 100%; }
+.s-sodium { background: radial-gradient(circle at 78% 18%, #ffb35c 0 4%, rgba(255,140,40,.55) 9%, transparent 30%), radial-gradient(ellipse at 30% 80%, rgba(255,120,30,.25), transparent 55%), linear-gradient(180deg, #120a05 0%, #2a1406 55%, #0b0604 100%); }
+.s-neon { background: radial-gradient(circle at 20% 30%, rgba(255,61,184,.55), transparent 35%), radial-gradient(circle at 80% 60%, rgba(79,179,255,.45), transparent 40%), linear-gradient(180deg, #08050c, #140a18); }
+.s-fog { background: radial-gradient(ellipse at 50% 20%, rgba(220,230,255,.35), transparent 45%), linear-gradient(180deg, #1d2128, #0c0e12); }
+.s-face { background: radial-gradient(ellipse at 38% 45%, rgba(255,170,90,.55) 0 12%, transparent 30%), radial-gradient(ellipse at 70% 50%, rgba(60,90,140,.35), transparent 40%), linear-gradient(90deg, #0a0806, #18100a 50%, #06080c); }
+/* Capa de dibujo encima de la imagen */
+.ink { position: absolute; inset: 0; width: 100%; height: 100%; }
+.mark { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font: 600 12px var(--mono); display: grid; place-items: center; box-shadow: 0 0 0 3px rgba(41,151,255,.3); }
+
+/* ── Opción A: lienzo de trabajo ── */
+.a-body { display: grid; grid-template-columns: 56px minmax(0, 1fr) 340px; min-height: 560px; }
+.tools { border-right: 1px solid var(--line); padding: 12px 8px; display: grid; align-content: start; gap: 8px; justify-items: center; }
+.tool { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; border: 1px solid var(--line); color: var(--muted); font-size: 15px; }
+.tool.on { border-color: var(--accent); color: var(--accent); background: rgba(41,151,255,.1); }
+.swatch { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--panel); outline: 1px solid var(--line); }
+.stage { padding: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.thumb { flex: 0 0 120px; aspect-ratio: 16/9; border-radius: 6px; border: 2px solid transparent; }
+.thumb.on { border-color: var(--accent); }
+.read { border-left: 1px solid var(--line); padding: 16px; display: grid; gap: 16px; align-content: start; min-width: 0; }
+.block { display: grid; gap: 6px; }
+.note { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; }
+.note h4 { margin: 0; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.note h4 .mark { position: static; width: 18px; height: 18px; font-size: 10px; box-shadow: none; }
+.note p { font-size: 12.5px; }
+.light-row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: 12.5px; }
+.light-row .k { font-family: var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.palette { display: flex; height: 22px; border-radius: 6px; overflow: hidden; }
+
+/* ── Opción B: láminas ── */
+.b-body { padding: 18px; display: grid; gap: 18px; }
+.sheet { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 18px; border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--panel-2); }
+.sheet .text { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.sheet h3 { margin: 0; font-size: 18px; letter-spacing: -.01em; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mini-plan { aspect-ratio: 4/3; border-radius: 8px; border: 1px solid var(--line); background:
+  linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 20px 20px,
+  linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 20px 20px, #0c0c0e; position: relative; max-width: 180px; }
+.lamp { position: absolute; width: 12px; height: 12px; border-radius: 50%; }
+.cone { position: absolute; width: 0; height: 0; border-left: 26px solid transparent; border-right: 26px solid transparent; }
+.cols { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: start; }
+.legend { display: grid; gap: 8px; }
+.legend li { list-style: none; display: grid; grid-template-columns: 18px 1fr; gap: 8px; font-size: 13px; color: var(--muted); }
+ul { margin: 0; padding: 0; }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 8px; }
+.card h3 { margin: 0; font-size: 15px; }
+.card ul { display: grid; gap: 6px; }
+.card li { list-style: none; font-size: 13.5px; color: var(--muted); padding-left: 14px; position: relative; line-height: 1.45; }
+.card li::before { content: ""; position: absolute; left: 0; top: .6em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+@media (max-width: 980px) {
+  .a-body { grid-template-columns: 48px minmax(0,1fr); }
+  .read { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+  .sheet { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .a-body { grid-template-columns: 1fr; }
+  .tools { grid-auto-flow: column; border-right: 0; border-bottom: 1px solid var(--line); justify-content: start; overflow-x: auto; }
+}
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <span class="eyebrow">IRIS DP · Biblia · Iluminación</span>
+    <h1>Dos maneras de trabajar una tarjeta del mosaico</h1>
+    <p>Ejemplo con la tarjeta «Cálidos y contraste alto» de CALLE RAVAL. Las dos guardan lo mismo: por cada imagen, qué contamos, sus luces (CCT o HSI, intensidad, calidad), la paleta y el dibujo encima con el Apple Pencil. Cambia cómo se trabaja y cómo se lee.</p>
+  </header>
+
+  <!-- ───────────── OPCIÓN A ───────────── -->
+  <section class="option" aria-labelledby="a-title">
+    <div class="option-head">
+      <span class="tag">A</span>
+      <h2 id="a-title">Lienzo de trabajo</h2>
+      <p>Una imagen grande con su capa de dibujo; a la derecha, la lectura de esa imagen. Los números que pintas en la imagen son los bloques de texto.</p>
+    </div>
+    <div class="screen">
+      <div class="bar">
+        <span>Luz por localización › CALLE RAVAL ›</span>
+        <strong>Cálidos y contraste alto</strong>
+        <span class="sp"></span>
+        <span class="btn">Ver dibujo ✓</span>
+        <span class="btn">Comentarios · 3</span>
+        <span class="btn primary">Listo</span>
+      </div>
+      <div class="a-body">
+        <div class="tools" aria-label="Herramientas de dibujo">
+          <span class="tool on" title="Lápiz">✎</span>
+          <span class="tool" title="Rotulador">▤</span>
+          <span class="tool" title="Flecha">↗</span>
+          <span class="tool" title="Número (enlaza un bloque)">①</span>
+          <span class="tool" title="Goma">⌫</span>
+          <span class="swatch" style="background: var(--accent)"></span>
+          <span class="swatch" style="background: var(--warm)"></span>
+          <span class="swatch" style="background: #fff"></span>
+          <span class="swatch" style="background: var(--magenta)"></span>
+        </div>
+        <div class="stage">
+          <div class="still s-face">
+            <svg class="ink" viewBox="0 0 240 100" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M150 12 C 120 20, 100 34, 92 46" stroke="#ff9d42" stroke-width="1.2" fill="none" stroke-dasharray="3 2"/>
+              <path d="M92 46 l5 -1 l-2 4 z" fill="#ff9d42"/>
+              <ellipse cx="88" cy="50" rx="18" ry="22" stroke="#2997ff" stroke-width=".8" fill="none"/>
+              <path d="M200 60 C 185 64, 170 64, 160 58" stroke="#4fb3ff" stroke-width="1" fill="none"/>
+            </svg>
+            <span class="mark" style="left: 60%; top: 6%">1</span>
+            <span class="mark" style="left: 30%; top: 40%">2</span>
+            <span class="mark" style="left: 80%; top: 56%">3</span>
+          </div>
+          <div class="strip" aria-label="Imágenes de la tarjeta">
+            <span class="thumb s-face on"></span>
+            <span class="thumb s-sodium"></span>
+            <span class="thumb s-neon"></span>
+            <span class="thumb s-fog"></span>
+            <span class="btn" style="align-self:center">＋ Imagen</span>
+          </div>
+        </div>
+        <aside class="read">
+          <div class="block">
+            <span class="label">Qué contamos con esta imagen</span>
+            <p style="color: var(--fg)">Ali queda partido: el sodio le quema medio rostro y el resto se pierde en un azul frío. Es el momento en que decide no volver.</p>
+          </div>
+          <div class="block">
+            <span class="label">Bloques (enlazados a la imagen)</span>
+            <div class="note"><h4><span class="mark">1</span>Farola de sodio, alta y lateral</h4><p>Dura, sin difusión. Cae rápido: deja la pared casi negra.</p></div>
+            <div class="note"><h4><span class="mark">2</span>Medio rostro, sin relleno</h4><p>No rescatar la sombra. Si hace falta, negativo a cámara.</p></div>
+            <div class="note"><h4><span class="mark">3</span>Rebote frío del escaparate</h4><p>Solo un filo azul en la nuca para separarlo del fondo.</p></div>
+          </div>
+          <div class="block">
+            <span class="label">Luces · CCT</span>
+            <div class="light-row"><span class="dot" style="background:var(--warm)"></span><span>Clave · sodio</span><span class="k">2000 K · 0 st</span></div>
+            <div class="light-row"><span class="dot" style="background:var(--cool)"></span><span>Contra · escaparate</span><span class="k">6500 K · −2 st</span></div>
+            <div class="light-row"><span class="dot" style="background:#333"></span><span>Relleno</span><span class="k">— · ratio 8:1</span></div>
+          </div>
+          <div class="block">
+            <span class="label">Paleta (de la imagen)</span>
+            <div class="palette"><span style="flex:3;background:#120a05"></span><span style="flex:2;background:#7a3a10"></span><span style="flex:1.2;background:#ffb35c"></span><span style="flex:1;background:#2b4a70"></span><span style="flex:.6;background:#0b0e14"></span></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────── OPCIÓN B ───────────── -->
+  <section class="option" aria-labelledby="b-title">
+    <div class="option-head">
+      <span class="tag">B</span>
+      <h2 id="b-title">Página de análisis</h2>
+      <p>Cada imagen es una lámina, como en una biblia impresa: se baja imagen a imagen. Tocar una lámina la abre a pantalla completa para dibujar con el Pencil.</p>
+    </div>
+    <div class="screen">
+      <div class="bar">
+        <span>Luz por localización › CALLE RAVAL ›</span>
+        <strong>Cálidos y contraste alto</strong>
+        <span class="sp"></span>
+        <span class="btn">4 láminas</span>
+        <span class="btn">＋ Lámina</span>
+      </div>
+      <div class="b-body">
+        <article class="sheet">
+          <div class="still s-face">
+            <svg class="ink" viewBox="0 0 240 100" preserveAspectRatio="none" aria-hidden="true">
+              <ellipse cx="88" cy="50" rx="18" ry="22" stroke="#2997ff" stroke-width=".8" fill="none"/>
+            </svg>
+            <span class="pill" style="position:absolute;left:10px;bottom:10px">✎ dibujo · pulsa para editar</span>
+          </div>
+          <div class="text">
+            <span class="label">Lámina 1 de 4</span>
+            <h3>Medio rostro quemado por el sodio</h3>
+            <div class="chips">
+              <span class="pill"><span class="dot" style="background:var(--warm)"></span>2000 K clave</span>
+              <span class="pill"><span class="dot" style="background:var(--cool)"></span>6500 K contra</span>
+              <span class="pill">8:1 · 3 st</span>
+              <span class="pill">Dura</span>
+            </div>
+            <p>Ali queda partido: el sodio le quema medio rostro y el resto se pierde en un azul frío. Es el momento en que decide no volver.</p>
+            <div class="cols">
+              <ul class="legend">
+                <li><span class="dot" style="background:var(--warm);margin-top:4px"></span>Farola alta y lateral, sin difusión.</li>
+                <li><span class="dot" style="background:#555;margin-top:4px"></span>Sin relleno; negativo si rebota la pared.</li>
+                <li><span class="dot" style="background:var(--cool);margin-top:4px"></span>Filo frío del escaparate en la nuca.</li>
+              </ul>
+              <div class="mini-plan" aria-label="Planta de luz de la lámina">
+                <span class="lamp" style="left:18%;top:14%;background:var(--warm)"></span>
+                <span class="lamp" style="left:74%;top:66%;background:var(--cool)"></span>
+                <span class="lamp" style="left:46%;top:46%;background:#fff;width:10px;height:10px"></span>
+              </div>
+            </div>
+            <div class="palette"><span style="flex:3;background:#120a05"></span><span style="flex:2;background:#7a3a10"></span><span style="flex:1.2;background:#ffb35c"></span><span style="flex:1;background:#2b4a70"></span><span style="flex:.6;background:#0b0e14"></span></div>
+          </div>
+        </article>
+        <article class="sheet">
+          <div class="still s-neon"></div>
+          <div class="text">
+            <span class="label">Lámina 2 de 4</span>
+            <h3>El neón de la fiesta entra por la puerta</h3>
+            <div class="chips">
+              <span class="pill"><span class="dot" style="background:var(--magenta)"></span>HSI 320·90·100</span>
+              <span class="pill"><span class="dot" style="background:var(--cool)"></span>HSI 205·70·60</span>
+              <span class="pill">4:1 · 2 st</span>
+            </div>
+            <p>Lo de dentro contamina la calle: magenta en primer término, cian de fondo. La calle deja de ser suya.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="compare" aria-label="Diferencias">
+    <div class="card">
+      <h3>A · Lienzo de trabajo</h3>
+      <ul>
+        <li>Pensada para trabajar: dibujas y escribes a la vez, sin cambiar de pantalla.</li>
+        <li>Los números de la imagen enlazan con los bloques de texto.</li>
+        <li>Una imagen cada vez; las demás en la tira de abajo.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>B · Página de análisis</h3>
+      <ul>
+        <li>Pensada para leer y presentar: se ve todo de un vistazo, como saldría en el PDF.</li>
+        <li>Cada lámina lleva su miniatura de planta de luz.</li>
+        <li>Para dibujar, se abre la lámina a pantalla completa.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>También se pueden combinar</h3>
+      <ul>
+        <li>B para ver la tarjeta entera y A al abrir una lámina para trabajarla.</li>
+      </ul>
+    </div>
+  </section>
+</div>

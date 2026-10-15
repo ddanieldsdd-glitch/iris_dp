@@ -12,8 +12,7 @@ import '../bible_point_panel.dart';
 /// Gelatinas de corrección de color del motor de luz de la planta.
 List<CorrectionGel> correctionGels() => [
   for (final m in LightModifier.ofKind(ModifierKind.correction))
-    if (m.miredShift != 0)
-      CorrectionGel(m.name, m.miredShift, m.transmission),
+    if (m.miredShift != 0) CorrectionGel(m.name, m.miredShift, m.transmission),
 ];
 
 Color _color(int rgb) => Color(0xFF000000 | rgb);
@@ -41,7 +40,7 @@ int _xToKelvin(double x) {
 /// Todo es opcional y nace vacío. [reference] es el valor general del
 /// proyecto cuando este widget es el de una localización o una idea de
 /// luz: se enseña como marca, para comparar.
-class LightingMetricsWidget extends StatelessWidget {
+class LightingMetricsWidget extends StatefulWidget {
   final LightingMetrics value;
   final ValueChanged<LightingMetrics> onChanged;
   final LightingMetrics? reference;
@@ -52,6 +51,10 @@ class LightingMetricsWidget extends StatelessWidget {
   /// En poco ancho, sin la receta de gelatinas ni la esfera grande.
   final bool compact;
 
+  /// Una vez configurado, se enseña plegado en una tira y se despliega
+  /// para editar.
+  final bool collapsible;
+
   const LightingMetricsWidget({
     super.key,
     required this.value,
@@ -59,10 +62,51 @@ class LightingMetricsWidget extends StatelessWidget {
     this.reference,
     this.whiteBalance,
     this.compact = false,
+    this.collapsible = true,
   });
 
   @override
+  State<LightingMetricsWidget> createState() => _LightingMetricsWidgetState();
+}
+
+class _LightingMetricsWidgetState extends State<LightingMetricsWidget> {
+  /// Vacío se abre para configurarlo; configurado, plegado.
+  late bool _expanded = !widget.collapsible || widget.value.isEmpty;
+
+  LightingMetrics get value => widget.value;
+  ValueChanged<LightingMetrics> get onChanged => widget.onChanged;
+  LightingMetrics? get reference => widget.reference;
+  int? get whiteBalance => widget.whiteBalance;
+  bool get compact => widget.compact;
+
+  @override
   Widget build(BuildContext context) {
+    if (!_expanded && !value.isEmpty) {
+      return _LightingSummary(
+        value: value,
+        onEdit: () => setState(() => _expanded = true),
+      );
+    }
+    final full = _full(context);
+    if (!widget.collapsible || value.isEmpty) return full;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        full,
+        const SizedBox(height: AppSpacing.md),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.tonalIcon(
+            onPressed: () => setState(() => _expanded = false),
+            icon: const Icon(Icons.unfold_less, size: 18),
+            label: const Text('Listo'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _full(BuildContext context) {
     final palette = context.palette;
     final label = BiblePointPanel.labelStyle(palette);
     final mono = AppTypography.mono(palette);
@@ -77,7 +121,13 @@ class LightingMetricsWidget extends StatelessWidget {
         : null;
     final light = _color(keyColor?.rgb ?? value.color ?? 0xFFFFFF);
     final option = value.ratioOption;
-    final sceneColors = usesColors ? value.colors : const <LightColor>[];
+    // En HSI, sus colores; en CCT con fuentes, cada fuente con su
+    // temperatura desde su lado.
+    final sceneColors = usesColors
+        ? value.colors
+        : (!value.colorMode && value.sources.length > 1)
+        ? value.sceneLights
+        : const <LightColor>[];
 
     Widget head(String text, String? current, VoidCallback? onClear) => Row(
       children: [
@@ -96,8 +146,6 @@ class LightingMetricsWidget extends StatelessWidget {
       ],
     );
 
-    final recipe = value.recipe(correctionGels());
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -105,14 +153,14 @@ class LightingMetricsWidget extends StatelessWidget {
         Row(
           children: [
             _ModeTab(
-              label: 'Luz blanca',
+              label: 'CCT',
               icon: Icons.wb_sunny_outlined,
               selected: !value.colorMode,
               onTap: () => onChanged(value.copyWith(colorMode: false)),
             ),
             const SizedBox(width: 6),
             _ModeTab(
-              label: 'Color',
+              label: 'HSI',
               icon: Icons.color_lens_outlined,
               selected: value.colorMode,
               onTap: () => onChanged(value.copyWith(colorMode: true)),
@@ -127,131 +175,43 @@ class LightingMetricsWidget extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
         ] else ...[
-        // ── Temperatura ───────────────────────────────────────────────
-        head(
-          'TEMPERATURA DE COLOR',
-          value.kelvin == null ? null : '${value.kelvin} K',
-          value.kelvin == null
-              ? null
-              : () => onChanged(value.without(kelvin: true)),
-        ),
+          _CctSources(
+            sources: value.cctSources,
+            whiteBalance: whiteBalance,
+            referenceKelvin: reference?.kelvin,
+            onChanged: (next) => onChanged(value.withSources(next)),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        // ── Mezcla de la escena ───────────────────────────────────────
+        if (value.mix.length > 1) ...[
+          Text('MEZCLA DE LA ESCENA', style: label),
+          const SizedBox(height: 6),
+          _MixBar(mix: value.mix),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        // ── Escenas de partida ────────────────────────────────────────
+        Text('EMPEZAR DESDE', style: label),
         const SizedBox(height: 6),
-        _ScaleBar(
-          semanticLabel: 'Temperatura de color',
-          position: value.kelvin == null ? null : _kelvinToX(value.kelvin!),
-          referencePosition: reference?.kelvin == null
-              ? null
-              : _kelvinToX(reference!.kelvin!),
-          colors: [
-            for (var i = 0; i <= 24; i++)
-              _color(LightingMetrics.colorOf(_xToKelvin(i / 24))),
-          ],
-          onChanged: (x) => onChanged(value.copyWith(kelvin: _xToKelvin(x))),
-        ),
-        const SizedBox(height: 4),
         Wrap(
           spacing: 4,
           runSpacing: 4,
           children: [
-            for (final mark in kKelvinLandmarks)
-              _Chip(
-                label: mark.name,
-                detail: '${mark.kelvin}',
-                dot: _color(LightingMetrics.colorOf(mark.kelvin)),
-                selected: value.kelvin == mark.kelvin,
-                onTap: () => onChanged(value.copyWith(kelvin: mark.kelvin)),
+            for (final preset in kLightingPresets)
+              ActionChip(
+                visualDensity: VisualDensity.compact,
+                avatar: Icon(
+                  preset.hsi
+                      ? Icons.color_lens_outlined
+                      : Icons.wb_sunny_outlined,
+                  size: 14,
+                ),
+                label: Text(preset.name),
+                onPressed: () => onChanged(preset.applyTo(value)),
               ),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-
-        // ── Tinte ─────────────────────────────────────────────────────
-        head(
-          'TINTE',
-          value.tint == null ? null : value.tintLabel,
-          value.tint == null
-              ? null
-              : () => onChanged(value.without(tint: true)),
-        ),
-        const SizedBox(height: 6),
-        _ScaleBar(
-          semanticLabel: 'Tinte',
-          position: value.tint == null
-              ? null
-              : (value.tint! + LightingMetrics.maxTint) /
-                    (2 * LightingMetrics.maxTint),
-          referencePosition: reference?.tint == null
-              ? null
-              : (reference!.tint! + LightingMetrics.maxTint) /
-                    (2 * LightingMetrics.maxTint),
-          colors: const [
-            Color(0xFFD946C8),
-            Color(0xFFE8E8E8),
-            Color(0xFF3FCB5E),
-          ],
-          onChanged: (x) {
-            final tint = (x * 2 - 1) * LightingMetrics.maxTint;
-            // Cerca del centro se queda en neutro.
-            onChanged(value.copyWith(tint: tint.abs() < 1.5 ? 0 : tint));
-          },
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Magenta', style: caption),
-              Text('Neutro', style: caption),
-              Text('Verde', style: caption),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-
-        // ── Color resultante ──────────────────────────────────────────
-        if (value.kelvin != null)
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: palette.background.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: palette.divider),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: light,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('EL COLOR DE ESTA LUZ', style: label),
-                      const SizedBox(height: 2),
-                      Text(
-                        [
-                          '${value.kelvin} K',
-                          if (value.tint != null && value.tint!.abs() >= 0.5)
-                            value.tintLabel.toLowerCase(),
-                        ].join(' · '),
-                        style: AppTypography.bodyLarge(palette),
-                      ),
-                      if (value.lookAgainst(whiteBalance) != null)
-                        Text(value.lookAgainst(whiteBalance)!, style: caption),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        if (value.kelvin != null) const SizedBox(height: AppSpacing.md),
-        ],
 
         // ── Contraste ─────────────────────────────────────────────────
         head(
@@ -341,34 +301,6 @@ class LightingMetricsWidget extends StatelessWidget {
             style: caption,
           ),
         ],
-        if (!compact && !value.colorMode && value.kelvin != null) ...[
-          const SizedBox(height: AppSpacing.lg),
-          Text('QUÉ HACE FALTA PARA LLEGAR A ESE COLOR', style: label),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 4,
-            runSpacing: 4,
-            children: [
-              for (final source in kLightSources)
-                _Chip(
-                  label: source.name,
-                  detail: '${source.kelvin}',
-                  dot: _color(LightingMetrics.colorOf(source.kelvin)),
-                  selected: value.sourceKelvin == source.kelvin,
-                  onTap: () =>
-                      onChanged(value.copyWith(sourceKelvin: source.kelvin)),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (recipe == null)
-            Text(
-              'Elige de qué fuente partes y te digo qué corrección lleva.',
-              style: caption,
-            )
-          else
-            _RecipeView(recipe: recipe),
-        ],
       ],
     );
   }
@@ -425,10 +357,7 @@ class _ScaleBar extends StatelessWidget {
                       bottom: 2,
                       child: Tooltip(
                         message: 'Valor general del proyecto',
-                        child: Container(
-                          width: 2,
-                          color: palette.textTertiary,
-                        ),
+                        child: Container(width: 2, color: palette.textTertiary),
                       ),
                     ),
                   if (position != null)
@@ -928,9 +857,7 @@ class _ColorLights extends StatelessWidget {
                         colors: [Colors.black, _color(colors[i].rgb)],
                         onChanged: (x) => _set(
                           i,
-                          colors[i].copyWith(
-                            intensity: (x * 20).round() / 20,
-                          ),
+                          colors[i].copyWith(intensity: (x * 20).round() / 20),
                         ),
                       ),
                     ),
@@ -1094,4 +1021,507 @@ class _RecipeView extends StatelessWidget {
       borderRadius: BorderRadius.circular(6),
     ),
   );
+}
+
+/// El widget plegado: la esfera pequeña, una pastilla por fuente y el
+/// contraste. «Editar» lo despliega.
+class _LightingSummary extends StatelessWidget {
+  final LightingMetrics value;
+  final VoidCallback onEdit;
+
+  const _LightingSummary({required this.value, required this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final mono = AppTypography.mono(palette).copyWith(fontSize: 11);
+    final option = value.ratioOption;
+    final hsi = value.usesColors;
+    final key = hsi
+        ? value.colors
+              .where((c) => c.role == LightColorRole.key)
+              .followedBy(value.colors)
+              .firstOrNull
+              ?.rgb
+        : value.keySource?.rgb;
+    final lights = hsi ? value.colors : value.sceneLights;
+
+    Widget pill(Color dot, String text) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: palette.border),
+        color: palette.background.withValues(alpha: 0.35),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 9,
+            height: 9,
+            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(text, style: mono),
+        ],
+      ),
+    );
+
+    return InkWell(
+      onTap: onEdit,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: CustomPaint(
+                painter: _SpherePainter(
+                  ratio: option?.ratio ?? 2,
+                  light: _color(key ?? 0xFFFFFF),
+                  colors: lights.length > 1 ? lights : const [],
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  pill(palette.accent, hsi ? 'HSI' : 'CCT'),
+                  if (hsi)
+                    for (final c in value.colors)
+                      pill(
+                        _color(c.rgb),
+                        '${c.role.label} · '
+                        'HSI ${c.hueSaturation.$1.round()}·'
+                        '${(c.hueSaturation.$2 * 100).round()}·'
+                        '${(c.intensity * 100).round()}',
+                      )
+                  else
+                    for (final s in value.cctSources)
+                      pill(
+                        _color(s.rgb),
+                        '${s.role.label} · ${s.kelvin} K'
+                        '${s.stops == 0 ? '' : ' · ${_stopsLabel(s.stops)}'}',
+                      ),
+                  if (option != null)
+                    pill(
+                      Colors.white70,
+                      '${option.label} · ${option.stopsLabel}',
+                    ),
+                ],
+              ),
+            ),
+            TextButton.icon(
+              onPressed: onEdit,
+              icon: const Icon(Icons.tune, size: 16),
+              label: const Text('Editar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _stopsLabel(double stops) {
+  final v = stops % 1 == 0 ? stops.toInt().toString() : stops.toString();
+  return '${stops > 0 ? '+' : ''}$v st'.replaceAll('.', ',');
+}
+
+/// Barra con la parte de luz que pone cada fuente.
+class _MixBar extends StatelessWidget {
+  final List<(int rgb, double share)> mix;
+
+  const _MixBar({required this.mix});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: SizedBox(
+            height: 18,
+            child: Row(
+              children: [
+                for (final (rgb, share) in mix)
+                  Expanded(
+                    flex: (share * 1000).round().clamp(1, 1000),
+                    child: ColoredBox(color: _color(rgb)),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Row(
+          children: [
+            for (final (_, share) in mix)
+              Expanded(
+                flex: (share * 1000).round().clamp(1, 1000),
+                child: Text(
+                  '${(share * 100).round()} %',
+                  style: AppTypography.caption(palette).copyWith(fontSize: 10),
+                  overflow: TextOverflow.clip,
+                  maxLines: 1,
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Fuentes de luz blanca (CCT): clave, relleno, contra, prácticos…, cada
+/// una con su temperatura, su tinte, cuánto da y cómo es.
+class _CctSources extends StatelessWidget {
+  final List<CctSource> sources;
+  final int? whiteBalance;
+
+  /// Temperatura general del proyecto, marcada en la clave para comparar.
+  final int? referenceKelvin;
+  final ValueChanged<List<CctSource>> onChanged;
+
+  const _CctSources({
+    required this.sources,
+    required this.whiteBalance,
+    required this.onChanged,
+    this.referenceKelvin,
+  });
+
+  LightColorRole _nextRole() {
+    for (final role in [
+      LightColorRole.key,
+      LightColorRole.fill,
+      LightColorRole.back,
+      LightColorRole.practical,
+    ]) {
+      if (!sources.any((s) => s.role == role)) return role;
+    }
+    return LightColorRole.ambient;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final label = BiblePointPanel.labelStyle(palette);
+    final key = sources.where((s) => s.role == LightColorRole.key).firstOrNull;
+
+    void replace(int i, CctSource next) =>
+        onChanged([for (final (j, s) in sources.indexed) j == i ? next : s]);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('FUENTES DE LUZ', style: label),
+        const SizedBox(height: 6),
+        if (sources.isEmpty)
+          Text(
+            'Añade la clave y, si quieres, relleno, contra y prácticos: el '
+            'contraste sale de cuánto da cada una.',
+            style: AppTypography.caption(palette),
+          ),
+        for (final (i, source) in sources.indexed)
+          _CctSourceTile(
+            key: ValueKey('cct_$i'),
+            source: source,
+            whiteBalance: whiteBalance,
+            keyKelvin: key?.kelvin,
+            referenceKelvin: source.role == LightColorRole.key
+                ? referenceKelvin
+                : null,
+            onChanged: (next) => replace(i, next),
+            onRemove: () => onChanged([
+              for (final (j, s) in sources.indexed)
+                if (j != i) s,
+            ]),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () {
+              final role = _nextRole();
+              onChanged([
+                ...sources,
+                CctSource(
+                  role: role,
+                  kelvin: key?.kelvin ?? 3200,
+                  stops: switch (role) {
+                    LightColorRole.key => 0,
+                    LightColorRole.fill => -2,
+                    LightColorRole.back => -1,
+                    _ => -2,
+                  },
+                  soft: role == LightColorRole.fill,
+                ),
+              ]);
+            },
+            icon: const Icon(Icons.add, size: 16),
+            label: Text('Fuente (${_nextRole().label.toLowerCase()})'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CctSourceTile extends StatefulWidget {
+  final CctSource source;
+  final int? whiteBalance;
+  final int? keyKelvin;
+  final int? referenceKelvin;
+  final ValueChanged<CctSource> onChanged;
+  final VoidCallback onRemove;
+
+  const _CctSourceTile({
+    super.key,
+    required this.source,
+    required this.whiteBalance,
+    required this.keyKelvin,
+    this.referenceKelvin,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  @override
+  State<_CctSourceTile> createState() => _CctSourceTileState();
+}
+
+class _CctSourceTileState extends State<_CctSourceTile> {
+  bool _open = false;
+  late final _name = TextEditingController(text: widget.source.name);
+
+  @override
+  void didUpdateWidget(_CctSourceTile old) {
+    super.didUpdateWidget(old);
+    if (old.source.name != widget.source.name &&
+        _name.text != widget.source.name) {
+      _name.text = widget.source.name;
+    }
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  void _set(CctSource next) => widget.onChanged(next);
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final s = widget.source;
+    final mono = AppTypography.mono(palette).copyWith(fontSize: 12);
+    final caption = AppTypography.caption(palette);
+    final look = LightingMetrics(
+      kelvin: s.kelvin,
+    ).lookAgainst(widget.whiteBalance);
+    final recipe = s.recipe(correctionGels());
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+      decoration: BoxDecoration(
+        color: palette.background.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: palette.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: _color(s.rgb),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              PopupMenuButton<LightColorRole>(
+                tooltip: 'Papel de la fuente',
+                onSelected: (role) => _set(s.copyWith(role: role)),
+                itemBuilder: (_) => [
+                  for (final role in LightColorRole.values)
+                    PopupMenuItem(value: role, child: Text(role.label)),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    s.role.label,
+                    style: AppTypography.bodyMedium(
+                      palette,
+                    ).copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: TextField(
+                  controller: _name,
+                  style: AppTypography.bodyMedium(palette),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: 'Qué es: farola, Skypanel…',
+                    hintStyle: caption,
+                  ),
+                  onSubmitted: (v) => _set(s.copyWith(name: v.trim())),
+                  onTapOutside: (_) {
+                    if (_name.text.trim() != s.name) {
+                      _set(s.copyWith(name: _name.text.trim()));
+                    }
+                  },
+                ),
+              ),
+              Text('${s.kelvin} K', style: mono),
+              // Cuánto da respecto a la clave.
+              IconButton(
+                tooltip: 'Medio stop menos',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.remove, size: 14),
+                onPressed: () => _set(s.copyWith(stops: s.stops - 0.5)),
+              ),
+              SizedBox(
+                width: 48,
+                child: Text(
+                  s.role == LightColorRole.key && s.stops == 0
+                      ? 'clave'
+                      : _stopsLabel(s.stops),
+                  style: mono,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Medio stop más',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.add, size: 14),
+                onPressed: () => _set(s.copyWith(stops: s.stops + 0.5)),
+              ),
+              Tooltip(
+                message: s.soft ? 'Suave (difusa)' : 'Dura',
+                child: InkWell(
+                  onTap: () => _set(s.copyWith(soft: !s.soft)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      s.soft ? Icons.blur_on : Icons.flare,
+                      size: 16,
+                      color: palette.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: _open ? 'Plegar' : 'Temperatura, tinte y gelatina',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  _open ? Icons.expand_less : Icons.expand_more,
+                  size: 18,
+                ),
+                onPressed: () => setState(() => _open = !_open),
+              ),
+              IconButton(
+                tooltip: 'Quitar fuente',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.close, size: 14, color: palette.textTertiary),
+                onPressed: widget.onRemove,
+              ),
+            ],
+          ),
+          if (look != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 20, bottom: 4),
+              child: Text(look, style: caption),
+            ),
+          if (_open) ...[
+            const SizedBox(height: 6),
+            _ScaleBar(
+              semanticLabel: 'Temperatura de ${s.role.label.toLowerCase()}',
+              position: _kelvinToX(s.kelvin),
+              referencePosition: widget.referenceKelvin == null
+                  ? null
+                  : _kelvinToX(widget.referenceKelvin!),
+              colors: [
+                for (var i = 0; i <= 24; i++)
+                  _color(LightingMetrics.colorOf(_xToKelvin(i / 24))),
+              ],
+              onChanged: (x) => _set(s.copyWith(kelvin: _xToKelvin(x))),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                for (final mark in kKelvinLandmarks)
+                  _Chip(
+                    label: mark.name,
+                    detail: '${mark.kelvin}',
+                    dot: _color(LightingMetrics.colorOf(mark.kelvin)),
+                    selected: s.kelvin == mark.kelvin,
+                    onTap: () => _set(s.copyWith(kelvin: mark.kelvin)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'TINTE · ${LightingMetrics(tint: s.tint).tintLabel}',
+              style: BiblePointPanel.labelStyle(palette),
+            ),
+            const SizedBox(height: 4),
+            _ScaleBar(
+              semanticLabel: 'Tinte',
+              position:
+                  (s.tint + LightingMetrics.maxTint) /
+                  (2 * LightingMetrics.maxTint),
+              colors: const [
+                Color(0xFFD946C8),
+                Color(0xFFE8E8E8),
+                Color(0xFF3FCB5E),
+              ],
+              onChanged: (x) {
+                final tint = (x * 2 - 1) * LightingMetrics.maxTint;
+                _set(s.copyWith(tint: tint.abs() < 1.5 ? 0 : tint));
+              },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'EL APARATO PARTE DE',
+              style: BiblePointPanel.labelStyle(palette),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                for (final native in kLightSources)
+                  _Chip(
+                    label: native.name,
+                    detail: '${native.kelvin}',
+                    dot: _color(LightingMetrics.colorOf(native.kelvin)),
+                    selected: s.nativeKelvin == native.kelvin,
+                    onTap: () => _set(s.copyWith(nativeKelvin: native.kelvin)),
+                  ),
+              ],
+            ),
+            if (recipe != null) ...[
+              const SizedBox(height: 6),
+              _RecipeView(recipe: recipe),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
 }
