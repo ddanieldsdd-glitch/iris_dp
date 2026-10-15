@@ -420,15 +420,45 @@ void main() {
 
     // Base recién creada o ya migrada: nada que copiar.
     expect(backupBeforeSchemaUpgrade(path, 0), isNull);
-    expect(backupBeforeSchemaUpgrade(path, kSchemaBackupBefore), isNull);
+    expect(backupBeforeSchemaUpgrade(path, kSchemaVersion), isNull);
 
-    final copy = backupBeforeSchemaUpgrade(path, 44);
-    expect(copy, '$path.antes-de-esquema-$kSchemaBackupBefore');
+    final copy = backupBeforeSchemaUpgrade(path, kSchemaVersion - 1);
+    expect(copy, '$path.antes-de-esquema-$kSchemaVersion');
     expect(File(copy!).readAsStringSync(), 'datos');
 
     // Una segunda apertura no pisa la copia buena.
     File(path).writeAsStringSync('datos ya migrados');
-    backupBeforeSchemaUpgrade(path, 44);
+    backupBeforeSchemaUpgrade(path, kSchemaVersion - 1);
     expect(File(copy).readAsStringSync(), 'datos');
+  });
+
+  test('cada subida de esquema deja copia y se guardan las tres últimas', () {
+    final dir = Directory.systemTemp.createTempSync('iris_backup_test');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final path = '${dir.path}/iris_dp.db';
+    for (var target = 45; target <= 49; target++) {
+      File(path).writeAsStringSync('esquema ${target - 1}');
+      File('$path-wal').writeAsStringSync('wal ${target - 1}');
+      backupBeforeSchemaUpgrade(path, target - 1, targetVersion: target);
+    }
+    final copies =
+        dir
+            .listSync()
+            .map((f) => f.path.split('/').last)
+            .where((n) => n.contains('antes-de-esquema'))
+            .toList()
+          ..sort();
+    expect(copies, [
+      'iris_dp.db.antes-de-esquema-47',
+      'iris_dp.db.antes-de-esquema-47-wal',
+      'iris_dp.db.antes-de-esquema-48',
+      'iris_dp.db.antes-de-esquema-48-wal',
+      'iris_dp.db.antes-de-esquema-49',
+      'iris_dp.db.antes-de-esquema-49-wal',
+    ]);
+    expect(
+      File('$path.antes-de-esquema-49').readAsStringSync(),
+      'esquema 48',
+    );
   });
 }

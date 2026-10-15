@@ -180,7 +180,6 @@ class _LukaBridgeScreenState extends ConsumerState<LukaBridgeScreen> {
     final scene = _selectedScene;
     if (scene == null || _exporting) return;
 
-    final palette = context.palette;
     final db = ref.read(databaseProvider);
     setState(() => _exporting = true);
 
@@ -220,7 +219,6 @@ class _LukaBridgeScreenState extends ConsumerState<LukaBridgeScreen> {
   Future<void> _exportProject() async {
     if (_exporting) return;
 
-    final palette = context.palette;
     final db = ref.read(databaseProvider);
     setState(() => _exporting = true);
 
@@ -259,7 +257,6 @@ class _LukaBridgeScreenState extends ConsumerState<LukaBridgeScreen> {
   Future<void> _importRenders() async {
     if (_importing) return;
 
-    final palette = context.palette;
     final db = ref.read(databaseProvider);
     setState(() => _importing = true);
 

@@ -6,7 +6,6 @@ import '../../../../core/theme/app_typography.dart';
 import '../../bible_block_catalog.dart';
 import '../commands/bible_document_history.dart';
 import '../editor/bible_canvas_editor.dart';
-import '../model/bible_document.dart';
 import '../templates/bible_template_package.dart';
 import '../templates/bible_v2_builtin_templates.dart';
 

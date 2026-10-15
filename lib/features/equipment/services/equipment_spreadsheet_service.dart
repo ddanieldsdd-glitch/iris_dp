@@ -139,10 +139,6 @@ class EquipmentSpreadsheetService {
     final desiredKeys = resolved
         .map((r) => '${r.row.equipmentType}:${r.equipmentId}')
         .toSet();
-    final currentKeys = current
-        .map((a) => '${a.equipmentType}:${a.equipmentId}')
-        .toSet();
-
     removed = current.where((a) {
       final key = '${a.equipmentType}:${a.equipmentId}';
       return !desiredKeys.contains(key);

@@ -2,12 +2,14 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../cloud/cloud_runtime_config.dart';
 import '../storage/app_storage_config.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import '../utils/error_log.dart';
 import '../widgets/app_theme_toggle.dart';
 import '../update/settings_update_section.dart';
 import 'settings_cloud_link_section.dart';
@@ -72,6 +74,26 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
     final paths = AppStorageConfig.current;
     _appDataPath = paths?.appDataPath;
     _documentsPath = paths?.documentsPath;
+  }
+
+  Future<void> _shareErrorLog() async {
+    final log = await ErrorLog.file();
+    if (!mounted) return;
+    if (!log.existsSync() || log.lengthSync() == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay errores registrados')),
+      );
+      return;
+    }
+    final box = context.findRenderObject() as RenderBox?;
+    await Share.shareXFiles(
+      [XFile(log.path)],
+      subject: 'Registro de errores de IRIS DP',
+      // iPad necesita saber desde dónde abrir el menú de compartir.
+      sharePositionOrigin: box == null
+          ? null
+          : box.localToGlobal(Offset.zero) & box.size,
+    );
   }
 
   Future<void> _pickAppData() async {
@@ -184,6 +206,16 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
                   style: AppTypography.caption(palette),
                 ),
                 onTap: widget.onInstallGuide,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.bug_report_outlined, color: palette.accent),
+                title: const Text('Compartir registro de errores'),
+                subtitle: Text(
+                  'Para enviarlo si algo ha fallado',
+                  style: AppTypography.caption(palette),
+                ),
+                onTap: _shareErrorLog,
               ),
               const SizedBox(height: AppSpacing.lg),
               Align(

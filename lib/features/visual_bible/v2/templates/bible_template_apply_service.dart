@@ -1,9 +1,7 @@
 import 'dart:math';
 
-import '../model/bible_block.dart';
 import '../../bible_block_catalog.dart';
 import '../model/bible_document.dart';
-import '../model/bible_page.dart';
 import '../persistence/bible_document_store.dart';
 import '../theme/bible_theme.dart';
 import 'bible_template_package.dart';

@@ -282,9 +282,6 @@ abstract final class ClipboardImageReader {
     return extractHttpUrl(trimmed);
   }
 
-  static Future<ClipboardImageReadResult?> _readMacClipboard() =>
-      _readNativeClipboard();
-
   static Future<ClipboardImageReadResult?> _parseNativeClipboardMap(
     Object? raw,
   ) async {

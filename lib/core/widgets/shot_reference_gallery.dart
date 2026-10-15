@@ -262,7 +262,6 @@ class _ShotReferenceViewerPageState
   }
 
   Future<void> _setPrimary(ShotReference reference) async {
-    final palette = context.palette;
     final db = ref.read(databaseProvider);
     try {
       final current = await db.getShotById(widget.shot.id) ?? widget.shot;

@@ -1,9 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 /// Carga imágenes en formato compatible con el paquete `pdf` (PNG/JPEG).
 abstract final class PdfSafeImage {
+  static const _cacheKey = #pdfSafeImageCache;
+
+  /// Ejecuta [build] con una caché de imágenes: dentro, cargar la misma
+  /// imagen varias veces (moodboard y secciones) la lee y reduce una vez.
+  static Future<T> withExportCache<T>(Future<T> Function() build) =>
+      runZoned(build, zoneValues: {_cacheKey: <String, Future<Uint8List?>>{}});
+
   static bool _isPng(Uint8List bytes) =>
       bytes.length >= 8 &&
       bytes[0] == 0x89 &&
@@ -39,19 +47,26 @@ abstract final class PdfSafeImage {
   static Future<Uint8List?> loadFromPathMaxEdge(
     String? path, {
     int maxEdge = 2048,
-  }) async {
-    if (path == null || maxEdge <= 0) return null;
+  }) {
+    if (path == null || maxEdge <= 0) return Future.value();
+    final cache = Zone.current[_cacheKey] as Map<String, Future<Uint8List?>>?;
+    if (cache == null) return _loadMaxEdge(path, maxEdge);
+    return cache.putIfAbsent('$maxEdge|$path', () => _loadMaxEdge(path, maxEdge));
+  }
+
+  static Future<Uint8List?> _loadMaxEdge(String path, int maxEdge) async {
     final file = File(path);
     if (!file.existsSync()) return null;
     try {
       final bytes = await file.readAsBytes();
       if (bytes.isEmpty) return null;
-      final probe = await ui.instantiateImageCodec(bytes);
-      final frame = await probe.getNextFrame();
-      final width = frame.image.width;
-      final height = frame.image.height;
-      frame.image.dispose();
-      probe.dispose();
+      // Las medidas salen de la cabecera, sin decodificar la imagen entera.
+      final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      final descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final width = descriptor.width;
+      final height = descriptor.height;
+      descriptor.dispose();
+      buffer.dispose();
       if (width <= maxEdge && height <= maxEdge && isPdfCompatible(bytes)) {
         return bytes;
       }

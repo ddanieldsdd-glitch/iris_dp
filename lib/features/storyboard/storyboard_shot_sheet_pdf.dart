@@ -41,7 +41,7 @@ class StoryboardShotSheetPdf {
       bold: fonts.bold,
     );
 
-    final imageBytes = await PdfSafeImage.loadFromPath(storyboardImageOf(shot));
+    final imageBytes = await PdfSafeImage.loadFromPathMaxEdge(storyboardImageOf(shot));
     final paletteColors = imageBytes != null
         ? await StoryboardImagePalette.extractFromBytes(imageBytes)
         : List.filled(8, const Color(0xFF808080));

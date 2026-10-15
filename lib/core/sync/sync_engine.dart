@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -265,7 +267,8 @@ class SyncEngine {
         mediaUploaded += await uploadQueue.scanAndEnqueueProject(p.id);
         mediaDownloaded += await hydrate.hydrateProject(p.id, p.cloudId!);
       }
-      await uploadQueue.startWorker();
+      // Las imágenes siguen subiendo en segundo plano.
+      unawaited(uploadQueue.startWorker());
       bytesSaved = uploadQueue.bytesSavedSession;
     }
 

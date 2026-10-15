@@ -142,6 +142,24 @@ void main() {
     }
   });
 
+  test('un plano sin escena se deja fuera en vez de romper', () async {
+    await db
+        .into(db.shots)
+        .insert(
+          ShotsCompanion.insert(
+            sceneId: sceneId,
+            projectId: projectId,
+            number: 1,
+          ),
+        );
+    await db.customStatement('PRAGMA foreign_keys = OFF');
+    await db.customStatement('DELETE FROM scenes WHERE id = ?', [sceneId]);
+
+    final bundle = await ProjectContentBundle.export(db, projectId);
+
+    expect(bundle['shots'], isEmpty);
+  });
+
   test(
     'un esquema de luz de la biblia conserva su localización y su set',
     () async {

@@ -65,23 +65,25 @@ class VisualBiblePdfService {
     List<BibleExportSectionRef> sectionOrder = const [],
     List<NarrativeCardModel> lightingCards = const [],
   }) async {
-    final doc = await buildDocument(
-      sectionOrder: sectionOrder,
-      mode: mode,
-      projectName: projectName,
-      director: director,
-      data: data,
-      colorBlocks: colorBlocks,
-      exposureBlocks: exposureBlocks,
-      lightingSetups: lightingSetups,
-      cameraTests: cameraTests,
-      moodboard: moodboard,
-      includedSections: includedSections,
-      sectionContentJsonById: sectionContentJsonById,
-      primaryCameraLabel: primaryCameraLabel,
-      moodboardLayout: moodboardLayout,
-      includeAllMoodboardImages: includeAllMoodboardImages,
-      lightingCards: lightingCards,
+    final doc = await PdfSafeImage.withExportCache(
+      () => buildDocument(
+        sectionOrder: sectionOrder,
+        mode: mode,
+        projectName: projectName,
+        director: director,
+        data: data,
+        colorBlocks: colorBlocks,
+        exposureBlocks: exposureBlocks,
+        lightingSetups: lightingSetups,
+        cameraTests: cameraTests,
+        moodboard: moodboard,
+        includedSections: includedSections,
+        sectionContentJsonById: sectionContentJsonById,
+        primaryCameraLabel: primaryCameraLabel,
+        moodboardLayout: moodboardLayout,
+        includeAllMoodboardImages: includeAllMoodboardImages,
+        lightingCards: lightingCards,
+      ),
     );
     return doc.save();
   }
@@ -890,7 +892,7 @@ class VisualBiblePdfService {
           <String, List<({MoodboardImageModel img, pw.MemoryImage? image})>>{};
       for (final img in moodboard) {
         final assigned = exportSectionsForMoodboardImage(img);
-        final bytes = await PdfSafeImage.loadFromPath(img.imagePath);
+        final bytes = await PdfSafeImage.loadFromPathMaxEdge(img.imagePath);
         final memory = bytes != null ? pw.MemoryImage(bytes) : null;
         final item = (img: img, image: memory);
         if (assigned.isEmpty) {
