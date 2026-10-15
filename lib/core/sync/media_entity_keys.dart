@@ -1,7 +1,29 @@
 import 'media_entity_types.dart';
 
-/// Claves estables para `media_assets.entity_key` (independientes del dispositivo).
+/// Claves para `media_assets.entity_key` (independientes del dispositivo).
+///
+/// Desde B1 las imágenes se identifican por su `uid` permanente
+/// ([byUid]). Las claves por posición ([moodboard], [shotReference],
+/// [siteImage], [locationImage]) quedan para reconocer lo subido antes: dos
+/// imágenes en el mismo puesto compartían clave y reordenar la cambiaba.
 abstract final class MediaEntityKeys {
+  static const uidPrefix = 'uid:';
+
+  /// Clave de una imagen por su uid: `uid:<uid>`. El tipo va aparte, en
+  /// `media_assets.entity_type`.
+  static String byUid(String uid) => '$uidPrefix$uid';
+
+  /// El uid de una clave [byUid], o nulo si es de las de posición.
+  static String? uidOf(String entityKey) =>
+      entityKey.startsWith(uidPrefix)
+          ? entityKey.substring(uidPrefix.length)
+          : null;
+
+  /// La clave de una imagen: por uid si lo tiene; si no (filas aún sin
+  /// migrar), la de posición.
+  static String forImage(String? uid, String Function() positional) =>
+      uid != null && uid.isNotEmpty ? byUid(uid) : positional();
+
   static String moodboard({
     String? groupKey,
     required int sortOrder,

@@ -3141,6 +3141,16 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
   static const VerificationMeta _projectIdMeta = const VerificationMeta(
     'projectId',
   );
@@ -3395,6 +3405,7 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     projectId,
     number,
     name,
@@ -3431,6 +3442,12 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('project_id')) {
       context.handle(
@@ -3617,6 +3634,10 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       projectId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}project_id'],
@@ -3712,6 +3733,9 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
 
 class Scene extends DataClass implements Insertable<Scene> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int projectId;
   final int number;
   final String name;
@@ -3735,6 +3759,7 @@ class Scene extends DataClass implements Insertable<Scene> {
   final bool offScript;
   const Scene({
     required this.id,
+    this.uid,
     required this.projectId,
     required this.number,
     required this.name,
@@ -3761,6 +3786,9 @@ class Scene extends DataClass implements Insertable<Scene> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['project_id'] = Variable<int>(projectId);
     map['number'] = Variable<int>(number);
     map['name'] = Variable<String>(name);
@@ -3806,6 +3834,7 @@ class Scene extends DataClass implements Insertable<Scene> {
   ScenesCompanion toCompanion(bool nullToAbsent) {
     return ScenesCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       projectId: Value(projectId),
       number: Value(number),
       name: Value(name),
@@ -3855,6 +3884,7 @@ class Scene extends DataClass implements Insertable<Scene> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Scene(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       projectId: serializer.fromJson<int>(json['projectId']),
       number: serializer.fromJson<int>(json['number']),
       name: serializer.fromJson<String>(json['name']),
@@ -3883,6 +3913,7 @@ class Scene extends DataClass implements Insertable<Scene> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'projectId': serializer.toJson<int>(projectId),
       'number': serializer.toJson<int>(number),
       'name': serializer.toJson<String>(name),
@@ -3909,6 +3940,7 @@ class Scene extends DataClass implements Insertable<Scene> {
 
   Scene copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? projectId,
     int? number,
     String? name,
@@ -3932,6 +3964,7 @@ class Scene extends DataClass implements Insertable<Scene> {
     bool? offScript,
   }) => Scene(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     projectId: projectId ?? this.projectId,
     number: number ?? this.number,
     name: name ?? this.name,
@@ -3969,6 +4002,7 @@ class Scene extends DataClass implements Insertable<Scene> {
   Scene copyWithCompanion(ScenesCompanion data) {
     return Scene(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       projectId: data.projectId.present ? data.projectId.value : this.projectId,
       number: data.number.present ? data.number.value : this.number,
       name: data.name.present ? data.name.value : this.name,
@@ -4025,6 +4059,7 @@ class Scene extends DataClass implements Insertable<Scene> {
   String toString() {
     return (StringBuffer('Scene(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('number: $number, ')
           ..write('name: $name, ')
@@ -4053,6 +4088,7 @@ class Scene extends DataClass implements Insertable<Scene> {
   @override
   int get hashCode => Object.hashAll([
     id,
+    uid,
     projectId,
     number,
     name,
@@ -4080,6 +4116,7 @@ class Scene extends DataClass implements Insertable<Scene> {
       identical(this, other) ||
       (other is Scene &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.projectId == this.projectId &&
           other.number == this.number &&
           other.name == this.name &&
@@ -4105,6 +4142,7 @@ class Scene extends DataClass implements Insertable<Scene> {
 
 class ScenesCompanion extends UpdateCompanion<Scene> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> projectId;
   final Value<int> number;
   final Value<String> name;
@@ -4128,6 +4166,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
   final Value<bool> offScript;
   const ScenesCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.projectId = const Value.absent(),
     this.number = const Value.absent(),
     this.name = const Value.absent(),
@@ -4152,6 +4191,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
   });
   ScenesCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int projectId,
     required int number,
     required String name,
@@ -4180,6 +4220,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
        locationPureName = Value(locationPureName);
   static Insertable<Scene> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? projectId,
     Expression<int>? number,
     Expression<String>? name,
@@ -4204,6 +4245,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (projectId != null) 'project_id': projectId,
       if (number != null) 'number': number,
       if (name != null) 'name': name,
@@ -4230,6 +4272,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
 
   ScenesCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? projectId,
     Value<int>? number,
     Value<String>? name,
@@ -4254,6 +4297,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
   }) {
     return ScenesCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       projectId: projectId ?? this.projectId,
       number: number ?? this.number,
       name: name ?? this.name,
@@ -4283,6 +4327,9 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (projectId.present) {
       map['project_id'] = Variable<int>(projectId.value);
@@ -4354,6 +4401,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
   String toString() {
     return (StringBuffer('ScenesCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('number: $number, ')
           ..write('name: $name, ')
@@ -5118,6 +5166,16 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
   static const VerificationMeta _sceneIdMeta = const VerificationMeta(
     'sceneId',
   );
@@ -5420,6 +5478,7 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     sceneId,
     projectId,
     number,
@@ -5462,6 +5521,12 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('scene_id')) {
       context.handle(
@@ -5686,6 +5751,10 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       sceneId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}scene_id'],
@@ -5805,6 +5874,9 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
 
 class Shot extends DataClass implements Insertable<Shot> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int sceneId;
   final int projectId;
   final int number;
@@ -5834,6 +5906,7 @@ class Shot extends DataClass implements Insertable<Shot> {
   final String? cellStylesJson;
   const Shot({
     required this.id,
+    this.uid,
     required this.sceneId,
     required this.projectId,
     required this.number,
@@ -5866,6 +5939,9 @@ class Shot extends DataClass implements Insertable<Shot> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['scene_id'] = Variable<int>(sceneId);
     map['project_id'] = Variable<int>(projectId);
     map['number'] = Variable<int>(number);
@@ -5943,6 +6019,7 @@ class Shot extends DataClass implements Insertable<Shot> {
   ShotsCompanion toCompanion(bool nullToAbsent) {
     return ShotsCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       sceneId: Value(sceneId),
       projectId: Value(projectId),
       number: Value(number),
@@ -6020,6 +6097,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Shot(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       sceneId: serializer.fromJson<int>(json['sceneId']),
       projectId: serializer.fromJson<int>(json['projectId']),
       number: serializer.fromJson<int>(json['number']),
@@ -6062,6 +6140,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'sceneId': serializer.toJson<int>(sceneId),
       'projectId': serializer.toJson<int>(projectId),
       'number': serializer.toJson<int>(number),
@@ -6094,6 +6173,7 @@ class Shot extends DataClass implements Insertable<Shot> {
 
   Shot copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? sceneId,
     int? projectId,
     int? number,
@@ -6123,6 +6203,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     Value<String?> cellStylesJson = const Value.absent(),
   }) => Shot(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     sceneId: sceneId ?? this.sceneId,
     projectId: projectId ?? this.projectId,
     number: number ?? this.number,
@@ -6174,6 +6255,7 @@ class Shot extends DataClass implements Insertable<Shot> {
   Shot copyWithCompanion(ShotsCompanion data) {
     return Shot(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       sceneId: data.sceneId.present ? data.sceneId.value : this.sceneId,
       projectId: data.projectId.present ? data.projectId.value : this.projectId,
       number: data.number.present ? data.number.value : this.number,
@@ -6236,6 +6318,7 @@ class Shot extends DataClass implements Insertable<Shot> {
   String toString() {
     return (StringBuffer('Shot(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('sceneId: $sceneId, ')
           ..write('projectId: $projectId, ')
           ..write('number: $number, ')
@@ -6270,6 +6353,7 @@ class Shot extends DataClass implements Insertable<Shot> {
   @override
   int get hashCode => Object.hashAll([
     id,
+    uid,
     sceneId,
     projectId,
     number,
@@ -6303,6 +6387,7 @@ class Shot extends DataClass implements Insertable<Shot> {
       identical(this, other) ||
       (other is Shot &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.sceneId == this.sceneId &&
           other.projectId == this.projectId &&
           other.number == this.number &&
@@ -6334,6 +6419,7 @@ class Shot extends DataClass implements Insertable<Shot> {
 
 class ShotsCompanion extends UpdateCompanion<Shot> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> sceneId;
   final Value<int> projectId;
   final Value<int> number;
@@ -6363,6 +6449,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
   final Value<String?> cellStylesJson;
   const ShotsCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.sceneId = const Value.absent(),
     this.projectId = const Value.absent(),
     this.number = const Value.absent(),
@@ -6393,6 +6480,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
   });
   ShotsCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int sceneId,
     required int projectId,
     required int number,
@@ -6425,6 +6513,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
        number = Value(number);
   static Insertable<Shot> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? sceneId,
     Expression<int>? projectId,
     Expression<int>? number,
@@ -6455,6 +6544,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (sceneId != null) 'scene_id': sceneId,
       if (projectId != null) 'project_id': projectId,
       if (number != null) 'number': number,
@@ -6492,6 +6582,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
 
   ShotsCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? sceneId,
     Value<int>? projectId,
     Value<int>? number,
@@ -6522,6 +6613,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
   }) {
     return ShotsCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       sceneId: sceneId ?? this.sceneId,
       projectId: projectId ?? this.projectId,
       number: number ?? this.number,
@@ -6557,6 +6649,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (sceneId.present) {
       map['scene_id'] = Variable<int>(sceneId.value);
@@ -6650,6 +6745,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
   String toString() {
     return (StringBuffer('ShotsCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('sceneId: $sceneId, ')
           ..write('projectId: $projectId, ')
           ..write('number: $number, ')
@@ -8568,6 +8664,16 @@ class $ShotReferencesTable extends ShotReferences
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
   static const VerificationMeta _shotIdMeta = const VerificationMeta('shotId');
   @override
   late final GeneratedColumn<int> shotId = GeneratedColumn<int>(
@@ -8616,6 +8722,7 @@ class $ShotReferencesTable extends ShotReferences
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     shotId,
     imagePath,
     source,
@@ -8635,6 +8742,12 @@ class $ShotReferencesTable extends ShotReferences
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('shot_id')) {
       context.handle(
@@ -8677,6 +8790,10 @@ class $ShotReferencesTable extends ShotReferences
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       shotId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}shot_id'],
@@ -8704,12 +8821,16 @@ class $ShotReferencesTable extends ShotReferences
 
 class ShotReference extends DataClass implements Insertable<ShotReference> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int shotId;
   final String imagePath;
   final String source;
   final int sortOrder;
   const ShotReference({
     required this.id,
+    this.uid,
     required this.shotId,
     required this.imagePath,
     required this.source,
@@ -8719,6 +8840,9 @@ class ShotReference extends DataClass implements Insertable<ShotReference> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['shot_id'] = Variable<int>(shotId);
     map['image_path'] = Variable<String>(imagePath);
     map['source'] = Variable<String>(source);
@@ -8729,6 +8853,7 @@ class ShotReference extends DataClass implements Insertable<ShotReference> {
   ShotReferencesCompanion toCompanion(bool nullToAbsent) {
     return ShotReferencesCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       shotId: Value(shotId),
       imagePath: Value(imagePath),
       source: Value(source),
@@ -8743,6 +8868,7 @@ class ShotReference extends DataClass implements Insertable<ShotReference> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return ShotReference(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       shotId: serializer.fromJson<int>(json['shotId']),
       imagePath: serializer.fromJson<String>(json['imagePath']),
       source: serializer.fromJson<String>(json['source']),
@@ -8754,6 +8880,7 @@ class ShotReference extends DataClass implements Insertable<ShotReference> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'shotId': serializer.toJson<int>(shotId),
       'imagePath': serializer.toJson<String>(imagePath),
       'source': serializer.toJson<String>(source),
@@ -8763,12 +8890,14 @@ class ShotReference extends DataClass implements Insertable<ShotReference> {
 
   ShotReference copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? shotId,
     String? imagePath,
     String? source,
     int? sortOrder,
   }) => ShotReference(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     shotId: shotId ?? this.shotId,
     imagePath: imagePath ?? this.imagePath,
     source: source ?? this.source,
@@ -8777,6 +8906,7 @@ class ShotReference extends DataClass implements Insertable<ShotReference> {
   ShotReference copyWithCompanion(ShotReferencesCompanion data) {
     return ShotReference(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       shotId: data.shotId.present ? data.shotId.value : this.shotId,
       imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
       source: data.source.present ? data.source.value : this.source,
@@ -8788,6 +8918,7 @@ class ShotReference extends DataClass implements Insertable<ShotReference> {
   String toString() {
     return (StringBuffer('ShotReference(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('shotId: $shotId, ')
           ..write('imagePath: $imagePath, ')
           ..write('source: $source, ')
@@ -8797,12 +8928,14 @@ class ShotReference extends DataClass implements Insertable<ShotReference> {
   }
 
   @override
-  int get hashCode => Object.hash(id, shotId, imagePath, source, sortOrder);
+  int get hashCode =>
+      Object.hash(id, uid, shotId, imagePath, source, sortOrder);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is ShotReference &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.shotId == this.shotId &&
           other.imagePath == this.imagePath &&
           other.source == this.source &&
@@ -8811,12 +8944,14 @@ class ShotReference extends DataClass implements Insertable<ShotReference> {
 
 class ShotReferencesCompanion extends UpdateCompanion<ShotReference> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> shotId;
   final Value<String> imagePath;
   final Value<String> source;
   final Value<int> sortOrder;
   const ShotReferencesCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.shotId = const Value.absent(),
     this.imagePath = const Value.absent(),
     this.source = const Value.absent(),
@@ -8824,6 +8959,7 @@ class ShotReferencesCompanion extends UpdateCompanion<ShotReference> {
   });
   ShotReferencesCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int shotId,
     required String imagePath,
     this.source = const Value.absent(),
@@ -8832,6 +8968,7 @@ class ShotReferencesCompanion extends UpdateCompanion<ShotReference> {
        imagePath = Value(imagePath);
   static Insertable<ShotReference> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? shotId,
     Expression<String>? imagePath,
     Expression<String>? source,
@@ -8839,6 +8976,7 @@ class ShotReferencesCompanion extends UpdateCompanion<ShotReference> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (shotId != null) 'shot_id': shotId,
       if (imagePath != null) 'image_path': imagePath,
       if (source != null) 'source': source,
@@ -8848,6 +8986,7 @@ class ShotReferencesCompanion extends UpdateCompanion<ShotReference> {
 
   ShotReferencesCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? shotId,
     Value<String>? imagePath,
     Value<String>? source,
@@ -8855,6 +8994,7 @@ class ShotReferencesCompanion extends UpdateCompanion<ShotReference> {
   }) {
     return ShotReferencesCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       shotId: shotId ?? this.shotId,
       imagePath: imagePath ?? this.imagePath,
       source: source ?? this.source,
@@ -8867,6 +9007,9 @@ class ShotReferencesCompanion extends UpdateCompanion<ShotReference> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (shotId.present) {
       map['shot_id'] = Variable<int>(shotId.value);
@@ -8887,6 +9030,7 @@ class ShotReferencesCompanion extends UpdateCompanion<ShotReference> {
   String toString() {
     return (StringBuffer('ShotReferencesCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('shotId: $shotId, ')
           ..write('imagePath: $imagePath, ')
           ..write('source: $source, ')
@@ -10270,6 +10414,16 @@ class $LocationImagesTable extends LocationImages
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
   static const VerificationMeta _locationIdMeta = const VerificationMeta(
     'locationId',
   );
@@ -10342,6 +10496,7 @@ class $LocationImagesTable extends LocationImages
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     locationId,
     imagePath,
     caption,
@@ -10363,6 +10518,12 @@ class $LocationImagesTable extends LocationImages
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('location_id')) {
       context.handle(
@@ -10417,6 +10578,10 @@ class $LocationImagesTable extends LocationImages
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       locationId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}location_id'],
@@ -10452,6 +10617,9 @@ class $LocationImagesTable extends LocationImages
 
 class LocationImage extends DataClass implements Insertable<LocationImage> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int locationId;
   final String imagePath;
   final String? caption;
@@ -10460,6 +10628,7 @@ class LocationImage extends DataClass implements Insertable<LocationImage> {
   final int sortOrder;
   const LocationImage({
     required this.id,
+    this.uid,
     required this.locationId,
     required this.imagePath,
     this.caption,
@@ -10471,6 +10640,9 @@ class LocationImage extends DataClass implements Insertable<LocationImage> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['location_id'] = Variable<int>(locationId);
     map['image_path'] = Variable<String>(imagePath);
     if (!nullToAbsent || caption != null) {
@@ -10487,6 +10659,7 @@ class LocationImage extends DataClass implements Insertable<LocationImage> {
   LocationImagesCompanion toCompanion(bool nullToAbsent) {
     return LocationImagesCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       locationId: Value(locationId),
       imagePath: Value(imagePath),
       caption: caption == null && nullToAbsent
@@ -10507,6 +10680,7 @@ class LocationImage extends DataClass implements Insertable<LocationImage> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return LocationImage(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       locationId: serializer.fromJson<int>(json['locationId']),
       imagePath: serializer.fromJson<String>(json['imagePath']),
       caption: serializer.fromJson<String?>(json['caption']),
@@ -10520,6 +10694,7 @@ class LocationImage extends DataClass implements Insertable<LocationImage> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'locationId': serializer.toJson<int>(locationId),
       'imagePath': serializer.toJson<String>(imagePath),
       'caption': serializer.toJson<String?>(caption),
@@ -10531,6 +10706,7 @@ class LocationImage extends DataClass implements Insertable<LocationImage> {
 
   LocationImage copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? locationId,
     String? imagePath,
     Value<String?> caption = const Value.absent(),
@@ -10539,6 +10715,7 @@ class LocationImage extends DataClass implements Insertable<LocationImage> {
     int? sortOrder,
   }) => LocationImage(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     locationId: locationId ?? this.locationId,
     imagePath: imagePath ?? this.imagePath,
     caption: caption.present ? caption.value : this.caption,
@@ -10549,6 +10726,7 @@ class LocationImage extends DataClass implements Insertable<LocationImage> {
   LocationImage copyWithCompanion(LocationImagesCompanion data) {
     return LocationImage(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       locationId: data.locationId.present
           ? data.locationId.value
           : this.locationId,
@@ -10564,6 +10742,7 @@ class LocationImage extends DataClass implements Insertable<LocationImage> {
   String toString() {
     return (StringBuffer('LocationImage(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('locationId: $locationId, ')
           ..write('imagePath: $imagePath, ')
           ..write('caption: $caption, ')
@@ -10577,6 +10756,7 @@ class LocationImage extends DataClass implements Insertable<LocationImage> {
   @override
   int get hashCode => Object.hash(
     id,
+    uid,
     locationId,
     imagePath,
     caption,
@@ -10589,6 +10769,7 @@ class LocationImage extends DataClass implements Insertable<LocationImage> {
       identical(this, other) ||
       (other is LocationImage &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.locationId == this.locationId &&
           other.imagePath == this.imagePath &&
           other.caption == this.caption &&
@@ -10599,6 +10780,7 @@ class LocationImage extends DataClass implements Insertable<LocationImage> {
 
 class LocationImagesCompanion extends UpdateCompanion<LocationImage> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> locationId;
   final Value<String> imagePath;
   final Value<String?> caption;
@@ -10607,6 +10789,7 @@ class LocationImagesCompanion extends UpdateCompanion<LocationImage> {
   final Value<int> sortOrder;
   const LocationImagesCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.locationId = const Value.absent(),
     this.imagePath = const Value.absent(),
     this.caption = const Value.absent(),
@@ -10616,6 +10799,7 @@ class LocationImagesCompanion extends UpdateCompanion<LocationImage> {
   });
   LocationImagesCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int locationId,
     required String imagePath,
     this.caption = const Value.absent(),
@@ -10626,6 +10810,7 @@ class LocationImagesCompanion extends UpdateCompanion<LocationImage> {
        imagePath = Value(imagePath);
   static Insertable<LocationImage> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? locationId,
     Expression<String>? imagePath,
     Expression<String>? caption,
@@ -10635,6 +10820,7 @@ class LocationImagesCompanion extends UpdateCompanion<LocationImage> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (locationId != null) 'location_id': locationId,
       if (imagePath != null) 'image_path': imagePath,
       if (caption != null) 'caption': caption,
@@ -10646,6 +10832,7 @@ class LocationImagesCompanion extends UpdateCompanion<LocationImage> {
 
   LocationImagesCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? locationId,
     Value<String>? imagePath,
     Value<String?>? caption,
@@ -10655,6 +10842,7 @@ class LocationImagesCompanion extends UpdateCompanion<LocationImage> {
   }) {
     return LocationImagesCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       locationId: locationId ?? this.locationId,
       imagePath: imagePath ?? this.imagePath,
       caption: caption ?? this.caption,
@@ -10669,6 +10857,9 @@ class LocationImagesCompanion extends UpdateCompanion<LocationImage> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (locationId.present) {
       map['location_id'] = Variable<int>(locationId.value);
@@ -10695,6 +10886,7 @@ class LocationImagesCompanion extends UpdateCompanion<LocationImage> {
   String toString() {
     return (StringBuffer('LocationImagesCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('locationId: $locationId, ')
           ..write('imagePath: $imagePath, ')
           ..write('caption: $caption, ')
@@ -10724,6 +10916,16 @@ class $SiteImagesTable extends SiteImages
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'PRIMARY KEY AUTOINCREMENT',
     ),
+  );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
   );
   static const VerificationMeta _siteIdMeta = const VerificationMeta('siteId');
   @override
@@ -10795,6 +10997,7 @@ class $SiteImagesTable extends SiteImages
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     siteId,
     imagePath,
     caption,
@@ -10816,6 +11019,12 @@ class $SiteImagesTable extends SiteImages
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('site_id')) {
       context.handle(
@@ -10870,6 +11079,10 @@ class $SiteImagesTable extends SiteImages
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       siteId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}site_id'],
@@ -10905,6 +11118,9 @@ class $SiteImagesTable extends SiteImages
 
 class SiteImage extends DataClass implements Insertable<SiteImage> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int siteId;
   final String imagePath;
   final String? caption;
@@ -10913,6 +11129,7 @@ class SiteImage extends DataClass implements Insertable<SiteImage> {
   final int sortOrder;
   const SiteImage({
     required this.id,
+    this.uid,
     required this.siteId,
     required this.imagePath,
     this.caption,
@@ -10924,6 +11141,9 @@ class SiteImage extends DataClass implements Insertable<SiteImage> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['site_id'] = Variable<int>(siteId);
     map['image_path'] = Variable<String>(imagePath);
     if (!nullToAbsent || caption != null) {
@@ -10940,6 +11160,7 @@ class SiteImage extends DataClass implements Insertable<SiteImage> {
   SiteImagesCompanion toCompanion(bool nullToAbsent) {
     return SiteImagesCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       siteId: Value(siteId),
       imagePath: Value(imagePath),
       caption: caption == null && nullToAbsent
@@ -10960,6 +11181,7 @@ class SiteImage extends DataClass implements Insertable<SiteImage> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return SiteImage(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       siteId: serializer.fromJson<int>(json['siteId']),
       imagePath: serializer.fromJson<String>(json['imagePath']),
       caption: serializer.fromJson<String?>(json['caption']),
@@ -10973,6 +11195,7 @@ class SiteImage extends DataClass implements Insertable<SiteImage> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'siteId': serializer.toJson<int>(siteId),
       'imagePath': serializer.toJson<String>(imagePath),
       'caption': serializer.toJson<String?>(caption),
@@ -10984,6 +11207,7 @@ class SiteImage extends DataClass implements Insertable<SiteImage> {
 
   SiteImage copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? siteId,
     String? imagePath,
     Value<String?> caption = const Value.absent(),
@@ -10992,6 +11216,7 @@ class SiteImage extends DataClass implements Insertable<SiteImage> {
     int? sortOrder,
   }) => SiteImage(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     siteId: siteId ?? this.siteId,
     imagePath: imagePath ?? this.imagePath,
     caption: caption.present ? caption.value : this.caption,
@@ -11002,6 +11227,7 @@ class SiteImage extends DataClass implements Insertable<SiteImage> {
   SiteImage copyWithCompanion(SiteImagesCompanion data) {
     return SiteImage(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       siteId: data.siteId.present ? data.siteId.value : this.siteId,
       imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
       caption: data.caption.present ? data.caption.value : this.caption,
@@ -11015,6 +11241,7 @@ class SiteImage extends DataClass implements Insertable<SiteImage> {
   String toString() {
     return (StringBuffer('SiteImage(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('siteId: $siteId, ')
           ..write('imagePath: $imagePath, ')
           ..write('caption: $caption, ')
@@ -11026,13 +11253,22 @@ class SiteImage extends DataClass implements Insertable<SiteImage> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, siteId, imagePath, caption, kind, timeOfDay, sortOrder);
+  int get hashCode => Object.hash(
+    id,
+    uid,
+    siteId,
+    imagePath,
+    caption,
+    kind,
+    timeOfDay,
+    sortOrder,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is SiteImage &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.siteId == this.siteId &&
           other.imagePath == this.imagePath &&
           other.caption == this.caption &&
@@ -11043,6 +11279,7 @@ class SiteImage extends DataClass implements Insertable<SiteImage> {
 
 class SiteImagesCompanion extends UpdateCompanion<SiteImage> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> siteId;
   final Value<String> imagePath;
   final Value<String?> caption;
@@ -11051,6 +11288,7 @@ class SiteImagesCompanion extends UpdateCompanion<SiteImage> {
   final Value<int> sortOrder;
   const SiteImagesCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.siteId = const Value.absent(),
     this.imagePath = const Value.absent(),
     this.caption = const Value.absent(),
@@ -11060,6 +11298,7 @@ class SiteImagesCompanion extends UpdateCompanion<SiteImage> {
   });
   SiteImagesCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int siteId,
     required String imagePath,
     this.caption = const Value.absent(),
@@ -11070,6 +11309,7 @@ class SiteImagesCompanion extends UpdateCompanion<SiteImage> {
        imagePath = Value(imagePath);
   static Insertable<SiteImage> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? siteId,
     Expression<String>? imagePath,
     Expression<String>? caption,
@@ -11079,6 +11319,7 @@ class SiteImagesCompanion extends UpdateCompanion<SiteImage> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (siteId != null) 'site_id': siteId,
       if (imagePath != null) 'image_path': imagePath,
       if (caption != null) 'caption': caption,
@@ -11090,6 +11331,7 @@ class SiteImagesCompanion extends UpdateCompanion<SiteImage> {
 
   SiteImagesCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? siteId,
     Value<String>? imagePath,
     Value<String?>? caption,
@@ -11099,6 +11341,7 @@ class SiteImagesCompanion extends UpdateCompanion<SiteImage> {
   }) {
     return SiteImagesCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       siteId: siteId ?? this.siteId,
       imagePath: imagePath ?? this.imagePath,
       caption: caption ?? this.caption,
@@ -11113,6 +11356,9 @@ class SiteImagesCompanion extends UpdateCompanion<SiteImage> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (siteId.present) {
       map['site_id'] = Variable<int>(siteId.value);
@@ -11139,6 +11385,7 @@ class SiteImagesCompanion extends UpdateCompanion<SiteImage> {
   String toString() {
     return (StringBuffer('SiteImagesCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('siteId: $siteId, ')
           ..write('imagePath: $imagePath, ')
           ..write('caption: $caption, ')
@@ -24759,6 +25006,16 @@ class $MoodboardImagesTable extends MoodboardImages
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
   static const VerificationMeta _projectIdMeta = const VerificationMeta(
     'projectId',
   );
@@ -24939,6 +25196,7 @@ class $MoodboardImagesTable extends MoodboardImages
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     projectId,
     bibleId,
     imagePath,
@@ -24969,6 +25227,12 @@ class $MoodboardImagesTable extends MoodboardImages
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('project_id')) {
       context.handle(
@@ -25095,6 +25359,10 @@ class $MoodboardImagesTable extends MoodboardImages
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       projectId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}project_id'],
@@ -25166,6 +25434,9 @@ class $MoodboardImagesTable extends MoodboardImages
 
 class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int projectId;
   final int? bibleId;
   final String imagePath;
@@ -25190,6 +25461,7 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
   final int sortOrder;
   const MoodboardImage({
     required this.id,
+    this.uid,
     required this.projectId,
     this.bibleId,
     required this.imagePath,
@@ -25210,6 +25482,9 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['project_id'] = Variable<int>(projectId);
     if (!nullToAbsent || bibleId != null) {
       map['bible_id'] = Variable<int>(bibleId);
@@ -25255,6 +25530,7 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
   MoodboardImagesCompanion toCompanion(bool nullToAbsent) {
     return MoodboardImagesCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       projectId: Value(projectId),
       bibleId: bibleId == null && nullToAbsent
           ? const Value.absent()
@@ -25302,6 +25578,7 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return MoodboardImage(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       projectId: serializer.fromJson<int>(json['projectId']),
       bibleId: serializer.fromJson<int?>(json['bibleId']),
       imagePath: serializer.fromJson<String>(json['imagePath']),
@@ -25328,6 +25605,7 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'projectId': serializer.toJson<int>(projectId),
       'bibleId': serializer.toJson<int?>(bibleId),
       'imagePath': serializer.toJson<String>(imagePath),
@@ -25350,6 +25628,7 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
 
   MoodboardImage copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? projectId,
     Value<int?> bibleId = const Value.absent(),
     String? imagePath,
@@ -25367,6 +25646,7 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
     int? sortOrder,
   }) => MoodboardImage(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     projectId: projectId ?? this.projectId,
     bibleId: bibleId.present ? bibleId.value : this.bibleId,
     imagePath: imagePath ?? this.imagePath,
@@ -25398,6 +25678,7 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
   MoodboardImage copyWithCompanion(MoodboardImagesCompanion data) {
     return MoodboardImage(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       projectId: data.projectId.present ? data.projectId.value : this.projectId,
       bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
       imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
@@ -25432,6 +25713,7 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
   String toString() {
     return (StringBuffer('MoodboardImage(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('bibleId: $bibleId, ')
           ..write('imagePath: $imagePath, ')
@@ -25454,6 +25736,7 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
   @override
   int get hashCode => Object.hash(
     id,
+    uid,
     projectId,
     bibleId,
     imagePath,
@@ -25475,6 +25758,7 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
       identical(this, other) ||
       (other is MoodboardImage &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.projectId == this.projectId &&
           other.bibleId == this.bibleId &&
           other.imagePath == this.imagePath &&
@@ -25494,6 +25778,7 @@ class MoodboardImage extends DataClass implements Insertable<MoodboardImage> {
 
 class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> projectId;
   final Value<int?> bibleId;
   final Value<String> imagePath;
@@ -25511,6 +25796,7 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
   final Value<int> sortOrder;
   const MoodboardImagesCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.projectId = const Value.absent(),
     this.bibleId = const Value.absent(),
     this.imagePath = const Value.absent(),
@@ -25529,6 +25815,7 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
   });
   MoodboardImagesCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int projectId,
     this.bibleId = const Value.absent(),
     required String imagePath,
@@ -25548,6 +25835,7 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
        imagePath = Value(imagePath);
   static Insertable<MoodboardImage> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? projectId,
     Expression<int>? bibleId,
     Expression<String>? imagePath,
@@ -25566,6 +25854,7 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (projectId != null) 'project_id': projectId,
       if (bibleId != null) 'bible_id': bibleId,
       if (imagePath != null) 'image_path': imagePath,
@@ -25588,6 +25877,7 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
 
   MoodboardImagesCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? projectId,
     Value<int?>? bibleId,
     Value<String>? imagePath,
@@ -25606,6 +25896,7 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
   }) {
     return MoodboardImagesCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       projectId: projectId ?? this.projectId,
       bibleId: bibleId ?? this.bibleId,
       imagePath: imagePath ?? this.imagePath,
@@ -25630,6 +25921,9 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (projectId.present) {
       map['project_id'] = Variable<int>(projectId.value);
@@ -25685,6 +25979,7 @@ class MoodboardImagesCompanion extends UpdateCompanion<MoodboardImage> {
   String toString() {
     return (StringBuffer('MoodboardImagesCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('bibleId: $bibleId, ')
           ..write('imagePath: $imagePath, ')
@@ -39181,6 +39476,7 @@ typedef $$LocationBasePlansTableProcessedTableManager =
 typedef $$ScenesTableCreateCompanionBuilder =
     ScenesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int projectId,
       required int number,
       required String name,
@@ -39206,6 +39502,7 @@ typedef $$ScenesTableCreateCompanionBuilder =
 typedef $$ScenesTableUpdateCompanionBuilder =
     ScenesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> projectId,
       Value<int> number,
       Value<String> name,
@@ -39346,6 +39643,11 @@ class $$ScenesTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -39573,6 +39875,11 @@ class $$ScenesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get number => $composableBuilder(
     column: $table.number,
     builder: (column) => ColumnOrderings(column),
@@ -39744,6 +40051,9 @@ class $$ScenesTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<int> get number =>
       $composableBuilder(column: $table.number, builder: (column) => column);
@@ -39980,6 +40290,7 @@ class $$ScenesTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> projectId = const Value.absent(),
                 Value<int> number = const Value.absent(),
                 Value<String> name = const Value.absent(),
@@ -40003,6 +40314,7 @@ class $$ScenesTableTableManager
                 Value<bool> offScript = const Value.absent(),
               }) => ScenesCompanion(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 number: number,
                 name: name,
@@ -40028,6 +40340,7 @@ class $$ScenesTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int projectId,
                 required int number,
                 required String name,
@@ -40051,6 +40364,7 @@ class $$ScenesTableTableManager
                 Value<bool> offScript = const Value.absent(),
               }) => ScenesCompanion.insert(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 number: number,
                 name: name,
@@ -41062,6 +41376,7 @@ typedef $$LightSetupsTableProcessedTableManager =
 typedef $$ShotsTableCreateCompanionBuilder =
     ShotsCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int sceneId,
       required int projectId,
       required int number,
@@ -41093,6 +41408,7 @@ typedef $$ShotsTableCreateCompanionBuilder =
 typedef $$ShotsTableUpdateCompanionBuilder =
     ShotsCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> sceneId,
       Value<int> projectId,
       Value<int> number,
@@ -41282,6 +41598,11 @@ class $$ShotsTableFilterComposer extends Composer<_$AppDatabase, $ShotsTable> {
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -41582,6 +41903,11 @@ class $$ShotsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get number => $composableBuilder(
     column: $table.number,
     builder: (column) => ColumnOrderings(column),
@@ -41801,6 +42127,9 @@ class $$ShotsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<int> get number =>
       $composableBuilder(column: $table.number, builder: (column) => column);
@@ -42103,6 +42432,7 @@ class $$ShotsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> sceneId = const Value.absent(),
                 Value<int> projectId = const Value.absent(),
                 Value<int> number = const Value.absent(),
@@ -42132,6 +42462,7 @@ class $$ShotsTableTableManager
                 Value<String?> cellStylesJson = const Value.absent(),
               }) => ShotsCompanion(
                 id: id,
+                uid: uid,
                 sceneId: sceneId,
                 projectId: projectId,
                 number: number,
@@ -42163,6 +42494,7 @@ class $$ShotsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int sceneId,
                 required int projectId,
                 required int number,
@@ -42192,6 +42524,7 @@ class $$ShotsTableTableManager
                 Value<String?> cellStylesJson = const Value.absent(),
               }) => ShotsCompanion.insert(
                 id: id,
+                uid: uid,
                 sceneId: sceneId,
                 projectId: projectId,
                 number: number,
@@ -43884,6 +44217,7 @@ typedef $$ShootDocumentBlocksTableProcessedTableManager =
 typedef $$ShotReferencesTableCreateCompanionBuilder =
     ShotReferencesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int shotId,
       required String imagePath,
       Value<String> source,
@@ -43892,6 +44226,7 @@ typedef $$ShotReferencesTableCreateCompanionBuilder =
 typedef $$ShotReferencesTableUpdateCompanionBuilder =
     ShotReferencesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> shotId,
       Value<String> imagePath,
       Value<String> source,
@@ -43936,6 +44271,11 @@ class $$ShotReferencesTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -43992,6 +44332,11 @@ class $$ShotReferencesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get imagePath => $composableBuilder(
     column: $table.imagePath,
     builder: (column) => ColumnOrderings(column),
@@ -44042,6 +44387,9 @@ class $$ShotReferencesTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<String> get imagePath =>
       $composableBuilder(column: $table.imagePath, builder: (column) => column);
@@ -44107,12 +44455,14 @@ class $$ShotReferencesTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> shotId = const Value.absent(),
                 Value<String> imagePath = const Value.absent(),
                 Value<String> source = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
               }) => ShotReferencesCompanion(
                 id: id,
+                uid: uid,
                 shotId: shotId,
                 imagePath: imagePath,
                 source: source,
@@ -44121,12 +44471,14 @@ class $$ShotReferencesTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int shotId,
                 required String imagePath,
                 Value<String> source = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
               }) => ShotReferencesCompanion.insert(
                 id: id,
+                uid: uid,
                 shotId: shotId,
                 imagePath: imagePath,
                 source: source,
@@ -45218,6 +45570,7 @@ typedef $$CameraPathPointsTableProcessedTableManager =
 typedef $$LocationImagesTableCreateCompanionBuilder =
     LocationImagesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int locationId,
       required String imagePath,
       Value<String?> caption,
@@ -45228,6 +45581,7 @@ typedef $$LocationImagesTableCreateCompanionBuilder =
 typedef $$LocationImagesTableUpdateCompanionBuilder =
     LocationImagesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> locationId,
       Value<String> imagePath,
       Value<String?> caption,
@@ -45278,6 +45632,11 @@ class $$LocationImagesTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -45344,6 +45703,11 @@ class $$LocationImagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get imagePath => $composableBuilder(
     column: $table.imagePath,
     builder: (column) => ColumnOrderings(column),
@@ -45404,6 +45768,9 @@ class $$LocationImagesTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<String> get imagePath =>
       $composableBuilder(column: $table.imagePath, builder: (column) => column);
@@ -45476,6 +45843,7 @@ class $$LocationImagesTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> locationId = const Value.absent(),
                 Value<String> imagePath = const Value.absent(),
                 Value<String?> caption = const Value.absent(),
@@ -45484,6 +45852,7 @@ class $$LocationImagesTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => LocationImagesCompanion(
                 id: id,
+                uid: uid,
                 locationId: locationId,
                 imagePath: imagePath,
                 caption: caption,
@@ -45494,6 +45863,7 @@ class $$LocationImagesTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int locationId,
                 required String imagePath,
                 Value<String?> caption = const Value.absent(),
@@ -45502,6 +45872,7 @@ class $$LocationImagesTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => LocationImagesCompanion.insert(
                 id: id,
+                uid: uid,
                 locationId: locationId,
                 imagePath: imagePath,
                 caption: caption,
@@ -45580,6 +45951,7 @@ typedef $$LocationImagesTableProcessedTableManager =
 typedef $$SiteImagesTableCreateCompanionBuilder =
     SiteImagesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int siteId,
       required String imagePath,
       Value<String?> caption,
@@ -45590,6 +45962,7 @@ typedef $$SiteImagesTableCreateCompanionBuilder =
 typedef $$SiteImagesTableUpdateCompanionBuilder =
     SiteImagesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> siteId,
       Value<String> imagePath,
       Value<String?> caption,
@@ -45633,6 +46006,11 @@ class $$SiteImagesTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -45699,6 +46077,11 @@ class $$SiteImagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get imagePath => $composableBuilder(
     column: $table.imagePath,
     builder: (column) => ColumnOrderings(column),
@@ -45759,6 +46142,9 @@ class $$SiteImagesTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<String> get imagePath =>
       $composableBuilder(column: $table.imagePath, builder: (column) => column);
@@ -45828,6 +46214,7 @@ class $$SiteImagesTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> siteId = const Value.absent(),
                 Value<String> imagePath = const Value.absent(),
                 Value<String?> caption = const Value.absent(),
@@ -45836,6 +46223,7 @@ class $$SiteImagesTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => SiteImagesCompanion(
                 id: id,
+                uid: uid,
                 siteId: siteId,
                 imagePath: imagePath,
                 caption: caption,
@@ -45846,6 +46234,7 @@ class $$SiteImagesTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int siteId,
                 required String imagePath,
                 Value<String?> caption = const Value.absent(),
@@ -45854,6 +46243,7 @@ class $$SiteImagesTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => SiteImagesCompanion.insert(
                 id: id,
+                uid: uid,
                 siteId: siteId,
                 imagePath: imagePath,
                 caption: caption,
@@ -54942,6 +55332,7 @@ typedef $$MoodboardGroupsTableProcessedTableManager =
 typedef $$MoodboardImagesTableCreateCompanionBuilder =
     MoodboardImagesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int projectId,
       Value<int?> bibleId,
       required String imagePath,
@@ -54961,6 +55352,7 @@ typedef $$MoodboardImagesTableCreateCompanionBuilder =
 typedef $$MoodboardImagesTableUpdateCompanionBuilder =
     MoodboardImagesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> projectId,
       Value<int?> bibleId,
       Value<String> imagePath,
@@ -55112,6 +55504,11 @@ class $$MoodboardImagesTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -55304,6 +55701,11 @@ class $$MoodboardImagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get imagePath => $composableBuilder(
     column: $table.imagePath,
     builder: (column) => ColumnOrderings(column),
@@ -55463,6 +55865,9 @@ class $$MoodboardImagesTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<String> get imagePath =>
       $composableBuilder(column: $table.imagePath, builder: (column) => column);
@@ -55665,6 +56070,7 @@ class $$MoodboardImagesTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> projectId = const Value.absent(),
                 Value<int?> bibleId = const Value.absent(),
                 Value<String> imagePath = const Value.absent(),
@@ -55682,6 +56088,7 @@ class $$MoodboardImagesTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => MoodboardImagesCompanion(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 bibleId: bibleId,
                 imagePath: imagePath,
@@ -55701,6 +56108,7 @@ class $$MoodboardImagesTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int projectId,
                 Value<int?> bibleId = const Value.absent(),
                 required String imagePath,
@@ -55718,6 +56126,7 @@ class $$MoodboardImagesTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => MoodboardImagesCompanion.insert(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 bibleId: bibleId,
                 imagePath: imagePath,

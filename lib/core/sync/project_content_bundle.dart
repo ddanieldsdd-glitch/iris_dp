@@ -18,6 +18,11 @@ int? bundleInt(dynamic value) {
 
 int bundleIntOr(dynamic value, int fallback) => bundleInt(value) ?? fallback;
 
+/// El `uid` que trae el bundle; si no lo trae (bundles anteriores a B1), la
+/// fila recibe uno nuevo.
+Value<String?> bundleUid(dynamic value) =>
+    value is String && value.isNotEmpty ? Value(value) : const Value.absent();
+
 DateTime? bundleDateTime(dynamic value) {
   if (value == null) return null;
   if (value is DateTime) return value;
@@ -100,7 +105,8 @@ class ContentSyncSummary {
 class ProjectContentBundle {
   /// v5: obturación, fps, descripción, numeración y planta de cada plano, y
   /// localización y set de los esquemas de luz de la biblia.
-  static const bundleVersion = 5;
+  /// v6: `uid` permanente de escenas, planos e imágenes.
+  static const bundleVersion = 6;
 
   static Future<Map<String, dynamic>> export(
     AppDatabase db,
@@ -127,11 +133,15 @@ class ProjectContentBundle {
       )..where((i) => i.siteId.equals(site.id))).get();
       for (final img in imgs) {
         siteImages.add({
+          'uid': img.uid,
           'siteKey': siteKeyById[site.id],
           'imagePath': img.imagePath,
-          'mediaKey': MediaEntityKeys.siteImage(
-            siteKey: siteKeyById[site.id]!,
-            sortOrder: img.sortOrder,
+          'mediaKey': MediaEntityKeys.forImage(
+            img.uid,
+            () => MediaEntityKeys.siteImage(
+              siteKey: siteKeyById[site.id]!,
+              sortOrder: img.sortOrder,
+            ),
           ),
           'caption': img.caption,
           'kind': img.kind,
@@ -157,11 +167,15 @@ class ProjectContentBundle {
       )..where((i) => i.locationId.equals(set.id))).get();
       for (final img in imgs) {
         locationImages.add({
+          'uid': img.uid,
           'setKey': setKeyById[set.id],
           'imagePath': img.imagePath,
-          'mediaKey': MediaEntityKeys.locationImage(
-            setKey: setKeyById[set.id]!,
-            sortOrder: img.sortOrder,
+          'mediaKey': MediaEntityKeys.forImage(
+            img.uid,
+            () => MediaEntityKeys.locationImage(
+              setKey: setKeyById[set.id]!,
+              sortOrder: img.sortOrder,
+            ),
           ),
           'caption': img.caption,
           'kind': img.kind,
@@ -217,11 +231,15 @@ class ProjectContentBundle {
       )..where((r) => r.shotId.equals(shot.id))).get();
       for (final ref in refs) {
         shotReferences.add({
+          'uid': ref.uid,
           'shotKey': shotKeyById[shot.id],
           'imagePath': ref.imagePath,
-          'mediaKey': MediaEntityKeys.shotReference(
-            shotKey: shotKeyById[shot.id]!,
-            sortOrder: ref.sortOrder,
+          'mediaKey': MediaEntityKeys.forImage(
+            ref.uid,
+            () => MediaEntityKeys.shotReference(
+              shotKey: shotKeyById[shot.id]!,
+              sortOrder: ref.sortOrder,
+            ),
           ),
           'source': ref.source,
           'sortOrder': ref.sortOrder,
@@ -317,9 +335,12 @@ class ProjectContentBundle {
     )..where((m) => m.projectId.equals(projectId))).get();
     final moodboardKeyById = <int, String>{
       for (final m in moodImages)
-        m.id: MediaEntityKeys.moodboard(
-          groupKey: m.groupId != null ? groupKeyById[m.groupId!] : null,
-          sortOrder: m.sortOrder,
+        m.id: MediaEntityKeys.forImage(
+          m.uid,
+          () => MediaEntityKeys.moodboard(
+            groupKey: m.groupId != null ? groupKeyById[m.groupId!] : null,
+            sortOrder: m.sortOrder,
+          ),
         ),
     };
 
@@ -595,6 +616,7 @@ class ProjectContentBundle {
       'scenes': scenes
           .map(
             (s) => {
+              'uid': s.uid,
               'sceneKey': sceneKeyById[s.id],
               'number': s.number,
               'name': s.name,
@@ -624,6 +646,7 @@ class ProjectContentBundle {
       'shots': shots.map((shot) {
         final scene = sceneById[shot.sceneId]!;
         return {
+          'uid': shot.uid,
           'shotKey': shotKeyById[shot.id],
           'sceneKey': sceneKeyById[scene.id],
           'number': shot.number,
@@ -725,13 +748,11 @@ class ProjectContentBundle {
               // Id en el dispositivo de origen: el contenido de la biblia
               // enlaza imágenes por id y al importar hay que rehacerlos.
               'localId': m.id,
+              'uid': m.uid,
               'bibleId': m.bibleId,
               'bibleKey': m.bibleId != null ? vbKeyById[m.bibleId!] : null,
               'imagePath': m.imagePath,
-              'mediaKey': MediaEntityKeys.moodboard(
-                groupKey: m.groupId != null ? groupKeyById[m.groupId!] : null,
-                sortOrder: m.sortOrder,
-              ),
+              'mediaKey': moodboardKeyById[m.id],
               'source': m.source,
               'category': m.category,
               'caption': m.caption,
@@ -867,6 +888,18 @@ class ProjectContentBundle {
     final stills = bundle['moodboardImages'];
     for (final key in _hashVolatileTopKeys) {
       copy.remove(key);
+    }
+    // El uid no es contenido: quitarlo evita que, al actualizar, todos los
+    // proyectos salgan como modificados (cada dispositivo pone el suyo hasta
+    // que recibe los de la nube).
+    for (final key in const ['scenes', 'shots']) {
+      final rows = copy[key];
+      if (rows is List) {
+        copy[key] = [
+          for (final row in rows)
+            row is Map ? (Map<String, dynamic>.from(row)..remove('uid')) : row,
+        ];
+      }
     }
     if (stills is List) {
       copy['moodboardData'] = [
@@ -1022,6 +1055,7 @@ class ProjectContentBundle {
       if (siteId == null) continue;
       await db.insertSiteImage(
         SiteImagesCompanion.insert(
+          uid: bundleUid(m['uid']),
           siteId: siteId,
           imagePath: m['imagePath'] as String,
           caption: Value(m['caption'] as String?),
@@ -1088,6 +1122,7 @@ class ProjectContentBundle {
       if (setId == null) continue;
       await db.insertLocationImage(
         LocationImagesCompanion.insert(
+          uid: bundleUid(m['uid']),
           locationId: setId,
           imagePath: m['imagePath'] as String,
           caption: Value(m['caption'] as String?),
@@ -1107,6 +1142,7 @@ class ProjectContentBundle {
           .into(db.scenes)
           .insert(
             ScenesCompanion.insert(
+              uid: bundleUid(m['uid']),
               projectId: projectId,
               number: bundleIntOr(m['number'], 0),
               name: m['name'] as String,
@@ -1144,6 +1180,7 @@ class ProjectContentBundle {
           .into(db.shots)
           .insert(
             ShotsCompanion.insert(
+              uid: bundleUid(m['uid']),
               sceneId: sceneId,
               projectId: projectId,
               number: bundleIntOr(m['number'], 0),
@@ -1194,6 +1231,7 @@ class ProjectContentBundle {
       if (shotId == null) continue;
       await db.insertShotReference(
         ShotReferencesCompanion.insert(
+          uid: bundleUid(m['uid']),
           shotId: shotId,
           imagePath: m['imagePath'] as String,
           source: Value(m['source'] as String? ?? 'manual'),
@@ -1348,6 +1386,7 @@ class ProjectContentBundle {
           .into(db.moodboardImages)
           .insert(
             MoodboardImagesCompanion.insert(
+              uid: bundleUid(m['uid']),
               projectId: projectId,
               imagePath: m['imagePath'] as String,
               bibleId: Value(bundleInt(m['bibleId'])),

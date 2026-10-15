@@ -1,4 +1,9 @@
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
+
+/// Identidad permanente de una fila entre dispositivos (escenas, planos e
+/// imágenes): no cambia al reordenar, renumerar ni renombrar.
+String newEntityUid() => const Uuid().v4();
 
 class ProjectGroups extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -53,6 +58,8 @@ class CloudSyncQueue extends Table {
 
 class Scenes extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
   IntColumn get number => integer()();
   TextColumn get name => text()();
@@ -95,6 +102,8 @@ class Scenes extends Table {
 
 class Shots extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get sceneId => integer().references(Scenes, #id)();
   IntColumn get projectId => integer().references(Projects, #id)();
   IntColumn get number => integer()();
@@ -187,6 +196,8 @@ class ShootDocumentBlocks extends Table {
 
 class ShotReferences extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get shotId => integer().references(Shots, #id)();
   TextColumn get imagePath => text()();
   TextColumn get source => text().withDefault(const Constant('manual'))();
@@ -274,6 +285,8 @@ class LocationSites extends Table {
 /// Imágenes de la localización contenedora (nivel sitio, no set).
 class SiteImages extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get siteId => integer().references(LocationSites, #id)();
   TextColumn get imagePath => text()();
   TextColumn get caption => text().nullable()();
@@ -306,6 +319,8 @@ class LocationBasePlans extends Table {
 
 class LocationImages extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get locationId => integer().references(LocationBasePlans, #id)();
   TextColumn get imagePath => text()();
   TextColumn get caption => text().nullable()();
@@ -783,6 +798,8 @@ class MoodboardGroups extends Table {
 
 class MoodboardImages extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
   IntColumn get bibleId => integer().nullable().references(VisualBibles, #id)();
   TextColumn get imagePath => text()();
