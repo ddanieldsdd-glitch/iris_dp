@@ -115,7 +115,7 @@ Cada punto es un PR pequeño con `flutter analyze` y `flutter test` en verde, co
 ### Fase B — Mejoras de funcionamiento
 
 - [x] **B1. Identidad estable de escenas, planos e imágenes (F4, 3.1 del tablero).** Hecho el 2026-10-16 (schema 47, bundle v6). Probado con la base real: 142 de 146 imágenes se reconocieron por contenido sin volver a subirse. Los demás equipos (iPad) deben actualizarse. `uid` en `Scenes`, `Shots` y `MoodboardImages`; claves de medios y `publicId` por `uid`; migración que mantenga lo ya subido.
-- [ ] **B2. Lo que vive en `SharedPreferences` pasa a la base (2.2)**, incluidas las huellas de sync, para que una copia de la base sea completa.
+- [x] **B2. Lo que vive en `SharedPreferences` pasa a la base (2.2).** Hecho el 2026-10-16 (schema 48): huellas de sincronización y catálogo propio del moodboard. Los metadatos de las imágenes ya estaban en la base (`metaJson`). Estilos de sección, blueprint y preset de PDF son restos sin uso: a la limpieza de la Fase 5. Lo demás son preferencias de este equipo y se quedan.
 - [ ] **B3. Estado de sincronización a la vista.** Por proyecto: al día / cambios por subir / conflicto / imágenes pendientes o fallidas.
 - [ ] **B4. Secciones técnicas sin diálogos y con datos reales (4.6 + 1.5).** Exposición, Cámara, Óptica y Formato con edición directa, leyendo el equipo del proyecto.
 - [ ] **B5. Mapa de luz fuera del hilo principal**, con medición en iPad.
