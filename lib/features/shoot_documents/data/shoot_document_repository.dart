@@ -1,5 +1,4 @@
 import '../../../core/database/app_database.dart';
-import '../shoot_document_block_types.dart';
 import '../shoot_document_composer.dart';
 import '../shoot_document_service.dart';
 

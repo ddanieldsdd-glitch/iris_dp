@@ -7,7 +7,7 @@ import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/sync/cloud_media_service.dart';
 import 'package:iris_dp/core/sync/media_upload_queue.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase/supabase.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Cloudinary simulado: falla las primeras [failures] subidas de cada clave.
 class _FakeCloud extends CloudMediaService {

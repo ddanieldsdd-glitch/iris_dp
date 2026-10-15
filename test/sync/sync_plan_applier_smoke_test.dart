@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/sync/sync_plan.dart';
 import 'package:iris_dp/core/sync/sync_plan_applier.dart';
-import 'package:supabase/supabase.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   late AppDatabase db;

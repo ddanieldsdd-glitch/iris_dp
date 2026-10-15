@@ -128,7 +128,7 @@ abstract final class SunCalculator {
         0.02 * math.sin(2 * m * _rad) +
         0.0003 * math.sin(3 * m * _rad);
     final lambda = (m + c + 180 + 102.9372) % 360;
-    final e = _obliquity * _rad;
+    const e = _obliquity * _rad;
     final dec = math.asin(math.sin(lambda * _rad) * math.sin(e));
     final ra = math.atan2(
       math.sin(lambda * _rad) * math.cos(e),

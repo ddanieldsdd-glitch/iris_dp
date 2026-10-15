@@ -12,7 +12,6 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/media_storage.dart';
 import '../../core/widgets/app_card.dart';
-import '../../shared/visual_bible/bible_section_ids.dart';
 import '../../shared/visual_bible/format_pilot_resolve.dart';
 import '../../shared/visual_bible/format_ratio_format.dart';
 import '../../shared/visual_bible/format_sensor_mode_resolve.dart';

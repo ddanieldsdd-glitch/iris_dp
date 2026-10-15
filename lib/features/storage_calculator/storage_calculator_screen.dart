@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -91,18 +89,6 @@ class _StorageCalculatorScreenState
         recordingVariantId: _codecVariant,
         delivery: _delivery,
       );
-
-  List<SensorModeSpec> _parseModes(Camera? cam) {
-    final jsonStr = cam?.sensorModesJson;
-    if (jsonStr == null || jsonStr.isEmpty) return [];
-    try {
-      return (jsonDecode(jsonStr) as List)
-          .map((e) => SensorModeSpec.fromJson(Map<String, dynamic>.from(e as Map)))
-          .toList();
-    } catch (_) {
-      return [];
-    }
-  }
 
   /// Resolución en px del modo: usa datos del catálogo o estima desde mm físicos.
   (int width, int height, bool estimated) _resolutionForMode(
