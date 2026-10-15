@@ -367,9 +367,21 @@ class MediaUploadQueue {
       if (!File(img.imagePath).existsSync()) continue;
       final group = img.groupId != null ? groupById[img.groupId!] : null;
       final groupKey = img.groupId != null ? groupKeyById[img.groupId!] : null;
-      final entityKey =
-          MediaEntityKeys.moodboard(groupKey: groupKey, sortOrder: img.sortOrder);
-      final publicId = group != null
+      final entityKey = MediaEntityKeys.forImage(
+        img.uid,
+        () => MediaEntityKeys.moodboard(
+          groupKey: groupKey,
+          sortOrder: img.sortOrder,
+        ),
+      );
+      final publicId = img.uid != null
+          ? CloudinaryPublicId.byUid(
+              workspaceId: workspaceId,
+              projectCloudId: cloudId,
+              category: MediaEntityType.moodboard,
+              uid: img.uid!,
+            )
+          : group != null
           ? CloudinaryPublicId.moodboard(
               workspaceId: workspaceId,
               projectCloudId: cloudId,
@@ -423,13 +435,23 @@ class MediaUploadQueue {
           projectId: projectId,
           projectCloudId: cloudId,
           entityType: MediaEntityType.shotReference,
-          entityKey: MediaEntityKeys.shotReference(
-            shotKey: shotKey,
-            sortOrder: ref.sortOrder,
+          entityKey: MediaEntityKeys.forImage(
+            ref.uid,
+            () => MediaEntityKeys.shotReference(
+              shotKey: shotKey,
+              sortOrder: ref.sortOrder,
+            ),
           ),
           localPath: ref.imagePath,
           sortOrder: ref.sortOrder,
-          publicId: CloudinaryPublicId.shotReference(
+          publicId: ref.uid != null
+              ? CloudinaryPublicId.byUid(
+                  workspaceId: workspaceId,
+                  projectCloudId: cloudId,
+                  category: MediaEntityType.shotReference,
+                  uid: ref.uid!,
+                )
+              : CloudinaryPublicId.shotReference(
             workspaceId: workspaceId,
             projectCloudId: cloudId,
             sceneNumber: scene.number,
@@ -460,13 +482,23 @@ class MediaUploadQueue {
           projectId: projectId,
           projectCloudId: cloudId,
           entityType: MediaEntityType.site,
-          entityKey: MediaEntityKeys.siteImage(
-            siteKey: siteKey,
-            sortOrder: img.sortOrder,
+          entityKey: MediaEntityKeys.forImage(
+            img.uid,
+            () => MediaEntityKeys.siteImage(
+              siteKey: siteKey,
+              sortOrder: img.sortOrder,
+            ),
           ),
           localPath: img.imagePath,
           sortOrder: img.sortOrder,
-          publicId: CloudinaryPublicId.siteImage(
+          publicId: img.uid != null
+              ? CloudinaryPublicId.byUid(
+                  workspaceId: workspaceId,
+                  projectCloudId: cloudId,
+                  category: MediaEntityType.site,
+                  uid: img.uid!,
+                )
+              : CloudinaryPublicId.siteImage(
             workspaceId: workspaceId,
             projectCloudId: cloudId,
             siteSortOrder: site.sortOrder,
@@ -497,13 +529,23 @@ class MediaUploadQueue {
           projectId: projectId,
           projectCloudId: cloudId,
           entityType: MediaEntityType.location,
-          entityKey: MediaEntityKeys.locationImage(
-            setKey: setKey,
-            sortOrder: img.sortOrder,
+          entityKey: MediaEntityKeys.forImage(
+            img.uid,
+            () => MediaEntityKeys.locationImage(
+              setKey: setKey,
+              sortOrder: img.sortOrder,
+            ),
           ),
           localPath: img.imagePath,
           sortOrder: img.sortOrder,
-          publicId: CloudinaryPublicId.locationImage(
+          publicId: img.uid != null
+              ? CloudinaryPublicId.byUid(
+                  workspaceId: workspaceId,
+                  projectCloudId: cloudId,
+                  category: MediaEntityType.location,
+                  uid: img.uid!,
+                )
+              : CloudinaryPublicId.locationImage(
             workspaceId: workspaceId,
             projectCloudId: cloudId,
             setSortOrder: set.sortOrder,

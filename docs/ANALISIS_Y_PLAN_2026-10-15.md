@@ -104,7 +104,7 @@ Cada punto es un PR pequeño con `flutter analyze` y `flutter test` en verde, co
 - [x] **A4. Copia automática antes de migrar (F6).** Ya existía para el esquema 45; ahora para toda subida de esquema, con las tres últimas copias. Si la versión de la base en disco es menor que `schemaVersion`, copia `antes-de-migrar-<versión>` antes de abrirla.
 - [x] **A5. Migraciones a prueba de choques (F5).** Un `addColumnIfMissing` que mire `pragma table_info`, usado en todos los pasos; test que migre una base vacía de cada versión antigua disponible hasta la actual.
 - [x] **A6. Cola de imágenes sana (F7).** Al arrancar, `processing` → `pending`; reutilizar la fila fallida en vez de crear otra; reintento sin bloquear el lote; botón «Reintentar subidas fallidas» y recuento de fallos visible.
-- [x] **A7. Tema sin reinicio y guardado (F8).** Falta comprobarlo a mano en la app. Quitar la `key` del `MaterialApp`, crear el futuro de arranque una sola vez y guardar el tema.
+- [x] **A7. Tema sin reinicio y guardado (F8).** Al probarlo, Daniel decidió quitar el tema claro: la app es solo oscura. Quitar la `key` del `MaterialApp`, crear el futuro de arranque una sola vez y guardar el tema.
 - [x] **A8. `firstWhere` seguros (F9)** en sync y export primero; el resto, al tocar cada archivo.
 - [x] **A9. Errores con rastro (F10).** Registro en `iris_dp/logs/` y «Compartir registro de errores» en Ajustes. Captura global que escriba en un log local rotativo, con opción de enviarlo.
 - [x] **A10. Blobs dañados no se pisan (F11).** Hecho en las pantallas de la biblia (el punto común de guardado); quedan los blobs de otras tablas. Si un JSON no se puede leer, no se escribe encima: se guarda aparte y se avisa.
@@ -114,7 +114,7 @@ Cada punto es un PR pequeño con `flutter analyze` y `flutter test` en verde, co
 
 ### Fase B — Mejoras de funcionamiento
 
-- [ ] **B1. Identidad estable de escenas, planos e imágenes (F4, 3.1 del tablero).** `uid` en `Scenes`, `Shots` y `MoodboardImages`; claves de medios y `publicId` por `uid`; migración que mantenga lo ya subido.
+- [x] **B1. Identidad estable de escenas, planos e imágenes (F4, 3.1 del tablero).** Hecho el 2026-10-16 (schema 47, bundle v6). Probado con la base real: 142 de 146 imágenes se reconocieron por contenido sin volver a subirse. Los demás equipos (iPad) deben actualizarse. `uid` en `Scenes`, `Shots` y `MoodboardImages`; claves de medios y `publicId` por `uid`; migración que mantenga lo ya subido.
 - [ ] **B2. Lo que vive en `SharedPreferences` pasa a la base (2.2)**, incluidas las huellas de sync, para que una copia de la base sea completa.
 - [ ] **B3. Estado de sincronización a la vista.** Por proyecto: al día / cambios por subir / conflicto / imágenes pendientes o fallidas.
 - [ ] **B4. Secciones técnicas sin diálogos y con datos reales (4.6 + 1.5).** Exposición, Cámara, Óptica y Formato con edición directa, leyendo el equipo del proyecto.
@@ -138,3 +138,13 @@ Cada punto es un PR pequeño con `flutter analyze` y `flutter test` en verde, co
 3. A4–A7, luego el resto de la Fase A.
 4. B1 lo antes posible dentro de la Fase B: cuanto más tarde, más imágenes subidas con claves por posición.
 5. Fase C en paralelo a las secciones de la biblia que ya están en marcha.
+
+## 6. Visto en la primera sincronización real (2026-10-15/16)
+
+- [x] Cada sincronización volvía a subir todas las imágenes. Arreglado.
+- [x] 30 subidas fallidas de un proyecto borrado en agosto (y restos de otros dos). La cola los descarta.
+- [x] La copia antes de migrar reutilizaba una vieja de la misma versión. Ahora lleva el día.
+- [ ] Las builds de otras ramas (l12, l13…) abren la base y rebajan su versión: conviene que todas las sesiones fusionen `main` cuanto antes.
+- [ ] Error de interfaz repetido en bucle: «ListTile background color or ink splashes may be invisible» (un ListTile sin Material debajo). Llena el registro de errores.
+- [ ] La cola local guarda las filas antiguas por posición junto a las nuevas por uid: limpiar las que ya tienen su par.
+

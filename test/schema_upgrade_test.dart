@@ -22,7 +22,7 @@ void main() {
     final projects = await db.select(db.projects).get();
     expect(projects.single.name, 'P');
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data['user_version'], 46);
+    expect(version.data['user_version'], kSchemaVersion);
     await db.close();
   });
 }

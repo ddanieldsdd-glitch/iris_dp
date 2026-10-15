@@ -15,6 +15,16 @@ abstract final class CloudinaryPublicId {
     return base;
   }
 
+  /// Nombre de una imagen por su uid permanente: no cambia al reordenar ni
+  /// al renombrar, y dos imágenes no pueden compartirlo.
+  static String byUid({
+    required String workspaceId,
+    required String projectCloudId,
+    required String category,
+    required String uid,
+  }) =>
+      '${CloudinaryConfig.rootFolder}/$workspaceId/$projectCloudId/$category/$uid';
+
   static String moodboard({
     required String workspaceId,
     required String projectCloudId,

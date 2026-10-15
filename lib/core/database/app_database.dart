@@ -487,6 +487,25 @@ class AppDatabase extends _$AppDatabase {
         await add(shootDocuments, shootDocuments.weatherOptionsJson);
         await add(shootDocuments, shootDocuments.weatherSnapshotJson);
       }
+      if (from < 47) {
+        // Identidad permanente de escenas, planos e imágenes (B1): la nube y
+        // los demás dispositivos las reconocen aunque se reordenen.
+        final withUid = <(TableInfo, GeneratedColumn)>[
+          (scenes, scenes.uid),
+          (shots, shots.uid),
+          (shotReferences, shotReferences.uid),
+          (siteImages, siteImages.uid),
+          (locationImages, locationImages.uid),
+          (moodboardImages, moodboardImages.uid),
+        ];
+        for (final (table, column) in withUid) {
+          await add(table, column);
+          await customStatement(
+            'UPDATE ${table.actualTableName} '
+            'SET uid = lower(hex(randomblob(16))) WHERE uid IS NULL',
+          );
+        }
+      }
     },
   );
 
@@ -4619,7 +4638,7 @@ LazyDatabase _openConnection() {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 46;
+const kSchemaVersion = 47;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

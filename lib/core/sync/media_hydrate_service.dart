@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import '../database/app_database.dart';
 import 'cloud_media_service.dart';
+import 'media_entity_keys.dart';
 import 'media_entity_types.dart';
 
 /// Descarga imágenes remotas y actualiza rutas locales en Drift.
@@ -93,6 +94,10 @@ class MediaHydrateService {
     required String entityType,
     required String entityKey,
   }) async {
+    final uid = MediaEntityKeys.uidOf(entityKey);
+    if (uid != null) {
+      return (await _rowByUid(projectId, entityType, uid))?.path;
+    }
     if (entityType == MediaEntityType.moodboard) {
       final parsed = _parseMoodboardKey(entityKey);
       if (parsed == null) return null;
@@ -154,6 +159,19 @@ class MediaHydrateService {
     required String entityKey,
     required String newPath,
   }) async {
+    final uid = MediaEntityKeys.uidOf(entityKey);
+    if (uid != null) {
+      final row = await _rowByUid(projectId, entityType, uid);
+      final table = _uidTables[entityType];
+      if (row != null && table != null) {
+        await _db.customUpdate(
+          'UPDATE ${table.table} SET image_path = ? WHERE id = ?',
+          variables: [Variable.withString(newPath), Variable.withInt(row.id)],
+          updates: {table.info(_db)},
+        );
+      }
+      return;
+    }
     if (entityType == MediaEntityType.moodboard) {
       final parsed = _parseMoodboardKey(entityKey);
       if (parsed == null) return;
@@ -271,4 +289,60 @@ class MediaHydrateService {
         .get();
     return shots.isEmpty ? null : shots.first;
   }
+
+  /// Tablas de imágenes con uid y cómo llegar a su proyecto.
+  static final _uidTables = <String, _UidTable>{
+    MediaEntityType.moodboard: _UidTable(
+      'moodboard_images',
+      'SELECT i.id, i.image_path FROM moodboard_images i '
+          'WHERE i.project_id = ? AND i.uid = ?',
+      (db) => db.moodboardImages,
+    ),
+    MediaEntityType.shotReference: _UidTable(
+      'shot_references',
+      'SELECT i.id, i.image_path FROM shot_references i '
+          'JOIN shots s ON s.id = i.shot_id '
+          'WHERE s.project_id = ? AND i.uid = ?',
+      (db) => db.shotReferences,
+    ),
+    MediaEntityType.site: _UidTable(
+      'site_images',
+      'SELECT i.id, i.image_path FROM site_images i '
+          'JOIN location_sites s ON s.id = i.site_id '
+          'WHERE s.project_id = ? AND i.uid = ?',
+      (db) => db.siteImages,
+    ),
+    MediaEntityType.location: _UidTable(
+      'location_images',
+      'SELECT i.id, i.image_path FROM location_images i '
+          'JOIN location_base_plans b ON b.id = i.location_id '
+          'WHERE b.project_id = ? AND i.uid = ?',
+      (db) => db.locationImages,
+    ),
+  };
+
+  Future<({int id, String path})?> _rowByUid(
+    int projectId,
+    String entityType,
+    String uid,
+  ) async {
+    final table = _uidTables[entityType];
+    if (table == null) return null;
+    final row = await _db
+        .customSelect(
+          table.select,
+          variables: [Variable.withInt(projectId), Variable.withString(uid)],
+        )
+        .getSingleOrNull();
+    if (row == null) return null;
+    return (id: row.read<int>('id'), path: row.read<String>('image_path'));
+  }
+}
+
+class _UidTable {
+  final String table;
+  final String select;
+  final TableInfo Function(AppDatabase) info;
+
+  const _UidTable(this.table, this.select, this.info);
 }
