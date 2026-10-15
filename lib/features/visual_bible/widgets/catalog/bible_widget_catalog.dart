@@ -17,6 +17,7 @@ import '../bible_generic_point_views.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_palette_widget.dart';
 import '../bible_point_images.dart';
+import '../bible_image_sheet.dart';
 import '../bible_point_panel.dart';
 import '../bible_equipment_widget.dart';
 import '../bible_references_deck.dart';
@@ -340,6 +341,17 @@ abstract final class BibleWidgetCatalog {
       build: _generic,
     ),
     const BibleWidgetEntry(
+      id: 'image_analysis',
+      type: BibleSectionFieldType.specs,
+      category: BibleWidgetCategory.image,
+      label: 'Análisis de una imagen',
+      description:
+          'Una sola imagen estudiada a fondo: qué cuenta, su luz, sus '
+          'comentarios y lo que dibujes encima.',
+      icon: Icons.image_search_outlined,
+      build: _imageAnalysis,
+    ),
+    const BibleWidgetEntry(
       id: 'light_metrics',
       type: BibleSectionFieldType.specs,
       category: BibleWidgetCategory.data,
@@ -554,6 +566,19 @@ abstract final class BibleWidgetCatalog {
         child: LightingMetricsWidget(
           value: LightingMetrics.fromJson(ctx.value),
           onChanged: (value) => ctx.onChanged(value.encode()),
+        ),
+      );
+
+  static Widget _imageAnalysis(BuildContext context, BibleWidgetContext ctx) =>
+      BiblePointPanel(
+        label: ctx.field.label,
+        icon: Icons.image_search_outlined,
+        child: BibleImageAnalysisPoint(
+          projectId: ctx.projectId,
+          bibleId: ctx.bibleId,
+          sectionId: ctx.sectionId,
+          value: ctx.value,
+          onChanged: ctx.onChanged,
         ),
       );
 

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -13,7 +14,9 @@ import '../../../shared/annotations/annotation_document.dart';
 import '../../../shared/visual_bible/bible_cards.dart';
 import '../../../shared/visual_bible/lighting_metrics.dart';
 import '../moodboard_annotation_store.dart';
+import 'bible_point_images.dart';
 import 'bible_point_panel.dart';
+import 'moodboard_images_viewer.dart';
 import 'lighting/lighting_metrics_widget.dart';
 
 /// Una imagen de una tarjeta como lámina: la imagen con su dibujo encima,
@@ -29,6 +32,10 @@ class BibleImageSheet extends ConsumerStatefulWidget {
   final bool showDrawing;
   final int? bibleId;
   final int? projectId;
+
+  /// Una imagen sola (el widget «Análisis de una imagen»): sin portada, y
+  /// «cambiar» en lugar de «quitar».
+  final bool single;
 
   /// Abre el visor (comentarios y dibujo); al volver, se relee el dibujo.
   final Future<void> Function() onOpen;
@@ -53,6 +60,7 @@ class BibleImageSheet extends ConsumerStatefulWidget {
     required this.onRemove,
     this.bibleId,
     this.projectId,
+    this.single = false,
   });
 
   @override
@@ -173,12 +181,14 @@ class _BibleImageSheetState extends ConsumerState<BibleImageSheet> {
           children: [
             Expanded(
               child: Text(
-                'LÁMINA ${widget.index + 1} DE ${widget.count}'
-                '${widget.isCover ? ' · PORTADA' : ''}',
+                widget.single
+                    ? 'ANÁLISIS DE LA IMAGEN'
+                    : 'LÁMINA ${widget.index + 1} DE ${widget.count}'
+                          '${widget.isCover ? ' · PORTADA' : ''}',
                 style: label,
               ),
             ),
-            if (!widget.isCover)
+            if (!widget.isCover && !widget.single)
               IconButton(
                 tooltip: 'Poner de portada',
                 visualDensity: VisualDensity.compact,
@@ -186,9 +196,14 @@ class _BibleImageSheetState extends ConsumerState<BibleImageSheet> {
                 onPressed: widget.onCover,
               ),
             IconButton(
-              tooltip: 'Quitar esta imagen de la tarjeta',
+              tooltip: widget.single
+                  ? 'Cambiar la imagen'
+                  : 'Quitar esta imagen de la tarjeta',
               visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.close, size: 18),
+              icon: Icon(
+                widget.single ? Icons.swap_horiz : Icons.close,
+                size: 18,
+              ),
               onPressed: widget.onRemove,
             ),
           ],
@@ -305,9 +320,8 @@ class _ImageWithDrawing extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: AspectRatio(
-            aspectRatio: aspect ?? 16 / 9,
-            child: Stack(
+          child: _box(
+            Stack(
               fit: StackFit.expand,
               children: [
                 Image.file(File(path), fit: BoxFit.cover, cacheWidth: 1400),
@@ -331,6 +345,238 @@ class _ImageWithDrawing extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _box(Widget child) =>
+      AspectRatio(aspectRatio: aspect ?? 16 / 9, child: child);
+}
+
+/// Miniatura de una imagen del moodboard con su dibujo encima y cuántos
+/// comentarios tiene. Tocarla abre el visor.
+class MoodboardImageThumb extends ConsumerStatefulWidget {
+  final int imageId;
+  final String path;
+  final int? projectId;
+  final int? bibleId;
+  final double width;
+  final double height;
+
+  /// Abre el visor; al volver, se relee el dibujo.
+  final Future<void> Function() onTap;
+
+  const MoodboardImageThumb({
+    super.key,
+    required this.imageId,
+    required this.path,
+    required this.onTap,
+    this.projectId,
+    this.bibleId,
+    this.width = 120,
+    this.height = 68,
+  });
+
+  @override
+  ConsumerState<MoodboardImageThumb> createState() =>
+      _MoodboardImageThumbState();
+}
+
+class _MoodboardImageThumbState extends ConsumerState<MoodboardImageThumb> {
+  Future<AnnotationDocument>? _drawing;
+  double? _aspect;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    // Con su proporción, el dibujo cae donde se hizo.
+    FileImage(File(widget.path))
+        .resolve(const ImageConfiguration())
+        .addListener(
+          ImageStreamListener((info, _) {
+            if (!mounted) return;
+            setState(() => _aspect = info.image.width / info.image.height);
+          }, onError: (_, _) {}),
+        );
+  }
+
+  void _load() {
+    final projectId = widget.projectId;
+    if (projectId == null) return;
+    _drawing = MoodboardAnnotationStore.loadDocument(
+      db: ref.read(databaseProvider),
+      projectId: projectId,
+      imageId: widget.imageId,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.width,
+      height: widget.height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(
+            color: Colors.black,
+            child: Center(
+              child: _ImageWithDrawing(
+                path: widget.path,
+                aspect: _aspect,
+                drawing: _drawing,
+                onTap: () async {
+                  await widget.onTap();
+                  if (mounted) setState(_load);
+                },
+              ),
+            ),
+          ),
+          if (widget.bibleId != null)
+            Positioned(
+              left: 4,
+              bottom: 4,
+              child: StreamBuilder<List<BibleComment>>(
+                stream: ref
+                    .watch(databaseProvider)
+                    .watchBibleComments(
+                      widget.bibleId!,
+                      targetType: 'moodboard',
+                      targetId: widget.imageId,
+                    ),
+                builder: (context, snap) {
+                  final n = snap.data?.length ?? 0;
+                  if (n == 0) return const SizedBox.shrink();
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '💬 $n',
+                      style: const TextStyle(fontSize: 10, color: Colors.white),
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// «Análisis de una imagen»: una sola imagen estudiada a fondo — su título,
+/// qué cuenta, su luz, sus comentarios y su dibujo. Valor: JSON con
+/// `image` (id del moodboard) y la nota.
+class BibleImageAnalysisPoint extends ConsumerWidget {
+  final int projectId;
+  final int bibleId;
+  final String sectionId;
+  final String? value;
+  final ValueChanged<String?> onChanged;
+
+  const BibleImageAnalysisPoint({
+    super.key,
+    required this.projectId,
+    required this.bibleId,
+    required this.sectionId,
+    required this.value,
+    required this.onChanged,
+  });
+
+  static (int?, BibleImageNote) decode(String? raw) {
+    if (raw == null || raw.trim().isEmpty)
+      return (null, const BibleImageNote());
+    try {
+      final map = jsonDecode(raw);
+      if (map is! Map) return (null, const BibleImageNote());
+      return ((map['image'] as num?)?.toInt(), BibleImageNote.fromJson(map));
+    } catch (_) {
+      return (null, const BibleImageNote());
+    }
+  }
+
+  static String encode(int? image, BibleImageNote note) =>
+      jsonEncode({if (image != null) 'image': image, ...note.toJson()});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final (imageId, note) = decode(value);
+
+    Future<void> pick() async {
+      final picked = await showMoodboardImagePicker(
+        context,
+        projectId: projectId,
+        bibleId: bibleId,
+        sectionId: sectionId,
+        selected: [?imageId],
+        single: true,
+      );
+      if (picked == null || picked.isEmpty) return;
+      onChanged(encode(picked.first, note));
+    }
+
+    if (imageId == null) {
+      return InkWell(
+        onTap: pick,
+        borderRadius: BorderRadius.circular(BiblePointPanel.radius),
+        child: Container(
+          height: 180,
+          decoration: BiblePointPanel.decoration(palette),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.image_search_outlined,
+                size: 32,
+                color: palette.textSecondary,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'ELIGE LA IMAGEN QUE ANALIZAMOS',
+                style: BiblePointPanel.labelStyle(palette),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return StreamBuilder<List<MoodboardImage>>(
+      stream: ref.watch(databaseProvider).watchMoodboardImages(projectId),
+      builder: (context, snap) {
+        final row = snap.data?.where((m) => m.id == imageId).firstOrNull;
+        if (row == null) return const SizedBox(height: 180);
+        return BibleImageSheet(
+          key: ValueKey('analysis_$imageId'),
+          index: 0,
+          count: 1,
+          imageId: imageId,
+          path: row.imagePath,
+          note: note,
+          isCover: false,
+          showDrawing: true,
+          single: true,
+          bibleId: bibleId,
+          projectId: projectId,
+          onOpen: () => openMoodboardImages(
+            context,
+            [imageId],
+            initialId: imageId,
+            bibleId: bibleId,
+          ),
+          onChanged: (next, {bool now = false}) =>
+              onChanged(encode(imageId, next)),
+          onCover: () {},
+          onRemove: pick,
+        );
+      },
     );
   }
 }

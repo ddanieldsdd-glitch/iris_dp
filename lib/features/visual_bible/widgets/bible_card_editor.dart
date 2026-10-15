@@ -57,6 +57,11 @@ class BibleCardEditorCopy {
   /// Cómo se llama cada punto («Punto», «Apartado»).
   final String pointLabel;
 
+  /// Cada punto es un tema que se analiza con un texto y varias imágenes
+  /// («los cálidos», «el contraste alto»): van a todo el ancho, con sus
+  /// imágenes grandes.
+  final bool topics;
+
   const BibleCardEditorCopy({
     required this.pageTitle,
     this.titleHint = 'Título',
@@ -68,6 +73,7 @@ class BibleCardEditorCopy {
     this.points = false,
     this.sheets = false,
     this.pointLabel = 'Punto',
+    this.topics = false,
   });
 
   static const card = BibleCardEditorCopy(pageTitle: 'Tarjeta');
@@ -92,8 +98,7 @@ class BibleCardEditorCopy {
     bodyHint: 'La idea de esta tarjeta: qué queremos contar con esta luz…',
     kickerHint: 'DATOS CORTOS: CONTRASTE 8:1 · CAÍDA RÁPIDA · 3200 K',
     points: true,
-    sheets: true,
-    pointLabel: 'Apartado',
+    topics: true,
   );
 
   static BibleCardEditorCopy forAct({required bool shared}) =>
@@ -500,6 +505,7 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
                   context,
                   existing,
                   initialId: existing.first,
+                  bibleId: widget.source?.bibleId,
                 ),
                 child: Image.file(File(cover), fit: BoxFit.contain),
               ),
@@ -662,18 +668,18 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
             children: [
               Tooltip(
                 message: 'Ver en grande, comentar y dibujar encima',
-                child: InkWell(
-                  onTap: () => openMoodboardImages(context, ids, initialId: id),
-                  borderRadius: BorderRadius.circular(6),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Image.file(
-                      File(widget.imagePaths[id]!),
-                      width: 120,
-                      height: 68,
-                      fit: BoxFit.cover,
-                      cacheWidth: 360,
-                    ),
+                child: MoodboardImageThumb(
+                  imageId: id,
+                  path: widget.imagePaths[id]!,
+                  projectId: widget.source?.projectId,
+                  bibleId: widget.source?.bibleId,
+                  width: widget.copy.topics ? 240 : 120,
+                  height: widget.copy.topics ? 135 : 68,
+                  onTap: () => openMoodboardImages(
+                    context,
+                    ids,
+                    initialId: id,
+                    bibleId: widget.source?.bibleId,
                   ),
                 ),
               ),
@@ -713,7 +719,11 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
           onPressed: pick,
           icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
           label: Text(
-            ids.isEmpty ? 'Imágenes de este bloque' : 'Cambiar imágenes',
+            ids.isEmpty
+                ? (widget.copy.topics
+                      ? 'Imágenes de este punto'
+                      : 'Imágenes de este bloque')
+                : 'Cambiar imágenes',
           ),
         ),
       ],
@@ -783,7 +793,7 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
             onChanged: (_) => _touch(),
           ),
         ),
-        if ((copy.act || copy.points) && !copy.sheets) ...[
+        if ((copy.act || copy.points) && !copy.sheets && !copy.topics) ...[
           const SizedBox(height: AppSpacing.md),
           ..._pointsBlock(palette, label),
         ],
@@ -816,6 +826,26 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
               const SizedBox(height: AppSpacing.xl),
               Text('DESARROLLO', style: label),
               const SizedBox(height: AppSpacing.sm),
+              ..._pointsBlock(palette, label),
+            ],
+          )
+        : null;
+    // Temas: la tarjeta (imágenes y texto) arriba y, a todo el ancho, cada
+    // punto con su texto y su grupo de imágenes.
+    final topics = copy.topics
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: AppSpacing.xl),
+              Text('PUNTOS QUE ANALIZAMOS', style: label),
+              const SizedBox(height: 4),
+              Text(
+                'Cada punto, un tema («los cálidos», «el contraste alto») con '
+                'su texto y las imágenes que lo explican. Toca una imagen '
+                'para comentarla y dibujar encima.',
+                style: AppTypography.caption(palette),
+              ),
+              const SizedBox(height: AppSpacing.md),
               ..._pointsBlock(palette, label),
             ],
           )
@@ -868,6 +898,29 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
                 ),
                 child: sheets != null
                     ? sheets
+                    : topics != null
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (wide)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(flex: 6, child: _gallery(palette)),
+                                const SizedBox(width: AppSpacing.xl),
+                                Expanded(flex: 5, child: fields),
+                              ],
+                            )
+                          else ...[
+                            if (hasGallery) ...[
+                              _gallery(palette),
+                              const SizedBox(height: AppSpacing.lg),
+                            ],
+                            fields,
+                          ],
+                          topics,
+                        ],
+                      )
                     : wide
                     ? Row(
                         crossAxisAlignment: CrossAxisAlignment.start,

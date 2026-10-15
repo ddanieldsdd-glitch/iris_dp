@@ -7,7 +7,8 @@ import 'package:image/image.dart' as img;
 import 'package:iris_dp/core/theme/app_theme.dart';
 import 'package:iris_dp/features/visual_bible/widgets/bible_card_editor.dart';
 import 'package:iris_dp/shared/visual_bible/bible_cards.dart';
-import 'package:iris_dp/shared/visual_bible/lighting_metrics.dart';
+import 'package:iris_dp/features/visual_bible/widgets/bible_image_sheet.dart';
+import 'package:iris_dp/features/visual_bible/widgets/catalog/bible_widget_catalog.dart';
 
 void main() {
   test('las imágenes de un bloque se guardan en ese bloque', () {
@@ -58,7 +59,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Imágenes de este bloque'));
+    await tester.tap(find.text('Imágenes de este punto'));
     await tester.pumpAndSettle();
     expect(saved, isNotNull);
     expect(saved!.points.single.imageIds, [7]);
@@ -71,17 +72,20 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('en el mosaico cada imagen es una lámina con su título, lo que '
-      'cuenta y su luz', (tester) async {
+  testWidgets('en el mosaico cada punto es un tema con su texto y su grupo '
+      'de imágenes, a todo el ancho', (tester) async {
     tester.view.physicalSize = const Size(1300, 2000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final tmp = Directory.systemTemp.createTempSync('iris_lamina');
+    final tmp = Directory.systemTemp.createTempSync('iris_tema');
     addTearDown(() => tmp.deleteSync(recursive: true));
-    final path = '${tmp.path}/a.png';
-    File(
-      path,
-    ).writeAsBytesSync(img.encodePng(img.Image(width: 32, height: 18)));
+    final paths = <int, String>{};
+    for (final id in [7, 8, 9]) {
+      paths[id] = '${tmp.path}/$id.png';
+      File(
+        paths[id]!,
+      ).writeAsBytesSync(img.encodePng(img.Image(width: 32, height: 18)));
+    }
 
     BibleCard? saved;
     await tester.pumpWidget(
@@ -90,43 +94,49 @@ void main() {
           theme: AppTheme.dark,
           home: BibleCardEditor(
             copy: BibleCardEditorCopy.mosaic,
-            initial: const BibleCard(title: 'Cálidos', imageIds: [7]),
-            imagePaths: {7: path},
+            initial: const BibleCard(
+              title: 'Cálidos y contraste alto',
+              imageIds: [7],
+              points: [
+                BibleCard(title: 'Los cálidos', imageIds: [8, 9]),
+                BibleCard(title: 'El contraste alto'),
+              ],
+            ),
+            imagePaths: paths,
             onChanged: (card) => saved = card,
             onMove: (_, _) {},
             onDelete: () {},
-            onPickImages: (selected) async => selected,
+            onPickImages: (selected) async => [...selected, 7],
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('LÁMINAS · 1'), findsOneWidget);
-    expect(find.text('LÁMINA 1 DE 1 · PORTADA'), findsOneWidget);
-    expect(find.text('Comentar y dibujar'), findsOneWidget);
-    expect(find.text('DESARROLLO'), findsOneWidget);
-    expect(find.text('AÑADIR APARTADO'), findsOneWidget);
+    expect(find.text('PUNTOS QUE ANALIZAMOS'), findsOneWidget);
+    expect(find.text('LÁMINAS · 1'), findsNothing);
+    // El primer tema con sus dos imágenes, grandes.
+    final thumbs = find.byType(MoodboardImageThumb);
+    expect(thumbs, findsNWidgets(2));
+    expect(tester.getSize(thumbs.first).width, 240);
 
-    await tester.enterText(
-      find.widgetWithText(
-        TextField,
-        'Título de la lámina: «Medio rostro '
-        'quemado por el sodio»',
-      ),
-      'Medio rostro',
-    );
-    await tester.pump(const Duration(milliseconds: 700));
-    expect(saved!.imageNotes[7]!.title, 'Medio rostro');
-
-    // Su luz: una clave de sodio.
-    await tester.tap(find.text('Fuente (clave)'));
-    await tester.pump();
-    expect(
-      LightingMetrics.fromJson(saved!.imageNotes[7]!.light).sources,
-      hasLength(1),
-    );
-    final back = BibleCard.fromJson(saved!.toJson());
-    expect(back.imageNotes[7]!.title, 'Medio rostro');
+    await tester.tap(find.text('Imágenes de este punto'));
+    await tester.pumpAndSettle();
+    expect(saved!.points.last.imageIds, [7]);
+    expect(saved!.points.first.imageIds, [8, 9]);
     expect(tester.takeException(), isNull);
+  });
+
+  test('análisis de una imagen: la imagen y su nota viajan juntas', () {
+    final raw = BibleImageAnalysisPoint.encode(
+      12,
+      const BibleImageNote(title: 'Medio rostro', text: 'El sodio quema'),
+    );
+    final (id, note) = BibleImageAnalysisPoint.decode(raw);
+    expect(id, 12);
+    expect(note.title, 'Medio rostro');
+    expect(
+      BibleWidgetCatalog.byId('image_analysis')?.label,
+      'Análisis de una imagen',
+    );
   });
 }

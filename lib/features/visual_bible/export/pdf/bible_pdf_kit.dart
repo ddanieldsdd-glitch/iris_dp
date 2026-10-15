@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../../../shared/visual_bible/lighting_metrics.dart';
 import '../../../../shared/visual_bible/bible_equipment.dart';
 import '../../../../shared/visual_bible/bible_table.dart';
@@ -1294,6 +1296,45 @@ class BiblePdfKit {
       );
 
   /// Pinta un punto según su tipo. `null` si no tiene contenido.
+  /// Análisis de una imagen: la imagen, su título, lo que cuenta y su luz.
+  pw.Widget? _imageAnalysisPoint(String label, String raw) {
+    Map<dynamic, dynamic> map;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      map = decoded;
+    } catch (_) {
+      return null;
+    }
+    final id = (map['image'] as num?)?.toInt();
+    final note = BibleImageNote.fromJson(map);
+    final image = id == null ? null : _loaded([id]).firstOrNull;
+    if (image == null && note.isEmpty) return null;
+    final light = lightMetricsPoint(
+      'Su luz',
+      LightingMetrics.fromJson(note.light),
+    );
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          this.label(label),
+          pw.SizedBox(height: 4),
+          if (image != null)
+            pw.ClipRRect(
+              horizontalRadius: BiblePdfTokens.radius,
+              verticalRadius: BiblePdfTokens.radius,
+              child: pw.Image(image, height: 200, fit: pw.BoxFit.contain),
+            ),
+          pw.SizedBox(height: 5),
+          _titled(note.title.trim(), note.text.trim()),
+          ?light,
+        ],
+      ),
+    );
+  }
+
   pw.Widget? point(BibleSectionField field, String? raw) {
     if (raw == null || raw.trim().isEmpty) return null;
     switch (field.type) {
@@ -1305,6 +1346,9 @@ class BiblePdfKit {
       case BibleSectionFieldType.specs:
         if (field.widget == 'light_metrics') {
           return lightMetricsPoint(field.label, LightingMetrics.fromJson(raw));
+        }
+        if (field.widget == 'image_analysis') {
+          return _imageAnalysisPoint(field.label, raw);
         }
         if (field.widget == 'text_specs') {
           return textSpecsPoint(field.label, BibleTextSpecsValue.decode(raw));

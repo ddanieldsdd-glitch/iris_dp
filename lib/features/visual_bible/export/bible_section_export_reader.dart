@@ -249,9 +249,9 @@ abstract final class BibleSectionExportReader {
     AppDatabase db,
     int bibleId,
   ) async {
-    final rows = await (db.select(db.bibleSectionDefinitions)
-          ..where((d) => d.bibleId.equals(bibleId)))
-        .get();
+    final rows = await (db.select(
+      db.bibleSectionDefinitions,
+    )..where((d) => d.bibleId.equals(bibleId))).get();
     return {for (final row in rows) row.id: row.contentJson};
   }
 
@@ -292,11 +292,17 @@ abstract final class BibleSectionExportReader {
 
   /// Puntos que el usuario añadió a una sección estándar, en su orden y
   /// solo los que tienen contenido.
-  static List<BibleUserPoint> userPoints(String? contentJson, String sectionId) {
+  static List<BibleUserPoint> userPoints(
+    String? contentJson,
+    String sectionId,
+  ) {
     if (contentJson == null || contentJson.isEmpty) return const [];
     final values = BibleSectionFieldsConfig.parseValues(contentJson);
     return [
-      for (final field in BibleSectionFieldsConfig.parse(contentJson, sectionId))
+      for (final field in BibleSectionFieldsConfig.parse(
+        contentJson,
+        sectionId,
+      ))
         if (_isUserPoint(sectionId, field) &&
             (values[field.key]?.trim().isNotEmpty ?? false))
           (field: field, value: values[field.key]!),
@@ -371,6 +377,8 @@ abstract final class BibleSectionExportReader {
       if (decoded.containsKey('colors') || decoded.containsKey('show')) {
         return BiblePaletteValue.decode(raw).imageIds;
       }
+      // Análisis de una imagen.
+      if (decoded['image'] is num) return [(decoded['image'] as num).toInt()];
       return const [];
     }
     if (decoded is! List) return const [];
@@ -400,17 +408,21 @@ abstract final class BibleSectionExportReader {
           field.type == BibleSectionFieldType.equipment);
 
   /// Valor de un punto del usuario como texto plano, para listados de filas.
-  static String userPointText(BibleUserPoint point) => switch (point.field.type) {
+  static String userPointText(BibleUserPoint point) =>
+      switch (point.field.type) {
         BibleSectionFieldType.list => BibleSectionPointValue.decodeList(
-            point.value,
-          ).where((e) => e.trim().isNotEmpty).map((e) => '• $e').join('\n'),
+          point.value,
+        ).where((e) => e.trim().isNotEmpty).map((e) => '• $e').join('\n'),
         BibleSectionFieldType.specs => BibleSectionPointValue.decodeSpecs(
-            point.value,
-          ).map((r) => '${r.$1}: ${r.$2}').join('\n'),
+          point.value,
+        ).map((r) => '${r.$1}: ${r.$2}').join('\n'),
         BibleSectionFieldType.palette => _paletteText(point.value),
-        BibleSectionFieldType.referenceDeck => _referenceItems(point.value)
-            .map((r) => [r.title, r.work].where((e) => e.isNotEmpty).join(' — '))
-            .join('\n'),
+        BibleSectionFieldType.referenceDeck =>
+          _referenceItems(point.value)
+              .map(
+                (r) => [r.title, r.work].where((e) => e.isNotEmpty).join(' — '),
+              )
+              .join('\n'),
         BibleSectionFieldType.gallery => '',
         BibleSectionFieldType.cards || BibleSectionFieldType.acts =>
           (point.field.type == BibleSectionFieldType.acts
@@ -418,27 +430,29 @@ abstract final class BibleSectionExportReader {
                   : BibleCard.listFrom(point.value))
               .where((c) => !c.isEmpty)
               .map(
-                (c) => [c.kicker, c.title, c.body]
-                    .where((e) => e.trim().isNotEmpty)
-                    .join(' — '),
+                (c) => [
+                  c.kicker,
+                  c.title,
+                  c.body,
+                ].where((e) => e.trim().isNotEmpty).join(' — '),
               )
               .join('\n'),
         BibleSectionFieldType.tags => BibleSectionPointValue.decodeList(
-            point.value,
-          ).join(' · '),
+          point.value,
+        ).join(' · '),
         BibleSectionFieldType.table => [
-            for (final row in BibleTableValue.decode(point.value).filledRows)
-              row.where((c) => c.trim().isNotEmpty).join(' · '),
-          ].join('\n'),
+          for (final row in BibleTableValue.decode(point.value).filledRows)
+            row.where((c) => c.trim().isNotEmpty).join(' · '),
+        ].join('\n'),
         BibleSectionFieldType.equipment => [
-            for (final item in BibleEquipmentItem.listFrom(point.value))
-              if (!item.isEmpty)
-                '${item.role} ${item.name} (${item.status.masculine})'.trim(),
-          ].join('\n'),
+          for (final item in BibleEquipmentItem.listFrom(point.value))
+            if (!item.isEmpty)
+              '${item.role} ${item.name} (${item.status.masculine})'.trim(),
+        ].join('\n'),
         BibleSectionFieldType.meters => [
-            for (final m in BibleMeter.listFrom(point.value))
-              if (!m.isEmpty) '${m.label}: ${m.value}',
-          ].join('\n'),
+          for (final m in BibleMeter.listFrom(point.value))
+            if (!m.isEmpty) '${m.label}: ${m.value}',
+        ].join('\n'),
         _ => point.value.trim(),
       };
 
@@ -516,7 +530,10 @@ abstract final class BibleSectionExportReader {
     );
     if (custom.isEmpty) return const [];
     final userKeys = {
-      for (final field in BibleSectionFieldsConfig.parse(contentJson, sectionId))
+      for (final field in BibleSectionFieldsConfig.parse(
+        contentJson,
+        sectionId,
+      ))
         if (_isUserPoint(sectionId, field)) field.key,
     };
     custom.removeWhere(
@@ -532,8 +549,7 @@ abstract final class BibleSectionExportReader {
   static bool hasExportableContent(
     String sectionId,
     Map<String, dynamic> custom,
-  ) =>
-      rowsForSection(sectionId, custom).isNotEmpty;
+  ) => rowsForSection(sectionId, custom).isNotEmpty;
 
   static List<BibleSectionExportEntry> rowsForSection(
     String sectionId,
@@ -564,14 +580,18 @@ abstract final class BibleSectionExportReader {
               _flatten(
                 sectionId,
                 nestedMap,
-                prefix.isEmpty ? 'Set ${nested.key}' : '$prefix · Set ${nested.key}',
+                prefix.isEmpty
+                    ? 'Set ${nested.key}'
+                    : '$prefix · Set ${nested.key}',
                 out,
               );
             } else if (nestedMap is Map) {
               _flatten(
                 sectionId,
                 Map<String, dynamic>.from(nestedMap),
-                prefix.isEmpty ? 'Set ${nested.key}' : '$prefix · Set ${nested.key}',
+                prefix.isEmpty
+                    ? 'Set ${nested.key}'
+                    : '$prefix · Set ${nested.key}',
                 out,
               );
             }
@@ -646,7 +666,9 @@ abstract final class BibleSectionExportReader {
     final parts = <String>[];
     for (final item in values) {
       if (item is Map) {
-        final map = item.map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''));
+        final map = item.map(
+          (k, v) => MapEntry(k.toString(), v?.toString() ?? ''),
+        );
         final label = map['label'] ?? map['title'] ?? map['name'] ?? map['key'];
         final value = map['value'] ?? map['meta'] ?? map['note'] ?? map['tag'];
         if (label != null && label.isNotEmpty) {
@@ -672,12 +694,11 @@ abstract final class BibleSectionExportReader {
     String? opticsConfigJson, {
     String? narrativeIntent,
     String? lensPhilosophy,
-  }) =>
-      rowsFromOpticsConfigJson(
-        opticsConfigJson,
-        narrativeIntent: narrativeIntent,
-        lensPhilosophy: lensPhilosophy,
-      ).isNotEmpty;
+  }) => rowsFromOpticsConfigJson(
+    opticsConfigJson,
+    narrativeIntent: narrativeIntent,
+    lensPhilosophy: lensPhilosophy,
+  ).isNotEmpty;
 
   static List<BibleSectionExportEntry> rowsFromOpticsConfigJson(
     String? jsonStr, {
@@ -734,10 +755,7 @@ abstract final class BibleSectionExportReader {
         if (justification != null && justification.isNotEmpty) {
           parts.add(justification);
         }
-        return (
-          label: name.isEmpty ? 'Filtro' : name,
-          value: parts.join('\n'),
-        );
+        return (label: name.isEmpty ? 'Filtro' : name, value: parts.join('\n'));
       },
     );
 
