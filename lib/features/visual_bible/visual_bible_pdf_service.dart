@@ -51,9 +51,11 @@ class VisualBiblePdfService {
     MoodboardExportLayout moodboardLayout = MoodboardExportLayout.defaults,
     bool includeAllMoodboardImages = false,
     List<BibleExportSectionRef> sectionOrder = const [],
+    Map<int, Uint8List> lightingSketchPngs = const {},
   }) async {
     final doc = await buildDocument(
       sectionOrder: sectionOrder,
+      lightingSketchPngs: lightingSketchPngs,
       mode: mode,
       projectName: projectName,
       director: director,
@@ -249,6 +251,9 @@ class VisualBiblePdfService {
     MoodboardExportLayout moodboardLayout = MoodboardExportLayout.defaults,
     bool includeAllMoodboardImages = false,
     List<BibleExportSectionRef> sectionOrder = const [],
+
+    /// Boceto a mano de cada setup (por id), ya pasado a PNG.
+    Map<int, Uint8List> lightingSketchPngs = const {},
   }) async {
     final isPitch = mode == VisualBibleExportMode.pitch;
     final isTech = mode == VisualBibleExportMode.techScout;
@@ -582,7 +587,22 @@ class VisualBiblePdfService {
                               '• ${s.setupName}: ${s.narrativeNote ?? ''}',
                             ),
                           ),
-                          if (s.diagramJson != '[]') ...[
+                          if (lightingSketchPngs[s.id] != null) ...[
+                            pw.SizedBox(width: 8),
+                            pw.Container(
+                              width: 150,
+                              decoration: pw.BoxDecoration(
+                                border: pw.Border.all(
+                                  color: PdfColors.grey400,
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: pw.Image(
+                                pw.MemoryImage(lightingSketchPngs[s.id]!),
+                                fit: pw.BoxFit.contain,
+                              ),
+                            ),
+                          ] else if (s.diagramJson != '[]') ...[
                             pw.SizedBox(width: 8),
                             _lightingDiagram(s.diagramJson),
                           ],

@@ -4175,15 +4175,17 @@ class AppDatabase extends _$AppDatabase {
           documentSchemaVersion: Value(documentSchemaVersion),
         ),
       );
-      return;
+    } else {
+      await update(projectAnnotationDocuments).replace(
+        existing.copyWith(
+          documentJson: documentJson,
+          documentSchemaVersion: documentSchemaVersion,
+          updatedAt: DateTime.now(),
+        ),
+      );
     }
-    await update(projectAnnotationDocuments).replace(
-      existing.copyWith(
-        documentJson: documentJson,
-        documentSchemaVersion: documentSchemaVersion,
-        updatedAt: DateTime.now(),
-      ),
-    );
+    // Sin esto la sincronización no ve el cambio y puede pisar lo local.
+    await touchProjectContent(projectId);
   }
 
   Future<int> deleteProjectAnnotationDocument({

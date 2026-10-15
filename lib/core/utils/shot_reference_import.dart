@@ -13,6 +13,9 @@ abstract final class ShotReferenceSource {
   static const manual = 'manual';
   static const artemisCapture = 'artemis_capture';
   static const unrealRender = 'unreal_render';
+
+  /// Viñeta dibujada a mano en el folio de la app.
+  static const sketch = 'sketch';
 }
 
 /// Importa una imagen y la vincula al plano (miniatura + registro en [ShotReferences]).

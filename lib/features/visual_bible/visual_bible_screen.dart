@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/app_database.dart' hide BibleSectionGroup;
 import '../../core/database/app_database.dart' as app_db show BibleSectionGroup;
 import '../../core/database/database_provider.dart';
+import 'widgets/lighting_diagram/lighting_sketch_export.dart';
 import '../../core/templates/user_template_models.dart';
 import '../../core/templates/user_template_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -382,6 +383,11 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
               includedSections: config.sections,
               sectionContentJsonById: bundle.sectionContentJsonById,
               sectionOrder: bundle.sectionOrder,
+              lightingSketchPngs: await LightingSketchExport.loadPngs(
+                db: ref.read(databaseProvider),
+                projectId: widget.projectId,
+                setupIds: bundle.lightingSetups.map((s) => s.id),
+              ),
               primaryCameraLabel: bundle.primaryCameraLabel,
               moodboardLayout: config.resolvedMoodboardLayout,
               includeAllMoodboardImages: config.includeAllMoodboardImages,
@@ -947,6 +953,11 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                         moodboard: bundle.moodboard,
                         sectionContentJsonById: bundle.sectionContentJsonById,
                         sectionOrder: bundle.sectionOrder,
+                        lightingSketchPngs: await LightingSketchExport.loadPngs(
+                          db: ref.read(databaseProvider),
+                          projectId: widget.projectId,
+                          setupIds: bundle.lightingSetups.map((s) => s.id),
+                        ),
                         primaryCameraLabel: bundle.primaryCameraLabel,
                         moodboardLayout:
                             last?.moodboardLayout ?? MoodboardExportLayout.defaults,

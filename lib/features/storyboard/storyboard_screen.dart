@@ -26,6 +26,8 @@ import '../technical_script/technical_script_screen.dart';
 import 'storyboard_export_options_sheet.dart';
 import 'storyboard_shot_export_service.dart';
 import '../../core/widgets/app_snackbar.dart';
+import '../../shared/annotations/annotation_document.dart';
+import '../../shared/annotations/sketch_sheet_screen.dart';
 
 enum _StoryboardLayout { linear, grid, list }
 
@@ -880,6 +882,74 @@ class _StoryboardFrame extends ConsumerWidget {
     }
   }
 
+  static const _sketchTargetType = 'storyboard_sketch';
+
+  /// Abre el folio para dibujar la viñeta. El dibujo se guarda editable y,
+  /// además, como imagen principal del plano (sustituye al boceto anterior).
+  Future<void> _draw(BuildContext context, WidgetRef ref) async {
+    final db = ref.read(databaseProvider);
+    try {
+      final row = await db.getProjectAnnotationDocument(
+        projectId: shot.projectId,
+        targetType: _sketchTargetType,
+        targetId: shot.id.toString(),
+      );
+      if (!context.mounted) return;
+      final result = await SketchSheetScreen.open(
+        context,
+        title: 'Viñeta · Esc ${scene.number} · Plano ${shot.number}',
+        document: AnnotationDocument.decode(row?.documentJson),
+        purpose: SketchSheetPurpose.storyboard,
+        aspectRatio: 16 / 9,
+        exportPng: true,
+      );
+      if (result == null) return;
+
+      final refs = await db.watchReferencesForShot(shot.id).first;
+      for (final reference in refs.where(
+        (r) => r.source == ShotReferenceSource.sketch,
+      )) {
+        await deleteShotReferenceEntry(
+          db: db,
+          shot: await db.getShotById(shot.id) ?? shot,
+          reference: reference,
+        );
+      }
+
+      if (result.document.isEmpty) {
+        await db.deleteProjectAnnotationDocument(
+          projectId: shot.projectId,
+          targetType: _sketchTargetType,
+          targetId: shot.id.toString(),
+        );
+        await db.touchProjectContent(shot.projectId);
+        return;
+      }
+
+      await db.saveProjectAnnotationDocument(
+        projectId: shot.projectId,
+        targetType: _sketchTargetType,
+        targetId: shot.id.toString(),
+        documentJson: result.document.encode(),
+        documentSchemaVersion: result.document.schemaVersion,
+      );
+      final png = result.png;
+      if (png != null) {
+        await importShotReferenceImage(
+          db: db,
+          shot: await db.getShotById(shot.id) ?? shot,
+          sourceBytes: png,
+          fileName: 'vineta_${shot.number}.png',
+          source: ShotReferenceSource.sketch,
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        AppSnackBar.showError(context, userFriendlyError(e));
+      }
+    }
+  }
+
   Future<void> _openPrimaryViewer(BuildContext context, WidgetRef ref) async {
     final db = ref.read(databaseProvider);
     try {
@@ -936,6 +1006,10 @@ class _StoryboardFrame extends ConsumerWidget {
         onImport: (source) {
           Navigator.pop(ctx);
           _import(context, ref, source: source);
+        },
+        onDraw: () {
+          Navigator.pop(ctx);
+          _draw(context, ref);
         },
         onExport: () async {
           Navigator.pop(ctx);
@@ -1026,6 +1100,11 @@ class _StoryboardFrame extends ConsumerWidget {
                   ],
                 ),
               ),
+            Positioned(
+              right: 6,
+              bottom: 6,
+              child: _DrawFrameButton(onTap: () => _draw(context, ref)),
+            ),
             if (showSceneBadge)
               Positioned(
                 left: 8,
@@ -1256,6 +1335,7 @@ class _FrameDetailSheet extends ConsumerWidget {
   final Shot shot;
   final Color sceneColor;
   final void Function(String source) onImport;
+  final VoidCallback onDraw;
   final Future<void> Function() onExport;
 
   const _FrameDetailSheet({
@@ -1263,6 +1343,7 @@ class _FrameDetailSheet extends ConsumerWidget {
     required this.shot,
     required this.sceneColor,
     required this.onImport,
+    required this.onDraw,
     required this.onExport,
   });
 
@@ -1302,6 +1383,12 @@ class _FrameDetailSheet extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.xl),
             Text('Añadir referencia', style: AppTypography.label(palette)),
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
+              label: 'Dibujar viñeta',
+              icon: Icons.draw_outlined,
+              onTap: onDraw,
+            ),
             const SizedBox(height: AppSpacing.sm),
             AppButton(
               label: 'Captura Artemis',
@@ -1360,6 +1447,32 @@ class _FrameDetailSheet extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Lápiz pequeño sobre la viñeta: abre el folio de dibujo.
+class _DrawFrameButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _DrawFrameButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Dibujar viñeta',
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.55),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: const Padding(
+            padding: EdgeInsets.all(6),
+            child: Icon(Icons.draw_outlined, size: 16, color: Colors.white),
+          ),
         ),
       ),
     );
