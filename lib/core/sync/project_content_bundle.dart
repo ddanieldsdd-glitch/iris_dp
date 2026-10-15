@@ -97,7 +97,9 @@ class ContentSyncSummary {
 
 /// Exporta e importa el contenido completo de un proyecto como JSON.
 class ProjectContentBundle {
-  static const bundleVersion = 4;
+  /// v5: obturación, fps, descripción, numeración y planta de cada plano, y
+  /// localización y set de los esquemas de luz de la biblia.
+  static const bundleVersion = 5;
 
   static Future<Map<String, dynamic>> export(
     AppDatabase db,
@@ -442,6 +444,10 @@ class ProjectContentBundle {
           'narrativeNote': setup.narrativeNote,
           'diagramJson': setup.diagramJson,
           'planSetupId': setup.planSetupId,
+          if (setup.locationSiteId != null)
+            'locationSiteKey': siteKeyById[setup.locationSiteId!],
+          if (setup.locationBasePlanId != null)
+            'locationSetKey': setKeyById[setup.locationBasePlanId!],
           'gelNotes': setup.gelNotes,
           'practicalMotivation': setup.practicalMotivation,
           'referenceImagePath': setup.referenceImagePath,
@@ -630,6 +636,14 @@ class ProjectContentBundle {
           'lightOverridesJson': shot.lightOverridesJson,
           'storyboardImagePath': shot.storyboardImagePath,
           'cellStylesJson': shot.cellStylesJson,
+          // Solo con valor: así un proyecto que no los usa conserva la
+          // huella que tenía antes de que viajaran.
+          if (shot.shutterAngle != null) 'shutterAngle': shot.shutterAngle,
+          if (shot.fps != null) 'fps': shot.fps,
+          if (shot.description != null) 'description': shot.description,
+          if (!shot.autoNumbering) 'autoNumbering': false,
+          if (shot.cameraPlanImagePath != null)
+            'cameraPlanImagePath': shot.cameraPlanImagePath,
           'lightSetupKey': shot.lightSetupId != null
               ? lightSetupKeyById[shot.lightSetupId!]
               : null,
@@ -1123,6 +1137,11 @@ class ProjectContentBundle {
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
               lightSetupId: Value(lightSetupKeyToId[m['lightSetupKey']]),
               lightOverridesJson: Value(m['lightOverridesJson'] as String?),
+              shutterAngle: Value(m['shutterAngle'] as String?),
+              fps: Value(bundleInt(m['fps'])),
+              description: Value(m['description'] as String?),
+              autoNumbering: Value(m['autoNumbering'] as bool? ?? true),
+              cameraPlanImagePath: Value(m['cameraPlanImagePath'] as String?),
               storyboardImagePath: Value(
                 m['storyboardImagePath'] as String?,
               ),
@@ -1616,6 +1635,8 @@ class ProjectContentBundle {
               practicalMotivation: Value(m['practicalMotivation'] as String?),
               referenceImagePath: Value(m['referenceImagePath'] as String?),
               planSetupId: Value(lightSetupKeyToId[m['planSetupKey']]),
+              locationSiteId: Value(siteKeyToId[m['locationSiteKey']]),
+              locationBasePlanId: Value(setKeyToId[m['locationSetKey']]),
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
             ),
           );
