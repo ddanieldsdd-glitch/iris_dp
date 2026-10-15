@@ -53,7 +53,7 @@ En `media_upload_queue.dart`:
 `main.dart` pone `key: ValueKey(themeMode)` en `MaterialApp` y lanza `_bootstrapApp()` dentro de `build`. Cambiar claro/oscuro desmonta todo: vuelve el splash, se vuelve a Proyectos y se pierde lo que estuviera abierto. Además el tema no se guarda: siempre arranca en oscuro.
 
 **F9. Exportar puede romper si un plano apunta a una escena que no está.**
-`project_content_bundle.dart:200` y `:612` usan `scenes.firstWhere` sin `orElse`. Hay 55 `firstWhere` así en total.
+`project_content_bundle.dart:200` y `:612` usan `scenes.firstWhere` sin `orElse`. Hay 22 `firstWhere` así en total (la primera cuenta, 55, era por línea y contaba los que tienen `orElse` en la línea siguiente).
 
 ### Medios
 
@@ -101,16 +101,16 @@ Cada punto es un PR pequeño con `flutter analyze` y `flutter test` en verde, co
 - [x] **A1. Conflictos respetados en la cola (F1).** También se quitó la subida de contenido escondida en «actualizar datos del proyecto». Antes de subir desde la cola, rehacer la decisión por huellas; si hay conflicto o cambios en la nube, no subir y dejarlo para la revisión. Test: proyecto en conflicto + entrada en cola → la nube no cambia.
 - [x] **A2. Subida condicionada (F2).** Subir solo si el `content_hash` de la nube es el de la base (comprobación en la consulta o función RPC); si no, devolver conflicto.
 - [x] **A3. Bundle v5 con los planos completos (F3).** Incluye localización y set de los esquemas de luz de la biblia. El test de columnas cubre `Shots`; queda extenderlo al resto de tablas. Añadir los campos de `Shots` que faltan y meterlos en la huella. Test de ida y vuelta que compare **todas** las columnas de cada tabla del bundle, para que no vuelva a pasar con columnas nuevas.
-- [ ] **A4. Copia automática antes de migrar (F6).** Si la versión de la base en disco es menor que `schemaVersion`, copia `antes-de-migrar-<versión>` antes de abrirla.
-- [ ] **A5. Migraciones a prueba de choques (F5).** Un `addColumnIfMissing` que mire `pragma table_info`, usado en todos los pasos; test que migre una base vacía de cada versión antigua disponible hasta la actual.
-- [ ] **A6. Cola de imágenes sana (F7).** Al arrancar, `processing` → `pending`; reutilizar la fila fallida en vez de crear otra; reintento sin bloquear el lote; botón «Reintentar subidas fallidas» y recuento de fallos visible.
-- [ ] **A7. Tema sin reinicio y guardado (F8).** Quitar la `key` del `MaterialApp`, crear el futuro de arranque una sola vez y guardar el tema.
-- [ ] **A8. `firstWhere` seguros (F9)** en sync y export primero; el resto, al tocar cada archivo.
-- [ ] **A9. Errores con rastro (F10).** Captura global que escriba en un log local rotativo, con opción de enviarlo.
-- [ ] **A10. Blobs dañados no se pisan (F11).** Si un JSON no se puede leer, no se escribe encima: se guarda aparte y se avisa.
-- [ ] **A11. PDF con imágenes reducidas (F12)** y caché de imágenes durante una exportación.
-- [ ] **A13. Huella estable entre versiones.** `hashBundle` usa `String.hashCode`, que no está garantizado entre versiones de Dart ni plataformas y es de 32 bits. Pasar a SHA-256 (ya está `crypto`) con transición: comparar las huellas guardadas con el método antiguo hasta la siguiente sincronización.
-- [ ] **A12. Avisos del analizador a cero** en `lib/` (F13, código muerto, APIs obsoletas, dependencia `supabase` de los tests).
+- [x] **A4. Copia automática antes de migrar (F6).** Ya existía para el esquema 45; ahora para toda subida de esquema, con las tres últimas copias. Si la versión de la base en disco es menor que `schemaVersion`, copia `antes-de-migrar-<versión>` antes de abrirla.
+- [x] **A5. Migraciones a prueba de choques (F5).** Un `addColumnIfMissing` que mire `pragma table_info`, usado en todos los pasos; test que migre una base vacía de cada versión antigua disponible hasta la actual.
+- [x] **A6. Cola de imágenes sana (F7).** Al arrancar, `processing` → `pending`; reutilizar la fila fallida en vez de crear otra; reintento sin bloquear el lote; botón «Reintentar subidas fallidas» y recuento de fallos visible.
+- [x] **A7. Tema sin reinicio y guardado (F8).** Falta comprobarlo a mano en la app. Quitar la `key` del `MaterialApp`, crear el futuro de arranque una sola vez y guardar el tema.
+- [x] **A8. `firstWhere` seguros (F9)** en sync y export primero; el resto, al tocar cada archivo.
+- [x] **A9. Errores con rastro (F10).** Registro en `iris_dp/logs/` y «Compartir registro de errores» en Ajustes. Captura global que escriba en un log local rotativo, con opción de enviarlo.
+- [x] **A10. Blobs dañados no se pisan (F11).** Hecho en las pantallas de la biblia (el punto común de guardado); quedan los blobs de otras tablas. Si un JSON no se puede leer, no se escribe encima: se guarda aparte y se avisa.
+- [x] **A11. PDF con imágenes reducidas (F12)** y caché de imágenes durante una exportación.
+- [x] **A13. Huella estable entre versiones.** `hashBundle` usa `String.hashCode`, que no está garantizado entre versiones de Dart ni plataformas y es de 32 bits. Pasar a SHA-256 (ya está `crypto`) con transición: comparar las huellas guardadas con el método antiguo hasta la siguiente sincronización.
+- [ ] **A12. Avisos del analizador a cero** (hecho fuera de las zonas en obras: de 73 a 57 en `lib/`; el resto, al cerrar las sesiones de biblia, planta y anotaciones) en `lib/` (F13, código muerto, APIs obsoletas, dependencia `supabase` de los tests).
 
 ### Fase B — Mejoras de funcionamiento
 
