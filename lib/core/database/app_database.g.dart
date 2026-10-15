@@ -503,6 +503,39 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _cardMetricsJsonMeta = const VerificationMeta(
+    'cardMetricsJson',
+  );
+  @override
+  late final GeneratedColumn<String> cardMetricsJson = GeneratedColumn<String>(
+    'card_metrics_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _cardColorMeta = const VerificationMeta(
+    'cardColor',
+  );
+  @override
+  late final GeneratedColumn<int> cardColor = GeneratedColumn<int>(
+    'card_color',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _cardSizeMeta = const VerificationMeta(
+    'cardSize',
+  );
+  @override
+  late final GeneratedColumn<String> cardSize = GeneratedColumn<String>(
+    'card_size',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -551,6 +584,9 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     contentSyncBaseLocal,
     contentSyncBaseCloud,
     moodboardCatalogJson,
+    cardMetricsJson,
+    cardColor,
+    cardSize,
     createdAt,
     updatedAt,
   ];
@@ -736,6 +772,27 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         ),
       );
     }
+    if (data.containsKey('card_metrics_json')) {
+      context.handle(
+        _cardMetricsJsonMeta,
+        cardMetricsJson.isAcceptableOrUnknown(
+          data['card_metrics_json']!,
+          _cardMetricsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('card_color')) {
+      context.handle(
+        _cardColorMeta,
+        cardColor.isAcceptableOrUnknown(data['card_color']!, _cardColorMeta),
+      );
+    }
+    if (data.containsKey('card_size')) {
+      context.handle(
+        _cardSizeMeta,
+        cardSize.isAcceptableOrUnknown(data['card_size']!, _cardSizeMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -845,6 +902,18 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         DriftSqlType.string,
         data['${effectivePrefix}moodboard_catalog_json'],
       ),
+      cardMetricsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}card_metrics_json'],
+      ),
+      cardColor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}card_color'],
+      ),
+      cardSize: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}card_size'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -895,6 +964,16 @@ class Project extends DataClass implements Insertable<Project> {
 
   /// Opciones propias del catálogo del moodboard (JSON por clave).
   final String? moodboardCatalogJson;
+
+  /// Qué datos enseña la tarjeta del proyecto (lista de nombres de
+  /// `ProjectCardMetric`). Nula: los de siempre.
+  final String? cardMetricsJson;
+
+  /// Color de la tarjeta del proyecto (ARGB). Nulo: el de acento.
+  final int? cardColor;
+
+  /// Tamaño de la tarjeta: s, m, l o xl. Nulo: m.
+  final String? cardSize;
   final DateTime createdAt;
   final DateTime updatedAt;
   const Project({
@@ -920,6 +999,9 @@ class Project extends DataClass implements Insertable<Project> {
     this.contentSyncBaseLocal,
     this.contentSyncBaseCloud,
     this.moodboardCatalogJson,
+    this.cardMetricsJson,
+    this.cardColor,
+    this.cardSize,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -981,6 +1063,15 @@ class Project extends DataClass implements Insertable<Project> {
     }
     if (!nullToAbsent || moodboardCatalogJson != null) {
       map['moodboard_catalog_json'] = Variable<String>(moodboardCatalogJson);
+    }
+    if (!nullToAbsent || cardMetricsJson != null) {
+      map['card_metrics_json'] = Variable<String>(cardMetricsJson);
+    }
+    if (!nullToAbsent || cardColor != null) {
+      map['card_color'] = Variable<int>(cardColor);
+    }
+    if (!nullToAbsent || cardSize != null) {
+      map['card_size'] = Variable<String>(cardSize);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -1045,6 +1136,15 @@ class Project extends DataClass implements Insertable<Project> {
       moodboardCatalogJson: moodboardCatalogJson == null && nullToAbsent
           ? const Value.absent()
           : Value(moodboardCatalogJson),
+      cardMetricsJson: cardMetricsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cardMetricsJson),
+      cardColor: cardColor == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cardColor),
+      cardSize: cardSize == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cardSize),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -1090,6 +1190,9 @@ class Project extends DataClass implements Insertable<Project> {
       moodboardCatalogJson: serializer.fromJson<String?>(
         json['moodboardCatalogJson'],
       ),
+      cardMetricsJson: serializer.fromJson<String?>(json['cardMetricsJson']),
+      cardColor: serializer.fromJson<int?>(json['cardColor']),
+      cardSize: serializer.fromJson<String?>(json['cardSize']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -1122,6 +1225,9 @@ class Project extends DataClass implements Insertable<Project> {
       'contentSyncBaseLocal': serializer.toJson<String?>(contentSyncBaseLocal),
       'contentSyncBaseCloud': serializer.toJson<String?>(contentSyncBaseCloud),
       'moodboardCatalogJson': serializer.toJson<String?>(moodboardCatalogJson),
+      'cardMetricsJson': serializer.toJson<String?>(cardMetricsJson),
+      'cardColor': serializer.toJson<int?>(cardColor),
+      'cardSize': serializer.toJson<String?>(cardSize),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -1150,6 +1256,9 @@ class Project extends DataClass implements Insertable<Project> {
     Value<String?> contentSyncBaseLocal = const Value.absent(),
     Value<String?> contentSyncBaseCloud = const Value.absent(),
     Value<String?> moodboardCatalogJson = const Value.absent(),
+    Value<String?> cardMetricsJson = const Value.absent(),
+    Value<int?> cardColor = const Value.absent(),
+    Value<String?> cardSize = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Project(
@@ -1197,6 +1306,11 @@ class Project extends DataClass implements Insertable<Project> {
     moodboardCatalogJson: moodboardCatalogJson.present
         ? moodboardCatalogJson.value
         : this.moodboardCatalogJson,
+    cardMetricsJson: cardMetricsJson.present
+        ? cardMetricsJson.value
+        : this.cardMetricsJson,
+    cardColor: cardColor.present ? cardColor.value : this.cardColor,
+    cardSize: cardSize.present ? cardSize.value : this.cardSize,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1252,6 +1366,11 @@ class Project extends DataClass implements Insertable<Project> {
       moodboardCatalogJson: data.moodboardCatalogJson.present
           ? data.moodboardCatalogJson.value
           : this.moodboardCatalogJson,
+      cardMetricsJson: data.cardMetricsJson.present
+          ? data.cardMetricsJson.value
+          : this.cardMetricsJson,
+      cardColor: data.cardColor.present ? data.cardColor.value : this.cardColor,
+      cardSize: data.cardSize.present ? data.cardSize.value : this.cardSize,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1282,6 +1401,9 @@ class Project extends DataClass implements Insertable<Project> {
           ..write('contentSyncBaseLocal: $contentSyncBaseLocal, ')
           ..write('contentSyncBaseCloud: $contentSyncBaseCloud, ')
           ..write('moodboardCatalogJson: $moodboardCatalogJson, ')
+          ..write('cardMetricsJson: $cardMetricsJson, ')
+          ..write('cardColor: $cardColor, ')
+          ..write('cardSize: $cardSize, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1312,6 +1434,9 @@ class Project extends DataClass implements Insertable<Project> {
     contentSyncBaseLocal,
     contentSyncBaseCloud,
     moodboardCatalogJson,
+    cardMetricsJson,
+    cardColor,
+    cardSize,
     createdAt,
     updatedAt,
   ]);
@@ -1341,6 +1466,9 @@ class Project extends DataClass implements Insertable<Project> {
           other.contentSyncBaseLocal == this.contentSyncBaseLocal &&
           other.contentSyncBaseCloud == this.contentSyncBaseCloud &&
           other.moodboardCatalogJson == this.moodboardCatalogJson &&
+          other.cardMetricsJson == this.cardMetricsJson &&
+          other.cardColor == this.cardColor &&
+          other.cardSize == this.cardSize &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1368,6 +1496,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
   final Value<String?> contentSyncBaseLocal;
   final Value<String?> contentSyncBaseCloud;
   final Value<String?> moodboardCatalogJson;
+  final Value<String?> cardMetricsJson;
+  final Value<int?> cardColor;
+  final Value<String?> cardSize;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   const ProjectsCompanion({
@@ -1393,6 +1524,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.contentSyncBaseLocal = const Value.absent(),
     this.contentSyncBaseCloud = const Value.absent(),
     this.moodboardCatalogJson = const Value.absent(),
+    this.cardMetricsJson = const Value.absent(),
+    this.cardColor = const Value.absent(),
+    this.cardSize = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -1419,6 +1553,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.contentSyncBaseLocal = const Value.absent(),
     this.contentSyncBaseCloud = const Value.absent(),
     this.moodboardCatalogJson = const Value.absent(),
+    this.cardMetricsJson = const Value.absent(),
+    this.cardColor = const Value.absent(),
+    this.cardSize = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   }) : name = Value(name);
@@ -1445,6 +1582,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Expression<String>? contentSyncBaseLocal,
     Expression<String>? contentSyncBaseCloud,
     Expression<String>? moodboardCatalogJson,
+    Expression<String>? cardMetricsJson,
+    Expression<int>? cardColor,
+    Expression<String>? cardSize,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
   }) {
@@ -1476,6 +1616,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
         'content_sync_base_cloud': contentSyncBaseCloud,
       if (moodboardCatalogJson != null)
         'moodboard_catalog_json': moodboardCatalogJson,
+      if (cardMetricsJson != null) 'card_metrics_json': cardMetricsJson,
+      if (cardColor != null) 'card_color': cardColor,
+      if (cardSize != null) 'card_size': cardSize,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -1504,6 +1647,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Value<String?>? contentSyncBaseLocal,
     Value<String?>? contentSyncBaseCloud,
     Value<String?>? moodboardCatalogJson,
+    Value<String?>? cardMetricsJson,
+    Value<int?>? cardColor,
+    Value<String?>? cardSize,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
   }) {
@@ -1530,6 +1676,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       contentSyncBaseLocal: contentSyncBaseLocal ?? this.contentSyncBaseLocal,
       contentSyncBaseCloud: contentSyncBaseCloud ?? this.contentSyncBaseCloud,
       moodboardCatalogJson: moodboardCatalogJson ?? this.moodboardCatalogJson,
+      cardMetricsJson: cardMetricsJson ?? this.cardMetricsJson,
+      cardColor: cardColor ?? this.cardColor,
+      cardSize: cardSize ?? this.cardSize,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -1614,6 +1763,15 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
         moodboardCatalogJson.value,
       );
     }
+    if (cardMetricsJson.present) {
+      map['card_metrics_json'] = Variable<String>(cardMetricsJson.value);
+    }
+    if (cardColor.present) {
+      map['card_color'] = Variable<int>(cardColor.value);
+    }
+    if (cardSize.present) {
+      map['card_size'] = Variable<String>(cardSize.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1648,6 +1806,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
           ..write('contentSyncBaseLocal: $contentSyncBaseLocal, ')
           ..write('contentSyncBaseCloud: $contentSyncBaseCloud, ')
           ..write('moodboardCatalogJson: $moodboardCatalogJson, ')
+          ..write('cardMetricsJson: $cardMetricsJson, ')
+          ..write('cardColor: $cardColor, ')
+          ..write('cardSize: $cardSize, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -34860,6 +35021,9 @@ typedef $$ProjectsTableCreateCompanionBuilder =
       Value<String?> contentSyncBaseLocal,
       Value<String?> contentSyncBaseCloud,
       Value<String?> moodboardCatalogJson,
+      Value<String?> cardMetricsJson,
+      Value<int?> cardColor,
+      Value<String?> cardSize,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
     });
@@ -34887,6 +35051,9 @@ typedef $$ProjectsTableUpdateCompanionBuilder =
       Value<String?> contentSyncBaseLocal,
       Value<String?> contentSyncBaseCloud,
       Value<String?> moodboardCatalogJson,
+      Value<String?> cardMetricsJson,
+      Value<int?> cardColor,
+      Value<String?> cardSize,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
     });
@@ -35384,6 +35551,21 @@ class $$ProjectsTableFilterComposer
 
   ColumnFilters<String> get moodboardCatalogJson => $composableBuilder(
     column: $table.moodboardCatalogJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cardMetricsJson => $composableBuilder(
+    column: $table.cardMetricsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cardColor => $composableBuilder(
+    column: $table.cardColor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cardSize => $composableBuilder(
+    column: $table.cardSize,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -35937,6 +36119,21 @@ class $$ProjectsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get cardMetricsJson => $composableBuilder(
+    column: $table.cardMetricsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cardColor => $composableBuilder(
+    column: $table.cardColor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cardSize => $composableBuilder(
+    column: $table.cardSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -36070,6 +36267,17 @@ class $$ProjectsTableAnnotationComposer
     column: $table.moodboardCatalogJson,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get cardMetricsJson => $composableBuilder(
+    column: $table.cardMetricsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get cardColor =>
+      $composableBuilder(column: $table.cardColor, builder: (column) => column);
+
+  GeneratedColumn<String> get cardSize =>
+      $composableBuilder(column: $table.cardSize, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -36577,6 +36785,9 @@ class $$ProjectsTableTableManager
                 Value<String?> contentSyncBaseLocal = const Value.absent(),
                 Value<String?> contentSyncBaseCloud = const Value.absent(),
                 Value<String?> moodboardCatalogJson = const Value.absent(),
+                Value<String?> cardMetricsJson = const Value.absent(),
+                Value<int?> cardColor = const Value.absent(),
+                Value<String?> cardSize = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => ProjectsCompanion(
@@ -36602,6 +36813,9 @@ class $$ProjectsTableTableManager
                 contentSyncBaseLocal: contentSyncBaseLocal,
                 contentSyncBaseCloud: contentSyncBaseCloud,
                 moodboardCatalogJson: moodboardCatalogJson,
+                cardMetricsJson: cardMetricsJson,
+                cardColor: cardColor,
+                cardSize: cardSize,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),
@@ -36629,6 +36843,9 @@ class $$ProjectsTableTableManager
                 Value<String?> contentSyncBaseLocal = const Value.absent(),
                 Value<String?> contentSyncBaseCloud = const Value.absent(),
                 Value<String?> moodboardCatalogJson = const Value.absent(),
+                Value<String?> cardMetricsJson = const Value.absent(),
+                Value<int?> cardColor = const Value.absent(),
+                Value<String?> cardSize = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => ProjectsCompanion.insert(
@@ -36654,6 +36871,9 @@ class $$ProjectsTableTableManager
                 contentSyncBaseLocal: contentSyncBaseLocal,
                 contentSyncBaseCloud: contentSyncBaseCloud,
                 moodboardCatalogJson: moodboardCatalogJson,
+                cardMetricsJson: cardMetricsJson,
+                cardColor: cardColor,
+                cardSize: cardSize,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),

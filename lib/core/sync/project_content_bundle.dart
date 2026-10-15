@@ -554,6 +554,10 @@ class ProjectContentBundle {
         // Solo si hay: no cambia la huella de los proyectos que no lo usan.
         if (project.moodboardCatalogJson != null)
           'moodboardCatalogJson': project.moodboardCatalogJson,
+        if (project.cardMetricsJson != null)
+          'cardMetricsJson': project.cardMetricsJson,
+        if (project.cardColor != null) 'cardColor': project.cardColor,
+        if (project.cardSize != null) 'cardSize': project.cardSize,
       },
       'locationSites': sites
           .map(
@@ -1028,6 +1032,15 @@ class ProjectContentBundle {
           scriptFileName: Value(projectFields['scriptFileName'] as String?),
           moodboardCatalogJson: projectFields.containsKey('moodboardCatalogJson')
               ? Value(projectFields['moodboardCatalogJson'] as String?)
+              : const Value.absent(),
+          cardMetricsJson: projectFields.containsKey('cardMetricsJson')
+              ? Value(projectFields['cardMetricsJson'] as String?)
+              : const Value.absent(),
+          cardColor: projectFields.containsKey('cardColor')
+              ? Value(bundleInt(projectFields['cardColor']))
+              : const Value.absent(),
+          cardSize: projectFields.containsKey('cardSize')
+              ? Value(projectFields['cardSize'] as String?)
               : const Value.absent(),
         ),
       );

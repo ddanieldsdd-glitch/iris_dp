@@ -50,6 +50,16 @@ class Projects extends Table {
 
   /// Opciones propias del catálogo del moodboard (JSON por clave).
   TextColumn get moodboardCatalogJson => text().nullable()();
+
+  /// Qué datos enseña la tarjeta del proyecto (lista de nombres de
+  /// `ProjectCardMetric`). Nula: los de siempre.
+  TextColumn get cardMetricsJson => text().nullable()();
+
+  /// Color de la tarjeta del proyecto (ARGB). Nulo: el de acento.
+  IntColumn get cardColor => integer().nullable()();
+
+  /// Tamaño de la tarjeta: s, m, l o xl. Nulo: m.
+  TextColumn get cardSize => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }

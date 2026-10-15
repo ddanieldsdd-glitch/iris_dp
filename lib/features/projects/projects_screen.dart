@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +10,6 @@ import '../../core/theme/app_typography.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
-import '../../core/widgets/app_card.dart';
 import 'create_project_sheet.dart';
 import '../auth/auth_screen.dart';
 import '../migration/cloud_migration_wizard.dart';
@@ -20,13 +18,15 @@ import '../onboarding/auth_required_banner.dart';
 import '../onboarding/initial_tutorial_flow.dart';
 import '../onboarding/install_update_guide_screen.dart';
 import 'project_form_sheet.dart';
-import 'project_overview.dart';
-import 'project_overview_metrics.dart';
+import 'project_card_actions.dart';
+import 'project_card_stats.dart';
+import 'project_poster_card.dart';
 import '../project_hub/project_hub_screen.dart';
 import '../shoot_documents/shoot_template_editor_screen.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../core/widgets/sync/sync_conflict_resolution_sheet.dart';
 import '../../core/widgets/sync/sync_flow_coordinator.dart';
+import '../../core/sync/media_sync_providers.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sync_status_indicator.dart';
 import '../../core/update/update_available_banner.dart';
@@ -497,23 +497,38 @@ class _ProjectGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 280,
-        crossAxisSpacing: AppSpacing.md,
-        mainAxisSpacing: AppSpacing.md,
-        childAspectRatio: 0.62,
-      ),
-      itemCount: projects.length,
-      itemBuilder: (context, i) => _ProjectCard(
-        project: projects[i],
-        onTap: () => onTap(projects[i]),
-        onEdit: () => onEdit(projects[i]),
-        onDuplicate: () => onDuplicate(projects[i]),
-        onDelete: () => onDelete(projects[i]),
-      ),
+    // Tarjetas grandes: son la portada de cada trabajo. Cada proyecto elige
+    // su tamaño (S, M, L, XL) y las filas se rellenan solas.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth;
+        return Wrap(
+          spacing: 28,
+          runSpacing: 28,
+          children: [
+            for (final project in projects)
+              Builder(
+                builder: (_) {
+                  final size = ProjectCardSize.of(project.cardSize);
+                  final width = size.width > available
+                      ? available
+                      : size.width;
+                  return SizedBox(
+                    width: width,
+                    height: width * 10 / 16,
+                    child: _ProjectCard(
+                      project: project,
+                      onTap: () => onTap(project),
+                      onEdit: () => onEdit(project),
+                      onDuplicate: () => onDuplicate(project),
+                      onDelete: () => onDelete(project),
+                    ),
+                  );
+                },
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -538,242 +553,68 @@ class _ProjectCard extends ConsumerStatefulWidget {
 }
 
 class _ProjectCardState extends ConsumerState<_ProjectCard> {
-  ProjectOverview? _overview;
+  ProjectCardStats? _stats;
 
   @override
   void initState() {
     super.initState();
-    _loadOverview();
+    _loadStats();
   }
 
   @override
   void didUpdateWidget(_ProjectCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.project.id != widget.project.id) {
-      _loadOverview();
-    }
+    if (oldWidget.project != widget.project) _loadStats();
   }
 
-  Future<void> _loadOverview() async {
+  Future<void> _loadStats() async {
     final db = ref.read(databaseProvider);
-    final overview = await loadProjectOverview(db, widget.project.id);
-    if (mounted) setState(() => _overview = overview);
+    final stats = await loadProjectCardStats(db, widget.project.id);
+    if (mounted) setState(() => _stats = stats);
   }
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
-    final project = widget.project;
-    final icon = IconData(project.iconCode, fontFamily: 'MaterialIcons');
-    final coverPath = project.coverImagePath;
-    final hasCover =
-        coverPath != null &&
-        coverPath.isNotEmpty &&
-        File(coverPath).existsSync();
-    final overview = _overview;
-    final directionText = overview?.directionSummary;
+    // Tras sincronizar o subir imágenes cambia el estado de la nube.
+    ref.listen(pendingSyncPlanProvider, (_, _) => _loadStats());
+    ref.listen(mediaUploadProgressProvider, (_, _) => _loadStats());
+    final stats = _stats;
 
-    return AppCard(
-      onTap: widget.onTap,
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 5,
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(16),
-                  ),
-                  child: hasCover
-                      ? Image.file(
-                          File(coverPath),
-                          width: double.infinity,
-                          height: double.infinity,
-                          fit: BoxFit.cover,
-                        )
-                      : Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: palette.surfaceOverlay,
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(16),
-                            ),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              icon,
-                              color: palette.textTertiary,
-                              size: 48,
-                            ),
-                          ),
-                        ),
-                ),
-                if (hasCover)
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(16),
-                        ),
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.35),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: PopupMenuButton<String>(
-                    color: palette.surfaceElevated,
-                    icon: Icon(
-                      Icons.more_horiz,
-                      color: palette.textSecondary,
-                      size: 18,
-                    ),
-                    onSelected: (v) {
-                      if (v == 'edit') widget.onEdit();
-                      if (v == 'duplicate') widget.onDuplicate();
-                      if (v == 'delete') widget.onDelete();
-                    },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.edit_outlined,
-                              color: palette.textSecondary,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Editar',
-                              style: AppTypography.bodyMedium(palette),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'duplicate',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.copy_outlined,
-                              color: palette.textSecondary,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Duplicar',
-                              style: AppTypography.bodyMedium(palette),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.delete_outline,
-                              color: palette.error,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Eliminar',
-                              style: AppTypography.bodyMedium(
-                                palette,
-                              ).copyWith(color: palette.error),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 6,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    project.name,
-                    style: AppTypography.titleMedium(palette),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (project.director != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      project.director!,
-                      style: AppTypography.caption(palette),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (directionText != null && directionText.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      directionText,
-                      style: AppTypography.caption(palette).copyWith(
-                        color: palette.textSecondary,
-                        height: 1.35,
-                        fontStyle: FontStyle.italic,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ] else if (overview != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Añade la intención en Biblia → Dirección',
-                      style: AppTypography.caption(palette).copyWith(
-                        color: palette.textTertiary,
-                        fontStyle: FontStyle.italic,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  if (overview != null) ...[
-                    ProjectStateChip(
-                      overview: overview,
-                      status: project.status,
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        physics: const NeverScrollableScrollPhysics(),
-                        child: ProjectOverviewMetrics(overview: overview),
-                      ),
-                    ),
-                  ] else
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: LinearProgressIndicator(minHeight: 2),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
+    return ProjectPosterCard(
+      project: widget.project,
+      stats: stats,
+      metrics: ProjectCardMetric.of(widget.project.cardMetricsJson),
+      onChangeImage: () => changeProjectCardImage(
+        context,
+        ref.read(databaseProvider),
+        widget.project,
       ),
+      onChooseColor: () => chooseProjectCardColor(
+        context,
+        ref.read(databaseProvider),
+        widget.project,
+      ),
+      onSetSize: (size) =>
+          setProjectCardSize(ref.read(databaseProvider), widget.project, size),
+      onChooseData: () async {
+        await chooseProjectCardData(
+          context,
+          ref.read(databaseProvider),
+          widget.project,
+        );
+        _loadStats();
+      },
+      syncState: stats == null
+          ? null
+          : projectSyncState(
+              project: widget.project,
+              stats: stats,
+              pendingPlan: ref.watch(pendingSyncPlanProvider),
+            ),
+      onTap: widget.onTap,
+      onEdit: widget.onEdit,
+      onDuplicate: widget.onDuplicate,
+      onDelete: widget.onDelete,
     );
   }
 }
