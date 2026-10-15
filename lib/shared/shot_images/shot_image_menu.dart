@@ -451,6 +451,9 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
           ? const AnnotationDocument()
           : readSketchDocument(editing),
       aspectRatio: _sketch ? 4 / 3 : 16 / 9,
+      purpose: _sketch
+          ? SketchSheetPurpose.lightingPlan
+          : SketchSheetPurpose.storyboard,
     );
     if (result == null || !mounted) return;
     await _run(() async {

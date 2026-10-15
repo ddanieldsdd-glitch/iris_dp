@@ -1,9 +1,14 @@
+import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import 'annotation_brushes.dart';
 import 'annotation_document.dart';
+import 'annotation_shape_recognizer.dart';
 
 /// Transforma un documento normalizado al mismo viewport que un plano.
 class AnnotationViewport {
@@ -29,16 +34,36 @@ class AnnotationCanvasController extends ChangeNotifier {
   final List<AnnotationDocument> _undo = [];
   final List<AnnotationDocument> _redo = [];
   AnnotationDocument? _noteDragBaseline;
+  String? _selectedStampId;
 
   AnnotationDocument get document => _document;
   bool get canUndo => _undo.isNotEmpty;
   bool get canRedo => _redo.isNotEmpty;
+
+  /// Sello seleccionado con la herramienta «Mover».
+  String? get selectedStampId => _selectedStampId;
+
+  AnnotationStamp? get selectedStamp {
+    final id = _selectedStampId;
+    if (id == null) return null;
+    for (final stamp in _document.stamps) {
+      if (stamp.id == id) return stamp;
+    }
+    return null;
+  }
+
+  void selectStamp(String? id) {
+    if (_selectedStampId == id) return;
+    _selectedStampId = id;
+    notifyListeners();
+  }
 
   void replaceDocument(
     AnnotationDocument document, {
     bool clearHistory = true,
   }) {
     _document = document;
+    _selectedStampId = null;
     if (clearHistory) {
       _undo.clear();
       _redo.clear();
@@ -53,6 +78,62 @@ class AnnotationCanvasController extends ChangeNotifier {
   void addNote(AnnotationNote note) {
     _commit(_document.copyWith(notes: [..._document.notes, note]));
   }
+
+  void addStamp(AnnotationStamp stamp) {
+    _commit(_document.copyWith(stamps: [..._document.stamps, stamp]));
+  }
+
+  void updateStamp(
+    String id, {
+    double? x,
+    double? y,
+    double? rotation,
+    double? size,
+    int? colorArgb,
+    String? label,
+    bool commit = true,
+  }) {
+    final index = _document.stamps.indexWhere((stamp) => stamp.id == id);
+    if (index < 0) return;
+    final next = List<AnnotationStamp>.from(_document.stamps);
+    next[index] = next[index].copyWith(
+      x: x,
+      y: y,
+      rotation: rotation,
+      size: size,
+      colorArgb: colorArgb,
+      label: label,
+    );
+    final document = _document.copyWith(stamps: next);
+    if (commit) {
+      _commit(document);
+    } else {
+      _document = document;
+      notifyListeners();
+    }
+  }
+
+  void removeStamp(String id) {
+    final next = _document.stamps.where((stamp) => stamp.id != id).toList();
+    if (next.length == _document.stamps.length) return;
+    if (_selectedStampId == id) _selectedStampId = null;
+    _commit(_document.copyWith(stamps: next));
+  }
+
+  /// Sello bajo [point] (píxeles de documento de tamaño [size]).
+  String? hitTestStamp(Offset point, Size size) {
+    for (final stamp in _document.stamps.reversed) {
+      final center = AnnotationBrushes.stampCenter(stamp, size);
+      final radius = math.max(12.0, AnnotationBrushes.stampRadius(stamp, size));
+      if ((point - center).distance <= radius * 1.15) return stamp.id;
+    }
+    return null;
+  }
+
+  /// Agrupa los cambios de un arrastre en un solo paso de deshacer.
+  void beginGesture() => beginNoteDrag();
+
+  void endGesture() => endNoteDrag();
 
   void beginNoteDrag() {
     _noteDragBaseline ??= _document;
@@ -99,16 +180,56 @@ class AnnotationCanvasController extends ChangeNotifier {
   }
 
   String? hitTestStroke(double nx, double ny, {double threshold = 0.02}) {
+    final p = Offset(nx, ny);
     for (final stroke in _document.strokes.reversed) {
-      for (final point in stroke.points) {
-        final dx = point.x - nx;
-        final dy = point.y - ny;
-        if (math.sqrt(dx * dx + dy * dy) <= threshold) {
-          return stroke.id;
-        }
+      if (stroke.tool == AnnotationToolType.eraseArea) continue;
+      final pts = [for (final q in stroke.points) Offset(q.x, q.y)];
+      if (pts.isEmpty) continue;
+      if ((AnnotationBrushes.isAreaTool(stroke.tool) || stroke.closed) &&
+          pts.length >= 3 &&
+          _insidePolygon(p, pts)) {
+        return stroke.id;
+      }
+      final reach =
+          threshold +
+          (stroke.tool == AnnotationToolType.wash ||
+                  stroke.tool == AnnotationToolType.airbrush
+              ? stroke.width / 1000
+              : 0);
+      if (pts.length == 1) {
+        if ((pts.single - p).distance <= reach) return stroke.id;
+        continue;
+      }
+      final path = stroke.closed ? [...pts, pts.first] : pts;
+      for (var i = 1; i < path.length; i++) {
+        if (_distToSegment(p, path[i - 1], path[i]) <= reach) return stroke.id;
       }
     }
     return null;
+  }
+
+  static bool _insidePolygon(Offset p, List<Offset> poly) {
+    var inside = false;
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      final a = poly[i];
+      final b = poly[j];
+      if ((a.dy > p.dy) != (b.dy > p.dy) &&
+          p.dx < (b.dx - a.dx) * (p.dy - a.dy) / (b.dy - a.dy) + a.dx) {
+        inside = !inside;
+      }
+    }
+    return inside;
+  }
+
+  static double _distToSegment(Offset p, Offset a, Offset b) {
+    final ab = b - a;
+    final len2 = ab.dx * ab.dx + ab.dy * ab.dy;
+    if (len2 == 0) return (p - a).distance;
+    final t = (((p - a).dx * ab.dx + (p - a).dy * ab.dy) / len2).clamp(
+      0.0,
+      1.0,
+    );
+    return (p - (a + ab * t)).distance;
   }
 
   void removeNote(String id) {
@@ -132,6 +253,7 @@ class AnnotationCanvasController extends ChangeNotifier {
 
   void clear() {
     if (_document.isEmpty) return;
+    _selectedStampId = null;
     _commit(const AnnotationDocument());
   }
 
@@ -139,6 +261,7 @@ class AnnotationCanvasController extends ChangeNotifier {
     if (_undo.isEmpty) return;
     _redo.add(_document);
     _document = _undo.removeLast();
+    _dropStaleSelection();
     notifyListeners();
   }
 
@@ -146,7 +269,12 @@ class AnnotationCanvasController extends ChangeNotifier {
     if (_redo.isEmpty) return;
     _undo.add(_document);
     _document = _redo.removeLast();
+    _dropStaleSelection();
     notifyListeners();
+  }
+
+  void _dropStaleSelection() {
+    if (selectedStamp == null) _selectedStampId = null;
   }
 
   void _commit(AnnotationDocument next) {
@@ -174,6 +302,25 @@ class AnnotationCanvas extends StatefulWidget {
   final ValueChanged<String?>? onNoteSelected;
   final Future<void> Function(AnnotationNote note)? onNoteEditRequested;
 
+  /// Opacidad del trazo nuevo (0–1).
+  final double opacity;
+
+  /// Sello que coloca la herramienta [AnnotationToolType.stamp].
+  final AnnotationStampKind stampKind;
+
+  /// Tamaño del sello nuevo, en fracción del lado corto.
+  final double stampSize;
+
+  /// Mantener quieto el lápiz al final del trazo lo convierte en recta,
+  /// polilínea, rectángulo o elipse.
+  final bool straightenOnHold;
+
+  /// Pide el texto para la herramienta [AnnotationToolType.text].
+  final Future<String?> Function()? onTextRequested;
+
+  /// Se llama al tocar un sello ya seleccionado (para ponerle nombre).
+  final Future<void> Function(AnnotationStamp stamp)? onStampEditRequested;
+
   const AnnotationCanvas({
     super.key,
     required this.controller,
@@ -190,16 +337,40 @@ class AnnotationCanvas extends StatefulWidget {
     this.selectedNoteId,
     this.onNoteSelected,
     this.onNoteEditRequested,
+    this.opacity = 1,
+    this.stampKind = AnnotationStampKind.camera,
+    this.stampSize = 0.07,
+    this.straightenOnHold = true,
+    this.onTextRequested,
+    this.onStampEditRequested,
   });
 
   @override
   State<AnnotationCanvas> createState() => _AnnotationCanvasState();
 }
 
+enum _StampDrag { move, rotate }
+
 class _AnnotationCanvasState extends State<AnnotationCanvas> {
+  static const _holdDelay = Duration(milliseconds: 450);
+  static const _holdSlop = 3.0;
+
   int? _activePointer;
+  AnnotationToolType _activeTool = AnnotationToolType.pen;
   AnnotationInputKind _inputKind = AnnotationInputKind.unknown;
   final List<AnnotationPoint> _livePoints = [];
+  Size _documentSize = Size.zero;
+
+  Timer? _holdTimer;
+  Offset? _holdAnchor;
+  RecognizedShapeKind? _snapped;
+  bool _snappedClosed = false;
+
+  AnnotationStamp? _liveStamp;
+  Offset? _downDoc;
+  _StampDrag? _stampDrag;
+  bool _stampDragMoved = false;
+  bool _tappedSelected = false;
 
   @override
   void initState() {
@@ -214,10 +385,15 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
       oldWidget.controller.removeListener(_onControllerChanged);
       widget.controller.addListener(_onControllerChanged);
     }
+    if (oldWidget.tool == AnnotationToolType.select &&
+        widget.tool != AnnotationToolType.select) {
+      widget.controller.selectStamp(null);
+    }
   }
 
   @override
   void dispose() {
+    _holdTimer?.cancel();
     widget.controller.removeListener(_onControllerChanged);
     super.dispose();
   }
@@ -247,11 +423,13 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     _ => AnnotationInputKind.unknown,
   };
 
-  AnnotationPoint _pointFor(PointerEvent event, Size size) {
-    final viewport = widget.viewport;
-    final documentSize = viewport?.documentSize ?? size;
-    final documentPosition =
-        viewport?.localToDocument(event.localPosition) ?? event.localPosition;
+  /// Posición en píxeles del documento.
+  Offset _docOffset(PointerEvent event) =>
+      widget.viewport?.localToDocument(event.localPosition) ??
+      event.localPosition;
+
+  AnnotationPoint _pointFor(PointerEvent event) {
+    final documentPosition = _docOffset(event);
     final pressureRange = event.pressureMax - event.pressureMin;
     final normalizedPressure = pressureRange > 0
         ? ((event.pressure - event.pressureMin) / pressureRange).clamp(
@@ -260,71 +438,316 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
           )
         : 1.0;
     return AnnotationPoint(
-      x: (documentPosition.dx / documentSize.width).clamp(0.0, 1.0),
-      y: (documentPosition.dy / documentSize.height).clamp(0.0, 1.0),
+      x: (documentPosition.dx / _documentSize.width).clamp(0.0, 1.0),
+      y: (documentPosition.dy / _documentSize.height).clamp(0.0, 1.0),
       pressure: normalizedPressure,
     );
   }
 
+  String _newId() => DateTime.now().microsecondsSinceEpoch.toString();
+
+  void _eraseAt(PointerEvent event) {
+    final docPoint = _docOffset(event);
+    final stampHit = widget.controller.hitTestStamp(docPoint, _documentSize);
+    if (stampHit != null) {
+      widget.controller.removeStamp(stampHit);
+      return;
+    }
+    final point = _pointFor(event);
+    final hit = widget.controller.hitTestStroke(point.x, point.y);
+    if (hit != null) widget.controller.removeStroke(hit);
+  }
+
   void _onPointerDown(PointerDownEvent event, Size size) {
     if (_activePointer != null || !_accepts(event)) return;
-    final effectiveTool = event.kind == PointerDeviceKind.invertedStylus
+    _documentSize = widget.viewport?.documentSize ?? size;
+    final tool = event.kind == PointerDeviceKind.invertedStylus
         ? AnnotationToolType.eraser
         : widget.tool;
-    if (effectiveTool == AnnotationToolType.eraser) {
-      final point = _pointFor(event, size);
-      final hit = widget.controller.hitTestStroke(point.x, point.y);
-      if (hit != null) {
-        widget.controller.removeStroke(hit);
-      }
-      return;
-    }
     _activePointer = event.pointer;
+    _activeTool = tool;
     _inputKind = _kindFor(event.kind);
-    _livePoints
-      ..clear()
-      ..add(_pointFor(event, size));
-    setState(() {});
+    final docPoint = _docOffset(event);
+    _downDoc = docPoint;
+
+    switch (tool) {
+      case AnnotationToolType.eraser:
+        _eraseAt(event);
+        return;
+      case AnnotationToolType.select:
+        _beginSelect(docPoint);
+        return;
+      case AnnotationToolType.stamp:
+        final p = _pointFor(event);
+        _liveStamp = AnnotationStamp(
+          id: _newId(),
+          kind: widget.stampKind,
+          x: p.x,
+          y: p.y,
+          rotation: -math.pi / 2,
+          size: widget.stampSize,
+          colorArgb: widget.color.toARGB32(),
+        );
+        setState(() {});
+        return;
+      case AnnotationToolType.text:
+        return;
+      default:
+        _snapped = null;
+        _snappedClosed = false;
+        _livePoints
+          ..clear()
+          ..add(_pointFor(event));
+        _restartHold(event.localPosition);
+        setState(() {});
+    }
   }
 
-  void _onPointerMove(PointerMoveEvent event, Size size) {
-    if (event.pointer != _activePointer) return;
-    if (event.kind == PointerDeviceKind.invertedStylus ||
-        widget.tool == AnnotationToolType.eraser) {
-      final point = _pointFor(event, size);
-      final hit = widget.controller.hitTestStroke(point.x, point.y);
-      if (hit != null) {
-        widget.controller.removeStroke(hit);
-      }
+  void _beginSelect(Offset docPoint) {
+    final controller = widget.controller;
+    final selected = controller.selectedStamp;
+    _stampDragMoved = false;
+    _tappedSelected = false;
+    if (selected != null &&
+        selected.kind != AnnotationStampKind.text &&
+        (docPoint - AnnotationBrushes.stampHandle(selected, _documentSize))
+                .distance <=
+            16) {
+      _stampDrag = _StampDrag.rotate;
+      controller.beginGesture();
       return;
     }
-    _livePoints.add(_pointFor(event, size));
-    setState(() {});
+    final hit = controller.hitTestStamp(docPoint, _documentSize);
+    if (hit == null) {
+      _stampDrag = null;
+      controller.selectStamp(null);
+      return;
+    }
+    _tappedSelected = hit == controller.selectedStampId;
+    controller.selectStamp(hit);
+    _stampDrag = _StampDrag.move;
+    controller.beginGesture();
   }
 
-  void _onPointerUp(PointerEvent event) {
+  void _onPointerMove(PointerMoveEvent event) {
     if (event.pointer != _activePointer) return;
-    if (widget.tool == AnnotationToolType.eraser ||
-        event.kind == PointerDeviceKind.invertedStylus) {
-      _activePointer = null;
-      return;
+    final docPoint = _docOffset(event);
+    switch (_activeTool) {
+      case AnnotationToolType.eraser:
+        _eraseAt(event);
+        return;
+      case AnnotationToolType.select:
+        _dragSelected(docPoint);
+        return;
+      case AnnotationToolType.stamp:
+        final stamp = _liveStamp;
+        final down = _downDoc;
+        if (stamp == null || down == null) return;
+        final delta = docPoint - down;
+        if (delta.distance < 8) return;
+        _liveStamp = stamp.copyWith(rotation: _snapAngle(delta.direction));
+        setState(() {});
+        return;
+      case AnnotationToolType.text:
+        return;
+      case AnnotationToolType.line:
+        final start = _livePoints.first;
+        final end = _pointFor(event);
+        _livePoints
+          ..clear()
+          ..addAll(_snappedLine(start, end));
+        setState(() {});
+        return;
+      default:
+        if (_snapped == RecognizedShapeKind.line) {
+          // Tras enderezar, la recta sigue al lápiz desde su origen.
+          final start = _livePoints.first;
+          _livePoints
+            ..clear()
+            ..addAll(_snappedLine(start, _pointFor(event)));
+          setState(() {});
+          return;
+        }
+        if (_snapped != null) return;
+        _livePoints.add(_pointFor(event));
+        final anchor = _holdAnchor;
+        if (anchor == null ||
+            (event.localPosition - anchor).distance > _holdSlop) {
+          _restartHold(event.localPosition);
+        }
+        setState(() {});
     }
-    if (_livePoints.isNotEmpty) {
+  }
+
+  void _dragSelected(Offset docPoint) {
+    final controller = widget.controller;
+    final stamp = controller.selectedStamp;
+    final down = _downDoc;
+    if (stamp == null || _stampDrag == null || down == null) return;
+    if ((docPoint - down).distance > 3) _stampDragMoved = true;
+    if (_stampDrag == _StampDrag.rotate) {
+      final center = AnnotationBrushes.stampCenter(stamp, _documentSize);
+      controller.updateStamp(
+        stamp.id,
+        rotation: _snapAngle((docPoint - center).direction),
+        commit: false,
+      );
+    } else {
+      final delta = docPoint - down;
+      _downDoc = docPoint;
+      controller.updateStamp(
+        stamp.id,
+        x: (stamp.x + delta.dx / _documentSize.width).clamp(0.0, 1.0),
+        y: (stamp.y + delta.dy / _documentSize.height).clamp(0.0, 1.0),
+        commit: false,
+      );
+    }
+  }
+
+  Future<void> _onPointerUp(PointerEvent event) async {
+    if (event.pointer != _activePointer) return;
+    _holdTimer?.cancel();
+    _activePointer = null;
+    final tool = _activeTool;
+    switch (tool) {
+      case AnnotationToolType.eraser:
+        return;
+      case AnnotationToolType.select:
+        widget.controller.endGesture();
+        final stamp = widget.controller.selectedStamp;
+        if (_tappedSelected && !_stampDragMoved && stamp != null) {
+          await widget.onStampEditRequested?.call(stamp);
+        }
+        _stampDrag = null;
+        return;
+      case AnnotationToolType.stamp:
+        final stamp = _liveStamp;
+        _liveStamp = null;
+        if (stamp != null && event is PointerUpEvent) {
+          widget.controller.addStamp(stamp);
+        }
+        setState(() {});
+        return;
+      case AnnotationToolType.text:
+        if (event is! PointerUpEvent) return;
+        final p = _pointFor(event);
+        final text = (await widget.onTextRequested?.call())?.trim();
+        if (text == null || text.isEmpty) return;
+        widget.controller.addStamp(
+          AnnotationStamp(
+            id: _newId(),
+            kind: AnnotationStampKind.text,
+            x: p.x,
+            y: p.y,
+            size: widget.stampSize * 0.6,
+            colorArgb: widget.color.toARGB32(),
+            label: text,
+          ),
+        );
+        return;
+      default:
+        _commitLiveStroke(tool);
+    }
+  }
+
+  void _commitLiveStroke(AnnotationToolType tool) {
+    final points = List.of(_livePoints);
+    final closed = _snappedClosed;
+    final inputKind = _inputKind;
+    _livePoints.clear();
+    _snapped = null;
+    _snappedClosed = false;
+    _inputKind = AnnotationInputKind.unknown;
+    final valid = switch (tool) {
+      AnnotationToolType.fill || AnnotationToolType.hatch => points.length >= 3,
+      AnnotationToolType.line || AnnotationToolType.arrow => points.length >= 2,
+      _ => points.isNotEmpty,
+    };
+    if (valid) {
       widget.controller.addStroke(
         AnnotationStroke(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          tool: widget.tool,
+          id: _newId(),
+          tool: tool,
           colorArgb: widget.color.toARGB32(),
           width: widget.width,
-          inputKind: _inputKind,
-          points: List.of(_livePoints),
+          inputKind: inputKind,
+          points: points,
+          opacity: widget.opacity,
+          closed: closed,
         ),
       );
     }
-    _activePointer = null;
-    _inputKind = AnnotationInputKind.unknown;
-    _livePoints.clear();
     setState(() {});
+  }
+
+  void _restartHold(Offset local) {
+    _holdAnchor = local;
+    _holdTimer?.cancel();
+    if (!widget.straightenOnHold ||
+        !AnnotationBrushes.canStraighten(_activeTool)) {
+      return;
+    }
+    _holdTimer = Timer(_holdDelay, _straighten);
+  }
+
+  /// Sustituye el trazo vivo por la forma limpia que reconoce.
+  void _straighten() {
+    if (_activePointer == null || _livePoints.length < 2 || _snapped != null) {
+      return;
+    }
+    final w = _documentSize.width;
+    final h = _documentSize.height;
+    final shape = AnnotationShapeRecognizer.recognize([
+      for (final p in _livePoints) Offset(p.x * w, p.y * h),
+    ]);
+    if (shape == null) return;
+    // Un área a lazo siempre se queda cerrada.
+    final area = AnnotationBrushes.isAreaTool(_activeTool);
+    if (area && !shape.closed && shape.kind != RecognizedShapeKind.polyline) {
+      return;
+    }
+    final pressure =
+        _livePoints.map((p) => p.pressure).reduce((a, b) => a + b) /
+        _livePoints.length;
+    _livePoints
+      ..clear()
+      ..addAll([
+        for (final p in shape.points)
+          AnnotationPoint(
+            x: (p.dx / w).clamp(0.0, 1.0),
+            y: (p.dy / h).clamp(0.0, 1.0),
+            pressure: pressure,
+          ),
+      ]);
+    _snapped = shape.kind;
+    _snappedClosed = shape.closed && !area;
+    HapticFeedback.selectionClick();
+    if (mounted) setState(() {});
+  }
+
+  List<AnnotationPoint> _snappedLine(AnnotationPoint a, AnnotationPoint b) {
+    final w = _documentSize.width;
+    final h = _documentSize.height;
+    final line = AnnotationShapeRecognizer.snapLine(
+      Offset(a.x * w, a.y * h),
+      Offset(b.x * w, b.y * h),
+    );
+    return [
+      a,
+      AnnotationPoint(
+        x: (line.last.dx / w).clamp(0.0, 1.0),
+        y: (line.last.dy / h).clamp(0.0, 1.0),
+        pressure: a.pressure,
+      ),
+    ];
+  }
+
+  static double _snapAngle(double angle) {
+    const step = math.pi / 4;
+    final nearest = (angle / step).round() * step;
+    return (angle - nearest).abs() <= AnnotationShapeRecognizer.angleSnap
+        ? nearest
+        : angle;
   }
 
   @override
@@ -336,11 +759,13 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
             ? null
             : AnnotationStroke(
                 id: 'live',
-                tool: widget.tool,
+                tool: _activeTool,
                 colorArgb: widget.color.toARGB32(),
                 width: widget.width,
                 inputKind: _inputKind,
                 points: List.of(_livePoints),
+                opacity: widget.opacity,
+                closed: _snappedClosed,
               );
         return Stack(
           fit: StackFit.expand,
@@ -348,13 +773,17 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
             Listener(
               behavior: HitTestBehavior.opaque,
               onPointerDown: (event) => _onPointerDown(event, size),
-              onPointerMove: (event) => _onPointerMove(event, size),
+              onPointerMove: _onPointerMove,
               onPointerUp: _onPointerUp,
               onPointerCancel: _onPointerUp,
               child: CustomPaint(
                 foregroundPainter: AnnotationPainter(
                   document: widget.controller.document,
                   liveStroke: live,
+                  liveStamp: _liveStamp,
+                  selectedStampId: widget.tool == AnnotationToolType.select
+                      ? widget.controller.selectedStampId
+                      : null,
                   viewport: widget.viewport,
                   paintNotes: !widget.interactiveNotes,
                 ),
@@ -379,15 +808,46 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
   }
 }
 
+class _CachedStrokes {
+  final Size size;
+  final ui.Picture picture;
+
+  const _CachedStrokes(this.size, this.picture);
+}
+
+/// Los trazos ya guardados se graban una vez en un `Picture` y se reutilizan
+/// mientras se dibuja: con pinceles de grano y desenfoque, repintarlos todos
+/// en cada movimiento del lápiz se notaría.
+final Expando<_CachedStrokes> _strokeCache = Expando('annotation-strokes');
+
+ui.Picture _strokesPicture(List<AnnotationStroke> strokes, Size size) {
+  final cached = _strokeCache[strokes];
+  if (cached != null && cached.size == size) return cached.picture;
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  canvas.saveLayer(Offset.zero & size, Paint());
+  for (final stroke in strokes) {
+    AnnotationBrushes.paintStroke(canvas, size, stroke);
+  }
+  canvas.restore();
+  final picture = recorder.endRecording();
+  _strokeCache[strokes] = _CachedStrokes(size, picture);
+  return picture;
+}
+
 class AnnotationPainter extends CustomPainter {
   final AnnotationDocument document;
   final AnnotationStroke? liveStroke;
+  final AnnotationStamp? liveStamp;
+  final String? selectedStampId;
   final AnnotationViewport? viewport;
   final bool paintNotes;
 
   const AnnotationPainter({
     required this.document,
     this.liveStroke,
+    this.liveStamp,
+    this.selectedStampId,
     this.viewport,
     this.paintNotes = true,
   });
@@ -400,11 +860,29 @@ class AnnotationPainter extends CustomPainter {
       canvas.translate(viewport!.offset.dx, viewport!.offset.dy);
       canvas.scale(viewport!.scale);
     }
-    for (final stroke in document.strokes) {
-      _paintStroke(canvas, documentSize, stroke);
+    final live = liveStroke;
+    final erasing = live?.tool == AnnotationToolType.eraseArea;
+    if (erasing) canvas.saveLayer(Offset.zero & documentSize, Paint());
+    if (document.strokes.isNotEmpty) {
+      canvas.drawPicture(_strokesPicture(document.strokes, documentSize));
     }
-    if (liveStroke != null) {
-      _paintStroke(canvas, documentSize, liveStroke!);
+    if (live != null) {
+      AnnotationBrushes.paintStroke(canvas, documentSize, live);
+      if (AnnotationBrushes.isAreaTool(live.tool) && live.points.length > 1) {
+        _paintLassoOutline(canvas, documentSize, live);
+      }
+    }
+    if (erasing) canvas.restore();
+    for (final stamp in document.stamps) {
+      AnnotationBrushes.paintStamp(
+        canvas,
+        documentSize,
+        stamp,
+        selected: stamp.id == selectedStampId,
+      );
+    }
+    if (liveStamp != null) {
+      AnnotationBrushes.paintStamp(canvas, documentSize, liveStamp!);
     }
     if (paintNotes) {
       for (final note in document.notes) {
@@ -414,65 +892,19 @@ class AnnotationPainter extends CustomPainter {
     if (viewport != null) canvas.restore();
   }
 
-  void _paintStroke(Canvas canvas, Size size, AnnotationStroke stroke) {
-    if (stroke.points.isEmpty) return;
-    final color = Color(stroke.colorArgb);
-    final scale = math.min(size.width, size.height) / 1000;
-    final opacity = stroke.tool == AnnotationToolType.highlighter ? 0.35 : 1.0;
-    final points = stroke.points
-        .map((point) => Offset(point.x * size.width, point.y * size.height))
-        .toList();
-
-    if (stroke.tool == AnnotationToolType.arrow && points.length >= 2) {
-      final paint = Paint()
-        ..color = color.withValues(alpha: opacity)
-        ..strokeWidth = math.max(1, stroke.width * scale)
-        ..strokeCap = StrokeCap.round
-        ..style = PaintingStyle.stroke;
-      canvas.drawLine(points.first, points.last, paint);
-      _paintArrowHead(canvas, points[points.length - 2], points.last, paint);
-      return;
-    }
-
-    if (points.length == 1) {
-      canvas.drawCircle(
-        points.single,
-        math.max(0.75, stroke.width * scale / 2),
-        Paint()..color = color.withValues(alpha: opacity),
-      );
-      return;
-    }
-
-    for (var i = 1; i < points.length; i++) {
-      final pressure =
-          (stroke.points[i - 1].pressure + stroke.points[i].pressure) / 2;
-      final paint = Paint()
-        ..color = color.withValues(alpha: opacity)
-        ..strokeWidth = math.max(
-          0.75,
-          stroke.width * scale * (0.35 + pressure * 0.65),
-        )
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
-      canvas.drawLine(points[i - 1], points[i], paint);
-    }
-  }
-
-  void _paintArrowHead(Canvas canvas, Offset start, Offset end, Paint paint) {
-    final angle = math.atan2(end.dy - start.dy, end.dx - start.dx);
-    final head = math.max(10, paint.strokeWidth * 4);
+  void _paintLassoOutline(Canvas canvas, Size size, AnnotationStroke stroke) {
     final path = Path()
-      ..moveTo(end.dx, end.dy)
-      ..lineTo(
-        end.dx - head * math.cos(angle - 0.45),
-        end.dy - head * math.sin(angle - 0.45),
-      )
-      ..moveTo(end.dx, end.dy)
-      ..lineTo(
-        end.dx - head * math.cos(angle + 0.45),
-        end.dy - head * math.sin(angle + 0.45),
-      );
-    canvas.drawPath(path, paint);
+      ..addPolygon([
+        for (final p in stroke.points)
+          Offset(p.x * size.width, p.y * size.height),
+      ], true);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Color(stroke.colorArgb).withValues(alpha: 0.8)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
   }
 
   void _paintNote(Canvas canvas, Size size, AnnotationNote note) {
@@ -506,6 +938,8 @@ class AnnotationPainter extends CustomPainter {
   bool shouldRepaint(covariant AnnotationPainter oldDelegate) =>
       oldDelegate.document != document ||
       oldDelegate.liveStroke != liveStroke ||
+      oldDelegate.liveStamp != liveStamp ||
+      oldDelegate.selectedStampId != selectedStampId ||
       oldDelegate.viewport != viewport ||
       oldDelegate.paintNotes != paintNotes;
 }
@@ -532,7 +966,8 @@ class _InteractiveAnnotationNote extends StatefulWidget {
       _InteractiveAnnotationNoteState();
 }
 
-class _InteractiveAnnotationNoteState extends State<_InteractiveAnnotationNote> {
+class _InteractiveAnnotationNoteState
+    extends State<_InteractiveAnnotationNote> {
   Offset? _dragOrigin;
   double? _startX;
   double? _startY;

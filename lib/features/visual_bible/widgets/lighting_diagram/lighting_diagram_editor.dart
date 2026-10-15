@@ -7,6 +7,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../shared/annotations/annotation_canvas.dart';
 import '../../../../shared/annotations/annotation_document.dart';
+import '../../../../shared/annotations/annotation_tools.dart';
+import '../../../../shared/annotations/sketch_sheet_screen.dart';
 
 enum _LightingEditorMode { edit, annotate }
 
@@ -66,6 +68,10 @@ class LightingDiagramEditor extends StatefulWidget {
     required this.onChanged,
   });
 
+  /// Proporción fija del boceto (folio apaisado) para que lo dibujado en el
+  /// folio, en la vista pequeña y en el PDF coincida sin deformarse.
+  static const sheetAspectRatio = 1.414;
+
   @override
   State<LightingDiagramEditor> createState() => _LightingDiagramEditorState();
 }
@@ -76,7 +82,7 @@ class _LightingDiagramEditorState extends State<LightingDiagramEditor> {
       AnnotationCanvasController();
   _LightingEditorMode _mode = _LightingEditorMode.edit;
   AnnotationToolType _tool = AnnotationToolType.pen;
-  Color _annotationColor = const Color(0xFFFFD54F);
+  Color _annotationColor = const Color(0xFF1A1A1A);
   double _annotationWidth = 6;
   bool _loadingAnnotations = true;
   Future<void> _annotationSaveChain = Future.value();
@@ -153,6 +159,21 @@ class _LightingDiagramEditorState extends State<LightingDiagramEditor> {
         });
   }
 
+  /// Abre el boceto a pantalla completa con todas las herramientas.
+  Future<void> _openSheet() async {
+    final result = await SketchSheetScreen.open(
+      context,
+      title: widget.setName == null
+          ? 'Boceto de luz y cámara'
+          : 'Boceto de luz · ${widget.setName}',
+      document: _annotationController.document,
+      purpose: SketchSheetPurpose.lightingPlan,
+      aspectRatio: LightingDiagramEditor.sheetAspectRatio,
+    );
+    if (result == null || !mounted) return;
+    _annotationController.replaceDocument(result.document, clearHistory: false);
+  }
+
   List<LightingDiagramElement> _decode(String json) {
     try {
       final raw = jsonDecode(json) as List<dynamic>;
@@ -196,7 +217,7 @@ class _LightingDiagramEditorState extends State<LightingDiagramEditor> {
 
   Color _colorFor(String type, AppPalette palette) => switch (type) {
     'camera' => palette.accent,
-    'subject' => palette.textPrimary,
+    'subject' => const Color(0xFF1A1A1A),
     'key' => const Color(0xFFFFD54F),
     'fill' => const Color(0xFF81D4FA),
     'rim' => const Color(0xFFFF8A65),
@@ -206,11 +227,12 @@ class _LightingDiagramEditorState extends State<LightingDiagramEditor> {
 
   Widget _buildModeToolbar() {
     final colors = <Color>[
+      const Color(0xFF1A1A1A),
+      const Color(0xFF1F3FBF),
       const Color(0xFFFFD54F),
       const Color(0xFFFF5252),
       const Color(0xFF40C4FF),
       const Color(0xFF69F0AE),
-      Colors.white,
     ];
     return SizedBox(
       height: 38,
@@ -236,29 +258,20 @@ class _LightingDiagramEditorState extends State<LightingDiagramEditor> {
               setState(() => _mode = value.first);
             },
           ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: _loadingAnnotations ? null : _openSheet,
+            icon: const Icon(Icons.open_in_full, size: 16),
+            label: const Text('Dibujar en folio'),
+          ),
           if (_mode == _LightingEditorMode.annotate) ...[
             const SizedBox(width: 8),
-            for (final tool in AnnotationToolType.values.where(
-              (t) =>
-                  t != AnnotationToolType.select,
-            ))
+            for (final tool in AnnotationTools.quick)
               IconButton(
-                tooltip: switch (tool) {
-                  AnnotationToolType.pen => 'Lápiz',
-                  AnnotationToolType.highlighter => 'Subrayador',
-                  AnnotationToolType.arrow => 'Flecha',
-                  AnnotationToolType.eraser => 'Goma',
-                  AnnotationToolType.select => 'Seleccionar',
-                },
+                tooltip: AnnotationTools.label(tool),
                 isSelected: _tool == tool,
                 onPressed: () => setState(() => _tool = tool),
-                icon: Icon(switch (tool) {
-                  AnnotationToolType.pen => Icons.edit,
-                  AnnotationToolType.highlighter => Icons.brush,
-                  AnnotationToolType.arrow => Icons.arrow_outward,
-                  AnnotationToolType.eraser => Icons.auto_fix_off,
-                  AnnotationToolType.select => Icons.pan_tool_alt_outlined,
-                }, size: 18),
+                icon: Icon(AnnotationTools.icon(tool), size: 18),
               ),
             PopupMenuButton<Color>(
               tooltip: 'Color',
@@ -327,8 +340,11 @@ class _LightingDiagramEditorState extends State<LightingDiagramEditor> {
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: Row(
               children: [
-                Icon(Icons.location_on_outlined,
-                    size: 14, color: palette.textTertiary),
+                Icon(
+                  Icons.location_on_outlined,
+                  size: 14,
+                  color: palette.textTertiary,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   widget.setName!,
@@ -342,10 +358,9 @@ class _LightingDiagramEditorState extends State<LightingDiagramEditor> {
                   const Spacer(),
                   Text(
                     'Set #${widget.locationBasePlanId}',
-                    style: AppTypography.mono(palette).copyWith(
-                      fontSize: 10,
-                      color: palette.textTertiary,
-                    ),
+                    style: AppTypography.mono(
+                      palette,
+                    ).copyWith(fontSize: 10, color: palette.textTertiary),
                   ),
                 ],
               ],
@@ -379,75 +394,83 @@ class _LightingDiagramEditorState extends State<LightingDiagramEditor> {
           ),
         const SizedBox(height: 8),
         Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              decoration: BoxDecoration(
-                color: palette.background,
-                border: Border.all(color: palette.divider),
+          child: Center(
+            child: AspectRatio(
+              aspectRatio: LightingDiagramEditor.sheetAspectRatio,
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-              ),
-              child: AnnotationCanvas(
-                controller: _annotationController,
-                enabled:
-                    _mode == _LightingEditorMode.annotate &&
-                    !_loadingAnnotations,
-                tool: _tool,
-                color: _annotationColor,
-                width: _annotationWidth,
-                acceptTouch: true,
-                onChanged: _persistAnnotations,
-                child: Stack(
-                  children: [
-                    CustomPaint(
-                      size: Size.infinite,
-                      painter: _GridPainter(palette.divider),
-                    ),
-                    ..._elements.map((el) {
-                      return Positioned(
-                        left: el.position.dx - 20,
-                        top: el.position.dy - 20,
-                        child: IgnorePointer(
-                          ignoring: _mode != _LightingEditorMode.edit,
-                          child: GestureDetector(
-                            onPanUpdate: (d) {
-                              setState(() {
-                                el.position += d.delta;
-                              });
-                            },
-                            onPanEnd: (_) => _persist(),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  _iconFor(el.type),
-                                  color: _colorFor(el.type, palette),
-                                  size: 28,
+                child: Container(
+                  decoration: BoxDecoration(
+                    // Folio blanco, igual que el boceto a pantalla completa.
+                    color: Colors.white,
+                    border: Border.all(color: palette.divider),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: AnnotationCanvas(
+                    controller: _annotationController,
+                    enabled:
+                        _mode == _LightingEditorMode.annotate &&
+                        !_loadingAnnotations,
+                    tool: _tool,
+                    color: _annotationColor,
+                    width: _annotationWidth,
+                    acceptTouch: true,
+                    onChanged: _persistAnnotations,
+                    child: Stack(
+                      children: [
+                        CustomPaint(
+                          size: Size.infinite,
+                          painter: _GridPainter(const Color(0xFFB0B0B0)),
+                        ),
+                        ..._elements.map((el) {
+                          return Positioned(
+                            left: el.position.dx - 20,
+                            top: el.position.dy - 20,
+                            child: IgnorePointer(
+                              ignoring: _mode != _LightingEditorMode.edit,
+                              child: GestureDetector(
+                                onPanUpdate: (d) {
+                                  setState(() {
+                                    el.position += d.delta;
+                                  });
+                                },
+                                onPanEnd: (_) => _persist(),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _iconFor(el.type),
+                                      color: _colorFor(el.type, palette),
+                                      size: 28,
+                                    ),
+                                    if (el.label != null)
+                                      Text(
+                                        el.label!,
+                                        style: AppTypography.caption(palette)
+                                            .copyWith(
+                                              fontSize: 10,
+                                              color: const Color(0xFF444444),
+                                            ),
+                                      ),
+                                  ],
                                 ),
-                                if (el.label != null)
-                                  Text(
-                                    el.label!,
-                                    style: AppTypography.caption(
-                                      palette,
-                                    ).copyWith(fontSize: 10),
-                                  ),
-                              ],
+                              ),
+                            ),
+                          );
+                        }),
+                        if (_loadingAnnotations)
+                          const Positioned(
+                            right: 8,
+                            bottom: 8,
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                           ),
-                        ),
-                      );
-                    }),
-                    if (_loadingAnnotations)
-                      const Positioned(
-                        right: 8,
-                        bottom: 8,
-                        child: SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),

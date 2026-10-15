@@ -64,6 +64,7 @@ class VisualBiblePdfService {
     bool includeAllMoodboardImages = false,
     List<BibleExportSectionRef> sectionOrder = const [],
     List<NarrativeCardModel> lightingCards = const [],
+    Map<int, Uint8List> lightingSketchPngs = const {},
   }) async {
     final doc = await PdfSafeImage.withExportCache(
       () => buildDocument(
@@ -83,6 +84,7 @@ class VisualBiblePdfService {
         moodboardLayout: moodboardLayout,
         includeAllMoodboardImages: includeAllMoodboardImages,
         lightingCards: lightingCards,
+        lightingSketchPngs: lightingSketchPngs,
       ),
     );
     return doc.save();
@@ -266,6 +268,9 @@ class VisualBiblePdfService {
     bool includeAllMoodboardImages = false,
     List<BibleExportSectionRef> sectionOrder = const [],
     List<NarrativeCardModel> lightingCards = const [],
+
+    /// Boceto a mano de cada setup (por id), ya pasado a PNG.
+    Map<int, Uint8List> lightingSketchPngs = const {},
   }) async {
     final isPitch = mode == VisualBibleExportMode.pitch;
     final isTech = mode == VisualBibleExportMode.techScout;
@@ -500,6 +505,7 @@ class VisualBiblePdfService {
         lightingCards,
         kit,
         fonts,
+        lightingSketchPngs,
       );
       if (lightingContent.isNotEmpty) {
         addSection(
@@ -2176,6 +2182,7 @@ class VisualBiblePdfService {
     List<NarrativeCardModel> cards,
     BiblePdfKit kit,
     ({pw.Font regular, pw.Font bold}) fonts,
+    Map<int, Uint8List> sketchPngs,
   ) {
     final values = BibleSectionFieldsConfig.parseValues(contentJson);
     final lighting = BibleLightingData.decode(values['lightingData']);
@@ -2299,7 +2306,22 @@ class VisualBiblePdfService {
                     style: pw.TextStyle(font: fonts.regular, fontSize: 10),
                   ),
                 ),
-                if (s.diagramJson != '[]') ...[
+                if (sketchPngs[s.id] != null) ...[
+                  pw.SizedBox(width: 8),
+                  pw.Container(
+                    width: 150,
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(
+                        color: PdfColors.grey400,
+                        width: 0.5,
+                      ),
+                    ),
+                    child: pw.Image(
+                      pw.MemoryImage(sketchPngs[s.id]!),
+                      fit: pw.BoxFit.contain,
+                    ),
+                  ),
+                ] else if (s.diagramJson != '[]') ...[
                   pw.SizedBox(width: 8),
                   _lightingDiagram(s.diagramJson),
                 ],
