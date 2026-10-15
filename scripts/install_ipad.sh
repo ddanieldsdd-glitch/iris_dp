@@ -2,7 +2,8 @@
 # Compila IRIS DP firmada con el equipo personal de Xcode y la instala en el
 # iPad por Wi‑Fi o cable. La firma gratuita dura 7 días: en modo --auto se
 # renueva sola cuando quedan menos de 3,5 días o hay un main nuevo con el CI
-# en verde, en cuanto el Mac y el iPad coinciden encendidos.
+# en verde, en cuanto el Mac y el iPad coinciden encendidos. Como instalar
+# cierra la app, de día solo lo hace si quedan menos de 1,5 días.
 #
 #   install_ipad.sh                 instala el último main con CI en verde
 #   install_ipad.sh --ref <rama>    instala esa rama o commit (sin mirar el CI)
@@ -135,6 +136,7 @@ fi
 
 # ── ¿Hace falta? (solo en --auto) ───────────────────────────────────────────
 EXPIRES="$(state_get expires)"
+DAY_INSTALL=0
 if [[ $AUTO == 1 ]]; then
   # La primera instalación se hace a mano.
   [[ -n "$(state_get installed_sha)" ]] || exit 0
@@ -156,6 +158,14 @@ if [[ $AUTO == 1 ]]; then
       && [[ $NEWER == 0 ]]; then
     exit 0
   fi
+  # Instalar cierra la app en el iPad. Si no corre prisa, solo de madrugada
+  # (2:00–6:59); con menos de 1,5 días de firma, a cualquier hora.
+  HOUR=$((10#$(date +%H)))
+  if (( HOUR < 2 || HOUR >= 7 )) \
+      && python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) >= 1.5 else 1)" "$LEFT"; then
+    exit 0
+  fi
+  (( HOUR < 2 || HOUR >= 7 )) && DAY_INSTALL=1
 fi
 
 DEVICE="$(find_ipad)"
@@ -183,6 +193,7 @@ if [[ -z "$TEAM" ]]; then
 fi
 
 log "Instalando ${SHA:0:7} ($LABEL) en el iPad…"
+[[ $DAY_INSTALL == 1 ]] && notify "Renovando la firma" "IRIS DP se cerrará un momento en el iPad."
 state_set "last_attempt=$(date -u +%FT%TZ)"
 
 # ── Carpeta de compilación propia ───────────────────────────────────────────
