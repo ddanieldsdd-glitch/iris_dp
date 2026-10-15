@@ -292,7 +292,7 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
         if (r.locationBasePlanId != null) r.locationBasePlanId!: r,
     };
     final refsByName = {for (final r in refs) r.locationName: r};
-    final wholeCard = group.sets
+    final wholeCard = group.shownSets
         .map((set) => group.cardBySet[set.id])
         .whereType<VisualBibleNarrativeCard>()
         .firstOrNull;
@@ -307,10 +307,8 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
           ),
           const Spacer(),
           TextButton.icon(
-            onPressed: () => BibleNavigationScope.openLocationSet(
-              context,
-              siteId: site?.id,
-            ),
+            onPressed: () =>
+                BibleNavigationScope.openLocationSet(context, siteId: site?.id),
             icon: const Icon(Icons.open_in_new, size: 16),
             label: const Text('Abrir en Localizaciones'),
           ),
@@ -324,6 +322,14 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
       const SizedBox(height: 4),
       Text(group.name, style: AppTypography.displayMedium(palette)),
       const SizedBox(height: 16),
+      for (final twin in group.looseTwins) ...[
+        LooseTwinNotice(
+          projectId: widget.projectId,
+          twin: twin,
+          into: group.shownSets.where(group.isWholeSite).firstOrNull,
+        ),
+        const SizedBox(height: 16),
+      ],
       if (site != null)
         _SiteFactsCard(site: site)
       else
@@ -365,7 +371,7 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
           label: const Text('Crear la ficha de luz de esta localización'),
         ),
       const SizedBox(height: 28),
-      for (final set in group.sets) ...[
+      for (final set in group.shownSets) ...[
         Text(
           group.isWholeSite(set)
               ? 'FICHA DE LA LOCALIZACIÓN'
@@ -443,7 +449,7 @@ class _LocationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final site = group.site;
-    final zones = group.sets.where((s) => !group.isWholeSite(s)).length;
+    final zones = group.shownSets.where((s) => !group.isWholeSite(s)).length;
     final located = site?.latitude != null && site?.longitude != null;
     return InkWell(
       borderRadius: BorderRadius.circular(10),
@@ -709,10 +715,7 @@ List<(String, String)> locationMapLinks(double latitude, double longitude) => [
     'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
   ),
   ('Waze', 'https://waze.com/ul?ll=$latitude,$longitude&navigate=yes'),
-  (
-    'Google Earth',
-    'https://earth.google.com/web/search/$latitude,$longitude',
-  ),
+  ('Google Earth', 'https://earth.google.com/web/search/$latitude,$longitude'),
   ('Apple Mapas', 'https://maps.apple.com/?ll=$latitude,$longitude&q=Rodaje'),
 ];
 
@@ -1084,10 +1087,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     final sunriseAz = _s('sunriseAz', '');
     final sunset = _s('sunset', '');
     final sunsetAz = _s('sunsetAz', '');
-    final daylight = _s(
-      'daylightWindow',
-      _model.availableLightHours ?? '',
-    );
+    final daylight = _s('daylightWindow', _model.availableLightHours ?? '');
     final blueHour = _s('blueHour', '');
     final goldenHour = _s('goldenHour', '');
     final maxElev = _s('maxElevation', '');
@@ -1190,80 +1190,80 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                           ),
                           child: Text(
                             '⌘V',
-                            style: AppTypography.mono(palette).copyWith(
-                              fontSize: 10,
-                              color: Colors.white70,
-                            ),
+                            style: AppTypography.mono(
+                              palette,
+                            ).copyWith(fontSize: 10, color: Colors.white70),
                           ),
                         ),
                       ),
                     ),
-                  Positioned(
-                    top: 14,
-                    right: 14,
-                    child: _Glass(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      child: InkWell(
-                        onTap: _locateSite,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            if (widget.site?.placeLabel != null)
+                    Positioned(
+                      top: 14,
+                      right: 14,
+                      child: _Glass(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: InkWell(
+                          onTap: _locateSite,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              if (widget.site?.placeLabel != null)
+                                Text(
+                                  widget.site!.placeLabel!,
+                                  style: AppTypography.mono(
+                                    palette,
+                                  ).copyWith(fontSize: 11, color: Colors.white),
+                                ),
                               Text(
-                                widget.site!.placeLabel!,
+                                _coordsText().isEmpty
+                                    ? 'Ubicar en el mapa'
+                                    : _coordsText(),
                                 style: AppTypography.mono(
                                   palette,
                                 ).copyWith(fontSize: 11, color: Colors.white),
                               ),
-                            Text(
-                              _coordsText().isEmpty
-                                  ? 'Ubicar en el mapa'
-                                  : _coordsText(),
-                              style: AppTypography.mono(
-                                palette,
-                              ).copyWith(fontSize: 11, color: Colors.white),
-                            ),
-                            InkWell(
-                              onTap: () =>
-                                  _edit('Elevación', 'elevation', elevation),
-                              child: Text(
-                                elevation.isEmpty
-                                    ? 'Añadir elevación'
-                                    : elevation,
-                                style: AppTypography.mono(palette).copyWith(
-                                  fontSize: 10,
-                                  color: palette.textTertiary,
+                              InkWell(
+                                onTap: () =>
+                                    _edit('Elevación', 'elevation', elevation),
+                                child: Text(
+                                  elevation.isEmpty
+                                      ? 'Añadir elevación'
+                                      : elevation,
+                                  style: AppTypography.mono(palette).copyWith(
+                                    fontSize: 10,
+                                    color: palette.textTertiary,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  Positioned(
-                    left: 16,
-                    bottom: 16,
-                    child: Row(
-                      children: [
-                        _Pill(
-                          icon: Icons.wb_sunny_outlined,
-                          label: intExt.isEmpty ? 'INT / EXT' : intExt,
-                          palette: palette,
-                          onTap: () => _edit('INT/EXT', 'intExt', intExt),
-                        ),
-                        const SizedBox(width: 8),
-                        _Pill(
-                          label: 'LOC: $locLabel',
-                          palette: palette,
-                          onTap: () => _edit('Nombre del lugar', 'locLabel', locLabel),
-                        ),
-                      ],
+                    Positioned(
+                      left: 16,
+                      bottom: 16,
+                      child: Row(
+                        children: [
+                          _Pill(
+                            icon: Icons.wb_sunny_outlined,
+                            label: intExt.isEmpty ? 'INT / EXT' : intExt,
+                            palette: palette,
+                            onTap: () => _edit('INT/EXT', 'intExt', intExt),
+                          ),
+                          const SizedBox(width: 8),
+                          _Pill(
+                            label: 'LOC: $locLabel',
+                            palette: palette,
+                            onTap: () =>
+                                _edit('Nombre del lugar', 'locLabel', locLabel),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                   ],
                 ),
               ),
@@ -1296,13 +1296,18 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                       _Kv(
                         label: 'Calidad de la luz',
                         value: quality,
-                        onTap: () => _edit('Calidad de la luz', 'lightQuality', quality),
+                        onTap: () =>
+                            _edit('Calidad de la luz', 'lightQuality', quality),
                         palette: palette,
                       ),
                       _Kv(
                         label: 'Rebote del lugar',
                         value: bounce,
-                        onTap: () => _edit('Rebote del lugar', 'bouncePotential', bounce),
+                        onTap: () => _edit(
+                          'Rebote del lugar',
+                          'bouncePotential',
+                          bounce,
+                        ),
                         palette: palette,
                       ),
                       const SizedBox(height: 10),
@@ -1436,7 +1441,8 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                       _Kv(
                         label: 'Humedad y bruma',
                         value: humidity,
-                        onTap: () => _edit('Humedad y bruma', 'humidity', humidity),
+                        onTap: () =>
+                            _edit('Humedad y bruma', 'humidity', humidity),
                         palette: palette,
                       ),
                       _Kv(
@@ -1803,13 +1809,18 @@ class _SolarCard extends StatelessWidget {
           _Kv(
             label: 'Altura máxima del sol',
             value: maxElev,
-            onTap: () => onEditField('maxElevation', 'Altura máxima del sol', maxElev),
+            onTap: () =>
+                onEditField('maxElevation', 'Altura máxima del sol', maxElev),
             palette: palette,
           ),
           _Kv(
             label: 'Largo de sombra a mediodía',
             value: shadow,
-            onTap: () => onEditField('shadowRatio', 'Largo de sombra a mediodía', shadow),
+            onTap: () => onEditField(
+              'shadowRatio',
+              'Largo de sombra a mediodía',
+              shadow,
+            ),
             palette: palette,
           ),
         ],
@@ -2617,8 +2628,8 @@ class _LightingIdeaFromBible extends ConsumerWidget {
         final text = (summary?.isNotEmpty == true)
             ? summary!
             : (lightingNote.isNotEmpty
-                ? lightingNote
-                : 'Sin idea de luz aún — ábrela en Iluminación.');
+                  ? lightingNote
+                  : 'Sin idea de luz aún — ábrela en Iluminación.');
 
         return Container(
           width: double.infinity,
@@ -2676,10 +2687,9 @@ class _LightingIdeaFromBible extends ConsumerWidget {
               const SizedBox(height: 10),
               Text(
                 text,
-                style: AppTypography.bodyMedium(palette).copyWith(
-                  color: palette.textSecondary,
-                  height: 1.45,
-                ),
+                style: AppTypography.bodyMedium(
+                  palette,
+                ).copyWith(color: palette.textSecondary, height: 1.45),
               ),
               if (card != null) ...[
                 const SizedBox(height: 12),

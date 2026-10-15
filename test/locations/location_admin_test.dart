@@ -95,6 +95,13 @@ void main() {
     expect(groups.map((g) => g.name), ['CALLE RAVAL', 'hospital']);
     expect(groups.first.sets.map((s) => s.id), [wholeSet, looseSet]);
     expect(groups.last.sets.single.id, extra);
+    // La copia suelta no se pinta como otra ficha: se ofrece unirla.
+    expect(groups.first.looseTwins.map((s) => s.id), [looseSet]);
+    expect(groups.first.shownSets.map((s) => s.id), [wholeSet]);
+    // Sin más sets, el título es el nombre limpio.
+    final whole = groups.first.shownSets.single;
+    expect(groups.first.titleOf(whole), 'CALLE RAVAL');
+    expect(groups.last.looseTwins, isEmpty);
   });
 
   test('el aviso cuenta las escenas y planos que usan el set', () async {

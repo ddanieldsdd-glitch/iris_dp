@@ -94,7 +94,8 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
   }
 
   Map<String, dynamic> _getCustom() {
-    if (widget.sectionContentJson == null || widget.sectionContentJson!.isEmpty) {
+    if (widget.sectionContentJson == null ||
+        widget.sectionContentJson!.isEmpty) {
       return {};
     }
     try {
@@ -155,9 +156,9 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
       }
     }
     if (row != null) {
-      await (db.update(db.visualBibleLocationRefs)
-            ..where((r) => r.id.equals(row!.id)))
-          .write(
+      await (db.update(
+        db.visualBibleLocationRefs,
+      )..where((r) => r.id.equals(row!.id))).write(
         VisualBibleLocationRefsCompanion(
           lightingNote: drift.Value(note.isEmpty ? null : note),
         ),
@@ -171,96 +172,114 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
     final db = ref.watch(databaseProvider);
     final custom = _getCustom();
     final shootCtx = ref.watch(projectShootContextProvider(widget.projectId));
-    final selectedPlanId = _selectedPlanId ??
+    final selectedPlanId =
+        _selectedPlanId ??
         (custom['selectedPlanId'] as num?)?.toInt() ??
         shootCtx.activeSetId;
 
-    return BibleSectionScaffold(
-      sectionId: BibleSectionId.lighting,
-      projectId: widget.projectId,
-      data: widget.data,
-      onChanged: widget.onChanged,
-      sectionContentJson: widget.sectionContentJson,
-      narrativeHint:
-          '¿Por qué iluminamos así? Qué emoción transmite esta filosofía de luz…',
-      sectionNumber: null,
-      sectionTitle: 'Iluminación',
-      fieldWidgets: {
-        'overview': LightingOverviewBlock(
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-          lightingData: custom,
-          onUpdateLightingData: (patch) async {
-            await _updateCustom(patch);
-            if (patch.containsKey('narrativeStory')) {
-              final story = (patch['narrativeStory'] as String?)?.trim() ?? '';
-              widget.data.lightingPhilosophy =
-                  story.isEmpty ? null : story;
-              widget.data.lightingNarrativeIntent =
-                  story.isEmpty ? null : story;
-              widget.onChanged(widget.data);
-            }
-          },
-        ),
-        'lightBehaviors': LightingBehaviorsBlock(
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-        ),
-        // Legacy: slots separados (layouts antiguos).
-        'lightStyles': NarrativeDeckBlock(
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
+    // Una sola cabecera: la de la pantalla, con la imagen y el nombre del
+    // tratamiento de luz si no tiene los suyos.
+    return StreamBuilder<List<VisualBibleNarrativeCard>>(
+      stream: db.watchNarrativeCardsForSection(
+        widget.bibleId,
+        BibleSectionId.lighting,
+        kind: NarrativeCardKind.overview,
+      ),
+      builder: (context, overviewSnap) {
+        final overview = overviewSnap.data?.firstOrNull;
+        return BibleSectionScaffold(
+          heroFallbackImageId: overview?.coverMoodboardImageId,
+          heroSubtitle: overview == null || overview.title.trim().isEmpty
+              ? null
+              : overview.title,
           sectionId: BibleSectionId.lighting,
-          kind: NarrativeCardKind.style,
-          title: 'Ideas de luz',
-          subtitle:
-              'Textura, calidad, color y cómo se comporta la luz en el proyecto',
-        ),
-        'lightingTagRefs': LightingTaggedRefsBlock(
           projectId: widget.projectId,
-          bibleId: widget.bibleId,
-        ),
-        'filmRefs': NarrativeDeckBlock(
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-          sectionId: BibleSectionId.lighting,
-          kind: NarrativeCardKind.filmRef,
-          title: 'Referencias de cine',
-          subtitle: 'Películas que nos inspiran y nos ayudan a definir la luz',
-        ),
-        'locationLights': LightingLocationsBlock(
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-          globalMetrics: LightingGlobalMetricsPanel.metricsOf(custom),
-          technicalPanelBuilder: (card) => _LocationTechnicalPanel(
-            projectId: widget.projectId,
-            bibleId: widget.bibleId,
-            planId: card.locationBasePlanId ?? selectedPlanId,
-            lightingData: custom,
-            onUpdatePlan: _updatePlan,
-            onUpdateCustom: _updateCustom,
-            onSyncLightingNote: _syncLightingNote,
-            onAddSetup: () => _addSetup(
-              context,
-              card.locationBasePlanId ?? selectedPlanId,
+          data: widget.data,
+          onChanged: widget.onChanged,
+          sectionContentJson: widget.sectionContentJson,
+          narrativeHint:
+              '¿Por qué iluminamos así? Qué emoción transmite esta filosofía de luz…',
+          sectionNumber: null,
+          sectionTitle: 'Iluminación',
+          fieldWidgets: {
+            'overview': LightingOverviewBlock(
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+              lightingData: custom,
+              onUpdateLightingData: (patch) async {
+                await _updateCustom(patch);
+                if (patch.containsKey('narrativeStory')) {
+                  final story =
+                      (patch['narrativeStory'] as String?)?.trim() ?? '';
+                  widget.data.lightingPhilosophy = story.isEmpty ? null : story;
+                  widget.data.lightingNarrativeIntent = story.isEmpty
+                      ? null
+                      : story;
+                  widget.onChanged(widget.data);
+                }
+              },
             ),
-            data: widget.data,
-            onChanged: widget.onChanged,
-          ),
-        ),
-        // Legacy slots: keep widgets available if old layouts still reference them.
-        'diagrams': _SetupsBlock(
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-          db: db,
-          palette: palette,
-          filterPlanId: selectedPlanId,
-          onAdd: () => _addSetup(context, selectedPlanId),
-        ),
+            'lightBehaviors': LightingBehaviorsBlock(
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+            ),
+            // Legacy: slots separados (layouts antiguos).
+            'lightStyles': NarrativeDeckBlock(
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+              sectionId: BibleSectionId.lighting,
+              kind: NarrativeCardKind.style,
+              title: 'Ideas de luz',
+              subtitle:
+                  'Textura, calidad, color y cómo se comporta la luz en el proyecto',
+            ),
+            'lightingTagRefs': LightingTaggedRefsBlock(
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+            ),
+            'filmRefs': NarrativeDeckBlock(
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+              sectionId: BibleSectionId.lighting,
+              kind: NarrativeCardKind.filmRef,
+              title: 'Referencias de cine',
+              subtitle:
+                  'Películas que nos inspiran y nos ayudan a definir la luz',
+            ),
+            'locationLights': LightingLocationsBlock(
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+              globalMetrics: LightingGlobalMetricsPanel.metricsOf(custom),
+              technicalPanelBuilder: (card) => _LocationTechnicalPanel(
+                projectId: widget.projectId,
+                bibleId: widget.bibleId,
+                planId: card.locationBasePlanId ?? selectedPlanId,
+                lightingData: custom,
+                onUpdatePlan: _updatePlan,
+                onUpdateCustom: _updateCustom,
+                onSyncLightingNote: _syncLightingNote,
+                onAddSetup: () => _addSetup(
+                  context,
+                  card.locationBasePlanId ?? selectedPlanId,
+                ),
+                data: widget.data,
+                onChanged: widget.onChanged,
+              ),
+            ),
+            // Legacy slots: keep widgets available if old layouts still reference them.
+            'diagrams': _SetupsBlock(
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+              db: db,
+              palette: palette,
+              filterPlanId: selectedPlanId,
+              onAdd: () => _addSetup(context, selectedPlanId),
+            ),
+          },
+        );
       },
     );
   }
-
 
   Future<void> _addSetup(BuildContext context, int? planId) async {
     final palette = context.palette;
@@ -366,7 +385,6 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
       },
     );
   }
-
 }
 
 /// Panel técnico colapsable dentro del detalle de localización (luz).
@@ -376,7 +394,7 @@ class _LocationTechnicalPanel extends ConsumerWidget {
   final int? planId;
   final Map<String, dynamic> lightingData;
   final Future<void> Function(int planId, Map<String, dynamic> patch)
-      onUpdatePlan;
+  onUpdatePlan;
   final Future<void> Function(Map<String, dynamic> update) onUpdateCustom;
   final Future<void> Function(int planId, String note) onSyncLightingNote;
   final VoidCallback onAddSetup;
@@ -407,7 +425,8 @@ class _LocationTechnicalPanel extends ConsumerWidget {
     final lightBehavior = plan['lightBehavior'] as String? ?? '';
     final dayNightIntent = plan['dayNightIntent'] as String? ?? '';
     final sourceK = (custom['sourceKelvin'] as num?)?.toInt() ?? 3200;
-    final targetK = (custom['targetKelvin'] as num?)?.toInt() ??
+    final targetK =
+        (custom['targetKelvin'] as num?)?.toInt() ??
         (custom['colorTemp'] as num?)?.toInt() ??
         5600;
 
@@ -1072,8 +1091,9 @@ class _SetupCardState extends ConsumerState<_SetupCard> {
                       ],
                       Text(
                         setup.setupName,
-                        style: AppTypography.titleMedium(palette)
-                            .copyWith(fontSize: 18),
+                        style: AppTypography.titleMedium(
+                          palette,
+                        ).copyWith(fontSize: 18),
                       ),
                       if (setup.narrativeNote?.isNotEmpty == true) ...[
                         const SizedBox(height: 4),
@@ -1089,17 +1109,20 @@ class _SetupCardState extends ConsumerState<_SetupCard> {
                         const SizedBox(height: 4),
                         Text(
                           'MOTIVACIÓN: ${setup.practicalMotivation}',
-                          style: AppTypography.mono(palette).copyWith(
-                            fontSize: 11,
-                            color: palette.accent,
-                          ),
+                          style: AppTypography.mono(
+                            palette,
+                          ).copyWith(fontSize: 11, color: palette.accent),
                         ),
                       ],
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.delete_outline, color: palette.error, size: 20),
+                  icon: Icon(
+                    Icons.delete_outline,
+                    color: palette.error,
+                    size: 20,
+                  ),
                   onPressed: () => db.deleteLightingSetup(setup.id),
                 ),
               ],
@@ -1108,48 +1131,49 @@ class _SetupCardState extends ConsumerState<_SetupCard> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: BibleMoodboardImageTarget(
-                projectId: widget.projectId,
-                sectionId: BibleSectionId.lighting,
-                bibleId: widget.bibleId,
-                hint: '⌘V — ref del setup',
-                child: AspectRatio(
-                  aspectRatio: 16 / 5,
-                  child: InkWell(
-                    onTap: () async {
-                      await BiblePasteHelpers.pasteFromClipboard(
-                        onPayload: (payload) async {
-                          final path =
-                              await BiblePasteHelpers.savePayloadToProject(
-                            projectId: widget.projectId,
-                            subfolder: 'lighting_setups',
-                            payload: payload,
-                          );
-                          if (path != null) await _saveRefPath(path);
-                        },
-                      );
-                    },
-                    child: setup.referenceImagePath != null &&
-                            File(setup.referenceImagePath!).existsSync()
-                        ? Image.file(
-                            File(setup.referenceImagePath!),
-                            fit: BoxFit.cover,
-                          )
-                        : ColoredBox(
-                            color: palette.surfaceOverlay,
-                            child: Center(
-                              child: Text(
-                                'Pegar referencia del setup',
-                                style: TextStyle(
-                                  color: palette.textTertiary,
-                                  fontSize: 12,
-                                ),
+              projectId: widget.projectId,
+              sectionId: BibleSectionId.lighting,
+              bibleId: widget.bibleId,
+              hint: '⌘V — ref del setup',
+              child: AspectRatio(
+                aspectRatio: 16 / 5,
+                child: InkWell(
+                  onTap: () async {
+                    await BiblePasteHelpers.pasteFromClipboard(
+                      onPayload: (payload) async {
+                        final path =
+                            await BiblePasteHelpers.savePayloadToProject(
+                              projectId: widget.projectId,
+                              subfolder: 'lighting_setups',
+                              payload: payload,
+                            );
+                        if (path != null) await _saveRefPath(path);
+                      },
+                    );
+                  },
+                  child:
+                      setup.referenceImagePath != null &&
+                          File(setup.referenceImagePath!).existsSync()
+                      ? Image.file(
+                          File(setup.referenceImagePath!),
+                          fit: BoxFit.cover,
+                        )
+                      : ColoredBox(
+                          color: palette.surfaceOverlay,
+                          child: Center(
+                            child: Text(
+                              'Pegar referencia del setup',
+                              style: TextStyle(
+                                color: palette.textTertiary,
+                                fontSize: 12,
                               ),
                             ),
                           ),
-                  ),
+                        ),
                 ),
               ),
             ),
+          ),
           SizedBox(
             height: 280,
             child: LightingDiagramEditor(

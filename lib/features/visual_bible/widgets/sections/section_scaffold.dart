@@ -34,6 +34,11 @@ class BibleSectionScaffold extends ConsumerStatefulWidget {
   final String? sectionNumber;
   final String? sectionTitle;
 
+  /// Imagen y subtítulo de la cabecera cuando la pantalla los toma de otro
+  /// sitio (Iluminación: su tratamiento de luz).
+  final int? heroFallbackImageId;
+  final String? heroSubtitle;
+
   /// Los actos del proyecto, si la sección ya los ha resuelto con lo que
   /// había escrito antes de compartirlos.
   final List<BibleCard>? sharedActs;
@@ -56,6 +61,8 @@ class BibleSectionScaffold extends ConsumerStatefulWidget {
     required this.fieldWidgets,
     this.sectionNumber,
     this.sectionTitle,
+    this.heroFallbackImageId,
+    this.heroSubtitle,
     this.sharedActs,
     this.duplicateValues = const {},
     this.legacyPointImages = const {},
@@ -105,6 +112,8 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
           bibleId: widget.data.id,
           sectionId: widget.sectionId,
           title: widget.sectionTitle ?? BibleSectionId.label(widget.sectionId),
+          fallbackImageId: widget.heroFallbackImageId,
+          subtitle: widget.heroSubtitle,
           onAfterReset: () {
             // Lo que la pantalla escribe en la biblia, fuera de su definición.
             widget.data.clearSection(widget.sectionId);

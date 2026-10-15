@@ -52,6 +52,13 @@ class BibleScreenHero extends ConsumerWidget {
   /// Reinicia la pantalla. La confirmación la pide la cabecera.
   final VoidCallback? onReset;
 
+  /// Imagen del moodboard que se enseña si la pantalla no tiene una propia
+  /// (en Iluminación, la del tratamiento de luz).
+  final int? fallbackImageId;
+
+  /// Línea bajo el título.
+  final String? subtitle;
+
   const BibleScreenHero({
     super.key,
     required this.projectId,
@@ -63,6 +70,8 @@ class BibleScreenHero extends ConsumerWidget {
     this.onChanged,
     this.onRename,
     this.onReset,
+    this.fallbackImageId,
+    this.subtitle,
   });
 
   static const double height = 220;
@@ -215,7 +224,7 @@ class BibleScreenHero extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final id = value.imageId;
+    final id = value.imageId ?? fallbackImageId;
     if (id == null) return _band(context, null);
     return StreamBuilder<List<MoodboardImage>>(
       stream: ref.watch(databaseProvider).watchMoodboardImages(projectId),
@@ -326,6 +335,19 @@ class BibleScreenHero extends ConsumerWidget {
                         color: hasImage ? Colors.white : palette.textPrimary,
                       ),
                     ),
+                    if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        subtitle!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodyLarge(palette).copyWith(
+                          color: hasImage
+                              ? Colors.white70
+                              : palette.textSecondary,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -404,6 +426,8 @@ class BibleSectionHero extends ConsumerWidget {
   /// Vacía lo que la pantalla guarda fuera de su definición, tras reiniciar
   /// su contenido.
   final VoidCallback? onAfterReset;
+  final int? fallbackImageId;
+  final String? subtitle;
 
   const BibleSectionHero({
     super.key,
@@ -412,6 +436,8 @@ class BibleSectionHero extends ConsumerWidget {
     required this.sectionId,
     required this.title,
     this.onAfterReset,
+    this.fallbackImageId,
+    this.subtitle,
   });
 
   @override
@@ -439,12 +465,16 @@ class BibleSectionHero extends ConsumerWidget {
             bibleId: bibleId,
             sectionId: sectionId,
             title: title,
+            fallbackImageId: fallbackImageId,
+            subtitle: subtitle,
           );
         }
         return BibleScreenHero(
           projectId: projectId,
           bibleId: bibleId,
           sectionId: sectionId,
+          fallbackImageId: fallbackImageId,
+          subtitle: subtitle,
           title: def.label.trim().isEmpty ? title : def.label,
           value: BibleScreenHeroValue.read(
             BibleSectionFieldsConfig.parseValues(def.contentJson),

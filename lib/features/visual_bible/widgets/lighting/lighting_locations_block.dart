@@ -1,3 +1,4 @@
+import '../../../locations/location_admin.dart';
 import '../../../locations/location_manage_menu.dart';
 import 'dart:io';
 
@@ -38,6 +39,30 @@ class LightingSiteGroup {
   /// El set es la localización entera, no una zona de ella.
   bool isWholeSite(LocationBasePlan set) =>
       set.locationName.trim().toLowerCase() == name.trim().toLowerCase();
+
+  /// Sets sueltos que repiten esta localización (mismo nombre, sin
+  /// localización): una copia que conviene unir, no un set más.
+  List<LocationBasePlan> get looseTwins => [
+    if (site != null)
+      for (final set in sets)
+        if (set.siteId != site!.id && isWholeSite(set)) set,
+  ];
+
+  /// Los sets que se enseñan: sin las copias sueltas.
+  List<LocationBasePlan> get shownSets {
+    final twins = looseTwins;
+    return [
+      for (final set in sets)
+        if (!twins.contains(set)) set,
+    ];
+  }
+
+  /// Título de la ficha de un set: el nombre limpio; « · toda la
+  /// localización» solo si hay además otros sets.
+  String titleOf(LocationBasePlan set) {
+    if (!isWholeSite(set)) return set.locationName;
+    return shownSets.length > 1 ? '$name · toda la localización' : name;
+  }
 
   /// Agrupa los sets por localización: cada localización sale una vez.
   static List<LightingSiteGroup> group({
@@ -250,7 +275,7 @@ class _SiteTile extends StatelessWidget {
       if (metrics.isEmpty) metrics = page.metrics;
       if ((card.body ?? '').trim().isNotEmpty || ids.isNotEmpty) written++;
     }
-    final zones = group.sets.where((s) => !group.isWholeSite(s)).length;
+    final zones = group.shownSets.where((s) => !group.isWholeSite(s)).length;
     final ratio = metrics.ratioOption;
 
     return InkWell(
@@ -395,7 +420,7 @@ class LightingSitePage extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: palette.background,
         title: Text(
-          'Luz de la localización',
+          'Luz por localización',
           style: AppTypography.bodyMedium(
             palette,
           ).copyWith(fontWeight: FontWeight.w600),
@@ -429,12 +454,18 @@ class LightingSitePage extends ConsumerWidget {
                   return ListView(
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     children: [
-                      Text(
-                        group.name,
-                        style: AppTypography.displayMedium(palette),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      for (final set in group.sets)
+                      for (final twin in group.looseTwins)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                          child: LooseTwinNotice(
+                            projectId: projectId,
+                            twin: twin,
+                            into: group.shownSets
+                                .where(group.isWholeSite)
+                                .firstOrNull,
+                          ),
+                        ),
+                      for (final set in group.shownSets)
                         if (group.cardBySet[set.id] != null)
                           Padding(
                             padding: const EdgeInsets.only(
@@ -445,9 +476,7 @@ class LightingSitePage extends ConsumerWidget {
                               projectId: projectId,
                               bibleId: bibleId,
                               cardId: group.cardBySet[set.id]!.id,
-                              fixedTitle: group.isWholeSite(set)
-                                  ? '${group.name} · toda la localización'
-                                  : set.locationName,
+                              fixedTitle: group.titleOf(set),
                               globalMetrics: globalMetrics,
                               actions: [
                                 // Esquemas y notas técnicas del set.
@@ -477,6 +506,67 @@ class LightingSitePage extends ConsumerWidget {
               ),
         ),
       ),
+    );
+  }
+}
+
+/// Aviso de una copia suelta de la localización (un set sin localización
+/// que se llama igual), con el botón para unirla.
+class LooseTwinNotice extends ConsumerWidget {
+  final int projectId;
+  final LocationBasePlan twin;
+
+  /// El set bueno en el que se une; nulo si no lo hay.
+  final LocationBasePlan? into;
+
+  const LooseTwinNotice({
+    super.key,
+    required this.projectId,
+    required this.twin,
+    required this.into,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final db = ref.watch(databaseProvider);
+    final admin = LocationAdmin(db);
+    return FutureBuilder<LocationUsage>(
+      future: admin.usageOfSet(twin.id),
+      builder: (context, snap) {
+        final usage = snap.data;
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: palette.accent.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: palette.accent.withValues(alpha: 0.4)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.content_copy_outlined, color: palette.accent),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  'Hay una copia suelta de «${twin.locationName}» con su '
+                  'propia ficha'
+                  '${usage != null && usage.inUse ? ' (la usan ${usage.summary})' : ''}. '
+                  'Al unirla, todo pasa a esta localización y la copia '
+                  'desaparece.',
+                  style: AppTypography.bodyMedium(palette),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              FilledButton(
+                onPressed: into == null
+                    ? null
+                    : () => admin.mergeSetInto(twin.id, into!.id),
+                child: const Text('Unirla'),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
