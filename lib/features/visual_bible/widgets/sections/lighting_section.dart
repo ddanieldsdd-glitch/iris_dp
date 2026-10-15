@@ -61,7 +61,64 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
   void initState() {
     super.initState();
     _selectedPlanId = widget.initialPlanId;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _handleFocus());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleFocus();
+      _placeGlobalLight();
+    });
+  }
+
+  /// Clave del punto de luz general (color y contraste del proyecto).
+  static const globalLightKey = 'globalLight';
+
+  /// Una vez: la luz general deja de ir dentro de «Puntos clave». Si ya
+  /// estaba configurada, pasa a ser su propio punto (justo después); si no,
+  /// no sale y se añade desde «Añadir punto» cuando se quiera.
+  Future<void> _placeGlobalLight() async {
+    final custom = _getCustom();
+    if (custom['globalLightPlaced'] == true || widget.data.id <= 0) return;
+    final db = ref.read(databaseProvider);
+    final def =
+        await (db.select(db.bibleSectionDefinitions)..where(
+              (d) =>
+                  d.bibleId.equals(widget.data.id) &
+                  d.id.equals(BibleSectionId.lighting),
+            ))
+            .getSingleOrNull();
+    if (def == null) return;
+    var fields = BibleSectionFieldsConfig.parse(
+      def.contentJson,
+      BibleSectionId.lighting,
+    );
+    fields = [
+      for (final f in fields)
+        f.key == 'overview' && f.label == 'Visión general'
+            ? f.copyWith(label: 'Puntos clave')
+            : f,
+    ];
+    final configured = !LightingGlobalMetricsPanel.metricsOf(custom).isEmpty;
+    if (configured && !fields.any((f) => f.key == globalLightKey)) {
+      final at = fields.indexWhere((f) => f.key == 'overview');
+      fields.insert(
+        at + 1,
+        const BibleSectionField(
+          key: globalLightKey,
+          label: 'Luz: color y contraste',
+          type: BibleSectionFieldType.specs,
+          widget: 'light_metrics',
+        ),
+      );
+    }
+    final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
+    values['lightingData'] = BibleLightingData.encode(
+      BibleLightingData.migrate({...custom, 'globalLightPlaced': true}),
+    );
+    await db.upsertBibleSectionDefinition(
+      def.copyWith(
+        contentJson: drift.Value(
+          BibleSectionFieldsConfig.encode(fields, values: values),
+        ),
+      ),
+    );
   }
 
   @override
@@ -218,6 +275,11 @@ class _LightingSectionState extends ConsumerState<LightingSection> {
                   widget.onChanged(widget.data);
                 }
               },
+            ),
+            // La luz general del proyecto, si se ha añadido como punto.
+            globalLightKey: LightingGlobalMetricsPanel(
+              lightingData: custom,
+              onUpdate: _updateCustom,
             ),
             'lightBehaviors': LightingBehaviorsBlock(
               projectId: widget.projectId,

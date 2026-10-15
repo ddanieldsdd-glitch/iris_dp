@@ -280,7 +280,7 @@ abstract final class BibleStitchModuleRegistry {
         BibleSectionId.lighting => const [
             StitchModule(
               key: 'overview',
-              label: 'Visión general',
+              label: 'Puntos clave',
               type: BibleSectionFieldType.narrative,
               maxLines: 6,
               subsectionKind: BibleSubsectionKindId.narrativeIntent,

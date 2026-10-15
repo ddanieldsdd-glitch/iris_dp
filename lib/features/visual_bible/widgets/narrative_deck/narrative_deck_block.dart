@@ -1,6 +1,5 @@
 import '../lighting/lighting_card_view.dart';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -17,7 +16,7 @@ import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
 import '../bible_navigation_scope.dart';
 import 'narrative_card_tile.dart';
-import 'lighting_global_metrics_panel.dart';
+import '../bible_point_panel.dart';
 
 /// Bloque del deck: cabecera + grid de cartas + CTA añadir.
 class NarrativeDeckBlock extends ConsumerWidget {
@@ -70,10 +69,9 @@ class NarrativeDeckBlock extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Text(
                       subtitle!,
-                      style: AppTypography.bodyMedium(palette).copyWith(
-                        color: palette.textSecondary,
-                        fontSize: 13,
-                      ),
+                      style: AppTypography.bodyMedium(
+                        palette,
+                      ).copyWith(color: palette.textSecondary, fontSize: 13),
                     ),
                   ],
                 ],
@@ -135,9 +133,9 @@ class NarrativeDeckBlock extends ConsumerWidget {
                   allowAdd
                       ? 'Aún no hay cartas. Añade la primera.'
                       : 'Sin contenido todavía.',
-                  style: AppTypography.bodyMedium(palette).copyWith(
-                    color: palette.textTertiary,
-                  ),
+                  style: AppTypography.bodyMedium(
+                    palette,
+                  ).copyWith(color: palette.textTertiary),
                 ),
               );
             }
@@ -148,8 +146,8 @@ class NarrativeDeckBlock extends ConsumerWidget {
                 final cross = w >= 900
                     ? 4
                     : w >= 600
-                        ? 3
-                        : 2;
+                    ? 3
+                    : 2;
                 return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -165,7 +163,8 @@ class NarrativeDeckBlock extends ConsumerWidget {
                     return NarrativeCardTile(
                       card: card,
                       onTap: () => _openCard(context, ref, card),
-                      onDelete: allowDelete &&
+                      onDelete:
+                          allowDelete &&
                               card.kind != NarrativeCardKind.locationLight
                           ? () => _deleteCard(ref, card.id)
                           : null,
@@ -245,13 +244,14 @@ class NarrativeDeckBlock extends ConsumerWidget {
       bibleId: bibleId,
       cardId: card.id,
       technicalPanel: technicalPanelBuilder?.call(card),
-      onOpenLocation: card.kind == NarrativeCardKind.locationLight &&
+      onOpenLocation:
+          card.kind == NarrativeCardKind.locationLight &&
               card.locationBasePlanId != null
           ? () => BibleNavigationScope.goToSection(
-                context,
-                BibleSectionId.location,
-                planId: card.locationBasePlanId,
-              )
+              context,
+              BibleSectionId.location,
+              planId: card.locationBasePlanId,
+            )
           : null,
     );
   }
@@ -319,53 +319,26 @@ class _LightingOverviewBlockState extends ConsumerState<LightingOverviewBlock> {
             ? overview!.body!
             : (data['narrativeStory'] as String?) ?? '';
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            BibleCrossNavChips.techTriplet(current: BibleSectionId.lighting),
-            const SizedBox(height: 12),
-            // La imagen y el nombre del tratamiento van en la cabecera de la
-            // pantalla: aquí no se repiten.
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final narrative = _OverviewNarrativePanel(
-                  palette: palette,
-                  story: story,
-                  onStoryChanged: (v) async {
-                    await widget.onUpdateLightingData({'narrativeStory': v});
-                    if (overview != null) {
-                      final row = await db.getNarrativeCard(overview.id);
-                      if (row != null) {
-                        await db.updateNarrativeCard(
-                          row.copyWith(
-                            body: Value(v.trim().isEmpty ? null : v),
-                          ),
-                        );
-                      }
-                    }
-                  },
+        // Solo los puntos clave: la luz general es otro widget, que se
+        // añade si se quiere.
+        return _OverviewNarrativePanel(
+          palette: palette,
+          story: story,
+          onStoryChanged: (v) async {
+            await widget.onUpdateLightingData({'narrativeStory': v});
+            if (overview != null) {
+              final row = await db.getNarrativeCard(overview.id);
+              if (row != null) {
+                await db.updateNarrativeCard(
+                  row.copyWith(body: Value(v.trim().isEmpty ? null : v)),
                 );
-                final metrics = LightingGlobalMetricsPanel(
-                  lightingData: data,
-                  onUpdate: widget.onUpdateLightingData,
-                );
-                // Las métricas van a todo el ancho: enseñan todos los ratios.
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    narrative,
-                    const SizedBox(height: 16),
-                    metrics,
-                  ],
-                );
-              },
-            ),
-          ],
+              }
+            }
+          },
         );
       },
     );
   }
-
 }
 
 class _OverviewNarrativePanel extends StatelessWidget {
@@ -381,45 +354,17 @@ class _OverviewNarrativePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xB31A1A1C),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'PUNTOS CLAVE',
-            style: AppTypography.mono(palette).copyWith(
-              fontSize: 11,
-              letterSpacing: 1.2,
-              color: palette.textTertiary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Lo más importante que vamos a destacar de la luz en el proyecto',
-            style: AppTypography.bodyMedium(palette).copyWith(
-              fontSize: 12,
-              color: palette.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 12),
-          BibleTextField(
-            label: 'Estrategia e intención narrativa',
-            hint:
-                'Alto contraste motivado por prácticos, dualismo de sombra, '
-                'alienación mediante top-light…',
-            maxLines: 8,
-            initialValue: story,
-            onChanged: onStoryChanged,
-          ),
-        ],
+    return BiblePointPanel(
+      label: 'Puntos clave',
+      icon: Icons.lightbulb_outline,
+      child: BibleTextField(
+        hint:
+            'Alto contraste motivado por prácticos, dualismo de sombra, '
+            'alienación mediante top-light…',
+        maxLines: 8,
+        initialValue: story,
+        onChanged: onStoryChanged,
       ),
     );
   }
 }
-

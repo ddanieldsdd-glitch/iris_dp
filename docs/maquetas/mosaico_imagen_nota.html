@@ -90,7 +90,29 @@ ul { margin: 0; padding: 0; }
 .card li { list-style: none; font-size: 13.5px; color: var(--muted); padding-left: 14px; position: relative; line-height: 1.45; }
 .card li::before { content: ""; position: absolute; left: 0; top: .6em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 
+/* ── Desarrollo y referencias ── */
+.dev { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; padding: 18px; }
+.essay { display: grid; gap: 10px; align-content: start; max-width: 68ch; }
+.essay h3 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+.essay h4 { margin: 6px 0 0; font-size: 14px; color: var(--fg); }
+.essay p { color: #c9c9d0; font-size: 14px; line-height: 1.65; }
+.refs-inline { display: flex; gap: 8px; flex-wrap: wrap; }
+.ref-mini { position: relative; width: 140px; aspect-ratio: 16/9; border-radius: 6px; }
+.badge { position: absolute; left: 6px; bottom: 6px; font: 600 10px var(--mono); background: rgba(0,0,0,.6); padding: 2px 6px; border-radius: 4px; }
+.refs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-content: start; }
+.refs > .label { grid-column: 1 / -1; }
+.ref { margin: 0; display: grid; gap: 6px; }
+.ref .still { aspect-ratio: 16/10; }
+.on-img { position: absolute; right: 6px; top: 6px; }
+.ref figcaption { display: grid; gap: 2px; font-size: 12.5px; color: var(--muted); }
+.ref figcaption strong { color: var(--fg); font-size: 13px; }
+.ref .meta { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+.comments { border-top: 1px solid var(--line); padding: 14px 18px; display: grid; gap: 8px; }
+.comment { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; display: grid; gap: 2px; font-size: 13px; }
+.comment.add p { color: var(--faint); }
+
 @media (max-width: 980px) {
+  .dev { grid-template-columns: 1fr; }
   .a-body { grid-template-columns: 48px minmax(0,1fr); }
   .read { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
   .sheet { grid-template-columns: 1fr; }
@@ -243,6 +265,86 @@ ul { margin: 0; padding: 0; }
             <p>Lo de dentro contamina la calle: magenta en primer término, cian de fondo. La calle deja de ser suya.</p>
           </div>
         </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────── DESARROLLO Y REFERENCIAS ───────────── -->
+  <section class="option" aria-labelledby="c-title">
+    <div class="option-head">
+      <span class="tag">+</span>
+      <h2 id="c-title">Desarrollo y referencias</h2>
+      <p>Debajo de la imagen principal (en A) o de cada lámina (en B): un texto largo que se desarrolla con títulos, y varias imágenes de referencia. Cada referencia lleva sus comentarios y, si quieres, un dibujo encima que se enseña u oculta.</p>
+    </div>
+    <div class="screen">
+      <div class="bar">
+        <strong>Cálidos y contraste alto</strong>
+        <span>· desarrollo</span>
+        <span class="sp"></span>
+        <span class="btn">＋ Apartado</span>
+        <span class="btn">＋ Referencias</span>
+      </div>
+      <div class="dev">
+        <article class="essay">
+          <span class="label">Desarrollo</span>
+          <h3>Por qué esta noche es de sodio</h3>
+          <p>La calle es el último sitio donde Ali se siente dueño de algo. El sodio lo aplana todo en un único naranja sucio: no hay colores, solo luz y su ausencia. Queremos que la cara se lea a medias, que el espectador tenga que buscarla.</p>
+          <h4>La sombra no se rellena</h4>
+          <p>Nada de rebotes amables. Si la pared devuelve demasiado, negativo. El contraste es la idea, no un efecto.</p>
+          <h4>El frío llega de dentro</h4>
+          <p>El escaparate del kebab es el único azul: el mundo de Khaled, ordenado y frío, mirando a la calle. Solo un filo, nunca un relleno.</p>
+          <div class="refs-inline">
+            <span class="ref-mini s-sodium"><span class="badge">ver ref. 1</span></span>
+            <span class="ref-mini s-fog"><span class="badge">ver ref. 3</span></span>
+          </div>
+        </article>
+        <div class="refs" aria-label="Imágenes de referencia">
+          <span class="label">Imágenes de referencia · 4</span>
+          <figure class="ref">
+            <div class="still s-sodium">
+              <svg class="ink" viewBox="0 0 240 100" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M30 80 C 70 60, 120 58, 170 30" stroke="#2997ff" stroke-width="1.2" fill="none"/>
+                <circle cx="190" cy="20" r="10" stroke="#ff9d42" stroke-width="1" fill="none"/>
+              </svg>
+              <span class="pill on-img">✎ dibujo</span>
+            </div>
+            <figcaption>
+              <strong>1 · La caída de la farola</strong>
+              <span>La luz muere en dos metros: así queremos la acera.</span>
+              <span class="meta">💬 3 comentarios · ver dibujo ✓</span>
+            </figcaption>
+          </figure>
+          <figure class="ref">
+            <div class="still s-face"><span class="pill on-img">✎ dibujo</span></div>
+            <figcaption>
+              <strong>2 · Medio rostro</strong>
+              <span>Ojo: el ojo de sombra tiene que tener un brillo mínimo.</span>
+              <span class="meta">💬 1 comentario · dibujo oculto</span>
+            </figcaption>
+          </figure>
+          <figure class="ref">
+            <div class="still s-fog"></div>
+            <figcaption>
+              <strong>3 · Atmósfera</strong>
+              <span>Algo de humo para que el sodio dibuje volumen.</span>
+              <span class="meta">💬 2 comentarios</span>
+            </figcaption>
+          </figure>
+          <figure class="ref">
+            <div class="still s-neon"></div>
+            <figcaption>
+              <strong>4 · Lo que no queremos</strong>
+              <span>Demasiado color: aquí se pierde la noche de barrio.</span>
+              <span class="meta">💬 0 · marcar como «evitar»</span>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="comments" aria-label="Comentarios de la referencia 1">
+        <span class="label">Comentarios · referencia 1</span>
+        <div class="comment"><strong>Daniel</strong><p>Fijaos en cómo la acera pasa a negro antes del portal.</p></div>
+        <div class="comment"><strong>Dirección</strong><p>¿Podemos tener esto en el plano 3 también?</p></div>
+        <div class="comment add"><p>Escribe un comentario…</p></div>
       </div>
     </div>
   </section>
