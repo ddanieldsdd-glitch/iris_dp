@@ -226,6 +226,17 @@ class SyncPlanBuilder {
 
       if (cloudHash == localHash ||
           ProjectContentBundle.contentMatchesSnapshot(localHash, snap)) {
+        // Iguales: este es el nuevo punto de partida. Guardarlo deja las
+        // huellas en la base (y en SHA-256) aunque no haya nada que subir.
+        final synced = ContentSyncBase(
+          localHash: localHash,
+          cloudHash: cloudHash ?? localHash,
+        );
+        final base = await ContentSyncBaseStore.load(_db, local.id);
+        if (base?.localHash != synced.localHash ||
+            base?.cloudHash != synced.cloudHash) {
+          await ContentSyncBaseStore.save(_db, local.id, synced);
+        }
         continue;
       }
 
@@ -254,7 +265,7 @@ class SyncPlanBuilder {
       // Quién ha cambiado desde la última sincronización se decide por las
       // huellas guardadas entonces, no por horas: una descarga reemplaza el
       // contenido local y no puede depender del reloj.
-      final base = await ContentSyncBaseStore.load(local.id);
+      final base = await ContentSyncBaseStore.load(_db, local.id);
       if (base == null) {
         if (localSummary.isEmpty &&
             !await ProjectContentBundle.hasLocalContent(_db, local.id)) {

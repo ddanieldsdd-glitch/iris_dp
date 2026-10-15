@@ -470,6 +470,39 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         type: DriftSqlType.dateTime,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _contentSyncBaseLocalMeta =
+      const VerificationMeta('contentSyncBaseLocal');
+  @override
+  late final GeneratedColumn<String> contentSyncBaseLocal =
+      GeneratedColumn<String>(
+        'content_sync_base_local',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _contentSyncBaseCloudMeta =
+      const VerificationMeta('contentSyncBaseCloud');
+  @override
+  late final GeneratedColumn<String> contentSyncBaseCloud =
+      GeneratedColumn<String>(
+        'content_sync_base_cloud',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _moodboardCatalogJsonMeta =
+      const VerificationMeta('moodboardCatalogJson');
+  @override
+  late final GeneratedColumn<String> moodboardCatalogJson =
+      GeneratedColumn<String>(
+        'moodboard_catalog_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -515,6 +548,9 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     cloudId,
     syncUpdatedAt,
     contentSyncUpdatedAt,
+    contentSyncBaseLocal,
+    contentSyncBaseCloud,
+    moodboardCatalogJson,
     createdAt,
     updatedAt,
   ];
@@ -673,6 +709,33 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         ),
       );
     }
+    if (data.containsKey('content_sync_base_local')) {
+      context.handle(
+        _contentSyncBaseLocalMeta,
+        contentSyncBaseLocal.isAcceptableOrUnknown(
+          data['content_sync_base_local']!,
+          _contentSyncBaseLocalMeta,
+        ),
+      );
+    }
+    if (data.containsKey('content_sync_base_cloud')) {
+      context.handle(
+        _contentSyncBaseCloudMeta,
+        contentSyncBaseCloud.isAcceptableOrUnknown(
+          data['content_sync_base_cloud']!,
+          _contentSyncBaseCloudMeta,
+        ),
+      );
+    }
+    if (data.containsKey('moodboard_catalog_json')) {
+      context.handle(
+        _moodboardCatalogJsonMeta,
+        moodboardCatalogJson.isAcceptableOrUnknown(
+          data['moodboard_catalog_json']!,
+          _moodboardCatalogJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -770,6 +833,18 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}content_sync_updated_at'],
       ),
+      contentSyncBaseLocal: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_sync_base_local'],
+      ),
+      contentSyncBaseCloud: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_sync_base_cloud'],
+      ),
+      moodboardCatalogJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}moodboard_catalog_json'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -811,6 +886,15 @@ class Project extends DataClass implements Insertable<Project> {
 
   /// Última modificación del contenido del proyecto (escenas, planos, etc.).
   final DateTime? contentSyncUpdatedAt;
+
+  /// Huellas del contenido en la última sincronización (aquí y en la nube).
+  /// Van en la base y no en las preferencias para que, al restaurar una
+  /// copia, sigan casando con el contenido restaurado.
+  final String? contentSyncBaseLocal;
+  final String? contentSyncBaseCloud;
+
+  /// Opciones propias del catálogo del moodboard (JSON por clave).
+  final String? moodboardCatalogJson;
   final DateTime createdAt;
   final DateTime updatedAt;
   const Project({
@@ -833,6 +917,9 @@ class Project extends DataClass implements Insertable<Project> {
     this.cloudId,
     this.syncUpdatedAt,
     this.contentSyncUpdatedAt,
+    this.contentSyncBaseLocal,
+    this.contentSyncBaseCloud,
+    this.moodboardCatalogJson,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -885,6 +972,15 @@ class Project extends DataClass implements Insertable<Project> {
     }
     if (!nullToAbsent || contentSyncUpdatedAt != null) {
       map['content_sync_updated_at'] = Variable<DateTime>(contentSyncUpdatedAt);
+    }
+    if (!nullToAbsent || contentSyncBaseLocal != null) {
+      map['content_sync_base_local'] = Variable<String>(contentSyncBaseLocal);
+    }
+    if (!nullToAbsent || contentSyncBaseCloud != null) {
+      map['content_sync_base_cloud'] = Variable<String>(contentSyncBaseCloud);
+    }
+    if (!nullToAbsent || moodboardCatalogJson != null) {
+      map['moodboard_catalog_json'] = Variable<String>(moodboardCatalogJson);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -940,6 +1036,15 @@ class Project extends DataClass implements Insertable<Project> {
       contentSyncUpdatedAt: contentSyncUpdatedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(contentSyncUpdatedAt),
+      contentSyncBaseLocal: contentSyncBaseLocal == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contentSyncBaseLocal),
+      contentSyncBaseCloud: contentSyncBaseCloud == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contentSyncBaseCloud),
+      moodboardCatalogJson: moodboardCatalogJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(moodboardCatalogJson),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -976,6 +1081,15 @@ class Project extends DataClass implements Insertable<Project> {
       contentSyncUpdatedAt: serializer.fromJson<DateTime?>(
         json['contentSyncUpdatedAt'],
       ),
+      contentSyncBaseLocal: serializer.fromJson<String?>(
+        json['contentSyncBaseLocal'],
+      ),
+      contentSyncBaseCloud: serializer.fromJson<String?>(
+        json['contentSyncBaseCloud'],
+      ),
+      moodboardCatalogJson: serializer.fromJson<String?>(
+        json['moodboardCatalogJson'],
+      ),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -1005,6 +1119,9 @@ class Project extends DataClass implements Insertable<Project> {
       'contentSyncUpdatedAt': serializer.toJson<DateTime?>(
         contentSyncUpdatedAt,
       ),
+      'contentSyncBaseLocal': serializer.toJson<String?>(contentSyncBaseLocal),
+      'contentSyncBaseCloud': serializer.toJson<String?>(contentSyncBaseCloud),
+      'moodboardCatalogJson': serializer.toJson<String?>(moodboardCatalogJson),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -1030,6 +1147,9 @@ class Project extends DataClass implements Insertable<Project> {
     Value<String?> cloudId = const Value.absent(),
     Value<DateTime?> syncUpdatedAt = const Value.absent(),
     Value<DateTime?> contentSyncUpdatedAt = const Value.absent(),
+    Value<String?> contentSyncBaseLocal = const Value.absent(),
+    Value<String?> contentSyncBaseCloud = const Value.absent(),
+    Value<String?> moodboardCatalogJson = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Project(
@@ -1068,6 +1188,15 @@ class Project extends DataClass implements Insertable<Project> {
     contentSyncUpdatedAt: contentSyncUpdatedAt.present
         ? contentSyncUpdatedAt.value
         : this.contentSyncUpdatedAt,
+    contentSyncBaseLocal: contentSyncBaseLocal.present
+        ? contentSyncBaseLocal.value
+        : this.contentSyncBaseLocal,
+    contentSyncBaseCloud: contentSyncBaseCloud.present
+        ? contentSyncBaseCloud.value
+        : this.contentSyncBaseCloud,
+    moodboardCatalogJson: moodboardCatalogJson.present
+        ? moodboardCatalogJson.value
+        : this.moodboardCatalogJson,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1114,6 +1243,15 @@ class Project extends DataClass implements Insertable<Project> {
       contentSyncUpdatedAt: data.contentSyncUpdatedAt.present
           ? data.contentSyncUpdatedAt.value
           : this.contentSyncUpdatedAt,
+      contentSyncBaseLocal: data.contentSyncBaseLocal.present
+          ? data.contentSyncBaseLocal.value
+          : this.contentSyncBaseLocal,
+      contentSyncBaseCloud: data.contentSyncBaseCloud.present
+          ? data.contentSyncBaseCloud.value
+          : this.contentSyncBaseCloud,
+      moodboardCatalogJson: data.moodboardCatalogJson.present
+          ? data.moodboardCatalogJson.value
+          : this.moodboardCatalogJson,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1141,6 +1279,9 @@ class Project extends DataClass implements Insertable<Project> {
           ..write('cloudId: $cloudId, ')
           ..write('syncUpdatedAt: $syncUpdatedAt, ')
           ..write('contentSyncUpdatedAt: $contentSyncUpdatedAt, ')
+          ..write('contentSyncBaseLocal: $contentSyncBaseLocal, ')
+          ..write('contentSyncBaseCloud: $contentSyncBaseCloud, ')
+          ..write('moodboardCatalogJson: $moodboardCatalogJson, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1168,6 +1309,9 @@ class Project extends DataClass implements Insertable<Project> {
     cloudId,
     syncUpdatedAt,
     contentSyncUpdatedAt,
+    contentSyncBaseLocal,
+    contentSyncBaseCloud,
+    moodboardCatalogJson,
     createdAt,
     updatedAt,
   ]);
@@ -1194,6 +1338,9 @@ class Project extends DataClass implements Insertable<Project> {
           other.cloudId == this.cloudId &&
           other.syncUpdatedAt == this.syncUpdatedAt &&
           other.contentSyncUpdatedAt == this.contentSyncUpdatedAt &&
+          other.contentSyncBaseLocal == this.contentSyncBaseLocal &&
+          other.contentSyncBaseCloud == this.contentSyncBaseCloud &&
+          other.moodboardCatalogJson == this.moodboardCatalogJson &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1218,6 +1365,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
   final Value<String?> cloudId;
   final Value<DateTime?> syncUpdatedAt;
   final Value<DateTime?> contentSyncUpdatedAt;
+  final Value<String?> contentSyncBaseLocal;
+  final Value<String?> contentSyncBaseCloud;
+  final Value<String?> moodboardCatalogJson;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   const ProjectsCompanion({
@@ -1240,6 +1390,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.cloudId = const Value.absent(),
     this.syncUpdatedAt = const Value.absent(),
     this.contentSyncUpdatedAt = const Value.absent(),
+    this.contentSyncBaseLocal = const Value.absent(),
+    this.contentSyncBaseCloud = const Value.absent(),
+    this.moodboardCatalogJson = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -1263,6 +1416,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.cloudId = const Value.absent(),
     this.syncUpdatedAt = const Value.absent(),
     this.contentSyncUpdatedAt = const Value.absent(),
+    this.contentSyncBaseLocal = const Value.absent(),
+    this.contentSyncBaseCloud = const Value.absent(),
+    this.moodboardCatalogJson = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   }) : name = Value(name);
@@ -1286,6 +1442,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Expression<String>? cloudId,
     Expression<DateTime>? syncUpdatedAt,
     Expression<DateTime>? contentSyncUpdatedAt,
+    Expression<String>? contentSyncBaseLocal,
+    Expression<String>? contentSyncBaseCloud,
+    Expression<String>? moodboardCatalogJson,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
   }) {
@@ -1311,6 +1470,12 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       if (syncUpdatedAt != null) 'sync_updated_at': syncUpdatedAt,
       if (contentSyncUpdatedAt != null)
         'content_sync_updated_at': contentSyncUpdatedAt,
+      if (contentSyncBaseLocal != null)
+        'content_sync_base_local': contentSyncBaseLocal,
+      if (contentSyncBaseCloud != null)
+        'content_sync_base_cloud': contentSyncBaseCloud,
+      if (moodboardCatalogJson != null)
+        'moodboard_catalog_json': moodboardCatalogJson,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -1336,6 +1501,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Value<String?>? cloudId,
     Value<DateTime?>? syncUpdatedAt,
     Value<DateTime?>? contentSyncUpdatedAt,
+    Value<String?>? contentSyncBaseLocal,
+    Value<String?>? contentSyncBaseCloud,
+    Value<String?>? moodboardCatalogJson,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
   }) {
@@ -1359,6 +1527,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       cloudId: cloudId ?? this.cloudId,
       syncUpdatedAt: syncUpdatedAt ?? this.syncUpdatedAt,
       contentSyncUpdatedAt: contentSyncUpdatedAt ?? this.contentSyncUpdatedAt,
+      contentSyncBaseLocal: contentSyncBaseLocal ?? this.contentSyncBaseLocal,
+      contentSyncBaseCloud: contentSyncBaseCloud ?? this.contentSyncBaseCloud,
+      moodboardCatalogJson: moodboardCatalogJson ?? this.moodboardCatalogJson,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -1428,6 +1599,21 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
         contentSyncUpdatedAt.value,
       );
     }
+    if (contentSyncBaseLocal.present) {
+      map['content_sync_base_local'] = Variable<String>(
+        contentSyncBaseLocal.value,
+      );
+    }
+    if (contentSyncBaseCloud.present) {
+      map['content_sync_base_cloud'] = Variable<String>(
+        contentSyncBaseCloud.value,
+      );
+    }
+    if (moodboardCatalogJson.present) {
+      map['moodboard_catalog_json'] = Variable<String>(
+        moodboardCatalogJson.value,
+      );
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1459,6 +1645,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
           ..write('cloudId: $cloudId, ')
           ..write('syncUpdatedAt: $syncUpdatedAt, ')
           ..write('contentSyncUpdatedAt: $contentSyncUpdatedAt, ')
+          ..write('contentSyncBaseLocal: $contentSyncBaseLocal, ')
+          ..write('contentSyncBaseCloud: $contentSyncBaseCloud, ')
+          ..write('moodboardCatalogJson: $moodboardCatalogJson, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -34668,6 +34857,9 @@ typedef $$ProjectsTableCreateCompanionBuilder =
       Value<String?> cloudId,
       Value<DateTime?> syncUpdatedAt,
       Value<DateTime?> contentSyncUpdatedAt,
+      Value<String?> contentSyncBaseLocal,
+      Value<String?> contentSyncBaseCloud,
+      Value<String?> moodboardCatalogJson,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
     });
@@ -34692,6 +34884,9 @@ typedef $$ProjectsTableUpdateCompanionBuilder =
       Value<String?> cloudId,
       Value<DateTime?> syncUpdatedAt,
       Value<DateTime?> contentSyncUpdatedAt,
+      Value<String?> contentSyncBaseLocal,
+      Value<String?> contentSyncBaseCloud,
+      Value<String?> moodboardCatalogJson,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
     });
@@ -35174,6 +35369,21 @@ class $$ProjectsTableFilterComposer
 
   ColumnFilters<DateTime> get contentSyncUpdatedAt => $composableBuilder(
     column: $table.contentSyncUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentSyncBaseLocal => $composableBuilder(
+    column: $table.contentSyncBaseLocal,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentSyncBaseCloud => $composableBuilder(
+    column: $table.contentSyncBaseCloud,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get moodboardCatalogJson => $composableBuilder(
+    column: $table.moodboardCatalogJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -35712,6 +35922,21 @@ class $$ProjectsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get contentSyncBaseLocal => $composableBuilder(
+    column: $table.contentSyncBaseLocal,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentSyncBaseCloud => $composableBuilder(
+    column: $table.contentSyncBaseCloud,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get moodboardCatalogJson => $composableBuilder(
+    column: $table.moodboardCatalogJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -35828,6 +36053,21 @@ class $$ProjectsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get contentSyncUpdatedAt => $composableBuilder(
     column: $table.contentSyncUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get contentSyncBaseLocal => $composableBuilder(
+    column: $table.contentSyncBaseLocal,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get contentSyncBaseCloud => $composableBuilder(
+    column: $table.contentSyncBaseCloud,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get moodboardCatalogJson => $composableBuilder(
+    column: $table.moodboardCatalogJson,
     builder: (column) => column,
   );
 
@@ -36334,6 +36574,9 @@ class $$ProjectsTableTableManager
                 Value<String?> cloudId = const Value.absent(),
                 Value<DateTime?> syncUpdatedAt = const Value.absent(),
                 Value<DateTime?> contentSyncUpdatedAt = const Value.absent(),
+                Value<String?> contentSyncBaseLocal = const Value.absent(),
+                Value<String?> contentSyncBaseCloud = const Value.absent(),
+                Value<String?> moodboardCatalogJson = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => ProjectsCompanion(
@@ -36356,6 +36599,9 @@ class $$ProjectsTableTableManager
                 cloudId: cloudId,
                 syncUpdatedAt: syncUpdatedAt,
                 contentSyncUpdatedAt: contentSyncUpdatedAt,
+                contentSyncBaseLocal: contentSyncBaseLocal,
+                contentSyncBaseCloud: contentSyncBaseCloud,
+                moodboardCatalogJson: moodboardCatalogJson,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),
@@ -36380,6 +36626,9 @@ class $$ProjectsTableTableManager
                 Value<String?> cloudId = const Value.absent(),
                 Value<DateTime?> syncUpdatedAt = const Value.absent(),
                 Value<DateTime?> contentSyncUpdatedAt = const Value.absent(),
+                Value<String?> contentSyncBaseLocal = const Value.absent(),
+                Value<String?> contentSyncBaseCloud = const Value.absent(),
+                Value<String?> moodboardCatalogJson = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => ProjectsCompanion.insert(
@@ -36402,6 +36651,9 @@ class $$ProjectsTableTableManager
                 cloudId: cloudId,
                 syncUpdatedAt: syncUpdatedAt,
                 contentSyncUpdatedAt: contentSyncUpdatedAt,
+                contentSyncBaseLocal: contentSyncBaseLocal,
+                contentSyncBaseCloud: contentSyncBaseCloud,
+                moodboardCatalogJson: moodboardCatalogJson,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),

@@ -256,8 +256,7 @@ void main() {
     }
 
     test('cambios solo aquí se suben, aunque la nube tenga hora posterior', () async {
-      await ContentSyncBaseStore.save(
-        projectId,
+      await ContentSyncBaseStore.save(db, projectId,
         const ContentSyncBase(localHash: 'antes', cloudHash: 'nube-1'),
       );
       final items = await plan(cloudHash: 'nube-1');
@@ -266,8 +265,7 @@ void main() {
 
     test('cambios solo en la nube se descargan', () async {
       final local = await ProjectContentBundle.computeLocalHash(db, projectId);
-      await ContentSyncBaseStore.save(
-        projectId,
+      await ContentSyncBaseStore.save(db, projectId,
         ContentSyncBase(localHash: local, cloudHash: 'nube-1'),
       );
       final items = await plan(cloudHash: 'nube-2');
@@ -275,8 +273,7 @@ void main() {
     });
 
     test('cambios en los dos sitios piden decidir y proponen lo local', () async {
-      await ContentSyncBaseStore.save(
-        projectId,
+      await ContentSyncBaseStore.save(db, projectId,
         const ContentSyncBase(localHash: 'antes', cloudHash: 'nube-1'),
       );
       final items = await plan(cloudHash: 'nube-2');
@@ -291,8 +288,7 @@ void main() {
 
     test('nada cambia: no hay nada que hacer', () async {
       final local = await ProjectContentBundle.computeLocalHash(db, projectId);
-      await ContentSyncBaseStore.save(
-        projectId,
+      await ContentSyncBaseStore.save(db, projectId,
         ContentSyncBase(localHash: local, cloudHash: 'nube-1'),
       );
       expect(await plan(cloudHash: 'nube-1'), isEmpty);

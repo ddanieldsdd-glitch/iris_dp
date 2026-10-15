@@ -41,8 +41,7 @@ void main() {
   Future<Map<String, dynamic>> syncedWithLegacyHash() async {
     final bundle = await ProjectContentBundle.export(db, projectId);
     final legacy = ProjectContentBundle.legacyHashBundle(bundle);
-    await ContentSyncBaseStore.save(
-      projectId,
+    await ContentSyncBaseStore.save(db, projectId,
       ContentSyncBase(localHash: legacy, cloudHash: legacy),
     );
     return {'project_id': cloudId, 'content': bundle, 'content_hash': legacy};

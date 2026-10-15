@@ -41,6 +41,15 @@ class Projects extends Table {
 
   /// Última modificación del contenido del proyecto (escenas, planos, etc.).
   DateTimeColumn get contentSyncUpdatedAt => dateTime().nullable()();
+
+  /// Huellas del contenido en la última sincronización (aquí y en la nube).
+  /// Van en la base y no en las preferencias para que, al restaurar una
+  /// copia, sigan casando con el contenido restaurado.
+  TextColumn get contentSyncBaseLocal => text().nullable()();
+  TextColumn get contentSyncBaseCloud => text().nullable()();
+
+  /// Opciones propias del catálogo del moodboard (JSON por clave).
+  TextColumn get moodboardCatalogJson => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
