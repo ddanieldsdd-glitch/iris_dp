@@ -1,10 +1,15 @@
 name: CI
 
 on:
+  # Todas las ramas: el trabajo vive semanas en ramas plan/* antes de main.
   push:
-    branches: [main, master]
+    branches: ['**']
   pull_request:
-    branches: [main, master]
+
+# Un push nuevo cancela el anterior de la misma rama.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
