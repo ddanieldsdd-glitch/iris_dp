@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import '../storage/app_storage_config.dart';
+import '../utils/error_log.dart';
 import '../utils/media_storage.dart';
 import '../utils/scene_color.dart';
 import '../script/script_scene_matcher.dart';
@@ -3935,8 +3936,29 @@ class AppDatabase extends _$AppDatabase {
   Future<void> upsertBibleSectionGroup(BibleSectionGroup row) =>
       into(bibleSectionGroups).insertOnConflictUpdate(row);
 
-  Future<void> upsertBibleSectionDefinition(BibleSectionDefinition row) =>
-      into(bibleSectionDefinitions).insertOnConflictUpdate(row);
+  /// Guarda una pantalla de la biblia. Si lo guardado no se puede leer (JSON
+  /// dañado, o un bloque interno como `formatData`), se guarda una copia
+  /// aparte antes de escribir encima: quien lo leyó vio un contenido vacío.
+  Future<void> upsertBibleSectionDefinition(BibleSectionDefinition row) async {
+    final current =
+        await (select(bibleSectionDefinitions)..where(
+              (d) => d.bibleId.equals(row.bibleId) & d.id.equals(row.id),
+            ))
+            .getSingleOrNull();
+    final old = current?.contentJson;
+    if (old != null && old != row.contentJson) {
+      final damaged = unreadableContentParts(old);
+      final oldValues = BibleSectionFieldsConfig.parseValues(old);
+      final newValues = BibleSectionFieldsConfig.parseValues(row.contentJson);
+      // Solo si lo ilegible va a cambiar: un bloque dañado que se conserva tal
+      // cual no necesita otra copia en cada guardado.
+      if (damaged.contains('contentJson') ||
+          damaged.any((key) => newValues[key] != oldValues[key])) {
+        await ErrorLog.preserveDamaged('biblia-${row.bibleId}-${row.id}', old);
+      }
+    }
+    await into(bibleSectionDefinitions).insertOnConflictUpdate(row);
+  }
 
   Future<String> insertCustomBibleSection({
     required int bibleId,
@@ -4634,5 +4656,37 @@ void _pruneSchemaBackups(String databasePath) {
         f.deleteSync();
       } catch (_) {}
     }
+  }
+}
+
+/// Partes de un `contentJson` de la biblia que no se pueden leer: el propio
+/// JSON, o valores que parecen JSON (bloques como `formatData`) y no lo son.
+List<String> unreadableContentParts(String contentJson) {
+  if (contentJson.trim().isEmpty) return const [];
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(contentJson);
+  } catch (_) {
+    return const ['contentJson'];
+  }
+  final values = decoded is Map ? decoded['values'] : null;
+  if (values is! Map) return const [];
+  return [
+    for (final MapEntry(:key, :value) in values.entries)
+      if (value is String && _looksLikeJson(value) && !_decodes(value)) '$key',
+  ];
+}
+
+bool _looksLikeJson(String value) {
+  final t = value.trimLeft();
+  return t.startsWith('{') || t.startsWith('[');
+}
+
+bool _decodes(String value) {
+  try {
+    jsonDecode(value);
+    return true;
+  } catch (_) {
+    return false;
   }
 }

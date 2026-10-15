@@ -22,7 +22,11 @@ abstract final class ErrorLog {
     final dir =
         directoryOverride ??
         Directory(
-          p.join((await getApplicationSupportDirectory()).path, 'iris_dp', 'logs'),
+          p.join(
+            (await getApplicationSupportDirectory()).path,
+            'iris_dp',
+            'logs',
+          ),
         );
     await dir.create(recursive: true);
     return File(p.join(dir.path, fileName));
@@ -41,6 +45,25 @@ abstract final class ErrorLog {
       record(error, stack);
       return true;
     };
+  }
+
+  /// Guarda aparte un contenido que no se puede leer antes de que se escriba
+  /// encima, y lo anota en el registro. Devuelve la ruta de la copia.
+  static Future<String?> preserveDamaged(String name, String content) async {
+    try {
+      final dir = (await file()).parent;
+      final stamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+      final copy = File(p.join(dir.path, 'danado-$name-$stamp.json'));
+      await copy.writeAsString(content, flush: true);
+      await record(
+        'Contenido ilegible guardado en ${copy.path}',
+        null,
+        context: name,
+      );
+      return copy.path;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Añade un error al registro. Nunca lanza: un fallo al escribir el
