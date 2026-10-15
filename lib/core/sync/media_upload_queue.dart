@@ -168,8 +168,18 @@ class MediaUploadQueue {
     return true;
   }
 
+  /// Quita las filas de proyectos que ya no existen: la nube rechaza sus
+  /// imágenes y reintentarlas no sirve de nada.
+  Future<int> dropOrphans() => _db.customUpdate(
+    'DELETE FROM pending_media_uploads '
+    'WHERE project_id NOT IN (SELECT id FROM projects)',
+    updates: {_db.pendingMediaUploads},
+    updateKind: UpdateKind.delete,
+  );
+
   /// Vuelve a poner en cola las subidas que fallaron del todo.
   Future<int> retryFailed() async {
+    await dropOrphans();
     final count = await (_db.update(_db.pendingMediaUploads)
           ..where((t) => t.status.equals('failed')))
         .write(const PendingMediaUploadsCompanion(
@@ -198,6 +208,7 @@ class MediaUploadQueue {
       await (_db.update(_db.pendingMediaUploads)
             ..where((t) => t.status.equals('processing')))
           .write(const PendingMediaUploadsCompanion(status: Value('pending')));
+      await dropOrphans();
 
       while (true) {
         final pending = await (_db.select(_db.pendingMediaUploads)

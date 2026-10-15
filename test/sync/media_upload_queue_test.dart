@@ -178,4 +178,34 @@ void main() {
     expect(queued, isTrue);
     expect(cloud.attempts['moodboard:ungrouped:0'], 2);
   });
+
+  test('las subidas de un proyecto borrado se descartan', () async {
+    final gone = await db.insertProject(ProjectsCompanion.insert(name: 'viejo'));
+    await db
+        .into(db.pendingMediaUploads)
+        .insert(
+          PendingMediaUploadsCompanion.insert(
+            projectId: gone,
+            entityType: 'moodboard',
+            entityKey: 'moodboard:ungrouped:9',
+            localPath: imagePath,
+            status: const Value('failed'),
+          ),
+        );
+    await db.customStatement('PRAGMA foreign_keys = OFF');
+    await db.customStatement('DELETE FROM projects WHERE id = ?', [gone]);
+
+    final queue = queueWith(_FakeCloud());
+    expect(await queue.retryFailed(), 0);
+    await queue.startWorker();
+    expect(await rows(), isEmpty);
+  });
+
+  test('borrar un proyecto limpia su cola de imágenes', () async {
+    final queue = queueWith(_FakeCloud(failures: 99));
+    await enqueue(queue);
+    await db.deleteProjectFully(projectId);
+    await queue.startWorker();
+    expect(await rows(), isEmpty);
+  });
 }

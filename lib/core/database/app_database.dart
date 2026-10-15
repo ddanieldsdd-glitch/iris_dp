@@ -644,6 +644,10 @@ class AppDatabase extends _$AppDatabase {
   /// Elimina proyecto, datos relacionados y archivos en disco.
   Future<void> deleteProjectFully(int id) async {
     await transaction(() async {
+      // Sus imágenes pendientes de subir ya no tienen adónde ir.
+      await (delete(
+        pendingMediaUploads,
+      )..where((u) => u.projectId.equals(id))).go();
       final projectShots = await (select(
         shots,
       )..where((s) => s.projectId.equals(id))).get();
