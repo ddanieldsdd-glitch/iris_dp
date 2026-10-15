@@ -45,15 +45,18 @@ notify() {
 with_timeout() { local s="$1"; shift; perl -e 'alarm shift; exec @ARGV' "$s" "$@"; }
 
 # Una sola ejecución a la vez.
+# A mano se espera a que acabe la automática; la automática se retira.
 LOCK="$STATE_DIR/lock"
-if ! mkdir "$LOCK" 2>/dev/null; then
+WAITED=0
+until mkdir "$LOCK" 2>/dev/null; do
   if [[ -n "$(find "$LOCK" -maxdepth 0 -mmin +120 2>/dev/null)" ]]; then
-    rm -rf "$LOCK"; mkdir "$LOCK"
-  else
-    [[ $AUTO == 1 ]] || echo "Ya hay una instalación en marcha."
-    exit 0
+    rm -rf "$LOCK"; continue
   fi
-fi
+  [[ $AUTO == 1 ]] && exit 0
+  [[ $WAITED == 0 ]] && echo "Hay otra instalación en marcha; espero a que acabe…"
+  WAITED=1
+  sleep 10
+done
 trap 'rm -rf "$LOCK"' EXIT
 
 state_get() {
@@ -122,6 +125,10 @@ else
     SHA="$(state_get installed_sha)"
     [[ -n "$SHA" ]] || SHA="$(git -C "$REPO" rev-parse origin/main)"
     log "No pude consultar el CI; uso ${SHA:0:7}."
+  fi
+  if ! git -C "$REPO" cat-file -e "$SHA^{commit}" 2>/dev/null; then
+    log "${SHA:0:7} aún no está en local; uso origin/main."
+    SHA="$(git -C "$REPO" rev-parse origin/main)"
   fi
   LABEL="main"
 fi
