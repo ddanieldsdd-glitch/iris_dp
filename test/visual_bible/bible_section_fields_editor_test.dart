@@ -67,11 +67,11 @@ void main() {
     expect(find.text('Mi tono'), findsOneWidget);
     // Cada punto se nombra por lo que es, no como texto genérico.
     expect(
-      find.text('Punto de la pantalla · Puntos con título'),
+      find.textContaining('Punto de la pantalla · Puntos con título'),
       findsOneWidget,
     );
     expect(find.text('Paleta de noche'), findsOneWidget);
-    expect(find.text('Color · Paleta compacta'), findsOneWidget);
+    expect(find.textContaining('Color · Paleta compacta'), findsOneWidget);
 
     expect(find.byTooltip('Cambiar tipo'), findsNothing);
     expect(find.byTooltip('Renombrar'), findsNWidgets(2));
@@ -118,5 +118,29 @@ void main() {
     );
     expect(find.text('Restablecer pantalla'), findsNothing);
     expect(find.text('Añadir punto'), findsOneWidget);
+  });
+
+  testWidgets('avisa de lo que la pantalla no pinta: «Sin vincular»', (
+    tester,
+  ) async {
+    // Localización se pinta con bloques propios: sus puntos no se ven.
+    await pump(
+      tester,
+      sectionId: BibleSectionId.location,
+      fields: const [BibleSectionField(key: 'notes', label: 'Notas')],
+    );
+    expect(find.text('SIN VINCULAR'), findsOneWidget);
+    expect(find.text('· Notas'), findsOneWidget);
+    expect(find.text('· Ubicación, sol y meteorología'), findsOneWidget);
+    expect(find.textContaining('· no se ve'), findsOneWidget);
+
+    // Una pantalla con todo pintado no enseña el aviso.
+    await pump(
+      tester,
+      sectionId: BibleSectionId.direction,
+      fields: BibleSectionFieldsConfig.defaultsFor(BibleSectionId.direction),
+    );
+    expect(find.text('SIN VINCULAR'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

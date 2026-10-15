@@ -9,6 +9,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../bible_section_fields.dart';
 import 'bible_add_point.dart';
+import 'bible_render_report.dart';
 import 'catalog/bible_widget_catalog.dart';
 import '../../../core/widgets/safe_reorderable_column.dart';
 
@@ -268,6 +269,18 @@ class _BibleSectionFieldsEditorState
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final sectionId = widget.definition.id;
+    final fixed = kSectionFixedBlocks[sectionId];
+    // Lo que la pantalla no ha podido pintar; en una pantalla de bloques
+    // fijos, ninguno de sus puntos se ve todavía.
+    final unrendered = fixed != null
+        ? {for (final f in _fields) f.key}
+        : (ref.watch(bibleRenderReportProvider)[sectionId] ?? const <String>{});
+    final loose = [
+      for (final f in _fields)
+        if (unrendered.contains(f.key)) f.label,
+      ...?fixed,
+    ];
 
     return Material(
       color: palette.surfaceElevated,
@@ -311,8 +324,16 @@ class _BibleSectionFieldsEditorState
                       leading: Icon(_icon(field), size: 20),
                       title: Text(field.label),
                       subtitle: Text(
-                        _kindLabel(field),
-                        style: AppTypography.caption(palette),
+                        [
+                          _kindLabel(field),
+                          field.width.label,
+                          if (unrendered.contains(field.key)) 'no se ve',
+                        ].join(' · '),
+                        style: AppTypography.caption(palette).copyWith(
+                          color: unrendered.contains(field.key)
+                              ? palette.warning
+                              : null,
+                        ),
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -336,6 +357,10 @@ class _BibleSectionFieldsEditorState
                 },
               ),
             ),
+            if (loose.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _LooseBlocks(items: loose, fixedScreen: fixed != null),
+            ],
             const SizedBox(height: AppSpacing.sm),
             FilledButton.icon(
               onPressed: _add,
@@ -359,6 +384,58 @@ class _BibleSectionFieldsEditorState
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// «Sin vincular»: puntos que la pantalla no pinta y bloques que pinta por
+/// su cuenta, fuera del sistema de puntos. Queda a la vista para
+/// vincularlos más adelante.
+class _LooseBlocks extends StatelessWidget {
+  final List<String> items;
+  final bool fixedScreen;
+
+  const _LooseBlocks({required this.items, required this.fixedScreen});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: palette.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: palette.warning.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.link_off, size: 16, color: palette.warning),
+              const SizedBox(width: 6),
+              Text(
+                'SIN VINCULAR',
+                style: AppTypography.mono(
+                  palette,
+                ).copyWith(fontSize: 11, color: palette.warning),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            fixedScreen
+                ? 'Esta pantalla aún se pinta con bloques propios: no se '
+                      'ordenan ni se quitan desde aquí, y sus puntos no se ven.'
+                : 'Estos puntos están en la lista pero la pantalla no tiene '
+                      'widget para pintarlos.',
+            style: AppTypography.caption(palette),
+          ),
+          const SizedBox(height: 4),
+          for (final item in items)
+            Text('· $item', style: AppTypography.bodyMedium(palette)),
+        ],
       ),
     );
   }

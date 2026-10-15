@@ -16,6 +16,7 @@ import '../../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../../bible_section_fields.dart';
 import '../bible_add_point.dart';
 import '../bible_point_frame.dart';
+import '../bible_render_report.dart';
 import '../bible_screen_hero.dart';
 import '../catalog/bible_widget_catalog.dart';
 
@@ -92,14 +93,24 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
       widget.sectionContentJson,
     );
     final points = <(BiblePointWidth, Widget)>[];
+    final unrendered = <String>{};
     for (final field in fields) {
       final w = _buildField(context, field);
-      if (w == null) continue;
+      if (w == null) {
+        unrendered.add(field.key);
+        continue;
+      }
       points.add((
         field.width,
         widget.data.id > 0 ? _framed(fields, values, field, w) : w,
       ));
     }
+    // El panel lateral avisa de lo que no se ha podido pintar.
+    final report = ref.read(bibleRenderReportProvider.notifier);
+    final sectionId = widget.sectionId;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => report.report(sectionId, unrendered),
+    );
     // En estrecho no hay sitio para dos puntos por fila.
     final wide = MediaQuery.sizeOf(context).width >= _rowBreakpoint;
     final items = _rows(points, wide: wide);
@@ -216,14 +227,11 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
           : () => _duplicate(fields, field, copyValue, extras),
       onRemove: () => _remove(fields, field),
       width: field.width,
-      onWidthChanged: (width) => db.saveBibleSectionFields(
-        widget.data.id,
-        widget.sectionId,
-        [
-          for (final f in fields)
-            f.key == field.key ? f.copyWith(width: width) : f,
-        ],
-      ),
+      onWidthChanged: (width) =>
+          db.saveBibleSectionFields(widget.data.id, widget.sectionId, [
+            for (final f in fields)
+              f.key == field.key ? f.copyWith(width: width) : f,
+          ]),
       child: point,
     );
   }
