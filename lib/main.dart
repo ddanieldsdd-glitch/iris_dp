@@ -17,6 +17,7 @@ import 'features/onboarding/auth_required_banner.dart';
 import 'features/onboarding/onboarding_gate.dart';
 import 'features/projects/projects_screen.dart';
 import 'core/update/update_available_banner.dart';
+import 'core/utils/error_log.dart';
 
 Future<void> _bootstrapApp() async {
   await AppStorageConfig.ensureLoaded();
@@ -25,6 +26,7 @@ Future<void> _bootstrapApp() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  ErrorLog.install();
   final themeMode = await ThemeModeStore.load();
   runApp(
     ProviderScope(
