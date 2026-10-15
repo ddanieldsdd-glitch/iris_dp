@@ -1154,6 +1154,37 @@ class _Stage extends StatefulWidget {
 class _StageState extends State<_Stage> {
   bool _hovered = false;
 
+  /// Proporción de la imagen: el lienzo de dibujo se ajusta a ella, así
+  /// lo dibujado queda pegado a la imagen y se ve igual en otras pantallas.
+  double? _aspect;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveAspect();
+  }
+
+  @override
+  void didUpdateWidget(_Stage old) {
+    super.didUpdateWidget(old);
+    if (old.image.imagePath != widget.image.imagePath) {
+      _aspect = null;
+      _resolveAspect();
+    }
+  }
+
+  void _resolveAspect() {
+    final path = widget.image.imagePath;
+    FileImage(File(path))
+        .resolve(const ImageConfiguration())
+        .addListener(
+          ImageStreamListener((info, _) {
+            if (!mounted || widget.image.imagePath != path) return;
+            setState(() => _aspect = info.image.width / info.image.height);
+          }, onError: (_, _) {}),
+        );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -1245,12 +1276,15 @@ class _StageState extends State<_Stage> {
                               ),
                             ),
                           );
-                          if (widget.onExpandImage == null) return canvas;
+                          final fitted = _aspect == null
+                              ? canvas
+                              : AspectRatio(aspectRatio: _aspect!, child: canvas);
+                          if (widget.onExpandImage == null) return fitted;
                           return MouseRegion(
                             cursor: SystemMouseCursors.zoomIn,
                             child: GestureDetector(
                               onTap: widget.onExpandImage,
-                              child: canvas,
+                              child: fitted,
                             ),
                           );
                         },

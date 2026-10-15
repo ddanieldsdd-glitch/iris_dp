@@ -1,11 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:iris_dp/core/theme/app_theme.dart';
 import 'package:iris_dp/features/visual_bible/widgets/bible_card_editor.dart';
 import 'package:iris_dp/shared/visual_bible/bible_cards.dart';
+import 'package:iris_dp/shared/visual_bible/lighting_metrics.dart';
 
 void main() {
   test('las imágenes de un bloque se guardan en ese bloque', () {
@@ -37,19 +39,21 @@ void main() {
 
     BibleCard? saved;
     await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.dark,
-        home: BibleCardEditor(
-          copy: BibleCardEditorCopy.mosaic,
-          initial: const BibleCard(
-            title: 'Niebla',
-            points: [BibleCard(title: 'Luz rota')],
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          home: BibleCardEditor(
+            copy: BibleCardEditorCopy.mosaic,
+            initial: const BibleCard(
+              title: 'Niebla',
+              points: [BibleCard(title: 'Luz rota')],
+            ),
+            imagePaths: {7: path},
+            onChanged: (card) => saved = card,
+            onMove: (_, _) {},
+            onDelete: () {},
+            onPickImages: (selected) async => [...selected, 7],
           ),
-          imagePaths: {7: path},
-          onChanged: (card) => saved = card,
-          onMove: (_, _) {},
-          onDelete: () {},
-          onPickImages: (selected) async => [...selected, 7],
         ),
       ),
     );
@@ -64,6 +68,65 @@ void main() {
     await tester.tap(find.byTooltip('Quitar de este bloque'));
     await tester.pumpAndSettle();
     expect(saved!.points.single.imageIds, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('en el mosaico cada imagen es una lámina con su título, lo que '
+      'cuenta y su luz', (tester) async {
+    tester.view.physicalSize = const Size(1300, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tmp = Directory.systemTemp.createTempSync('iris_lamina');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final path = '${tmp.path}/a.png';
+    File(
+      path,
+    ).writeAsBytesSync(img.encodePng(img.Image(width: 32, height: 18)));
+
+    BibleCard? saved;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          home: BibleCardEditor(
+            copy: BibleCardEditorCopy.mosaic,
+            initial: const BibleCard(title: 'Cálidos', imageIds: [7]),
+            imagePaths: {7: path},
+            onChanged: (card) => saved = card,
+            onMove: (_, _) {},
+            onDelete: () {},
+            onPickImages: (selected) async => selected,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('LÁMINAS · 1'), findsOneWidget);
+    expect(find.text('LÁMINA 1 DE 1 · PORTADA'), findsOneWidget);
+    expect(find.text('Comentar y dibujar'), findsOneWidget);
+    expect(find.text('DESARROLLO'), findsOneWidget);
+    expect(find.text('AÑADIR APARTADO'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(
+        TextField,
+        'Título de la lámina: «Medio rostro '
+        'quemado por el sodio»',
+      ),
+      'Medio rostro',
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(saved!.imageNotes[7]!.title, 'Medio rostro');
+
+    // Su luz: una clave de sodio.
+    await tester.tap(find.text('Fuente (clave)'));
+    await tester.pump();
+    expect(
+      LightingMetrics.fromJson(saved!.imageNotes[7]!.light).sources,
+      hasLength(1),
+    );
+    final back = BibleCard.fromJson(saved!.toJson());
+    expect(back.imageNotes[7]!.title, 'Medio rostro');
     expect(tester.takeException(), isNull);
   });
 }

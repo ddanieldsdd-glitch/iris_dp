@@ -194,6 +194,18 @@ class BiblePdfKit {
                   children: [
                     _titled(card.title.trim(), card.body.trim()),
                     ..._moreImages(card, skip: 0),
+                    // Lo que cuenta cada imagen (láminas del mosaico).
+                    for (final (i, id) in card.imageIds.indexed)
+                      if (card.imageNotes[id] case final note?
+                          when !note.isEmpty)
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.only(top: 4),
+                          child: _titled(
+                            'Lámina ${i + 1}'
+                            '${note.title.trim().isEmpty ? '' : ' · ${note.title.trim()}'}',
+                            note.text.trim(),
+                          ),
+                        ),
                     for (final point in card.points)
                       if (!point.isEmpty)
                         pw.Padding(

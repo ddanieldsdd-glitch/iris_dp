@@ -1,5 +1,41 @@
 import 'dart:convert';
 
+/// Lo que se cuenta de una imagen dentro de una tarjeta: su título, el
+/// texto y su luz (`LightingMetrics` en JSON).
+class BibleImageNote {
+  final String title;
+  final String text;
+  final String? light;
+
+  const BibleImageNote({this.title = '', this.text = '', this.light});
+
+  bool get isEmpty =>
+      title.trim().isEmpty &&
+      text.trim().isEmpty &&
+      (light == null || light!.trim().isEmpty || light == '{}');
+
+  BibleImageNote copyWith({String? title, String? text, String? light}) =>
+      BibleImageNote(
+        title: title ?? this.title,
+        text: text ?? this.text,
+        light: light ?? this.light,
+      );
+
+  Map<String, dynamic> toJson() => {
+    if (title.isNotEmpty) 'title': title,
+    if (text.isNotEmpty) 'text': text,
+    if (light != null && light!.isNotEmpty && light != '{}') 'light': light,
+  };
+
+  static BibleImageNote fromJson(Object? raw) => raw is Map
+      ? BibleImageNote(
+          title: raw['title']?.toString() ?? '',
+          text: raw['text']?.toString() ?? '',
+          light: raw['light']?.toString(),
+        )
+      : const BibleImageNote();
+}
+
 /// Tarjeta de un punto estructurado de la biblia: una idea con título y
 /// desarrollo. En una división por actos, [kicker] es la fase del acto e
 /// [imageIds] las imágenes del moodboard que lo representan.
@@ -9,11 +45,10 @@ class BibleCard {
   final String kicker;
   final String title;
   final String body;
+
   /// Las imágenes de la ficha y las de sus bloques, sin repetir.
-  List<int> get allImageIds => {
-    ...imageIds,
-    for (final point in points) ...point.allImageIds,
-  }.toList();
+  List<int> get allImageIds =>
+      {...imageIds, for (final point in points) ...point.allImageIds}.toList();
 
   final List<int> imageIds;
 
@@ -24,6 +59,9 @@ class BibleCard {
   /// quiere explicar de un acto.
   final List<BibleCard> points;
 
+  /// Lo que se cuenta de cada imagen (por su id del moodboard).
+  final Map<int, BibleImageNote> imageNotes;
+
   const BibleCard({
     this.id = '',
     this.kicker = '',
@@ -32,6 +70,7 @@ class BibleCard {
     this.imageIds = const [],
     this.turn = false,
     this.points = const [],
+    this.imageNotes = const {},
   });
 
   bool get isEmpty =>
@@ -39,6 +78,7 @@ class BibleCard {
       title.trim().isEmpty &&
       body.trim().isEmpty &&
       imageIds.isEmpty &&
+      imageNotes.values.every((note) => note.isEmpty) &&
       points.every((point) => point.isEmpty);
 
   BibleCard copyWith({
@@ -49,6 +89,7 @@ class BibleCard {
     List<int>? imageIds,
     bool? turn,
     List<BibleCard>? points,
+    Map<int, BibleImageNote>? imageNotes,
   }) => BibleCard(
     id: id ?? this.id,
     kicker: kicker ?? this.kicker,
@@ -57,6 +98,7 @@ class BibleCard {
     imageIds: imageIds ?? this.imageIds,
     turn: turn ?? this.turn,
     points: points ?? this.points,
+    imageNotes: imageNotes ?? this.imageNotes,
   );
 
   factory BibleCard.fromJson(Map<dynamic, dynamic> json) => BibleCard(
@@ -71,6 +113,12 @@ class BibleCard {
     ],
     turn: json['turn'] == true,
     points: listFrom(json['points']),
+    imageNotes: {
+      if (json['imageNotes'] is Map)
+        for (final e in (json['imageNotes'] as Map).entries)
+          if (int.tryParse('${e.key}') case final id?)
+            id: BibleImageNote.fromJson(e.value),
+    },
   );
 
   Map<String, dynamic> toJson() => {
@@ -81,6 +129,11 @@ class BibleCard {
     if (imageIds.isNotEmpty) 'images': imageIds,
     if (turn) 'turn': true,
     if (points.isNotEmpty) 'points': [for (final p in points) p.toJson()],
+    if (imageNotes.values.any((n) => !n.isEmpty))
+      'imageNotes': {
+        for (final e in imageNotes.entries)
+          if (!e.value.isEmpty) '${e.key}': e.value.toJson(),
+      },
   };
 
   /// Lee las tarjetas desde una lista ya decodificada o desde su JSON.
