@@ -90,7 +90,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 46;
+  int get schemaVersion => kSchemaVersion;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -4562,19 +4562,28 @@ LazyDatabase _openConnection() {
   });
 }
 
-/// Versión de esquema a partir de la cual una app más antigua ya no puede
-/// abrir la base. Antes de pasar de ella se guarda una copia.
-const kSchemaBackupBefore = 45;
+/// Versión del esquema de la base. Subirla aquí al añadir una migración.
+const kSchemaVersion = 46;
 
-/// Guarda una copia de la base junto a ella antes de migrarla al esquema
-/// [kSchemaBackupBefore], por si hay que volver a una versión anterior de la
-/// app. Devuelve la ruta de la copia, o nulo si no hacía falta.
-String? backupBeforeSchemaUpgrade(String databasePath, int storedVersion) {
+/// Copias `antes-de-esquema-…` que se conservan.
+const kSchemaBackupsKept = 3;
+
+/// Guarda una copia de la base junto a ella antes de migrarla de
+/// [storedVersion] a [targetVersion], por si la migración falla o hay que
+/// volver a una versión anterior de la app. Se conservan las
+/// [kSchemaBackupsKept] más recientes. Devuelve la ruta de la copia, o nulo
+/// si no hacía falta.
+String? backupBeforeSchemaUpgrade(
+  String databasePath,
+  int storedVersion, {
+  int targetVersion = kSchemaVersion,
+}) {
   // 0 = base recién creada: no hay nada que guardar.
-  if (storedVersion == 0 || storedVersion >= kSchemaBackupBefore) return null;
+  if (storedVersion == 0 || storedVersion >= targetVersion) return null;
   final source = File(databasePath);
   if (!source.existsSync()) return null;
-  final copyPath = '$databasePath.antes-de-esquema-$kSchemaBackupBefore';
+  final copyPath = '$databasePath.antes-de-esquema-$targetVersion';
+  // Si una migración falló a medias, la copia buena es la primera.
   if (File(copyPath).existsSync()) return copyPath;
   try {
     source.copySync(copyPath);
@@ -4583,8 +4592,31 @@ String? backupBeforeSchemaUpgrade(String databasePath, int storedVersion) {
       final extra = File('$databasePath$suffix');
       if (extra.existsSync()) extra.copySync('$copyPath$suffix');
     }
+    _pruneSchemaBackups(databasePath);
     return copyPath;
   } catch (_) {
     return null;
+  }
+}
+
+void _pruneSchemaBackups(String databasePath) {
+  final prefix = '${p.basename(databasePath)}.antes-de-esquema-';
+  final byVersion = <int, List<File>>{};
+  for (final f in Directory(p.dirname(databasePath)).listSync()) {
+    if (f is! File) continue;
+    final name = p.basename(f.path);
+    if (!name.startsWith(prefix)) continue;
+    final version = int.tryParse(
+      name.substring(prefix.length).replaceAll(RegExp(r'-(wal|shm)$'), ''),
+    );
+    if (version != null) byVersion.putIfAbsent(version, () => []).add(f);
+  }
+  final versions = byVersion.keys.toList()..sort((a, b) => b.compareTo(a));
+  for (final old in versions.skip(kSchemaBackupsKept)) {
+    for (final f in byVersion[old]!) {
+      try {
+        f.deleteSync();
+      } catch (_) {}
+    }
   }
 }
