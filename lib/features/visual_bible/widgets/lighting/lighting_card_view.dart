@@ -17,6 +17,7 @@ import '../../../../shared/visual_bible/lighting_metrics.dart';
 import '../../../../shared/visual_bible/narrative_card_kind.dart';
 import '../bible_point_images.dart';
 import '../bible_point_panel.dart';
+import '../active_bible_pages.dart';
 import '../bible_points_host.dart';
 import '../narrative_deck/narrative_card_detail.dart';
 import 'lighting_metrics_widget.dart';
@@ -76,6 +77,34 @@ class _LightingCardViewState extends ConsumerState<LightingCardView> {
 
   AppDatabase get _db => ref.read(databaseProvider);
 
+  /// Para quitar la ficha del panel lateral al cerrarla.
+  late final ActiveBiblePages _activePages = ref.read(
+    activeBiblePagesProvider.notifier,
+  );
+  String get _activeId => 'lighting_card_${widget.cardId}';
+
+  @override
+  void dispose() {
+    final pages = _activePages;
+    final id = _activeId;
+    // Fuera del cuadro: cambiar el estado al desmontar rompe el repintado.
+    Future.microtask(() => pages.hide(id));
+    super.dispose();
+  }
+
+  /// Anuncia la ficha al panel lateral, con sus puntos de ahora.
+  void _announce(String title, LightingCardPage page) {
+    final entry = ActiveBiblePage(
+      id: _activeId,
+      title: title,
+      fields: page.fields,
+      onFieldsChanged: _setFields,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _activePages.show(entry);
+    });
+  }
+
   void _write(
     VisualBibleNarrativeCard Function(
       VisualBibleNarrativeCard fresh,
@@ -116,10 +145,7 @@ class _LightingCardViewState extends ConsumerState<LightingCardView> {
       );
     }
     return fresh.copyWith(
-      metaJson: _encode({
-        ...meta,
-        'page': page.withValue(key, value).toJson(),
-      }),
+      metaJson: _encode({...meta, 'page': page.withValue(key, value).toJson()}),
     );
   });
 
@@ -132,11 +158,13 @@ class _LightingCardViewState extends ConsumerState<LightingCardView> {
       body: dropValues.contains(LightingCardPage.bodyKey)
           ? const Value(null)
           : Value(fresh.body),
-      metaJson: _encode({
-        ...meta,
-        if (dropValues.contains(LightingCardPage.light)) 'light': null,
-        'page': page.withFields(fields, dropValues: dropValues).toJson(),
-      }..removeWhere((key, value) => value == null)),
+      metaJson: _encode(
+        {
+          ...meta,
+          if (dropValues.contains(LightingCardPage.light)) 'light': null,
+          'page': page.withFields(fields, dropValues: dropValues).toJson(),
+        }..removeWhere((key, value) => value == null),
+      ),
     ),
   );
 
@@ -170,6 +198,7 @@ class _LightingCardViewState extends ConsumerState<LightingCardView> {
         final card = snap.data;
         if (card == null) return const SizedBox.shrink();
         final page = lightingCardPageOf(card);
+        _announce(widget.fixedTitle ?? card.title, page);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
