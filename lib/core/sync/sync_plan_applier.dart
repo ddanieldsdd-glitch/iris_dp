@@ -56,7 +56,11 @@ class SyncPlanApplier {
 
     if (item.action == SyncPlanAction.contentConflict) {
       if (item.choice == SyncResolutionChoice.useLocal) {
-        return _pushContent(item.localProjectId!, item.cloudId!);
+        return _pushContent(
+          item.localProjectId!,
+          item.cloudId!,
+          item.cloudContentHash,
+        );
       }
       if (item.choice == SyncResolutionChoice.useCloud) {
         return _pullContent(item.localProjectId!, item.cloudId!);
@@ -77,8 +81,11 @@ class SyncPlanApplier {
         _deleteLocal(item.localProjectId!),
       SyncPlanAction.deleteCloud =>
         _deleteCloud(item.cloudId!, item.localProjectId),
-      SyncPlanAction.pushContentLocal =>
-        _pushContent(item.localProjectId!, item.cloudId!),
+      SyncPlanAction.pushContentLocal => _pushContent(
+        item.localProjectId!,
+        item.cloudId!,
+        item.cloudContentHash,
+      ),
       SyncPlanAction.pullContentCloud =>
         _pullContent(item.localProjectId!, item.cloudId!),
       SyncPlanAction.conflict ||
@@ -87,15 +94,25 @@ class SyncPlanApplier {
     };
   }
 
+  /// Sube el contenido si la nube sigue en [expectedCloudHash], la versión
+  /// que se vio en el plan. Si otro dispositivo ha subido entretanto no pisa
+  /// nada: la próxima sincronización lo enseña como conflicto.
   Future<({int pushed, int pulled, int deleted})> _pushContent(
     int localProjectId,
     String cloudId,
+    String? expectedCloudHash,
   ) async {
     try {
       final sync = ProjectContentSyncService(_db, _client);
-      await sync.upload(localProjectId, cloudId);
+      await sync.upload(
+        localProjectId,
+        cloudId,
+        expectedCloudHash: expectedCloudHash,
+      );
       return (pushed: 1, pulled: 0, deleted: 0);
     } on SnapshotsTableMissing {
+      return (pushed: 0, pulled: 0, deleted: 0);
+    } on CloudContentChanged {
       return (pushed: 0, pulled: 0, deleted: 0);
     }
   }
@@ -132,7 +149,8 @@ class SyncPlanApplier {
     ));
     final sync = ProjectContentSyncService(_db, _client);
     try {
-      await sync.upload(project.id, cloudId);
+      // Proyecto recién creado en la nube: no tiene copia de contenido.
+      await sync.upload(project.id, cloudId, expectedCloudHash: null);
     } on SnapshotsTableMissing {
       // Metadatos subidos; contenido cuando exista migración 007.
     }
@@ -155,7 +173,8 @@ class SyncPlanApplier {
     }).eq('id', project.cloudId!);
     await (_db.update(_db.projects)..where((p) => p.id.equals(project.id)))
         .write(ProjectsCompanion(syncUpdatedAt: Value(DateTime.now().toUtc())));
-    await _pushContent(project.id, project.cloudId!);
+    // Solo los datos del proyecto. El contenido tiene su propio ítem en el
+    // plan: subirlo aquí pisaría la nube sin haberlo comparado.
     return (pushed: 1, pulled: 0, deleted: 0);
   }
 

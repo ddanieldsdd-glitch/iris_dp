@@ -49,6 +49,10 @@ class SyncPlanItem {
   final List<SyncFieldDiff> diffs;
   final ContentSyncSummary? localContentSummary;
   final ContentSyncSummary? cloudContentSummary;
+
+  /// Huella del contenido en la nube cuando se hizo el plan (`null`: no había
+  /// copia). Subir solo pisa esa versión, no una más nueva.
+  final String? cloudContentHash;
   SyncResolutionChoice choice;
 
   SyncPlanItem({
@@ -62,6 +66,7 @@ class SyncPlanItem {
     this.diffs = const [],
     this.localContentSummary,
     this.cloudContentSummary,
+    this.cloudContentHash,
     SyncResolutionChoice? choice,
   }) : choice = choice ?? _defaultChoice(action);
 
@@ -109,6 +114,7 @@ class SyncPlanItem {
         diffs: diffs,
         localContentSummary: localContentSummary,
         cloudContentSummary: cloudContentSummary,
+        cloudContentHash: cloudContentHash,
         choice: choice ?? this.choice,
       );
 }

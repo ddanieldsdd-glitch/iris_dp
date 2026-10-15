@@ -229,6 +229,14 @@ class SyncPlanBuilder {
         continue;
       }
 
+      final cloudNow =
+          cloudHash ??
+          (cloudContent is Map
+              ? ProjectContentBundle.hashBundle(
+                  Map<String, dynamic>.from(cloudContent),
+                )
+              : null);
+
       SyncPlanItem contentItem(SyncPlanAction action, String description) =>
           SyncPlanItem(
             action: action,
@@ -239,6 +247,7 @@ class SyncPlanBuilder {
             localProject: local,
             localContentSummary: localSummary,
             cloudContentSummary: cloudSummary,
+            cloudContentHash: cloudNow,
             diffs: _contentDiffs(localSummary, cloudSummary),
           );
 
@@ -267,13 +276,6 @@ class SyncPlanBuilder {
         continue;
       }
 
-      final cloudNow =
-          cloudHash ??
-          (cloudContent is Map
-              ? ProjectContentBundle.hashBundle(
-                  Map<String, dynamic>.from(cloudContent),
-                )
-              : null);
       final localChanged = localHash != base.localHash;
       final cloudChanged = cloudNow != base.cloudHash;
 
