@@ -23,20 +23,32 @@ Future<void> _bootstrapApp() async {
   await initializeCloud();
 }
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ProviderScope(child: IrisDPApp()));
+  final themeMode = await ThemeModeStore.load();
+  runApp(
+    ProviderScope(
+      overrides: [themeModeProvider.overrideWith((ref) => themeMode)],
+      child: IrisDPApp(bootstrap: _bootstrapApp()),
+    ),
+  );
 }
 
 class IrisDPApp extends ConsumerWidget {
-  const IrisDPApp({super.key});
+  /// El arranque se lanza una sola vez, en `main`: si se creara en `build`,
+  /// cada reconstrucción lo repetiría.
+  final Future<void> bootstrap;
+
+  const IrisDPApp({super.key, required this.bootstrap});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Sin `key` por tema: cambiar claro/oscuro no desmonta la app (antes
+    // volvía al splash y a Proyectos y se perdía lo abierto).
     final themeMode = ref.watch(themeModeProvider);
+    ref.listen(themeModeProvider, (_, next) => ThemeModeStore.save(next));
 
     return MaterialApp(
-      key: ValueKey(themeMode),
       title: 'IRIS DP',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
@@ -44,7 +56,7 @@ class IrisDPApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       navigatorObservers: [routeObserver],
       home: AppSplashScreen(
-        bootstrap: _bootstrapApp(),
+        bootstrap: bootstrap,
         child: AppLifecyclePersistence(
           child: AppBackground(
             child: StorageRelocationGate(
