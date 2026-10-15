@@ -59,18 +59,19 @@ class PlanLightMap {
   });
 
   /// Stops por debajo de [keyLux] que todavía se ven.
-  static const double rangeStops = 10;
+  static const double rangeStops = 8;
 
   /// Lo más que tapa la luz al lienzo: por encima, las paredes y los
   /// rótulos (claros) dejarían de leerse.
-  static const double maxAlpha = 0.5;
+  static const double maxAlpha = 0.55;
 
   /// Brillo con el que se pinta una cantidad de luz, de 0 a 1.
   static double brightnessFor(double lux, double keyLux) {
     if (lux <= 0 || keyLux <= 0) return 0;
     final stops = math.log(lux / keyLux) / math.ln2;
     final v = ((stops + rangeStops) / rangeStops).clamp(0.0, 1.0);
-    return math.pow(v, 1.6).toDouble();
+    // Curva contrastada: dos stops de caída se ven.
+    return math.pow(v, 2.0).toDouble();
   }
 
   double luxAt(int column, int row) => lux[row * (columns + 1) + column];
@@ -158,6 +159,11 @@ class PlanLightMap {
         ((tint.g * 255).round() << 8) |
         (tint.b * 255).round();
   }
+
+  /// Color con el que se pinta una cantidad de luz de una temperatura,
+  /// medida contra [key].
+  static Color colorFor(double lux, double cct, double key) =>
+      Color(_argb(lux, cct, key));
 
   /// Color con el que se pinta lo que queda fuera del mapa, al aire libre.
   Color get openColor => Color(_argb(openLux, openCct, keyLux));
@@ -249,7 +255,8 @@ class PlanLightMapCache extends ChangeNotifier {
   final int coarseBudget;
   final int fineBudget;
 
-  PlanLightMapCache({this.coarseBudget = 60000, this.fineBudget = 900000});
+  PlanLightMapCache({this.coarseBudget = 60000, int? fineBudget})
+    : fineBudget = fineBudget ?? coarseBudget;
 
   int? _key;
   PlanLightMap? _map;
@@ -265,6 +272,8 @@ class PlanLightMapCache extends ChangeNotifier {
     _key = key;
     _map = quick;
     _refine?.cancel();
+    // Solo se afina si se ha pedido más detalle del que ya tiene.
+    if (fineBudget <= coarseBudget) return quick;
     _refine = Timer(const Duration(milliseconds: 280), () {
       if (_disposed || _key != key) return;
       _map = PlanLightMap.compute(scene, rect, budget: fineBudget);
@@ -273,9 +282,23 @@ class PlanLightMapCache extends ChangeNotifier {
     return quick;
   }
 
+  int? _pictureKey;
+  ui.Picture? _picture;
+
+  /// La luz ya dibujada. Mientras no cambie nada que afecte a la luz se
+  /// reutiliza: mover la vista, hacer zoom o seleccionar no la recalcula.
+  ui.Picture picture(int key, ui.Picture Function() record) {
+    final current = _picture;
+    if (current != null && _pictureKey == key) return current;
+    current?.dispose();
+    _pictureKey = key;
+    return _picture = record();
+  }
+
   @override
   void dispose() {
     _disposed = true;
+    _picture?.dispose();
     _refine?.cancel();
     super.dispose();
   }

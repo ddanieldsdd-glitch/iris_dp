@@ -6,7 +6,7 @@ import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
-import 'floor_plan_repository.dart';
+import 'plan_item_actions.dart';
 import 'plan_target.dart';
 
 const kLightSetupStatuses = ['boceto', 'en_desarrollo', 'definitivo'];
@@ -53,8 +53,8 @@ Future<String?> askPlanName(
   return name == null || name.isEmpty ? null : name;
 }
 
-/// Menú «⋯» de un esquema de luz: renombrar, catalogar, estado, duplicar
-/// y borrar.
+/// Menú «⋯» de un esquema de luz: renombrar, catalogar, estado, copiar,
+/// duplicar, pegar al lado y borrar.
 class LightSetupMenuButton extends ConsumerWidget {
   final LightSetup setup;
   final int shotCount;
@@ -69,24 +69,43 @@ class LightSetupMenuButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final db = ref.read(databaseProvider);
-    return PopupMenuButton<String>(
-      tooltip: 'Opciones del esquema',
-      icon: Icon(Icons.more_vert, color: palette.textSecondary),
-      onSelected: (action) => _onAction(context, db, action),
-      itemBuilder: (_) => [
-        const PopupMenuItem(value: 'rename', child: Text('Renombrar')),
-        const PopupMenuItem(value: 'category', child: Text('Catalogar')),
-        for (final status in kLightSetupStatuses)
-          if (status != setup.status)
-            PopupMenuItem(
-              value: 'status:$status',
-              child: Text(
-                'Marcar como ${lightSetupStatusLabel(status).toLowerCase()}',
+    return ValueListenableBuilder<PlanClip?>(
+      valueListenable: PlanBoardClipboard.current,
+      builder: (context, clip, _) => PopupMenuButton<String>(
+        tooltip: 'Opciones del esquema',
+        icon: Icon(Icons.more_vert, color: palette.textSecondary),
+        onSelected: (action) => _onAction(context, db, action),
+        itemBuilder: (_) => [
+          const PopupMenuItem(value: 'rename', child: Text('Renombrar')),
+          const PopupMenuItem(value: 'category', child: Text('Catalogar')),
+          for (final status in kLightSetupStatuses)
+            if (status != setup.status)
+              PopupMenuItem(
+                value: 'status:$status',
+                child: Text(
+                  'Marcar como ${lightSetupStatusLabel(status).toLowerCase()}',
+                ),
               ),
+          const PopupMenuDivider(),
+          const PopupMenuItem(
+            value: 'copy',
+            child: PlanMenuRow('Copiar', '⌘C'),
+          ),
+          const PopupMenuItem(
+            value: 'duplicate',
+            child: PlanMenuRow('Duplicar', '⌘D'),
+          ),
+          if (clip?.kind == PlanClipKind.setup)
+            PopupMenuItem(
+              value: 'paste',
+              child: PlanMenuRow('Pegar «${clip!.name}» al lado', '⌘V'),
             ),
-        const PopupMenuItem(value: 'duplicate', child: Text('Duplicar')),
-        const PopupMenuItem(value: 'delete', child: Text('Borrar')),
-      ],
+          const PopupMenuItem(
+            value: 'delete',
+            child: PlanMenuRow('Borrar', 'Supr'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -146,39 +165,14 @@ class LightSetupMenuButton extends ConsumerWidget {
             setup.copyWith(category: Value(trimmed.isEmpty ? null : trimmed)),
           );
         }
+      case 'copy':
+        LightSetupActions(context, db, setup, shotCount).copy();
       case 'duplicate':
-        await FloorPlanRepository(db).duplicateLightSetup(setup);
+        await LightSetupActions(context, db, setup, shotCount).duplicate();
+      case 'paste':
+        await LightSetupActions(context, db, setup, shotCount).pasteBeside();
       case 'delete':
-        final palette = context.palette;
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: palette.surfaceElevated,
-            title: Text(
-              '¿Borrar «${setup.name}»?',
-              style: AppTypography.titleMedium(palette),
-            ),
-            content: Text(
-              shotCount == 0
-                  ? 'Se borra el esquema de luz.'
-                  : 'Se borra el esquema de luz. '
-                        '$shotCount plano${shotCount == 1 ? '' : 's'} '
-                        'se quedará${shotCount == 1 ? '' : 'n'} sin luz.',
-              style: AppTypography.bodyMedium(palette),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancelar'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Borrar'),
-              ),
-            ],
-          ),
-        );
-        if (confirmed == true) await db.deleteLightSetup(setup.id);
+        await LightSetupActions(context, db, setup, shotCount).delete();
     }
   }
 }

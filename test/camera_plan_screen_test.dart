@@ -1,6 +1,8 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -15,6 +17,7 @@ import 'package:iris_dp/features/camera_plan/camera_plan_screen.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_repository.dart';
 import 'package:iris_dp/features/camera_plan/light_overrides.dart';
+import 'package:iris_dp/features/camera_plan/plan_item_actions.dart';
 import 'package:iris_dp/features/camera_plan/plan_marks.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 import 'package:iris_dp/features/camera_plan/shot_route.dart';
@@ -461,6 +464,109 @@ void main() {
       shot = await theShot(tester);
       expect(shot.locationBasePlanId, otherSetId);
       expect(shot.lightSetupId, isNull);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('esquemas y sets se copian, se pegan, se duplican y se '
+        'borran desde el tablero', (tester) async {
+      await seed(tester, siteJson: '{"version":2,"elements":[]}');
+      late int otherSetId;
+      await tester.runAsync(() async {
+        otherSetId = await db.insertLocation(
+          LocationBasePlansCompanion.insert(
+            projectId: projectId,
+            siteId: Value(siteId),
+            locationName: 'Quirófano',
+          ),
+        );
+        final setup = await FloorPlanRepository(
+          db,
+        ).createLightSetup(projectId: projectId, setId: setId);
+        await db.updateLightSetup(
+          setup.copyWith(planJson: const Value('{"version":2,"elements":[]}')),
+        );
+        await db.moveShot(shotId, setId: null, lightSetupId: setup.id);
+      });
+      PlanBoardClipboard.current.value = null;
+      await tester.pumpWidget(host(CameraPlanScreen(projectId: projectId)));
+      await settle(tester);
+      expect(find.text('Setup A'), findsOneWidget);
+
+      Future<void> keys(Finder over, LogicalKeyboardKey key) async {
+        final mouse = TestPointer(1, PointerDeviceKind.mouse);
+        await tester.sendEventToBinding(mouse.hover(tester.getCenter(over)));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+        await tester.sendKeyEvent(key);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+        await settle(tester);
+        await tester.sendEventToBinding(mouse.removePointer());
+      }
+
+      Future<List<LightSetup>> setups() async => (await tester.runAsync(
+        () => db.getLightSetupsForProject(projectId),
+      ))!;
+
+      // ⌘D con el ratón encima duplica el esquema, con su planta.
+      await keys(find.text('Setup A'), LogicalKeyboardKey.keyD);
+      expect(find.text('Setup A (copia)'), findsOneWidget);
+      var all = await setups();
+      expect(all, hasLength(2));
+      expect(all.last.planJson, all.first.planJson);
+      expect(all.last.locationBasePlanId, setId);
+
+      // ⌘C lo copia; en el otro set aparece «Pegar «Setup A»».
+      await keys(find.text('Setup A'), LogicalKeyboardKey.keyC);
+      expect(PlanBoardClipboard.current.value?.name, 'Setup A');
+      await tester.tap(find.text('Otro set de Hospital'));
+      await settle(tester);
+      await tester.tap(find.text('Quirófano').last);
+      await settle(tester);
+      await tester.tap(find.text('Pegar «Setup A»').last);
+      await settle(tester);
+      all = await setups();
+      expect(
+        all.where((s) => s.locationBasePlanId == otherSetId).map((s) => s.name),
+        ['Setup A'],
+      );
+
+      // Borrar el set Quirófano desde su menú se lleva su esquema.
+      await tester.tap(find.byTooltip('Opciones del set').last);
+      await settle(tester);
+      await tester.tap(find.text('Borrar set'));
+      await settle(tester);
+      expect(
+        find.textContaining('¿Borrar el set «Quirófano»?'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Borrar'));
+      await settle(tester);
+      final left = await tester.runAsync(() => db.getLocationById(otherSetId));
+      expect(left, isNull);
+      all = await setups();
+      expect(all.where((s) => s.locationBasePlanId == otherSetId), isEmpty);
+      expect(all, hasLength(2));
+
+      // Supr sobre el esquema copia lo borra, tras confirmar; el plano no
+      // se toca porque no lo usa.
+      await tester.sendEventToBinding(
+        TestPointer(
+          1,
+          PointerDeviceKind.mouse,
+        ).hover(tester.getCenter(find.text('Setup A (copia)'))),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+      await settle(tester);
+      await tester.tap(find.text('Borrar'));
+      await settle(tester);
+      all = await setups();
+      expect(all.map((s) => s.name), ['Setup A']);
+      expect((await theShot(tester)).lightSetupId, all.single.id);
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());
@@ -997,6 +1103,101 @@ void main() {
       expect(saved.rotation, 0);
       expect(PlanMarks.rotationAt(saved, 0), closeTo(90, 2));
       expect(saved.pathPoints.single, mark);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('ratón y teclado: marco de selección, copiar y pegar, '
+        'flechas, y la rueda hace zoom hacia el cursor', (tester) async {
+      await seed(tester, siteJson: '{"version":2,"elements":[]}');
+      await tester.runAsync(() async {
+        for (final (x, name) in [(300.0, 'Adil'), (400.0, 'Juan')]) {
+          await db.insertCameraPlanElement(
+            CameraPlanElementsCompanion.insert(
+              shotId: shotId,
+              type: 'actor',
+              x: Value(x),
+              y: const Value(300),
+              label: Value(name),
+            ),
+          );
+        }
+      });
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.shot(
+            projectId: projectId,
+            shotId: shotId,
+            shotLabel: 'Esc 1 · Plano 1',
+          ),
+        ),
+      );
+      await settle(tester);
+      final state = tester.state(find.byType(CameraPlanEditor));
+      ({Offset offset, double scale}) view() =>
+          // ignore: avoid_dynamic_calls
+          (state as dynamic).debugView as ({Offset offset, double scale});
+      final canvas = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is CameraPlanPainter,
+      );
+      Offset onScreen(Offset p) =>
+          tester.getTopLeft(canvas) + view().offset + p * view().scale;
+      Future<List<CameraPlanElement>> rows() async => (await tester.runAsync(
+        () => db.getCameraPlanElementsForShot(shotId),
+      ))!;
+
+      // Arrastrar con el ratón en vacío traza un marco: coge a los dos.
+      final mouse = await tester.startGesture(
+        onScreen(const Offset(240, 240)),
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      await mouse.moveTo(onScreen(const Offset(350, 330)));
+      await tester.pump(const Duration(milliseconds: 50));
+      await mouse.moveTo(onScreen(const Offset(460, 360)));
+      await tester.pump(const Duration(milliseconds: 50));
+      await mouse.up();
+      await settle(tester);
+      expect(find.textContaining('2 elementos seleccionados'), findsOneWidget);
+
+      // Flecha derecha con Mayús: los dos se mueven 10 cm (5 unidades).
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await settle(tester);
+      expect((await rows()).map((r) => r.x), [305, 405]);
+
+      // Copiar y pegar: dos más, bajo el cursor.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await settle(tester);
+      final all = await rows();
+      expect(all, hasLength(4));
+      expect(all.map((r) => r.label).toSet(), {'Adil', 'Juan'});
+      // Las copias no están encima de los originales.
+      expect(all[2].x, isNot(305));
+
+      // Deshacer quita lo pegado.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await settle(tester);
+      expect((await rows()).length, lessThan(4));
+
+      // La rueda acerca, y el punto bajo el cursor no se mueve.
+      final before = view();
+      final anchor = onScreen(const Offset(300, 300));
+      final pointer = TestPointer(1, PointerDeviceKind.mouse);
+      await tester.sendEventToBinding(pointer.hover(anchor));
+      await tester.sendEventToBinding(pointer.scroll(const Offset(0, -200)));
+      await settle(tester);
+      expect(view().scale, greaterThan(before.scale));
+      expect((onScreen(const Offset(300, 300)) - anchor).distance, lessThan(1));
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

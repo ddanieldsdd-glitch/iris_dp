@@ -1,4 +1,4 @@
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -18,6 +18,81 @@ void main() {
 
   tearDown(() async {
     await db.close();
+  });
+
+  test('un set se copia con su planta y sus esquemas, y al borrarlo sus '
+      'planos vuelven al set de su escena', () async {
+    final projectId = await db.insertProject(
+      ProjectsCompanion.insert(name: 'Copias'),
+    );
+    final siteId = await db.insertSite(
+      LocationSitesCompanion.insert(projectId: projectId, name: 'Bosque'),
+    );
+    final otherSite = await db.insertSite(
+      LocationSitesCompanion.insert(projectId: projectId, name: 'Playa'),
+    );
+    final setId = await db.insertLocation(
+      LocationBasePlansCompanion.insert(
+        projectId: projectId,
+        siteId: Value(siteId),
+        locationName: 'Río',
+        floorPlanJson: const Value('{"version":2,"elements":[]}'),
+        sitePlacementJson: const Value('{"x":1}'),
+      ),
+    );
+    final setup = await repo.createLightSetup(
+      projectId: projectId,
+      setId: setId,
+    );
+    final sceneId = await db.insertScene(
+      ScenesCompanion.insert(
+        projectId: projectId,
+        number: 1,
+        name: 'Escena 1',
+        locationCanonical: 'EXT. RÍO - DÍA',
+        locationPureName: 'RÍO',
+        locationSiteId: Value(siteId),
+      ),
+    );
+    final shotId = await db.insertShot(
+      ShotsCompanion.insert(sceneId: sceneId, projectId: projectId, number: 1),
+    );
+    await db.moveShot(shotId, setId: setId, lightSetupId: setup.id);
+
+    // Duplicado en su localización: nombre nuevo, misma zona.
+    final source = (await db.getLocationById(setId))!;
+    final twin = await repo.copySet(source);
+    expect(twin.locationName, 'Río (copia)');
+    expect(twin.siteId, siteId);
+    expect(twin.floorPlanJson, source.floorPlanJson);
+    expect(twin.sitePlacementJson, source.sitePlacementJson);
+    // Pegado en otra: conserva el nombre y pierde la zona.
+    final pasted = await repo.copySet(
+      source,
+      siteId: otherSite,
+      keepSite: false,
+    );
+    expect(pasted.locationName, 'Río');
+    expect(pasted.siteId, otherSite);
+    expect(pasted.sitePlacementJson, isNull);
+    final setups = await db.getLightSetupsForProject(projectId);
+    expect(
+      setups.where((s) => s.locationBasePlanId == pasted.id).single.name,
+      'Setup A',
+    );
+
+    // Un esquema pegado en las plantas libres no es de ningún set.
+    final free = await repo.copyLightSetup(setup);
+    expect(free.locationBasePlanId, isNull);
+    expect(free.locationSiteId, isNull);
+    expect(free.name, 'Setup A');
+
+    await repo.deleteSet(source);
+    expect(await db.getLocationById(setId), isNull);
+    final shot = (await db.getShotById(shotId))!;
+    expect(shot.locationBasePlanId, isNull);
+    expect(shot.lightSetupId, isNull);
+    expect(await db.getLightSetupById(setup.id), isNull);
   });
 
   test('el plano vacío ve la planta del set', () async {
