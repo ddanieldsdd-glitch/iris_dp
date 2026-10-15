@@ -305,7 +305,7 @@ class StoryboardPdfExporter {
     final cache = <int, Uint8List>{};
     for (final shots in shotsByScene.values) {
       for (final shot in shots) {
-        final bytes = await PdfSafeImage.loadFromPath(storyboardImageOf(shot));
+        final bytes = await PdfSafeImage.loadFromPathMaxEdge(storyboardImageOf(shot));
         if (bytes != null) cache[shot.id] = bytes;
       }
     }
