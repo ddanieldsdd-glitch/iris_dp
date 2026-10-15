@@ -50,6 +50,10 @@ class Projects extends Table {
 
   /// Opciones propias del catálogo del moodboard (JSON por clave).
   TextColumn get moodboardCatalogJson => text().nullable()();
+
+  /// Qué datos enseña la tarjeta del proyecto (lista de nombres de
+  /// `ProjectCardMetric`). Nula: los de siempre.
+  TextColumn get cardMetricsJson => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
