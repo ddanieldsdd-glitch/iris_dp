@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
@@ -18,6 +19,8 @@ class ProjectPosterCard extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onChangeImage;
   final VoidCallback onChooseData;
+  final VoidCallback onChooseColor;
+  final ValueChanged<ProjectCardSize> onSetSize;
   final VoidCallback onEdit;
   final VoidCallback onDuplicate;
   final VoidCallback onDelete;
@@ -31,6 +34,8 @@ class ProjectPosterCard extends StatefulWidget {
     required this.onTap,
     required this.onChangeImage,
     required this.onChooseData,
+    required this.onChooseColor,
+    required this.onSetSize,
     required this.onEdit,
     required this.onDuplicate,
     required this.onDelete,
@@ -64,54 +69,84 @@ class _ProjectPosterCardState extends State<ProjectPosterCard> {
         coverPath != null &&
         coverPath.isNotEmpty &&
         File(coverPath).existsSync();
-    final color = syncColor(palette, widget.syncState);
+    // El color de la tarjeta lo elige el usuario; el estado de la nube va
+    // en la pastilla.
+    final color = project.cardColor != null
+        ? Color(project.cardColor!)
+        : palette.accent;
+    final stateColor = syncColor(palette, widget.syncState);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
-      child: AnimatedSlide(
-        offset: _hover ? const Offset(0, -0.012) : Offset.zero,
-        duration: const Duration(milliseconds: 180),
-        child: GestureDetector(
-          onTap: widget.onTap,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          transform: Matrix4.translationValues(0, _hover ? -4 : 0, 0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: color.withValues(alpha: _hover ? 0.85 : 0.25),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: (_hover ? color : Colors.black).withValues(
+                  alpha: _hover ? 0.28 : 0.45,
+                ),
+                blurRadius: _hover ? 32 : 18,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(19),
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (hasCover)
-                  Image.file(File(coverPath), fit: BoxFit.cover)
-                else
-                  ColoredBox(
-                    color: palette.surfaceOverlay,
-                    child: Center(
-                      child: Icon(
-                        IconData(project.iconCode, fontFamily: 'MaterialIcons'),
-                        size: 64,
-                        color: palette.textTertiary,
-                      ),
-                    ),
-                  ),
-                // Oscurece la parte baja para que el texto se lea sobre
-                // cualquier portada.
+                // La imagen se acerca al pasar el ratón.
+                AnimatedScale(
+                  scale: _hover ? 1.05 : 1,
+                  duration: const Duration(milliseconds: 600),
+                  curve: Curves.easeOutCubic,
+                  child: hasCover
+                      ? Image.file(File(coverPath), fit: BoxFit.cover)
+                      : ColoredBox(
+                          color: palette.surfaceOverlay,
+                          child: Center(
+                            child: Icon(
+                              IconData(
+                                project.iconCode,
+                                fontFamily: 'MaterialIcons',
+                              ),
+                              size: 96,
+                              color: palette.textTertiary,
+                            ),
+                          ),
+                        ),
+                ),
+                // Oscurece arriba (menú y anillo) y sobre todo abajo (texto).
                 const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      stops: [0.35, 1],
-                      colors: [Colors.transparent, Color(0xE6000000)],
+                      stops: [0, 0.22, 0.5, 1],
+                      colors: [
+                        Color(0x66000000),
+                        Colors.transparent,
+                        Colors.transparent,
+                        Color(0xF2000000),
+                      ],
                     ),
                   ),
                 ),
+                Positioned(top: 10, left: 8, child: _menu(palette)),
                 Positioned(
-                  top: 6,
-                  left: 4,
-                  child: _menu(palette),
-                ),
-                Positioned(
-                  top: 10,
-                  right: 10,
+                  top: 16,
+                  right: 16,
                   child: Tooltip(
                     message: widget.syncState?.label ?? '',
                     child: _Ring(
@@ -121,55 +156,83 @@ class _ProjectPosterCardState extends State<ProjectPosterCard> {
                   ),
                 ),
                 Positioned(
-                  left: 12,
-                  right: 12,
-                  bottom: 12,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+                  left: 22,
+                  right: 22,
+                  bottom: 20,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
+                      Expanded(
+                        flex: 11,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (widget.syncState != null)
+                              _SyncPill(
+                                label: widget.syncState!.label,
+                                color: stateColor,
+                              ),
+                            const SizedBox(height: 10),
+                            Text(
+                              project.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 30,
+                                fontWeight: FontWeight.w700,
+                                height: 1.05,
+                                letterSpacing: -0.5,
+                                shadows: [
+                                  Shadow(color: Colors.black54, blurRadius: 12),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              [
+                                if (project.director?.trim().isNotEmpty ??
+                                    false)
+                                  project.director!.trim(),
+                                if (stats != null &&
+                                    !widget.metrics.contains(
+                                      ProjectCardMetric.scenes,
+                                    ))
+                                  '${stats.scenes} escenas',
+                              ].join(' · '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       if (stats != null) ...[
-                        for (final metric in widget.metrics)
-                          metric.isProgress
-                              ? _Bar(
-                                  label: metric.label,
-                                  done: metric.done(stats),
-                                  total: metric.total(stats),
-                                )
-                              : _Count(
-                                  label: metric.label,
-                                  icon: metric.icon,
-                                  value: metric.done(stats),
-                                ),
-                        const SizedBox(height: 10),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          flex: 9,
+                          child: _GlassPanel(
+                            children: [
+                              for (final metric in widget.metrics)
+                                metric.isProgress
+                                    ? _Bar(
+                                        label: metric.label,
+                                        done: metric.done(stats),
+                                        total: metric.total(stats),
+                                      )
+                                    : _Count(
+                                        label: metric.label,
+                                        icon: metric.icon,
+                                        value: metric.done(stats),
+                                      ),
+                            ],
+                          ),
+                        ),
                       ],
-                      Text(
-                        project.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          height: 1.15,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        [
-                          if (stats != null &&
-                              !widget.metrics.contains(ProjectCardMetric.scenes))
-                            '${stats.scenes} escenas',
-                          if (widget.syncState != null)
-                            widget.syncState!.label.toLowerCase(),
-                        ].join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.8),
-                          fontSize: 11.5,
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -187,6 +250,10 @@ class _ProjectPosterCardState extends State<ProjectPosterCard> {
     onSelected: (v) {
       if (v == 'image') widget.onChangeImage();
       if (v == 'data') widget.onChooseData();
+      if (v == 'color') widget.onChooseColor();
+      for (final size in ProjectCardSize.values) {
+        if (v == 'size_${size.name}') widget.onSetSize(size);
+      }
       if (v == 'edit') widget.onEdit();
       if (v == 'duplicate') widget.onDuplicate();
       if (v == 'delete') widget.onDelete();
@@ -204,6 +271,19 @@ class _ProjectPosterCardState extends State<ProjectPosterCard> {
         'Datos de la tarjeta',
         palette.textSecondary,
       ),
+      _item(
+        'color',
+        Icons.palette_outlined,
+        'Color de la tarjeta',
+        palette.textSecondary,
+      ),
+      const PopupMenuDivider(),
+      for (final size in ProjectCardSize.values)
+        CheckedPopupMenuItem(
+          value: 'size_${size.name}',
+          checked: ProjectCardSize.of(widget.project.cardSize) == size,
+          child: Text('Tamaño ${size.label}'),
+        ),
       const PopupMenuDivider(),
       _item('edit', Icons.edit_outlined, 'Editar', palette.textSecondary),
       _item('duplicate', Icons.copy_outlined, 'Duplicar', palette.textSecondary),
@@ -237,8 +317,8 @@ class _Ring extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    width: 46,
-    height: 46,
+    width: 64,
+    height: 64,
     decoration: const BoxDecoration(
       color: Color(0x8C000000),
       shape: BoxShape.circle,
@@ -247,11 +327,12 @@ class _Ring extends StatelessWidget {
       alignment: Alignment.center,
       children: [
         SizedBox(
-          width: 40,
-          height: 40,
+          width: 56,
+          height: 56,
           child: CircularProgressIndicator(
             value: percent / 100,
-            strokeWidth: 3,
+            strokeWidth: 4.5,
+            strokeCap: StrokeCap.round,
             color: color,
             backgroundColor: color.withValues(alpha: 0.25),
           ),
@@ -260,7 +341,7 @@ class _Ring extends StatelessWidget {
           '$percent%',
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 11,
+            fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -279,18 +360,18 @@ class _Bar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const style = TextStyle(color: Colors.white, fontSize: 11);
+    const style = TextStyle(color: Colors.white, fontSize: 12.5);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          SizedBox(width: 68, child: Text(label, style: style)),
+          SizedBox(width: 84, child: Text(label, style: style)),
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(2),
               child: LinearProgressIndicator(
                 value: total == 0 ? 0 : done / total,
-                minHeight: 4,
+                minHeight: 5,
                 color: Colors.white,
                 backgroundColor: Colors.white.withValues(alpha: 0.25),
               ),
@@ -320,9 +401,9 @@ class _Count extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const style = TextStyle(color: Colors.white, fontSize: 11);
+    const style = TextStyle(color: Colors.white, fontSize: 12.5);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
           Icon(icon, size: 12, color: Colors.white70),
@@ -334,3 +415,62 @@ class _Count extends StatelessWidget {
     );
   }
 }
+
+/// Panel de cristal esmerilado para los datos: se leen sobre cualquier imagen
+/// sin taparla del todo.
+class _GlassPanel extends StatelessWidget {
+  final List<Widget> children;
+
+  const _GlassPanel({required this.children});
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(14),
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: children),
+      ),
+    ),
+  );
+}
+
+/// El estado de la nube como pastilla, con el mismo color que el anillo.
+class _SyncPill extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _SyncPill({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: Colors.black.withValues(alpha: 0.45),
+      borderRadius: BorderRadius.circular(99),
+      border: Border.all(color: color.withValues(alpha: 0.6)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white, fontSize: 12),
+        ),
+      ],
+    ),
+  );
+}
+

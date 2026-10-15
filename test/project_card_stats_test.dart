@@ -195,4 +195,11 @@ void main() {
       50,
     );
   });
+
+  test('el tamaño de la tarjeta se lee del proyecto; sin elegir, M', () {
+    expect(ProjectCardSize.of(null), ProjectCardSize.m);
+    expect(ProjectCardSize.of('xl'), ProjectCardSize.xl);
+    expect(ProjectCardSize.of('raro'), ProjectCardSize.m);
+    expect(ProjectCardSize.xl.width, double.infinity);
+  });
 }

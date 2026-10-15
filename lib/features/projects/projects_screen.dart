@@ -497,23 +497,38 @@ class _ProjectGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 360,
-        crossAxisSpacing: AppSpacing.md,
-        mainAxisSpacing: AppSpacing.md,
-        childAspectRatio: 4 / 3,
-      ),
-      itemCount: projects.length,
-      itemBuilder: (context, i) => _ProjectCard(
-        project: projects[i],
-        onTap: () => onTap(projects[i]),
-        onEdit: () => onEdit(projects[i]),
-        onDuplicate: () => onDuplicate(projects[i]),
-        onDelete: () => onDelete(projects[i]),
-      ),
+    // Tarjetas grandes: son la portada de cada trabajo. Cada proyecto elige
+    // su tamaño (S, M, L, XL) y las filas se rellenan solas.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth;
+        return Wrap(
+          spacing: 28,
+          runSpacing: 28,
+          children: [
+            for (final project in projects)
+              Builder(
+                builder: (_) {
+                  final size = ProjectCardSize.of(project.cardSize);
+                  final width = size.width > available
+                      ? available
+                      : size.width;
+                  return SizedBox(
+                    width: width,
+                    height: width * 10 / 16,
+                    child: _ProjectCard(
+                      project: project,
+                      onTap: () => onTap(project),
+                      onEdit: () => onEdit(project),
+                      onDuplicate: () => onDuplicate(project),
+                      onDelete: () => onDelete(project),
+                    ),
+                  );
+                },
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -574,6 +589,13 @@ class _ProjectCardState extends ConsumerState<_ProjectCard> {
         ref.read(databaseProvider),
         widget.project,
       ),
+      onChooseColor: () => chooseProjectCardColor(
+        context,
+        ref.read(databaseProvider),
+        widget.project,
+      ),
+      onSetSize: (size) =>
+          setProjectCardSize(ref.read(databaseProvider), widget.project, size),
       onChooseData: () async {
         await chooseProjectCardData(
           context,

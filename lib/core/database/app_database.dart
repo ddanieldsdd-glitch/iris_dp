@@ -517,6 +517,11 @@ class AppDatabase extends _$AppDatabase {
         // Datos elegidos para la tarjeta del proyecto (B3).
         await add(projects, projects.cardMetricsJson);
       }
+      if (from < 50) {
+        // Color y tamaño de la tarjeta del proyecto (B3).
+        await add(projects, projects.cardColor);
+        await add(projects, projects.cardSize);
+      }
     },
   );
 
@@ -4636,7 +4641,7 @@ LazyDatabase _openConnection() {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 49;
+const kSchemaVersion = 50;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

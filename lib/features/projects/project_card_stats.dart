@@ -255,3 +255,20 @@ ProjectSyncState projectSyncState({
   if (stats.imagesPending > 0) return ProjectSyncState.imagesPending;
   return ProjectSyncState.upToDate;
 }
+
+/// Tamaño de la tarjeta de un proyecto en la pantalla de inicio.
+enum ProjectCardSize {
+  s('S', 320),
+  m('M', 460),
+  l('L', 640),
+  xl('XL', double.infinity);
+
+  final String label;
+
+  /// Ancho deseado; XL ocupa la fila entera.
+  final double width;
+  const ProjectCardSize(this.label, this.width);
+
+  static ProjectCardSize of(String? name) =>
+      values.where((s) => s.name == name).firstOrNull ?? m;
+}
