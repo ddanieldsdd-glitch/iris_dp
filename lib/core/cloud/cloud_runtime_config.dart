@@ -40,6 +40,13 @@ abstract final class CloudRuntimeConfig {
 
   static Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
+    // Primera vez con un build que trae las claves: la nube viene activada y
+    // se entra directo a iniciar sesión. Si el usuario eligió «solo local»,
+    // queda guardado `false` y se respeta.
+    if (prefs.getBool(_enabledKey) == null && SupabaseConfig.isConfigured) {
+      await prefs.setBool(_enabledKey, true);
+      await prefs.setBool(_manualKey, false);
+    }
     _enabled = prefs.getBool(_enabledKey) ?? false;
     _manual = prefs.getBool(_manualKey) ?? false;
     _url = prefs.getString(_urlKey);
