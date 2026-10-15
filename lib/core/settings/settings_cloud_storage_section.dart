@@ -29,7 +29,7 @@ class SettingsCloudStorageSection extends ConsumerWidget {
         const SizedBox(height: AppSpacing.sm),
         progress.when(
           data: (p) {
-            if (!p.hasWork && p.completed == 0) {
+            if (!p.hasWork && p.completed == 0 && p.failed == 0) {
               return Text(
                 'Sin subidas pendientes',
                 style: AppTypography.caption(palette),
@@ -37,11 +37,24 @@ class SettingsCloudStorageSection extends ConsumerWidget {
             }
             final savedMb =
                 (p.bytesSaved / 1024 / 1024).toStringAsFixed(1);
-            return Text(
+            final summary = Text(
               '↑ ${p.pending} pendientes · ${p.completed} subidas'
               '${p.failed > 0 ? ' · ${p.failed} fallidas' : ''}'
               '${p.bytesSaved > 0 ? ' · $savedMb MB ahorrados' : ''}',
               style: AppTypography.caption(palette),
+            );
+            if (p.failed == 0) return summary;
+            return Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: AppSpacing.sm,
+              children: [
+                summary,
+                TextButton(
+                  onPressed: () =>
+                      ref.read(mediaUploadQueueProvider)?.retryFailed(),
+                  child: const Text('Reintentar las fallidas'),
+                ),
+              ],
             );
           },
           loading: () => Text(

@@ -38,16 +38,27 @@ class MediaUploadQueue {
   MediaUploadQueue({
     required AppDatabase db,
     required CloudMediaService cloud,
+    @visibleForTesting bool Function()? isEnabled,
   })  : _db = db,
-        _cloud = cloud;
+        _cloud = cloud,
+        _isEnabled = isEnabled ?? (() => CloudinaryConfig.isConfigured);
 
   final AppDatabase _db;
   final CloudMediaService _cloud;
+  final bool Function() _isEnabled;
 
   static const maxConcurrency = 3;
   static const maxRetries = 5;
 
-  bool _running = false;
+  /// La pasada del worker en curso, si hay una.
+  Future<void>? _run;
+
+  /// Espera antes de reintentar: se dobla en cada fallo.
+  @visibleForTesting
+  static Duration retryDelay = const Duration(seconds: 1);
+
+  /// Cuándo puede reintentarse cada fila que falló (por id).
+  final _notBefore = <int, DateTime>{};
   int _bytesSavedSession = 0;
   final _progressController =
       StreamController<MediaUploadQueueProgress>.broadcast();
@@ -55,29 +66,25 @@ class MediaUploadQueue {
   Stream<MediaUploadQueueProgress> get progressStream =>
       _progressController.stream;
 
-  MediaUploadQueueProgress _currentProgress({bool processing = false}) {
-    // Counts computed synchronously from DB in notifyProgress
-    return MediaUploadQueueProgress(
-      bytesSaved: _bytesSavedSession,
-      isProcessing: processing,
-    );
+  Future<int> _count(String status) async {
+    final count = _db.pendingMediaUploads.id.count();
+    final row = await (_db.selectOnly(_db.pendingMediaUploads)
+          ..addColumns([count])
+          ..where(_db.pendingMediaUploads.status.equals(status)))
+        .getSingle();
+    return row.read(count) ?? 0;
   }
 
   Future<void> notifyProgress({bool processing = false}) async {
-    final pending = await (_db.select(_db.pendingMediaUploads)
-          ..where((t) => t.status.equals('pending')))
-        .get();
-    final done = await (_db.select(_db.pendingMediaUploads)
-          ..where((t) => t.status.equals('done')))
-        .get();
-    final failed = await (_db.select(_db.pendingMediaUploads)
-          ..where((t) => t.status.equals('failed')))
-        .get();
+    if (_progressController.isClosed) return;
+    final pending = await _count('pending') + await _count('processing');
+    final done = await _count('done');
+    final failed = await _count('failed');
     _progressController.add(MediaUploadQueueProgress(
-      pending: pending.length,
-      completed: done.length,
-      failed: failed.length,
-      total: pending.length + done.length + failed.length,
+      pending: pending,
+      completed: done,
+      failed: failed,
+      total: pending + done + failed,
       bytesSaved: _bytesSavedSession,
       isProcessing: processing,
     ));
@@ -94,19 +101,28 @@ class MediaUploadQueue {
     int priority = 0,
     String? source,
   }) async {
-    if (!CloudinaryConfig.isConfigured) return;
+    if (!_isEnabled()) return;
     if (!File(localPath).existsSync()) return;
 
-    final existing = await (_db.select(_db.pendingMediaUploads)
+    // Una fila por imagen: se reutiliza aunque fallara antes (y se quitan
+    // los duplicados que dejaban versiones anteriores).
+    final rows = await (_db.select(_db.pendingMediaUploads)
           ..where(
             (t) =>
                 t.projectId.equals(projectId) &
                 t.entityType.equals(entityType) &
                 t.entityKey.equals(entityKey),
-          ))
-        .getSingleOrNull();
+          )
+          ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+        .get();
+    final existing = rows.isEmpty ? null : rows.first;
+    if (rows.length > 1) {
+      await (_db.delete(_db.pendingMediaUploads)
+            ..where((t) => t.id.isIn(rows.skip(1).map((r) => r.id))))
+          .go();
+    }
 
-    if (existing != null && existing.status != 'failed') {
+    if (existing != null) {
       await (_db.update(_db.pendingMediaUploads)
             ..where((t) => t.id.equals(existing.id)))
           .write(PendingMediaUploadsCompanion(
@@ -117,7 +133,10 @@ class MediaUploadQueue {
         projectCloudId: Value(projectCloudId),
         source: Value(source),
         status: const Value('pending'),
+        retries: const Value(0),
+        lastError: const Value(null),
       ));
+      _notBefore.remove(existing.id);
     } else {
       await _db.into(_db.pendingMediaUploads).insert(
             PendingMediaUploadsCompanion.insert(
@@ -138,30 +157,66 @@ class MediaUploadQueue {
     unawaited(startWorker());
   }
 
-  Future<void> startWorker() async {
-    if (_running || !CloudinaryConfig.isConfigured) return;
-    _running = true;
+  /// Vuelve a poner en cola las subidas que fallaron del todo.
+  Future<int> retryFailed() async {
+    final count = await (_db.update(_db.pendingMediaUploads)
+          ..where((t) => t.status.equals('failed')))
+        .write(const PendingMediaUploadsCompanion(
+      status: Value('pending'),
+      retries: Value(0),
+      lastError: Value(null),
+    ));
+    await notifyProgress();
+    unawaited(startWorker());
+    return count;
+  }
+
+  /// Arranca el worker, o devuelve la pasada en curso: al completarse, la
+  /// cola está vacía o solo quedan fallidas.
+  Future<void> startWorker() {
+    if (!_isEnabled()) return Future.value();
+    return _run ??= _work().whenComplete(() => _run = null);
+  }
+
+  Future<void> _work() async {
     await notifyProgress(processing: true);
 
     try {
+      // Solo hay un worker: lo que esté «subiendo» al arrancar se cortó (la
+      // app se cerró a medias) y vuelve a la cola.
+      await (_db.update(_db.pendingMediaUploads)
+            ..where((t) => t.status.equals('processing')))
+          .write(const PendingMediaUploadsCompanion(status: Value('pending')));
+
       while (true) {
-        final batch = await (_db.select(_db.pendingMediaUploads)
+        final pending = await (_db.select(_db.pendingMediaUploads)
               ..where((t) => t.status.equals('pending'))
               ..orderBy([
                 (t) => OrderingTerm.desc(t.priority),
                 (t) => OrderingTerm.asc(t.sortOrder),
                 (t) => OrderingTerm.asc(t.id),
-              ])
-              ..limit(maxConcurrency))
+              ]))
             .get();
+        if (pending.isEmpty) break;
 
-        if (batch.isEmpty) break;
+        // Las que esperan su reintento no frenan a las demás.
+        final now = DateTime.now();
+        final ready = pending
+            .where((r) => !(_notBefore[r.id]?.isAfter(now) ?? false))
+            .take(maxConcurrency)
+            .toList();
+        if (ready.isEmpty) {
+          final next = pending
+              .map((r) => _notBefore[r.id]!)
+              .reduce((a, b) => a.isBefore(b) ? a : b);
+          await Future<void>.delayed(next.difference(now));
+          continue;
+        }
 
-        await Future.wait(batch.map(_processOne));
+        await Future.wait(ready.map(_processOne));
         await notifyProgress(processing: true);
       }
     } finally {
-      _running = false;
       await notifyProgress();
     }
   }
@@ -233,7 +288,9 @@ class MediaUploadQueue {
         lastError: Value(e.toString()),
       ));
       if (status == 'pending') {
-        await Future<void>.delayed(Duration(seconds: 1 << retries.clamp(0, 4)));
+        _notBefore[row.id] = DateTime.now().add(
+          retryDelay * (1 << retries.clamp(0, 4)),
+        );
       }
     }
   }
@@ -257,7 +314,7 @@ class MediaUploadQueue {
 
   /// Escanea un proyecto y encola imágenes locales pendientes.
   Future<int> scanAndEnqueueProject(int projectId) async {
-    if (!CloudinaryConfig.isConfigured) return 0;
+    if (!_isEnabled()) return 0;
 
     final project = await _db.getProject(projectId);
     if (project == null) return 0;
