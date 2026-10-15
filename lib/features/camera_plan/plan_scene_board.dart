@@ -13,6 +13,7 @@ import 'camera_plan_scene_badge.dart';
 import 'floor_plan_repository.dart';
 import 'light_setup_actions.dart';
 import 'plan_data.dart';
+import 'plan_item_actions.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
 import 'shot_route.dart';
@@ -231,39 +232,66 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
     final setColor = set == null
         ? palette.textTertiary
         : _data.colors.setColor(set);
+    final actions = set == null
+        ? null
+        : SetActions(
+            context,
+            _db,
+            set,
+            sceneCount: _data.scenesOfSet(set.id).length,
+            setupCount: _data.setupsOfSet(set.id).length,
+          );
+    // Lo que se pega en esta fila: un esquema va a este set.
+    final paste = set == null
+        ? PlanPasteTarget(siteId: _data.siteIdOfScene(_scene))
+        : PlanPasteTarget(setId: set.id);
+    final header = Row(
+      children: [
+        Container(width: 4, height: 18, color: setColor),
+        const SizedBox(width: 8),
+        Text(
+          set == null ? 'SIN SET' : 'SET ${set.locationName.toUpperCase()}',
+          style: AppTypography.label(palette),
+        ),
+        const SizedBox(width: 8),
+        if (set != null && own)
+          Text(
+            'el de la escena',
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.textTertiary),
+          ),
+        const Spacer(),
+        if (set != null) ...[
+          TextButton.icon(
+            onPressed: () =>
+                widget.onOpen(PlanTarget.set(set.id, set.locationName)),
+            icon: const Icon(Icons.grid_on_outlined, size: 15),
+            label: const Text('Planta del set'),
+          ),
+          SetMenuButton(
+            set: set,
+            sceneCount: actions!.sceneCount,
+            setupCount: actions.setupCount,
+          ),
+        ],
+      ],
+    );
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(width: 4, height: 18, color: setColor),
-              const SizedBox(width: 8),
-              Text(
-                set == null
-                    ? 'SIN SET'
-                    : 'SET ${set.locationName.toUpperCase()}',
-                style: AppTypography.label(palette),
-              ),
-              const SizedBox(width: 8),
-              if (set != null && own)
-                Text(
-                  'el de la escena',
-                  style: AppTypography.caption(
-                    palette,
-                  ).copyWith(color: palette.textTertiary),
-                ),
-              const Spacer(),
-              if (set != null)
-                TextButton.icon(
-                  onPressed: () =>
-                      widget.onOpen(PlanTarget.set(set.id, set.locationName)),
-                  icon: const Icon(Icons.grid_on_outlined, size: 15),
-                  label: const Text('Planta del set'),
-                ),
-            ],
-          ),
+          if (actions == null)
+            header
+          else
+            PlanItemKeys(
+              onCopy: actions.copy,
+              onDuplicate: actions.duplicate,
+              onPaste: actions.paste,
+              onDelete: actions.delete,
+              child: header,
+            ),
           const SizedBox(height: AppSpacing.sm),
           Wrap(
             spacing: AppSpacing.md,
@@ -273,10 +301,16 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
               _column(palette, set: set, setup: null),
               for (final setup in setups)
                 _column(palette, set: set, setup: setup),
-              _NewSetupColumn(
-                onTap: () => _newSetup(set),
-                onDrop: (shots) async =>
-                    _move(shots, set, await _newSetup(set)),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _NewSetupColumn(
+                    onTap: () => _newSetup(set),
+                    onDrop: (shots) async =>
+                        _move(shots, set, await _newSetup(set)),
+                  ),
+                  PlanPasteButton(target: paste),
+                ],
               ),
             ],
           ),
@@ -294,7 +328,7 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
     final color = setup == null
         ? palette.textTertiary
         : _data.setupColor(setup);
-    return DragTarget<List<Shot>>(
+    final target = DragTarget<List<Shot>>(
       onWillAcceptWithDetails: (d) => d.data.any((s) => !shots.contains(s)),
       onAcceptWithDetails: (d) => _move(d.data, set, setup),
       builder: (context, candidate, _) => Container(
@@ -422,6 +456,20 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
           ],
         ),
       ),
+    );
+    if (setup == null) return target;
+    final actions = LightSetupActions(
+      context,
+      _db,
+      setup,
+      _data.shotsOfSetup(setup.id).length,
+    );
+    return PlanItemKeys(
+      onCopy: actions.copy,
+      onDuplicate: actions.duplicate,
+      onPaste: actions.pasteBeside,
+      onDelete: actions.delete,
+      child: target,
     );
   }
 }

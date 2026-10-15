@@ -1746,6 +1746,9 @@ class AppDatabase extends _$AppDatabase {
       await (update(scenes)..where((s) => s.locationId.equals(id))).write(
         const ScenesCompanion(locationId: Value(null)),
       );
+      // Los planos que se rodaban en este set vuelven al de su escena.
+      await (update(shots)..where((s) => s.locationBasePlanId.equals(id)))
+          .write(const ShotsCompanion(locationBasePlanId: Value(null)));
       await (delete(
         locationImages,
       )..where((i) => i.locationId.equals(id))).go();
