@@ -645,6 +645,10 @@ class AppDatabase extends _$AppDatabase {
   /// Elimina proyecto, datos relacionados y archivos en disco.
   Future<void> deleteProjectFully(int id) async {
     await transaction(() async {
+      // Sus imágenes pendientes de subir ya no tienen adónde ir.
+      await (delete(
+        pendingMediaUploads,
+      )..where((u) => u.projectId.equals(id))).go();
       final projectShots = await (select(
         shots,
       )..where((s) => s.projectId.equals(id))).get();
@@ -4622,20 +4626,25 @@ const kSchemaBackupsKept = 3;
 
 /// Guarda una copia de la base junto a ella antes de migrarla de
 /// [storedVersion] a [targetVersion], por si la migración falla o hay que
-/// volver a una versión anterior de la app. Se conservan las
+/// volver a una versión anterior de la app. La copia lleva la versión y el
+/// día (`antes-de-esquema-46-2026-10-15`): una copia vieja de la misma versión
+/// no sirve, porque una app anterior abierta entretanto rebaja el número de
+/// versión y la siguiente migración vuelve a pasar por aquí. Se conservan las
 /// [kSchemaBackupsKept] más recientes. Devuelve la ruta de la copia, o nulo
 /// si no hacía falta.
 String? backupBeforeSchemaUpgrade(
   String databasePath,
   int storedVersion, {
   int targetVersion = kSchemaVersion,
+  DateTime? now,
 }) {
   // 0 = base recién creada: no hay nada que guardar.
   if (storedVersion == 0 || storedVersion >= targetVersion) return null;
   final source = File(databasePath);
   if (!source.existsSync()) return null;
-  final copyPath = '$databasePath.antes-de-esquema-$targetVersion';
-  // Si una migración falló a medias, la copia buena es la primera.
+  final day = (now ?? DateTime.now()).toIso8601String().substring(0, 10);
+  final copyPath = '$databasePath.antes-de-esquema-$targetVersion-$day';
+  // Si una migración falló a medias hoy, la copia buena es la primera.
   if (File(copyPath).existsSync()) return copyPath;
   try {
     source.copySync(copyPath);
@@ -4651,21 +4660,30 @@ String? backupBeforeSchemaUpgrade(
   }
 }
 
+/// Deja las [kSchemaBackupsKept] copias más recientes (con sus -wal y
+/// -shm), por el día y la versión del nombre; las antiguas sin día, primero.
 void _pruneSchemaBackups(String databasePath) {
   final prefix = '${p.basename(databasePath)}.antes-de-esquema-';
-  final byVersion = <int, List<File>>{};
+  final copies = <String, List<File>>{};
   for (final f in Directory(p.dirname(databasePath)).listSync()) {
     if (f is! File) continue;
     final name = p.basename(f.path);
     if (!name.startsWith(prefix)) continue;
-    final version = int.tryParse(
-      name.substring(prefix.length).replaceAll(RegExp(r'-(wal|shm)$'), ''),
-    );
-    if (version != null) byVersion.putIfAbsent(version, () => []).add(f);
+    final key = name
+        .substring(prefix.length)
+        .replaceAll(RegExp(r'-(wal|shm)$'), '');
+    copies.putIfAbsent(key, () => []).add(f);
   }
-  final versions = byVersion.keys.toList()..sort((a, b) => b.compareTo(a));
-  for (final old in versions.skip(kSchemaBackupsKept)) {
-    for (final f in byVersion[old]!) {
+  String order(String key) {
+    final m = RegExp(r'^(\d+)(?:-(\d{4}-\d{2}-\d{2}))?$').firstMatch(key);
+    if (m == null) return '';
+    return '${m.group(2) ?? '0000-00-00'} ${m.group(1)!.padLeft(6, '0')}';
+  }
+
+  final newestFirst = copies.keys.toList()
+    ..sort((a, b) => order(b).compareTo(order(a)));
+  for (final old in newestFirst.skip(kSchemaBackupsKept)) {
+    for (final f in copies[old]!) {
       try {
         f.deleteSync();
       } catch (_) {}

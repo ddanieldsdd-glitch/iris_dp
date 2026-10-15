@@ -67,7 +67,7 @@ void main() {
   Future<List<PendingMediaUpload>> rows() =>
       db.select(db.pendingMediaUploads).get();
 
-  Future<void> enqueue(MediaUploadQueue queue) => queue.enqueue(
+  Future<bool> enqueue(MediaUploadQueue queue) => queue.enqueue(
     projectId: projectId,
     projectCloudId: 'cloud-1',
     entityType: 'moodboard',
@@ -141,5 +141,71 @@ void main() {
     expect(progress.last.failed, 1);
     expect(progress.last.pending, 0);
     expect(progress.last.hasWork, isFalse);
+  });
+
+  test('una imagen ya subida no se vuelve a subir en cada sincronización', () async {
+    final cloud = _FakeCloud();
+    final queue = queueWith(cloud);
+    expect(await enqueue(queue), isTrue);
+    await queue.startWorker();
+
+    expect(await enqueue(queue), isFalse);
+    await queue.startWorker();
+
+    expect(cloud.attempts['moodboard:ungrouped:0'], 1);
+    expect((await rows()).single.status, 'done');
+  });
+
+  test('si el archivo cambia, se sube de nuevo', () async {
+    final cloud = _FakeCloud();
+    final queue = queueWith(cloud);
+    await enqueue(queue);
+    await queue.startWorker();
+
+    final other = '${File(imagePath).parent.path}/otro.png';
+    File(other).writeAsBytesSync([4, 5, 6]);
+    final queued = await queue.enqueue(
+      projectId: projectId,
+      projectCloudId: 'cloud-1',
+      entityType: 'moodboard',
+      entityKey: 'moodboard:ungrouped:0',
+      localPath: other,
+      sortOrder: 0,
+      publicId: 'ws-1/cloud-1/still',
+    );
+    await queue.startWorker();
+
+    expect(queued, isTrue);
+    expect(cloud.attempts['moodboard:ungrouped:0'], 2);
+  });
+
+  test('las subidas de un proyecto borrado se descartan', () async {
+    final gone = await db.insertProject(ProjectsCompanion.insert(name: 'viejo'));
+    await db
+        .into(db.pendingMediaUploads)
+        .insert(
+          PendingMediaUploadsCompanion.insert(
+            projectId: gone,
+            entityType: 'moodboard',
+            entityKey: 'moodboard:ungrouped:9',
+            localPath: imagePath,
+            status: const Value('failed'),
+          ),
+        );
+    await db.customStatement('PRAGMA foreign_keys = OFF');
+    await db.customStatement('DELETE FROM projects WHERE id = ?', [gone]);
+
+    final queue = queueWith(_FakeCloud());
+    expect(await queue.retryFailed(), 0);
+    await queue.startWorker();
+    expect(await rows(), isEmpty);
+  });
+
+  test('borrar un proyecto limpia su cola de imágenes', () async {
+    final queue = queueWith(_FakeCloud(failures: 99));
+    await enqueue(queue);
+    await db.deleteProjectFully(projectId);
+    await queue.startWorker();
+    expect(await rows(), isEmpty);
   });
 }

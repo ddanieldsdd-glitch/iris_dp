@@ -10,7 +10,6 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../utils/error_log.dart';
-import '../widgets/app_theme_toggle.dart';
 import '../update/settings_update_section.dart';
 import 'settings_cloud_link_section.dart';
 import 'settings_cloud_storage_section.dart';
@@ -136,10 +135,6 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text('Ajustes', style: AppTypography.titleLarge(palette)),
-              const SizedBox(height: AppSpacing.lg),
-              Text('Apariencia', style: AppTypography.titleMedium(palette)),
-              const SizedBox(height: AppSpacing.sm),
-              const AppThemeToggle(),
               const SizedBox(height: AppSpacing.lg),
               Text('Almacenamiento', style: AppTypography.titleMedium(palette)),
               const SizedBox(height: AppSpacing.sm),
