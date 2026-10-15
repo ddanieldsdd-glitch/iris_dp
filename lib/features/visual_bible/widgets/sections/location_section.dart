@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:drift/drift.dart' as drift;
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -30,6 +31,9 @@ import '../../../../shared/visual_bible/narrative_card_kind.dart';
 import '../../../locations/location_manage_menu.dart';
 import '../lighting/lighting_card_view.dart';
 import '../lighting/lighting_locations_block.dart';
+import '../../../../shared/visual_bible/bible_cards.dart';
+import '../../../../shared/visual_bible/lighting_card_page.dart';
+import '../bible_card_editor.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_paste_zone.dart';
 import '../moodboard_drag.dart';
@@ -38,10 +42,21 @@ import '../moodboard_strip.dart';
 import '../../moodboard_helpers.dart';
 import '../../services/lighting_narrative_cards_service.dart';
 import '../../../../shared/visual_bible/bible_section_ids.dart';
-import '../narrative_deck/narrative_card_detail.dart';
 import '../bible_screen_hero.dart';
 
 /// Localización — layout Stitch (hero + solar + atmósfera + staging).
+/// Fotos que se pueden soltar en la ficha (las del iPhone llegan en HEIC).
+const _kPhotoExtensions = {
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.heic',
+  '.heif',
+  '.webp',
+  '.tif',
+  '.tiff',
+};
+
 class LocationSection extends ConsumerStatefulWidget {
   final int projectId;
   final int bibleId;
@@ -131,6 +146,23 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
   /// Nulo = se ven todas, en tarjetas.
   String? _open;
 
+  @override
+  void initState() {
+    super.initState();
+    // Las fichas de luz de cada set, una vez al entrar (no en cada
+    // repintado).
+    if (widget.bibleId > 0) {
+      final db = ref.read(databaseProvider);
+      Future.microtask(
+        () => LightingNarrativeCardsService.ensureSeeded(
+          db: db,
+          bibleId: widget.bibleId,
+          projectId: widget.projectId,
+        ),
+      );
+    }
+  }
+
   static String _keyOf(LightingSiteGroup group) => group.site != null
       ? 'site:${group.site!.id}'
       : 'set:${group.sets.first.id}';
@@ -165,30 +197,35 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
                         final open = groups
                             .where((g) => _keyOf(g) == _open)
                             .firstOrNull;
-                        return ListView(
+                        // Una columna, no una lista perezosa: las fichas son
+                        // altas y, construidas al vuelo, la página saltaba.
+                        return SingleChildScrollView(
                           padding: const EdgeInsets.all(24),
-                          children: [
-                            BibleSectionHero(
-                              projectId: widget.projectId,
-                              bibleId: widget.bibleId,
-                              sectionId: BibleSectionId.location,
-                              title: 'Localización',
-                            ),
-                            if (open == null)
-                              _hub(
-                                palette,
-                                groups,
-                                refSnap.data ?? const [],
-                                sceneSnap.data ?? const [],
-                              )
-                            else
-                              ..._page(
-                                palette,
-                                db,
-                                open,
-                                refSnap.data ?? const [],
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              BibleSectionHero(
+                                projectId: widget.projectId,
+                                bibleId: widget.bibleId,
+                                sectionId: BibleSectionId.location,
+                                title: 'Localización',
                               ),
-                          ],
+                              if (open == null)
+                                _hub(
+                                  palette,
+                                  groups,
+                                  refSnap.data ?? const [],
+                                  sceneSnap.data ?? const [],
+                                )
+                              else
+                                ..._page(
+                                  palette,
+                                  db,
+                                  open,
+                                  refSnap.data ?? const [],
+                                ),
+                            ],
+                          ),
                         );
                       },
                     ),
@@ -330,47 +367,6 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
         ),
         const SizedBox(height: 16),
       ],
-      if (site != null)
-        _SiteFactsCard(site: site)
-      else
-        Text(
-          'Este set no está dentro de ninguna localización, así que no '
-          'tiene ubicación, sol ni meteorología. Mételo en una desde el '
-          'menú «⋯» de arriba.',
-          style: AppTypography.bodyMedium(
-            palette,
-          ).copyWith(color: palette.textSecondary),
-        ),
-      const SizedBox(height: 24),
-      Text('LA LUZ DEL LUGAR', style: AppTypography.label(palette)),
-      const SizedBox(height: 4),
-      Text(
-        'Es la misma ficha que «Luz por localización» de Iluminación: lo '
-        'que escribas aquí aparece allí.',
-        style: AppTypography.caption(palette),
-      ),
-      const SizedBox(height: 10),
-      if (wholeCard != null)
-        LightingCardView(
-          key: ValueKey('loc_light_${wholeCard.id}'),
-          projectId: widget.projectId,
-          bibleId: widget.bibleId,
-          cardId: wholeCard.id,
-          fixedTitle: group.name,
-        )
-      else
-        TextButton.icon(
-          onPressed: () async {
-            await LightingNarrativeCardsService.ensureSeeded(
-              db: db,
-              bibleId: widget.bibleId,
-              projectId: widget.projectId,
-            );
-          },
-          icon: const Icon(Icons.wb_incandescent_outlined, size: 18),
-          label: const Text('Crear la ficha de luz de esta localización'),
-        ),
-      const SizedBox(height: 28),
       for (final set in group.shownSets) ...[
         Text(
           group.isWholeSite(set)
@@ -424,6 +420,52 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Añadir un set a esta localización'),
           ),
+        ),
+      const SizedBox(height: 24),
+      Text('LA LUZ DEL LUGAR', style: AppTypography.label(palette)),
+      const SizedBox(height: 4),
+      Text(
+        'Es la misma ficha que «Luz por localización» de Iluminación: lo '
+        'que escribas aquí aparece allí.',
+        style: AppTypography.caption(palette),
+      ),
+      const SizedBox(height: 10),
+      if (wholeCard != null)
+        LightingCardView(
+          key: ValueKey('loc_light_${wholeCard.id}'),
+          projectId: widget.projectId,
+          bibleId: widget.bibleId,
+          cardId: wholeCard.id,
+          fixedTitle: group.name,
+        )
+      else
+        TextButton.icon(
+          onPressed: () async {
+            await LightingNarrativeCardsService.ensureSeeded(
+              db: db,
+              bibleId: widget.bibleId,
+              projectId: widget.projectId,
+            );
+          },
+          icon: const Icon(Icons.wb_incandescent_outlined, size: 18),
+          label: const Text('Crear la ficha de luz de esta localización'),
+        ),
+      const SizedBox(height: 28),
+      Text(
+        'UBICACIÓN, SOL Y METEOROLOGÍA',
+        style: AppTypography.label(palette),
+      ),
+      const SizedBox(height: 10),
+      if (site != null)
+        _SiteFactsCard(site: site)
+      else
+        Text(
+          'Este set no está dentro de ninguna localización, así que no '
+          'tiene ubicación, sol ni meteorología. Mételo en una desde el '
+          'menú «⋯» de arriba.',
+          style: AppTypography.bodyMedium(
+            palette,
+          ).copyWith(color: palette.textSecondary),
         ),
     ];
   }
@@ -916,6 +958,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
       );
       if (stored == null) continue;
       _model.referenceImages.add(stored);
+      await _shareWithLocations(stored);
       final extraction = await ColorExtractionService.extractFromFile(stored);
       if (extraction.estimatedKelvin != null &&
           _model.estimatedColorTempKelvin == null) {
@@ -923,6 +966,42 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
       }
     }
     setState(() {});
+    await widget.onSaveRef(_model);
+  }
+
+  /// La foto también queda en el set de la pantalla Localizaciones.
+  Future<void> _shareWithLocations(String stored) async {
+    final db = ref.read(databaseProvider);
+    final existing = await db.watchImagesForLocation(widget.plan.id).first;
+    if (existing.any((i) => i.imagePath == stored)) return;
+    await db.insertLocationImage(
+      LocationImagesCompanion.insert(
+        locationId: widget.plan.id,
+        imagePath: stored,
+        kind: const drift.Value('scouting'),
+        sortOrder: drift.Value(existing.length),
+      ),
+    );
+  }
+
+  /// Fotos soltadas desde Fotos o Finder (las del iPhone llegan por AirDrop).
+  Future<void> _dropFiles(List<String> paths) async {
+    for (final path in paths) {
+      if (!_kPhotoExtensions.contains(p.extension(path).toLowerCase())) {
+        continue;
+      }
+      final stored = await MediaStorage.copyFileIntoProject(
+        projectId: widget.projectId,
+        sourcePath: path,
+        subfolder: 'visual_bible/locations',
+        fileName:
+            'loc_${DateTime.now().millisecondsSinceEpoch}${p.extension(path)}',
+      );
+      if (stored == null) continue;
+      _model.referenceImages.add(stored);
+      await _shareWithLocations(stored);
+    }
+    if (mounted) setState(() {});
     await widget.onSaveRef(_model);
   }
 
@@ -935,6 +1014,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     );
     if (stored == null) return;
     _model.referenceImages.add(stored);
+    await _shareWithLocations(stored);
     final extraction = await ColorExtractionService.extractFromFile(stored);
     if (extraction.estimatedKelvin != null &&
         _model.estimatedColorTempKelvin == null) {
@@ -1131,140 +1211,153 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
               minHeight: 0,
               onPaste: _pastePhoto,
               onMoodboardDropped: _dropMoodboardPhoto,
-              child: SizedBox(
-                height: 320,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (heroPath != null &&
-                        heroPath.isNotEmpty &&
-                        File(heroPath).existsSync())
-                      Image.file(File(heroPath), fit: BoxFit.cover)
-                    else
-                      StreamBuilder<List<MoodboardImage>>(
-                        stream: ref
-                            .watch(databaseProvider)
-                            .watchMoodboardImagesForSection(
-                              widget.projectId,
-                              BibleSectionId.location,
-                            ),
-                        builder: (context, snap) {
-                          final imgs = snap.data ?? [];
-                          if (imgs.isNotEmpty &&
-                              File(imgs.first.imagePath).existsSync()) {
-                            return Image.file(
-                              File(imgs.first.imagePath),
-                              fit: BoxFit.cover,
-                            );
-                          }
-                          return ColoredBox(
-                            color: palette.surfaceOverlay,
-                            child: Center(
-                              child: TextButton.icon(
-                                onPressed: _addPhoto,
-                                icon: Icon(
-                                  Icons.add_photo_alternate_outlined,
-                                  color: palette.accent,
-                                ),
-                                label: Text(
-                                  'Añadir hero',
-                                  style: TextStyle(color: palette.accent),
+              child: DropTarget(
+                onDragDone: (details) =>
+                    _dropFiles([for (final f in details.files) f.path]),
+                child: SizedBox(
+                  height: 320,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (heroPath != null &&
+                          heroPath.isNotEmpty &&
+                          File(heroPath).existsSync())
+                        Image.file(File(heroPath), fit: BoxFit.cover)
+                      else
+                        // Sin foto propia, la del set en Localizaciones; nunca
+                        // una común a todos.
+                        StreamBuilder<List<LocationImage>>(
+                          stream: ref
+                              .watch(databaseProvider)
+                              .watchImagesForLocation(widget.plan.id),
+                          builder: (context, snap) {
+                            final imgs = [
+                              for (final i
+                                  in snap.data ?? const <LocationImage>[])
+                                if (File(i.imagePath).existsSync()) i,
+                            ];
+                            if (imgs.isNotEmpty) {
+                              return Image.file(
+                                File(imgs.first.imagePath),
+                                fit: BoxFit.cover,
+                              );
+                            }
+                            return ColoredBox(
+                              color: palette.surfaceOverlay,
+                              child: Center(
+                                child: TextButton.icon(
+                                  onPressed: _addPhoto,
+                                  icon: Icon(
+                                    Icons.add_photo_alternate_outlined,
+                                    color: palette.accent,
+                                  ),
+                                  label: Text(
+                                    'Añadir fotos del lugar',
+                                    style: TextStyle(color: palette.accent),
+                                  ),
                                 ),
                               ),
+                            );
+                          },
+                        ),
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: IgnorePointer(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
                             ),
-                          );
-                        },
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.45),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '⌘V',
+                              style: AppTypography.mono(
+                                palette,
+                              ).copyWith(fontSize: 10, color: Colors.white70),
+                            ),
+                          ),
+                        ),
                       ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: IgnorePointer(
-                        child: Container(
+                      Positioned(
+                        top: 14,
+                        right: 14,
+                        child: _Glass(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                            horizontal: 12,
+                            vertical: 10,
                           ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '⌘V',
-                            style: AppTypography.mono(
-                              palette,
-                            ).copyWith(fontSize: 10, color: Colors.white70),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 14,
-                      right: 14,
-                      child: _Glass(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        child: InkWell(
-                          onTap: _locateSite,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              if (widget.site?.placeLabel != null)
+                          child: InkWell(
+                            onTap: _locateSite,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                if (widget.site?.placeLabel != null)
+                                  Text(
+                                    widget.site!.placeLabel!,
+                                    style: AppTypography.mono(palette).copyWith(
+                                      fontSize: 11,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                                 Text(
-                                  widget.site!.placeLabel!,
+                                  _coordsText().isEmpty
+                                      ? 'Ubicar en el mapa'
+                                      : _coordsText(),
                                   style: AppTypography.mono(
                                     palette,
                                   ).copyWith(fontSize: 11, color: Colors.white),
                                 ),
-                              Text(
-                                _coordsText().isEmpty
-                                    ? 'Ubicar en el mapa'
-                                    : _coordsText(),
-                                style: AppTypography.mono(
-                                  palette,
-                                ).copyWith(fontSize: 11, color: Colors.white),
-                              ),
-                              InkWell(
-                                onTap: () =>
-                                    _edit('Elevación', 'elevation', elevation),
-                                child: Text(
-                                  elevation.isEmpty
-                                      ? 'Añadir elevación'
-                                      : elevation,
-                                  style: AppTypography.mono(palette).copyWith(
-                                    fontSize: 10,
-                                    color: palette.textTertiary,
+                                InkWell(
+                                  onTap: () => _edit(
+                                    'Elevación',
+                                    'elevation',
+                                    elevation,
+                                  ),
+                                  child: Text(
+                                    elevation.isEmpty
+                                        ? 'Añadir elevación'
+                                        : elevation,
+                                    style: AppTypography.mono(palette).copyWith(
+                                      fontSize: 10,
+                                      color: palette.textTertiary,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      left: 16,
-                      bottom: 16,
-                      child: Row(
-                        children: [
-                          _Pill(
-                            icon: Icons.wb_sunny_outlined,
-                            label: intExt.isEmpty ? 'INT / EXT' : intExt,
-                            palette: palette,
-                            onTap: () => _edit('INT/EXT', 'intExt', intExt),
-                          ),
-                          const SizedBox(width: 8),
-                          _Pill(
-                            label: 'LOC: $locLabel',
-                            palette: palette,
-                            onTap: () =>
-                                _edit('Nombre del lugar', 'locLabel', locLabel),
-                          ),
-                        ],
+                      Positioned(
+                        left: 16,
+                        bottom: 16,
+                        child: Row(
+                          children: [
+                            _Pill(
+                              icon: Icons.wb_sunny_outlined,
+                              label: intExt.isEmpty ? 'INT / EXT' : intExt,
+                              palette: palette,
+                              onTap: () => _edit('INT/EXT', 'intExt', intExt),
+                            ),
+                            const SizedBox(width: 8),
+                            _Pill(
+                              label: 'LOC: $locLabel',
+                              palette: palette,
+                              onTap: () => _edit(
+                                'Nombre del lugar',
+                                'locLabel',
+                                locLabel,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -2610,26 +2703,41 @@ class _LightingIdeaFromBible extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseProvider);
-
-    return FutureBuilder<VisualBibleNarrativeCard?>(
-      future: () async {
-        await LightingNarrativeCardsService.ensureSeeded(
-          db: db,
-          bibleId: bibleId,
-          projectId: projectId,
-        );
-        return db.getNarrativeCardForLocationLight(bibleId, planId);
-      }(),
+    // Se escucha la ficha: sin un «cargando» en cada repintado, la página
+    // no cambia de alto mientras se baja.
+    return StreamBuilder<VisualBibleNarrativeCard?>(
+      stream:
+          (db.select(db.visualBibleNarrativeCards)
+                ..where(
+                  (c) =>
+                      c.bibleId.equals(bibleId) &
+                      c.sectionId.equals(BibleSectionId.lighting) &
+                      c.kind.equals(NarrativeCardKind.locationLight) &
+                      c.locationBasePlanId.equals(planId),
+                )
+                ..limit(1))
+              .watchSingleOrNull(),
       builder: (context, snap) {
         final card = snap.data;
-        final summary = card != null
-            ? NarrativeCardModel.fromRow(card).summary
-            : null;
-        final text = (summary?.isNotEmpty == true)
-            ? summary!
+        final page = card == null ? null : lightingCardPageOf(card);
+        final cards = page == null
+            ? const <BibleCard>[]
+            : [
+                for (final c in BibleCard.listFrom(
+                  page.values[LightingCardPage.mosaic],
+                ))
+                  if (!c.isEmpty) c,
+              ];
+        final body = (card?.body ?? '').trim();
+        final text = body.isNotEmpty
+            ? body
             : (lightingNote.isNotEmpty
                   ? lightingNote
-                  : 'Sin idea de luz aún — ábrela en Iluminación.');
+                  : cards.isEmpty
+                  ? 'Sin idea de luz aún: se desarrolla en Iluminación › Luz '
+                        'por localización.'
+                  : '');
+        final metrics = page?.metrics;
 
         return Container(
           width: double.infinity,
@@ -2652,7 +2760,7 @@ class _LightingIdeaFromBible extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'IDEA DE LUZ (DESDE ILUMINACIÓN)',
+                      'IDEA DE LUZ · CÓMO LA IMAGINAMOS',
                       style: AppTypography.mono(palette).copyWith(
                         fontSize: 11,
                         letterSpacing: 1.1,
@@ -2660,67 +2768,76 @@ class _LightingIdeaFromBible extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  TextButton(
-                    onPressed: () async {
-                      if (card != null) {
-                        await NarrativeCardDetailPage.open(
-                          context,
-                          projectId: projectId,
-                          bibleId: bibleId,
-                          cardId: card.id,
-                        );
-                      } else {
-                        BibleNavigationScope.goToSection(
-                          context,
-                          BibleSectionId.lighting,
-                          planId: planId,
-                        );
-                      }
-                    },
-                    child: Text(
-                      'Abrir en Iluminación',
-                      style: TextStyle(color: palette.accent, fontSize: 12),
+                  if (card != null)
+                    TextButton(
+                      onPressed: () => openLightingCard(
+                        context,
+                        projectId: projectId,
+                        bibleId: bibleId,
+                        cardId: card.id,
+                      ),
+                      child: Text(
+                        'Abrir en Iluminación',
+                        style: TextStyle(color: palette.accent, fontSize: 12),
+                      ),
                     ),
-                  ),
                 ],
               ),
-              const SizedBox(height: 10),
-              Text(
-                text,
-                style: AppTypography.bodyMedium(
-                  palette,
-                ).copyWith(color: palette.textSecondary, height: 1.45),
-              ),
-              if (card != null) ...[
+              if (metrics != null && !metrics.isEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final chip in [
+                      if (metrics.usesColors)
+                        'HSI · ${metrics.colors.map((c) => c.name).join(', ')}'
+                      else if (metrics.kelvin != null)
+                        'CCT · ${metrics.kelvin} K',
+                      if (metrics.ratioOption case final r?) r.label,
+                    ])
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: palette.border),
+                        ),
+                        child: Text(
+                          chip,
+                          style: AppTypography.mono(
+                            palette,
+                          ).copyWith(fontSize: 11),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+              if (text.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  text,
+                  style: AppTypography.bodyMedium(
+                    palette,
+                  ).copyWith(color: palette.textSecondary, height: 1.45),
+                ),
+              ],
+              if (cards.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                SizedBox(
-                  height: 72,
-                  child: StreamBuilder<List<MoodboardImage>>(
-                    stream: db.watchMoodboardImagesForCard(projectId, card.id),
-                    builder: (context, imgSnap) {
-                      final imgs = imgSnap.data ?? [];
-                      if (imgs.isEmpty) return const SizedBox.shrink();
-                      return ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: imgs.length.clamp(0, 8),
-                        separatorBuilder: (_, __) => const SizedBox(width: 6),
-                        itemBuilder: (context, i) {
-                          final path = imgs[i].imagePath;
-                          if (!File(path).existsSync()) {
-                            return const SizedBox(width: 96);
-                          }
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: Image.file(
-                              File(path),
-                              width: 96,
-                              height: 72,
-                              fit: BoxFit.cover,
-                            ),
-                          );
-                        },
-                      );
-                    },
+                BibleImagePaths(
+                  source: BibleCardImageSource(
+                    projectId: projectId,
+                    bibleId: bibleId,
+                    sectionId: BibleSectionId.lighting,
+                  ),
+                  builder: (context, paths) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final c in cards)
+                        _IdeaCardRow(card: c, paths: paths, palette: palette),
+                    ],
                   ),
                 ),
               ],
@@ -2728,6 +2845,75 @@ class _LightingIdeaFromBible extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Una tarjeta de «Cómo la imaginamos»: su imagen, su título y sus
+/// bloques de texto.
+class _IdeaCardRow extends StatelessWidget {
+  final BibleCard card;
+  final Map<int, String> paths;
+  final AppPalette palette;
+
+  const _IdeaCardRow({
+    required this.card,
+    required this.paths,
+    required this.palette,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = card.allImageIds
+        .map((id) => paths[id])
+        .whereType<String>()
+        .where((p) => File(p).existsSync())
+        .firstOrNull;
+    final lines = [
+      if (card.body.trim().isNotEmpty) card.body.trim(),
+      for (final point in card.points)
+        if (!point.isEmpty)
+          [
+            point.title.trim(),
+            point.body.trim(),
+          ].where((t) => t.isNotEmpty).join(': '),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              width: 128,
+              height: 72,
+              child: cover == null
+                  ? const ColoredBox(color: Colors.black26)
+                  : Image.file(File(cover), fit: BoxFit.cover, cacheWidth: 400),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  card.title.trim().isEmpty ? 'Sin título' : card.title,
+                  style: AppTypography.bodyLarge(palette),
+                ),
+                for (final line in lines)
+                  Text(
+                    line,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption(palette),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
