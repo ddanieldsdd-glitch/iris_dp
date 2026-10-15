@@ -106,8 +106,10 @@ class ProjectContentSyncService {
     if (current == null || current['content_hash'] != null) return false;
     final content = current['content'];
     if (content is! Map ||
-        ProjectContentBundle.hashBundle(Map<String, dynamic>.from(content)) !=
-            expected) {
+        !ProjectContentBundle.bundleMatchesHash(
+          Map<String, dynamic>.from(content),
+          expected,
+        )) {
       return false;
     }
     final legacy = await _client
@@ -267,9 +269,8 @@ class CloudSyncQueueService {
         // decide el usuario en el plan.
         final base = await ContentSyncBaseStore.load(localId);
         if (base == null) continue;
-        final localHash =
-            await ProjectContentBundle.computeLocalHash(_db, localId);
-        if (localHash != base.localHash) {
+        final local = await ProjectContentBundle.export(_db, localId);
+        if (!ProjectContentBundle.bundleMatchesHash(local, base.localHash)) {
           // Solo si la nube no ha cambiado desde entonces; si ha cambiado
           // es un conflicto y queda pendiente para revisarlo.
           await sync.upload(

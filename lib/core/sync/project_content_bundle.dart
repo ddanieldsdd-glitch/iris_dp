@@ -1,6 +1,7 @@
 import '../../features/camera_plan/shot_route.dart';
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 
 import '../../shared/visual_bible/bible_image_links.dart';
@@ -840,7 +841,26 @@ class ProjectContentBundle {
     );
   }
 
-  static String hashBundle(Map<String, dynamic> bundle) {
+  /// Huella del contenido: SHA-256 del JSON canónico, igual en cualquier
+  /// plataforma y versión de Dart.
+  static String hashBundle(Map<String, dynamic> bundle) =>
+      sha256.convert(utf8.encode(_canonicalJson(bundle))).toString();
+
+  /// Huella de versiones anteriores (`String.hashCode`, 32 bits y sin
+  /// garantía entre versiones de Dart). Solo para comparar con huellas que se
+  /// guardaron así, hasta que el proyecto vuelva a sincronizarse.
+  static String legacyHashBundle(Map<String, dynamic> bundle) =>
+      _canonicalJson(bundle).hashCode.toRadixString(16);
+
+  static bool isLegacyHash(String hash) => hash.length != 64;
+
+  /// Si [bundle] es el contenido de [hash], sea la huella nueva o la antigua.
+  static bool bundleMatchesHash(Map<String, dynamic> bundle, String hash) =>
+      isLegacyHash(hash)
+          ? legacyHashBundle(bundle) == hash
+          : hashBundle(bundle) == hash;
+
+  static String _canonicalJson(Map<String, dynamic> bundle) {
     final copy = Map<String, dynamic>.from(bundle);
     // De los stills cuentan sus datos (título, notas, asignaciones), no su
     // ruta local ni su id.
@@ -862,8 +882,7 @@ class ProjectContentBundle {
             },
       ];
     }
-    final canonical = jsonEncode(_canonicalize(copy));
-    return canonical.hashCode.toRadixString(16);
+    return jsonEncode(_canonicalize(copy));
   }
 
   /// Campos excluidos del hash (rutas locales, media, metadatos volátiles).

@@ -190,8 +190,8 @@ class SyncPlanBuilder {
       final cloudId = local.cloudId!;
       final localSummary =
           await ProjectContentBundle.summarizeLocal(_db, local.id);
-      final localHash =
-          await ProjectContentBundle.computeLocalHash(_db, local.id);
+      final localBundle = await ProjectContentBundle.export(_db, local.id);
+      final localHash = ProjectContentBundle.hashBundle(localBundle);
       final snap = snapshots[cloudId];
 
       if (snap == null) {
@@ -276,8 +276,23 @@ class SyncPlanBuilder {
         continue;
       }
 
-      final localChanged = localHash != base.localHash;
-      final cloudChanged = cloudNow != base.cloudHash;
+      // La base puede ser de antes de SHA-256: se compara con su método.
+      final localChanged = !ProjectContentBundle.bundleMatchesHash(
+        localBundle,
+        base.localHash,
+      );
+      // La huella de la nube sirve si está en el mismo formato que la base;
+      // si no (subida ya con SHA-256), se calcula del contenido.
+      final sameFormat =
+          cloudHash != null &&
+          ProjectContentBundle.isLegacyHash(cloudHash) ==
+              ProjectContentBundle.isLegacyHash(base.cloudHash);
+      final cloudChanged = !sameFormat && cloudContent is Map
+          ? !ProjectContentBundle.bundleMatchesHash(
+              Map<String, dynamic>.from(cloudContent),
+              base.cloudHash,
+            )
+          : cloudNow != base.cloudHash;
 
       if (localChanged && cloudChanged) {
         items.add(
