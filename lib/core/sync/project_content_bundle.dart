@@ -191,15 +191,21 @@ class ProjectContentBundle {
           : 'scene:${s.number}#$times';
     }
 
-    final shots =
-        await (db.select(db.shots)
-              ..where((s) => s.projectId.equals(projectId))
-              ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
-            .get();
+    final sceneById = {for (final s in scenes) s.id: s};
+    // Un plano cuya escena ya no existe no tiene a qué volver al importar: se
+    // deja fuera en vez de romper la exportación.
+    final shots = [
+      for (final shot
+          in await (db.select(db.shots)
+                ..where((s) => s.projectId.equals(projectId))
+                ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+              .get())
+        if (sceneById.containsKey(shot.sceneId)) shot,
+    ];
     final shotKeyById = <int, String>{};
 
     for (final shot in shots) {
-      final scene = scenes.firstWhere((s) => s.id == shot.sceneId);
+      final scene = sceneById[shot.sceneId]!;
       shotKeyById[shot.id] = 'shot:${scene.number}:${shot.number}';
     }
 
@@ -615,7 +621,7 @@ class ProjectContentBundle {
           )
           .toList(),
       'shots': shots.map((shot) {
-        final scene = scenes.firstWhere((s) => s.id == shot.sceneId);
+        final scene = sceneById[shot.sceneId]!;
         return {
           'shotKey': shotKeyById[shot.id],
           'sceneKey': sceneKeyById[scene.id],
