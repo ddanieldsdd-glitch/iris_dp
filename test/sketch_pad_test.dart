@@ -5,14 +5,15 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:iris_dp/shared/annotations/annotation_canvas.dart';
 import 'package:iris_dp/shared/annotations/annotation_document.dart';
 import 'package:iris_dp/shared/annotations/sketch_pad.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('se dibuja con el ratón sobre el lienzo blanco y al guardar '
-      'salen la imagen y los trazos', (tester) async {
+  testWidgets('«Dibujar» abre el folio: se dibuja con el ratón y cerrar sin '
+      'guardar avisa', (tester) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -35,12 +36,11 @@ void main() {
     await tester.tap(find.text('abrir'));
     await tester.pumpAndSettle();
     expect(find.text('Referencia'), findsOneWidget);
-    for (final tool in ['Lápiz', 'Rotulador', 'Flecha', 'Goma']) {
+    for (final tool in ['Lápiz', 'Rotulador', 'Flecha', 'Goma', 'Aguada']) {
       expect(find.byTooltip(tool), findsOneWidget);
     }
-    expect(find.byTooltip('Color del lápiz'), findsNWidgets(8));
 
-    final center = tester.getCenter(find.byType(AspectRatio));
+    final center = tester.getCenter(find.byType(AnnotationCanvas));
     final mouse = await tester.startGesture(
       center - const Offset(120, 40),
       kind: PointerDeviceKind.mouse,
@@ -58,10 +58,10 @@ void main() {
     );
 
     // Con algo dibujado, cerrar avisa antes de perderlo.
-    await tester.tap(find.text('Cancelar'));
+    await tester.tap(find.byTooltip('Cerrar'));
     await tester.pumpAndSettle();
-    expect(find.text('¿Salir sin guardar el dibujo?'), findsOneWidget);
-    await tester.tap(find.text('Salir sin guardar'));
+    expect(find.text('¿Salir sin guardar?'), findsOneWidget);
+    await tester.tap(find.text('Descartar'));
     await tester.pumpAndSettle();
     expect(result, isNull);
     expect(find.text('abrir'), findsOneWidget);
