@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'ios_container_paths.dart';
+
 /// Rutas configurables de almacenamiento de IRIS DP.
 class StoragePaths {
   final String appDataPath;
@@ -57,14 +59,42 @@ abstract final class AppStorageConfig {
   static Future<StoragePaths?> load() async {
     try {
       final file = await _bootstrapFile();
-      if (!await file.exists()) return null;
+      if (!await file.exists()) {
+        await IosContainerPaths.detect();
+        return null;
+      }
       final json =
           jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-      if (json['configured'] != true) return null;
-      return StoragePaths.fromJson(json);
+      if (json['configured'] != true) {
+        await IosContainerPaths.detect();
+        return null;
+      }
+      final stored = StoragePaths.fromJson(json);
+      await IosContainerPaths.detect(configuredPath: stored.appDataPath);
+      return await _followIosContainer(stored, file);
     } catch (_) {
       return null;
     }
+  }
+
+  /// En iOS, lleva las rutas guardadas al contenedor actual y las vuelve a
+  /// guardar si han cambiado.
+  static Future<StoragePaths> _followIosContainer(
+    StoragePaths stored,
+    File file,
+  ) async {
+    final root = IosContainerPaths.currentRoot;
+    if (root == null) return stored;
+    final moved = StoragePaths(
+      appDataPath: IosContainerPaths.rebase(stored.appDataPath, root),
+      documentsPath: IosContainerPaths.rebase(stored.documentsPath, root),
+    );
+    if (moved.appDataPath == stored.appDataPath &&
+        moved.documentsPath == stored.documentsPath) {
+      return stored;
+    }
+    await file.writeAsString(jsonEncode(moved.toJson()), flush: true);
+    return moved;
   }
 
   static Future<void> save(StoragePaths paths) async {

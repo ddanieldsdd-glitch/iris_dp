@@ -12,6 +12,7 @@ import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/share_origin.dart';
 import '../../../shared/annotations/annotation_canvas.dart';
 import '../../../shared/annotations/annotation_document.dart';
 import '../../../shared/visual_bible/bible_section_ids.dart';
@@ -550,7 +551,11 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
     final title = _titleCtrl.text.trim().isEmpty
         ? 'Referencia IRIS'
         : _titleCtrl.text.trim();
-    await Share.shareXFiles([file], text: title);
+    await Share.shareXFiles(
+      [file],
+      text: title,
+      sharePositionOrigin: shareOrigin(context),
+    );
   }
 
   Future<void> _postComment() async {

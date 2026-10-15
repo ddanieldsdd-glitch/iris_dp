@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import '../storage/app_storage_config.dart';
+import '../storage/ios_container_paths.dart';
 import '../utils/error_log.dart';
 import '../utils/media_storage.dart';
 import '../utils/scene_color.dart';
@@ -4589,12 +4590,25 @@ LazyDatabase _openConnection() {
     }
     await Directory(p.dirname(file.path)).create(recursive: true);
     final path = file.path;
+    final oldRoot = IosContainerPaths.previousRoot;
+    final newRoot = IosContainerPaths.currentRoot;
+    final markerPath = IosContainerPaths.markerPath;
     return NativeDatabase.createInBackground(
       file,
       setup: (raw) {
         final version =
             raw.select('PRAGMA user_version').first.values.first as int;
         backupBeforeSchemaUpgrade(path, version);
+        // iOS ha movido el contenedor: las rutas guardadas apuntan al viejo.
+        if (oldRoot != null && newRoot != null && markerPath != null) {
+          IosContainerPaths.rewriteDatabase(
+            select: (sql) => raw.select(sql).toList(),
+            execute: raw.execute,
+            oldRoot: oldRoot,
+            newRoot: newRoot,
+          );
+          IosContainerPaths.writeMarker(markerPath, newRoot);
+        }
       },
     );
   });
