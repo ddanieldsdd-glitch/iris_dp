@@ -11,6 +11,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/visual_bible/bible_cards.dart';
 import 'bible_point_images.dart';
+import 'moodboard_images_viewer.dart';
 import 'bible_point_panel.dart';
 import 'bible_references_deck.dart';
 
@@ -99,14 +100,20 @@ class BibleImagePaths extends ConsumerWidget {
   final BibleCardImageSource? source;
   final Widget Function(BuildContext context, Map<int, String> paths) builder;
 
-  const BibleImagePaths({super.key, required this.source, required this.builder});
+  const BibleImagePaths({
+    super.key,
+    required this.source,
+    required this.builder,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final source = this.source;
     if (source == null) return builder(context, const {});
     return StreamBuilder<List<MoodboardImage>>(
-      stream: ref.watch(databaseProvider).watchMoodboardImages(source.projectId),
+      stream: ref
+          .watch(databaseProvider)
+          .watchMoodboardImages(source.projectId),
       builder: (context, snap) => builder(context, {
         for (final image in snap.data ?? const <MoodboardImage>[])
           image.id: image.imagePath,
@@ -215,12 +222,19 @@ class _PointControllers {
   final TextEditingController title;
   final TextEditingController body;
 
+  /// Las imágenes de este bloque: las que explican su texto.
+  List<int> imageIds;
+
   _PointControllers(BibleCard point)
     : title = TextEditingController(text: point.title),
-      body = TextEditingController(text: point.body);
+      body = TextEditingController(text: point.body),
+      imageIds = [...point.imageIds];
 
-  BibleCard get value =>
-      BibleCard(title: title.text.trim(), body: body.text.trim());
+  BibleCard get value => BibleCard(
+    title: title.text.trim(),
+    body: body.text.trim(),
+    imageIds: imageIds,
+  );
 
   void dispose() {
     title.dispose();
@@ -376,9 +390,16 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
         if (cover != null)
           ClipRRect(
             borderRadius: BorderRadius.circular(BiblePointPanel.radius),
-            child: InkWell(
-              onTap: () => showBibleImageViewer(context, path: cover),
-              child: Image.file(File(cover), fit: BoxFit.contain),
+            child: Tooltip(
+              message: 'Ver en grande, comentar y dibujar encima',
+              child: InkWell(
+                onTap: () => openMoodboardImages(
+                  context,
+                  existing,
+                  initialId: existing.first,
+                ),
+                child: Image.file(File(cover), fit: BoxFit.contain),
+              ),
             ),
           )
         else
@@ -440,7 +461,8 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'Toca una imagen para ponerla de portada.',
+            'Toca la imagen grande para verla con comentarios y dibujo; '
+            'una miniatura, para ponerla de portada.',
             style: AppTypography.caption(palette),
           ),
         ],
@@ -503,9 +525,95 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
               decoration: _bare(palette, 'Desarróllalo aquí…', bodyStyle),
               onChanged: (_) => _touch(),
             ),
+            if (widget.onPickImages != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _pointImages(palette, point),
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  /// Las imágenes de un bloque, junto a su texto: tocar una la abre en
+  /// grande; «+» elige cuáles.
+  Widget _pointImages(AppPalette palette, _PointControllers point) {
+    final ids = [
+      for (final id in point.imageIds)
+        if (widget.imagePaths[id] != null) id,
+    ];
+    Future<void> pick() async {
+      final picked = await widget.onPickImages!(point.imageIds);
+      if (picked == null || !mounted) return;
+      setState(() => point.imageIds = picked);
+      _flush();
+    }
+
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        for (final id in ids)
+          Stack(
+            children: [
+              Tooltip(
+                message: 'Ver en grande, comentar y dibujar encima',
+                child: InkWell(
+                  onTap: () => openMoodboardImages(context, ids, initialId: id),
+                  borderRadius: BorderRadius.circular(6),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.file(
+                      File(widget.imagePaths[id]!),
+                      width: 120,
+                      height: 68,
+                      fit: BoxFit.cover,
+                      cacheWidth: 360,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 2,
+                right: 2,
+                child: Tooltip(
+                  message: 'Quitar de este bloque',
+                  child: InkWell(
+                    onTap: () {
+                      setState(
+                        () => point.imageIds = [
+                          for (final other in point.imageIds)
+                            if (other != id) other,
+                        ],
+                      );
+                      _flush();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        size: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        TextButton.icon(
+          onPressed: pick,
+          icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+          label: Text(
+            ids.isEmpty ? 'Imágenes de este bloque' : 'Cambiar imágenes',
+          ),
+        ),
+      ],
     );
   }
 

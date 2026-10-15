@@ -378,7 +378,7 @@ abstract final class BibleSectionExportReader {
       for (final entry in decoded)
         // Tarjetas con sus imágenes, o una tira de identificadores.
         if (entry is Map)
-          ...BibleCard.fromJson(entry).imageIds
+          ...BibleCard.fromJson(entry).allImageIds
         else if (int.tryParse(entry.toString()) != null)
           int.parse(entry.toString()),
     ];

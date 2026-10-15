@@ -9,6 +9,12 @@ class BibleCard {
   final String kicker;
   final String title;
   final String body;
+  /// Las imágenes de la ficha y las de sus bloques, sin repetir.
+  List<int> get allImageIds => {
+    ...imageIds,
+    for (final point in points) ...point.allImageIds,
+  }.toList();
+
   final List<int> imageIds;
 
   /// Punto de giro: un hito entre actos, que no se numera.

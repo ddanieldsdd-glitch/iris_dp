@@ -193,5 +193,5 @@ class BibleActsValue {
   /// Imágenes del moodboard que usa el punto, en el modo en que está.
   Iterable<int> get imageIds => shared
       ? layers.values.expand((layer) => layer.imageIds)
-      : own.expand((act) => act.imageIds);
+      : own.expand((act) => act.allImageIds);
 }

@@ -325,7 +325,7 @@ class _MosaicTile extends StatelessWidget {
       for (final part in card.kicker.split(RegExp(r'[·|;]')))
         if (part.trim().isNotEmpty) part.trim(),
     ];
-    final more = card.imageIds.length - 1;
+    final more = card.allImageIds.length - 1;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),

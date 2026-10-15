@@ -133,12 +133,22 @@ class BiblePdfKit {
           if (!point.isEmpty)
             pw.Padding(
               padding: const pw.EdgeInsets.only(top: 5),
-              child: _titled(point.title.trim(), point.body.trim()),
+              child: _pointBlock(point),
             ),
         ..._moreImages(act),
       ],
     );
   }
+
+  /// Un bloque de una ficha: su texto y, debajo, las imágenes que lo
+  /// explican.
+  pw.Widget _pointBlock(BibleCard point) => pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      _titled(point.title.trim(), point.body.trim()),
+      ..._moreImages(point, skip: 0),
+    ],
+  );
 
   /// Imágenes de una ficha que no son la portada, en pequeño.
   List<pw.Widget> _moreImages(BibleCard card, {int skip = 1}) {
@@ -184,6 +194,12 @@ class BiblePdfKit {
                   children: [
                     _titled(card.title.trim(), card.body.trim()),
                     ..._moreImages(card, skip: 0),
+                    for (final point in card.points)
+                      if (!point.isEmpty)
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.only(top: 5),
+                          child: _pointBlock(point),
+                        ),
                   ],
                 ),
               ),

@@ -5,6 +5,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/database/app_database.dart';
@@ -93,6 +94,10 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
   List<Color> _palette = const [];
   bool _extracting = false;
   bool _annotateMode = false;
+
+  /// Ver lo dibujado encima (y sus post-it). Ocultarlo no lo borra.
+  bool _showDrawing = true;
+  static const _showDrawingKey = 'iris_lightbox_show_drawing';
   _LightboxTool _tool = _LightboxTool.draw;
   Color _drawColor = const Color(0xFF2997FF);
   String? _selectedNoteId;
@@ -138,6 +143,12 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
     _focus = FocusNode();
     _annotationController = AnnotationCanvasController();
     _bindMetaControllers();
+    SharedPreferences.getInstance()
+        .then((prefs) {
+          final show = prefs.getBool(_showDrawingKey);
+          if (show != null && mounted) setState(() => _showDrawing = show);
+        })
+        .catchError((Object _) {});
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
       _ensurePalette();
@@ -743,6 +754,7 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
       onNext: _next,
       onReextract: () => _ensurePalette(force: true),
       annotateMode: _annotateMode,
+      showDrawing: _showDrawing,
       strokesLoading: _strokesLoading,
       annotationController: _annotationController,
       tool: _tool,
@@ -895,6 +907,13 @@ class _MoodboardLightboxState extends ConsumerState<MoodboardLightbox> {
       onPendingReview: (v) {
         setState(() => _pendingReview = v);
         _saveMetaSilent();
+      },
+      showDrawing: _showDrawing,
+      onShowDrawing: (v) {
+        setState(() => _showDrawing = v);
+        SharedPreferences.getInstance()
+            .then((prefs) => prefs.setBool(_showDrawingKey, v))
+            .catchError((Object _) => false);
       },
       onClose: _handleClose,
     );
@@ -1081,6 +1100,9 @@ class _Stage extends StatefulWidget {
   final VoidCallback onNext;
   final VoidCallback onReextract;
   final bool annotateMode;
+
+  /// Fuera del modo dibujo, ¿se ve lo dibujado?
+  final bool showDrawing;
   final bool strokesLoading;
   final AnnotationCanvasController annotationController;
   final _LightboxTool tool;
@@ -1107,6 +1129,7 @@ class _Stage extends StatefulWidget {
     required this.onNext,
     required this.onReextract,
     required this.annotateMode,
+    this.showDrawing = true,
     required this.strokesLoading,
     required this.annotationController,
     required this.tool,
@@ -1160,7 +1183,26 @@ class _StageState extends State<_Stage> {
                             constraints.maxWidth,
                             constraints.maxHeight,
                           );
-                          final canvas = ClipRRect(
+                          final image = Image.file(
+                            File(widget.image.imagePath),
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => ColoredBox(
+                              color: palette.surfaceElevated,
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                color: palette.textTertiary,
+                                size: 48,
+                              ),
+                            ),
+                          );
+                          final hidden =
+                              !widget.annotateMode && !widget.showDrawing;
+                          final canvas = hidden
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: image,
+                                )
+                              : ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: AnnotationCanvas(
                               controller: widget.annotationController,
@@ -1185,18 +1227,7 @@ class _StageState extends State<_Stage> {
                               child: Stack(
                                 fit: StackFit.expand,
                                 children: [
-                                  Image.file(
-                                    File(widget.image.imagePath),
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (_, __, ___) => ColoredBox(
-                                      color: palette.surfaceElevated,
-                                      child: Icon(
-                                        Icons.broken_image_outlined,
-                                        color: palette.textTertiary,
-                                        size: 48,
-                                      ),
-                                    ),
-                                  ),
+                                  image,
                                   if (widget.strokesLoading)
                                     const Center(
                                       child: CircularProgressIndicator(),
@@ -1538,6 +1569,8 @@ class _LightboxChromeHeader extends StatelessWidget {
   final bool showTitle;
   final TextEditingController? titleCtrl;
   final ValueChanged<bool> onPendingReview;
+  final bool showDrawing;
+  final ValueChanged<bool>? onShowDrawing;
   final VoidCallback onClose;
 
   const _LightboxChromeHeader({
@@ -1546,6 +1579,8 @@ class _LightboxChromeHeader extends StatelessWidget {
     required this.showTitle,
     this.titleCtrl,
     required this.onPendingReview,
+    this.showDrawing = true,
+    this.onShowDrawing,
     required this.onClose,
   });
 
@@ -1581,6 +1616,18 @@ class _LightboxChromeHeader extends StatelessWidget {
                     ),
                   ),
           ),
+          if (onShowDrawing != null && !annotateMode)
+            IconButton(
+              tooltip: showDrawing
+                  ? 'Ocultar el dibujo (no se borra)'
+                  : 'Ver el dibujo',
+              onPressed: () => onShowDrawing!(!showDrawing),
+              icon: Icon(
+                showDrawing ? Icons.draw : Icons.draw_outlined,
+                color: showDrawing ? palette.accent : palette.textTertiary,
+                size: 20,
+              ),
+            ),
           IconButton(
             tooltip: pendingReview ? 'Quitar pendiente' : 'Marcar pendiente',
             onPressed: () => onPendingReview(!pendingReview),
