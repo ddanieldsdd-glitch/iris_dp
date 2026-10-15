@@ -90,7 +90,9 @@ class MediaUploadQueue {
     ));
   }
 
-  Future<void> enqueue({
+  /// Pone una imagen en la cola. Devuelve si quedó en cola: una imagen ya
+  /// subida desde el mismo archivo no se vuelve a subir.
+  Future<bool> enqueue({
     required int projectId,
     String? projectCloudId,
     required String entityType,
@@ -101,8 +103,8 @@ class MediaUploadQueue {
     int priority = 0,
     String? source,
   }) async {
-    if (!_isEnabled()) return;
-    if (!File(localPath).existsSync()) return;
+    if (!_isEnabled()) return false;
+    if (!File(localPath).existsSync()) return false;
 
     // Una fila por imagen: se reutiliza aunque fallara antes (y se quitan
     // los duplicados que dejaban versiones anteriores).
@@ -120,6 +122,14 @@ class MediaUploadQueue {
       await (_db.delete(_db.pendingMediaUploads)
             ..where((t) => t.id.isIn(rows.skip(1).map((r) => r.id))))
           .go();
+    }
+
+    // Ya subida desde este mismo archivo: cada sincronización vuelve a
+    // recorrer las imágenes, y antes las subía todas otra vez.
+    if (existing != null &&
+        existing.status == 'done' &&
+        existing.localPath == localPath) {
+      return false;
     }
 
     if (existing != null) {
@@ -155,6 +165,7 @@ class MediaUploadQueue {
 
     await notifyProgress();
     unawaited(startWorker());
+    return true;
   }
 
   /// Vuelve a poner en cola las subidas que fallaron del todo.
@@ -363,7 +374,7 @@ class MediaUploadQueue {
               sortOrder: img.sortOrder,
             );
 
-      await enqueue(
+      if (await enqueue(
         projectId: projectId,
         projectCloudId: cloudId,
         entityType: MediaEntityType.moodboard,
@@ -372,8 +383,9 @@ class MediaUploadQueue {
         sortOrder: img.sortOrder,
         publicId: publicId,
         source: MediaIngestSource.sync,
-      );
-      count++;
+      )) {
+        count++;
+      }
     }
 
     // Shot references
@@ -396,7 +408,7 @@ class MediaUploadQueue {
 
       for (final ref in refs) {
         if (!File(ref.imagePath).existsSync()) continue;
-        await enqueue(
+        if (await enqueue(
           projectId: projectId,
           projectCloudId: cloudId,
           entityType: MediaEntityType.shotReference,
@@ -414,8 +426,9 @@ class MediaUploadQueue {
             refSortOrder: ref.sortOrder,
           ),
           source: MediaIngestSource.sync,
-        );
-        count++;
+        )) {
+          count++;
+        }
       }
     }
 
@@ -432,7 +445,7 @@ class MediaUploadQueue {
           .get();
       for (final img in imgs) {
         if (!File(img.imagePath).existsSync()) continue;
-        await enqueue(
+        if (await enqueue(
           projectId: projectId,
           projectCloudId: cloudId,
           entityType: MediaEntityType.site,
@@ -450,8 +463,9 @@ class MediaUploadQueue {
             imageSortOrder: img.sortOrder,
           ),
           source: MediaIngestSource.sync,
-        );
-        count++;
+        )) {
+          count++;
+        }
       }
     }
 
@@ -468,7 +482,7 @@ class MediaUploadQueue {
           .get();
       for (final img in imgs) {
         if (!File(img.imagePath).existsSync()) continue;
-        await enqueue(
+        if (await enqueue(
           projectId: projectId,
           projectCloudId: cloudId,
           entityType: MediaEntityType.location,
@@ -486,15 +500,16 @@ class MediaUploadQueue {
             imageSortOrder: img.sortOrder,
           ),
           source: MediaIngestSource.sync,
-        );
-        count++;
+        )) {
+          count++;
+        }
       }
     }
 
     // Project cover
     if (project.coverImagePath != null &&
         File(project.coverImagePath!).existsSync()) {
-      await enqueue(
+      if (await enqueue(
         projectId: projectId,
         projectCloudId: cloudId,
         entityType: MediaEntityType.projectCover,
@@ -506,8 +521,9 @@ class MediaUploadQueue {
           projectCloudId: cloudId,
         ),
         source: MediaIngestSource.sync,
-      );
-      count++;
+      )) {
+        count++;
+      }
     }
 
     unawaited(startWorker());
