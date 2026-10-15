@@ -23,6 +23,7 @@ import '../../services/color_extraction_service.dart';
 import '../../visual_bible_model.dart';
 import '../../../locations/location_form_sheet.dart';
 import '../../../locations/location_site_form_sheet.dart';
+import '../../../../core/weather/sun_calculator.dart';
 import '../../../locations/site_place.dart';
 import '../../../../core/weather/weather_models.dart';
 import '../../../../core/weather/weather_service.dart';
@@ -1112,32 +1113,6 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     );
   }
 
-  /// Rellena los campos de sol con lo calculado para un día en la
-  /// ubicación de la localización. Siguen siendo editables a mano.
-  Future<void> _fillSunFromPlace() async {
-    final site = widget.site;
-    final lat = site?.latitude;
-    final lon = site?.longitude;
-    if (lat == null || lon == null) return;
-    final now = DateTime.now();
-    final day = await showDatePicker(
-      context: context,
-      initialDate: now,
-      firstDate: DateTime(now.year - 2),
-      lastDate: DateTime(now.year + 5),
-      helpText: '¿Para qué día calculo el sol?',
-    );
-    if (day == null) return;
-    final sun = SunDaySummary.of(day, lat, lon);
-    await widget.onExtras({
-      'sunrise': sun.sunrise,
-      'sunset': sun.sunset,
-      'daylightWindow': sun.daylight,
-      'blueHour': sun.blueEvening,
-      'goldenHour': sun.goldenEvening,
-    });
-  }
-
   Future<void> _openEarth() async {
     final url = _s('earthUrl');
     final coords = _coordsText();
@@ -1163,15 +1138,42 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     );
     final intExt = _s('intExt', '');
     final azimuth = (x['azimuth'] as num?)?.toDouble() ?? 0;
-    final sunrise = _s('sunrise', '');
-    final sunriseAz = _s('sunriseAz', '');
-    final sunset = _s('sunset', '');
-    final sunsetAz = _s('sunsetAz', '');
-    final daylight = _s('daylightWindow', _model.availableLightHours ?? '');
-    final blueHour = _s('blueHour', '');
-    final goldenHour = _s('goldenHour', '');
-    final maxElev = _s('maxElevation', '');
-    final shadow = _s('shadowRatio', '');
+    // Con la localización en el mapa, el sol se calcula; si no, vale lo
+    // escrito a mano.
+    final lat = widget.site?.latitude;
+    final lon = widget.site?.longitude;
+    final sunDay = DateTime.tryParse(_s('sunDate', '')) ?? DateTime.now();
+    final sun = lat == null || lon == null
+        ? null
+        : SunCalculator.dayPath(
+            year: sunDay.year,
+            month: sunDay.month,
+            day: sunDay.day,
+            latitude: lat,
+            longitude: lon,
+          );
+    final summary = lat == null || lon == null
+        ? null
+        : SunDaySummary.of(sunDay, lat, lon);
+    String az(double? a) => a == null ? '' : '${a.round()}° ${compassPoint(a)}';
+    final sunrise = summary?.sunrise ?? _s('sunrise', '');
+    final sunriseAz = sun != null
+        ? az(sun.sunriseAzimuth)
+        : _s('sunriseAz', '');
+    final sunset = summary?.sunset ?? _s('sunset', '');
+    final sunsetAz = sun != null ? az(sun.sunsetAzimuth) : _s('sunsetAz', '');
+    final daylight =
+        summary?.daylight ??
+        _s('daylightWindow', _model.availableLightHours ?? '');
+    final blueHour = summary?.blueEvening ?? _s('blueHour', '');
+    final goldenHour = summary?.goldenEvening ?? _s('goldenHour', '');
+    final maxElev = sun?.noonAltitude != null
+        ? '${sun!.noonAltitude!.round()}°'
+        : _s('maxElevation', '');
+    final shadow = sun?.noonShadow != null
+        ? '${sun!.noonShadow!.toStringAsFixed(1).replaceAll('.', ',')} m '
+              'por metro de altura'
+        : _s('shadowRatio', '');
     final elevation = _s('elevation', '');
 
     final contrast = _s('contrastRatio', '');
@@ -1442,6 +1444,26 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                 ),
                 const SizedBox(height: 16),
                 _SolarCard(
+                  path: sun,
+                  dayLabel: sun == null
+                      ? null
+                      : '${sunDay.day}/${sunDay.month}/${sunDay.year}',
+                  onPickDay: sun == null
+                      ? null
+                      : () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: sunDay,
+                            firstDate: DateTime(sunDay.year - 2),
+                            lastDate: DateTime(sunDay.year + 5),
+                            helpText: '¿Qué día ruedas aquí?',
+                          );
+                          if (picked == null) return;
+                          await widget.onExtras({
+                            'sunDate':
+                                '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}',
+                          });
+                        },
                   azimuth: azimuth,
                   sunrise: sunrise,
                   sunriseAz: sunriseAz,
@@ -1454,9 +1476,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                   shadow: shadow,
                   solarNote: _model.solarOrientation ?? '',
                   palette: palette,
-                  onCalculate: widget.site?.latitude != null
-                      ? _fillSunFromPlace
-                      : null,
+                  onCalculate: null,
                   onEditAzimuth: () async {
                     final ctrl = TextEditingController(text: '$azimuth');
                     final v = await showDialog<String>(
@@ -1756,7 +1776,15 @@ class _SolarCard extends StatelessWidget {
   /// Nulo si la localización no está ubicada en el mapa.
   final VoidCallback? onCalculate;
 
+  /// El sol calculado con las coordenadas; nulo sin ubicación.
+  final SunDayPath? path;
+  final String? dayLabel;
+  final VoidCallback? onPickDay;
+
   const _SolarCard({
+    this.path,
+    this.dayLabel,
+    this.onPickDay,
     required this.azimuth,
     required this.sunrise,
     required this.sunriseAz,
@@ -1786,14 +1814,26 @@ class _SolarCard extends StatelessWidget {
             label: 'Orientación Solar',
             palette: palette,
           ),
-          if (onCalculate != null)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: onCalculate,
-                icon: const Icon(Icons.wb_twilight_outlined, size: 16),
-                label: const Text('Calcular con la ubicación'),
-              ),
+          if (path != null)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Calculado con la ubicación · $dayLabel',
+                    style: AppTypography.caption(palette),
+                  ),
+                ),
+                TextButton(
+                  onPressed: onPickDay,
+                  child: const Text('Cambiar día'),
+                ),
+              ],
+            )
+          else
+            Text(
+              'Ubica la localización en el mapa (abajo, en «Ubicación») y el '
+              'sol se calcula solo.',
+              style: AppTypography.caption(palette),
             ),
           const SizedBox(height: 8),
           InkWell(
@@ -1820,6 +1860,7 @@ class _SolarCard extends StatelessWidget {
                   painter: _AzimuthDialPainter(
                     azimuth: azimuth,
                     accent: palette.accent,
+                    path: path,
                   ),
                   child: Center(
                     child: Column(
@@ -1834,7 +1875,7 @@ class _SolarCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'ACIMUT',
+                          path == null ? 'ACIMUT' : 'FACHADA',
                           style: AppTypography.mono(
                             palette,
                           ).copyWith(fontSize: 10, color: palette.textTertiary),
@@ -2642,7 +2683,11 @@ class _AzimuthDialPainter extends CustomPainter {
   final double azimuth;
   final Color accent;
 
-  _AzimuthDialPainter({required this.azimuth, required this.accent});
+  /// Recorrido del sol del día: se dibuja dentro del dial (más cerca del
+  /// centro cuanto más alto), con su salida y su puesta.
+  final SunDayPath? path;
+
+  _AzimuthDialPainter({required this.azimuth, required this.accent, this.path});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2667,6 +2712,44 @@ class _AzimuthDialPainter extends CustomPainter {
       canvas.drawLine(p1, p2, tick);
     }
 
+    final day = path;
+    if (day != null && day.path.isNotEmpty) {
+      Offset at(double az, double alt) {
+        final a = (az - 90) * math.pi / 180;
+        final d = (r - 10) * (1 - (alt.clamp(0, 90) / 90));
+        return Offset(c.dx + math.cos(a) * d, c.dy + math.sin(a) * d);
+      }
+
+      final trail = Path();
+      for (final (i, p) in day.path.indexed) {
+        final o = at(p.azimuth, p.altitude);
+        i == 0 ? trail.moveTo(o.dx, o.dy) : trail.lineTo(o.dx, o.dy);
+      }
+      canvas.drawPath(
+        trail,
+        Paint()
+          ..color = const Color(0xFFFFB347)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+      for (final (az, color) in [
+        (day.sunriseAzimuth, const Color(0xFFFFD27F)),
+        (day.sunsetAzimuth, const Color(0xFFFF8A3D)),
+      ]) {
+        if (az == null) continue;
+        canvas.drawCircle(at(az, 0), 5, Paint()..color = color);
+      }
+      // Norte arriba.
+      final north = TextPainter(
+        text: const TextSpan(
+          text: 'N',
+          style: TextStyle(fontSize: 10, color: Colors.white54),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      north.paint(canvas, Offset(c.dx - north.width / 2, c.dy - r + 10));
+    }
+
     final rad = (azimuth - 90) * math.pi / 180;
     final sun = Offset(
       c.dx + math.cos(rad) * (r - 18),
@@ -2681,7 +2764,9 @@ class _AzimuthDialPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _AzimuthDialPainter oldDelegate) =>
-      oldDelegate.azimuth != azimuth || oldDelegate.accent != accent;
+      oldDelegate.azimuth != azimuth ||
+      oldDelegate.accent != accent ||
+      oldDelegate.path != path;
 }
 
 /// Pincelada de luz sincronizada desde Iluminación + CTA de drill-down.
