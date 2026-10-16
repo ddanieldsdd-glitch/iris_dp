@@ -892,6 +892,27 @@ class ProjectContentBundle {
 
   static bool isLegacyHash(String hash) => hash.length != 64;
 
+  /// Si las filas de [local] tienen los mismos uid que las de [cloud], lista a
+  /// lista. Solo cuenta lo que la nube trae con uid (bundles desde la v6).
+  static bool uidsMatch(Map<String, dynamic> local, Map<String, dynamic> cloud) {
+    for (final entry in cloud.entries) {
+      final cloudRows = entry.value;
+      final localRows = local[entry.key];
+      if (cloudRows is! List || localRows is! List) continue;
+      Set<String> uids(List rows) => {
+        for (final r in rows)
+          if (r is Map && r['uid'] is String) r['uid'] as String,
+      };
+      final cloudUids = uids(cloudRows);
+      if (cloudUids.isEmpty) continue;
+      if (!cloudUids.containsAll(uids(localRows)) ||
+          !uids(localRows).containsAll(cloudUids)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// Si [bundle] es el contenido de [hash], sea la huella nueva o la antigua.
   static bool bundleMatchesHash(Map<String, dynamic> bundle, String hash) =>
       isLegacyHash(hash)
