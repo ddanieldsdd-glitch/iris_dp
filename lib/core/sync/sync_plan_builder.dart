@@ -237,6 +237,32 @@ class SyncPlanBuilder {
             base?.cloudHash != synced.cloudHash) {
           await ContentSyncBaseStore.save(_db, local.id, synced);
         }
+        // Mismo contenido, pero con uid distintos (este equipo bajó el
+        // proyecto antes de que los uid viajaran): sus imágenes no encuentran
+        // su fila. Descargar no cambia nada más y deja los uid de la nube.
+        if (cloudContent is Map &&
+            !ProjectContentBundle.uidsMatch(
+              localBundle,
+              Map<String, dynamic>.from(cloudContent),
+            )) {
+          items.add(
+            SyncPlanItem(
+              action: SyncPlanAction.pullContentCloud,
+              title: '${local.name} — contenido',
+              description:
+                  'Mismo contenido; descargar para recibir las imágenes y '
+                  'archivos de la nube',
+              localProjectId: local.id,
+              cloudId: cloudId,
+              localProject: local,
+              localContentSummary: localSummary,
+              cloudContentSummary: ProjectContentBundle.summarize(
+                Map<String, dynamic>.from(cloudContent),
+              ),
+              cloudContentHash: cloudHash,
+            ),
+          );
+        }
         continue;
       }
 

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../sync/sync_plan.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_typography.dart';
+import '../../utils/error_log.dart';
 import '../app_button.dart';
 import '../app_card.dart';
 
@@ -47,6 +49,10 @@ class _SyncConflictResolutionSheetState
   late List<SyncPlanItem> _items;
   var _applying = false;
 
+  /// El último error al aplicar. Se queda en la propia hoja (antes salía
+  /// detrás, en un aviso que desaparecía al cerrarla).
+  String? _error;
+
   @override
   void initState() {
     super.initState();
@@ -60,16 +66,16 @@ class _SyncConflictResolutionSheetState
   }
 
   Future<void> _apply() async {
-    setState(() => _applying = true);
+    setState(() {
+      _applying = true;
+      _error = null;
+    });
     try {
       await widget.onApply(SyncPlan(items: _items));
       if (mounted) Navigator.pop(context, true);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al sincronizar: $e')),
-        );
-      }
+    } catch (e, st) {
+      await ErrorLog.record(e, st, context: 'Aplicar sincronización');
+      if (mounted) setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _applying = false);
     }
@@ -133,6 +139,10 @@ class _SyncConflictResolutionSheetState
                     'Revisa cada cambio antes de aplicar nada.',
                     style: AppTypography.bodyMedium(palette),
                   ),
+                  if (_error != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    _ErrorPanel(message: _error!),
+                  ],
                   if (conflicts > 0) ...[
                     const SizedBox(height: AppSpacing.sm),
                     Text(
@@ -433,3 +443,60 @@ class PendingSyncBanner extends ConsumerWidget {
     );
   }
 }
+
+/// El error al sincronizar, entero y legible: se puede seleccionar y copiar.
+class _ErrorPanel extends StatelessWidget {
+  final String message;
+
+  const _ErrorPanel({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: palette.error.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: palette.error.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.error_outline, color: palette.error, size: 18),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'No se pudo completar la sincronización.',
+                  style: AppTypography.bodyMedium(
+                    palette,
+                  ).copyWith(color: palette.error),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () =>
+                    Clipboard.setData(ClipboardData(text: message)),
+                icon: const Icon(Icons.copy, size: 16),
+                label: const Text('Copiar'),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 160),
+            child: SingleChildScrollView(
+              child: SelectableText(
+                message,
+                style: AppTypography.caption(palette),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

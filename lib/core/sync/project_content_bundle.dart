@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
-import 'package:drift/drift.dart' show Value, OrderingTerm, Variable;
+import 'package:drift/drift.dart'
+    show InsertMode, OrderingTerm, Value, Variable;
 
 import '../../shared/visual_bible/bible_image_links.dart';
 import '../database/app_database.dart';
@@ -801,7 +802,44 @@ class ProjectContentBundle {
       'visualBibleNarrativeCards': narrativeCards,
       'bibleSectionEvidence': sectionEvidence,
       'projectAnnotatedPdfs': annotatedPdfs.map((p) => p.toJson()).toList(),
-      'projectAnnotationDocuments': annotationDocuments.map((document) {
+      'projectAnnotationDocuments': [
+        for (final document in annotationDocuments)
+          if (_annotationExport(
+                document,
+                siteKeyById: siteKeyById,
+                setKeyById: setKeyById,
+                shotKeyById: shotKeyById,
+                moodboardKeyById: moodboardKeyById,
+                lightSetupKeyById: lightSetupKeyById,
+              )
+              case final exported?)
+            exported,
+      ],
+      'opticsLabSamples': opticsSamples.map((o) => o.toJson()).toList(),
+    };
+  }
+
+  /// Tipos de dibujo cuyo destino es una fila del proyecto: viajan con la
+  /// clave de esa fila, no con su id local.
+  static const _keyedAnnotationTargets = {
+    'camera_plan_site',
+    'camera_plan_set',
+    'camera_plan_shot',
+    'camera_plan_light_setup',
+    'moodboard_image',
+  };
+
+  /// Un documento de dibujo para el bundle, o nulo si su destino ya no
+  /// existe (un dibujo huérfano no tiene adónde volver al importar y antes
+  /// hacía chocar la importación entera).
+  static Map<String, dynamic>? _annotationExport(
+    ProjectAnnotationDocument document, {
+    required Map<int, String> siteKeyById,
+    required Map<int, String> setKeyById,
+    required Map<int, String> shotKeyById,
+    required Map<int, String> moodboardKeyById,
+    required Map<int, String> lightSetupKeyById,
+  }) {
         final numericTargetId = int.tryParse(document.targetId);
         final targetKey = switch (document.targetType) {
           'camera_plan_site' =>
@@ -812,8 +850,14 @@ class ProjectContentBundle {
             numericTargetId != null ? shotKeyById[numericTargetId] : null,
           'moodboard_image' =>
             numericTargetId != null ? moodboardKeyById[numericTargetId] : null,
+          'camera_plan_light_setup' =>
+            numericTargetId != null ? lightSetupKeyById[numericTargetId] : null,
           _ => null,
         };
+        if (_keyedAnnotationTargets.contains(document.targetType) &&
+            targetKey == null) {
+          return null;
+        }
         return {
           'targetType': document.targetType,
           'targetId': document.targetId,
@@ -823,9 +867,6 @@ class ProjectContentBundle {
           'createdAt': document.createdAt.toIso8601String(),
           'updatedAt': document.updatedAt.toIso8601String(),
         };
-      }).toList(),
-      'opticsLabSamples': opticsSamples.map((o) => o.toJson()).toList(),
-    };
   }
 
   static ContentSyncSummary summarizeFromCounts({
@@ -892,6 +933,27 @@ class ProjectContentBundle {
 
   static bool isLegacyHash(String hash) => hash.length != 64;
 
+  /// Si las filas de [local] tienen los mismos uid que las de [cloud], lista a
+  /// lista. Solo cuenta lo que la nube trae con uid (bundles desde la v6).
+  static bool uidsMatch(Map<String, dynamic> local, Map<String, dynamic> cloud) {
+    for (final entry in cloud.entries) {
+      final cloudRows = entry.value;
+      final localRows = local[entry.key];
+      if (cloudRows is! List || localRows is! List) continue;
+      Set<String> uids(List rows) => {
+        for (final r in rows)
+          if (r is Map && r['uid'] is String) r['uid'] as String,
+      };
+      final cloudUids = uids(cloudRows);
+      if (cloudUids.isEmpty) continue;
+      if (!cloudUids.containsAll(uids(localRows)) ||
+          !uids(localRows).containsAll(cloudUids)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// Si [bundle] es el contenido de [hash], sea la huella nueva o la antigua.
   static bool bundleMatchesHash(Map<String, dynamic> bundle, String hash) =>
       isLegacyHash(hash)
@@ -905,6 +967,17 @@ class ProjectContentBundle {
     final stills = bundle['moodboardImages'];
     for (final key in _hashVolatileTopKeys) {
       copy.remove(key);
+    }
+    // Los dibujos se identifican por la clave de su destino; el id local
+    // cambia de un equipo a otro.
+    final docs = copy['projectAnnotationDocuments'];
+    if (docs is List) {
+      copy['projectAnnotationDocuments'] = [
+        for (final d in docs)
+          d is Map && d['targetKey'] != null
+              ? (Map<String, dynamic>.from(d)..remove('targetId'))
+              : d,
+      ];
     }
     // El uid no es contenido: quitarlo evita que, al actualizar, todos los
     // proyectos salgan como modificados (cada dispositivo pone el suyo hasta
@@ -1859,13 +1932,22 @@ class ProjectContentBundle {
           targetKey != null ? shotKeyToId[targetKey]?.toString() : null,
         'moodboard_image' =>
           targetKey != null ? moodboardKeyToId[targetKey]?.toString() : null,
+        'camera_plan_light_setup' =>
+          targetKey != null ? lightSetupKeyToId[targetKey]?.toString() : null,
         _ => null,
       };
+      // Un dibujo de una fila que no ha llegado no tiene adónde ir: tomar el
+      // id del otro equipo lo pegaría a otra cosa o chocaría con otro dibujo.
+      if (_keyedAnnotationTargets.contains(targetType) &&
+          remappedTargetId == null) {
+        continue;
+      }
       final targetId = remappedTargetId ?? m['targetId']?.toString();
       if (targetId == null) continue;
       await db
           .into(db.projectAnnotationDocuments)
           .insert(
+            mode: InsertMode.insertOrIgnore,
             ProjectAnnotationDocumentsCompanion.insert(
               projectId: projectId,
               targetType: targetType,
