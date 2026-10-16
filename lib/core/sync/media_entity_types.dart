@@ -10,6 +10,8 @@ abstract final class MediaEntityType {
   // Archivos de huecos (ver `kMediaSlots`).
   static const shotStoryboard = 'shot_storyboard';
   static const shotPlanImage = 'shot_plan_image';
+  /// Ya no se usa: la principal es una de las referencias del plano. Lo
+  /// subido con este tipo se ignora al bajar.
   static const shotMainReference = 'shot_main_reference';
   static const lightSketch = 'light_sketch';
   static const lightingReference = 'lighting_reference';
