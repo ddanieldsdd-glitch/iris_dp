@@ -9,6 +9,8 @@ import 'cloud_media_service.dart';
 import 'media_entity_keys.dart';
 import 'media_entity_types.dart';
 import 'media_slots.dart';
+import 'primary_reference_repair.dart' as repair_refs;
+import '../utils/error_log.dart';
 
 /// Descarga imágenes remotas y actualiza rutas locales en Drift.
 class MediaHydrateService {
@@ -22,60 +24,133 @@ class MediaHydrateService {
     var downloaded = 0;
 
     for (final asset in assets) {
-      final entityType = asset['entity_type'] as String?;
-      final entityKey = asset['entity_key'] as String?;
-      final slot = entityType == null ? null : mediaSlotFor(entityType);
-      if (slot != null && entityKey != null) {
-        if (await _hydrateSlot(projectId, slot, entityKey, asset)) {
+      try {
+        if (await _hydrateAsset(projectId, projectCloudId, asset)) {
           downloaded++;
         }
-        continue;
+      } catch (e, st) {
+        // Un archivo que falle no deja sin bajar el resto.
+        await ErrorLog.record(
+          e,
+          st,
+          context: 'Bajar ${asset['entity_type']} ${asset['entity_key']}',
+        );
       }
-      // Tipos que ya no se usan (p. ej. la referencia principal subida como
-      // imagen aparte): bajarlos solo crearía copias.
-      if (!_legacyTypes.contains(entityType)) continue;
-      final deliveryUrl = asset['delivery_url'] as String?;
-      final publicId = asset['public_id'] as String?;
-      if (entityType == null ||
-          entityKey == null ||
-          deliveryUrl == null ||
-          publicId == null) {
-        continue;
-      }
-
-      final localPath = await _resolveLocalPath(
-        projectId: projectId,
-        entityType: entityType,
-        entityKey: entityKey,
-      );
-
-      if (localPath != null && File(localPath).existsSync()) continue;
-
-      final ext = p.extension(publicId);
-      final safeExt = ext.isEmpty ? '.jpg' : ext;
-      final fileName =
-          '${entityType}_${entityKey.hashCode.abs()}$safeExt'.replaceAll(':', '_');
-
-      final subfolder = _subfolderFor(entityType);
-      final newPath = await _cloud.downloadToLocal(
-        localProjectId: projectId,
-        deliveryUrl: deliveryUrl,
-        subfolder: subfolder,
-        fileName: fileName,
-      );
-      if (newPath == null) continue;
-
-      await _applyLocalPath(
-        projectId: projectId,
-        entityType: entityType,
-        entityKey: entityKey,
-        newPath: newPath,
-      );
-      downloaded++;
     }
 
-    await repairDuplicatePrimaryReferences(projectId);
     return downloaded;
+  }
+
+  /// Baja un medio y lo coloca. Devuelve si lo bajó.
+  Future<bool> _hydrateAsset(
+    int projectId,
+    String projectCloudId,
+    Map<String, dynamic> asset,
+  ) async {
+    final entityType = asset['entity_type'] as String?;
+    final entityKey = asset['entity_key'] as String?;
+    if (entityType == null || entityKey == null) return false;
+
+    final slot = mediaSlotFor(entityType);
+    if (slot != null) {
+      final newPath = await _hydrateSlot(
+        projectId,
+        projectCloudId,
+        slot,
+        entityKey,
+        asset,
+      );
+      if (newPath == null) return false;
+      await _markDownloaded(projectId, projectCloudId, asset, newPath);
+      return true;
+    }
+    // Tipos que ya no se usan (p. ej. la referencia principal subida como
+    // imagen aparte): bajarlos solo crearía copias.
+    if (!_legacyTypes.contains(entityType)) return false;
+    final deliveryUrl = asset['delivery_url'] as String?;
+    final publicId = asset['public_id'] as String?;
+    if (deliveryUrl == null || publicId == null) return false;
+
+    final localPath = await _resolveLocalPath(
+      projectId: projectId,
+      entityType: entityType,
+      entityKey: entityKey,
+    );
+    if (localPath != null && File(localPath).existsSync()) {
+      await _forgetIfDownloaded(projectId, projectCloudId, asset, localPath);
+      return false;
+    }
+
+    final ext = p.extension(publicId);
+    final safeExt = ext.isEmpty ? '.jpg' : ext;
+    final fileName = '${entityType}_${entityKey.hashCode.abs()}$safeExt'
+        .replaceAll(':', '_');
+    final newPath = await _cloud.downloadToLocal(
+      localProjectId: projectId,
+      deliveryUrl: deliveryUrl,
+      subfolder: _subfolderFor(entityType),
+      fileName: fileName,
+    );
+    if (newPath == null) return false;
+
+    await _applyLocalPath(
+      projectId: projectId,
+      entityType: entityType,
+      entityKey: entityKey,
+      newPath: newPath,
+    );
+    await _markDownloaded(projectId, projectCloudId, asset, newPath);
+    return true;
+  }
+
+  /// Un archivo que ya está aquí y que bajó la app (su nombre empieza por el
+  /// tipo, como `shot_reference_294749529.jpg`) no es un cambio de este
+  /// equipo: si estaba en cola para subirse, sale de ella (antes de este
+  /// arreglo, lo bajado se ponía en cola y se subía recomprimido).
+  Future<void> _forgetIfDownloaded(
+    int projectId,
+    String projectCloudId,
+    Map<String, dynamic> asset,
+    String localPath,
+  ) async {
+    final type = asset['entity_type'] as String?;
+    if (type == null || !p.basename(localPath).startsWith('${type}_')) return;
+    await _markDownloaded(projectId, projectCloudId, asset, localPath);
+  }
+
+  /// Lo que se acaba de bajar ya está en la nube: se anota como subido desde
+  /// esta ruta para que la cola no lo vuelva a subir (la copia que llega no
+  /// es idéntica al original y lo sustituiría por una recomprimida).
+  Future<void> _markDownloaded(
+    int projectId,
+    String projectCloudId,
+    Map<String, dynamic> asset,
+    String localPath,
+  ) async {
+    final entityType = asset['entity_type'] as String;
+    final entityKey = asset['entity_key'] as String;
+    await (_db.delete(_db.pendingMediaUploads)..where(
+          (t) =>
+              t.projectId.equals(projectId) &
+              t.entityType.equals(entityType) &
+              t.entityKey.equals(entityKey),
+        ))
+        .go();
+    await _db
+        .into(_db.pendingMediaUploads)
+        .insert(
+          PendingMediaUploadsCompanion.insert(
+            projectId: projectId,
+            projectCloudId: Value(projectCloudId),
+            entityType: entityType,
+            entityKey: entityKey,
+            localPath: localPath,
+            publicId: Value(
+              asset['public_id'] as String? ?? asset['storage_path'] as String?,
+            ),
+            status: const Value('done'),
+          ),
+        );
   }
 
   static const _legacyTypes = {
@@ -87,49 +162,9 @@ class MediaHydrateService {
     MediaEntityType.projectCover,
   };
 
-  /// La principal de un plano es una de sus referencias. En equipos que la
-  /// bajaron como imagen aparte (antes de este arreglo) salía dos veces: si es
-  /// el mismo archivo que una referencia, pasa a apuntar a esa referencia.
-  Future<int> repairDuplicatePrimaryReferences(int projectId) async {
-    final rows = await _db
-        .customSelect(
-          'SELECT s.id, s.reference_image_path AS primary_path, '
-          'r.image_path AS ref_path FROM shots s '
-          'JOIN shot_references r ON r.shot_id = s.id '
-          'WHERE s.project_id = ? AND s.reference_image_path IS NOT NULL '
-          'AND NOT EXISTS (SELECT 1 FROM shot_references x '
-          'WHERE x.shot_id = s.id AND x.image_path = s.reference_image_path)',
-          variables: [Variable.withInt(projectId)],
-        )
-        .get();
-    var repaired = 0;
-    final done = <int>{};
-    for (final row in rows) {
-      final shotId = row.read<int>('id');
-      if (done.contains(shotId)) continue;
-      final primary = File(row.read<String>('primary_path'));
-      final reference = File(row.read<String>('ref_path'));
-      if (!primary.existsSync() || !reference.existsSync()) continue;
-      if (primary.lengthSync() != reference.lengthSync()) continue;
-      if (!_sameBytes(primary, reference)) continue;
-      await (_db.update(_db.shots)..where((s) => s.id.equals(shotId))).write(
-        ShotsCompanion(referenceImagePath: Value(reference.path)),
-      );
-      done.add(shotId);
-      repaired++;
-    }
-    return repaired;
-  }
+  Future<int> repairDuplicatePrimaryReferences(int projectId) =>
+      repair_refs.repairDuplicatePrimaryReferences(_db, projectId);
 
-  static bool _sameBytes(File a, File b) {
-    final x = a.readAsBytesSync();
-    final y = b.readAsBytesSync();
-    if (x.length != y.length) return false;
-    for (var i = 0; i < x.length; i++) {
-      if (x[i] != y[i]) return false;
-    }
-    return true;
-  }
 
   String _subfolderFor(String entityType) {
     return switch (entityType) {
@@ -419,15 +454,16 @@ class MediaHydrateService {
   }
 
   /// Baja el archivo de un hueco (storyboard, boceto de luz, guion…) y lo
-  /// coloca en su fila por el uid. Devuelve si lo bajó.
-  Future<bool> _hydrateSlot(
+  /// coloca en su fila por el uid. Devuelve la ruta bajada, o nulo.
+  Future<String?> _hydrateSlot(
     int projectId,
+    String projectCloudId,
     MediaSlot slot,
     String entityKey,
     Map<String, dynamic> asset,
   ) async {
     final parsed = parseMediaSlotKey(entityKey);
-    if (parsed == null) return false;
+    if (parsed == null) return null;
     final (uid, index) = parsed;
     final rows = await _db
         .customSelect(
@@ -436,7 +472,7 @@ class MediaHydrateService {
         )
         .get();
     final row = rows.where((r) => r.read<String?>('uid') == uid).firstOrNull;
-    if (row == null) return false;
+    if (row == null) return null;
     final id = row.read<int>('id');
     final raw = row.read<String?>('path');
 
@@ -446,13 +482,14 @@ class MediaHydrateService {
         ? (index != null && index < list().length ? list()[index] : null)
         : raw;
     if (current != null && current.isNotEmpty && File(current).existsSync()) {
-      return false;
+      await _forgetIfDownloaded(projectId, projectCloudId, asset, current);
+      return null;
     }
 
     final String? newPath;
     if (slot.kind == MediaKind.file) {
       final storagePath = asset['storage_path'] as String?;
-      if (storagePath == null) return false;
+      if (storagePath == null) return null;
       final meta = asset['metadata'];
       final name = meta is Map && meta['file_name'] is String
           ? meta['file_name'] as String
@@ -465,7 +502,7 @@ class MediaHydrateService {
       );
     } else {
       final url = asset['delivery_url'] as String?;
-      if (url == null) return false;
+      if (url == null) return null;
       newPath = await _cloud.downloadToLocal(
         localProjectId: projectId,
         deliveryUrl: url,
@@ -473,7 +510,7 @@ class MediaHydrateService {
         fileName: '${slot.entityType}_$uid${index ?? ''}.jpg',
       );
     }
-    if (newPath == null) return false;
+    if (newPath == null) return null;
 
     final String value;
     if (slot.isList) {
@@ -495,7 +532,7 @@ class MediaHydrateService {
           if (t.actualTableName == slot.table) t,
       },
     );
-    return true;
+    return newPath;
   }
 }
 
