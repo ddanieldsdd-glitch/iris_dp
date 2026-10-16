@@ -53,7 +53,13 @@ class MediaHydrateService {
 
     final slot = mediaSlotFor(entityType);
     if (slot != null) {
-      final newPath = await _hydrateSlot(projectId, slot, entityKey, asset);
+      final newPath = await _hydrateSlot(
+        projectId,
+        projectCloudId,
+        slot,
+        entityKey,
+        asset,
+      );
       if (newPath == null) return false;
       await _markDownloaded(projectId, projectCloudId, asset, newPath);
       return true;
@@ -70,7 +76,10 @@ class MediaHydrateService {
       entityType: entityType,
       entityKey: entityKey,
     );
-    if (localPath != null && File(localPath).existsSync()) return false;
+    if (localPath != null && File(localPath).existsSync()) {
+      await _forgetIfDownloaded(projectId, projectCloudId, asset, localPath);
+      return false;
+    }
 
     final ext = p.extension(publicId);
     final safeExt = ext.isEmpty ? '.jpg' : ext;
@@ -92,6 +101,21 @@ class MediaHydrateService {
     );
     await _markDownloaded(projectId, projectCloudId, asset, newPath);
     return true;
+  }
+
+  /// Un archivo que ya está aquí y que bajó la app (su nombre empieza por el
+  /// tipo, como `shot_reference_294749529.jpg`) no es un cambio de este
+  /// equipo: si estaba en cola para subirse, sale de ella (antes de este
+  /// arreglo, lo bajado se ponía en cola y se subía recomprimido).
+  Future<void> _forgetIfDownloaded(
+    int projectId,
+    String projectCloudId,
+    Map<String, dynamic> asset,
+    String localPath,
+  ) async {
+    final type = asset['entity_type'] as String?;
+    if (type == null || !p.basename(localPath).startsWith('${type}_')) return;
+    await _markDownloaded(projectId, projectCloudId, asset, localPath);
   }
 
   /// Lo que se acaba de bajar ya está en la nube: se anota como subido desde
@@ -433,6 +457,7 @@ class MediaHydrateService {
   /// coloca en su fila por el uid. Devuelve la ruta bajada, o nulo.
   Future<String?> _hydrateSlot(
     int projectId,
+    String projectCloudId,
     MediaSlot slot,
     String entityKey,
     Map<String, dynamic> asset,
@@ -457,6 +482,7 @@ class MediaHydrateService {
         ? (index != null && index < list().length ? list()[index] : null)
         : raw;
     if (current != null && current.isNotEmpty && File(current).existsSync()) {
+      await _forgetIfDownloaded(projectId, projectCloudId, asset, current);
       return null;
     }
 

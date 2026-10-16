@@ -135,4 +135,32 @@ void main() {
 
     expect(cloud.uploads, isEmpty);
   });
+
+  test('lo que ya estaba en cola tras bajarlo sale de la cola', () async {
+    // Como en el iPad: la imagen se bajó antes del arreglo y quedó en cola.
+    final downloaded =
+        (File('${dir.path}/moodboard_123.jpg')..writeAsBytesSync([1])).path;
+    final uid = await addStill(downloaded);
+    await db
+        .into(db.pendingMediaUploads)
+        .insert(
+          PendingMediaUploadsCompanion.insert(
+            projectId: projectId,
+            projectCloudId: const Value('cloud-1'),
+            entityType: MediaEntityType.moodboard,
+            entityKey: MediaEntityKeys.byUid(uid),
+            localPath: downloaded,
+          ),
+        );
+    final cloud = _FakeCloud([
+      asset(uid, 'https://res.cloudinary.com/x/buena'),
+    ], dir);
+
+    await MediaHydrateService(db, cloud).hydrateProject(projectId, 'cloud-1');
+    final queue = MediaUploadQueue(db: db, cloud: cloud, isEnabled: () => true);
+    await queue.scanAndEnqueueProject(projectId);
+    await queue.startWorker();
+
+    expect(cloud.uploads, isEmpty);
+  });
 }
