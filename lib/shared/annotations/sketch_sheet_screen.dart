@@ -14,6 +14,7 @@ import 'annotation_canvas.dart';
 import 'annotation_document.dart';
 import 'annotation_raster.dart';
 import 'annotation_tools.dart';
+import 'sheet/sheet_guides.dart';
 import 'sheet/sheet_panels.dart';
 
 /// Para qué es el folio: cambia el estilo, las capas y las guías de inicio.
@@ -61,6 +62,9 @@ class SketchSheetScreen extends StatefulWidget {
   final double aspectRatio;
   final bool exportPng;
 
+  /// Viñeta anterior, para verla atenuada encima (papel cebolla).
+  final ImageProvider? onionSkin;
+
   const SketchSheetScreen({
     super.key,
     required this.title,
@@ -68,6 +72,7 @@ class SketchSheetScreen extends StatefulWidget {
     required this.purpose,
     required this.aspectRatio,
     this.exportPng = false,
+    this.onionSkin,
   });
 
   static Future<SketchSheetResult?> open(
@@ -77,6 +82,7 @@ class SketchSheetScreen extends StatefulWidget {
     required SketchSheetPurpose purpose,
     double? aspectRatio,
     bool exportPng = false,
+    ImageProvider? onionSkin,
   }) {
     return Navigator.of(context, rootNavigator: true).push<SketchSheetResult>(
       MaterialPageRoute(
@@ -89,6 +95,7 @@ class SketchSheetScreen extends StatefulWidget {
               aspectRatio ??
               (purpose == SketchSheetPurpose.storyboard ? 16 / 9 : 1.414),
           exportPng: exportPng,
+          onionSkin: onionSkin,
         ),
       ),
     );
@@ -119,6 +126,12 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
   double _stampSize = 0.07;
 
   bool _guides = true;
+  SheetFrame _frame = SheetFrame.none;
+  bool _safeArea = false;
+  PerspectiveGuide _perspective = const PerspectiveGuide();
+  bool _magnet = true;
+  bool _onion = true;
+  double _onionOpacity = 0.3;
   bool _straighten = true;
   bool _fingerDraws = true;
   bool _stylusSeen = false;
@@ -866,6 +879,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
       straightenOnHold: _straighten,
       streamline: _mode == _Mode.paint ? _streamline : 0,
       resolutionScale: _rasterZoom,
+      lineSnap: _magnet && _perspective.enabled ? _perspective.snap : null,
       onTextRequested: () => _askText(),
       onStampEditRequested: _nameStamp,
     );
@@ -888,12 +902,60 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
             fit: StackFit.expand,
             children: [
               RepaintBoundary(key: _sheetKey, child: canvas),
+              if (widget.onionSkin != null && _onion)
+                IgnorePointer(
+                  child: Opacity(
+                    opacity: _onionOpacity,
+                    child: Image(image: widget.onionSkin!, fit: BoxFit.fill),
+                  ),
+                ),
               if (_guides)
                 IgnorePointer(
                   child: CustomPaint(
                     painter: _GuidesPainter(thirds: _storyboard),
                   ),
                 ),
+              if (_frame != SheetFrame.none || _safeArea)
+                IgnorePointer(
+                  child: CustomPaint(
+                    painter: FrameGuidePainter(
+                      frame: _frame,
+                      safeArea: _safeArea,
+                    ),
+                  ),
+                ),
+              if (_perspective.enabled) ...[
+                IgnorePointer(
+                  child: CustomPaint(painter: PerspectivePainter(_perspective)),
+                ),
+                LayoutBuilder(
+                  builder: (context, box) {
+                    final size = Size(box.maxWidth, box.maxHeight);
+                    return Stack(
+                      children: [
+                        VanishingPointHandle(
+                          tooltip: 'Punto de fuga',
+                          position: _perspective.vp1,
+                          sheet: size,
+                          onMoved: (p) => setState(
+                            () => _perspective = _perspective.copyWith(vp1: p),
+                          ),
+                        ),
+                        if (_perspective.points == 2)
+                          VanishingPointHandle(
+                            tooltip: 'Segundo punto de fuga',
+                            position: _perspective.vp2,
+                            sheet: size,
+                            onMoved: (p) => setState(
+                              () =>
+                                  _perspective = _perspective.copyWith(vp2: p),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ],
               if (_eyedropper)
                 Positioned.fill(
                   child: MouseRegion(
@@ -1025,6 +1087,85 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
             value: _guides,
             onChanged: (v) => setState(() => _guides = v),
           ),
+          if (_storyboard) ...[
+            Text('Encuadre', style: AppTypography.label(palette)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final frame in SheetFrame.values)
+                  ChoiceChip(
+                    label: Text(frame.label),
+                    selected: _frame == frame,
+                    onSelected: (_) => setState(() => _frame = frame),
+                  ),
+              ],
+            ),
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Zona segura'),
+              value: _safeArea,
+              onChanged: (v) => setState(() => _safeArea = v),
+            ),
+          ],
+          Text('Perspectiva', style: AppTypography.label(palette)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            children: [
+              for (final (points, label) in const [
+                (0, 'Sin guía'),
+                (1, '1 punto'),
+                (2, '2 puntos'),
+              ])
+                ChoiceChip(
+                  label: Text(label),
+                  selected: _perspective.points == points,
+                  onSelected: (_) => setState(
+                    () => _perspective = points == 2
+                        ? _perspective.copyWith(
+                            points: 2,
+                            vp1: const Offset(0.08, 0.42),
+                            vp2: const Offset(0.92, 0.42),
+                          )
+                        : _perspective.copyWith(
+                            points: points,
+                            vp1: const Offset(0.5, 0.42),
+                          ),
+                  ),
+                ),
+            ],
+          ),
+          if (_perspective.enabled)
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Imán de perspectiva'),
+              subtitle: const Text(
+                'Las rectas se ajustan a los puntos de fuga y a la vertical.',
+              ),
+              value: _magnet,
+              onChanged: (v) => setState(() => _magnet = v),
+            ),
+          if (widget.onionSkin != null) ...[
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Papel cebolla'),
+              subtitle: const Text('La viñeta anterior, atenuada encima.'),
+              value: _onion,
+              onChanged: (v) => setState(() => _onion = v),
+            ),
+            if (_onion)
+              Slider(
+                value: _onionOpacity,
+                min: 0.1,
+                max: 0.7,
+                onChanged: (v) => setState(() => _onionOpacity = v),
+              ),
+          ],
           const SizedBox(height: 4),
           OutlinedButton.icon(
             onPressed: doc.isEmpty ? null : _controller.clear,

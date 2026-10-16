@@ -598,6 +598,11 @@ class AnnotationCanvas extends StatefulWidget {
   /// Zoom con el que se ve el folio: sube la resolución de las capas.
   final double resolutionScale;
 
+  /// Imán de las rectas (p. ej. hacia los puntos de fuga): recibe inicio y
+  /// final en píxeles y devuelve el final ajustado, o `null` para usar el
+  /// ajuste a 45°.
+  final Offset? Function(Offset start, Offset end, Size size)? lineSnap;
+
   const AnnotationCanvas({
     super.key,
     required this.controller,
@@ -625,6 +630,7 @@ class AnnotationCanvas extends StatefulWidget {
     this.alphaLocked = false,
     this.streamline = 0,
     this.resolutionScale = 1,
+    this.lineSnap,
   });
 
   @override
@@ -1044,6 +1050,12 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
             pressure: pressure,
           ),
       ]);
+    if (shape.kind == RecognizedShapeKind.line && _livePoints.length == 2) {
+      final snapped = _snappedLine(_livePoints.first, _livePoints.last);
+      _livePoints
+        ..clear()
+        ..addAll(snapped);
+    }
     _snapped = shape.kind;
     _snappedClosed = shape.closed && !area;
     HapticFeedback.selectionClick();
@@ -1053,15 +1065,16 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
   List<AnnotationPoint> _snappedLine(AnnotationPoint a, AnnotationPoint b) {
     final w = _documentSize.width;
     final h = _documentSize.height;
-    final line = AnnotationShapeRecognizer.snapLine(
-      Offset(a.x * w, a.y * h),
-      Offset(b.x * w, b.y * h),
-    );
+    final start = Offset(a.x * w, a.y * h);
+    final end = Offset(b.x * w, b.y * h);
+    final snapped =
+        widget.lineSnap?.call(start, end, _documentSize) ??
+        AnnotationShapeRecognizer.snapLine(start, end).last;
     return [
       a,
       AnnotationPoint(
-        x: (line.last.dx / w).clamp(0.0, 1.0),
-        y: (line.last.dy / h).clamp(0.0, 1.0),
+        x: (snapped.dx / w).clamp(0.0, 1.0),
+        y: (snapped.dy / h).clamp(0.0, 1.0),
         pressure: a.pressure,
       ),
     ];
