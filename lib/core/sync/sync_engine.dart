@@ -9,12 +9,14 @@ import '../database/database_provider.dart';
 import 'media_hydrate_service.dart';
 import 'media_sync_providers.dart';
 import 'media_upload_queue.dart';
+import 'primary_reference_repair.dart';
 import 'project_content_sync_service.dart';
 import 'project_sync_service.dart';
 import 'sync_plan.dart';
 import 'sync_plan_applier.dart';
 import 'sync_plan_builder.dart';
 import '../templates/user_settings_sync_service.dart';
+import '../utils/error_log.dart';
 
 /// Orquestador de sincronización cloud ↔ cache local.
 class SyncEngine {
@@ -257,15 +259,35 @@ class SyncEngine {
     var mediaDownloaded = 0;
     var bytesSaved = 0;
 
+    final db = _ref.read(databaseProvider);
+    final allProjects = await db.watchProjects().first;
+    // Solo local y sin red: no depende de que la descarga llegue al final.
+    for (final p in allProjects) {
+      try {
+        await repairDuplicatePrimaryReferences(db, p.id);
+      } catch (e, st) {
+        await ErrorLog.record(e, st, context: 'Reparar referencias ${p.name}');
+      }
+    }
+
     final uploadQueue = _uploadQueue;
     final hydrate = _hydrate;
     if (uploadQueue != null && hydrate != null) {
-      final db = _ref.read(databaseProvider);
-      final allProjects = await db.watchProjects().first;
       for (final p in allProjects) {
         if (p.cloudId == null) continue;
-        mediaUploaded += await uploadQueue.scanAndEnqueueProject(p.id);
-        mediaDownloaded += await hydrate.hydrateProject(p.id, p.cloudId!);
+        // Primero bajar y después poner en cola: lo recién bajado queda
+        // anotado como subido y no vuelve a la nube. Un proyecto que falle
+        // no deja sin medios a los demás.
+        try {
+          mediaDownloaded += await hydrate.hydrateProject(p.id, p.cloudId!);
+        } catch (e, st) {
+          await ErrorLog.record(e, st, context: 'Bajar medios ${p.name}');
+        }
+        try {
+          mediaUploaded += await uploadQueue.scanAndEnqueueProject(p.id);
+        } catch (e, st) {
+          await ErrorLog.record(e, st, context: 'Subir medios ${p.name}');
+        }
       }
       // Las imágenes siguen subiendo en segundo plano.
       unawaited(uploadQueue.startWorker());
