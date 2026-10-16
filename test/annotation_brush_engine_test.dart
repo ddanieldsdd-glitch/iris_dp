@@ -195,8 +195,9 @@ void main() {
       );
       expect(a!.length, greaterThan(1000));
       expect(md5.convert(a), md5.convert(b!));
-      if (out != null)
+      if (out != null) {
         File('$out/muestras_${style.id}.png').writeAsBytesSync(a);
+      }
     }
   });
 }
