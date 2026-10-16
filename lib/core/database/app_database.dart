@@ -523,6 +523,26 @@ class AppDatabase extends _$AppDatabase {
         await add(projects, projects.cardColor);
         await add(projects, projects.cardSize);
       }
+      if (from < 51) {
+        // Identidad permanente de lo que lleva archivos (sincronizarlos).
+        final withUid = <(TableInfo, GeneratedColumn)>[
+          (lightSetups, lightSetups.uid),
+          (lightingSetups, lightingSetups.uid),
+          (locationBasePlans, locationBasePlans.uid),
+          (locationSites, locationSites.uid),
+          (bibleSectionEvidence, bibleSectionEvidence.uid),
+          (opticsLabSamples, opticsLabSamples.uid),
+          (projectAnnotatedPdfs, projectAnnotatedPdfs.uid),
+          (cameraTests, cameraTests.uid),
+        ];
+        for (final (table, column) in withUid) {
+          await add(table, column);
+          await customStatement(
+            'UPDATE ${table.actualTableName} '
+            'SET uid = lower(hex(randomblob(16))) WHERE uid IS NULL',
+          );
+        }
+      }
     },
   );
 
@@ -4657,7 +4677,7 @@ LazyDatabase _openConnection() {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 50;
+const kSchemaVersion = 51;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

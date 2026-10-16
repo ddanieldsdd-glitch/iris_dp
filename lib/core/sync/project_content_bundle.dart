@@ -1,12 +1,14 @@
 import '../../features/camera_plan/shot_route.dart';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:crypto/crypto.dart';
-import 'package:drift/drift.dart' show Value, OrderingTerm;
+import 'package:drift/drift.dart' show Value, OrderingTerm, Variable;
 
 import '../../shared/visual_bible/bible_image_links.dart';
 import '../database/app_database.dart';
 import 'media_entity_keys.dart';
+import 'media_slots.dart';
 
 int? bundleInt(dynamic value) {
   if (value == null) return null;
@@ -106,7 +108,9 @@ class ProjectContentBundle {
   /// v5: obturación, fps, descripción, numeración y planta de cada plano, y
   /// localización y set de los esquemas de luz de la biblia.
   /// v6: `uid` permanente de escenas, planos e imágenes.
-  static const bundleVersion = 6;
+  /// v7: también de esquemas de luz, sets, localizaciones, evidencias,
+  /// pruebas de cámara, PDF anotados y muestras ópticas (sus archivos viajan).
+  static const bundleVersion = 7;
 
   static Future<Map<String, dynamic>> export(
     AppDatabase db,
@@ -392,6 +396,7 @@ class ProjectContentBundle {
       )..where((e) => e.bibleId.equals(vb.id))).get();
       for (final item in evidence) {
         sectionEvidence.add({
+          'uid': item.uid,
           'bibleKey': vbKey,
           'sectionId': item.sectionId,
           'targetType': item.targetType,
@@ -467,6 +472,7 @@ class ProjectContentBundle {
       )..where((s) => s.bibleId.equals(vb.id))).get();
       for (final setup in setups) {
         lightingSetups.add({
+          'uid': setup.uid,
           'bibleKey': vbKey,
           'setupName': setup.setupName,
           'narrativeNote': setup.narrativeNote,
@@ -487,6 +493,7 @@ class ProjectContentBundle {
       )..where((t) => t.bibleId.equals(vb.id))).get();
       for (final test in tests) {
         cameraTests.add({
+          'uid': test.uid,
           'bibleKey': vbKey,
           'testName': test.testName,
           'cameraId': test.cameraId,
@@ -562,6 +569,7 @@ class ProjectContentBundle {
       'locationSites': sites
           .map(
             (s) => {
+              'uid': s.uid,
               'siteKey': siteKeyById[s.id],
               'name': s.name,
               'description': s.description,
@@ -581,6 +589,7 @@ class ProjectContentBundle {
       'locationBasePlans': sets
           .map(
             (s) => {
+              'uid': s.uid,
               'setKey': setKeyById[s.id],
               'siteKey': s.siteId != null ? siteKeyById[s.siteId!] : null,
               'locationName': s.locationName,
@@ -601,6 +610,7 @@ class ProjectContentBundle {
       'lightSetups': lightSetupRows
           .map(
             (s) => {
+              'uid': s.uid,
               'lightSetupKey': lightSetupKeyById[s.id],
               'siteKey': s.locationSiteId != null
                   ? siteKeyById[s.locationSiteId!]
@@ -899,7 +909,7 @@ class ProjectContentBundle {
     // El uid no es contenido: quitarlo evita que, al actualizar, todos los
     // proyectos salgan como modificados (cada dispositivo pone el suyo hasta
     // que recibe los de la nube).
-    for (final key in const ['scenes', 'shots']) {
+    for (final key in copy.keys.toList()) {
       final rows = copy[key];
       if (rows is List) {
         copy[key] = [
@@ -1007,6 +1017,54 @@ class ProjectContentBundle {
     // Todo o nada: si la importación falla a medias, el contenido anterior
     // sigue ahí.
     await db.transaction(() => _replaceContent(db, projectId, bundle));
+    await _clearMissingSlotPaths(db, projectId);
+  }
+
+  /// El bundle trae rutas del dispositivo de origen. Las que no existen aquí
+  /// se vacían: la descarga de medios pone después el archivo de verdad, y
+  /// mientras tanto la app no intenta abrir una ruta de otro equipo.
+  static bool _looksLikeFilePath(String value) =>
+      value.startsWith('/') || RegExp(r'^[A-Za-z]:[\\/]').hasMatch(value);
+
+  static Future<void> _clearMissingSlotPaths(AppDatabase db, int projectId) async {
+    for (final slot in kMediaSlots) {
+      if (!slot.nullable) continue;
+      final rows = await db
+          .customSelect(
+            slot.selectForProject,
+            variables: [Variable.withInt(projectId)],
+          )
+          .get();
+      for (final row in rows) {
+        final raw = row.read<String?>('path');
+        if (raw == null || raw.isEmpty) continue;
+        final paths = slot.isList ? decodeSlotPaths(raw) : [raw];
+        // Lo que no es ruta (p. ej. `setup:<id>`, un boceto dibujado) se
+        // queda; las rutas que no existen aquí dejan su sitio vacío, para que
+        // la descarga sepa dónde va cada archivo.
+        final here = [
+          for (final p in paths)
+            if (!_looksLikeFilePath(p) || File(p).existsSync()) p else '',
+        ];
+        if (here.join('\u0000') == paths.join('\u0000')) continue;
+        final String? value = here.every((p) => p.isEmpty)
+            ? null
+            : slot.isList
+            ? jsonEncode(here)
+            : here.single;
+        await db.customUpdate(
+          'UPDATE ${slot.table} SET ${slot.column} = ? WHERE id = ?',
+          variables: [
+            value == null ? const Variable(null) : Variable.withString(value),
+            Variable.withInt(row.read<int>('id')),
+          ],
+          updates: {
+            for (final t in db.allTables)
+              if (t.actualTableName == slot.table) t,
+          },
+        );
+      }
+    }
   }
 
   static Future<void> _replaceContent(
@@ -1051,6 +1109,7 @@ class ProjectContentBundle {
       final m = Map<String, dynamic>.from(row as Map);
       final id = await db.into(db.locationSites).insert(
         LocationSitesCompanion.insert(
+          uid: bundleUid(m['uid']),
           projectId: projectId,
           name: m['name'] as String,
           description: Value(m['description'] as String?),
@@ -1091,6 +1150,7 @@ class ProjectContentBundle {
       final siteKey = m['siteKey'] as String?;
       final id = await db.into(db.locationBasePlans).insert(
         LocationBasePlansCompanion.insert(
+          uid: bundleUid(m['uid']),
           projectId: projectId,
           siteId: Value(siteKey != null ? siteKeyToId[siteKey] : null),
           locationName: m['locationName'] as String,
@@ -1117,6 +1177,7 @@ class ProjectContentBundle {
       final setKey = m['setKey'] as String?;
       final id = await db.into(db.lightSetups).insert(
         LightSetupsCompanion.insert(
+          uid: bundleUid(m['uid']),
           projectId: projectId,
           locationSiteId: Value(siteKey != null ? siteKeyToId[siteKey] : null),
           locationBasePlanId: Value(
@@ -1650,6 +1711,7 @@ class ProjectContentBundle {
           .into(db.bibleSectionEvidence)
           .insert(
             BibleSectionEvidenceCompanion.insert(
+              uid: bundleUid(m['uid']),
               bibleId: bibleId,
               sectionId: m['sectionId'] as String,
               imagePath: m['imagePath'] as String,
@@ -1710,6 +1772,7 @@ class ProjectContentBundle {
           .into(db.lightingSetups)
           .insert(
             LightingSetupsCompanion.insert(
+              uid: bundleUid(m['uid']),
               bibleId: bibleId,
               setupName: m['setupName'] as String,
               narrativeNote: Value(m['narrativeNote'] as String?),
@@ -1733,6 +1796,7 @@ class ProjectContentBundle {
           .into(db.cameraTests)
           .insert(
             CameraTestsCompanion.insert(
+              uid: bundleUid(m['uid']),
               bibleId: bibleId,
               testName: m['testName'] as String,
               cameraId: Value(bundleInt(m['cameraId'])),
@@ -1774,6 +1838,7 @@ class ProjectContentBundle {
           .into(db.projectAnnotatedPdfs)
           .insert(
             ProjectAnnotatedPdfsCompanion.insert(
+              uid: bundleUid(m['uid']),
               projectId: projectId,
               moduleType: m['moduleType'] as String,
               pdfPath: m['pdfPath'] as String,
@@ -1827,6 +1892,7 @@ class ProjectContentBundle {
           .into(db.opticsLabSamples)
           .insert(
             OpticsLabSamplesCompanion.insert(
+              uid: bundleUid(m['uid']),
               projectId: projectId,
               imagePath: m['imagePath'] as String,
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),

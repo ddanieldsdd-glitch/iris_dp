@@ -254,6 +254,8 @@ class CameraPlanElements extends Table {
 /// Añadido en schemaVersion 42.
 class LightSetups extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
   IntColumn get locationSiteId =>
       integer().nullable().references(LocationSites, #id)();
@@ -283,6 +285,8 @@ class CameraPathPoints extends Table {
 /// Localización de rodaje (contenedor): ej. BOSQUE, HOSPITAL.
 class LocationSites extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
   TextColumn get name => text()();
   TextColumn get description => text().nullable()();
@@ -318,6 +322,8 @@ class SiteImages extends Table {
 /// Set de rodaje: unidad de scout con galería, color y escenas vinculadas.
 class LocationBasePlans extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
   IntColumn get siteId => integer().nullable().references(LocationSites, #id)();
   TextColumn get locationName => text()();
@@ -527,6 +533,8 @@ class LookBibles extends Table {
 /// PDFs reimportados desde GoodNotes u otras apps de anotación.
 class ProjectAnnotatedPdfs extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
   TextColumn get moduleType => text()();
   // guion_tecnico | planta_camara | orden_rodaje | look_bible | visual_bible | storyboard
@@ -649,6 +657,8 @@ class VisualBibles extends Table {
 
 class BibleSectionEvidence extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get bibleId => integer().references(VisualBibles, #id)();
   TextColumn get sectionId => text()();
   TextColumn get targetType => text().withDefault(const Constant('section'))();
@@ -673,6 +683,8 @@ class ExposureBlocks extends Table {
 
 class LightingSetups extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get bibleId => integer().references(VisualBibles, #id)();
   TextColumn get setupName => text()();
   TextColumn get narrativeNote => text().nullable()();
@@ -692,6 +704,8 @@ class LightingSetups extends Table {
 
 class CameraTests extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get bibleId => integer().references(VisualBibles, #id)();
   TextColumn get testName => text()();
   IntColumn get cameraId => integer().nullable().references(Cameras, #id)();
@@ -867,6 +881,8 @@ class VisualBibleNarrativeCards extends Table {
 /// Imágenes de muestra del laboratorio óptico (FLT), por proyecto (máx. 10).
 class OpticsLabSamples extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
   TextColumn get imagePath => text()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();

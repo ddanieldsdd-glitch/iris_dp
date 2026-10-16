@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart';
@@ -7,6 +8,7 @@ import '../database/app_database.dart';
 import 'cloud_media_service.dart';
 import 'media_entity_keys.dart';
 import 'media_entity_types.dart';
+import 'media_slots.dart';
 
 /// Descarga imágenes remotas y actualiza rutas locales en Drift.
 class MediaHydrateService {
@@ -22,6 +24,13 @@ class MediaHydrateService {
     for (final asset in assets) {
       final entityType = asset['entity_type'] as String?;
       final entityKey = asset['entity_key'] as String?;
+      final slot = entityType == null ? null : mediaSlotFor(entityType);
+      if (slot != null && entityKey != null) {
+        if (await _hydrateSlot(projectId, slot, entityKey, asset)) {
+          downloaded++;
+        }
+        continue;
+      }
       final deliveryUrl = asset['delivery_url'] as String?;
       final publicId = asset['public_id'] as String?;
       if (entityType == null ||
@@ -336,6 +345,86 @@ class MediaHydrateService {
         .getSingleOrNull();
     if (row == null) return null;
     return (id: row.read<int>('id'), path: row.read<String>('image_path'));
+  }
+
+  /// Baja el archivo de un hueco (storyboard, boceto de luz, guion…) y lo
+  /// coloca en su fila por el uid. Devuelve si lo bajó.
+  Future<bool> _hydrateSlot(
+    int projectId,
+    MediaSlot slot,
+    String entityKey,
+    Map<String, dynamic> asset,
+  ) async {
+    final parsed = parseMediaSlotKey(entityKey);
+    if (parsed == null) return false;
+    final (uid, index) = parsed;
+    final rows = await _db
+        .customSelect(
+          slot.selectForProject,
+          variables: [Variable.withInt(projectId)],
+        )
+        .get();
+    final row = rows.where((r) => r.read<String?>('uid') == uid).firstOrNull;
+    if (row == null) return false;
+    final id = row.read<int>('id');
+    final raw = row.read<String?>('path');
+
+    List<String> list() => decodeSlotPaths(raw);
+
+    final current = slot.isList
+        ? (index != null && index < list().length ? list()[index] : null)
+        : raw;
+    if (current != null && current.isNotEmpty && File(current).existsSync()) {
+      return false;
+    }
+
+    final String? newPath;
+    if (slot.kind == MediaKind.file) {
+      final storagePath = asset['storage_path'] as String?;
+      if (storagePath == null) return false;
+      final meta = asset['metadata'];
+      final name = meta is Map && meta['file_name'] is String
+          ? meta['file_name'] as String
+          : p.basename(storagePath);
+      newPath = await _cloud.downloadStorageFile(
+        localProjectId: projectId,
+        storagePath: storagePath,
+        subfolder: slot.subfolder,
+        fileName: name,
+      );
+    } else {
+      final url = asset['delivery_url'] as String?;
+      if (url == null) return false;
+      newPath = await _cloud.downloadToLocal(
+        localProjectId: projectId,
+        deliveryUrl: url,
+        subfolder: slot.subfolder,
+        fileName: '${slot.entityType}_$uid${index ?? ''}.jpg',
+      );
+    }
+    if (newPath == null) return false;
+
+    final String value;
+    if (slot.isList) {
+      final paths = list();
+      final at = index ?? 0;
+      while (paths.length <= at) {
+        paths.add('');
+      }
+      paths[at] = newPath;
+      value = jsonEncode(paths);
+    } else {
+      value = newPath;
+    }
+    await _db.customUpdate(
+      'UPDATE ${slot.table} SET ${slot.column} = ? WHERE id = ?',
+      variables: [Variable.withString(value), Variable.withInt(id)],
+      updates: {
+        for (final t in _db.allTables)
+          if (t.actualTableName == slot.table) t,
+      },
+    );
+    return true;
   }
 }
 

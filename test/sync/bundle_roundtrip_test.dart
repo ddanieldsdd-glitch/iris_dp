@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -53,6 +55,14 @@ void main() {
   }
 
   test('un plano vuelve con todos sus datos', () async {
+    // Las rutas existen en este equipo: al importar se conservan.
+    final dir = Directory.systemTemp.createTempSync('iris_roundtrip');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    String file(String name) =>
+        (File('${dir.path}/$name')..writeAsBytesSync([1])).path;
+    final ref = file('ref.png');
+    final plan = file('planta.png');
+    final sb = file('sb.png');
     await db
         .into(db.shots)
         .insert(
@@ -71,15 +81,15 @@ void main() {
             notes: const Value('Nota'),
             notesHighlight: const Value('#FFCC00'),
             description: const Value('Plano de llegada'),
-            referenceImagePath: const Value('/tmp/ref.png'),
-            cameraPlanImagePath: const Value('/tmp/planta.png'),
+            referenceImagePath: Value(ref),
+            cameraPlanImagePath: Value(plan),
             charactersJson: const Value('["Ana"]'),
             durationSeconds: const Value(12),
             scriptAnchorIndex: const Value(140),
             autoNumbering: const Value(false),
             sortOrder: const Value(2),
             lightOverridesJson: const Value('{"off":[1]}'),
-            storyboardImagePath: const Value('/tmp/sb.png'),
+            storyboardImagePath: Value(sb),
             cellStylesJson: const Value('{"lens":"bold"}'),
           ),
         );
@@ -210,4 +220,50 @@ void main() {
       expect(set.locationName, 'Salón');
     },
   );
+
+  test('una ruta de otro equipo se vacía al importar', () async {
+    await db
+        .into(db.shots)
+        .insert(
+          ShotsCompanion.insert(
+            sceneId: sceneId,
+            projectId: projectId,
+            number: 1,
+            storyboardImagePath: const Value('/Users/otro/no-existe/sb.png'),
+          ),
+        );
+    final bundle = await ProjectContentBundle.export(db, projectId);
+    final target = await importIntoNewProject(bundle);
+
+    final shot = await (db.select(
+      db.shots,
+    )..where((s) => s.projectId.equals(target))).getSingle();
+    expect(shot.storyboardImagePath, isNull);
+    expect(shot.uid, isNotNull);
+  });
+
+  test('en las listas de bocetos se guardan los sitios y los setup:', () async {
+    final dir = Directory.systemTemp.createTempSync('iris_lists');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final here = (File('${dir.path}/aqui.png')..writeAsBytesSync([1])).path;
+    await db
+        .into(db.shots)
+        .insert(
+          ShotsCompanion.insert(
+            sceneId: sceneId,
+            projectId: projectId,
+            number: 1,
+            cameraPlanImagePath: Value(
+              '["/Users/otro/falta.png","setup:12","$here"]',
+            ),
+          ),
+        );
+    final bundle = await ProjectContentBundle.export(db, projectId);
+    final target = await importIntoNewProject(bundle);
+
+    final shot = await (db.select(
+      db.shots,
+    )..where((s) => s.projectId.equals(target))).getSingle();
+    expect(shot.cameraPlanImagePath, '["","setup:12","$here"]');
+  });
 }

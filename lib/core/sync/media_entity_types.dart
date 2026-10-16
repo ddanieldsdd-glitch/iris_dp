@@ -6,6 +6,22 @@ abstract final class MediaEntityType {
   static const location = 'location';
   static const shootDocument = 'shoot_document';
   static const projectCover = 'project_cover';
+
+  // Archivos de huecos (ver `kMediaSlots`).
+  static const shotStoryboard = 'shot_storyboard';
+  static const shotPlanImage = 'shot_plan_image';
+  static const shotMainReference = 'shot_main_reference';
+  static const lightSketch = 'light_sketch';
+  static const lightingReference = 'lighting_reference';
+  static const setPlan = 'set_plan';
+  static const bibleEvidence = 'bible_evidence';
+  static const opticsSample = 'optics_sample';
+  static const cameraTest = 'camera_test';
+  static const script = 'script';
+  static const annotatedPdf = 'annotated_pdf';
+  static const setScan = 'set_scan';
+  static const setModel3d = 'set_model3d';
+  static const siteScan = 'site_scan';
 }
 
 /// Origen de una imagen ingerida.
