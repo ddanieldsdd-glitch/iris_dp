@@ -765,10 +765,48 @@ abstract final class BrushCatalog {
     startLayerId: 'guia',
   );
 
+  /// Planta de cámara y luz: capas por tipo de elemento.
+  static const planStyle = SketchStyle(
+    id: 'plan',
+    name: 'Planta',
+    description: 'Decorado, personajes, cámaras y luz, cada uno en su capa.',
+    paper: AnnotationPaper.white,
+    palette: [
+      0xFF1A1A1A,
+      0xFF1F3FBF,
+      0xFFD32F2F,
+      0xFF8A8A8A,
+      0xFF2E7D32,
+      0xFFFFB300,
+      0xFF4FC3F7,
+      0xFFFFFFFF,
+    ],
+    shelf: [
+      'graphite.hb',
+      'fineliner.03',
+      'fineliner.05',
+      'fineliner.08',
+      'ink.brushpen',
+      'marker.chisel',
+      'marker.tone',
+      'ink.hatch',
+      'marker.mist',
+    ],
+    layers: [
+      AnnotationLayer(id: 'decorado', name: 'Decorado'),
+      AnnotationLayer(id: 'personajes', name: 'Personajes'),
+      AnnotationLayer(id: 'camaras', name: 'Cámaras'),
+      AnnotationLayer(id: 'luz', name: 'Luz'),
+      AnnotationLayer(id: 'notas', name: 'Notas'),
+    ],
+    startLayerId: 'decorado',
+  );
+
+  /// Estilos para elegir en el storyboard.
   static const styles = [pencilStyle, finelinerStyle, markerStyle];
 
   static SketchStyle? styleById(String? id) {
-    for (final style in styles) {
+    for (final style in [...styles, planStyle]) {
       if (style.id == id) return style;
     }
     return null;

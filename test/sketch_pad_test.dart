@@ -36,7 +36,15 @@ void main() {
     await tester.tap(find.text('abrir'));
     await tester.pumpAndSettle();
     expect(find.text('Referencia'), findsOneWidget);
-    for (final tool in ['Lápiz', 'Rotulador', 'Flecha', 'Goma', 'Aguada']) {
+    for (final tool in [
+      'Pincel',
+      'Difuminar',
+      'Borrar',
+      'Capas',
+      'Color',
+      'Flecha',
+      'Sellos',
+    ]) {
       expect(find.byTooltip(tool), findsOneWidget);
     }
 

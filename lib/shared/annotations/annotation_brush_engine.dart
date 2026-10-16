@@ -132,14 +132,16 @@ abstract final class BrushEngine {
     final rnd = math.Random(seedFor(stroke));
     final bounds = _bounds(pts, diameter * 2.5 + 2);
 
+    // Cualquier pincel puede borrar: con la goma, su huella quita pintura.
+    final erase =
+        spec.mode == BrushMode.erase ||
+        stroke.tool == AnnotationToolType.eraseArea;
     final layerAlpha = spec.wet ? stroke.opacity.clamp(0.0, 1.0) : 1.0;
     canvas.saveLayer(
       bounds,
       Paint()
         ..color = Color.fromRGBO(0, 0, 0, layerAlpha)
-        ..blendMode = spec.mode == BrushMode.erase
-            ? BlendMode.dstOut
-            : spec.blend,
+        ..blendMode = erase ? BlendMode.dstOut : spec.blend,
     );
     if (spec.isArea) {
       _paintArea(canvas, spec, stroke, pts, color, diameter, rnd);

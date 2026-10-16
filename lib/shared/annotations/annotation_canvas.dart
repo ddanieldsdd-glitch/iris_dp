@@ -32,6 +32,24 @@ class AnnotationCanvasController extends ChangeNotifier {
   }) : _document = document;
 
   AnnotationDocument _document;
+
+  /// Capas ya rasterizadas del lienzo (también para las miniaturas).
+  final AnnotationCompositor compositor = AnnotationCompositor();
+
+  /// Último tamaño de documento con el que se pintó.
+  Size lastSize = Size.zero;
+
+  VoidCallback? _cancelLive;
+
+  /// Descarta el trazo a medio dibujar (al empezar un gesto de dos dedos).
+  void cancelLiveStroke() => _cancelLive?.call();
+
+  @override
+  void dispose() {
+    compositor.dispose();
+    super.dispose();
+  }
+
   final List<AnnotationDocument> _undo = [];
   final List<AnnotationDocument> _redo = [];
   AnnotationDocument? _noteDragBaseline;
@@ -311,6 +329,26 @@ class AnnotationCanvasController extends ChangeNotifier {
     );
   }
 
+  /// Aplica las capas y el papel de un estilo. En un folio vacío las capas
+  /// se sustituyen; si ya hay dibujo, las que faltan se añaden encima.
+  void applyLayout(List<AnnotationLayer> styleLayers, AnnotationPaper paper) {
+    final doc = _document;
+    final hasContent = doc.strokes.isNotEmpty || doc.stamps.isNotEmpty;
+    final List<AnnotationLayer> next;
+    if (!hasContent) {
+      next = styleLayers;
+    } else {
+      final current = doc.effectiveLayers;
+      next = [
+        ...current,
+        for (final layer in styleLayers)
+          if (!current.any((l) => l.id == layer.id)) layer,
+      ];
+    }
+    final pinned = hasContent ? _pinLayers(doc) : doc;
+    _commit(pinned.copyWith(layers: next, paper: paper));
+  }
+
   void setPaper(AnnotationPaper? paper) {
     if (paper == _document.paper) return;
     _commit(
@@ -553,6 +591,13 @@ class AnnotationCanvas extends StatefulWidget {
   /// Bloqueo de alfa de la capa activa: los trazos solo cubren lo pintado.
   final bool alphaLocked;
 
+  /// Estabilizador (0–1): suaviza el temblor del trazo a costa de que
+  /// siga al lápiz con algo de retraso.
+  final double streamline;
+
+  /// Zoom con el que se ve el folio: sube la resolución de las capas.
+  final double resolutionScale;
+
   const AnnotationCanvas({
     super.key,
     required this.controller,
@@ -578,6 +623,8 @@ class AnnotationCanvas extends StatefulWidget {
     this.brushId,
     this.layerId,
     this.alphaLocked = false,
+    this.streamline = 0,
+    this.resolutionScale = 1,
   });
 
   @override
@@ -607,12 +654,25 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
   bool _stampDragMoved = false;
   bool _tappedSelected = false;
 
-  final AnnotationCompositor _compositor = AnnotationCompositor();
-
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_onControllerChanged);
+    widget.controller._cancelLive = _cancelLive;
+  }
+
+  void _cancelLive() {
+    if (_activePointer == null) return;
+    _holdTimer?.cancel();
+    _activePointer = null;
+    _livePoints.clear();
+    _liveStamp = null;
+    _snapped = null;
+    _snappedClosed = false;
+    if (_activeTool == AnnotationToolType.select) {
+      widget.controller.endGesture();
+    }
+    if (mounted) setState(() {});
   }
 
   @override
@@ -630,7 +690,9 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
 
   @override
   void dispose() {
-    _compositor.dispose();
+    if (widget.controller._cancelLive == _cancelLive) {
+      widget.controller._cancelLive = null;
+    }
     _holdTimer?.cancel();
     widget.controller.removeListener(_onControllerChanged);
     super.dispose();
@@ -813,7 +875,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
           return;
         }
         if (_snapped != null) return;
-        _livePoints.add(_pointFor(event));
+        _livePoints.add(_stabilized(_pointFor(event)));
         final anchor = _holdAnchor;
         if (anchor == null ||
             (event.localPosition - anchor).distance > _holdSlop) {
@@ -928,6 +990,21 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     setState(() {});
   }
 
+  /// Con estabilizador, el punto nuevo se acerca al anterior.
+  AnnotationPoint _stabilized(AnnotationPoint raw) {
+    final k = widget.streamline.clamp(0.0, 1.0);
+    if (k == 0 || _livePoints.isEmpty) return raw;
+    final prev = _livePoints.last;
+    final follow = 1 - k * 0.85;
+    return AnnotationPoint(
+      x: prev.x + (raw.x - prev.x) * follow,
+      y: prev.y + (raw.y - prev.y) * follow,
+      pressure: raw.pressure,
+      tilt: raw.tilt,
+      azimuth: raw.azimuth,
+    );
+  }
+
   void _restartHold(Offset local) {
     _holdAnchor = local;
     _holdTimer?.cancel();
@@ -1005,8 +1082,10 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         final docSize = widget.viewport?.documentSize ?? size;
         final longest = math.max(1.0, docSize.longestSide);
-        _compositor.pixelRatio = math.min(
-          MediaQuery.maybeDevicePixelRatioOf(context) ?? 1,
+        widget.controller.lastSize = docSize;
+        widget.controller.compositor.pixelRatio = math.min(
+          (MediaQuery.maybeDevicePixelRatioOf(context) ?? 1) *
+              widget.resolutionScale,
           4096 / longest,
         );
         final live = _livePoints.isEmpty
@@ -1043,7 +1122,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
                       : null,
                   viewport: widget.viewport,
                   paintNotes: !widget.interactiveNotes,
-                  compositor: _compositor,
+                  compositor: widget.controller.compositor,
                 ),
                 child: widget.child ?? const SizedBox.expand(),
               ),
