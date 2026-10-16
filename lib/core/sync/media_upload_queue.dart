@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart';
@@ -11,6 +12,7 @@ import 'cloud_media_service.dart';
 import 'cloudinary_public_id.dart';
 import 'media_entity_keys.dart';
 import 'media_entity_types.dart';
+import 'media_slots.dart';
 
 /// Progreso global de la cola de subidas.
 class MediaUploadQueueProgress {
@@ -274,15 +276,26 @@ class MediaUploadQueue {
             sortOrder: row.sortOrder,
           );
 
-      final result = await _cloud.uploadFile(
-        localPath: row.localPath,
-        publicId: publicId,
-        projectCloudId: cloudId,
-        entityType: row.entityType,
-        entityKey: row.entityKey,
-        sortOrder: row.sortOrder,
-        source: row.source,
-      );
+      final slot = mediaSlotFor(row.entityType);
+      final result = slot?.kind == MediaKind.file
+          ? await _cloud.uploadRawFile(
+              localPath: row.localPath,
+              projectCloudId: cloudId,
+              entityType: row.entityType,
+              entityKey: row.entityKey,
+              sortOrder: row.sortOrder,
+              maxBytes: MediaSlot.maxFileBytes,
+              source: row.source,
+            )
+          : await _cloud.uploadFile(
+              localPath: row.localPath,
+              publicId: publicId,
+              projectCloudId: cloudId,
+              entityType: row.entityType,
+              entityKey: row.entityKey,
+              sortOrder: row.sortOrder,
+              source: row.source,
+            );
 
       if (result == null) {
         throw StateError('Upload devolvió null');
@@ -580,7 +593,71 @@ class MediaUploadQueue {
     }
 
     unawaited(startWorker());
+    count += await _enqueueSlots(projectId, cloudId, workspaceId);
     return count;
+  }
+
+  /// Pone en cola los archivos de los huecos del proyecto (storyboard,
+  /// bocetos de luz, plantas de set, guion, PDF anotados…, ver [kMediaSlots]).
+  Future<int> _enqueueSlots(
+    int projectId,
+    String cloudId,
+    String workspaceId,
+  ) async {
+    var count = 0;
+    for (final slot in kMediaSlots) {
+      final rows = await _db
+          .customSelect(
+            slot.selectForProject,
+            variables: [Variable.withInt(projectId)],
+          )
+          .get();
+      for (final row in rows) {
+        final uid = row.read<String?>('uid');
+        final raw = row.read<String?>('path');
+        if (uid == null || raw == null || raw.trim().isEmpty) continue;
+        final paths = slot.isList ? _decodePaths(raw) : [raw];
+        for (var i = 0; i < paths.length; i++) {
+          final path = paths[i];
+          final file = File(path);
+          if (!file.existsSync()) continue;
+          // Más que el límite de Storage: no se sube (ni se reintenta).
+          if (slot.kind == MediaKind.file &&
+              file.lengthSync() > MediaSlot.maxFileBytes) {
+            continue;
+          }
+          final key = mediaSlotKey(uid, slot.isList ? i : null);
+          if (await enqueue(
+            projectId: projectId,
+            projectCloudId: cloudId,
+            entityType: slot.entityType,
+            entityKey: key,
+            localPath: path,
+            sortOrder: i,
+            publicId: slot.kind == MediaKind.image
+                ? CloudinaryPublicId.byUid(
+                    workspaceId: workspaceId,
+                    projectCloudId: cloudId,
+                    category: slot.entityType,
+                    uid: slot.isList ? '$uid-$i' : uid,
+                  )
+                : null,
+            source: MediaIngestSource.sync,
+          )) {
+            count++;
+          }
+        }
+      }
+    }
+    return count;
+  }
+
+  static List<String> _decodePaths(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) return [for (final p in decoded) '$p'];
+    } catch (_) {}
+    return const [];
   }
 
   Future<void> scanAllProjects() async {

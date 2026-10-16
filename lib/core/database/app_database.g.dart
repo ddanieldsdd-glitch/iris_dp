@@ -1835,6 +1835,16 @@ class $LocationSitesTable extends LocationSites
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
   static const VerificationMeta _projectIdMeta = const VerificationMeta(
     'projectId',
   );
@@ -1970,6 +1980,7 @@ class $LocationSitesTable extends LocationSites
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     projectId,
     name,
     description,
@@ -1997,6 +2008,12 @@ class $LocationSitesTable extends LocationSites
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('project_id')) {
       context.handle(
@@ -2096,6 +2113,10 @@ class $LocationSitesTable extends LocationSites
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       projectId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}project_id'],
@@ -2155,6 +2176,9 @@ class $LocationSitesTable extends LocationSites
 
 class LocationSite extends DataClass implements Insertable<LocationSite> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int projectId;
   final String name;
   final String? description;
@@ -2169,6 +2193,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
   final String? placeLabel;
   const LocationSite({
     required this.id,
+    this.uid,
     required this.projectId,
     required this.name,
     this.description,
@@ -2186,6 +2211,9 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['project_id'] = Variable<int>(projectId);
     map['name'] = Variable<String>(name);
     if (!nullToAbsent || description != null) {
@@ -2222,6 +2250,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
   LocationSitesCompanion toCompanion(bool nullToAbsent) {
     return LocationSitesCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       projectId: Value(projectId),
       name: Value(name),
       description: description == null && nullToAbsent
@@ -2262,6 +2291,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return LocationSite(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       projectId: serializer.fromJson<int>(json['projectId']),
       name: serializer.fromJson<String>(json['name']),
       description: serializer.fromJson<String?>(json['description']),
@@ -2281,6 +2311,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'projectId': serializer.toJson<int>(projectId),
       'name': serializer.toJson<String>(name),
       'description': serializer.toJson<String?>(description),
@@ -2298,6 +2329,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
 
   LocationSite copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? projectId,
     String? name,
     Value<String?> description = const Value.absent(),
@@ -2312,6 +2344,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
     Value<String?> placeLabel = const Value.absent(),
   }) => LocationSite(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     projectId: projectId ?? this.projectId,
     name: name ?? this.name,
     description: description.present ? description.value : this.description,
@@ -2332,6 +2365,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
   LocationSite copyWithCompanion(LocationSitesCompanion data) {
     return LocationSite(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       projectId: data.projectId.present ? data.projectId.value : this.projectId,
       name: data.name.present ? data.name.value : this.name,
       description: data.description.present
@@ -2361,6 +2395,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
   String toString() {
     return (StringBuffer('LocationSite(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('name: $name, ')
           ..write('description: $description, ')
@@ -2380,6 +2415,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
   @override
   int get hashCode => Object.hash(
     id,
+    uid,
     projectId,
     name,
     description,
@@ -2398,6 +2434,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
       identical(this, other) ||
       (other is LocationSite &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.projectId == this.projectId &&
           other.name == this.name &&
           other.description == this.description &&
@@ -2414,6 +2451,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
 
 class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> projectId;
   final Value<String> name;
   final Value<String?> description;
@@ -2428,6 +2466,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
   final Value<String?> placeLabel;
   const LocationSitesCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.projectId = const Value.absent(),
     this.name = const Value.absent(),
     this.description = const Value.absent(),
@@ -2443,6 +2482,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
   });
   LocationSitesCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int projectId,
     required String name,
     this.description = const Value.absent(),
@@ -2459,6 +2499,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
        name = Value(name);
   static Insertable<LocationSite> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? projectId,
     Expression<String>? name,
     Expression<String>? description,
@@ -2474,6 +2515,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (projectId != null) 'project_id': projectId,
       if (name != null) 'name': name,
       if (description != null) 'description': description,
@@ -2491,6 +2533,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
 
   LocationSitesCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? projectId,
     Value<String>? name,
     Value<String?>? description,
@@ -2506,6 +2549,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
   }) {
     return LocationSitesCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       projectId: projectId ?? this.projectId,
       name: name ?? this.name,
       description: description ?? this.description,
@@ -2526,6 +2570,9 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (projectId.present) {
       map['project_id'] = Variable<int>(projectId.value);
@@ -2570,6 +2617,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
   String toString() {
     return (StringBuffer('LocationSitesCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('name: $name, ')
           ..write('description: $description, ')
@@ -2605,6 +2653,16 @@ class $LocationBasePlansTable extends LocationBasePlans
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'PRIMARY KEY AUTOINCREMENT',
     ),
+  );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
   );
   static const VerificationMeta _projectIdMeta = const VerificationMeta(
     'projectId',
@@ -2766,6 +2824,7 @@ class $LocationBasePlansTable extends LocationBasePlans
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     projectId,
     siteId,
     locationName,
@@ -2795,6 +2854,12 @@ class $LocationBasePlansTable extends LocationBasePlans
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('project_id')) {
       context.handle(
@@ -2915,6 +2980,10 @@ class $LocationBasePlansTable extends LocationBasePlans
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       projectId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}project_id'],
@@ -2983,6 +3052,9 @@ class $LocationBasePlansTable extends LocationBasePlans
 class LocationBasePlan extends DataClass
     implements Insertable<LocationBasePlan> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int projectId;
   final int? siteId;
   final String locationName;
@@ -2999,6 +3071,7 @@ class LocationBasePlan extends DataClass
   final int sortOrder;
   const LocationBasePlan({
     required this.id,
+    this.uid,
     required this.projectId,
     this.siteId,
     required this.locationName,
@@ -3018,6 +3091,9 @@ class LocationBasePlan extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['project_id'] = Variable<int>(projectId);
     if (!nullToAbsent || siteId != null) {
       map['site_id'] = Variable<int>(siteId);
@@ -3058,6 +3134,7 @@ class LocationBasePlan extends DataClass
   LocationBasePlansCompanion toCompanion(bool nullToAbsent) {
     return LocationBasePlansCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       projectId: Value(projectId),
       siteId: siteId == null && nullToAbsent
           ? const Value.absent()
@@ -3102,6 +3179,7 @@ class LocationBasePlan extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return LocationBasePlan(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       projectId: serializer.fromJson<int>(json['projectId']),
       siteId: serializer.fromJson<int?>(json['siteId']),
       locationName: serializer.fromJson<String>(json['locationName']),
@@ -3125,6 +3203,7 @@ class LocationBasePlan extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'projectId': serializer.toJson<int>(projectId),
       'siteId': serializer.toJson<int?>(siteId),
       'locationName': serializer.toJson<String>(locationName),
@@ -3144,6 +3223,7 @@ class LocationBasePlan extends DataClass
 
   LocationBasePlan copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? projectId,
     Value<int?> siteId = const Value.absent(),
     String? locationName,
@@ -3160,6 +3240,7 @@ class LocationBasePlan extends DataClass
     int? sortOrder,
   }) => LocationBasePlan(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     projectId: projectId ?? this.projectId,
     siteId: siteId.present ? siteId.value : this.siteId,
     locationName: locationName ?? this.locationName,
@@ -3184,6 +3265,7 @@ class LocationBasePlan extends DataClass
   LocationBasePlan copyWithCompanion(LocationBasePlansCompanion data) {
     return LocationBasePlan(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       projectId: data.projectId.present ? data.projectId.value : this.projectId,
       siteId: data.siteId.present ? data.siteId.value : this.siteId,
       locationName: data.locationName.present
@@ -3219,6 +3301,7 @@ class LocationBasePlan extends DataClass
   String toString() {
     return (StringBuffer('LocationBasePlan(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('siteId: $siteId, ')
           ..write('locationName: $locationName, ')
@@ -3240,6 +3323,7 @@ class LocationBasePlan extends DataClass
   @override
   int get hashCode => Object.hash(
     id,
+    uid,
     projectId,
     siteId,
     locationName,
@@ -3260,6 +3344,7 @@ class LocationBasePlan extends DataClass
       identical(this, other) ||
       (other is LocationBasePlan &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.projectId == this.projectId &&
           other.siteId == this.siteId &&
           other.locationName == this.locationName &&
@@ -3278,6 +3363,7 @@ class LocationBasePlan extends DataClass
 
 class LocationBasePlansCompanion extends UpdateCompanion<LocationBasePlan> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> projectId;
   final Value<int?> siteId;
   final Value<String> locationName;
@@ -3294,6 +3380,7 @@ class LocationBasePlansCompanion extends UpdateCompanion<LocationBasePlan> {
   final Value<int> sortOrder;
   const LocationBasePlansCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.projectId = const Value.absent(),
     this.siteId = const Value.absent(),
     this.locationName = const Value.absent(),
@@ -3311,6 +3398,7 @@ class LocationBasePlansCompanion extends UpdateCompanion<LocationBasePlan> {
   });
   LocationBasePlansCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int projectId,
     this.siteId = const Value.absent(),
     required String locationName,
@@ -3329,6 +3417,7 @@ class LocationBasePlansCompanion extends UpdateCompanion<LocationBasePlan> {
        locationName = Value(locationName);
   static Insertable<LocationBasePlan> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? projectId,
     Expression<int>? siteId,
     Expression<String>? locationName,
@@ -3346,6 +3435,7 @@ class LocationBasePlansCompanion extends UpdateCompanion<LocationBasePlan> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (projectId != null) 'project_id': projectId,
       if (siteId != null) 'site_id': siteId,
       if (locationName != null) 'location_name': locationName,
@@ -3365,6 +3455,7 @@ class LocationBasePlansCompanion extends UpdateCompanion<LocationBasePlan> {
 
   LocationBasePlansCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? projectId,
     Value<int?>? siteId,
     Value<String>? locationName,
@@ -3382,6 +3473,7 @@ class LocationBasePlansCompanion extends UpdateCompanion<LocationBasePlan> {
   }) {
     return LocationBasePlansCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       projectId: projectId ?? this.projectId,
       siteId: siteId ?? this.siteId,
       locationName: locationName ?? this.locationName,
@@ -3404,6 +3496,9 @@ class LocationBasePlansCompanion extends UpdateCompanion<LocationBasePlan> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (projectId.present) {
       map['project_id'] = Variable<int>(projectId.value);
@@ -3454,6 +3549,7 @@ class LocationBasePlansCompanion extends UpdateCompanion<LocationBasePlan> {
   String toString() {
     return (StringBuffer('LocationBasePlansCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('siteId: $siteId, ')
           ..write('locationName: $locationName, ')
@@ -4797,6 +4893,16 @@ class $LightSetupsTable extends LightSetups
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
   static const VerificationMeta _projectIdMeta = const VerificationMeta(
     'projectId',
   );
@@ -4926,6 +5032,7 @@ class $LightSetupsTable extends LightSetups
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     projectId,
     locationSiteId,
     locationBasePlanId,
@@ -4952,6 +5059,12 @@ class $LightSetupsTable extends LightSetups
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('project_id')) {
       context.handle(
@@ -5045,6 +5158,10 @@ class $LightSetupsTable extends LightSetups
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       projectId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}project_id'],
@@ -5100,6 +5217,9 @@ class $LightSetupsTable extends LightSetups
 
 class LightSetup extends DataClass implements Insertable<LightSetup> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int projectId;
   final int? locationSiteId;
   final int? locationBasePlanId;
@@ -5113,6 +5233,7 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
   final int sortOrder;
   const LightSetup({
     required this.id,
+    this.uid,
     required this.projectId,
     this.locationSiteId,
     this.locationBasePlanId,
@@ -5129,6 +5250,9 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['project_id'] = Variable<int>(projectId);
     if (!nullToAbsent || locationSiteId != null) {
       map['location_site_id'] = Variable<int>(locationSiteId);
@@ -5158,6 +5282,7 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
   LightSetupsCompanion toCompanion(bool nullToAbsent) {
     return LightSetupsCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       projectId: Value(projectId),
       locationSiteId: locationSiteId == null && nullToAbsent
           ? const Value.absent()
@@ -5191,6 +5316,7 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return LightSetup(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       projectId: serializer.fromJson<int>(json['projectId']),
       locationSiteId: serializer.fromJson<int?>(json['locationSiteId']),
       locationBasePlanId: serializer.fromJson<int?>(json['locationBasePlanId']),
@@ -5209,6 +5335,7 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'projectId': serializer.toJson<int>(projectId),
       'locationSiteId': serializer.toJson<int?>(locationSiteId),
       'locationBasePlanId': serializer.toJson<int?>(locationBasePlanId),
@@ -5225,6 +5352,7 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
 
   LightSetup copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? projectId,
     Value<int?> locationSiteId = const Value.absent(),
     Value<int?> locationBasePlanId = const Value.absent(),
@@ -5238,6 +5366,7 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     int? sortOrder,
   }) => LightSetup(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     projectId: projectId ?? this.projectId,
     locationSiteId: locationSiteId.present
         ? locationSiteId.value
@@ -5259,6 +5388,7 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
   LightSetup copyWithCompanion(LightSetupsCompanion data) {
     return LightSetup(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       projectId: data.projectId.present ? data.projectId.value : this.projectId,
       locationSiteId: data.locationSiteId.present
           ? data.locationSiteId.value
@@ -5285,6 +5415,7 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
   String toString() {
     return (StringBuffer('LightSetup(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('locationSiteId: $locationSiteId, ')
           ..write('locationBasePlanId: $locationBasePlanId, ')
@@ -5303,6 +5434,7 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
   @override
   int get hashCode => Object.hash(
     id,
+    uid,
     projectId,
     locationSiteId,
     locationBasePlanId,
@@ -5320,6 +5452,7 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
       identical(this, other) ||
       (other is LightSetup &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.projectId == this.projectId &&
           other.locationSiteId == this.locationSiteId &&
           other.locationBasePlanId == this.locationBasePlanId &&
@@ -5335,6 +5468,7 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
 
 class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> projectId;
   final Value<int?> locationSiteId;
   final Value<int?> locationBasePlanId;
@@ -5348,6 +5482,7 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
   final Value<int> sortOrder;
   const LightSetupsCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.projectId = const Value.absent(),
     this.locationSiteId = const Value.absent(),
     this.locationBasePlanId = const Value.absent(),
@@ -5362,6 +5497,7 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
   });
   LightSetupsCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int projectId,
     this.locationSiteId = const Value.absent(),
     this.locationBasePlanId = const Value.absent(),
@@ -5377,6 +5513,7 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
        name = Value(name);
   static Insertable<LightSetup> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? projectId,
     Expression<int>? locationSiteId,
     Expression<int>? locationBasePlanId,
@@ -5391,6 +5528,7 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (projectId != null) 'project_id': projectId,
       if (locationSiteId != null) 'location_site_id': locationSiteId,
       if (locationBasePlanId != null)
@@ -5408,6 +5546,7 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
 
   LightSetupsCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? projectId,
     Value<int?>? locationSiteId,
     Value<int?>? locationBasePlanId,
@@ -5422,6 +5561,7 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
   }) {
     return LightSetupsCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       projectId: projectId ?? this.projectId,
       locationSiteId: locationSiteId ?? this.locationSiteId,
       locationBasePlanId: locationBasePlanId ?? this.locationBasePlanId,
@@ -5441,6 +5581,9 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (projectId.present) {
       map['project_id'] = Variable<int>(projectId.value);
@@ -5482,6 +5625,7 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
   String toString() {
     return (StringBuffer('LightSetupsCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('locationSiteId: $locationSiteId, ')
           ..write('locationBasePlanId: $locationBasePlanId, ')
@@ -18793,6 +18937,16 @@ class $ProjectAnnotatedPdfsTable extends ProjectAnnotatedPdfs
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
   static const VerificationMeta _projectIdMeta = const VerificationMeta(
     'projectId',
   );
@@ -18844,6 +18998,7 @@ class $ProjectAnnotatedPdfsTable extends ProjectAnnotatedPdfs
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     projectId,
     moduleType,
     pdfPath,
@@ -18863,6 +19018,12 @@ class $ProjectAnnotatedPdfsTable extends ProjectAnnotatedPdfs
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('project_id')) {
       context.handle(
@@ -18907,6 +19068,10 @@ class $ProjectAnnotatedPdfsTable extends ProjectAnnotatedPdfs
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       projectId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}project_id'],
@@ -18935,12 +19100,16 @@ class $ProjectAnnotatedPdfsTable extends ProjectAnnotatedPdfs
 class ProjectAnnotatedPdf extends DataClass
     implements Insertable<ProjectAnnotatedPdf> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int projectId;
   final String moduleType;
   final String pdfPath;
   final DateTime importedAt;
   const ProjectAnnotatedPdf({
     required this.id,
+    this.uid,
     required this.projectId,
     required this.moduleType,
     required this.pdfPath,
@@ -18950,6 +19119,9 @@ class ProjectAnnotatedPdf extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['project_id'] = Variable<int>(projectId);
     map['module_type'] = Variable<String>(moduleType);
     map['pdf_path'] = Variable<String>(pdfPath);
@@ -18960,6 +19132,7 @@ class ProjectAnnotatedPdf extends DataClass
   ProjectAnnotatedPdfsCompanion toCompanion(bool nullToAbsent) {
     return ProjectAnnotatedPdfsCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       projectId: Value(projectId),
       moduleType: Value(moduleType),
       pdfPath: Value(pdfPath),
@@ -18974,6 +19147,7 @@ class ProjectAnnotatedPdf extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return ProjectAnnotatedPdf(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       projectId: serializer.fromJson<int>(json['projectId']),
       moduleType: serializer.fromJson<String>(json['moduleType']),
       pdfPath: serializer.fromJson<String>(json['pdfPath']),
@@ -18985,6 +19159,7 @@ class ProjectAnnotatedPdf extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'projectId': serializer.toJson<int>(projectId),
       'moduleType': serializer.toJson<String>(moduleType),
       'pdfPath': serializer.toJson<String>(pdfPath),
@@ -18994,12 +19169,14 @@ class ProjectAnnotatedPdf extends DataClass
 
   ProjectAnnotatedPdf copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? projectId,
     String? moduleType,
     String? pdfPath,
     DateTime? importedAt,
   }) => ProjectAnnotatedPdf(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     projectId: projectId ?? this.projectId,
     moduleType: moduleType ?? this.moduleType,
     pdfPath: pdfPath ?? this.pdfPath,
@@ -19008,6 +19185,7 @@ class ProjectAnnotatedPdf extends DataClass
   ProjectAnnotatedPdf copyWithCompanion(ProjectAnnotatedPdfsCompanion data) {
     return ProjectAnnotatedPdf(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       projectId: data.projectId.present ? data.projectId.value : this.projectId,
       moduleType: data.moduleType.present
           ? data.moduleType.value
@@ -19023,6 +19201,7 @@ class ProjectAnnotatedPdf extends DataClass
   String toString() {
     return (StringBuffer('ProjectAnnotatedPdf(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('moduleType: $moduleType, ')
           ..write('pdfPath: $pdfPath, ')
@@ -19033,12 +19212,13 @@ class ProjectAnnotatedPdf extends DataClass
 
   @override
   int get hashCode =>
-      Object.hash(id, projectId, moduleType, pdfPath, importedAt);
+      Object.hash(id, uid, projectId, moduleType, pdfPath, importedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is ProjectAnnotatedPdf &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.projectId == this.projectId &&
           other.moduleType == this.moduleType &&
           other.pdfPath == this.pdfPath &&
@@ -19048,12 +19228,14 @@ class ProjectAnnotatedPdf extends DataClass
 class ProjectAnnotatedPdfsCompanion
     extends UpdateCompanion<ProjectAnnotatedPdf> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> projectId;
   final Value<String> moduleType;
   final Value<String> pdfPath;
   final Value<DateTime> importedAt;
   const ProjectAnnotatedPdfsCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.projectId = const Value.absent(),
     this.moduleType = const Value.absent(),
     this.pdfPath = const Value.absent(),
@@ -19061,6 +19243,7 @@ class ProjectAnnotatedPdfsCompanion
   });
   ProjectAnnotatedPdfsCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int projectId,
     required String moduleType,
     required String pdfPath,
@@ -19070,6 +19253,7 @@ class ProjectAnnotatedPdfsCompanion
        pdfPath = Value(pdfPath);
   static Insertable<ProjectAnnotatedPdf> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? projectId,
     Expression<String>? moduleType,
     Expression<String>? pdfPath,
@@ -19077,6 +19261,7 @@ class ProjectAnnotatedPdfsCompanion
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (projectId != null) 'project_id': projectId,
       if (moduleType != null) 'module_type': moduleType,
       if (pdfPath != null) 'pdf_path': pdfPath,
@@ -19086,6 +19271,7 @@ class ProjectAnnotatedPdfsCompanion
 
   ProjectAnnotatedPdfsCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? projectId,
     Value<String>? moduleType,
     Value<String>? pdfPath,
@@ -19093,6 +19279,7 @@ class ProjectAnnotatedPdfsCompanion
   }) {
     return ProjectAnnotatedPdfsCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       projectId: projectId ?? this.projectId,
       moduleType: moduleType ?? this.moduleType,
       pdfPath: pdfPath ?? this.pdfPath,
@@ -19105,6 +19292,9 @@ class ProjectAnnotatedPdfsCompanion
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (projectId.present) {
       map['project_id'] = Variable<int>(projectId.value);
@@ -19125,6 +19315,7 @@ class ProjectAnnotatedPdfsCompanion
   String toString() {
     return (StringBuffer('ProjectAnnotatedPdfsCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('moduleType: $moduleType, ')
           ..write('pdfPath: $pdfPath, ')
@@ -29090,6 +29281,16 @@ class $LightingSetupsTable extends LightingSetups
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
   static const VerificationMeta _bibleIdMeta = const VerificationMeta(
     'bibleId',
   );
@@ -29226,6 +29427,7 @@ class $LightingSetupsTable extends LightingSetups
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     bibleId,
     setupName,
     narrativeNote,
@@ -29252,6 +29454,12 @@ class $LightingSetupsTable extends LightingSetups
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('bible_id')) {
       context.handle(
@@ -29359,6 +29567,10 @@ class $LightingSetupsTable extends LightingSetups
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       bibleId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}bible_id'],
@@ -29414,6 +29626,9 @@ class $LightingSetupsTable extends LightingSetups
 
 class LightingSetup extends DataClass implements Insertable<LightingSetup> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int bibleId;
   final String setupName;
   final String? narrativeNote;
@@ -29427,6 +29642,7 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
   final int sortOrder;
   const LightingSetup({
     required this.id,
+    this.uid,
     required this.bibleId,
     required this.setupName,
     this.narrativeNote,
@@ -29443,6 +29659,9 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['bible_id'] = Variable<int>(bibleId);
     map['setup_name'] = Variable<String>(setupName);
     if (!nullToAbsent || narrativeNote != null) {
@@ -29474,6 +29693,7 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
   LightingSetupsCompanion toCompanion(bool nullToAbsent) {
     return LightingSetupsCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       bibleId: Value(bibleId),
       setupName: Value(setupName),
       narrativeNote: narrativeNote == null && nullToAbsent
@@ -29509,6 +29729,7 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return LightingSetup(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       bibleId: serializer.fromJson<int>(json['bibleId']),
       setupName: serializer.fromJson<String>(json['setupName']),
       narrativeNote: serializer.fromJson<String?>(json['narrativeNote']),
@@ -29531,6 +29752,7 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'bibleId': serializer.toJson<int>(bibleId),
       'setupName': serializer.toJson<String>(setupName),
       'narrativeNote': serializer.toJson<String?>(narrativeNote),
@@ -29547,6 +29769,7 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
 
   LightingSetup copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? bibleId,
     String? setupName,
     Value<String?> narrativeNote = const Value.absent(),
@@ -29560,6 +29783,7 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
     int? sortOrder,
   }) => LightingSetup(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     bibleId: bibleId ?? this.bibleId,
     setupName: setupName ?? this.setupName,
     narrativeNote: narrativeNote.present
@@ -29585,6 +29809,7 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
   LightingSetup copyWithCompanion(LightingSetupsCompanion data) {
     return LightingSetup(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
       setupName: data.setupName.present ? data.setupName.value : this.setupName,
       narrativeNote: data.narrativeNote.present
@@ -29617,6 +29842,7 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
   String toString() {
     return (StringBuffer('LightingSetup(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('bibleId: $bibleId, ')
           ..write('setupName: $setupName, ')
           ..write('narrativeNote: $narrativeNote, ')
@@ -29635,6 +29861,7 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
   @override
   int get hashCode => Object.hash(
     id,
+    uid,
     bibleId,
     setupName,
     narrativeNote,
@@ -29652,6 +29879,7 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
       identical(this, other) ||
       (other is LightingSetup &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.bibleId == this.bibleId &&
           other.setupName == this.setupName &&
           other.narrativeNote == this.narrativeNote &&
@@ -29667,6 +29895,7 @@ class LightingSetup extends DataClass implements Insertable<LightingSetup> {
 
 class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> bibleId;
   final Value<String> setupName;
   final Value<String?> narrativeNote;
@@ -29680,6 +29909,7 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
   final Value<int> sortOrder;
   const LightingSetupsCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.bibleId = const Value.absent(),
     this.setupName = const Value.absent(),
     this.narrativeNote = const Value.absent(),
@@ -29694,6 +29924,7 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
   });
   LightingSetupsCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int bibleId,
     required String setupName,
     this.narrativeNote = const Value.absent(),
@@ -29710,6 +29941,7 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
        diagramJson = Value(diagramJson);
   static Insertable<LightingSetup> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? bibleId,
     Expression<String>? setupName,
     Expression<String>? narrativeNote,
@@ -29724,6 +29956,7 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (bibleId != null) 'bible_id': bibleId,
       if (setupName != null) 'setup_name': setupName,
       if (narrativeNote != null) 'narrative_note': narrativeNote,
@@ -29743,6 +29976,7 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
 
   LightingSetupsCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? bibleId,
     Value<String>? setupName,
     Value<String?>? narrativeNote,
@@ -29757,6 +29991,7 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
   }) {
     return LightingSetupsCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       bibleId: bibleId ?? this.bibleId,
       setupName: setupName ?? this.setupName,
       narrativeNote: narrativeNote ?? this.narrativeNote,
@@ -29776,6 +30011,9 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (bibleId.present) {
       map['bible_id'] = Variable<int>(bibleId.value);
@@ -29817,6 +30055,7 @@ class LightingSetupsCompanion extends UpdateCompanion<LightingSetup> {
   String toString() {
     return (StringBuffer('LightingSetupsCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('bibleId: $bibleId, ')
           ..write('setupName: $setupName, ')
           ..write('narrativeNote: $narrativeNote, ')
@@ -29851,6 +30090,16 @@ class $CameraTestsTable extends CameraTests
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'PRIMARY KEY AUTOINCREMENT',
     ),
+  );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
   );
   static const VerificationMeta _bibleIdMeta = const VerificationMeta(
     'bibleId',
@@ -29971,6 +30220,7 @@ class $CameraTestsTable extends CameraTests
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     bibleId,
     testName,
     cameraId,
@@ -29996,6 +30246,12 @@ class $CameraTestsTable extends CameraTests
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('bible_id')) {
       context.handle(
@@ -30079,6 +30335,10 @@ class $CameraTestsTable extends CameraTests
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       bibleId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}bible_id'],
@@ -30130,6 +30390,9 @@ class $CameraTestsTable extends CameraTests
 
 class CameraTest extends DataClass implements Insertable<CameraTest> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int bibleId;
   final String testName;
   final int? cameraId;
@@ -30142,6 +30405,7 @@ class CameraTest extends DataClass implements Insertable<CameraTest> {
   final int sortOrder;
   const CameraTest({
     required this.id,
+    this.uid,
     required this.bibleId,
     required this.testName,
     this.cameraId,
@@ -30157,6 +30421,9 @@ class CameraTest extends DataClass implements Insertable<CameraTest> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['bible_id'] = Variable<int>(bibleId);
     map['test_name'] = Variable<String>(testName);
     if (!nullToAbsent || cameraId != null) {
@@ -30185,6 +30452,7 @@ class CameraTest extends DataClass implements Insertable<CameraTest> {
   CameraTestsCompanion toCompanion(bool nullToAbsent) {
     return CameraTestsCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       bibleId: Value(bibleId),
       testName: Value(testName),
       cameraId: cameraId == null && nullToAbsent
@@ -30217,6 +30485,7 @@ class CameraTest extends DataClass implements Insertable<CameraTest> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return CameraTest(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       bibleId: serializer.fromJson<int>(json['bibleId']),
       testName: serializer.fromJson<String>(json['testName']),
       cameraId: serializer.fromJson<int?>(json['cameraId']),
@@ -30234,6 +30503,7 @@ class CameraTest extends DataClass implements Insertable<CameraTest> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'bibleId': serializer.toJson<int>(bibleId),
       'testName': serializer.toJson<String>(testName),
       'cameraId': serializer.toJson<int?>(cameraId),
@@ -30249,6 +30519,7 @@ class CameraTest extends DataClass implements Insertable<CameraTest> {
 
   CameraTest copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? bibleId,
     String? testName,
     Value<int?> cameraId = const Value.absent(),
@@ -30261,6 +30532,7 @@ class CameraTest extends DataClass implements Insertable<CameraTest> {
     int? sortOrder,
   }) => CameraTest(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     bibleId: bibleId ?? this.bibleId,
     testName: testName ?? this.testName,
     cameraId: cameraId.present ? cameraId.value : this.cameraId,
@@ -30277,6 +30549,7 @@ class CameraTest extends DataClass implements Insertable<CameraTest> {
   CameraTest copyWithCompanion(CameraTestsCompanion data) {
     return CameraTest(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
       testName: data.testName.present ? data.testName.value : this.testName,
       cameraId: data.cameraId.present ? data.cameraId.value : this.cameraId,
@@ -30298,6 +30571,7 @@ class CameraTest extends DataClass implements Insertable<CameraTest> {
   String toString() {
     return (StringBuffer('CameraTest(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('bibleId: $bibleId, ')
           ..write('testName: $testName, ')
           ..write('cameraId: $cameraId, ')
@@ -30315,6 +30589,7 @@ class CameraTest extends DataClass implements Insertable<CameraTest> {
   @override
   int get hashCode => Object.hash(
     id,
+    uid,
     bibleId,
     testName,
     cameraId,
@@ -30331,6 +30606,7 @@ class CameraTest extends DataClass implements Insertable<CameraTest> {
       identical(this, other) ||
       (other is CameraTest &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.bibleId == this.bibleId &&
           other.testName == this.testName &&
           other.cameraId == this.cameraId &&
@@ -30345,6 +30621,7 @@ class CameraTest extends DataClass implements Insertable<CameraTest> {
 
 class CameraTestsCompanion extends UpdateCompanion<CameraTest> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> bibleId;
   final Value<String> testName;
   final Value<int?> cameraId;
@@ -30357,6 +30634,7 @@ class CameraTestsCompanion extends UpdateCompanion<CameraTest> {
   final Value<int> sortOrder;
   const CameraTestsCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.bibleId = const Value.absent(),
     this.testName = const Value.absent(),
     this.cameraId = const Value.absent(),
@@ -30370,6 +30648,7 @@ class CameraTestsCompanion extends UpdateCompanion<CameraTest> {
   });
   CameraTestsCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int bibleId,
     required String testName,
     this.cameraId = const Value.absent(),
@@ -30385,6 +30664,7 @@ class CameraTestsCompanion extends UpdateCompanion<CameraTest> {
        imagePaths = Value(imagePaths);
   static Insertable<CameraTest> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? bibleId,
     Expression<String>? testName,
     Expression<int>? cameraId,
@@ -30398,6 +30678,7 @@ class CameraTestsCompanion extends UpdateCompanion<CameraTest> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (bibleId != null) 'bible_id': bibleId,
       if (testName != null) 'test_name': testName,
       if (cameraId != null) 'camera_id': cameraId,
@@ -30413,6 +30694,7 @@ class CameraTestsCompanion extends UpdateCompanion<CameraTest> {
 
   CameraTestsCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? bibleId,
     Value<String>? testName,
     Value<int?>? cameraId,
@@ -30426,6 +30708,7 @@ class CameraTestsCompanion extends UpdateCompanion<CameraTest> {
   }) {
     return CameraTestsCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       bibleId: bibleId ?? this.bibleId,
       testName: testName ?? this.testName,
       cameraId: cameraId ?? this.cameraId,
@@ -30444,6 +30727,9 @@ class CameraTestsCompanion extends UpdateCompanion<CameraTest> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (bibleId.present) {
       map['bible_id'] = Variable<int>(bibleId.value);
@@ -30482,6 +30768,7 @@ class CameraTestsCompanion extends UpdateCompanion<CameraTest> {
   String toString() {
     return (StringBuffer('CameraTestsCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('bibleId: $bibleId, ')
           ..write('testName: $testName, ')
           ..write('cameraId: $cameraId, ')
@@ -31706,6 +31993,16 @@ class $BibleSectionEvidenceTable extends BibleSectionEvidence
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
   static const VerificationMeta _bibleIdMeta = const VerificationMeta(
     'bibleId',
   );
@@ -31802,6 +32099,7 @@ class $BibleSectionEvidenceTable extends BibleSectionEvidence
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     bibleId,
     sectionId,
     targetType,
@@ -31825,6 +32123,12 @@ class $BibleSectionEvidenceTable extends BibleSectionEvidence
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('bible_id')) {
       context.handle(
@@ -31899,6 +32203,10 @@ class $BibleSectionEvidenceTable extends BibleSectionEvidence
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       bibleId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}bible_id'],
@@ -31943,6 +32251,9 @@ class $BibleSectionEvidenceTable extends BibleSectionEvidence
 class BibleSectionEvidenceData extends DataClass
     implements Insertable<BibleSectionEvidenceData> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int bibleId;
   final String sectionId;
   final String targetType;
@@ -31953,6 +32264,7 @@ class BibleSectionEvidenceData extends DataClass
   final int sortOrder;
   const BibleSectionEvidenceData({
     required this.id,
+    this.uid,
     required this.bibleId,
     required this.sectionId,
     required this.targetType,
@@ -31966,6 +32278,9 @@ class BibleSectionEvidenceData extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['bible_id'] = Variable<int>(bibleId);
     map['section_id'] = Variable<String>(sectionId);
     map['target_type'] = Variable<String>(targetType);
@@ -31986,6 +32301,7 @@ class BibleSectionEvidenceData extends DataClass
   BibleSectionEvidenceCompanion toCompanion(bool nullToAbsent) {
     return BibleSectionEvidenceCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       bibleId: Value(bibleId),
       sectionId: Value(sectionId),
       targetType: Value(targetType),
@@ -32010,6 +32326,7 @@ class BibleSectionEvidenceData extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return BibleSectionEvidenceData(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       bibleId: serializer.fromJson<int>(json['bibleId']),
       sectionId: serializer.fromJson<String>(json['sectionId']),
       targetType: serializer.fromJson<String>(json['targetType']),
@@ -32025,6 +32342,7 @@ class BibleSectionEvidenceData extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'bibleId': serializer.toJson<int>(bibleId),
       'sectionId': serializer.toJson<String>(sectionId),
       'targetType': serializer.toJson<String>(targetType),
@@ -32038,6 +32356,7 @@ class BibleSectionEvidenceData extends DataClass
 
   BibleSectionEvidenceData copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? bibleId,
     String? sectionId,
     String? targetType,
@@ -32048,6 +32367,7 @@ class BibleSectionEvidenceData extends DataClass
     int? sortOrder,
   }) => BibleSectionEvidenceData(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     bibleId: bibleId ?? this.bibleId,
     sectionId: sectionId ?? this.sectionId,
     targetType: targetType ?? this.targetType,
@@ -32064,6 +32384,7 @@ class BibleSectionEvidenceData extends DataClass
   ) {
     return BibleSectionEvidenceData(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       bibleId: data.bibleId.present ? data.bibleId.value : this.bibleId,
       sectionId: data.sectionId.present ? data.sectionId.value : this.sectionId,
       targetType: data.targetType.present
@@ -32083,6 +32404,7 @@ class BibleSectionEvidenceData extends DataClass
   String toString() {
     return (StringBuffer('BibleSectionEvidenceData(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('bibleId: $bibleId, ')
           ..write('sectionId: $sectionId, ')
           ..write('targetType: $targetType, ')
@@ -32098,6 +32420,7 @@ class BibleSectionEvidenceData extends DataClass
   @override
   int get hashCode => Object.hash(
     id,
+    uid,
     bibleId,
     sectionId,
     targetType,
@@ -32112,6 +32435,7 @@ class BibleSectionEvidenceData extends DataClass
       identical(this, other) ||
       (other is BibleSectionEvidenceData &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.bibleId == this.bibleId &&
           other.sectionId == this.sectionId &&
           other.targetType == this.targetType &&
@@ -32125,6 +32449,7 @@ class BibleSectionEvidenceData extends DataClass
 class BibleSectionEvidenceCompanion
     extends UpdateCompanion<BibleSectionEvidenceData> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> bibleId;
   final Value<String> sectionId;
   final Value<String> targetType;
@@ -32135,6 +32460,7 @@ class BibleSectionEvidenceCompanion
   final Value<int> sortOrder;
   const BibleSectionEvidenceCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.bibleId = const Value.absent(),
     this.sectionId = const Value.absent(),
     this.targetType = const Value.absent(),
@@ -32146,6 +32472,7 @@ class BibleSectionEvidenceCompanion
   });
   BibleSectionEvidenceCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int bibleId,
     required String sectionId,
     this.targetType = const Value.absent(),
@@ -32159,6 +32486,7 @@ class BibleSectionEvidenceCompanion
        imagePath = Value(imagePath);
   static Insertable<BibleSectionEvidenceData> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? bibleId,
     Expression<String>? sectionId,
     Expression<String>? targetType,
@@ -32170,6 +32498,7 @@ class BibleSectionEvidenceCompanion
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (bibleId != null) 'bible_id': bibleId,
       if (sectionId != null) 'section_id': sectionId,
       if (targetType != null) 'target_type': targetType,
@@ -32183,6 +32512,7 @@ class BibleSectionEvidenceCompanion
 
   BibleSectionEvidenceCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? bibleId,
     Value<String>? sectionId,
     Value<String>? targetType,
@@ -32194,6 +32524,7 @@ class BibleSectionEvidenceCompanion
   }) {
     return BibleSectionEvidenceCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       bibleId: bibleId ?? this.bibleId,
       sectionId: sectionId ?? this.sectionId,
       targetType: targetType ?? this.targetType,
@@ -32210,6 +32541,9 @@ class BibleSectionEvidenceCompanion
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (bibleId.present) {
       map['bible_id'] = Variable<int>(bibleId.value);
@@ -32242,6 +32576,7 @@ class BibleSectionEvidenceCompanion
   String toString() {
     return (StringBuffer('BibleSectionEvidenceCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('bibleId: $bibleId, ')
           ..write('sectionId: $sectionId, ')
           ..write('targetType: $targetType, ')
@@ -32596,6 +32931,16 @@ class $OpticsLabSamplesTable extends OpticsLabSamples
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
   static const VerificationMeta _projectIdMeta = const VerificationMeta(
     'projectId',
   );
@@ -32648,6 +32993,7 @@ class $OpticsLabSamplesTable extends OpticsLabSamples
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     projectId,
     imagePath,
     sortOrder,
@@ -32667,6 +33013,12 @@ class $OpticsLabSamplesTable extends OpticsLabSamples
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('project_id')) {
       context.handle(
@@ -32709,6 +33061,10 @@ class $OpticsLabSamplesTable extends OpticsLabSamples
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       projectId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}project_id'],
@@ -32736,12 +33092,16 @@ class $OpticsLabSamplesTable extends OpticsLabSamples
 
 class OpticsLabSample extends DataClass implements Insertable<OpticsLabSample> {
   final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
   final int projectId;
   final String imagePath;
   final int sortOrder;
   final DateTime createdAt;
   const OpticsLabSample({
     required this.id,
+    this.uid,
     required this.projectId,
     required this.imagePath,
     required this.sortOrder,
@@ -32751,6 +33111,9 @@ class OpticsLabSample extends DataClass implements Insertable<OpticsLabSample> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['project_id'] = Variable<int>(projectId);
     map['image_path'] = Variable<String>(imagePath);
     map['sort_order'] = Variable<int>(sortOrder);
@@ -32761,6 +33124,7 @@ class OpticsLabSample extends DataClass implements Insertable<OpticsLabSample> {
   OpticsLabSamplesCompanion toCompanion(bool nullToAbsent) {
     return OpticsLabSamplesCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       projectId: Value(projectId),
       imagePath: Value(imagePath),
       sortOrder: Value(sortOrder),
@@ -32775,6 +33139,7 @@ class OpticsLabSample extends DataClass implements Insertable<OpticsLabSample> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return OpticsLabSample(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       projectId: serializer.fromJson<int>(json['projectId']),
       imagePath: serializer.fromJson<String>(json['imagePath']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
@@ -32786,6 +33151,7 @@ class OpticsLabSample extends DataClass implements Insertable<OpticsLabSample> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'projectId': serializer.toJson<int>(projectId),
       'imagePath': serializer.toJson<String>(imagePath),
       'sortOrder': serializer.toJson<int>(sortOrder),
@@ -32795,12 +33161,14 @@ class OpticsLabSample extends DataClass implements Insertable<OpticsLabSample> {
 
   OpticsLabSample copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? projectId,
     String? imagePath,
     int? sortOrder,
     DateTime? createdAt,
   }) => OpticsLabSample(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     projectId: projectId ?? this.projectId,
     imagePath: imagePath ?? this.imagePath,
     sortOrder: sortOrder ?? this.sortOrder,
@@ -32809,6 +33177,7 @@ class OpticsLabSample extends DataClass implements Insertable<OpticsLabSample> {
   OpticsLabSample copyWithCompanion(OpticsLabSamplesCompanion data) {
     return OpticsLabSample(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       projectId: data.projectId.present ? data.projectId.value : this.projectId,
       imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
@@ -32820,6 +33189,7 @@ class OpticsLabSample extends DataClass implements Insertable<OpticsLabSample> {
   String toString() {
     return (StringBuffer('OpticsLabSample(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('imagePath: $imagePath, ')
           ..write('sortOrder: $sortOrder, ')
@@ -32830,12 +33200,13 @@ class OpticsLabSample extends DataClass implements Insertable<OpticsLabSample> {
 
   @override
   int get hashCode =>
-      Object.hash(id, projectId, imagePath, sortOrder, createdAt);
+      Object.hash(id, uid, projectId, imagePath, sortOrder, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is OpticsLabSample &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.projectId == this.projectId &&
           other.imagePath == this.imagePath &&
           other.sortOrder == this.sortOrder &&
@@ -32844,12 +33215,14 @@ class OpticsLabSample extends DataClass implements Insertable<OpticsLabSample> {
 
 class OpticsLabSamplesCompanion extends UpdateCompanion<OpticsLabSample> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> projectId;
   final Value<String> imagePath;
   final Value<int> sortOrder;
   final Value<DateTime> createdAt;
   const OpticsLabSamplesCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.projectId = const Value.absent(),
     this.imagePath = const Value.absent(),
     this.sortOrder = const Value.absent(),
@@ -32857,6 +33230,7 @@ class OpticsLabSamplesCompanion extends UpdateCompanion<OpticsLabSample> {
   });
   OpticsLabSamplesCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int projectId,
     required String imagePath,
     this.sortOrder = const Value.absent(),
@@ -32865,6 +33239,7 @@ class OpticsLabSamplesCompanion extends UpdateCompanion<OpticsLabSample> {
        imagePath = Value(imagePath);
   static Insertable<OpticsLabSample> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? projectId,
     Expression<String>? imagePath,
     Expression<int>? sortOrder,
@@ -32872,6 +33247,7 @@ class OpticsLabSamplesCompanion extends UpdateCompanion<OpticsLabSample> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (projectId != null) 'project_id': projectId,
       if (imagePath != null) 'image_path': imagePath,
       if (sortOrder != null) 'sort_order': sortOrder,
@@ -32881,6 +33257,7 @@ class OpticsLabSamplesCompanion extends UpdateCompanion<OpticsLabSample> {
 
   OpticsLabSamplesCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? projectId,
     Value<String>? imagePath,
     Value<int>? sortOrder,
@@ -32888,6 +33265,7 @@ class OpticsLabSamplesCompanion extends UpdateCompanion<OpticsLabSample> {
   }) {
     return OpticsLabSamplesCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       projectId: projectId ?? this.projectId,
       imagePath: imagePath ?? this.imagePath,
       sortOrder: sortOrder ?? this.sortOrder,
@@ -32900,6 +33278,9 @@ class OpticsLabSamplesCompanion extends UpdateCompanion<OpticsLabSample> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (projectId.present) {
       map['project_id'] = Variable<int>(projectId.value);
@@ -32920,6 +33301,7 @@ class OpticsLabSamplesCompanion extends UpdateCompanion<OpticsLabSample> {
   String toString() {
     return (StringBuffer('OpticsLabSamplesCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('imagePath: $imagePath, ')
           ..write('sortOrder: $sortOrder, ')
@@ -37339,6 +37721,7 @@ typedef $$ProjectsTableProcessedTableManager =
 typedef $$LocationSitesTableCreateCompanionBuilder =
     LocationSitesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int projectId,
       required String name,
       Value<String?> description,
@@ -37355,6 +37738,7 @@ typedef $$LocationSitesTableCreateCompanionBuilder =
 typedef $$LocationSitesTableUpdateCompanionBuilder =
     LocationSitesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> projectId,
       Value<String> name,
       Value<String?> description,
@@ -37563,6 +37947,11 @@ class $$LocationSitesTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -37835,6 +38224,11 @@ class $$LocationSitesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -37925,6 +38319,9 @@ class $$LocationSitesTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -38209,6 +38606,7 @@ class $$LocationSitesTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> projectId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String?> description = const Value.absent(),
@@ -38223,6 +38621,7 @@ class $$LocationSitesTableTableManager
                 Value<String?> placeLabel = const Value.absent(),
               }) => LocationSitesCompanion(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 name: name,
                 description: description,
@@ -38239,6 +38638,7 @@ class $$LocationSitesTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int projectId,
                 required String name,
                 Value<String?> description = const Value.absent(),
@@ -38253,6 +38653,7 @@ class $$LocationSitesTableTableManager
                 Value<String?> placeLabel = const Value.absent(),
               }) => LocationSitesCompanion.insert(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 name: name,
                 description: description,
@@ -38513,6 +38914,7 @@ typedef $$LocationSitesTableProcessedTableManager =
 typedef $$LocationBasePlansTableCreateCompanionBuilder =
     LocationBasePlansCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int projectId,
       Value<int?> siteId,
       required String locationName,
@@ -38531,6 +38933,7 @@ typedef $$LocationBasePlansTableCreateCompanionBuilder =
 typedef $$LocationBasePlansTableUpdateCompanionBuilder =
     LocationBasePlansCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> projectId,
       Value<int?> siteId,
       Value<String> locationName,
@@ -38802,6 +39205,11 @@ class $$LocationBasePlansTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -39129,6 +39537,11 @@ class $$LocationBasePlansTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get locationName => $composableBuilder(
     column: $table.locationName,
     builder: (column) => ColumnOrderings(column),
@@ -39247,6 +39660,9 @@ class $$LocationBasePlansTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<String> get locationName => $composableBuilder(
     column: $table.locationName,
@@ -39594,6 +40010,7 @@ class $$LocationBasePlansTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> projectId = const Value.absent(),
                 Value<int?> siteId = const Value.absent(),
                 Value<String> locationName = const Value.absent(),
@@ -39610,6 +40027,7 @@ class $$LocationBasePlansTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => LocationBasePlansCompanion(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 siteId: siteId,
                 locationName: locationName,
@@ -39628,6 +40046,7 @@ class $$LocationBasePlansTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int projectId,
                 Value<int?> siteId = const Value.absent(),
                 required String locationName,
@@ -39644,6 +40063,7 @@ class $$LocationBasePlansTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => LocationBasePlansCompanion.insert(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 siteId: siteId,
                 locationName: locationName,
@@ -41004,6 +41424,7 @@ typedef $$ScenesTableProcessedTableManager =
 typedef $$LightSetupsTableCreateCompanionBuilder =
     LightSetupsCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int projectId,
       Value<int?> locationSiteId,
       Value<int?> locationBasePlanId,
@@ -41019,6 +41440,7 @@ typedef $$LightSetupsTableCreateCompanionBuilder =
 typedef $$LightSetupsTableUpdateCompanionBuilder =
     LightSetupsCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> projectId,
       Value<int?> locationSiteId,
       Value<int?> locationBasePlanId,
@@ -41151,6 +41573,11 @@ class $$LightSetupsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -41328,6 +41755,11 @@ class $$LightSetupsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -41449,6 +41881,9 @@ class $$LightSetupsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -41634,6 +42069,7 @@ class $$LightSetupsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> projectId = const Value.absent(),
                 Value<int?> locationSiteId = const Value.absent(),
                 Value<int?> locationBasePlanId = const Value.absent(),
@@ -41647,6 +42083,7 @@ class $$LightSetupsTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => LightSetupsCompanion(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 locationSiteId: locationSiteId,
                 locationBasePlanId: locationBasePlanId,
@@ -41662,6 +42099,7 @@ class $$LightSetupsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int projectId,
                 Value<int?> locationSiteId = const Value.absent(),
                 Value<int?> locationBasePlanId = const Value.absent(),
@@ -41675,6 +42113,7 @@ class $$LightSetupsTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => LightSetupsCompanion.insert(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 locationSiteId: locationSiteId,
                 locationBasePlanId: locationBasePlanId,
@@ -50418,6 +50857,7 @@ typedef $$LookBiblesTableProcessedTableManager =
 typedef $$ProjectAnnotatedPdfsTableCreateCompanionBuilder =
     ProjectAnnotatedPdfsCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int projectId,
       required String moduleType,
       required String pdfPath,
@@ -50426,6 +50866,7 @@ typedef $$ProjectAnnotatedPdfsTableCreateCompanionBuilder =
 typedef $$ProjectAnnotatedPdfsTableUpdateCompanionBuilder =
     ProjectAnnotatedPdfsCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> projectId,
       Value<String> moduleType,
       Value<String> pdfPath,
@@ -50476,6 +50917,11 @@ class $$ProjectAnnotatedPdfsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -50532,6 +50978,11 @@ class $$ProjectAnnotatedPdfsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get moduleType => $composableBuilder(
     column: $table.moduleType,
     builder: (column) => ColumnOrderings(column),
@@ -50582,6 +51033,9 @@ class $$ProjectAnnotatedPdfsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<String> get moduleType => $composableBuilder(
     column: $table.moduleType,
@@ -50657,12 +51111,14 @@ class $$ProjectAnnotatedPdfsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> projectId = const Value.absent(),
                 Value<String> moduleType = const Value.absent(),
                 Value<String> pdfPath = const Value.absent(),
                 Value<DateTime> importedAt = const Value.absent(),
               }) => ProjectAnnotatedPdfsCompanion(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 moduleType: moduleType,
                 pdfPath: pdfPath,
@@ -50671,12 +51127,14 @@ class $$ProjectAnnotatedPdfsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int projectId,
                 required String moduleType,
                 required String pdfPath,
                 Value<DateTime> importedAt = const Value.absent(),
               }) => ProjectAnnotatedPdfsCompanion.insert(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 moduleType: moduleType,
                 pdfPath: pdfPath,
@@ -58852,6 +59310,7 @@ typedef $$ExposureBlocksTableProcessedTableManager =
 typedef $$LightingSetupsTableCreateCompanionBuilder =
     LightingSetupsCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int bibleId,
       required String setupName,
       Value<String?> narrativeNote,
@@ -58867,6 +59326,7 @@ typedef $$LightingSetupsTableCreateCompanionBuilder =
 typedef $$LightingSetupsTableUpdateCompanionBuilder =
     LightingSetupsCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> bibleId,
       Value<String> setupName,
       Value<String?> narrativeNote,
@@ -58982,6 +59442,11 @@ class $$LightingSetupsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -59127,6 +59592,11 @@ class $$LightingSetupsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get setupName => $composableBuilder(
     column: $table.setupName,
     builder: (column) => ColumnOrderings(column),
@@ -59266,6 +59736,9 @@ class $$LightingSetupsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<String> get setupName =>
       $composableBuilder(column: $table.setupName, builder: (column) => column);
@@ -59426,6 +59899,7 @@ class $$LightingSetupsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> bibleId = const Value.absent(),
                 Value<String> setupName = const Value.absent(),
                 Value<String?> narrativeNote = const Value.absent(),
@@ -59439,6 +59913,7 @@ class $$LightingSetupsTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => LightingSetupsCompanion(
                 id: id,
+                uid: uid,
                 bibleId: bibleId,
                 setupName: setupName,
                 narrativeNote: narrativeNote,
@@ -59454,6 +59929,7 @@ class $$LightingSetupsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int bibleId,
                 required String setupName,
                 Value<String?> narrativeNote = const Value.absent(),
@@ -59467,6 +59943,7 @@ class $$LightingSetupsTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => LightingSetupsCompanion.insert(
                 id: id,
+                uid: uid,
                 bibleId: bibleId,
                 setupName: setupName,
                 narrativeNote: narrativeNote,
@@ -59607,6 +60084,7 @@ typedef $$LightingSetupsTableProcessedTableManager =
 typedef $$CameraTestsTableCreateCompanionBuilder =
     CameraTestsCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int bibleId,
       required String testName,
       Value<int?> cameraId,
@@ -59621,6 +60099,7 @@ typedef $$CameraTestsTableCreateCompanionBuilder =
 typedef $$CameraTestsTableUpdateCompanionBuilder =
     CameraTestsCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> bibleId,
       Value<String> testName,
       Value<int?> cameraId,
@@ -59705,6 +60184,11 @@ class $$CameraTestsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -59827,6 +60311,11 @@ class $$CameraTestsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get testName => $composableBuilder(
     column: $table.testName,
     builder: (column) => ColumnOrderings(column),
@@ -59943,6 +60432,9 @@ class $$CameraTestsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<String> get testName =>
       $composableBuilder(column: $table.testName, builder: (column) => column);
@@ -60068,6 +60560,7 @@ class $$CameraTestsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> bibleId = const Value.absent(),
                 Value<String> testName = const Value.absent(),
                 Value<int?> cameraId = const Value.absent(),
@@ -60080,6 +60573,7 @@ class $$CameraTestsTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => CameraTestsCompanion(
                 id: id,
+                uid: uid,
                 bibleId: bibleId,
                 testName: testName,
                 cameraId: cameraId,
@@ -60094,6 +60588,7 @@ class $$CameraTestsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int bibleId,
                 required String testName,
                 Value<int?> cameraId = const Value.absent(),
@@ -60106,6 +60601,7 @@ class $$CameraTestsTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => CameraTestsCompanion.insert(
                 id: id,
+                uid: uid,
                 bibleId: bibleId,
                 testName: testName,
                 cameraId: cameraId,
@@ -61126,6 +61622,7 @@ typedef $$CatalogSyncMetaTableProcessedTableManager =
 typedef $$BibleSectionEvidenceTableCreateCompanionBuilder =
     BibleSectionEvidenceCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int bibleId,
       required String sectionId,
       Value<String> targetType,
@@ -61138,6 +61635,7 @@ typedef $$BibleSectionEvidenceTableCreateCompanionBuilder =
 typedef $$BibleSectionEvidenceTableUpdateCompanionBuilder =
     BibleSectionEvidenceCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> bibleId,
       Value<String> sectionId,
       Value<String> targetType,
@@ -61195,6 +61693,11 @@ class $$BibleSectionEvidenceTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -61271,6 +61774,11 @@ class $$BibleSectionEvidenceTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get sectionId => $composableBuilder(
     column: $table.sectionId,
     builder: (column) => ColumnOrderings(column),
@@ -61341,6 +61849,9 @@ class $$BibleSectionEvidenceTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<String> get sectionId =>
       $composableBuilder(column: $table.sectionId, builder: (column) => column);
@@ -61428,6 +61939,7 @@ class $$BibleSectionEvidenceTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> bibleId = const Value.absent(),
                 Value<String> sectionId = const Value.absent(),
                 Value<String> targetType = const Value.absent(),
@@ -61438,6 +61950,7 @@ class $$BibleSectionEvidenceTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => BibleSectionEvidenceCompanion(
                 id: id,
+                uid: uid,
                 bibleId: bibleId,
                 sectionId: sectionId,
                 targetType: targetType,
@@ -61450,6 +61963,7 @@ class $$BibleSectionEvidenceTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int bibleId,
                 required String sectionId,
                 Value<String> targetType = const Value.absent(),
@@ -61460,6 +61974,7 @@ class $$BibleSectionEvidenceTableTableManager
                 Value<int> sortOrder = const Value.absent(),
               }) => BibleSectionEvidenceCompanion.insert(
                 id: id,
+                uid: uid,
                 bibleId: bibleId,
                 sectionId: sectionId,
                 targetType: targetType,
@@ -61720,6 +62235,7 @@ typedef $$LukaSyncMetaTableProcessedTableManager =
 typedef $$OpticsLabSamplesTableCreateCompanionBuilder =
     OpticsLabSamplesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int projectId,
       required String imagePath,
       Value<int> sortOrder,
@@ -61728,6 +62244,7 @@ typedef $$OpticsLabSamplesTableCreateCompanionBuilder =
 typedef $$OpticsLabSamplesTableUpdateCompanionBuilder =
     OpticsLabSamplesCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> projectId,
       Value<String> imagePath,
       Value<int> sortOrder,
@@ -61774,6 +62291,11 @@ class $$OpticsLabSamplesTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -61830,6 +62352,11 @@ class $$OpticsLabSamplesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get imagePath => $composableBuilder(
     column: $table.imagePath,
     builder: (column) => ColumnOrderings(column),
@@ -61880,6 +62407,9 @@ class $$OpticsLabSamplesTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<String> get imagePath =>
       $composableBuilder(column: $table.imagePath, builder: (column) => column);
@@ -61945,12 +62475,14 @@ class $$OpticsLabSamplesTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> projectId = const Value.absent(),
                 Value<String> imagePath = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => OpticsLabSamplesCompanion(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 imagePath: imagePath,
                 sortOrder: sortOrder,
@@ -61959,12 +62491,14 @@ class $$OpticsLabSamplesTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int projectId,
                 required String imagePath,
                 Value<int> sortOrder = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => OpticsLabSamplesCompanion.insert(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 imagePath: imagePath,
                 sortOrder: sortOrder,

@@ -4,9 +4,11 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../cloud/cloudinary_config.dart';
+import '../cloud/supabase_config.dart';
 import '../utils/media_storage.dart';
 import 'media_optimizer.dart';
 
@@ -157,6 +159,108 @@ class CloudMediaService {
     );
   }
 
+  /// Sube un archivo que no es imagen (guion, PDF, escaneo, modelo 3D) tal
+  /// cual a Supabase Storage, en `projects/<proyecto>/<tipo>/<clave>/<nombre>`
+  /// (la ruta que permite la seguridad del bucket), y lo registra en
+  /// `media_assets`. Si ya está con la misma huella, no lo vuelve a subir.
+  /// Devuelve nulo si el archivo pasa de [maxBytes].
+  Future<CloudUploadResult?> uploadRawFile({
+    required String localPath,
+    required String projectCloudId,
+    required String entityType,
+    required String entityKey,
+    required int sortOrder,
+    required int maxBytes,
+    String? source,
+  }) async {
+    final file = File(localPath);
+    if (!file.existsSync()) return null;
+    final size = file.lengthSync();
+    if (size > maxBytes) return null;
+    final bytes = await file.readAsBytes();
+    final contentHash = hashBytes(bytes);
+
+    final existing = await _client
+        .from('media_assets')
+        .select('id, content_hash, storage_path')
+        .eq('project_id', projectCloudId)
+        .eq('entity_type', entityType)
+        .eq('entity_key', entityKey)
+        .maybeSingle();
+    if (existing != null &&
+        existing['content_hash'] == contentHash &&
+        existing['storage_path'] != null) {
+      return CloudUploadResult(
+        publicId: existing['storage_path'] as String,
+        deliveryUrl: '',
+        bytesOriginal: size,
+        bytesStored: size,
+        contentHash: contentHash,
+      );
+    }
+
+    final safeKey = entityKey.replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '_');
+    final name = p.basename(localPath);
+    final storagePath = 'projects/$projectCloudId/$entityType/$safeKey/$name';
+    await _client.storage
+        .from(SupabaseConfig.storageBucket)
+        .uploadBinary(
+          storagePath,
+          bytes,
+          fileOptions: const FileOptions(upsert: true),
+        );
+
+    final row = {
+      'project_id': projectCloudId,
+      'storage_path': storagePath,
+      'provider': 'supabase',
+      'entity_type': entityType,
+      'entity_key': entityKey,
+      'content_hash': contentHash,
+      'sort_order': sortOrder,
+      'bytes_original': size,
+      'bytes_stored': size,
+      'local_path_hint': localPath,
+      'category': entityType,
+      'local_hash': contentHash,
+      'metadata': {'file_name': name, if (source != null) 'source': source},
+    };
+    if (existing != null && existing['id'] != null) {
+      await _client
+          .from('media_assets')
+          .update(row)
+          .eq('id', existing['id'] as String);
+    } else {
+      await _client.from('media_assets').insert(row);
+    }
+    return CloudUploadResult(
+      publicId: storagePath,
+      deliveryUrl: '',
+      bytesOriginal: size,
+      bytesStored: size,
+      contentHash: contentHash,
+    );
+  }
+
+  /// Descarga un archivo de Supabase Storage al proyecto.
+  Future<String?> downloadStorageFile({
+    required int localProjectId,
+    required String storagePath,
+    required String subfolder,
+    required String fileName,
+  }) async {
+    final bytes = await _client.storage
+        .from(SupabaseConfig.storageBucket)
+        .download(storagePath);
+    if (bytes.isEmpty) return null;
+    return MediaStorage.writeProjectFileBytes(
+      projectId: localProjectId,
+      subfolder: subfolder,
+      bytes: bytes,
+      fileName: fileName,
+    );
+  }
+
   Future<Map<String, dynamic>?> _uploadToCloudinary({
     required Uint8List bytes,
     required String publicId,
@@ -208,7 +312,7 @@ class CloudMediaService {
         .from('media_assets')
         .select()
         .eq('project_id', projectCloudId)
-        .eq('provider', 'cloudinary')
+        .inFilter('provider', const ['cloudinary', 'supabase'])
         .order('entity_type')
         .order('sort_order');
     return List<Map<String, dynamic>>.from(rows as List);
