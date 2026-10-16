@@ -440,10 +440,27 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
     return false;
   });
 
+  /// Viñeta del plano anterior de la escena, para el papel cebolla.
+  Future<ImageProvider?> _previousStoryboardFrame() async {
+    if (widget.target != ShotImageTarget.storyboard) return null;
+    final shot = await _current();
+    final shots = await _db.getShotsForScene(shot.sceneId);
+    final index = shots.indexWhere((s) => s.id == shot.id);
+    for (var i = index - 1; i >= 0; i--) {
+      final path = shots[i].storyboardImagePath;
+      if (path != null && File(path).existsSync()) {
+        return FileImage(File(path));
+      }
+    }
+    return null;
+  }
+
   /// Abre el lienzo blanco y guarda el dibujo como imagen del plano. Con
   /// [editing], sigue un dibujo que ya estaba: el nuevo ocupa su sitio.
   Future<void> _draw({String? editing}) async {
     if (_busy) return;
+    final onionSkin = await _previousStoryboardFrame();
+    if (!mounted) return;
     final result = await showSketchPad(
       context,
       title: '$_what · Plano ${widget.shot.number}',
@@ -454,6 +471,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
       purpose: _sketch
           ? SketchSheetPurpose.lightingPlan
           : SketchSheetPurpose.storyboard,
+      onionSkin: onionSkin,
     );
     if (result == null || !mounted) return;
     await _run(() async {

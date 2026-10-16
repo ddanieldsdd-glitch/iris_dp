@@ -56,6 +56,7 @@ Future<SketchResult?> showSketchPad(
   AnnotationDocument initial = const AnnotationDocument(),
   double aspectRatio = 16 / 9,
   SketchSheetPurpose purpose = SketchSheetPurpose.storyboard,
+  ImageProvider? onionSkin,
 }) async {
   final result = await SketchSheetScreen.open(
     context,
@@ -64,6 +65,7 @@ Future<SketchResult?> showSketchPad(
     purpose: purpose,
     aspectRatio: aspectRatio,
     exportPng: true,
+    onionSkin: onionSkin,
   );
   final png = result?.png;
   if (result == null || png == null) return null;
