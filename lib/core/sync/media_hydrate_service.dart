@@ -369,14 +369,7 @@ class MediaHydrateService {
     final id = row.read<int>('id');
     final raw = row.read<String?>('path');
 
-    List<String> list() {
-      if (raw == null || raw.isEmpty) return [];
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is List) return [for (final e in decoded) '$e'];
-      } catch (_) {}
-      return [];
-    }
+    List<String> list() => decodeSlotPaths(raw);
 
     final current = slot.isList
         ? (index != null && index < list().length ? list()[index] : null)

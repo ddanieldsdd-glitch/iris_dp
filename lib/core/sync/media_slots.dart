@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'media_entity_types.dart';
 
 /// Cómo se sube un archivo: las imágenes van a Cloudinary (optimizadas); el
@@ -63,6 +65,8 @@ const kMediaSlots = <MediaSlot>[
         'SELECT id, uid, camera_plan_image_path AS path FROM shots '
         'WHERE project_id = ?',
     subfolder: 'camera_plans',
+    // Una ruta o una lista JSON (bocetos del plano).
+    isList: true,
   ),
   MediaSlot(
     entityType: MediaEntityType.shotMainReference,
@@ -215,3 +219,18 @@ String mediaSlotKey(String uid, [int? index]) =>
   if (index == null) return (rest, null);
   return (rest.substring(0, hash), index);
 }
+
+/// Las rutas de un hueco de lista: acepta una lista JSON o una ruta suelta.
+List<String> decodeSlotPaths(String? raw) {
+  final value = raw?.trim();
+  if (value == null || value.isEmpty) return [];
+  if (value.startsWith('[')) {
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is List) return [for (final e in decoded) '$e'];
+    } catch (_) {}
+    return [];
+  }
+  return [value];
+}
+

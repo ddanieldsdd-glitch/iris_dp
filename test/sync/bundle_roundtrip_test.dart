@@ -241,4 +241,29 @@ void main() {
     expect(shot.storyboardImagePath, isNull);
     expect(shot.uid, isNotNull);
   });
+
+  test('en las listas de bocetos se guardan los sitios y los setup:', () async {
+    final dir = Directory.systemTemp.createTempSync('iris_lists');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final here = (File('${dir.path}/aqui.png')..writeAsBytesSync([1])).path;
+    await db
+        .into(db.shots)
+        .insert(
+          ShotsCompanion.insert(
+            sceneId: sceneId,
+            projectId: projectId,
+            number: 1,
+            cameraPlanImagePath: Value(
+              '["/Users/otro/falta.png","setup:12","$here"]',
+            ),
+          ),
+        );
+    final bundle = await ProjectContentBundle.export(db, projectId);
+    final target = await importIntoNewProject(bundle);
+
+    final shot = await (db.select(
+      db.shots,
+    )..where((s) => s.projectId.equals(target))).getSingle();
+    expect(shot.cameraPlanImagePath, '["","setup:12","$here"]');
+  });
 }

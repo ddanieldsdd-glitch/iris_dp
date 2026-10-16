@@ -1023,6 +1023,9 @@ class ProjectContentBundle {
   /// El bundle trae rutas del dispositivo de origen. Las que no existen aquí
   /// se vacían: la descarga de medios pone después el archivo de verdad, y
   /// mientras tanto la app no intenta abrir una ruta de otro equipo.
+  static bool _looksLikeFilePath(String value) =>
+      value.startsWith('/') || RegExp(r'^[A-Za-z]:[\\/]').hasMatch(value);
+
   static Future<void> _clearMissingSlotPaths(AppDatabase db, int projectId) async {
     for (final slot in kMediaSlots) {
       if (!slot.nullable) continue;
@@ -1033,11 +1036,28 @@ class ProjectContentBundle {
           )
           .get();
       for (final row in rows) {
-        final path = row.read<String?>('path');
-        if (path == null || path.isEmpty || File(path).existsSync()) continue;
+        final raw = row.read<String?>('path');
+        if (raw == null || raw.isEmpty) continue;
+        final paths = slot.isList ? decodeSlotPaths(raw) : [raw];
+        // Lo que no es ruta (p. ej. `setup:<id>`, un boceto dibujado) se
+        // queda; las rutas que no existen aquí dejan su sitio vacío, para que
+        // la descarga sepa dónde va cada archivo.
+        final here = [
+          for (final p in paths)
+            if (!_looksLikeFilePath(p) || File(p).existsSync()) p else '',
+        ];
+        if (here.join('\u0000') == paths.join('\u0000')) continue;
+        final String? value = here.every((p) => p.isEmpty)
+            ? null
+            : slot.isList
+            ? jsonEncode(here)
+            : here.single;
         await db.customUpdate(
-          'UPDATE ${slot.table} SET ${slot.column} = NULL WHERE id = ?',
-          variables: [Variable.withInt(row.read<int>('id'))],
+          'UPDATE ${slot.table} SET ${slot.column} = ? WHERE id = ?',
+          variables: [
+            value == null ? const Variable(null) : Variable.withString(value),
+            Variable.withInt(row.read<int>('id')),
+          ],
           updates: {
             for (final t in db.allTables)
               if (t.actualTableName == slot.table) t,

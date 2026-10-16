@@ -207,4 +207,10 @@ void main() {
     expect(parseMediaSlotKey('uid:abc#3'), ('abc', 3));
     expect(parseMediaSlotKey('moodboard:x:1'), isNull);
   });
+
+  test('las rutas de un hueco de lista admiten JSON o una ruta suelta', () {
+    expect(decodeSlotPaths('/a.png'), ['/a.png']);
+    expect(decodeSlotPaths('["/a.png","setup:3"]'), ['/a.png', 'setup:3']);
+    expect(decodeSlotPaths(null), isEmpty);
+  });
 }

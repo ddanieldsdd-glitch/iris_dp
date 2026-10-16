@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart';
@@ -616,7 +615,7 @@ class MediaUploadQueue {
         final uid = row.read<String?>('uid');
         final raw = row.read<String?>('path');
         if (uid == null || raw == null || raw.trim().isEmpty) continue;
-        final paths = slot.isList ? _decodePaths(raw) : [raw];
+        final paths = slot.isList ? decodeSlotPaths(raw) : [raw];
         for (var i = 0; i < paths.length; i++) {
           final path = paths[i];
           final file = File(path);
@@ -652,13 +651,6 @@ class MediaUploadQueue {
     return count;
   }
 
-  static List<String> _decodePaths(String raw) {
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is List) return [for (final p in decoded) '$p'];
-    } catch (_) {}
-    return const [];
-  }
 
   Future<void> scanAllProjects() async {
     final projects = await _db.watchProjects().first;
