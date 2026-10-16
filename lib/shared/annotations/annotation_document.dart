@@ -57,15 +57,35 @@ class AnnotationPoint {
   final double y;
   final double pressure;
 
-  const AnnotationPoint({required this.x, required this.y, this.pressure = 1});
+  /// Inclinación del lápiz en radianes (0 = vertical, π/2 = tumbado).
+  final double tilt;
 
-  Map<String, dynamic> toJson() => {'x': x, 'y': y, 'pressure': pressure};
+  /// Hacia dónde apunta el lápiz inclinado, en radianes.
+  final double azimuth;
+
+  const AnnotationPoint({
+    required this.x,
+    required this.y,
+    this.pressure = 1,
+    this.tilt = 0,
+    this.azimuth = 0,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'x': x,
+    'y': y,
+    'pressure': pressure,
+    if (tilt != 0) 'tilt': tilt,
+    if (azimuth != 0) 'azimuth': azimuth,
+  };
 
   factory AnnotationPoint.fromJson(Map<String, dynamic> json) =>
       AnnotationPoint(
         x: (json['x'] as num?)?.toDouble() ?? 0,
         y: (json['y'] as num?)?.toDouble() ?? 0,
         pressure: (json['pressure'] as num?)?.toDouble() ?? 1,
+        tilt: (json['tilt'] as num?)?.toDouble() ?? 0,
+        azimuth: (json['azimuth'] as num?)?.toDouble() ?? 0,
       );
 }
 
@@ -83,6 +103,17 @@ class AnnotationStroke {
   /// Forma cerrada (polígono o elipse reconocidos al enderezar).
   final bool closed;
 
+  /// Pincel del catálogo (`graphite.hb`, `marker.chisel`…). [tool] sigue
+  /// guardando la familia, para que una versión anterior de la app pinte
+  /// algo parecido.
+  final String? brushId;
+
+  /// Capa a la que pertenece; sin capa va a la de abajo.
+  final String? layerId;
+
+  /// Semilla del azar del pincel; sin ella se deriva del [id].
+  final int? seed;
+
   const AnnotationStroke({
     required this.id,
     required this.tool,
@@ -92,6 +123,9 @@ class AnnotationStroke {
     this.inputKind = AnnotationInputKind.unknown,
     this.opacity = 1,
     this.closed = false,
+    this.brushId,
+    this.layerId,
+    this.seed,
   });
 
   AnnotationStroke copyWith({
@@ -102,6 +136,9 @@ class AnnotationStroke {
     List<AnnotationPoint>? points,
     double? opacity,
     bool? closed,
+    String? brushId,
+    String? layerId,
+    int? seed,
   }) => AnnotationStroke(
     id: id,
     tool: tool ?? this.tool,
@@ -111,6 +148,9 @@ class AnnotationStroke {
     points: points ?? this.points,
     opacity: opacity ?? this.opacity,
     closed: closed ?? this.closed,
+    brushId: brushId ?? this.brushId,
+    layerId: layerId ?? this.layerId,
+    seed: seed ?? this.seed,
   );
 
   Map<String, dynamic> toJson() => {
@@ -122,6 +162,9 @@ class AnnotationStroke {
     'points': points.map((point) => point.toJson()).toList(),
     if (opacity != 1) 'opacity': opacity,
     if (closed) 'closed': true,
+    if (brushId != null) 'brushId': brushId,
+    if (layerId != null) 'layerId': layerId,
+    if (seed != null) 'seed': seed,
   };
 
   factory AnnotationStroke.fromJson(Map<String, dynamic> json) =>
@@ -148,6 +191,9 @@ class AnnotationStroke {
             .toList(),
         opacity: ((json['opacity'] as num?)?.toDouble() ?? 1).clamp(0.0, 1.0),
         closed: json['closed'] == true,
+        brushId: json['brushId']?.toString(),
+        layerId: json['layerId']?.toString(),
+        seed: (json['seed'] as num?)?.toInt(),
       );
 }
 
@@ -164,6 +210,9 @@ class AnnotationStamp {
   final int colorArgb;
   final String? label;
 
+  /// Capa a la que pertenece; sin capa va a la de arriba.
+  final String? layerId;
+
   const AnnotationStamp({
     required this.id,
     required this.kind,
@@ -173,6 +222,7 @@ class AnnotationStamp {
     this.size = 0.07,
     required this.colorArgb,
     this.label,
+    this.layerId,
   });
 
   AnnotationStamp copyWith({
@@ -182,6 +232,7 @@ class AnnotationStamp {
     double? size,
     int? colorArgb,
     String? label,
+    String? layerId,
   }) => AnnotationStamp(
     id: id,
     kind: kind,
@@ -191,6 +242,7 @@ class AnnotationStamp {
     size: size ?? this.size,
     colorArgb: colorArgb ?? this.colorArgb,
     label: label ?? this.label,
+    layerId: layerId ?? this.layerId,
   );
 
   Map<String, dynamic> toJson() => {
@@ -202,6 +254,7 @@ class AnnotationStamp {
     'size': size,
     'colorArgb': colorArgb,
     if (label != null) 'label': label,
+    if (layerId != null) 'layerId': layerId,
   };
 
   factory AnnotationStamp.fromJson(Map<String, dynamic> json) =>
@@ -219,6 +272,90 @@ class AnnotationStamp {
         size: (json['size'] as num?)?.toDouble() ?? 0.07,
         colorArgb: (json['colorArgb'] as num?)?.toInt() ?? 0xFF111111,
         label: json['label']?.toString(),
+        layerId: json['layerId']?.toString(),
+      );
+}
+
+/// Cómo se mezcla una capa con lo que tiene debajo.
+enum AnnotationLayerBlend { normal, multiply, screen, add }
+
+/// Papel del folio. Sin papel, el dibujo es transparente (anotar encima de
+/// un plano o una foto).
+enum AnnotationPaper { white, ivory, kraft, grey }
+
+/// Capa de dibujo. El orden de [AnnotationDocument.layers] es de abajo
+/// arriba.
+class AnnotationLayer {
+  final String id;
+  final String name;
+  final bool visible;
+  final bool locked;
+  final double opacity;
+  final AnnotationLayerBlend blend;
+
+  /// Solo se pinta donde ya hay pintura en la capa (sombrear dentro).
+  final bool alphaLock;
+
+  /// Máscara de recorte: solo se ve donde hay pintura en la capa de abajo.
+  final bool clip;
+
+  const AnnotationLayer({
+    required this.id,
+    required this.name,
+    this.visible = true,
+    this.locked = false,
+    this.opacity = 1,
+    this.blend = AnnotationLayerBlend.normal,
+    this.alphaLock = false,
+    this.clip = false,
+  });
+
+  /// Capa de los documentos anteriores a las capas.
+  static const base = AnnotationLayer(id: 'base', name: 'Capa 1');
+
+  AnnotationLayer copyWith({
+    String? name,
+    bool? visible,
+    bool? locked,
+    double? opacity,
+    AnnotationLayerBlend? blend,
+    bool? alphaLock,
+    bool? clip,
+  }) => AnnotationLayer(
+    id: id,
+    name: name ?? this.name,
+    visible: visible ?? this.visible,
+    locked: locked ?? this.locked,
+    opacity: opacity ?? this.opacity,
+    blend: blend ?? this.blend,
+    alphaLock: alphaLock ?? this.alphaLock,
+    clip: clip ?? this.clip,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    if (!visible) 'visible': false,
+    if (locked) 'locked': true,
+    if (opacity != 1) 'opacity': opacity,
+    if (blend != AnnotationLayerBlend.normal) 'blend': blend.name,
+    if (alphaLock) 'alphaLock': true,
+    if (clip) 'clip': true,
+  };
+
+  factory AnnotationLayer.fromJson(Map<String, dynamic> json) =>
+      AnnotationLayer(
+        id: json['id']?.toString() ?? 'base',
+        name: json['name']?.toString() ?? 'Capa',
+        visible: json['visible'] != false,
+        locked: json['locked'] == true,
+        opacity: ((json['opacity'] as num?)?.toDouble() ?? 1).clamp(0.0, 1.0),
+        blend: AnnotationLayerBlend.values.firstWhere(
+          (value) => value.name == json['blend'],
+          orElse: () => AnnotationLayerBlend.normal,
+        ),
+        alphaLock: json['alphaLock'] == true,
+        clip: json['clip'] == true,
       );
 }
 
@@ -288,31 +425,64 @@ class AnnotationNote {
 /// poder renderizarse igual en iPad, escritorio, imagen y PDF.
 class AnnotationDocument {
   /// v2: pinceles con textura, opacidad, formas cerradas y sellos.
-  static const currentSchemaVersion = 2;
+  /// v3: pinceles del catálogo, capas, papel e inclinación del lápiz.
+  static const currentSchemaVersion = 3;
 
   final int schemaVersion;
   final List<AnnotationStroke> strokes;
   final List<AnnotationNote> notes;
   final List<AnnotationStamp> stamps;
 
+  /// Capas de abajo arriba. Vacío = una sola capa [AnnotationLayer.base].
+  final List<AnnotationLayer> layers;
+
+  final AnnotationPaper? paper;
+
   const AnnotationDocument({
     this.schemaVersion = currentSchemaVersion,
     this.strokes = const [],
     this.notes = const [],
     this.stamps = const [],
+    this.layers = const [],
+    this.paper,
   });
 
   bool get isEmpty => strokes.isEmpty && notes.isEmpty && stamps.isEmpty;
+
+  /// Capas que se pintan; nunca vacío.
+  List<AnnotationLayer> get effectiveLayers =>
+      layers.isEmpty ? const [AnnotationLayer.base] : layers;
+
+  /// Capa en la que cae un trazo: la suya, o la de abajo si no existe.
+  String strokeLayerId(AnnotationStroke stroke) {
+    final all = effectiveLayers;
+    final id = stroke.layerId;
+    if (id != null && all.any((layer) => layer.id == id)) return id;
+    return all.first.id;
+  }
+
+  /// Capa en la que cae un sello: la suya, o la de arriba si no existe.
+  String stampLayerId(AnnotationStamp stamp) {
+    final all = effectiveLayers;
+    final id = stamp.layerId;
+    if (id != null && all.any((layer) => layer.id == id)) return id;
+    return all.last.id;
+  }
 
   AnnotationDocument copyWith({
     List<AnnotationStroke>? strokes,
     List<AnnotationNote>? notes,
     List<AnnotationStamp>? stamps,
+    List<AnnotationLayer>? layers,
+    AnnotationPaper? paper,
+    bool clearPaper = false,
   }) => AnnotationDocument(
     schemaVersion: currentSchemaVersion,
     strokes: strokes ?? this.strokes,
     notes: notes ?? this.notes,
     stamps: stamps ?? this.stamps,
+    layers: layers ?? this.layers,
+    paper: clearPaper ? null : (paper ?? this.paper),
   );
 
   Map<String, dynamic> toJson() => {
@@ -321,6 +491,9 @@ class AnnotationDocument {
     'notes': notes.map((note) => note.toJson()).toList(),
     if (stamps.isNotEmpty)
       'stamps': stamps.map((stamp) => stamp.toJson()).toList(),
+    if (layers.isNotEmpty)
+      'layers': layers.map((layer) => layer.toJson()).toList(),
+    if (paper != null) 'paper': paper!.name,
   };
 
   String encode() => jsonEncode(toJson());
@@ -349,6 +522,16 @@ class AnnotationDocument {
                   AnnotationStamp.fromJson(Map<String, dynamic>.from(stamp)),
             )
             .toList(),
+        layers: (json['layers'] as List? ?? const [])
+            .whereType<Map>()
+            .map(
+              (layer) =>
+                  AnnotationLayer.fromJson(Map<String, dynamic>.from(layer)),
+            )
+            .toList(),
+        paper: AnnotationPaper.values
+            .where((value) => value.name == json['paper'])
+            .firstOrNull,
       );
 
   factory AnnotationDocument.decode(String? raw) {

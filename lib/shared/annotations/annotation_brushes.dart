@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import 'annotation_brush_engine.dart';
 import 'annotation_document.dart';
 
 /// Pintado de pinceles y sellos sobre un `Canvas` de Flutter.
@@ -43,6 +44,7 @@ abstract final class AnnotationBrushes {
 
   static void paintStroke(Canvas canvas, Size size, AnnotationStroke stroke) {
     if (stroke.points.isEmpty) return;
+    if (BrushEngine.paint(canvas, size, stroke)) return;
     final s = unit(size);
     final pts = [
       for (final p in stroke.points)

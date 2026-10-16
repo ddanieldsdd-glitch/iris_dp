@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'annotation_brush_engine.dart';
 import 'annotation_brushes.dart';
 import 'annotation_document.dart';
 import 'annotation_shape_recognizer.dart';
@@ -254,7 +255,9 @@ class AnnotationCanvasController extends ChangeNotifier {
   void clear() {
     if (_document.isEmpty) return;
     _selectedStampId = null;
-    _commit(const AnnotationDocument());
+    _commit(
+      AnnotationDocument(layers: _document.layers, paper: _document.paper),
+    );
   }
 
   void undo() {
@@ -321,6 +324,12 @@ class AnnotationCanvas extends StatefulWidget {
   /// Se llama al tocar un sello ya seleccionado (para ponerle nombre).
   final Future<void> Function(AnnotationStamp stamp)? onStampEditRequested;
 
+  /// Pincel del catálogo con el que se pinta [tool] (su familia).
+  final String? brushId;
+
+  /// Capa en la que caen los trazos y sellos nuevos.
+  final String? layerId;
+
   const AnnotationCanvas({
     super.key,
     required this.controller,
@@ -343,6 +352,8 @@ class AnnotationCanvas extends StatefulWidget {
     this.straightenOnHold = true,
     this.onTextRequested,
     this.onStampEditRequested,
+    this.brushId,
+    this.layerId,
   });
 
   @override
@@ -437,10 +448,15 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
             1.0,
           )
         : 1.0;
+    final stylus =
+        event.kind == PointerDeviceKind.stylus ||
+        event.kind == PointerDeviceKind.invertedStylus;
     return AnnotationPoint(
       x: (documentPosition.dx / _documentSize.width).clamp(0.0, 1.0),
       y: (documentPosition.dy / _documentSize.height).clamp(0.0, 1.0),
       pressure: normalizedPressure,
+      tilt: stylus ? event.tilt : 0,
+      azimuth: stylus ? event.orientation : 0,
     );
   }
 
@@ -487,6 +503,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
           rotation: -math.pi / 2,
           size: widget.stampSize,
           colorArgb: widget.color.toARGB32(),
+          layerId: widget.layerId,
         );
         setState(() {});
         return;
@@ -642,6 +659,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
             size: widget.stampSize * 0.6,
             colorArgb: widget.color.toARGB32(),
             label: text,
+            layerId: widget.layerId,
           ),
         );
         return;
@@ -674,6 +692,8 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
           points: points,
           opacity: widget.opacity,
           closed: closed,
+          brushId: tool == widget.tool ? widget.brushId : null,
+          layerId: widget.layerId,
         ),
       );
     }
@@ -766,6 +786,8 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
                 points: List.of(_livePoints),
                 opacity: widget.opacity,
                 closed: _snappedClosed,
+                brushId: _activeTool == widget.tool ? widget.brushId : null,
+                layerId: widget.layerId,
               );
         return Stack(
           fit: StackFit.expand,
@@ -860,6 +882,8 @@ class AnnotationPainter extends CustomPainter {
       canvas.translate(viewport!.offset.dx, viewport!.offset.dy);
       canvas.scale(viewport!.scale);
     }
+    final paper = document.paper;
+    if (paper != null) BrushEngine.paintPaper(canvas, documentSize, paper);
     final live = liveStroke;
     final erasing = live?.tool == AnnotationToolType.eraseArea;
     if (erasing) canvas.saveLayer(Offset.zero & documentSize, Paint());

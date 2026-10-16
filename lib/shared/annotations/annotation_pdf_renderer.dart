@@ -28,7 +28,11 @@ abstract final class AnnotationPdfRenderer {
     );
   }
 
-  static void _drawNote(PdfGraphics canvas, PdfPoint size, AnnotationNote note) {
+  static void _drawNote(
+    PdfGraphics canvas,
+    PdfPoint size,
+    AnnotationNote note,
+  ) {
     final rect = PdfRect(
       note.x * size.x,
       (1 - note.y - note.height) * size.y,
@@ -38,12 +42,7 @@ abstract final class AnnotationPdfRenderer {
     final base = PdfColor.fromInt(note.colorArgb);
     canvas
       ..setFillColor(base)
-      ..drawRect(
-        rect.left,
-        rect.bottom,
-        rect.width,
-        rect.height,
-      )
+      ..drawRect(rect.left, rect.bottom, rect.width, rect.height)
       ..fillPath();
   }
 
