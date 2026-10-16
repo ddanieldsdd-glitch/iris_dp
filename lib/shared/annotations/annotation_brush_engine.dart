@@ -30,6 +30,90 @@ abstract final class BrushEngine {
     return h;
   }
 
+  /// Trazo de difumino: arrastra lo que ya hay pintado en su capa.
+  static bool isSmudge(AnnotationStroke stroke) =>
+      BrushCatalog.byId(stroke.brushId)?.mode == BrushMode.smudge;
+
+  /// Difumino: dentro de la huella del dedo se vuelve a pintar la capa
+  /// [source] (en píxeles de imagen, [ratio] por píxel de documento)
+  /// desenfocada y arrastrada desde donde venía el trazo.
+  static void paintSmudge(
+    Canvas canvas,
+    Size size,
+    AnnotationStroke stroke,
+    ui.Image source,
+    double ratio,
+  ) {
+    final spec = BrushCatalog.byId(stroke.brushId);
+    if (spec == null || stroke.points.length < 2) return;
+    final u = unit(size);
+    final pts = [
+      for (final p in stroke.points)
+        Offset(p.x * size.width, p.y * size.height),
+    ];
+    final diameter = math.max(2.0, stroke.width * u * spec.sizeScale);
+    final dabs = _dabs(
+      spec,
+      stroke,
+      pts,
+      diameter,
+      math.Random(seedFor(stroke)),
+    );
+    if (dabs.length < 2) return;
+    final bounds = _bounds(pts, diameter * 2);
+    final strength = stroke.opacity.clamp(0.0, 1.0);
+
+    canvas.saveLayer(bounds, Paint());
+    // Lo arrastrado, algo desenfocado.
+    final blur = math.max(0.5, diameter * 0.08);
+    canvas.saveLayer(
+      bounds,
+      Paint()..imageFilter = ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+    );
+    final transforms = <RSTransform>[];
+    final rects = <Rect>[];
+    for (var i = 1; i < dabs.length; i++) {
+      final dab = dabs[i];
+      final travel = dab.position - dabs[i - 1].position;
+      final dir = travel.distance == 0 ? Offset.zero : travel / travel.distance;
+      final r = dab.size / 2;
+      final from = dab.position - dir * (diameter * 0.35);
+      rects.add(
+        Rect.fromLTWH(
+          (from.dx - r) * ratio,
+          (from.dy - r) * ratio,
+          2 * r * ratio,
+          2 * r * ratio,
+        ),
+      );
+      transforms.add(
+        RSTransform.fromComponents(
+          rotation: 0,
+          scale: 1 / ratio,
+          anchorX: 0,
+          anchorY: 0,
+          translateX: dab.position.dx - r,
+          translateY: dab.position.dy - r,
+        ),
+      );
+    }
+    canvas.drawAtlas(
+      source,
+      transforms,
+      rects,
+      null,
+      null,
+      null,
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+    canvas.restore();
+    // Solo dentro de la huella blanda.
+    canvas.saveLayer(bounds, Paint()..blendMode = BlendMode.dstIn);
+    _drawDabs(canvas, spec, dabs, const Color(0xFFFFFFFF), strength);
+    canvas.restore();
+    canvas.restore();
+  }
+
   /// Pinta [stroke] si su pincel está en el catálogo. Devuelve `false` si
   /// no lo está (lo pinta el renderizador antiguo).
   static bool paint(Canvas canvas, Size size, AnnotationStroke stroke) {

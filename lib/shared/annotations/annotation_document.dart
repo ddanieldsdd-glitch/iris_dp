@@ -114,6 +114,9 @@ class AnnotationStroke {
   /// Semilla del azar del pincel; sin ella se deriva del [id].
   final int? seed;
 
+  /// Pintado con la capa bloqueada: solo cubre lo que ya había en ella.
+  final bool alphaLocked;
+
   const AnnotationStroke({
     required this.id,
     required this.tool,
@@ -126,6 +129,7 @@ class AnnotationStroke {
     this.brushId,
     this.layerId,
     this.seed,
+    this.alphaLocked = false,
   });
 
   AnnotationStroke copyWith({
@@ -139,6 +143,7 @@ class AnnotationStroke {
     String? brushId,
     String? layerId,
     int? seed,
+    bool? alphaLocked,
   }) => AnnotationStroke(
     id: id,
     tool: tool ?? this.tool,
@@ -151,6 +156,7 @@ class AnnotationStroke {
     brushId: brushId ?? this.brushId,
     layerId: layerId ?? this.layerId,
     seed: seed ?? this.seed,
+    alphaLocked: alphaLocked ?? this.alphaLocked,
   );
 
   Map<String, dynamic> toJson() => {
@@ -165,6 +171,7 @@ class AnnotationStroke {
     if (brushId != null) 'brushId': brushId,
     if (layerId != null) 'layerId': layerId,
     if (seed != null) 'seed': seed,
+    if (alphaLocked) 'alphaLocked': true,
   };
 
   factory AnnotationStroke.fromJson(Map<String, dynamic> json) =>
@@ -194,6 +201,7 @@ class AnnotationStroke {
         brushId: json['brushId']?.toString(),
         layerId: json['layerId']?.toString(),
         seed: (json['seed'] as num?)?.toInt(),
+        alphaLocked: json['alphaLocked'] == true,
       );
 }
 

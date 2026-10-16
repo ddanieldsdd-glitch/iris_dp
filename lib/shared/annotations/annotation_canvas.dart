@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'annotation_brush_engine.dart';
 import 'annotation_brushes.dart';
 import 'annotation_document.dart';
+import 'annotation_layers.dart';
 import 'annotation_shape_recognizer.dart';
 
 /// Transforma un documento normalizado al mismo viewport que un plano.
@@ -119,6 +119,226 @@ class AnnotationCanvasController extends ChangeNotifier {
     if (next.length == _document.stamps.length) return;
     if (_selectedStampId == id) _selectedStampId = null;
     _commit(_document.copyWith(stamps: next));
+  }
+
+  // ─── Capas ────────────────────────────────────────────────────────────────
+
+  List<AnnotationLayer> get layers => _document.effectiveLayers;
+
+  AnnotationLayer? layerById(String? id) {
+    for (final layer in layers) {
+      if (layer.id == id) return layer;
+    }
+    return null;
+  }
+
+  int _layerSerial = 0;
+
+  String _newLayerId() =>
+      'l${DateTime.now().microsecondsSinceEpoch}_${_layerSerial++}';
+
+  /// Añade una capa encima de [aboveId] (o arriba del todo) y devuelve su id.
+  String addLayer({String? name, String? aboveId}) {
+    final current = List.of(layers);
+    final id = _newLayerId();
+    final index = aboveId == null
+        ? current.length
+        : current.indexWhere((layer) => layer.id == aboveId) + 1;
+    final layer = AnnotationLayer(
+      id: id,
+      name: name ?? 'Capa ${current.length + 1}',
+    );
+    current.insert(index.clamp(0, current.length), layer);
+    _commit(_document.copyWith(layers: current));
+    return id;
+  }
+
+  void updateLayer(
+    String id, {
+    String? name,
+    bool? visible,
+    bool? locked,
+    double? opacity,
+    AnnotationLayerBlend? blend,
+    bool? alphaLock,
+    bool? clip,
+    bool commit = true,
+  }) {
+    final current = List.of(layers);
+    final index = current.indexWhere((layer) => layer.id == id);
+    if (index < 0) return;
+    current[index] = current[index].copyWith(
+      name: name,
+      visible: visible,
+      locked: locked,
+      opacity: opacity,
+      blend: blend,
+      alphaLock: alphaLock,
+      clip: clip,
+    );
+    final next = _document.copyWith(layers: current);
+    if (commit) {
+      _commit(next);
+    } else {
+      _document = next;
+      notifyListeners();
+    }
+  }
+
+  /// Quita la capa y lo que tiene. Siempre queda al menos una.
+  void removeLayer(String id) {
+    final current = layers;
+    if (current.length <= 1) return;
+    final doc = _document;
+    _commit(
+      doc.copyWith(
+        layers: current.where((layer) => layer.id != id).toList(),
+        strokes: doc.strokes
+            .where((stroke) => doc.strokeLayerId(stroke) != id)
+            .toList(),
+        stamps: doc.stamps
+            .where((stamp) => doc.stampLayerId(stamp) != id)
+            .toList(),
+      ),
+    );
+  }
+
+  /// Mueve la capa a [index] (0 = abajo del todo).
+  void moveLayer(String id, int index) {
+    final current = List.of(layers);
+    final from = current.indexWhere((layer) => layer.id == id);
+    if (from < 0) return;
+    final layer = current.removeAt(from);
+    current.insert(index.clamp(0, current.length), layer);
+    if (from == current.indexOf(layer)) return;
+    // Los trazos sin capa caen en la de abajo: se les fija la suya antes
+    // de que cambie cuál es.
+    _commit(_pinLayers(_document).copyWith(layers: current));
+  }
+
+  /// Copia la capa con todo su contenido justo encima. Devuelve la nueva.
+  String? duplicateLayer(String id) {
+    final source = layerById(id);
+    if (source == null) return null;
+    final doc = _pinLayers(_document);
+    final newId = _newLayerId();
+    final current = List.of(layers);
+    current.insert(
+      current.indexWhere((layer) => layer.id == id) + 1,
+      AnnotationLayer(
+        id: newId,
+        name: '${source.name} copia',
+        visible: source.visible,
+        opacity: source.opacity,
+        blend: source.blend,
+        alphaLock: source.alphaLock,
+        clip: source.clip,
+      ),
+    );
+    var serial = 0;
+    String copyId(String old) => '$old-$newId-${serial++}';
+    _commit(
+      doc.copyWith(
+        layers: current,
+        strokes: [
+          ...doc.strokes,
+          for (final stroke in doc.strokes)
+            if (stroke.layerId == id)
+              AnnotationStroke(
+                id: copyId(stroke.id),
+                tool: stroke.tool,
+                colorArgb: stroke.colorArgb,
+                width: stroke.width,
+                points: stroke.points,
+                inputKind: stroke.inputKind,
+                opacity: stroke.opacity,
+                closed: stroke.closed,
+                brushId: stroke.brushId,
+                layerId: newId,
+                // Misma semilla: la copia sale idéntica.
+                seed: BrushEngine.seedFor(stroke),
+                alphaLocked: stroke.alphaLocked,
+              ),
+        ],
+        stamps: [
+          ...doc.stamps,
+          for (final stamp in doc.stamps)
+            if (stamp.layerId == id)
+              AnnotationStamp(
+                id: copyId(stamp.id),
+                kind: stamp.kind,
+                x: stamp.x,
+                y: stamp.y,
+                rotation: stamp.rotation,
+                size: stamp.size,
+                colorArgb: stamp.colorArgb,
+                label: stamp.label,
+                layerId: newId,
+              ),
+        ],
+      ),
+    );
+    return newId;
+  }
+
+  /// Junta la capa con la de abajo. Su opacidad pasa a los trazos.
+  void mergeDown(String id) {
+    final current = layers;
+    final index = current.indexWhere((layer) => layer.id == id);
+    if (index <= 0) return;
+    final upper = current[index];
+    final lower = current[index - 1];
+    final doc = _pinLayers(_document);
+    _commit(
+      doc.copyWith(
+        layers: [...current]..removeAt(index),
+        strokes: [
+          for (final stroke in doc.strokes)
+            stroke.layerId == upper.id
+                ? stroke.copyWith(
+                    layerId: lower.id,
+                    opacity: stroke.opacity * upper.opacity,
+                  )
+                : stroke,
+        ],
+        stamps: [
+          for (final stamp in doc.stamps)
+            stamp.layerId == upper.id
+                ? stamp.copyWith(layerId: lower.id)
+                : stamp,
+        ],
+      ),
+    );
+  }
+
+  void setPaper(AnnotationPaper? paper) {
+    if (paper == _document.paper) return;
+    _commit(
+      paper == null
+          ? _document.copyWith(clearPaper: true)
+          : _document.copyWith(paper: paper),
+    );
+  }
+
+  /// Fija en cada trazo y sello la capa en la que se ve ahora, para que
+  /// reordenar o quitar capas no los cambie de sitio.
+  static AnnotationDocument _pinLayers(AnnotationDocument doc) {
+    final layers = doc.effectiveLayers;
+    return doc.copyWith(
+      layers: layers,
+      strokes: [
+        for (final stroke in doc.strokes)
+          stroke.layerId == doc.strokeLayerId(stroke)
+              ? stroke
+              : stroke.copyWith(layerId: doc.strokeLayerId(stroke)),
+      ],
+      stamps: [
+        for (final stamp in doc.stamps)
+          stamp.layerId == doc.stampLayerId(stamp)
+              ? stamp
+              : stamp.copyWith(layerId: doc.stampLayerId(stamp)),
+      ],
+    );
   }
 
   /// Sello bajo [point] (píxeles de documento de tamaño [size]).
@@ -330,6 +550,9 @@ class AnnotationCanvas extends StatefulWidget {
   /// Capa en la que caen los trazos y sellos nuevos.
   final String? layerId;
 
+  /// Bloqueo de alfa de la capa activa: los trazos solo cubren lo pintado.
+  final bool alphaLocked;
+
   const AnnotationCanvas({
     super.key,
     required this.controller,
@@ -354,6 +577,7 @@ class AnnotationCanvas extends StatefulWidget {
     this.onStampEditRequested,
     this.brushId,
     this.layerId,
+    this.alphaLocked = false,
   });
 
   @override
@@ -383,6 +607,8 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
   bool _stampDragMoved = false;
   bool _tappedSelected = false;
 
+  final AnnotationCompositor _compositor = AnnotationCompositor();
+
   @override
   void initState() {
     super.initState();
@@ -404,6 +630,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
 
   @override
   void dispose() {
+    _compositor.dispose();
     _holdTimer?.cancel();
     widget.controller.removeListener(_onControllerChanged);
     super.dispose();
@@ -694,6 +921,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
           closed: closed,
           brushId: tool == widget.tool ? widget.brushId : null,
           layerId: widget.layerId,
+          alphaLocked: widget.alphaLocked,
         ),
       );
     }
@@ -775,6 +1003,12 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
+        final docSize = widget.viewport?.documentSize ?? size;
+        final longest = math.max(1.0, docSize.longestSide);
+        _compositor.pixelRatio = math.min(
+          MediaQuery.maybeDevicePixelRatioOf(context) ?? 1,
+          4096 / longest,
+        );
         final live = _livePoints.isEmpty
             ? null
             : AnnotationStroke(
@@ -788,6 +1022,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
                 closed: _snappedClosed,
                 brushId: _activeTool == widget.tool ? widget.brushId : null,
                 layerId: widget.layerId,
+                alphaLocked: widget.alphaLocked,
               );
         return Stack(
           fit: StackFit.expand,
@@ -808,6 +1043,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
                       : null,
                   viewport: widget.viewport,
                   paintNotes: !widget.interactiveNotes,
+                  compositor: _compositor,
                 ),
                 child: widget.child ?? const SizedBox.expand(),
               ),
@@ -830,33 +1066,6 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
   }
 }
 
-class _CachedStrokes {
-  final Size size;
-  final ui.Picture picture;
-
-  const _CachedStrokes(this.size, this.picture);
-}
-
-/// Los trazos ya guardados se graban una vez en un `Picture` y se reutilizan
-/// mientras se dibuja: con pinceles de grano y desenfoque, repintarlos todos
-/// en cada movimiento del lápiz se notaría.
-final Expando<_CachedStrokes> _strokeCache = Expando('annotation-strokes');
-
-ui.Picture _strokesPicture(List<AnnotationStroke> strokes, Size size) {
-  final cached = _strokeCache[strokes];
-  if (cached != null && cached.size == size) return cached.picture;
-  final recorder = ui.PictureRecorder();
-  final canvas = Canvas(recorder);
-  canvas.saveLayer(Offset.zero & size, Paint());
-  for (final stroke in strokes) {
-    AnnotationBrushes.paintStroke(canvas, size, stroke);
-  }
-  canvas.restore();
-  final picture = recorder.endRecording();
-  _strokeCache[strokes] = _CachedStrokes(size, picture);
-  return picture;
-}
-
 class AnnotationPainter extends CustomPainter {
   final AnnotationDocument document;
   final AnnotationStroke? liveStroke;
@@ -865,6 +1074,10 @@ class AnnotationPainter extends CustomPainter {
   final AnnotationViewport? viewport;
   final bool paintNotes;
 
+  /// Guarda las capas ya rasterizadas entre fotogramas. Sin él se usa uno
+  /// compartido por documento.
+  final AnnotationCompositor? compositor;
+
   const AnnotationPainter({
     required this.document,
     this.liveStroke,
@@ -872,6 +1085,7 @@ class AnnotationPainter extends CustomPainter {
     this.selectedStampId,
     this.viewport,
     this.paintNotes = true,
+    this.compositor,
   });
 
   @override
@@ -882,31 +1096,19 @@ class AnnotationPainter extends CustomPainter {
       canvas.translate(viewport!.offset.dx, viewport!.offset.dy);
       canvas.scale(viewport!.scale);
     }
-    final paper = document.paper;
-    if (paper != null) BrushEngine.paintPaper(canvas, documentSize, paper);
     final live = liveStroke;
-    final erasing = live?.tool == AnnotationToolType.eraseArea;
-    if (erasing) canvas.saveLayer(Offset.zero & documentSize, Paint());
-    if (document.strokes.isNotEmpty) {
-      canvas.drawPicture(_strokesPicture(document.strokes, documentSize));
-    }
-    if (live != null) {
-      AnnotationBrushes.paintStroke(canvas, documentSize, live);
-      if (AnnotationBrushes.isAreaTool(live.tool) && live.points.length > 1) {
-        _paintLassoOutline(canvas, documentSize, live);
-      }
-    }
-    if (erasing) canvas.restore();
-    for (final stamp in document.stamps) {
-      AnnotationBrushes.paintStamp(
-        canvas,
-        documentSize,
-        stamp,
-        selected: stamp.id == selectedStampId,
-      );
-    }
-    if (liveStamp != null) {
-      AnnotationBrushes.paintStamp(canvas, documentSize, liveStamp!);
+    (compositor ?? AnnotationCompositor.sharedFor(document)).paint(
+      canvas,
+      documentSize,
+      document,
+      live: live,
+      liveStamp: liveStamp,
+      selectedStampId: selectedStampId,
+    );
+    if (live != null &&
+        AnnotationBrushes.isAreaTool(live.tool) &&
+        live.points.length > 1) {
+      _paintLassoOutline(canvas, documentSize, live);
     }
     if (paintNotes) {
       for (final note in document.notes) {
@@ -965,7 +1167,8 @@ class AnnotationPainter extends CustomPainter {
       oldDelegate.liveStamp != liveStamp ||
       oldDelegate.selectedStampId != selectedStampId ||
       oldDelegate.viewport != viewport ||
-      oldDelegate.paintNotes != paintNotes;
+      oldDelegate.paintNotes != paintNotes ||
+      oldDelegate.compositor != compositor;
 }
 
 class _InteractiveAnnotationNote extends StatefulWidget {
