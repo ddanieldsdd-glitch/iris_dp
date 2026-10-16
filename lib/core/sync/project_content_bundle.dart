@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart'
-    show InsertMode, OrderingTerm, Value, Variable;
+    show BooleanExpressionOperators, InsertMode, OrderingTerm, Value, Variable;
 
 import '../../shared/visual_bible/bible_image_links.dart';
 import '../database/app_database.dart';
@@ -677,6 +677,11 @@ class ProjectContentBundle {
           'notes': shot.notes,
           'notesHighlight': shot.notesHighlight,
           'referenceImagePath': shot.referenceImagePath,
+          // La principal es una de sus referencias: viaja como cuál es, no
+          // como otra imagen (si no, al bajar salía dos veces).
+          if (_primaryReferenceUid(shot, shotReferences, shotKeyById)
+              case final uid?)
+            'primaryReferenceUid': uid,
           'charactersJson': shot.charactersJson,
           'durationSeconds': shot.durationSeconds,
           'scriptAnchorIndex': shot.scriptAnchorIndex,
@@ -1096,6 +1101,23 @@ class ProjectContentBundle {
   /// El bundle trae rutas del dispositivo de origen. Las que no existen aquí
   /// se vacían: la descarga de medios pone después el archivo de verdad, y
   /// mientras tanto la app no intenta abrir una ruta de otro equipo.
+  /// El uid de la referencia del plano que es su principal, si lo es.
+  static String? _primaryReferenceUid(
+    Shot shot,
+    List<Map<String, dynamic>> shotReferences,
+    Map<int, String> shotKeyById,
+  ) {
+    final primary = shot.referenceImagePath;
+    if (primary == null) return null;
+    final key = shotKeyById[shot.id];
+    for (final r in shotReferences) {
+      if (r['shotKey'] == key && r['imagePath'] == primary) {
+        return r['uid'] as String?;
+      }
+    }
+    return null;
+  }
+
   static bool _looksLikeFilePath(String value) =>
       value.startsWith('/') || RegExp(r'^[A-Za-z]:[\\/]').hasMatch(value);
 
@@ -1390,6 +1412,22 @@ class ProjectContentBundle {
           source: Value(m['source'] as String? ?? 'manual'),
           sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
         ),
+      );
+    }
+
+    // La principal de cada plano apunta a su referencia importada.
+    for (final row in bundle['shots'] as List? ?? []) {
+      final m = Map<String, dynamic>.from(row as Map);
+      final primaryUid = m['primaryReferenceUid'] as String?;
+      final shotId = shotKeyToId[m['shotKey']];
+      if (primaryUid == null || shotId == null) continue;
+      final reference = await (db.select(db.shotReferences)..where(
+            (r) => r.shotId.equals(shotId) & r.uid.equals(primaryUid),
+          ))
+          .getSingleOrNull();
+      if (reference == null) continue;
+      await (db.update(db.shots)..where((s) => s.id.equals(shotId))).write(
+        ShotsCompanion(referenceImagePath: Value(reference.imagePath)),
       );
     }
 
