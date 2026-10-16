@@ -47,9 +47,18 @@ class BrushSpec {
   /// Opacidad de cada huella: con poco flujo el trazo se carga al repasar.
   final double flow;
 
-  /// Cuánto cambian tamaño y opacidad con la presión (0–1).
+  /// Cuánto cambian tamaño y opacidad con la presión (0–1). Negativo:
+  /// al revés, más fino u opaco cuanto menos se aprieta.
   final double pressureSize;
   final double pressureOpacity;
+
+  /// Cuánto crece la huella y cuánto se aclara al inclinar el lápiz (0–1).
+  final double tiltSize;
+  final double tiltOpacity;
+
+  /// Estabilización propia del pincel (0–1); manda la mayor entre esta y
+  /// la de Ajustes.
+  final double streamline;
 
   /// Afilado del principio y del final, en diámetros.
   final double taperStart;
@@ -115,6 +124,9 @@ class BrushSpec {
     this.flow = 1,
     this.pressureSize = 0.4,
     this.pressureOpacity = 0,
+    this.tiltSize = 0,
+    this.tiltOpacity = 0,
+    this.streamline = 0,
     this.taperStart = 0,
     this.taperEnd = 0,
     this.sizeJitter = 0,
@@ -149,6 +161,9 @@ class BrushSpec {
     'flow',
     'pressureSize',
     'pressureOpacity',
+    'tiltSize',
+    'tiltOpacity',
+    'streamline',
     'taperStart',
     'taperEnd',
     'sizeJitter',
@@ -166,6 +181,9 @@ class BrushSpec {
     'flow': flow,
     'pressureSize': pressureSize,
     'pressureOpacity': pressureOpacity,
+    'tiltSize': tiltSize,
+    'tiltOpacity': tiltOpacity,
+    'streamline': streamline,
     'taperStart': taperStart,
     'taperEnd': taperEnd,
     'sizeJitter': sizeJitter,
@@ -185,6 +203,9 @@ class BrushSpec {
     ui.Image? tipImage,
     ui.Image? grainImage,
     int? defaultColor,
+    bool? wet,
+    BlendMode? blend,
+    bool? followDirection,
   }) {
     double p(String key, double current) => params[key] ?? current;
     return BrushSpec(
@@ -203,6 +224,9 @@ class BrushSpec {
       flow: p('flow', flow),
       pressureSize: p('pressureSize', pressureSize),
       pressureOpacity: p('pressureOpacity', pressureOpacity),
+      tiltSize: p('tiltSize', tiltSize),
+      tiltOpacity: p('tiltOpacity', tiltOpacity),
+      streamline: p('streamline', streamline),
       taperStart: p('taperStart', taperStart),
       taperEnd: p('taperEnd', taperEnd),
       sizeJitter: p('sizeJitter', sizeJitter),
@@ -210,13 +234,13 @@ class BrushSpec {
       scatter: p('scatter', scatter),
       rotationJitter: p('rotationJitter', rotationJitter),
       angle: p('angle', angle),
-      followDirection: followDirection,
+      followDirection: followDirection ?? this.followDirection,
       grain: grain,
       grainScale: p('grainScale', grainScale),
       grainDepth: p('grainDepth', grainDepth),
       grainPressure: grainPressure,
-      wet: wet,
-      blend: blend,
+      wet: wet ?? this.wet,
+      blend: blend ?? this.blend,
       tiltWidens: tiltWidens,
       hatchAngle: hatchAngle,
       hatchGap: hatchGap,

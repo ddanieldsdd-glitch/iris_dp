@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+
+import 'package:flutter/painting.dart' show BlendMode;
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -80,6 +83,9 @@ class CustomBrushStore {
       tipImage: shape.existsSync() ? await _decode(shape) : null,
       grainImage: grain.existsSync() ? await _decode(grain) : null,
       defaultColor: (json['color'] as num?)?.toInt(),
+      wet: json['wet'] as bool?,
+      blend: json['multiply'] == true ? BlendMode.multiply : null,
+      followDirection: json['followDirection'] as bool?,
     );
     BrushCatalog.register(spec);
     return spec;
@@ -94,20 +100,36 @@ class CustomBrushStore {
 
   static String _newId() => 'custom.${DateTime.now().microsecondsSinceEpoch}';
 
-  /// Importa un `.brush` o `.brushset`. Devuelve los pinceles añadidos.
+  /// Importa un `.brush` o `.brushset` ya en memoria.
   Future<List<BrushSpec>> importProcreate(
     Uint8List bytes, {
     String? fileName,
   }) async {
     await ensureLoaded();
-    final parsed = ProcreateBrushImport.parse(bytes, fileName: fileName);
+    return _save(ProcreateBrushImport.parse(bytes, fileName: fileName));
+  }
+
+  /// Importa desde un archivo, leyéndolo en otro isolate: un set de 150 MB
+  /// no bloquea el dibujo ni se carga entero en memoria.
+  Future<List<BrushSpec>> importProcreateFile(String path) async {
+    await ensureLoaded();
+    final parsed = await Isolate.run(
+      () => ProcreateBrushImport.parseFile(path),
+    );
+    return _save(parsed);
+  }
+
+  Future<List<BrushSpec>> _save(List<ImportedBrushData> parsed) async {
     final root = await _root();
     final added = <BrushSpec>[];
     for (final brush in parsed) {
       final id = _newId();
       final folder = Directory(p.join(root.path, id.replaceAll('.', '_')));
       folder.createSync(recursive: true);
-      File(p.join(folder.path, 'shape.png')).writeAsBytesSync(brush.shapePng);
+      final shape = brush.shapePng;
+      if (shape != null) {
+        File(p.join(folder.path, 'shape.png')).writeAsBytesSync(shape);
+      }
       final grain = brush.grainPng;
       if (grain != null) {
         File(p.join(folder.path, 'grain.png')).writeAsBytesSync(grain);
@@ -118,6 +140,9 @@ class CustomBrushStore {
           'name': brush.name,
           'source': 'procreate',
           'params': brush.params,
+          'wet': brush.wet,
+          'multiply': brush.multiply,
+          'followDirection': brush.followDirection,
         }),
       );
       final spec = await _loadOne(folder);
@@ -156,6 +181,11 @@ class CustomBrushStore {
         if (!custom) 'base': base.id,
         'params': {...base.params, ...params},
         'color': ?color,
+        if (custom) ...{
+          'wet': base.wet,
+          'multiply': base.blend == BlendMode.multiply,
+          'followDirection': base.followDirection,
+        },
       }),
     );
     return _loadOne(folder);

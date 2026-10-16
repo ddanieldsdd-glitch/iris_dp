@@ -496,6 +496,10 @@ class AnnotationDocument {
 
   final AnnotationPaper? paper;
 
+  /// Papel con imagen importado en el dispositivo (clave estable). Manda
+  /// sobre [paper]; si este dispositivo no lo tiene, se ve [paper].
+  final String? paperImage;
+
   const AnnotationDocument({
     this.schemaVersion = currentSchemaVersion,
     this.strokes = const [],
@@ -503,6 +507,7 @@ class AnnotationDocument {
     this.stamps = const [],
     this.layers = const [],
     this.paper,
+    this.paperImage,
   });
 
   bool get isEmpty => strokes.isEmpty && notes.isEmpty && stamps.isEmpty;
@@ -534,6 +539,8 @@ class AnnotationDocument {
     List<AnnotationLayer>? layers,
     AnnotationPaper? paper,
     bool clearPaper = false,
+    String? paperImage,
+    bool clearPaperImage = false,
   }) => AnnotationDocument(
     schemaVersion: currentSchemaVersion,
     strokes: strokes ?? this.strokes,
@@ -541,6 +548,7 @@ class AnnotationDocument {
     stamps: stamps ?? this.stamps,
     layers: layers ?? this.layers,
     paper: clearPaper ? null : (paper ?? this.paper),
+    paperImage: clearPaperImage ? null : (paperImage ?? this.paperImage),
   );
 
   Map<String, dynamic> toJson() => {
@@ -552,6 +560,7 @@ class AnnotationDocument {
     if (layers.isNotEmpty)
       'layers': layers.map((layer) => layer.toJson()).toList(),
     if (paper != null) 'paper': paper!.name,
+    if (paperImage != null) 'paperImage': paperImage,
   };
 
   String encode() => jsonEncode(toJson());
@@ -590,6 +599,7 @@ class AnnotationDocument {
         paper: AnnotationPaper.values
             .where((value) => value.name == json['paper'])
             .firstOrNull,
+        paperImage: json['paperImage']?.toString(),
       );
 
   factory AnnotationDocument.decode(String? raw) {

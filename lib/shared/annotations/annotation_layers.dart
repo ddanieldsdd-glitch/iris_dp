@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'annotation_brush_engine.dart';
 import 'annotation_brushes.dart';
 import 'annotation_document.dart';
+import 'brushes/paper_library.dart';
 
 /// Pinta un documento capa a capa, como Procreate: cada capa es una imagen
 /// que se mezcla con lo de debajo según su opacidad y su modo.
@@ -19,6 +20,9 @@ class AnnotationCompositor {
   double pixelRatio;
 
   final Map<String, _LayerRaster> _cache = {};
+
+  /// Papel con el que se rasterizaron las capas: su grano cambia el trazo.
+  String? _cachePaper;
 
   /// Veces que se ha rasterizado una capa (para las pruebas de rendimiento).
   int rasterizations = 0;
@@ -156,11 +160,43 @@ class AnnotationCompositor {
     String? selectedStampId,
     bool paintPaper = true,
   }) {
-    final rect = Offset.zero & size;
+    final paperTexture = PaperLibrary.paper(document.paperImage);
+    final paperKey = paperTexture?.id;
+    if (paperKey != _cachePaper) {
+      dispose();
+      _cachePaper = paperKey;
+    }
     final paper = document.paper;
-    if (paintPaper && paper != null) {
+    if (paintPaper && paperTexture != null) {
+      BrushEngine.paintPaperImage(canvas, size, paperTexture.background);
+    } else if (paintPaper && paper != null) {
       BrushEngine.paintPaper(canvas, size, paper);
     }
+    final previousGrain = BrushEngine.paperGrain;
+    BrushEngine.paperGrain = paperTexture?.grain;
+    try {
+      _paintLayers(
+        canvas,
+        size,
+        document,
+        live: live,
+        liveStamp: liveStamp,
+        selectedStampId: selectedStampId,
+      );
+    } finally {
+      BrushEngine.paperGrain = previousGrain;
+    }
+  }
+
+  void _paintLayers(
+    Canvas canvas,
+    Size size,
+    AnnotationDocument document, {
+    AnnotationStroke? live,
+    AnnotationStamp? liveStamp,
+    String? selectedStampId,
+  }) {
+    final rect = Offset.zero & size;
     final layers = document.effectiveLayers;
     final liveLayer = live == null ? null : document.strokeLayerId(live);
     final liveStampLayer = liveStamp == null

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -64,35 +65,49 @@ Uint8List _bplist(List<Object> objects, int top) {
 }
 
 /// `Brush.archive` como lo guarda Procreate (NSKeyedArchiver).
-Uint8List _brushArchive(String name) => _bplist([
-  // 0: diccionario raíz {$archiver, $objects, $top}
-  <int, int>{1: 4, 2: 5, 3: 6},
-  r'$archiver', // 1
-  r'$objects', // 2
-  r'$top', // 3
-  'NSKeyedArchiver', // 4
-  <int>[7, 8], // 5: $objects = [$null, pincel]
-  <int, int>{9: 10}, // 6: $top = {root: UID(1)}
-  r'$null', // 7
-  <int, int>{11: 12, 13: 14, 15: 16}, // 8: el pincel
-  'root', // 9
-  const PlistUid(1), // 10
-  'name', // 11
-  name, // 12
-  'plotSpacing', // 13
-  0.35, // 14
-  'shapeRandomise', // 15
-  true, // 16
-], 0);
+Uint8List _brushArchive(String name, {Map<String, Object> extra = const {}}) {
+  final objects = <Object>[
+    // 0: diccionario raíz {$archiver, $objects, $top}
+    <int, int>{1: 4, 2: 5, 3: 6},
+    r'$archiver', // 1
+    r'$objects', // 2
+    r'$top', // 3
+    'NSKeyedArchiver', // 4
+    <int>[7, 8], // 5: $objects = [$null, pincel]
+    <int, int>{9: 10}, // 6: $top = {root: UID(1)}
+    r'$null', // 7
+    <int, int>{}, // 8: el pincel, se rellena abajo
+    'root', // 9
+    const PlistUid(1), // 10
+  ];
+  final brush = <int, int>{};
+  void put(String key, Object value) {
+    objects.add(key);
+    final k = objects.length - 1;
+    objects.add(value);
+    brush[k] = objects.length - 1;
+  }
 
-Uint8List _png(int size, {required bool disc}) {
-  final image = img.Image(width: size, height: size);
+  put('name', name);
+  put('plotSpacing', 0.35);
+  put('shapeRandomise', true);
+  extra.forEach(put);
+  objects[8] = brush;
+  return _bplist(objects, 0);
+}
+
+Uint8List _png(int size, {required bool disc, bool gray = false}) {
+  final image = img.Image(width: size, height: size, numChannels: gray ? 1 : 3);
   for (final px in image) {
     final dx = px.x - size / 2, dy = px.y - size / 2;
     final white = disc
         ? dx * dx + dy * dy < (size / 3) * (size / 3)
         : (px.x * 7 + px.y * 13) % 5 < 2;
-    px.setRgb(white ? 255 : 0, white ? 255 : 0, white ? 255 : 0);
+    if (gray) {
+      px.r = white ? 255 : 0;
+    } else {
+      px.setRgb(white ? 255 : 0, white ? 255 : 0, white ? 255 : 0);
+    }
   }
   return Uint8List.fromList(img.encodePng(image));
 }
@@ -130,13 +145,154 @@ void main() {
     expect(first.params['rotationJitter'], 1);
     expect(first.grainPng, isNotNull);
     // La punta se reduce y queda blanca con alfa.
-    final tip = img.decodePng(first.shapePng)!;
+    final tip = img.decodePng(first.shapePng!)!;
     expect(tip.width, 256);
     expect(tip.getPixel(128, 128).a, 255);
     expect(tip.getPixel(2, 2).a, 0);
     // Sin Brush.archive: nombre del archivo.
     expect(brushes.map((b) => b.name), contains('Vintage 2'));
   });
+
+  test('lee lo que importa de los pinceles reales: inclinación, '
+      'suavizado, multiplicar y presión inversa; salta piezas y repetidos', () {
+    final archive = Archive();
+    void add(String name, Uint8List data) =>
+        archive.addFile(ArchiveFile(name, data.length, data));
+    // Punta en gris de un canal, guardada al revés (negro = pinta).
+    add(
+      'A/Brush.archive',
+      _brushArchive(
+        'Pentel',
+        extra: {
+          'dynamicsTiltSize': 1.0,
+          'dynamicsTiltOpacity': 0.5,
+          'plotSmoothing': 0.6,
+          'shapeInverted': true,
+          'dynamicsPressureSize': -0.8,
+        },
+      ),
+    );
+    add('A/Shape.png', _png(64, disc: false, gray: true));
+    add('B/Brush.archive', _brushArchive('Rotulador', extra: {'blendMode': 1}));
+    add('B/Shape.png', _png(64, disc: true, gray: true));
+    // El mismo rotulador otra vez (con espacios), una pieza y una sin nombre.
+    add(
+      'C/Brush.archive',
+      _brushArchive('Rotulador  ', extra: {'blendMode': 1}),
+    );
+    add('C/Shape.png', _png(64, disc: true, gray: true));
+    add('D/Brush.archive', _brushArchive('_ 3'));
+    add('D/Shape.png', _png(64, disc: true));
+    add('E/Brush.archive', _brushArchive('   '));
+    add('E/Shape.png', _png(64, disc: true));
+    // Solo grano, sin punta.
+    add('F/Brush.archive', _brushArchive('Sumi'));
+    add('F/Grain.png', _png(64, disc: false));
+    final brushes = ProcreateBrushImport.parse(
+      Uint8List.fromList(ZipEncoder().encode(archive)!),
+    );
+    expect(brushes.map((b) => b.name), ['Pentel', 'Rotulador', 'Sumi']);
+    final pentel = brushes[0];
+    expect(pentel.params['tiltSize'], 1);
+    expect(pentel.params['tiltOpacity'], 0.5);
+    expect(pentel.params['streamline'], closeTo(0.6, 1e-9));
+    expect(pentel.params['pressureSize'], closeTo(-0.8, 1e-9));
+    // En gris, el brillo es el canal único: blanco del original = no pinta
+    // una vez invertido.
+    final tip = img.decodePng(pentel.shapePng!)!;
+    final whiteSource = img.decodePng(_png(64, disc: false, gray: true))!;
+    for (final (x, y) in [(1, 0), (3, 3), (10, 7)]) {
+      final white = whiteSource.getPixel(x, y).r > 128;
+      expect(tip.getPixel(x, y).a > 128, !white, reason: '$x,$y');
+    }
+    expect(brushes[1].multiply, isTrue);
+    expect(brushes[2].shapePng, isNull);
+    expect(brushes[2].grainPng, isNotNull);
+  });
+
+  final real = Platform.environment['REAL_BRUSHES'];
+  test(
+    'los sets reales se leen sin piezas sueltas',
+    () {
+      for (final file in Directory(real!).listSync().whereType<File>()) {
+        if (!file.path.endsWith('.brushset') && !file.path.endsWith('.brush')) {
+          continue;
+        }
+        final brushes = ProcreateBrushImport.parseFile(file.path);
+        // ignore: avoid_print
+        print(
+          '${file.path.split('/').last}: ${brushes.length} → '
+          '${brushes.map((b) => b.name).join(', ')}',
+        );
+        expect(brushes, isNotEmpty);
+        expect(brushes.where((b) => b.name.trim().isEmpty), isEmpty);
+        expect(brushes.where((b) => b.name.startsWith('_')), isEmpty);
+      }
+    },
+    skip: real == null ? 'Sin REAL_BRUSHES' : false,
+    timeout: const Timeout(Duration(minutes: 5)),
+  );
+
+  testWidgets(
+    'hoja de muestras de los pinceles reales',
+    (tester) async {
+      final out = Platform.environment['SWATCH_DIR']!;
+      final dir = Directory.systemTemp.createTempSync('iris_reales');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final store = CustomBrushStore(root: () async => dir);
+      for (final file in Directory(real!).listSync().whereType<File>()) {
+        final added = (await tester.runAsync(
+          () => store.importProcreateFile(file.path),
+        ))!;
+        final name = file.path.split('/').last.split('.').first;
+        for (var page = 0; page * 24 < added.length; page++) {
+          final chunk = added.skip(page * 24).take(24).toList();
+          final strokes = <AnnotationStroke>[];
+          for (var i = 0; i < chunk.length; i++) {
+            final b = chunk[i];
+            final col = i % 2;
+            final row = i ~/ 2;
+            strokes.add(
+              AnnotationStroke(
+                id: 's$i',
+                tool: b.family,
+                brushId: b.id,
+                colorArgb: 0xFF1A1A1A,
+                width: b.defaultWidth.clamp(2.0, 30.0),
+                opacity: b.defaultOpacity,
+                points: [
+                  for (var k = 0; k <= 30; k++)
+                    AnnotationPoint(
+                      x: 0.04 + col * 0.5 + k / 30 * 0.42,
+                      y:
+                          (row + 0.5) / 12 +
+                          0.02 * math.sin(k / 30 * math.pi * 2),
+                      pressure: 0.15 + 0.85 * math.sin(k / 30 * math.pi),
+                      tilt: k > 20 ? 1.0 : 0,
+                    ),
+                ],
+              ),
+            );
+          }
+          final png = await tester.runAsync(
+            () => AnnotationRaster.toPng(
+              AnnotationDocument(strokes: strokes),
+              size: const Size(1200, 1400),
+            ),
+          );
+          File('$out/reales_${name}_$page.png').writeAsBytesSync(png!);
+          File(
+            '$out/reales_${name}_$page.txt',
+          ).writeAsStringSync(chunk.map((b) => b.name).join('\n'));
+        }
+      }
+      for (final b in BrushCatalog.custom) {
+        BrushCatalog.unregister(b.id);
+      }
+    },
+    skip: real == null || Platform.environment['SWATCH_DIR'] == null,
+    timeout: const Timeout(Duration(minutes: 8)),
+  );
 
   test('un archivo que no es pincel avisa', () {
     expect(

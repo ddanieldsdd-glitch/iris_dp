@@ -355,12 +355,25 @@ class AnnotationCanvasController extends ChangeNotifier {
     _commit(pinned.copyWith(layers: next, paper: paper));
   }
 
+  /// Papel con imagen (de [PaperLibrary]); `null` vuelve al papel liso.
+  void setPaperImage(String? id) {
+    if (id == _document.paperImage) return;
+    _commit(
+      id == null
+          ? _document.copyWith(clearPaperImage: true)
+          : _document.copyWith(
+              paperImage: id,
+              paper: _document.paper ?? AnnotationPaper.ivory,
+            ),
+    );
+  }
+
   void setPaper(AnnotationPaper? paper) {
-    if (paper == _document.paper) return;
+    if (paper == _document.paper && _document.paperImage == null) return;
     _commit(
       paper == null
-          ? _document.copyWith(clearPaper: true)
-          : _document.copyWith(paper: paper),
+          ? _document.copyWith(clearPaper: true, clearPaperImage: true)
+          : _document.copyWith(paper: paper, clearPaperImage: true),
     );
   }
 
@@ -520,7 +533,11 @@ class AnnotationCanvasController extends ChangeNotifier {
     if (_document.isEmpty) return;
     _selectedStampId = null;
     _commit(
-      AnnotationDocument(layers: _document.layers, paper: _document.paper),
+      AnnotationDocument(
+        layers: _document.layers,
+        paper: _document.paper,
+        paperImage: _document.paperImage,
+      ),
     );
   }
 

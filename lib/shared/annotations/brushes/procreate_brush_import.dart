@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
@@ -12,15 +12,29 @@ import 'bplist.dart';
 /// los ajustes que se han podido leer.
 class ImportedBrushData {
   final String name;
-  final Uint8List shapePng;
+
+  /// Sin punta propia (Procreate usa una de las suyas): punta redonda.
+  final Uint8List? shapePng;
   final Uint8List? grainPng;
   final Map<String, double> params;
 
+  /// Se mezcla multiplicando (rotuladores que oscurecen al solaparse).
+  final bool multiply;
+
+  /// El trazo no se carga sobre sí mismo (tinta, rotulador).
+  final bool wet;
+
+  /// La punta gira con la dirección del trazo.
+  final bool followDirection;
+
   const ImportedBrushData({
     required this.name,
-    required this.shapePng,
+    this.shapePng,
     this.grainPng,
     this.params = const {},
+    this.multiply = false,
+    this.wet = false,
+    this.followDirection = false,
   });
 }
 
@@ -31,6 +45,24 @@ abstract final class ProcreateBrushImport {
   static const _maxTip = 256;
   static const _maxGrain = 512;
 
+  /// Lee desde disco sin cargar el archivo entero en memoria (los sets
+  /// pueden pesar cientos de MB). Pensado para correr en otro isolate.
+  static List<ImportedBrushData> parseFile(String path) {
+    final stream = InputFileStream(path);
+    try {
+      return _parse(
+        ZipDecoder().decodeBuffer(stream),
+        fileName: p.basename(path),
+      );
+    } on FormatException {
+      rethrow;
+    } catch (_) {
+      throw const FormatException('El archivo no es un pincel de Procreate');
+    } finally {
+      stream.close();
+    }
+  }
+
   static List<ImportedBrushData> parse(Uint8List bytes, {String? fileName}) {
     final Archive archive;
     try {
@@ -38,6 +70,10 @@ abstract final class ProcreateBrushImport {
     } catch (_) {
       throw const FormatException('El archivo no es un pincel de Procreate');
     }
+    return _parse(archive, fileName: fileName);
+  }
+
+  static List<ImportedBrushData> _parse(Archive archive, {String? fileName}) {
     // Ficheros agrupados por carpeta (la raíz en un `.brush` suelto).
     final groups = <String, Map<String, ArchiveFile>>{};
     for (final file in archive) {
@@ -47,30 +83,50 @@ abstract final class ProcreateBrushImport {
       final dir = p.posix.dirname(name);
       groups.putIfAbsent(dir, () => {})[p.posix.basename(name)] = file;
     }
+    final brushGroups = groups.values
+        .where(
+          (files) =>
+              files.containsKey('Brush.archive') ||
+              files.containsKey('Shape.png'),
+        )
+        .toList();
     final out = <ImportedBrushData>[];
+    final seen = <String>{};
     final fallback = fileName == null
         ? 'Pincel'
         : p.basenameWithoutExtension(fileName);
     var n = 0;
-    for (final entry in groups.entries) {
-      final files = entry.value;
-      final shape = files['Shape.png'];
-      if (shape == null) continue;
-      n++;
+    for (final files in brushGroups) {
       final settings = _settings(files['Brush.archive']);
-      final name =
-          (settings['name'] is String &&
-              (settings['name'] as String).trim().isNotEmpty)
+      final rawName = settings['name'] is String
           ? (settings['name'] as String).trim()
-          : (groups.length > 1 ? '$fallback $n' : fallback);
-      final shapePng = _toAlpha(
-        _bytes(shape),
-        maxSize: _maxTip,
-        invert: settings['shapeInverted'] == true,
-        square: true,
-      );
-      if (shapePng == null) continue;
+          : '';
+      // Piezas de pinceles dobles y formas auxiliares: sin nombre o «_ 3».
+      if (brushGroups.length > 1 &&
+          files.containsKey('Brush.archive') &&
+          (rawName.isEmpty || rawName.startsWith('_'))) {
+        continue;
+      }
+      final shape = files['Shape.png'];
       final grain = files['Grain.png'];
+      if (shape == null && grain == null && settings.isEmpty) continue;
+      n++;
+      final name = rawName.isNotEmpty
+          ? rawName
+          : (brushGroups.length > 1 ? '$fallback $n' : fallback);
+      final params = _params(settings, hasGrain: grain != null);
+      // El mismo pincel repetido en el set (pasa con los «Sampler»).
+      final key =
+          '$name|${params.entries.map((e) => e.value.toStringAsFixed(3)).join(',')}';
+      if (!seen.add(key)) continue;
+      final shapePng = shape == null
+          ? null
+          : _toAlpha(
+              _bytes(shape),
+              maxSize: _maxTip,
+              invert: settings['shapeInverted'] == true,
+              square: true,
+            );
       final grainPng = grain == null
           ? null
           : _toAlpha(
@@ -78,12 +134,18 @@ abstract final class ProcreateBrushImport {
               maxSize: _maxGrain,
               invert: settings['textureInverted'] == true,
             );
+      final pressureOpacity = params['pressureOpacity'] ?? 0;
       out.add(
         ImportedBrushData(
-          name: name,
+          name: _unique(name, out),
           shapePng: shapePng,
           grainPng: grainPng,
-          params: _params(settings, hasGrain: grainPng != null),
+          params: {...params, if (grainPng == null) 'grainDepth': 0},
+          multiply: settings['blendMode'] == 1,
+          // Procreate no carga el trazo sobre sí mismo salvo en lápices que
+          // aclaran con poca presión: esos se dejan acumular.
+          wet: pressureOpacity.abs() < 0.3,
+          followDirection: (_num(settings, ['shapeRotation']) ?? 0) > 0.5,
         ),
       );
     }
@@ -93,8 +155,22 @@ abstract final class ProcreateBrushImport {
     return out;
   }
 
-  static Uint8List _bytes(ArchiveFile file) =>
-      Uint8List.fromList(file.content as List<int>);
+  /// «Dense marker», «Dense marker 2»… si quedan dos con el mismo nombre.
+  static String _unique(String name, List<ImportedBrushData> done) {
+    if (!done.any((b) => b.name == name)) return name;
+    var i = 2;
+    while (done.any((b) => b.name == '$name $i')) {
+      i++;
+    }
+    return '$name $i';
+  }
+
+  static Uint8List _bytes(ArchiveFile file) {
+    final content = file.content;
+    return content is Uint8List
+        ? content
+        : Uint8List.fromList(content as List<int>);
+  }
 
   static Map<String, Object?> _settings(ArchiveFile? file) {
     if (file == null) return const {};
@@ -122,25 +198,41 @@ abstract final class ProcreateBrushImport {
   }) {
     final spacing = _num(s, ['plotSpacing']);
     final jitter = _num(s, ['plotJitter']);
-    final size = _num(s, ['paintSize', 'maxSize']);
-    final opacity = _num(s, ['paintOpacity', 'maxOpacity']);
+    // El tamaño es el deslizador (paintSize) dentro de sus límites.
+    final minSize = _num(s, ['minSize']) ?? 0;
+    final maxSize = _num(s, ['maxSize']);
+    final paintSize = _num(s, ['paintSize']);
+    final sizeFraction = maxSize == null
+        ? null
+        : minSize + (paintSize ?? 0.5) * (maxSize - minSize);
     final pressureSize = _num(s, ['dynamicsPressureSize']);
     final pressureOpacity = _num(s, ['dynamicsPressureOpacity']);
-    final rotation = _num(s, ['shapeRotation']);
+    final tiltSize = _num(s, ['dynamicsTiltSize']);
+    final tiltOpacity = _num(s, ['dynamicsTiltOpacity']);
+    final smoothing = _num(s, ['plotSmoothing']);
     final grainScale = _num(s, ['textureScale']);
-    final grainDepth = _num(s, ['textureDepth', 'grainDepth']);
+    final grainDepth = _num(s, ['grainDepth', 'textureDepth']);
+    final taperSize = _num(s, ['taperSize']) ?? 0;
+    final taperStart = _num(s, ['taperStartLength']) ?? 0;
+    final taperEnd = _num(s, ['taperEndLength']) ?? 0;
     return {
       'spacing': (spacing ?? 0.1).clamp(0.02, 2.0),
       'scatter': (jitter ?? 0).clamp(0.0, 1.5),
-      'defaultWidth': size == null ? 14 : (2 + size * 60).clamp(1.0, 200.0),
-      'flow': (opacity ?? 0.7).clamp(0.05, 1.0),
-      'pressureSize': (pressureSize ?? 0.4).clamp(0.0, 1.0),
-      'pressureOpacity': (pressureOpacity ?? 0.4).clamp(0.0, 1.0),
+      'defaultWidth': sizeFraction == null
+          ? 14
+          : (sizeFraction * 120).clamp(1.0, 200.0),
+      'flow': hasGrain ? 0.6 : 0.8,
+      'pressureSize': (pressureSize ?? 0.4).clamp(-1.0, 1.0),
+      'pressureOpacity': (pressureOpacity ?? 0).clamp(-1.0, 1.0),
+      'tiltSize': (tiltSize ?? 0).clamp(0.0, 1.0),
+      'tiltOpacity': (tiltOpacity ?? 0).clamp(0.0, 1.0),
+      'streamline': (smoothing ?? 0).clamp(0.0, 1.0),
+      'taperStart': (taperStart * taperSize * 10).clamp(0.0, 8.0),
+      'taperEnd': (taperEnd * taperSize * 10).clamp(0.0, 8.0),
       'rotationJitter': s['shapeRandomise'] == true ? 1.0 : 0.0,
-      'angle': (rotation ?? 0) * 2 * math.pi,
       'grainScale': grainScale == null
           ? 1.4
-          : (0.5 + grainScale * 3).clamp(0.3, 4.0),
+          : (0.5 + grainScale * 1.2).clamp(0.3, 6.0),
       'grainDepth': hasGrain ? (grainDepth ?? 0.6).clamp(0.0, 1.0) : 0.0,
     };
   }
@@ -172,10 +264,18 @@ abstract final class ProcreateBrushImport {
     );
     final dx = square ? (side - src.width) ~/ 2 : 0;
     final dy = square ? (side - src.height) ~/ 2 : 0;
+    final channels = src.numChannels;
     for (final px in src) {
       final max = px.maxChannelValue.toDouble();
-      final lum = (0.299 * px.r + 0.587 * px.g + 0.114 * px.b) / max;
-      final alpha = src.numChannels == 4 ? px.a / max : 1.0;
+      // En gris (uno o dos canales) el brillo es el primer canal.
+      final lum = channels <= 2
+          ? px.r / max
+          : (0.299 * px.r + 0.587 * px.g + 0.114 * px.b) / max;
+      final alpha = channels == 4
+          ? px.a / max
+          : channels == 2
+          ? px.g / max
+          : 1.0;
       final v = (invert ? 1 - lum : lum) * alpha;
       out.setPixelRgba(
         px.x + dx,
