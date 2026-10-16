@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -17,6 +16,7 @@ import 'annotation_document.dart';
 import 'annotation_raster.dart';
 import 'annotation_tools.dart';
 import 'brushes/custom_brush_store.dart';
+import 'brushes/paper_library.dart';
 import 'sheet/brush_studio.dart';
 import 'sheet/sheet_guides.dart';
 import 'sheet/sheet_panels.dart';
@@ -192,39 +192,150 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     CustomBrushStore.instance.ensureLoaded().then((_) {
       if (mounted) setState(() {});
     });
+    PaperLibrary.instance.ensureLoaded().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// Importa papeles (PNG o JPG) y pone el último en el folio.
+  Future<void> _importPapers() async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: true,
+    );
+    final paths = [
+      for (final f in picked?.files ?? const <PlatformFile>[])
+        if (f.path != null) f.path!,
+    ];
+    if (paths.isEmpty || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          paths.length == 1 ? 'Preparando el papel…' : 'Preparando papeles…',
+        ),
+      ),
+    );
+    PaperTexture? last;
+    final problems = <String>[];
+    for (final path in paths) {
+      try {
+        last = await PaperLibrary.instance.importPaper(path);
+      } on FormatException catch (e) {
+        problems.add(e.message);
+      }
+    }
+    if (!mounted) return;
+    if (last != null) _controller.setPaperImage(last.id);
+    setState(() {});
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            [
+              if (last != null)
+                paths.length == 1
+                    ? 'Papel «${last.name}» listo.'
+                    : '${paths.length - problems.length} papeles listos.',
+              ...problems,
+            ].join('\n'),
+          ),
+        ),
+      );
+  }
+
+  Future<void> _importPalette() async {
+    final picked = await FilePicker.platform.pickFiles(type: FileType.any);
+    final path = picked?.files.singleOrNull?.path;
+    if (path == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final added = await PaperLibrary.instance.importSwatches(path);
+      if (!mounted) return;
+      setState(() {});
+      messenger.showSnackBar(
+        SnackBar(content: Text('Paleta «${added.first.name}» añadida.')),
+      );
+    } on FormatException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
+  Future<void> _deletePaper(PaperTexture paper) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('¿Quitar el papel «${paper.name}»?'),
+        content: const Text(
+          'Los dibujos que lo usan se verán sobre papel marfil en este '
+          'dispositivo hasta que lo vuelvas a importar.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Quitar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await PaperLibrary.instance.deletePaper(paper.id);
+    if (mounted) setState(() {});
   }
 
   Future<void> _importBrushes() async {
     final picked = await FilePicker.platform.pickFiles(
       type: FileType.any,
-      withData: true,
+      allowMultiple: true,
     );
-    final file = picked?.files.singleOrNull;
-    if (file == null || !mounted) return;
-    final bytes =
-        file.bytes ??
-        (file.path == null ? null : await File(file.path!).readAsBytes());
-    if (bytes == null || !mounted) return;
+    final files = picked?.files ?? const <PlatformFile>[];
+    if (files.isEmpty || !mounted) return;
     final messenger = ScaffoldMessenger.of(context);
-    try {
-      final added = await CustomBrushStore.instance.importProcreate(
-        bytes,
-        fileName: file.name,
-      );
-      if (!mounted) return;
-      setState(() {});
-      messenger.showSnackBar(
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Importando pinceles…')),
+    );
+    final added = <BrushSpec>[];
+    final problems = <String>[];
+    for (final file in files) {
+      try {
+        final path = file.path;
+        final bytes = file.bytes;
+        added.addAll(
+          path != null
+              ? await CustomBrushStore.instance.importProcreateFile(path)
+              : bytes != null
+              ? await CustomBrushStore.instance.importProcreate(
+                  bytes,
+                  fileName: file.name,
+                )
+              : const [],
+        );
+      } on FormatException catch (e) {
+        problems.add('${file.name}: ${e.message}');
+      }
+    }
+    if (!mounted) return;
+    setState(() {});
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
         SnackBar(
           content: Text(
-            added.length == 1
-                ? 'Pincel «${added.single.name}» importado en «Míos».'
-                : '${added.length} pinceles importados en «Míos».',
+            [
+              if (added.isNotEmpty)
+                added.length == 1
+                    ? 'Pincel «${added.single.name}» importado en «Míos».'
+                    : '${added.length} pinceles importados en «Míos».',
+              ...problems,
+            ].join('\n'),
           ),
         ),
       );
-    } on FormatException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
-    }
   }
 
   Future<void> _tuneBrush(BrushSpec brush) async {
@@ -998,7 +1109,9 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
       stampSize: _stampSize,
       acceptTouch: _fingerDraws,
       straightenOnHold: _straighten,
-      streamline: _mode == _Mode.paint ? _streamline : 0,
+      streamline: _mode == _Mode.paint
+          ? math.max(_streamline, _brush.streamline)
+          : 0,
       resolutionScale: _rasterZoom,
       lineSnap: _magnet && _perspective.enabled ? _perspective.snap : null,
       gridStep: !_storyboard && _guides && _gridMagnet ? 1 / 16 : null,
@@ -1171,6 +1284,8 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
           styleColors: _style.palette,
           recent: _recent,
           onChanged: _setColor,
+          palettes: [for (final p in PaperLibrary.palettes) (p.name, p.colors)],
+          onImportPalette: _importPalette,
         );
       case _Panel.actions:
         return _buildActions();
@@ -1214,10 +1329,50 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
               for (final paper in AnnotationPaper.values)
                 ChoiceChip(
                   label: Text(BrushCatalog.paperLabel(paper)),
-                  selected: doc.paper == paper,
+                  selected: doc.paperImage == null && doc.paper == paper,
                   onSelected: (_) => _controller.setPaper(paper),
                 ),
             ],
+          ),
+          const SizedBox(height: 8),
+          if (PaperLibrary.papers.isNotEmpty)
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final paper in PaperLibrary.papers)
+                  Tooltip(
+                    message: paper.name,
+                    child: InkWell(
+                      onTap: () => _controller.setPaperImage(paper.id),
+                      onLongPress: () => _deletePaper(paper),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        width: 64,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: doc.paperImage == paper.id
+                                ? palette.accent
+                                : Colors.white24,
+                            width: doc.paperImage == paper.id ? 2.5 : 1,
+                          ),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: RawImage(
+                          image: paper.background,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          TextButton.icon(
+            onPressed: _importPapers,
+            icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+            label: const Text('Importar papel (PNG o JPG)'),
           ),
           const SizedBox(height: 8),
           SwitchListTile(

@@ -17,6 +17,10 @@ abstract final class BrushEngine {
 
   static double unit(Size size) => math.min(size.width, size.height) / 1000;
 
+  /// Grano del papel con imagen del documento que se está pintando (lo pone
+  /// el compositor). Los pinceles de grano de papel lo usan en vez del suyo.
+  static ui.Image? paperGrain;
+
   /// Semilla estable (FNV-1a) para que el azar de un trazo no cambie entre
   /// dispositivos ni versiones de Dart.
   static int seedFor(AnnotationStroke stroke) {
@@ -153,7 +157,7 @@ abstract final class BrushEngine {
     final avgPressure =
         stroke.points.fold<double>(0, (sum, p) => sum + p.pressure) /
         stroke.points.length;
-    _applyGrain(canvas, spec, bounds, u, avgPressure);
+    _applyGrain(canvas, spec, bounds, u, avgPressure, size);
     canvas.restore();
     return true;
   }
@@ -175,7 +179,7 @@ abstract final class BrushEngine {
           pts.single,
           _size(spec, diameter, p.pressure, p.tilt, 1, rnd),
           _angle(spec, 0, rnd),
-          _alpha(spec, p.pressure, rnd),
+          _alpha(spec, p.pressure, rnd, tilt: p.tilt),
         ),
       ];
     }
@@ -198,7 +202,7 @@ abstract final class BrushEngine {
           pts.first,
           _size(spec, diameter, p.pressure, p.tilt, 1, rnd),
           _angle(spec, 0, rnd),
-          _alpha(spec, p.pressure, rnd),
+          _alpha(spec, p.pressure, rnd, tilt: p.tilt),
         ),
       ];
     }
@@ -241,7 +245,8 @@ abstract final class BrushEngine {
             pos,
             size,
             _angle(spec, direction, rnd),
-            _alpha(spec, sample.pressure, rnd) * math.min(1, taper * 1.5),
+            _alpha(spec, sample.pressure, rnd, tilt: sample.tilt) *
+                math.min(1, taper * 1.5),
           ),
         );
         // El paso sigue al tamaño: huellas pequeñas, más juntas.
@@ -299,8 +304,11 @@ abstract final class BrushEngine {
     double taper,
     math.Random rnd,
   ) {
-    var s = diameter * (1 - spec.pressureSize + spec.pressureSize * pressure);
+    var s = diameter * _pressureFactor(spec.pressureSize, pressure);
     s *= taper;
+    if (spec.tiltSize > 0 && tilt > 0) {
+      s *= 1 + 2 * spec.tiltSize * (tilt / (math.pi / 2)).clamp(0.0, 1.0);
+    }
     if (spec.sizeJitter > 0) {
       s *= 1 + (rnd.nextDouble() - 0.5) * 2 * spec.sizeJitter;
     }
@@ -308,6 +316,13 @@ abstract final class BrushEngine {
       s *= 1 + 1.6 * (tilt / (math.pi / 2)).clamp(0.0, 1.0);
     }
     return math.max(0.4, s);
+  }
+
+  /// Efecto de la presión: con [amount] positivo, más presión = más; con
+  /// negativo, al revés.
+  static double _pressureFactor(double amount, double pressure) {
+    if (amount >= 0) return 1 - amount + amount * pressure;
+    return math.max(0.1, 1 + amount * pressure);
   }
 
   static double _angle(BrushSpec spec, double direction, math.Random rnd) {
@@ -318,11 +333,17 @@ abstract final class BrushEngine {
     return a;
   }
 
-  static double _alpha(BrushSpec spec, double pressure, math.Random rnd) {
+  static double _alpha(
+    BrushSpec spec,
+    double pressure,
+    math.Random rnd, {
+    double tilt = 0,
+  }) {
     if (spec.wet) return 1;
-    var a =
-        spec.flow *
-        (1 - spec.pressureOpacity + spec.pressureOpacity * pressure);
+    var a = spec.flow * _pressureFactor(spec.pressureOpacity, pressure);
+    if (spec.tiltOpacity > 0 && tilt > 0) {
+      a *= 1 - 0.7 * spec.tiltOpacity * (tilt / (math.pi / 2)).clamp(0.0, 1.0);
+    }
     if (spec.opacityJitter > 0) a *= 1 - rnd.nextDouble() * spec.opacityJitter;
     return a.clamp(0.0, 1.0);
   }
@@ -465,6 +486,7 @@ abstract final class BrushEngine {
     Rect bounds,
     double u,
     double pressure,
+    Size size,
   ) {
     if (!spec.hasGrain) return;
     final depth = (spec.grainDepth * (1 - spec.grainPressure * pressure)).clamp(
@@ -477,11 +499,14 @@ abstract final class BrushEngine {
       Paint()..color = Color.fromRGBO(255, 255, 255, 1 - depth),
     );
     final custom = spec.grainImage;
+    final paper = paperGrain;
     canvas.drawRect(
       bounds,
       Paint()
         ..shader = custom != null
             ? imageShader(custom, u * spec.grainScale)
+            : paper != null
+            ? coverShader(paper, size)
             : grainShader(spec.grain!, u * spec.grainScale),
     );
     canvas.restore();
@@ -499,6 +524,36 @@ abstract final class BrushEngine {
       TileMode.repeated,
       Float64List.fromList([s, 0, 0, 0, 0, s, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),
       filterQuality: FilterQuality.medium,
+    );
+  }
+
+  /// Una imagen que cubre el folio entero sin deformarse (como el papel).
+  static ui.ImageShader coverShader(ui.Image image, Size size) {
+    final scale = math.max(
+      size.width / image.width,
+      size.height / image.height,
+    );
+    final dx = (size.width - image.width * scale) / 2;
+    final dy = (size.height - image.height * scale) / 2;
+    return ui.ImageShader(
+      image,
+      TileMode.clamp,
+      TileMode.clamp,
+      Float64List.fromList([
+        scale, 0, 0, 0, //
+        0, scale, 0, 0,
+        0, 0, 1, 0,
+        dx, dy, 0, 1,
+      ]),
+      filterQuality: FilterQuality.medium,
+    );
+  }
+
+  /// Papel con imagen: la imagen cubriendo el folio.
+  static void paintPaperImage(Canvas canvas, Size size, ui.Image image) {
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..shader = coverShader(image, size),
     );
   }
 

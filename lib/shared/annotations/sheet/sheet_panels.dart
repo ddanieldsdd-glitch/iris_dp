@@ -734,12 +734,18 @@ class ColorPanel extends StatelessWidget {
   final List<int> recent;
   final ValueChanged<Color> onChanged;
 
+  /// Paletas importadas (nombre y colores).
+  final List<(String, List<int>)> palettes;
+  final VoidCallback? onImportPalette;
+
   const ColorPanel({
     super.key,
     required this.color,
     required this.styleColors,
     required this.recent,
     required this.onChanged,
+    this.palettes = const [],
+    this.onImportPalette,
   });
 
   @override
@@ -789,6 +795,16 @@ class ColorPanel extends StatelessWidget {
             ),
             swatches('Del estilo', styleColors),
             if (recent.isNotEmpty) swatches('Recientes', recent),
+            for (final (name, colors) in palettes) swatches(name, colors),
+            if (onImportPalette != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                child: OutlinedButton.icon(
+                  onPressed: onImportPalette,
+                  icon: const Icon(Icons.palette_outlined, size: 18),
+                  label: const Text('Importar paleta (.swatches)'),
+                ),
+              ),
           ],
         ),
       ),
