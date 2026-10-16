@@ -159,7 +159,7 @@ class BrushPreviewPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant BrushPreviewPainter old) =>
-      old.brush.id != brush.id || old.color != color || old.paper != paper;
+      old.brush != brush || old.color != color || old.paper != paper;
 }
 
 /// Biblioteca de pinceles: estante del estilo y categorías.
@@ -173,6 +173,14 @@ class BrushLibraryPanel extends StatefulWidget {
   final ValueChanged<BrushSpec> onSelect;
   final String title;
 
+  /// Importar pinceles de Procreate (en «Míos»).
+  final VoidCallback? onImport;
+
+  /// Abrir el estudio con un pincel para guardar una variante.
+  final ValueChanged<BrushSpec>? onTune;
+
+  final ValueChanged<BrushSpec>? onDelete;
+
   const BrushLibraryPanel({
     super.key,
     required this.selectedId,
@@ -183,6 +191,9 @@ class BrushLibraryPanel extends StatefulWidget {
     required this.filter,
     required this.onSelect,
     this.title = 'Pinceles',
+    this.onImport,
+    this.onTune,
+    this.onDelete,
   });
 
   @override
@@ -232,6 +243,26 @@ class _BrushLibraryPanelState extends State<BrushLibraryPanel> {
               ],
             ),
           ),
+          if (_category == BrushCategory.custom) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: OutlinedButton.icon(
+                onPressed: widget.onImport,
+                icon: const Icon(Icons.file_download_outlined, size: 18),
+                label: const Text('Importar de Procreate (.brushset)'),
+              ),
+            ),
+            if (brushes.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                child: Text(
+                  'Aquí aparecen los pinceles que importes y las variantes '
+                  'que guardes desde el estudio de pincel. Se guardan en '
+                  'este dispositivo.',
+                  style: AppTypography.caption(palette),
+                ),
+              ),
+          ],
           Flexible(
             child: ListView.builder(
               shrinkWrap: true,
@@ -267,6 +298,24 @@ class _BrushLibraryPanelState extends State<BrushLibraryPanel> {
                                     ),
                               ),
                             ),
+                            if (selected && widget.onTune != null)
+                              IconButton(
+                                tooltip: 'Estudio de pincel',
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.tune, size: 18),
+                                onPressed: () => widget.onTune!(brush),
+                              ),
+                            if (brush.category == BrushCategory.custom &&
+                                widget.onDelete != null)
+                              IconButton(
+                                tooltip: 'Quitar pincel',
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 18,
+                                ),
+                                onPressed: () => widget.onDelete!(brush),
+                              ),
                             Expanded(
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(6),

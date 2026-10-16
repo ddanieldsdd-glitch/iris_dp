@@ -335,8 +335,10 @@ abstract final class BrushEngine {
     double opacity,
   ) {
     if (dabs.isEmpty) return;
-    final image = AnnotationTextures.instance.tip(spec.tip);
-    const half = AnnotationTextures.tipSize / 2;
+    final image = spec.tipImage ?? AnnotationTextures.instance.tip(spec.tip);
+    final tipSize = image.width.toDouble();
+    final half = tipSize / 2;
+    final rect = Rect.fromLTWH(0, 0, tipSize, image.height.toDouble());
     final transforms = <RSTransform>[];
     final rects = <Rect>[];
     final colors = <Color>[];
@@ -344,14 +346,14 @@ abstract final class BrushEngine {
       transforms.add(
         RSTransform.fromComponents(
           rotation: dab.angle,
-          scale: dab.size / AnnotationTextures.tipSize,
+          scale: dab.size / tipSize,
           anchorX: half,
-          anchorY: half,
+          anchorY: rect.height / 2,
           translateX: dab.position.dx,
           translateY: dab.position.dy,
         ),
       );
-      rects.add(AnnotationTextures.tipRect);
+      rects.add(rect);
       colors.add(
         color.withValues(alpha: (dab.alpha * opacity).clamp(0.0, 1.0)),
       );
@@ -464,8 +466,7 @@ abstract final class BrushEngine {
     double u,
     double pressure,
   ) {
-    final grain = spec.grain;
-    if (grain == null || spec.grainDepth <= 0) return;
+    if (!spec.hasGrain) return;
     final depth = (spec.grainDepth * (1 - spec.grainPressure * pressure)).clamp(
       0.0,
       1.0,
@@ -475,18 +476,25 @@ abstract final class BrushEngine {
       bounds,
       Paint()..color = Color.fromRGBO(255, 255, 255, 1 - depth),
     );
+    final custom = spec.grainImage;
     canvas.drawRect(
       bounds,
-      Paint()..shader = grainShader(grain, u * spec.grainScale),
+      Paint()
+        ..shader = custom != null
+            ? imageShader(custom, u * spec.grainScale)
+            : grainShader(spec.grain!, u * spec.grainScale),
     );
     canvas.restore();
   }
 
   /// Textura de grano repetida, fija al papel (no al trazo).
-  static ui.ImageShader grainShader(BrushGrain grain, double scale) {
+  static ui.ImageShader grainShader(BrushGrain grain, double scale) =>
+      imageShader(AnnotationTextures.instance.grain(grain), scale);
+
+  static ui.ImageShader imageShader(ui.Image image, double scale) {
     final s = math.max(0.2, scale);
     return ui.ImageShader(
-      AnnotationTextures.instance.grain(grain),
+      image,
       TileMode.repeated,
       TileMode.repeated,
       Float64List.fromList([s, 0, 0, 0, 0, s, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),

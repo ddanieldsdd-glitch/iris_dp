@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
 
@@ -12,7 +13,7 @@ enum BrushMode { paint, erase, smudge }
 enum BrushArea { none, fill, hatch, crossHatch }
 
 /// Estantes de la biblioteca de pinceles.
-enum BrushCategory { pencil, ink, marker }
+enum BrushCategory { pencil, ink, marker, custom }
 
 /// Pincel por estampado, al estilo de Procreate: una punta [tip] que se
 /// repite a lo largo del trazo cada [spacing] diámetros, recortada por el
@@ -93,6 +94,11 @@ class BrushSpec {
   final double hatchAngle;
   final double hatchGap;
 
+  /// Punta y grano propios (pinceles importados de Procreate): imágenes
+  /// blancas con alfa. Si están, mandan sobre [tip] y [grain].
+  final ui.Image? tipImage;
+  final ui.Image? grainImage;
+
   const BrushSpec({
     required this.id,
     required this.name,
@@ -126,9 +132,98 @@ class BrushSpec {
     this.tiltWidens = false,
     this.hatchAngle = math.pi / 3,
     this.hatchGap = 3.2,
+    this.tipImage,
+    this.grainImage,
   });
 
   bool get isArea => area != BrushArea.none;
+
+  bool get hasGrain => (grain != null || grainImage != null) && grainDepth > 0;
+
+  /// Ajustes que se pueden cambiar en el estudio de pincel o leer de un
+  /// pincel de Procreate.
+  static const tunable = [
+    'defaultWidth',
+    'defaultOpacity',
+    'spacing',
+    'flow',
+    'pressureSize',
+    'pressureOpacity',
+    'taperStart',
+    'taperEnd',
+    'sizeJitter',
+    'scatter',
+    'rotationJitter',
+    'angle',
+    'grainScale',
+    'grainDepth',
+  ];
+
+  Map<String, double> get params => {
+    'defaultWidth': defaultWidth,
+    'defaultOpacity': defaultOpacity,
+    'spacing': spacing,
+    'flow': flow,
+    'pressureSize': pressureSize,
+    'pressureOpacity': pressureOpacity,
+    'taperStart': taperStart,
+    'taperEnd': taperEnd,
+    'sizeJitter': sizeJitter,
+    'scatter': scatter,
+    'rotationJitter': rotationJitter,
+    'angle': angle,
+    'grainScale': grainScale,
+    'grainDepth': grainDepth,
+  };
+
+  /// Variante con otro id, nombre y ajustes.
+  BrushSpec derive({
+    required String id,
+    String? name,
+    BrushCategory? category,
+    Map<String, double> params = const {},
+    ui.Image? tipImage,
+    ui.Image? grainImage,
+    int? defaultColor,
+  }) {
+    double p(String key, double current) => params[key] ?? current;
+    return BrushSpec(
+      id: id,
+      name: name ?? this.name,
+      category: category ?? this.category,
+      family: family,
+      tip: tip,
+      mode: mode,
+      area: area,
+      defaultWidth: p('defaultWidth', defaultWidth),
+      defaultColor: defaultColor ?? this.defaultColor,
+      defaultOpacity: p('defaultOpacity', defaultOpacity),
+      sizeScale: sizeScale,
+      spacing: p('spacing', spacing),
+      flow: p('flow', flow),
+      pressureSize: p('pressureSize', pressureSize),
+      pressureOpacity: p('pressureOpacity', pressureOpacity),
+      taperStart: p('taperStart', taperStart),
+      taperEnd: p('taperEnd', taperEnd),
+      sizeJitter: p('sizeJitter', sizeJitter),
+      opacityJitter: opacityJitter,
+      scatter: p('scatter', scatter),
+      rotationJitter: p('rotationJitter', rotationJitter),
+      angle: p('angle', angle),
+      followDirection: followDirection,
+      grain: grain,
+      grainScale: p('grainScale', grainScale),
+      grainDepth: p('grainDepth', grainDepth),
+      grainPressure: grainPressure,
+      wet: wet,
+      blend: blend,
+      tiltWidens: tiltWidens,
+      hatchAngle: hatchAngle,
+      hatchGap: hatchGap,
+      tipImage: tipImage ?? this.tipImage,
+      grainImage: grainImage ?? this.grainImage,
+    );
+  }
 }
 
 /// Un estilo de dibujo: papel, colores, estante de pinceles y capas iniciales.
@@ -640,15 +735,28 @@ abstract final class BrushCatalog {
     for (final brush in all) brush.id: brush,
   };
 
-  static BrushSpec? byId(String? id) => id == null ? null : _byId[id];
+  /// Pinceles propios de este dispositivo: importados o variantes.
+  static final Map<String, BrushSpec> _custom = {};
+
+  static BrushSpec? byId(String? id) =>
+      id == null ? null : (_byId[id] ?? _custom[id]);
+
+  static List<BrushSpec> get custom => _custom.values.toList();
+
+  static void register(BrushSpec brush) => _custom[brush.id] = brush;
+
+  static void unregister(String id) => _custom.remove(id);
 
   static List<BrushSpec> inCategory(BrushCategory category) =>
-      all.where((brush) => brush.category == category).toList();
+      category == BrushCategory.custom
+      ? custom
+      : all.where((brush) => brush.category == category).toList();
 
   static String categoryLabel(BrushCategory category) => switch (category) {
     BrushCategory.pencil => 'Lápiz y carbón',
     BrushCategory.ink => 'Tinta',
     BrushCategory.marker => 'Rotulador',
+    BrushCategory.custom => 'Míos',
   };
 
   // ─── Estilos ───────────────────────────────────────────────────────────────

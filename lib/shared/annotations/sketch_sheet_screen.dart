@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -14,6 +16,8 @@ import 'annotation_canvas.dart';
 import 'annotation_document.dart';
 import 'annotation_raster.dart';
 import 'annotation_tools.dart';
+import 'brushes/custom_brush_store.dart';
+import 'sheet/brush_studio.dart';
 import 'sheet/sheet_guides.dart';
 import 'sheet/sheet_panels.dart';
 
@@ -184,6 +188,91 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     }
     _baseline = _controller.document;
     _selectBrush(BrushCatalog.byId(_style.shelf.first)!, notify: false);
+    // Pinceles propios (importados o variantes): se cargan aparte.
+    CustomBrushStore.instance.ensureLoaded().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  Future<void> _importBrushes() async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.any,
+      withData: true,
+    );
+    final file = picked?.files.singleOrNull;
+    if (file == null || !mounted) return;
+    final bytes =
+        file.bytes ??
+        (file.path == null ? null : await File(file.path!).readAsBytes());
+    if (bytes == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final added = await CustomBrushStore.instance.importProcreate(
+        bytes,
+        fileName: file.name,
+      );
+      if (!mounted) return;
+      setState(() {});
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            added.length == 1
+                ? 'Pincel «${added.single.name}» importado en «Míos».'
+                : '${added.length} pinceles importados en «Míos».',
+          ),
+        ),
+      );
+    } on FormatException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
+  Future<void> _tuneBrush(BrushSpec brush) async {
+    final result = await showBrushStudio(
+      context,
+      base: brush,
+      color: _color,
+      paper: _controller.document.paper ?? AnnotationPaper.white,
+    );
+    if (result == null || !mounted) return;
+    final saved = await CustomBrushStore.instance.saveVariant(
+      brush,
+      name: result.name,
+      params: result.params,
+      color: _color.toARGB32(),
+    );
+    if (saved == null || !mounted) return;
+    _selectBrush(saved);
+  }
+
+  Future<void> _deleteBrush(BrushSpec brush) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('¿Quitar «${brush.name}»?'),
+        content: const Text(
+          'Lo que ya dibujaste con él se seguirá viendo, pintado con un '
+          'pincel parecido.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Quitar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    if (_paintBrushId == brush.id) {
+      _paintBrushId = _style.shelf.first;
+    }
+    if (_eraseBrushId == brush.id) _eraseBrushId = 'eraser.kneaded';
+    await CustomBrushStore.instance.delete(brush.id);
+    if (mounted) setState(() {});
   }
 
   static SketchStyle? _styleFromLayers(AnnotationDocument doc) {
@@ -1066,6 +1155,9 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
             _selectBrush(brush);
             setState(() => _panel = null);
           },
+          onImport: _importBrushes,
+          onTune: erase ? null : _tuneBrush,
+          onDelete: _deleteBrush,
         );
       case _Panel.layers:
         return LayersPanel(
