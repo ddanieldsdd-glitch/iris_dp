@@ -43,6 +43,7 @@ enum _Mode {
   select,
   line,
   arrow,
+  path,
   text,
   stamp,
   eraseStroke,
@@ -132,6 +133,9 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
   bool _magnet = true;
   bool _onion = true;
   double _onionOpacity = 0.3;
+  bool _gridMagnet = false;
+  double _metersPerSquare = 1;
+  bool _fullFrame = false;
   bool _straighten = true;
   bool _fingerDraws = true;
   bool _stylusSeen = false;
@@ -243,7 +247,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     _Mode.erase => AnnotationToolType.eraseArea,
     _Mode.select => AnnotationToolType.select,
     _Mode.line => AnnotationToolType.line,
-    _Mode.arrow => AnnotationToolType.arrow,
+    _Mode.arrow || _Mode.path => AnnotationToolType.arrow,
     _Mode.text => AnnotationToolType.text,
     _Mode.stamp => AnnotationToolType.stamp,
     _Mode.eraseStroke => AnnotationToolType.eraser,
@@ -254,6 +258,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     // La recta se pinta con el pincel elegido si es de trazo.
     _Mode.line =>
       BrushCatalog.byId(_paintBrushId)!.isArea ? null : _paintBrushId,
+    _Mode.path => AnnotationBrushes.pathArrowId,
     _ => null,
   };
 
@@ -262,7 +267,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
   double get _canvasWidth => switch (_mode) {
     _Mode.line =>
       _widths[_widthKey] ?? BrushCatalog.byId(_paintBrushId)!.defaultWidth,
-    _Mode.arrow => 5,
+    _Mode.arrow || _Mode.path => 4,
     _ => _width,
   };
 
@@ -271,12 +276,21 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     if (_style.id == BrushCatalog.planStyle.id) {
       final wanted = switch (_mode) {
         _Mode.stamp => switch (_stampKind) {
-          AnnotationStampKind.camera => 'camaras',
+          AnnotationStampKind.camera ||
+          AnnotationStampKind.dolly ||
+          AnnotationStampKind.crane => 'camaras',
           AnnotationStampKind.actor => 'personajes',
           AnnotationStampKind.text => 'notas',
+          AnnotationStampKind.window ||
+          AnnotationStampKind.door ||
+          AnnotationStampKind.table ||
+          AnnotationStampKind.chair ||
+          AnnotationStampKind.sofa ||
+          AnnotationStampKind.car => 'decorado',
           _ => 'luz',
         },
         _Mode.text => 'notas',
+        _Mode.path => 'camaras',
         _ => null,
       };
       if (wanted != null && _controller.layerById(wanted) != null) {
@@ -472,6 +486,22 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     }
   }
 
+  static String _formatMeters(double m) =>
+      m == m.roundToDouble() ? '${m.round()} m' : '${m.toStringAsFixed(1)} m';
+
+  /// Óptica de la cámara seleccionada: su ángulo de visión se calcula con el
+  /// ancho del sensor (Super 35 o full frame).
+  void _setLens(AnnotationStamp stamp, double mm) {
+    _controller.updateStamp(
+      stamp.id,
+      lensMm: mm,
+      spread: AnnotationBrushes.fieldOfView(
+        mm,
+        sensorWidthMm: _fullFrame ? 36 : 24.9,
+      ),
+    );
+  }
+
   // ─── Gestos de varios dedos ────────────────────────────────────────────────
 
   void _onAnyPointerDown(PointerDownEvent event) {
@@ -629,7 +659,8 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                           if (_panel == null &&
                               (_mode == _Mode.stamp ||
                                   _mode == _Mode.select ||
-                                  _mode == _Mode.text))
+                                  _mode == _Mode.text ||
+                                  _mode == _Mode.path))
                             Positioned(
                               right: 12,
                               bottom: 12,
@@ -720,6 +751,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
             (_Mode.select, 'Mover', Icons.open_with),
             (_Mode.line, 'Recta', Icons.horizontal_rule),
             (_Mode.arrow, 'Flecha', Icons.north_east),
+            (_Mode.path, 'Recorrido', Icons.route_outlined),
             (_Mode.text, 'Texto', Icons.title),
             (_Mode.stamp, 'Sellos', Icons.videocam_outlined),
             (_Mode.eraseStroke, 'Borrar trazo', Icons.auto_fix_off),
@@ -880,6 +912,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
       streamline: _mode == _Mode.paint ? _streamline : 0,
       resolutionScale: _rasterZoom,
       lineSnap: _magnet && _perspective.enabled ? _perspective.snap : null,
+      gridStep: !_storyboard && _guides && _gridMagnet ? 1 / 16 : null,
       onTextRequested: () => _askText(),
       onStampEditRequested: _nameStamp,
     );
@@ -913,6 +946,21 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                 IgnorePointer(
                   child: CustomPaint(
                     painter: _GuidesPainter(thirds: _storyboard),
+                  ),
+                ),
+              if (!_storyboard && _guides)
+                Positioned(
+                  left: 8,
+                  bottom: 6,
+                  child: IgnorePointer(
+                    child: Text(
+                      '1 cuadro = ${_formatMeters(_metersPerSquare)}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0x992997FF),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               if (_frame != SheetFrame.none || _safeArea)
@@ -1087,6 +1135,30 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
             value: _guides,
             onChanged: (v) => setState(() => _guides = v),
           ),
+          if (!_storyboard && _guides) ...[
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Imán de rejilla'),
+              subtitle: const Text('Los sellos caen en los cruces.'),
+              value: _gridMagnet,
+              onChanged: (v) => setState(() => _gridMagnet = v),
+            ),
+            Text('Escala', style: AppTypography.label(palette)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              children: [
+                for (final m in const [0.5, 1.0, 2.0])
+                  ChoiceChip(
+                    label: Text('1 cuadro = ${_formatMeters(m)}'),
+                    selected: _metersPerSquare == m,
+                    onSelected: (_) => setState(() => _metersPerSquare = m),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
           if (_storyboard) ...[
             Text('Encuadre', style: AppTypography.label(palette)),
             const SizedBox(height: 6),
@@ -1264,24 +1336,36 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
               AnnotationTools.hint(_canvasTool),
               style: AppTypography.caption(palette),
             ),
-            if (_mode == _Mode.stamp) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final kind in AnnotationStampKind.values.where(
-                    (k) => k != AnnotationStampKind.text,
-                  ))
-                    _StampChoice(
-                      kind: kind,
-                      color: _color,
-                      selected: _stampKind == kind,
-                      onTap: () => setState(() => _stampKind = kind),
-                    ),
-                ],
+            if (_mode == _Mode.stamp)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 360),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final (group, kinds)
+                          in AnnotationTools.stampGroups) ...[
+                        const SizedBox(height: 10),
+                        Text(group, style: AppTypography.label(palette)),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            for (final kind in kinds)
+                              _StampChoice(
+                                kind: kind,
+                                color: _color,
+                                selected: _stampKind == kind,
+                                onTap: () => setState(() => _stampKind = kind),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
-            ],
             if (_mode == _Mode.stamp || _mode == _Mode.text) ...[
               const SizedBox(height: 8),
               Text('Tamaño', style: AppTypography.caption(palette)),
@@ -1311,6 +1395,43 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                   ),
                   onChangeEnd: (_) => _controller.endGesture(),
                 ),
+              if (selected.kind == AnnotationStampKind.camera ||
+                  selected.kind == AnnotationStampKind.dolly ||
+                  selected.kind == AnnotationStampKind.crane) ...[
+                Text('Óptica', style: AppTypography.caption(palette)),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: [
+                    for (final mm in const [
+                      18.0,
+                      25.0,
+                      35.0,
+                      50.0,
+                      85.0,
+                      135.0,
+                    ])
+                      ChoiceChip(
+                        label: Text('${mm.round()}'),
+                        selected: selected.lensMm == mm,
+                        visualDensity: VisualDensity.compact,
+                        onSelected: (_) => _setLens(selected, mm),
+                      ),
+                    FilterChip(
+                      label: const Text('Full frame'),
+                      selected: _fullFrame,
+                      visualDensity: VisualDensity.compact,
+                      onSelected: (v) {
+                        setState(() => _fullFrame = v);
+                        final lens = selected.lensMm;
+                        if (lens != null) _setLens(selected, lens);
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
               Wrap(
                 spacing: 6,
                 children: [
@@ -1522,8 +1643,8 @@ class _StampChoice extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          width: 60,
-          height: 60,
+          width: 52,
+          height: 52,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
@@ -1560,8 +1681,14 @@ class _StampPreviewPainter extends CustomPainter {
     // Se dibuja mirando a la derecha y algo desplazado a la izquierda para
     // que quepa el haz o el ángulo de visión.
     final offsetX = switch (kind) {
-      AnnotationStampKind.camera || AnnotationStampKind.light => 0.3,
-      AnnotationStampKind.softbox || AnnotationStampKind.sun => 0.38,
+      AnnotationStampKind.camera ||
+      AnnotationStampKind.light ||
+      AnnotationStampKind.fresnel ||
+      AnnotationStampKind.hmi => 0.3,
+      AnnotationStampKind.softbox ||
+      AnnotationStampKind.ledPanel ||
+      AnnotationStampKind.sun => 0.38,
+      AnnotationStampKind.crane => 0.42,
       _ => 0.5,
     };
     AnnotationBrushes.paintStamp(

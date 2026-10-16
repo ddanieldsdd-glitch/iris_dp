@@ -110,6 +110,9 @@ class AnnotationCanvasController extends ChangeNotifier {
     double? size,
     int? colorArgb,
     String? label,
+    double? spread,
+    double? reach,
+    double? lensMm,
     bool commit = true,
   }) {
     final index = _document.stamps.indexWhere((stamp) => stamp.id == id);
@@ -122,6 +125,9 @@ class AnnotationCanvasController extends ChangeNotifier {
       size: size,
       colorArgb: colorArgb,
       label: label,
+      spread: spread,
+      reach: reach,
+      lensMm: lensMm,
     );
     final document = _document.copyWith(stamps: next);
     if (commit) {
@@ -598,6 +604,9 @@ class AnnotationCanvas extends StatefulWidget {
   /// Zoom con el que se ve el folio: sube la resolución de las capas.
   final double resolutionScale;
 
+  /// Rejilla con imán para los sellos (fracción del lado corto), o `null`.
+  final double? gridStep;
+
   /// Imán de las rectas (p. ej. hacia los puntos de fuga): recibe inicio y
   /// final en píxeles y devuelve el final ajustado, o `null` para usar el
   /// ajuste a 45°.
@@ -631,13 +640,14 @@ class AnnotationCanvas extends StatefulWidget {
     this.streamline = 0,
     this.resolutionScale = 1,
     this.lineSnap,
+    this.gridStep,
   });
 
   @override
   State<AnnotationCanvas> createState() => _AnnotationCanvasState();
 }
 
-enum _StampDrag { move, rotate }
+enum _StampDrag { move, rotate, beam }
 
 class _AnnotationCanvasState extends State<AnnotationCanvas> {
   static const _holdDelay = Duration(milliseconds: 450);
@@ -656,6 +666,8 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
 
   AnnotationStamp? _liveStamp;
   Offset? _downDoc;
+  Offset _stampStart = Offset.zero;
+  Offset _moveStart = Offset.zero;
   _StampDrag? _stampDrag;
   bool _stampDragMoved = false;
   bool _tappedSelected = false;
@@ -789,12 +801,13 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
         _beginSelect(docPoint);
         return;
       case AnnotationToolType.stamp:
-        final p = _pointFor(event);
+        final raw = _pointFor(event);
+        final p = _snapToGrid(Offset(raw.x, raw.y));
         _liveStamp = AnnotationStamp(
           id: _newId(),
           kind: widget.stampKind,
-          x: p.x,
-          y: p.y,
+          x: p.dx,
+          y: p.dy,
           rotation: -math.pi / 2,
           size: widget.stampSize,
           colorArgb: widget.color.toARGB32(),
@@ -821,6 +834,15 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     _stampDragMoved = false;
     _tappedSelected = false;
     if (selected != null &&
+        AnnotationBrushes.hasBeam(selected.kind) &&
+        (docPoint - AnnotationBrushes.beamHandle(selected, _documentSize))
+                .distance <=
+            16) {
+      _stampDrag = _StampDrag.beam;
+      controller.beginGesture();
+      return;
+    }
+    if (selected != null &&
         selected.kind != AnnotationStampKind.text &&
         (docPoint - AnnotationBrushes.stampHandle(selected, _documentSize))
                 .distance <=
@@ -837,6 +859,9 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     }
     _tappedSelected = hit == controller.selectedStampId;
     controller.selectStamp(hit);
+    final stamp = controller.selectedStamp!;
+    _stampStart = Offset(stamp.x, stamp.y);
+    _moveStart = docPoint;
     _stampDrag = _StampDrag.move;
     controller.beginGesture();
   }
@@ -904,16 +929,51 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
         rotation: _snapAngle((docPoint - center).direction),
         commit: false,
       );
-    } else {
-      final delta = docPoint - down;
-      _downDoc = docPoint;
+    } else if (_stampDrag == _StampDrag.beam) {
+      final center = AnnotationBrushes.stampCenter(stamp, _documentSize);
+      final v = docPoint - center;
+      final r = math.max(
+        1.0,
+        AnnotationBrushes.stampRadius(stamp, _documentSize),
+      );
+      var diff = v.direction - stamp.rotation;
+      while (diff > math.pi) {
+        diff -= 2 * math.pi;
+      }
+      while (diff < -math.pi) {
+        diff += 2 * math.pi;
+      }
       controller.updateStamp(
         stamp.id,
-        x: (stamp.x + delta.dx / _documentSize.width).clamp(0.0, 1.0),
-        y: (stamp.y + delta.dy / _documentSize.height).clamp(0.0, 1.0),
+        spread: (diff.abs() * 2).clamp(0.09, 2.97),
+        reach: (v.distance / r).clamp(0.8, 12.0),
+        commit: false,
+      );
+    } else {
+      final delta = docPoint - _moveStart;
+      final p = _snapToGrid(
+        Offset(
+          _stampStart.dx + delta.dx / _documentSize.width,
+          _stampStart.dy + delta.dy / _documentSize.height,
+        ),
+      );
+      controller.updateStamp(
+        stamp.id,
+        x: p.dx.clamp(0.0, 1.0),
+        y: p.dy.clamp(0.0, 1.0),
         commit: false,
       );
     }
+  }
+
+  /// Ajusta una posición normalizada a la rejilla con imán.
+  Offset _snapToGrid(Offset p) {
+    final step = widget.gridStep;
+    if (step == null || step <= 0) return p;
+    final px = step * _documentSize.shortestSide;
+    final x = (p.dx * _documentSize.width / px).round() * px;
+    final y = (p.dy * _documentSize.height / px).round() * px;
+    return Offset(x / _documentSize.width, y / _documentSize.height);
   }
 
   Future<void> _onPointerUp(PointerEvent event) async {

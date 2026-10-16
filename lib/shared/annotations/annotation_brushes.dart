@@ -40,6 +40,10 @@ abstract final class AnnotationBrushes {
     _ => true,
   };
 
+  /// Flecha de recorrido (movimiento de cámara o de actor): sigue el trazo,
+  /// discontinua.
+  static const pathArrowId = 'arrow.path';
+
   static double unit(Size size) => math.min(size.width, size.height) / 1000;
 
   static void paintStroke(Canvas canvas, Size size, AnnotationStroke stroke) {
@@ -56,7 +60,11 @@ abstract final class AnnotationBrushes {
 
     switch (stroke.tool) {
       case AnnotationToolType.arrow:
-        _arrow(canvas, pts, base.withValues(alpha: opacity), w);
+        if (stroke.brushId == pathArrowId) {
+          _pathArrow(canvas, pts, base.withValues(alpha: opacity), w);
+        } else {
+          _arrow(canvas, pts, base.withValues(alpha: opacity), w);
+        }
       case AnnotationToolType.highlighter:
         _layered(canvas, size, 0.35 * opacity, () {
           _plainPath(canvas, pts, base, w, closed: stroke.closed);
@@ -366,6 +374,33 @@ abstract final class AnnotationBrushes {
     canvas.restore();
   }
 
+  static void _pathArrow(
+    Canvas canvas,
+    List<Offset> pts,
+    Color color,
+    double w,
+  ) {
+    if (pts.length < 2) return;
+    final path = _smoothPath(pts);
+    final paint = _strokePaint(color, w);
+    final dash = math.max(6.0, w * 3);
+    for (final metric in path.computeMetrics()) {
+      for (var d = 0.0; d < metric.length; d += dash * 2) {
+        canvas.drawPath(
+          metric.extractPath(d, math.min(metric.length, d + dash)),
+          paint,
+        );
+      }
+      final tip = metric.getTangentForOffset(metric.length);
+      final back = metric.getTangentForOffset(
+        math.max(0, metric.length - dash * 1.5),
+      );
+      if (tip != null && back != null) {
+        _arrow(canvas, [back.position, tip.position], color, w);
+      }
+    }
+  }
+
   static void _arrow(Canvas canvas, List<Offset> pts, Color color, double w) {
     if (pts.length < 2) {
       canvas.drawCircle(pts.single, w / 2, Paint()..color = color);
@@ -479,6 +514,50 @@ abstract final class AnnotationBrushes {
       stampCenter(stamp, size) +
       Offset.fromDirection(stamp.rotation, stampRadius(stamp, size) * 1.7);
 
+  /// Sellos con haz o ángulo de visión que se puede abrir y alargar.
+  static bool hasBeam(AnnotationStampKind kind) => switch (kind) {
+    AnnotationStampKind.camera ||
+    AnnotationStampKind.light ||
+    AnnotationStampKind.fresnel ||
+    AnnotationStampKind.hmi ||
+    AnnotationStampKind.ledPanel ||
+    AnnotationStampKind.softbox ||
+    AnnotationStampKind.crane ||
+    AnnotationStampKind.dolly => true,
+    _ => false,
+  };
+
+  /// Apertura (radianes) y alcance (radios) por defecto de cada sello.
+  static (double, double) beamDefaults(AnnotationStampKind kind) =>
+      switch (kind) {
+        AnnotationStampKind.camera ||
+        AnnotationStampKind.dolly ||
+        AnnotationStampKind.crane => (0.82, 2.6),
+        AnnotationStampKind.fresnel => (0.6, 2.6),
+        AnnotationStampKind.hmi => (0.5, 3.0),
+        AnnotationStampKind.ledPanel => (1.5, 1.8),
+        AnnotationStampKind.softbox => (1.6, 1.8),
+        _ => (0.7, 2.2),
+      };
+
+  static double beamSpread(AnnotationStamp stamp) =>
+      stamp.spread ?? beamDefaults(stamp.kind).$1;
+
+  static double beamReach(AnnotationStamp stamp) =>
+      stamp.reach ?? beamDefaults(stamp.kind).$2;
+
+  /// Tirador del borde del haz: arrastrarlo abre o cierra y alarga.
+  static Offset beamHandle(AnnotationStamp stamp, Size size) =>
+      stampCenter(stamp, size) +
+      Offset.fromDirection(
+        stamp.rotation + beamSpread(stamp) / 2,
+        beamReach(stamp) * stampRadius(stamp, size),
+      );
+
+  /// Ángulo de visión horizontal de una óptica, en radianes.
+  static double fieldOfView(double lensMm, {double sensorWidthMm = 24.9}) =>
+      2 * math.atan(sensorWidthMm / (2 * lensMm));
+
   static void paintStamp(
     Canvas canvas,
     Size size,
@@ -498,23 +577,72 @@ abstract final class AnnotationBrushes {
       canvas.save();
       canvas.translate(c.dx, c.dy);
       canvas.rotate(stamp.rotation);
+      final spread = beamSpread(stamp);
+      final reach = beamReach(stamp);
       switch (stamp.kind) {
         case AnnotationStampKind.camera:
+          _fov(canvas, r, spread, reach, color);
           _camera(canvas, r, line, fill, paper, color);
+        case AnnotationStampKind.dolly:
+          _dolly(canvas, r, line, paper);
+          _fov(canvas, r, spread, reach, color);
+          _camera(canvas, r * 0.8, line, fill, paper, color);
+        case AnnotationStampKind.crane:
+          _crane(canvas, r, line, fill, paper, color, spread, reach);
         case AnnotationStampKind.actor:
           _actor(canvas, r, line, fill, paper);
         case AnnotationStampKind.light:
+          _beam(canvas, r, spread, reach, color);
           _light(canvas, r, line, fill, color);
+        case AnnotationStampKind.fresnel:
+          _beam(canvas, r, spread, reach, color);
+          _fresnel(canvas, r, line, fill, paper);
+        case AnnotationStampKind.hmi:
+          _beam(canvas, r, spread, reach, color);
+          _hmi(canvas, r, line, fill, paper);
+        case AnnotationStampKind.ledPanel:
+          _spill(canvas, r, spread, reach, color);
+          _ledPanel(canvas, r, line, paper);
+        case AnnotationStampKind.tube:
+          _tube(canvas, r, line, paper, color);
         case AnnotationStampKind.softbox:
+          _spill(canvas, r, spread, reach, color);
           _softbox(canvas, r, line, paper, color);
         case AnnotationStampKind.sun:
           _sun(canvas, r, line, paper);
         case AnnotationStampKind.frame:
           _frame(canvas, r, line);
+        case AnnotationStampKind.bounce:
+          _bounce(canvas, r, line, paper);
+        case AnnotationStampKind.diffusion:
+          _diffusion(canvas, r, line, color);
+        case AnnotationStampKind.window:
+          _window(canvas, r, line, paper);
+        case AnnotationStampKind.door:
+          _door(canvas, r, line);
+        case AnnotationStampKind.table:
+          _table(canvas, r, line, paper);
+        case AnnotationStampKind.chair:
+          _chair(canvas, r, line, paper);
+        case AnnotationStampKind.sofa:
+          _sofa(canvas, r, line, paper);
+        case AnnotationStampKind.car:
+          _car(canvas, r, line, paper);
         case AnnotationStampKind.text:
           break;
       }
       canvas.restore();
+      final lens = stamp.lensMm;
+      if (lens != null && stamp.kind == AnnotationStampKind.camera) {
+        _text(
+          canvas,
+          '${lens.round()} mm',
+          c + Offset.fromDirection(stamp.rotation, r * (reach + 0.35)),
+          color,
+          math.max(8, r * 0.34),
+          center: true,
+        );
+      }
       final label = stamp.label;
       if (label != null && label.isNotEmpty) {
         _text(
@@ -544,6 +672,18 @@ abstract final class AnnotationBrushes {
         canvas.drawCircle(h, 7, Paint()..color = const Color(0xFF2997FF));
         canvas.drawCircle(h, 7, ring..color = Colors.white);
       }
+      if (hasBeam(stamp.kind)) {
+        final b = beamHandle(stamp, size);
+        canvas.drawCircle(b, 7, Paint()..color = const Color(0xFFFFB300));
+        canvas.drawCircle(
+          b,
+          7,
+          Paint()
+            ..color = Colors.white
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5,
+        );
+      }
     }
   }
 
@@ -556,19 +696,6 @@ abstract final class AnnotationBrushes {
     Paint paper,
     Color color,
   ) {
-    final fov = Paint()
-      ..color = color.withValues(alpha: 0.45)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(1, r * 0.04);
-    for (final side in [-1.0, 1.0]) {
-      _dashed(
-        canvas,
-        Offset(r * 0.62, side * r * 0.18),
-        Offset(r * 2.6, side * r * 1.05),
-        fov,
-        r * 0.12,
-      );
-    }
     final body = RRect.fromRectAndRadius(
       Rect.fromLTRB(-r * 0.7, -r * 0.42, r * 0.22, r * 0.42),
       Radius.circular(r * 0.08),
@@ -618,19 +745,6 @@ abstract final class AnnotationBrushes {
     Paint fill,
     Color color,
   ) {
-    final beam = Path()
-      ..moveTo(r * 0.2, -r * 0.3)
-      ..lineTo(r * 2.2, -r * 1.0)
-      ..lineTo(r * 2.2, r * 1.0)
-      ..lineTo(r * 0.2, r * 0.3)
-      ..close();
-    canvas.drawPath(beam, Paint()..color = color.withValues(alpha: 0.10));
-    final edge = Paint()
-      ..color = color.withValues(alpha: 0.55)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(1, r * 0.045);
-    canvas.drawLine(Offset(r * 0.2, -r * 0.3), Offset(r * 2.2, -r * 1.0), edge);
-    canvas.drawLine(Offset(r * 0.2, r * 0.3), Offset(r * 2.2, r * 1.0), edge);
     final body = Rect.fromLTRB(-r * 0.55, -r * 0.32, r * 0.2, r * 0.32);
     canvas.drawRect(body, fill);
     // Viseras.
@@ -653,18 +767,6 @@ abstract final class AnnotationBrushes {
     Paint paper,
     Color color,
   ) {
-    final spill = Path()
-      ..moveTo(r * 0.1, -r * 0.8)
-      ..lineTo(r * 1.8, -r * 1.3)
-      ..lineTo(r * 1.8, r * 1.3)
-      ..lineTo(r * 0.1, r * 0.8)
-      ..close();
-    canvas.drawPath(
-      spill,
-      Paint()
-        ..color = color.withValues(alpha: 0.08)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.15),
-    );
     final box = Path()
       ..moveTo(-r * 0.5, -r * 0.25)
       ..lineTo(r * 0.1, -r * 0.8)
@@ -719,6 +821,364 @@ abstract final class AnnotationBrushes {
     canvas.drawLine(Offset(0, -r), Offset(0, r), bar);
     canvas.drawLine(Offset(-r * 0.18, -r), Offset(r * 0.18, -r), line);
     canvas.drawLine(Offset(-r * 0.18, r), Offset(r * 0.18, r), line);
+  }
+
+  /// Ángulo de visión punteado desde el objetivo.
+  static void _fov(
+    Canvas canvas,
+    double r,
+    double spread,
+    double reach,
+    Color color,
+  ) {
+    final fov = Paint()
+      ..color = color.withValues(alpha: 0.5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1, r * 0.04);
+    final origin = Offset(r * 0.62, 0);
+    for (final side in [-1.0, 1.0]) {
+      _dashed(
+        canvas,
+        origin,
+        Offset.fromDirection(side * spread / 2, r * reach),
+        fov,
+        r * 0.12,
+      );
+    }
+    canvas.drawPath(
+      Path()
+        ..moveTo(origin.dx, origin.dy)
+        ..lineTo(
+          Offset.fromDirection(-spread / 2, r * reach).dx,
+          Offset.fromDirection(-spread / 2, r * reach).dy,
+        )
+        ..arcTo(
+          Rect.fromCircle(center: Offset.zero, radius: r * reach),
+          -spread / 2,
+          spread,
+          false,
+        )
+        ..close(),
+      Paint()..color = color.withValues(alpha: 0.05),
+    );
+  }
+
+  /// Haz de un foco: la «Λ» de los bocetos, abierta según [spread].
+  static void _beam(
+    Canvas canvas,
+    double r,
+    double spread,
+    double reach,
+    Color color,
+  ) {
+    final a = Offset(r * 0.2, -r * 0.3);
+    final b = Offset(r * 0.2, r * 0.3);
+    final far1 = Offset.fromDirection(-spread / 2, r * reach) + a;
+    final far2 = Offset.fromDirection(spread / 2, r * reach) + b;
+    canvas.drawPath(
+      Path()
+        ..moveTo(a.dx, a.dy)
+        ..lineTo(far1.dx, far1.dy)
+        ..lineTo(far2.dx, far2.dy)
+        ..lineTo(b.dx, b.dy)
+        ..close(),
+      Paint()..color = color.withValues(alpha: 0.10),
+    );
+    final edge = Paint()
+      ..color = color.withValues(alpha: 0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1, r * 0.045);
+    canvas.drawLine(a, far1, edge);
+    canvas.drawLine(b, far2, edge);
+  }
+
+  /// Luz difusa: mancha blanda que se abre (panel, softbox).
+  static void _spill(
+    Canvas canvas,
+    double r,
+    double spread,
+    double reach,
+    Color color,
+  ) {
+    final far1 = Offset.fromDirection(-spread / 2, r * reach);
+    final far2 = Offset.fromDirection(spread / 2, r * reach);
+    canvas.drawPath(
+      Path()
+        ..moveTo(r * 0.1, -r * 0.8)
+        ..lineTo(far1.dx, math.min(far1.dy, -r * 0.8))
+        ..lineTo(far2.dx, math.max(far2.dy, r * 0.8))
+        ..lineTo(r * 0.1, r * 0.8)
+        ..close(),
+      Paint()
+        ..color = color.withValues(alpha: 0.09)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.15),
+    );
+  }
+
+  /// Dolly: plataforma con ruedas sobre la vía.
+  static void _dolly(Canvas canvas, double r, Paint line, Paint paper) {
+    final rail = Paint()
+      ..color = line.color.withValues(alpha: 0.6)
+      ..strokeWidth = line.strokeWidth * 0.8;
+    for (final side in [-1.0, 1.0]) {
+      canvas.drawLine(
+        Offset(-r * 2.2, side * r * 0.62),
+        Offset(r * 2.2, side * r * 0.62),
+        rail,
+      );
+    }
+    for (var x = -r * 2.0; x <= r * 2.0; x += r * 0.5) {
+      canvas.drawLine(Offset(x, -r * 0.75), Offset(x, r * 0.75), rail);
+    }
+    final deck = Rect.fromCenter(
+      center: Offset.zero,
+      width: r * 1.6,
+      height: r * 1.1,
+    );
+    canvas.drawRect(deck, paper);
+    canvas.drawRect(deck, line);
+  }
+
+  /// Grúa: base, brazo y cabeza con su ángulo de visión.
+  static void _crane(
+    Canvas canvas,
+    double r,
+    Paint line,
+    Paint fill,
+    Paint paper,
+    Color color,
+    double spread,
+    double reach,
+  ) {
+    canvas.drawCircle(Offset(-r * 0.6, 0), r * 0.45, paper);
+    canvas.drawCircle(Offset(-r * 0.6, 0), r * 0.45, line);
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: Offset(-r * 1.2, 0),
+        width: r * 0.4,
+        height: r * 0.5,
+      ),
+      fill,
+    );
+    canvas.drawLine(
+      Offset(-r * 0.6, 0),
+      Offset(r * 1.2, 0),
+      Paint()
+        ..color = line.color
+        ..strokeWidth = line.strokeWidth * 2.2,
+    );
+    canvas.save();
+    canvas.translate(r * 1.2, 0);
+    _fov(canvas, r * 0.6, spread, reach, color);
+    _camera(canvas, r * 0.6, line, fill, paper, color);
+    canvas.restore();
+  }
+
+  static void _fresnel(
+    Canvas canvas,
+    double r,
+    Paint line,
+    Paint fill,
+    Paint paper,
+  ) {
+    final body = Rect.fromLTRB(-r * 0.6, -r * 0.38, r * 0.15, r * 0.38);
+    canvas.drawRect(body, fill);
+    // Lente escalonada.
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(r * 0.05, 0), radius: r * 0.42),
+      -math.pi / 3,
+      2 * math.pi / 3,
+      false,
+      line,
+    );
+    canvas.drawLine(
+      Offset(r * 0.15, -r * 0.38),
+      Offset(r * 0.45, -r * 0.6),
+      line,
+    );
+    canvas.drawLine(
+      Offset(r * 0.15, r * 0.38),
+      Offset(r * 0.45, r * 0.6),
+      line,
+    );
+  }
+
+  static void _hmi(
+    Canvas canvas,
+    double r,
+    Paint line,
+    Paint fill,
+    Paint paper,
+  ) {
+    final body = Rect.fromLTRB(-r * 0.7, -r * 0.45, r * 0.2, r * 0.45);
+    canvas.drawRect(body, fill);
+    canvas.drawLine(
+      Offset(r * 0.28, -r * 0.45),
+      Offset(r * 0.28, r * 0.45),
+      line,
+    );
+    // Balasto con su cable.
+    final ballast = Rect.fromCenter(
+      center: Offset(-r * 1.4, r * 0.5),
+      width: r * 0.5,
+      height: r * 0.35,
+    );
+    canvas.drawRect(ballast, paper);
+    canvas.drawRect(ballast, line);
+    canvas.drawLine(Offset(-r * 0.7, 0), ballast.topRight, line);
+  }
+
+  static void _ledPanel(Canvas canvas, double r, Paint line, Paint paper) {
+    final panel = Rect.fromLTRB(-r * 0.12, -r * 0.85, r * 0.12, r * 0.85);
+    canvas.drawRect(panel, paper);
+    canvas.drawRect(panel, line);
+    for (var y = -r * 0.6; y <= r * 0.6; y += r * 0.3) {
+      canvas.drawCircle(Offset(0, y), r * 0.05, Paint()..color = line.color);
+    }
+    canvas.drawLine(Offset(-r * 0.12, 0), Offset(-r * 0.45, 0), line);
+  }
+
+  static void _tube(
+    Canvas canvas,
+    double r,
+    Paint line,
+    Paint paper,
+    Color color,
+  ) {
+    final glow = RRect.fromRectAndRadius(
+      Rect.fromLTRB(-r * 0.55, -r * 1.1, r * 0.55, r * 1.1),
+      Radius.circular(r * 0.5),
+    );
+    canvas.drawRRect(
+      glow,
+      Paint()
+        ..color = color.withValues(alpha: 0.10)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.2),
+    );
+    final tube = RRect.fromRectAndRadius(
+      Rect.fromLTRB(-r * 0.1, -r, r * 0.1, r),
+      Radius.circular(r * 0.1),
+    );
+    canvas.drawRRect(tube, paper);
+    canvas.drawRRect(tube, line);
+  }
+
+  /// Rebotador: panel blanco con su cara reflectante punteada.
+  static void _bounce(Canvas canvas, double r, Paint line, Paint paper) {
+    final board = Rect.fromLTRB(-r * 0.14, -r, r * 0.14, r);
+    canvas.drawRect(board, paper);
+    canvas.drawRect(board, line);
+    _dashed(
+      canvas,
+      Offset(r * 0.28, -r * 0.9),
+      Offset(r * 0.28, r * 0.9),
+      line,
+      r * 0.1,
+    );
+  }
+
+  /// Difusor (6×6, 12×12): marco con la tela en trazo fino.
+  static void _diffusion(Canvas canvas, double r, Paint line, Color color) {
+    _frame(canvas, r, line);
+    final cloth = Paint()
+      ..color = color.withValues(alpha: 0.35)
+      ..strokeWidth = r * 0.22;
+    canvas.drawLine(Offset(0, -r * 0.92), Offset(0, r * 0.92), cloth);
+  }
+
+  /// Ventana en planta: muro con doble línea de vidrio.
+  static void _window(Canvas canvas, double r, Paint line, Paint paper) {
+    final wall = Rect.fromLTRB(-r * 0.16, -r * 1.2, r * 0.16, r * 1.2);
+    canvas.drawRect(wall, paper);
+    canvas.drawRect(wall, line);
+    canvas.drawLine(Offset(0, -r * 1.2), Offset(0, r * 1.2), line);
+  }
+
+  /// Puerta: hoja y arco de apertura.
+  static void _door(Canvas canvas, double r, Paint line) {
+    canvas.drawLine(Offset(0, -r), Offset(r * 1.6, -r), line);
+    final arc = Paint()
+      ..color = line.color.withValues(alpha: 0.6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = line.strokeWidth * 0.7;
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(0, -r), radius: r * 1.6),
+      0,
+      math.pi / 2,
+      false,
+      arc,
+    );
+    canvas.drawLine(Offset(0, -r), Offset(0, r * 0.6), line);
+  }
+
+  static void _table(Canvas canvas, double r, Paint line, Paint paper) {
+    final top = Rect.fromCenter(
+      center: Offset.zero,
+      width: r * 1.2,
+      height: r * 1.8,
+    );
+    canvas.drawRect(top, paper);
+    canvas.drawRect(top, line);
+  }
+
+  static void _chair(Canvas canvas, double r, Paint line, Paint paper) {
+    final seat = Rect.fromCenter(
+      center: Offset.zero,
+      width: r * 0.9,
+      height: r * 0.9,
+    );
+    canvas.drawRect(seat, paper);
+    canvas.drawRect(seat, line);
+    // Respaldo detrás: mira hacia la derecha.
+    canvas.drawLine(
+      Offset(-r * 0.55, -r * 0.45),
+      Offset(-r * 0.55, r * 0.45),
+      Paint()
+        ..color = line.color
+        ..strokeWidth = line.strokeWidth * 2.5,
+    );
+  }
+
+  static void _sofa(Canvas canvas, double r, Paint line, Paint paper) {
+    final body = Rect.fromCenter(
+      center: Offset.zero,
+      width: r * 1.0,
+      height: r * 2.2,
+    );
+    canvas.drawRect(body, paper);
+    canvas.drawRect(body, line);
+    canvas.drawRect(Rect.fromLTRB(-r * 0.5, -r * 1.1, -r * 0.2, r * 1.1), line);
+    for (final side in [-1.0, 1.0]) {
+      canvas.drawRect(
+        Rect.fromLTRB(-r * 0.5, side * r * 0.85, r * 0.5, side * r * 1.1),
+        line,
+      );
+    }
+  }
+
+  /// Coche en planta, con el morro hacia donde mira.
+  static void _car(Canvas canvas, double r, Paint line, Paint paper) {
+    final body = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset.zero, width: r * 2.4, height: r * 1.1),
+      Radius.circular(r * 0.3),
+    );
+    canvas.drawRRect(body, paper);
+    canvas.drawRRect(body, line);
+    // Parabrisas y luna trasera.
+    canvas.drawLine(
+      Offset(r * 0.45, -r * 0.42),
+      Offset(r * 0.6, r * 0.42),
+      line,
+    );
+    canvas.drawLine(
+      Offset(-r * 0.6, -r * 0.4),
+      Offset(-r * 0.7, r * 0.4),
+      line,
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(-r * 0.6, -r * 0.42, r * 0.45, r * 0.42),
+      line,
+    );
   }
 
   static void _dashed(

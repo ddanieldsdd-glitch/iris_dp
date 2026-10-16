@@ -15,10 +15,16 @@ abstract final class AnnotationPdfRenderer {
     return pw.CustomPaint(
       size: PdfPoint(width, height),
       painter: (canvas, size) {
+        final hidden = {
+          for (final layer in document.effectiveLayers)
+            if (!layer.visible) layer.id,
+        };
         for (final stroke in document.strokes) {
+          if (hidden.contains(document.strokeLayerId(stroke))) continue;
           _drawStroke(canvas, size, stroke);
         }
         for (final stamp in document.stamps) {
+          if (hidden.contains(document.stampLayerId(stamp))) continue;
           _drawStamp(canvas, size, stamp);
         }
         for (final note in document.notes) {

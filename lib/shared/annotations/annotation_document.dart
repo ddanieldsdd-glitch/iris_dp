@@ -48,7 +48,32 @@ enum AnnotationToolType {
 
 /// Sellos de planta: símbolos cenitales que se colocan con un toque y se
 /// orientan arrastrando.
-enum AnnotationStampKind { camera, actor, light, softbox, sun, frame, text }
+///
+/// Los valores nuevos van al final: en JSON se guarda el nombre y una versión
+/// anterior lee uno desconocido como foco.
+enum AnnotationStampKind {
+  camera,
+  actor,
+  light,
+  softbox,
+  sun,
+  frame,
+  text,
+  dolly,
+  crane,
+  fresnel,
+  hmi,
+  ledPanel,
+  tube,
+  bounce,
+  diffusion,
+  window,
+  door,
+  table,
+  chair,
+  sofa,
+  car,
+}
 
 enum AnnotationInputKind { stylus, invertedStylus, touch, mouse, unknown }
 
@@ -221,6 +246,16 @@ class AnnotationStamp {
   /// Capa a la que pertenece; sin capa va a la de arriba.
   final String? layerId;
 
+  /// Apertura del haz o del ángulo de visión, en radianes (`null` = la de
+  /// siempre del sello).
+  final double? spread;
+
+  /// Alcance del haz o del ángulo de visión, en radios del sello.
+  final double? reach;
+
+  /// Óptica de la cámara en mm, si se eligió.
+  final double? lensMm;
+
   const AnnotationStamp({
     required this.id,
     required this.kind,
@@ -231,6 +266,9 @@ class AnnotationStamp {
     required this.colorArgb,
     this.label,
     this.layerId,
+    this.spread,
+    this.reach,
+    this.lensMm,
   });
 
   AnnotationStamp copyWith({
@@ -241,6 +279,9 @@ class AnnotationStamp {
     int? colorArgb,
     String? label,
     String? layerId,
+    double? spread,
+    double? reach,
+    double? lensMm,
   }) => AnnotationStamp(
     id: id,
     kind: kind,
@@ -251,6 +292,9 @@ class AnnotationStamp {
     colorArgb: colorArgb ?? this.colorArgb,
     label: label ?? this.label,
     layerId: layerId ?? this.layerId,
+    spread: spread ?? this.spread,
+    reach: reach ?? this.reach,
+    lensMm: lensMm ?? this.lensMm,
   );
 
   Map<String, dynamic> toJson() => {
@@ -263,6 +307,9 @@ class AnnotationStamp {
     'colorArgb': colorArgb,
     if (label != null) 'label': label,
     if (layerId != null) 'layerId': layerId,
+    if (spread != null) 'spread': spread,
+    if (reach != null) 'reach': reach,
+    if (lensMm != null) 'lensMm': lensMm,
   };
 
   factory AnnotationStamp.fromJson(Map<String, dynamic> json) =>
@@ -281,6 +328,9 @@ class AnnotationStamp {
         colorArgb: (json['colorArgb'] as num?)?.toInt() ?? 0xFF111111,
         label: json['label']?.toString(),
         layerId: json['layerId']?.toString(),
+        spread: (json['spread'] as num?)?.toDouble(),
+        reach: (json['reach'] as num?)?.toDouble(),
+        lensMm: (json['lensMm'] as num?)?.toDouble(),
       );
 }
 

@@ -40,13 +40,14 @@ abstract final class AnnotationTools {
       'Rodea un área y se pinta entera. Mantén al cerrar para '
           'hacerla rectángulo o elipse.',
     AnnotationToolType.line => 'Arrastra de punta a punta. Se ajusta a 45°.',
-    AnnotationToolType.arrow => 'Arrastra para marcar dirección o recorrido.',
+    AnnotationToolType.arrow =>
+      'Arrastra para marcar dirección. «Recorrido» sigue el trazo, discontinuo.',
     AnnotationToolType.stamp =>
       'Toca para colocar. Arrastra antes de soltar para orientarlo.',
     AnnotationToolType.text => 'Toca donde quieras escribir.',
     AnnotationToolType.select =>
-      'Arrastra un sello para moverlo; el punto azul lo gira. '
-          'Tócalo otra vez para ponerle nombre.',
+      'Arrastra un sello para moverlo; el punto azul lo gira y el ámbar '
+          'abre o alarga el haz. Tócalo otra vez para ponerle nombre.',
     AnnotationToolType.eraseArea => 'Borra como una goma de verdad.',
     AnnotationToolType.eraser => 'Toca un trazo o sello para quitarlo entero.',
     AnnotationToolType.highlighter => 'Marca translúcida para resaltar.',
@@ -80,7 +81,65 @@ abstract final class AnnotationTools {
     AnnotationStampKind.sun => 'Sol',
     AnnotationStampKind.frame => 'Marco / bandera',
     AnnotationStampKind.text => 'Texto',
+    AnnotationStampKind.dolly => 'Dolly',
+    AnnotationStampKind.crane => 'Grúa',
+    AnnotationStampKind.fresnel => 'Fresnel',
+    AnnotationStampKind.hmi => 'HMI',
+    AnnotationStampKind.ledPanel => 'Panel LED',
+    AnnotationStampKind.tube => 'Tubo',
+    AnnotationStampKind.bounce => 'Rebotador',
+    AnnotationStampKind.diffusion => 'Difusor',
+    AnnotationStampKind.window => 'Ventana',
+    AnnotationStampKind.door => 'Puerta',
+    AnnotationStampKind.table => 'Mesa',
+    AnnotationStampKind.chair => 'Silla',
+    AnnotationStampKind.sofa => 'Sofá',
+    AnnotationStampKind.car => 'Coche',
   };
+
+  /// Sellos agrupados para elegirlos.
+  static const stampGroups = <(String, List<AnnotationStampKind>)>[
+    (
+      'Cámara',
+      [
+        AnnotationStampKind.camera,
+        AnnotationStampKind.dolly,
+        AnnotationStampKind.crane,
+      ],
+    ),
+    ('Personas', [AnnotationStampKind.actor]),
+    (
+      'Luz',
+      [
+        AnnotationStampKind.light,
+        AnnotationStampKind.fresnel,
+        AnnotationStampKind.hmi,
+        AnnotationStampKind.ledPanel,
+        AnnotationStampKind.tube,
+        AnnotationStampKind.softbox,
+        AnnotationStampKind.sun,
+      ],
+    ),
+    (
+      'Control',
+      [
+        AnnotationStampKind.frame,
+        AnnotationStampKind.bounce,
+        AnnotationStampKind.diffusion,
+      ],
+    ),
+    (
+      'Decorado',
+      [
+        AnnotationStampKind.window,
+        AnnotationStampKind.door,
+        AnnotationStampKind.table,
+        AnnotationStampKind.chair,
+        AnnotationStampKind.sofa,
+        AnnotationStampKind.car,
+      ],
+    ),
+  ];
 
   /// Herramientas de las barras pequeñas (anotar encima de un plano).
   static const quick = [
