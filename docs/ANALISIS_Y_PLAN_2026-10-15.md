@@ -147,4 +147,6 @@ Cada punto es un PR pequeño con `flutter analyze` y `flutter test` en verde, co
 - [ ] Las builds de otras ramas (l12, l13…) abren la base y rebajan su versión: conviene que todas las sesiones fusionen `main` cuanto antes.
 - [ ] Error de interfaz repetido en bucle: «ListTile background color or ink splashes may be invisible» (un ListTile sin Material debajo). Llena el registro de errores.
 - [ ] La cola local guarda las filas antiguas por posición junto a las nuevas por uid: limpiar las que ya tienen su par.
+- [x] El guion literario y los archivos que no viajaban (storyboard, bocetos de planta, referencias de plano, bocetos de luz, plantas de set, PDF anotados, escaneos…) se sincronizan (esquema 51, bundle v7, `media_slots.dart`). Pedido por Daniel al ver el iPad.
+- [ ] Las entradas `setup:<id>` de los bocetos de planta llevan el id local del esquema de luz: en otro equipo pueden no encontrarlo. Pasarlas a la clave del esquema en el bundle.
 
