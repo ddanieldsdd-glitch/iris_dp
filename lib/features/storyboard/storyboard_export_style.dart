@@ -1,49 +1,42 @@
-/// Estilo de exportación de fotogramas (referencia Artemis).
+/// Nivel de exportación de un plano (referencia Artemis). Todos salen en PDF.
 enum StoryboardExportStyle {
-  /// Imagen sin metadatos ni overlays (RAW).
+  /// La imagen sola, sin metadatos ni superposiciones.
   clean,
 
-  /// Badge de focal y FOV en esquina inferior derecha (S1).
+  /// Líneas de encuadre y abanico de focal y ángulo de visión.
   basic,
 
-  /// PDF con cabecera técnica, paleta de color y notas (S2).
+  /// Barra de cámara y óptica, paleta y franja de proyecto, escena y notas.
   detail,
 
-  /// PDF completo con localización, sol y planta cenital (S3).
+  /// Página entera: lo de DETAIL más guion técnico, planta y sol.
   shotPlan,
 }
 
 extension StoryboardExportStyleX on StoryboardExportStyle {
   String get title => switch (this) {
-        StoryboardExportStyle.clean => 'CLEAN',
-        StoryboardExportStyle.basic => 'BASIC',
-        StoryboardExportStyle.detail => 'DETAIL',
-        StoryboardExportStyle.shotPlan => 'SHOT PLAN',
-      };
+    StoryboardExportStyle.clean => 'CLEAN',
+    StoryboardExportStyle.basic => 'BASIC',
+    StoryboardExportStyle.detail => 'DETAIL',
+    StoryboardExportStyle.shotPlan => 'SHOT PLAN',
+  };
 
   String get description => switch (this) {
-        StoryboardExportStyle.clean =>
-          'Imagen sin metadatos ni overlays.',
-        StoryboardExportStyle.basic =>
-          'Indicador de focal y ángulo de visión (estilo Artemis).',
-        StoryboardExportStyle.detail =>
-          'PDF con cámara, paleta de color, FOV y notas.',
-        StoryboardExportStyle.shotPlan =>
-          'PDF completo con localización, sol y planta cenital.',
-      };
-
-  /// PNG (RAW/S1) vs PDF (S2/S3).
-  bool get singleShotUsesPdf =>
-      this == StoryboardExportStyle.detail ||
-      this == StoryboardExportStyle.shotPlan;
-
-  String get fileExtension => singleShotUsesPdf ? 'pdf' : 'png';
+    StoryboardExportStyle.clean =>
+      'La imagen sola, sin metadatos ni superposiciones.',
+    StoryboardExportStyle.basic =>
+      'Líneas de encuadre e indicador de focal y ángulo de visión.',
+    StoryboardExportStyle.detail =>
+      'Cámara y óptica, paleta, escena, notas y localización.',
+    StoryboardExportStyle.shotPlan =>
+      'Página entera con guion técnico, planta de luz y cámara y sol.',
+  };
 
   /// Sufijo Artemis en el nombre de archivo.
   String get artemisFileSuffix => switch (this) {
-        StoryboardExportStyle.clean => 'RAW',
-        StoryboardExportStyle.basic => 'S1',
-        StoryboardExportStyle.detail => 'S2',
-        StoryboardExportStyle.shotPlan => 'S3',
-      };
+    StoryboardExportStyle.clean => 'RAW',
+    StoryboardExportStyle.basic => 'S1',
+    StoryboardExportStyle.detail => 'S2',
+    StoryboardExportStyle.shotPlan => 'S3',
+  };
 }
