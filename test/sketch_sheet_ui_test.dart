@@ -118,7 +118,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Pinceles'), findsOneWidget);
     await _shot(tester, 'ui_pinceles');
-    await tester.tap(find.byKey(const ValueKey('brush-fineliner.05')));
+    await tester.tap(find.byKey(const ValueKey('brush-ink.brushpen')));
     await tester.pumpAndSettle();
 
     final sheet = tester.getRect(find.byType(AnnotationCanvas));
@@ -129,7 +129,7 @@ void main() {
     );
     expect(
       _controllerOf(tester).document.strokes.single.brushId,
-      'fineliner.05',
+      'ink.brushpen',
     );
 
     await tester.tap(find.byTooltip('Borrar'));
@@ -186,9 +186,37 @@ void main() {
     await tester.pumpAndSettle();
     await _shot(tester, 'ui_planta');
     final sheet = tester.getRect(find.byType(AnnotationCanvas));
-    await tester.tapAt(sheet.center);
+    await tester.tapAt(sheet.center, kind: PointerDeviceKind.mouse);
     await tester.pump();
     final stamp = _controllerOf(tester).document.stamps.single;
     expect(stamp.layerId, 'camaras');
+  });
+
+  testWidgets('con Pencil, un dedo desplaza el folio y no pinta', (
+    tester,
+  ) async {
+    await _open(tester)();
+    final sheet = tester.getRect(find.byType(AnnotationCanvas));
+    await _stroke(
+      tester,
+      sheet.center - const Offset(150, 0),
+      const Offset(300, 0),
+    );
+    expect(_controllerOf(tester).document.strokes, hasLength(1));
+
+    final before = tester.getRect(find.byType(AnnotationCanvas));
+    final finger = await tester.startGesture(
+      sheet.center + const Offset(0, 80),
+      kind: PointerDeviceKind.touch,
+    );
+    for (var i = 1; i <= 10; i++) {
+      await finger.moveBy(const Offset(12, 6));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await finger.up();
+    await tester.pumpAndSettle();
+    final after = tester.getRect(find.byType(AnnotationCanvas));
+    expect(after.center.dx, greaterThan(before.center.dx + 60));
+    expect(_controllerOf(tester).document.strokes, hasLength(1));
   });
 }

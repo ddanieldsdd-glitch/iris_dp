@@ -72,9 +72,201 @@ class AnnotationCanvasController extends ChangeNotifier {
   }
 
   void selectStamp(String? id) {
-    if (_selectedStampId == id) return;
-    _selectedStampId = id;
+    if (_selectedStampId == id &&
+        _selStrokes.isEmpty &&
+        _selStamps.length == (id == null ? 0 : 1)) {
+      return;
+    }
+    setSelection(strokes: const [], stamps: [?id]);
+  }
+
+  // ─── Selección de varios trazos y sellos ─────────────────────────────────
+
+  final Set<String> _selStrokes = {};
+  final Set<String> _selStamps = {};
+  bool _lifted = false;
+  Offset _liftOffset = Offset.zero;
+
+  Set<String> get selectedStrokeIds => Set.unmodifiable(_selStrokes);
+  Set<String> get selectedStampIds => Set.unmodifiable(_selStamps);
+  bool get hasSelection => _selStrokes.isNotEmpty || _selStamps.isNotEmpty;
+  int get selectionCount => _selStrokes.length + _selStamps.length;
+
+  /// Mientras se arrastra la selección, se pinta aparte y desplazada
+  /// [liftOffset] (fracción del folio) sin tocar el documento.
+  bool get isLifted => _lifted;
+  Offset get liftOffset => _liftOffset;
+
+  void setSelection({
+    required Iterable<String> strokes,
+    required Iterable<String> stamps,
+  }) {
+    _selStrokes
+      ..clear()
+      ..addAll(strokes);
+    _selStamps
+      ..clear()
+      ..addAll(stamps);
+    // Un sello solo conserva sus tiradores de giro y haz.
+    _selectedStampId = _selStrokes.isEmpty && _selStamps.length == 1
+        ? _selStamps.first
+        : null;
     notifyListeners();
+  }
+
+  void clearSelection() {
+    if (!hasSelection && _selectedStampId == null) return;
+    setSelection(strokes: const [], stamps: const []);
+  }
+
+  /// Selecciona lo que queda dentro del lazo [polygon] (coordenadas 0–1):
+  /// trazos con la mayoría de sus puntos dentro y sellos con el centro
+  /// dentro. Solo en capas visibles y sin bloquear.
+  void selectInLasso(List<Offset> polygon) {
+    if (polygon.length < 3) {
+      clearSelection();
+      return;
+    }
+    final doc = _document;
+    final usable = {
+      for (final layer in doc.effectiveLayers)
+        if (layer.visible && !layer.locked) layer.id,
+    };
+    setSelection(
+      strokes: [
+        for (final stroke in doc.strokes)
+          if (usable.contains(doc.strokeLayerId(stroke)) &&
+              stroke.points.isNotEmpty &&
+              stroke.points
+                          .where(
+                            (q) => _insidePolygon(Offset(q.x, q.y), polygon),
+                          )
+                          .length *
+                      2 >
+                  stroke.points.length)
+            stroke.id,
+      ],
+      stamps: [
+        for (final stamp in doc.stamps)
+          if (usable.contains(doc.stampLayerId(stamp)) &&
+              _insidePolygon(Offset(stamp.x, stamp.y), polygon))
+            stamp.id,
+      ],
+    );
+  }
+
+  /// Caja de la selección en píxeles de un folio de [size].
+  Rect? selectionBounds(Size size) {
+    if (!hasSelection) return null;
+    Rect? box;
+    void add(Rect r) => box = box == null ? r : box!.expandToInclude(r);
+    final unit = math.min(size.width, size.height) / 1000;
+    for (final stroke in _document.strokes) {
+      if (!_selStrokes.contains(stroke.id) || stroke.points.isEmpty) continue;
+      var minX = double.infinity, minY = double.infinity;
+      var maxX = -double.infinity, maxY = -double.infinity;
+      for (final q in stroke.points) {
+        minX = math.min(minX, q.x);
+        maxX = math.max(maxX, q.x);
+        minY = math.min(minY, q.y);
+        maxY = math.max(maxY, q.y);
+      }
+      final pad = stroke.width * unit;
+      add(
+        Rect.fromLTRB(
+          minX * size.width,
+          minY * size.height,
+          maxX * size.width,
+          maxY * size.height,
+        ).inflate(pad),
+      );
+    }
+    for (final stamp in _document.stamps) {
+      if (!_selStamps.contains(stamp.id)) continue;
+      add(
+        Rect.fromCircle(
+          center: AnnotationBrushes.stampCenter(stamp, size),
+          radius: AnnotationBrushes.stampRadius(stamp, size),
+        ),
+      );
+    }
+    return box;
+  }
+
+  void beginLift() {
+    if (!hasSelection) return;
+    _lifted = true;
+    _liftOffset = Offset.zero;
+    notifyListeners();
+  }
+
+  void updateLift(Offset offset) {
+    if (!_lifted) return;
+    _liftOffset = offset;
+    notifyListeners();
+  }
+
+  /// Suelta la selección: la mueve de verdad (un solo paso de deshacer).
+  void endLift() {
+    if (!_lifted) return;
+    final d = _liftOffset;
+    _lifted = false;
+    _liftOffset = Offset.zero;
+    if (d == Offset.zero) {
+      notifyListeners();
+      return;
+    }
+    translateSelection(d);
+  }
+
+  void translateSelection(Offset d) {
+    if (!hasSelection) return;
+    _commit(
+      _document.copyWith(
+        strokes: [
+          for (final stroke in _document.strokes)
+            _selStrokes.contains(stroke.id)
+                ? stroke.copyWith(
+                    points: [
+                      for (final q in stroke.points)
+                        AnnotationPoint(
+                          x: q.x + d.dx,
+                          y: q.y + d.dy,
+                          pressure: q.pressure,
+                          tilt: q.tilt,
+                          azimuth: q.azimuth,
+                        ),
+                    ],
+                    // El azar del pincel no cambia al moverlo.
+                    seed: BrushEngine.seedFor(stroke),
+                  )
+                : stroke,
+        ],
+        stamps: [
+          for (final stamp in _document.stamps)
+            _selStamps.contains(stamp.id)
+                ? stamp.copyWith(x: stamp.x + d.dx, y: stamp.y + d.dy)
+                : stamp,
+        ],
+      ),
+    );
+  }
+
+  void deleteSelection() {
+    if (!hasSelection) return;
+    final strokes = Set.of(_selStrokes);
+    final stamps = Set.of(_selStamps);
+    _selStrokes.clear();
+    _selStamps.clear();
+    _selectedStampId = null;
+    _commit(
+      _document.copyWith(
+        strokes: _document.strokes
+            .where((s) => !strokes.contains(s.id))
+            .toList(),
+        stamps: _document.stamps.where((s) => !stamps.contains(s.id)).toList(),
+      ),
+    );
   }
 
   void replaceDocument(
@@ -142,6 +334,7 @@ class AnnotationCanvasController extends ChangeNotifier {
     final next = _document.stamps.where((stamp) => stamp.id != id).toList();
     if (next.length == _document.stamps.length) return;
     if (_selectedStampId == id) _selectedStampId = null;
+    _selStamps.remove(id);
     _commit(_document.copyWith(stamps: next));
   }
 
@@ -459,8 +652,13 @@ class AnnotationCanvasController extends ChangeNotifier {
 
   String? hitTestStroke(double nx, double ny, {double threshold = 0.02}) {
     final p = Offset(nx, ny);
+    final usable = {
+      for (final layer in _document.effectiveLayers)
+        if (layer.visible && !layer.locked) layer.id,
+    };
     for (final stroke in _document.strokes.reversed) {
       if (stroke.tool == AnnotationToolType.eraseArea) continue;
+      if (!usable.contains(_document.strokeLayerId(stroke))) continue;
       final pts = [for (final q in stroke.points) Offset(q.x, q.y)];
       if (pts.isEmpty) continue;
       if ((AnnotationBrushes.isAreaTool(stroke.tool) || stroke.closed) &&
@@ -559,6 +757,10 @@ class AnnotationCanvasController extends ChangeNotifier {
 
   void _dropStaleSelection() {
     if (selectedStamp == null) _selectedStampId = null;
+    final strokes = {for (final s in _document.strokes) s.id};
+    final stamps = {for (final s in _document.stamps) s.id};
+    _selStrokes.removeWhere((id) => !strokes.contains(id));
+    _selStamps.removeWhere((id) => !stamps.contains(id));
   }
 
   void _commit(AnnotationDocument next) {
@@ -566,6 +768,7 @@ class AnnotationCanvasController extends ChangeNotifier {
     if (_undo.length > 80) _undo.removeAt(0);
     _redo.clear();
     _document = next;
+    _dropStaleSelection();
     notifyListeners();
   }
 }
@@ -664,7 +867,7 @@ class AnnotationCanvas extends StatefulWidget {
   State<AnnotationCanvas> createState() => _AnnotationCanvasState();
 }
 
-enum _StampDrag { move, rotate, beam }
+enum _StampDrag { move, rotate, beam, group, lasso }
 
 class _AnnotationCanvasState extends State<AnnotationCanvas> {
   static const _holdDelay = Duration(milliseconds: 450);
@@ -686,6 +889,10 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
   Offset _stampStart = Offset.zero;
   Offset _moveStart = Offset.zero;
   _StampDrag? _stampDrag;
+
+  /// Lazo de selección en curso (píxeles de documento).
+  List<Offset>? _lasso;
+  Offset _groupStart = Offset.zero;
   bool _stampDragMoved = false;
   bool _tappedSelected = false;
 
@@ -705,6 +912,12 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     _snapped = null;
     _snappedClosed = false;
     if (_activeTool == AnnotationToolType.select) {
+      if (_stampDrag == _StampDrag.group) {
+        widget.controller.updateLift(Offset.zero);
+        widget.controller.endLift();
+      }
+      _stampDrag = null;
+      _lasso = null;
       widget.controller.endGesture();
     }
     if (mounted) setState(() {});
@@ -869,9 +1082,34 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
       return;
     }
     final hit = controller.hitTestStamp(docPoint, _documentSize);
-    if (hit == null) {
-      _stampDrag = null;
-      controller.selectStamp(null);
+    final bounds = controller.selectionBounds(_documentSize)?.inflate(8);
+    final insideSelection =
+        controller.selectionCount > 1 &&
+        bounds != null &&
+        bounds.contains(docPoint);
+    if (hit == null || insideSelection) {
+      // Dentro de la selección: se mueve todo junto.
+      if (insideSelection) {
+        _startGroupMove(docPoint);
+        return;
+      }
+      // Un trazo: se selecciona y se mueve.
+      final p = Offset(
+        docPoint.dx / _documentSize.width,
+        docPoint.dy / _documentSize.height,
+      );
+      final stroke = controller.hitTestStroke(p.dx, p.dy, threshold: 0.012);
+      if (stroke != null) {
+        if (!controller.selectedStrokeIds.contains(stroke)) {
+          controller.setSelection(strokes: [stroke], stamps: const []);
+        }
+        _startGroupMove(docPoint);
+        return;
+      }
+      // Nada debajo: lazo.
+      controller.clearSelection();
+      _stampDrag = _StampDrag.lasso;
+      _lasso = [docPoint];
       return;
     }
     _tappedSelected = hit == controller.selectedStampId;
@@ -881,6 +1119,12 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     _moveStart = docPoint;
     _stampDrag = _StampDrag.move;
     controller.beginGesture();
+  }
+
+  void _startGroupMove(Offset docPoint) {
+    _stampDrag = _StampDrag.group;
+    _groupStart = docPoint;
+    widget.controller.beginLift();
   }
 
   void _onPointerMove(PointerMoveEvent event) {
@@ -935,6 +1179,21 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
 
   void _dragSelected(Offset docPoint) {
     final controller = widget.controller;
+    if (_stampDrag == _StampDrag.lasso) {
+      final lasso = _lasso;
+      if (lasso != null && (docPoint - lasso.last).distance > 2) {
+        lasso.add(docPoint);
+        setState(() {});
+      }
+      return;
+    }
+    if (_stampDrag == _StampDrag.group) {
+      final d = docPoint - _groupStart;
+      controller.updateLift(
+        Offset(d.dx / _documentSize.width, d.dy / _documentSize.height),
+      );
+      return;
+    }
     final stamp = controller.selectedStamp;
     final down = _downDoc;
     if (stamp == null || _stampDrag == null || down == null) return;
@@ -1002,6 +1261,27 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
       case AnnotationToolType.eraser:
         return;
       case AnnotationToolType.select:
+        if (_stampDrag == _StampDrag.lasso) {
+          final lasso = _lasso ?? const [];
+          _lasso = null;
+          _stampDrag = null;
+          final w = _documentSize.width, h = _documentSize.height;
+          widget.controller.selectInLasso([
+            for (final q in lasso) Offset(q.dx / w, q.dy / h),
+          ]);
+          setState(() {});
+          return;
+        }
+        if (_stampDrag == _StampDrag.group) {
+          _stampDrag = null;
+          if (event is PointerUpEvent) {
+            widget.controller.endLift();
+          } else {
+            widget.controller.updateLift(Offset.zero);
+            widget.controller.endLift();
+          }
+          return;
+        }
         widget.controller.endGesture();
         final stamp = widget.controller.selectedStamp;
         if (_tappedSelected && !_stampDragMoved && stamp != null) {
@@ -1210,6 +1490,31 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
                   selectedStampId: widget.tool == AnnotationToolType.select
                       ? widget.controller.selectedStampId
                       : null,
+                  liftedStrokes: widget.controller.isLifted
+                      ? widget.controller.selectedStrokeIds
+                      : const {},
+                  liftedStamps: widget.controller.isLifted
+                      ? widget.controller.selectedStampIds
+                      : const {},
+                  liftOffset: Offset(
+                    widget.controller.liftOffset.dx * docSize.width,
+                    widget.controller.liftOffset.dy * docSize.height,
+                  ),
+                  selectionRect:
+                      widget.tool == AnnotationToolType.select &&
+                          (widget.controller.selectionCount > 1 ||
+                              widget.controller.selectedStrokeIds.isNotEmpty)
+                      ? widget.controller
+                            .selectionBounds(docSize)
+                            ?.shift(
+                              Offset(
+                                widget.controller.liftOffset.dx * docSize.width,
+                                widget.controller.liftOffset.dy *
+                                    docSize.height,
+                              ),
+                            )
+                      : null,
+                  lasso: _lasso,
                   viewport: widget.viewport,
                   paintNotes: !widget.interactiveNotes,
                   compositor: widget.controller.compositor,
@@ -1247,6 +1552,15 @@ class AnnotationPainter extends CustomPainter {
   /// compartido por documento.
   final AnnotationCompositor? compositor;
 
+  /// Selección que se está arrastrando: se pinta desplazada [liftOffset].
+  final Set<String> liftedStrokes;
+  final Set<String> liftedStamps;
+  final Offset liftOffset;
+
+  /// Caja de la selección y lazo en curso (píxeles de documento).
+  final Rect? selectionRect;
+  final List<Offset>? lasso;
+
   const AnnotationPainter({
     required this.document,
     this.liveStroke,
@@ -1255,6 +1569,11 @@ class AnnotationPainter extends CustomPainter {
     this.viewport,
     this.paintNotes = true,
     this.compositor,
+    this.liftedStrokes = const {},
+    this.liftedStamps = const {},
+    this.liftOffset = Offset.zero,
+    this.selectionRect,
+    this.lasso,
   });
 
   @override
@@ -1273,7 +1592,11 @@ class AnnotationPainter extends CustomPainter {
       live: live,
       liveStamp: liveStamp,
       selectedStampId: selectedStampId,
+      liftedStrokes: liftedStrokes,
+      liftedStamps: liftedStamps,
+      liftOffset: liftOffset,
     );
+    _paintSelection(canvas);
     if (live != null &&
         AnnotationBrushes.isAreaTool(live.tool) &&
         live.points.length > 1) {
@@ -1285,6 +1608,36 @@ class AnnotationPainter extends CustomPainter {
       }
     }
     if (viewport != null) canvas.restore();
+  }
+
+  /// Caja punteada de la selección y lazo en curso.
+  void _paintSelection(Canvas canvas) {
+    final blue = Paint()
+      ..color = const Color(0xFF2997FF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    final rect = selectionRect;
+    if (rect != null) {
+      canvas.drawRect(rect, Paint()..color = const Color(0x142997FF));
+      _dashedPath(canvas, Path()..addRect(rect), blue);
+    }
+    final points = lasso;
+    if (points != null && points.length > 1) {
+      final path = Path()..addPolygon(points, false);
+      canvas.drawPath(path, Paint()..color = const Color(0x0F2997FF));
+      _dashedPath(canvas, path, blue);
+    }
+  }
+
+  static void _dashedPath(Canvas canvas, Path path, Paint paint) {
+    for (final metric in path.computeMetrics()) {
+      for (var d = 0.0; d < metric.length; d += 12) {
+        canvas.drawPath(
+          metric.extractPath(d, math.min(metric.length, d + 6)),
+          paint,
+        );
+      }
+    }
   }
 
   void _paintLassoOutline(Canvas canvas, Size size, AnnotationStroke stroke) {
@@ -1337,7 +1690,12 @@ class AnnotationPainter extends CustomPainter {
       oldDelegate.selectedStampId != selectedStampId ||
       oldDelegate.viewport != viewport ||
       oldDelegate.paintNotes != paintNotes ||
-      oldDelegate.compositor != compositor;
+      oldDelegate.compositor != compositor ||
+      oldDelegate.liftOffset != liftOffset ||
+      oldDelegate.liftedStrokes != liftedStrokes ||
+      oldDelegate.selectionRect != selectionRect ||
+      oldDelegate.lasso != lasso ||
+      (lasso?.length ?? 0) > 0;
 }
 
 class _InteractiveAnnotationNote extends StatefulWidget {

@@ -302,7 +302,10 @@ void _sheetTests() {
       await tester.tap(find.byTooltip('Sellos'));
       await tester.pumpAndSettle();
       final at = sheet.center;
-      final gesture = await tester.startGesture(at);
+      final gesture = await tester.startGesture(
+        at,
+        kind: PointerDeviceKind.mouse,
+      );
       await gesture.moveTo(at + const Offset(0, 40));
       await gesture.moveTo(at + const Offset(0, 80));
       await gesture.up();

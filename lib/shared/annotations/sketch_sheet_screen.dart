@@ -15,6 +15,7 @@ import 'annotation_canvas.dart';
 import 'annotation_document.dart';
 import 'annotation_raster.dart';
 import 'annotation_tools.dart';
+import 'brushes/auto_import.dart';
 import 'brushes/custom_brush_store.dart';
 import 'brushes/paper_library.dart';
 import 'sheet/brush_studio.dart';
@@ -189,12 +190,41 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     _baseline = _controller.document;
     _selectBrush(BrushCatalog.byId(_style.shelf.first)!, notify: false);
     // Pinceles propios (importados o variantes): se cargan aparte.
+    _stylusSeen = CustomBrushStore.instance.pencilSeen;
+    _fingerDraws = !_stylusSeen;
     CustomBrushStore.instance.ensureLoaded().then((_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() {
+        // Si en este dispositivo ya se usó el Pencil, el dedo mueve.
+        if (CustomBrushStore.instance.pencilSeen && !_stylusSeen) {
+          _stylusSeen = true;
+          _fingerDraws = false;
+        }
+      });
     });
     PaperLibrary.instance.ensureLoaded().then((_) {
       if (mounted) setState(() {});
     });
+    _autoImport();
+  }
+
+  /// Lo que haya en `Documents/Importar` entra solo, en segundo plano.
+  Future<void> _autoImport() async {
+    final result = await AutoImport.run();
+    if (!mounted || result.isEmpty) return;
+    setState(() {});
+    final added = result.describe();
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          [
+            if (added.isNotEmpty) 'Importado de la carpeta Importar: $added.',
+            if (result.failed.isNotEmpty)
+              'No se pudo leer: ${result.failed.join(', ')}.',
+          ].join('\n'),
+        ),
+      ),
+    );
   }
 
   /// Importa papeles (PNG o JPG) y pone el último en el folio.
@@ -555,6 +585,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
       _eyedropper = false;
       if (_mode == mode && mode != _Mode.smudge) {
         _panel = _panel == _Panel.brushes ? null : _Panel.brushes;
+        if (_panel == _Panel.brushes) _autoImport();
       } else {
         _mode = mode;
         if (_panel == _Panel.brushes) _panel = null;
@@ -656,6 +687,11 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
   }
 
   void _deleteSelected() {
+    if (_controller.selectionCount > 1 ||
+        _controller.selectedStrokeIds.isNotEmpty) {
+      _controller.deleteSelection();
+      return;
+    }
     final selected = _controller.selectedStamp;
     if (selected != null) _controller.removeStamp(selected.id);
   }
@@ -716,6 +752,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
           _stylusSeen = true;
           _fingerDraws = false;
         });
+        CustomBrushStore.instance.markPencilSeen();
       }
       return;
     }
@@ -1271,6 +1308,11 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
           onImport: _importBrushes,
           onTune: erase ? null : _tuneBrush,
           onDelete: _deleteBrush,
+          favorites: CustomBrushStore.instance.favorites,
+          onToggleFavorite: (brush) async {
+            await CustomBrushStore.instance.toggleFavorite(brush.id);
+            if (mounted) setState(() {});
+          },
         );
       case _Panel.layers:
         return LayersPanel(
@@ -1621,6 +1663,33 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                 min: 0.03,
                 max: 0.2,
                 onChanged: (v) => setState(() => _stampSize = v),
+              ),
+            ],
+            if (_mode == _Mode.select &&
+                selected == null &&
+                _controller.hasSelection) ...[
+              const SizedBox(height: 8),
+              Text(
+                _controller.selectionCount == 1
+                    ? '1 elemento seleccionado'
+                    : '${_controller.selectionCount} elementos seleccionados',
+                style: AppTypography.label(palette),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _controller.clearSelection,
+                    icon: const Icon(Icons.deselect, size: 16),
+                    label: const Text('Soltar'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _controller.deleteSelection,
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Borrar'),
+                  ),
+                ],
               ),
             ],
             if (selected != null) ...[

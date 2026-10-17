@@ -181,6 +181,10 @@ class BrushLibraryPanel extends StatefulWidget {
 
   final ValueChanged<BrushSpec>? onDelete;
 
+  /// Pinceles con estrella: su estante sale el primero.
+  final Set<String> favorites;
+  final ValueChanged<BrushSpec>? onToggleFavorite;
+
   const BrushLibraryPanel({
     super.key,
     required this.selectedId,
@@ -194,6 +198,8 @@ class BrushLibraryPanel extends StatefulWidget {
     this.onImport,
     this.onTune,
     this.onDelete,
+    this.favorites = const {},
+    this.onToggleFavorite,
   });
 
   @override
@@ -201,26 +207,30 @@ class BrushLibraryPanel extends StatefulWidget {
 }
 
 class _BrushLibraryPanelState extends State<BrushLibraryPanel> {
-  /// `null` = estante del estilo.
-  BrushCategory? _category;
+  /// Estante a la vista: favoritos, el del estilo o una categoría.
+  late _Shelf _shelf = widget.favorites.isEmpty
+      ? const _Shelf.style()
+      : const _Shelf.favorites();
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final brushes =
-        (_category == null
-                ? widget.shelf.map(BrushCatalog.byId).whereType<BrushSpec>()
-                : BrushCatalog.inCategory(_category!))
-            .where(widget.filter)
-            .toList();
-    Widget tab(String label, BrushCategory? category) {
-      final selected = _category == category;
+    final Iterable<BrushSpec> source = switch (_shelf) {
+      _Shelf(favorites: true) =>
+        widget.favorites.map(BrushCatalog.byId).whereType<BrushSpec>(),
+      _Shelf(category: final c?) => BrushCatalog.inCategory(c),
+      _ => widget.shelf.map(BrushCatalog.byId).whereType<BrushSpec>(),
+    };
+    final brushes = source.where(widget.filter).toList();
+    Widget tab(String label, _Shelf shelf, {IconData? icon}) {
+      final selected = _shelf == shelf;
       return Padding(
         padding: const EdgeInsets.only(right: 6),
         child: ChoiceChip(
+          avatar: icon == null ? null : Icon(icon, size: 16),
           label: Text(label),
           selected: selected,
-          onSelected: (_) => setState(() => _category = category),
+          onSelected: (_) => setState(() => _shelf = shelf),
           visualDensity: VisualDensity.compact,
         ),
       );
@@ -237,13 +247,22 @@ class _BrushLibraryPanelState extends State<BrushLibraryPanel> {
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Row(
               children: [
-                tab(widget.shelfName, null),
+                if (widget.favorites.isNotEmpty)
+                  tab(
+                    'Favoritos',
+                    const _Shelf.favorites(),
+                    icon: Icons.star_rounded,
+                  ),
+                tab(widget.shelfName, const _Shelf.style()),
                 for (final category in BrushCategory.values)
-                  tab(BrushCatalog.categoryLabel(category), category),
+                  tab(
+                    BrushCatalog.categoryLabel(category),
+                    _Shelf.category(category),
+                  ),
               ],
             ),
           ),
-          if (_category == BrushCategory.custom) ...[
+          if (_shelf.category == BrushCategory.custom) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               child: OutlinedButton.icon(
@@ -282,10 +301,31 @@ class _BrushLibraryPanelState extends State<BrushLibraryPanel> {
                       key: ValueKey('brush-${brush.id}'),
                       borderRadius: BorderRadius.circular(10),
                       onTap: () => widget.onSelect(brush),
+                      onLongPress: widget.onToggleFavorite == null
+                          ? null
+                          : () => widget.onToggleFavorite!(brush),
                       child: Padding(
                         padding: const EdgeInsets.all(6),
                         child: Row(
                           children: [
+                            if (widget.onToggleFavorite != null)
+                              IconButton(
+                                tooltip: widget.favorites.contains(brush.id)
+                                    ? 'Quitar de favoritos'
+                                    : 'Añadir a favoritos',
+                                visualDensity: VisualDensity.compact,
+                                iconSize: 18,
+                                color: widget.favorites.contains(brush.id)
+                                    ? const Color(0xFFFFC107)
+                                    : palette.textTertiary,
+                                icon: Icon(
+                                  widget.favorites.contains(brush.id)
+                                      ? Icons.star_rounded
+                                      : Icons.star_border_rounded,
+                                ),
+                                onPressed: () =>
+                                    widget.onToggleFavorite!(brush),
+                              ),
                             SizedBox(
                               width: 104,
                               child: Text(
@@ -846,4 +886,25 @@ class SheetSwatch extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Estante de la biblioteca de pinceles.
+class _Shelf {
+  final bool favorites;
+  final BrushCategory? category;
+
+  const _Shelf.favorites() : favorites = true, category = null;
+
+  const _Shelf.style() : favorites = false, category = null;
+
+  const _Shelf.category(BrushCategory this.category) : favorites = false;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _Shelf &&
+      other.favorites == favorites &&
+      other.category == category;
+
+  @override
+  int get hashCode => Object.hash(favorites, category);
 }

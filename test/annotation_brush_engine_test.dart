@@ -108,6 +108,14 @@ AnnotationDocument _swatch(SketchStyle style) {
 }
 
 void main() {
+  test('pocos pinceles, y los retirados se pintan con el más parecido', () {
+    final paint = BrushCatalog.all.where((b) => b.mode == BrushMode.paint);
+    expect(paint.length, inInclusiveRange(8, 12));
+    for (final entry in BrushCatalog.retired.entries) {
+      expect(BrushCatalog.byId(entry.key)?.id, entry.value, reason: entry.key);
+    }
+  });
+
   test('el catálogo no repite ids y los estantes existen', () {
     final ids = BrushCatalog.all.map((b) => b.id).toList();
     expect(ids.toSet(), hasLength(ids.length));
