@@ -101,10 +101,31 @@ abstract final class AutoImport {
         } catch (_) {
           failed.add(p.basename(file.path));
         }
+        // En Hechos se conserva la carpeta del kit.
         _moveAway(
           file,
-          p.join(root.path, ok ? 'Hechos' : 'No se pudo', folder),
+          p.joinAll([
+            root.path,
+            ok ? 'Hechos' : 'No se pudo',
+            folder,
+            if (relative != '.') relative,
+          ]),
         );
+      }
+    }
+
+    void pruneEmpty(String folder) {
+      final dir = Directory(p.join(root.path, folder));
+      final subdirs =
+          dir.listSync(recursive: true).whereType<Directory>().toList()
+            ..sort((a, b) => b.path.length.compareTo(a.path.length));
+      for (final d in subdirs) {
+        try {
+          final left = d.listSync().where(
+            (e) => !p.basename(e.path).startsWith('.'),
+          );
+          if (left.isEmpty) d.deleteSync(recursive: true);
+        } catch (_) {}
       }
     }
 
@@ -127,6 +148,12 @@ abstract final class AutoImport {
       (ext) => ext == '.swatches',
       (path, group) async => (await paperLibrary.importSwatches(path)).length,
     );
+    // Las carpetas de kit ya vacías se quitan de la entrada.
+    for (final folder in folders) {
+      try {
+        pruneEmpty(folder);
+      } catch (_) {}
+    }
     return AutoImportResult(
       brushes: brushes,
       papers: papers,
@@ -139,11 +166,12 @@ abstract final class AutoImport {
     try {
       Directory(toDir).createSync(recursive: true);
       var target = p.join(toDir, p.basename(file.path));
-      if (File(target).existsSync()) {
-        final stamp = DateTime.now().millisecondsSinceEpoch;
+      // Si ya hay uno igual (se importó dos veces), «Nombre 2».
+      var n = 2;
+      while (File(target).existsSync()) {
         target = p.join(
           toDir,
-          '${p.basenameWithoutExtension(file.path)} $stamp'
+          '${p.basenameWithoutExtension(file.path)} ${n++}'
           '${p.extension(file.path)}',
         );
       }

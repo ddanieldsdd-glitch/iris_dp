@@ -440,8 +440,9 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
     return false;
   });
 
-  /// Viñeta del plano anterior de la escena, para el papel cebolla.
-  Future<ImageProvider?> _previousStoryboardFrame() async {
+  /// Viñeta del plano anterior de la escena, para el papel cebolla, con
+  /// su etiqueta («Plano 1»).
+  Future<(ImageProvider, String)?> _previousStoryboardFrame() async {
     if (widget.target != ShotImageTarget.storyboard) return null;
     final shot = await _current();
     final shots = await _db.getShotsForScene(shot.sceneId);
@@ -449,7 +450,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
     for (var i = index - 1; i >= 0; i--) {
       final path = shots[i].storyboardImagePath;
       if (path != null && File(path).existsSync()) {
-        return FileImage(File(path));
+        return (FileImage(File(path)), 'Plano ${shots[i].number}');
       }
     }
     return null;
@@ -471,7 +472,8 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
       purpose: _sketch
           ? SketchSheetPurpose.lightingPlan
           : SketchSheetPurpose.storyboard,
-      onionSkin: onionSkin,
+      onionSkin: onionSkin?.$1,
+      onionSkinLabel: onionSkin?.$2,
     );
     if (result == null || !mounted) return;
     await _run(() async {

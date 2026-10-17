@@ -69,8 +69,12 @@ class SketchSheetScreen extends StatefulWidget {
   final double aspectRatio;
   final bool exportPng;
 
-  /// Viñeta anterior, para verla atenuada encima (papel cebolla).
+  /// Viñeta anterior, para verla atenuada encima (papel cebolla). Nunca
+  /// entra en el dibujo ni en el PNG exportado.
   final ImageProvider? onionSkin;
+
+  /// De dónde es esa viñeta («Plano 1»), para la etiqueta del folio.
+  final String? onionSkinLabel;
 
   const SketchSheetScreen({
     super.key,
@@ -80,6 +84,7 @@ class SketchSheetScreen extends StatefulWidget {
     required this.aspectRatio,
     this.exportPng = false,
     this.onionSkin,
+    this.onionSkinLabel,
   });
 
   static Future<SketchSheetResult?> open(
@@ -90,6 +95,7 @@ class SketchSheetScreen extends StatefulWidget {
     double? aspectRatio,
     bool exportPng = false,
     ImageProvider? onionSkin,
+    String? onionSkinLabel,
   }) {
     return Navigator.of(context, rootNavigator: true).push<SketchSheetResult>(
       MaterialPageRoute(
@@ -103,6 +109,7 @@ class SketchSheetScreen extends StatefulWidget {
               (purpose == SketchSheetPurpose.storyboard ? 16 / 9 : 1.414),
           exportPng: exportPng,
           onionSkin: onionSkin,
+          onionSkinLabel: onionSkinLabel,
         ),
       ),
     );
@@ -137,7 +144,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
   bool _safeArea = false;
   PerspectiveGuide _perspective = const PerspectiveGuide();
   bool _magnet = true;
-  bool _onion = true;
+  bool _onion = CustomBrushStore.instance.onionSkinOn;
   double _onionOpacity = 0.3;
   bool _gridMagnet = false;
   double _metersPerSquare = 1;
@@ -196,6 +203,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     CustomBrushStore.instance.ensureLoaded().then((_) {
       if (!mounted) return;
       setState(() {
+        _onion = CustomBrushStore.instance.onionSkinOn;
         // Si en este dispositivo ya se usó el Pencil, el dedo mueve.
         if (CustomBrushStore.instance.pencilSeen && !_stylusSeen) {
           _stylusSeen = true;
@@ -289,6 +297,42 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
           ),
         ),
       );
+  }
+
+  void _setOnion(bool on) {
+    setState(() => _onion = on);
+    CustomBrushStore.instance.setOnionSkin(on);
+  }
+
+  /// Etiqueta del papel cebolla: se ve qué hay encima y se quita de un toque.
+  Widget _buildOnionChip() {
+    final label = widget.onionSkinLabel ?? 'viñeta anterior';
+    return Material(
+      color: _onion ? const Color(0xE62997FF) : const Color(0xCC202124),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _setOnion(!_onion),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _onion ? Icons.layers_clear_outlined : Icons.layers_outlined,
+                size: 16,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _onion ? 'Papel cebolla · $label  ✕' : 'Ver $label debajo',
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// Primera página de un PDF como PNG (para usarla de papel).
@@ -952,6 +996,12 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                               bottom: 16,
                               child: Center(child: _buildStyleChooser()),
                             ),
+                          if (widget.onionSkin != null)
+                            Positioned(
+                              left: 76,
+                              top: 10,
+                              child: _buildOnionChip(),
+                            ),
                           if (_layerBlocked)
                             Positioned(
                               top: 10,
@@ -1518,7 +1568,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
               title: const Text('Papel cebolla'),
               subtitle: const Text('La viñeta anterior, atenuada encima.'),
               value: _onion,
-              onChanged: (v) => setState(() => _onion = v),
+              onChanged: _setOnion,
             ),
             if (_onion)
               Slider(

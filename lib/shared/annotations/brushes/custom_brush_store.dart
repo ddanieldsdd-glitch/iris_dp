@@ -174,6 +174,24 @@ class CustomBrushStore {
   /// a mover el folio desde que se abre.
   bool pencilSeen = false;
 
+  /// Papel cebolla encendido: se recuerda la última elección; de entrada,
+  /// apagado.
+  bool onionSkinOn = false;
+
+  Future<void> setOnionSkin(bool on) async {
+    onionSkinOn = on;
+    try {
+      final dir = await _root();
+      dir.createSync(recursive: true);
+      final file = File(p.join(dir.path, 'cebolla.json'));
+      if (on) {
+        file.writeAsStringSync('true');
+      } else if (file.existsSync()) {
+        file.deleteSync();
+      }
+    } catch (_) {}
+  }
+
   Future<void> markPencilSeen() async {
     if (pencilSeen) return;
     pencilSeen = true;
@@ -206,6 +224,7 @@ class CustomBrushStore {
       return;
     }
     pencilSeen = File(p.join(dir.path, 'pencil.json')).existsSync();
+    onionSkinOn = File(p.join(dir.path, 'cebolla.json')).existsSync();
     try {
       final fav = File(p.join(dir.path, 'favoritos.json'));
       if (fav.existsSync()) {

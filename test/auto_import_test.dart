@@ -79,6 +79,42 @@ void main() {
     expect(again.isEmpty, isTrue);
   });
 
+  testWidgets('un .brush en la carpeta de un kit va a su grupo y a Hechos '
+      'dentro de esa carpeta', (tester) async {
+    final docs = Directory.systemTemp.createTempSync('iris_docs_kit');
+    final data = Directory.systemTemp.createTempSync('iris_datos_kit');
+    addTearDown(() {
+      docs.deleteSync(recursive: true);
+      data.deleteSync(recursive: true);
+    });
+    final kit = Directory('${docs.path}/Importar/Pinceles/Ito Shinsui')
+      ..createSync(recursive: true);
+    final shape = _png(32);
+    final brush = Archive()
+      ..addFile(ArchiveFile('Shape.png', shape.length, shape));
+    File(
+      '${kit.path}/Orpheus.brush',
+    ).writeAsBytesSync(ZipEncoder().encode(brush)!);
+    final store = CustomBrushStore(root: () async => data);
+    final result = (await tester.runAsync(
+      () => AutoImport.run(
+        documents: () async => docs,
+        brushes: store,
+        papers: PaperLibrary(root: () async => data),
+      ),
+    ))!;
+    expect(result.brushes, 1);
+    expect(store.groups.single.id, 'Ito Shinsui');
+    expect(
+      File(
+        '${docs.path}/Importar/Hechos/Pinceles/Ito Shinsui/Orpheus.brush',
+      ).existsSync(),
+      isTrue,
+    );
+    expect(kit.existsSync(), isFalse);
+    expect(Directory('${docs.path}/Importar/Pinceles').existsSync(), isTrue);
+  });
+
   test('las estrellas de favoritos se guardan', () async {
     final data = Directory.systemTemp.createTempSync('iris_fav');
     addTearDown(() => data.deleteSync(recursive: true));

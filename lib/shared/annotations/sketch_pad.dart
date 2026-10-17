@@ -57,6 +57,7 @@ Future<SketchResult?> showSketchPad(
   double aspectRatio = 16 / 9,
   SketchSheetPurpose purpose = SketchSheetPurpose.storyboard,
   ImageProvider? onionSkin,
+  String? onionSkinLabel,
 }) async {
   final result = await SketchSheetScreen.open(
     context,
@@ -66,6 +67,7 @@ Future<SketchResult?> showSketchPad(
     aspectRatio: aspectRatio,
     exportPng: true,
     onionSkin: onionSkin,
+    onionSkinLabel: onionSkinLabel,
   );
   final png = result?.png;
   if (result == null || png == null) return null;
