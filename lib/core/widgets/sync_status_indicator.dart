@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../cloud/cloud_providers.dart';
 import '../cloud/cloud_session.dart';
 import '../cloud/cloud_runtime_config.dart';
+import '../cloud/cloudinary_config.dart';
 import '../sync/pending_sync_queue_provider.dart';
 import '../sync/media_sync_providers.dart';
 import '../sync/sync_engine.dart';
@@ -91,7 +92,8 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
             final lastSync = syncSnap.data;
             final queueCount = pendingCount.valueOrNull ?? 0;
             final hasPending = queueCount > 0 || mediaPending > 0;
-            final iconColor = hasPending
+            final mediaOff = !CloudinaryConfig.isConfigured;
+            final iconColor = hasPending || mediaOff
                 ? context.palette.warning
                 : context.palette.success;
 
@@ -110,6 +112,9 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
             }
             if (mediaPending > 0) {
               tooltip += ' · ↑$mediaPending img en cola';
+            }
+            if (mediaOff) {
+              tooltip += ' · imágenes desactivadas en esta versión';
             }
 
             return Row(

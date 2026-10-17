@@ -207,4 +207,56 @@ void main() {
       expect(File(local).readAsBytesSync(), [5, 5, 5]);
     },
   );
+
+  /// Este equipo subió [path] para [uid] y la nube guarda esa subida.
+  Future<void> uploadedFromHere(String uid, String path, String publicId) =>
+      db.into(db.pendingMediaUploads).insert(
+        PendingMediaUploadsCompanion.insert(
+          projectId: projectId,
+          entityType: MediaEntityType.moodboard,
+          entityKey: MediaEntityKeys.byUid(uid),
+          localPath: path,
+          publicId: Value(publicId),
+          status: const Value('done'),
+        ),
+      );
+
+  test(
+    'con una ruta de otro equipo vuelve al original subido desde aquí',
+    () async {
+      final original = File('${dir.path}/paste_1.png')..writeAsBytesSync([9]);
+      final uid = await addStill('/var/mobile/otro/1.png');
+      await uploadedFromHere(
+        uid,
+        original.path,
+        'iris/ws/cloud-1/moodboard/$uid',
+      );
+
+      final downloaded = await MediaHydrateService(
+        db,
+        _FakeCloud([asset(uid, 'https://res.cloudinary.com/x/buena')], dir),
+      ).hydrateProject(projectId, 'cloud-1');
+
+      expect(downloaded, 1);
+      final still = await db.select(db.moodboardImages).getSingle();
+      expect(still.imagePath, original.path);
+      // No se bajó ninguna copia.
+      expect(dir.listSync().whereType<File>(), hasLength(1));
+    },
+  );
+
+  test('si la nube tiene otra versión, se baja aunque haya original', () async {
+    final original = File('${dir.path}/paste_1.png')..writeAsBytesSync([9]);
+    final uid = await addStill('/var/mobile/otro/1.png');
+    await uploadedFromHere(uid, original.path, 'iris/ws/cloud-1/moodboard/viejo');
+
+    await MediaHydrateService(
+      db,
+      _FakeCloud([asset(uid, 'https://res.cloudinary.com/x/buena')], dir),
+    ).hydrateProject(projectId, 'cloud-1');
+
+    final still = await db.select(db.moodboardImages).getSingle();
+    expect(still.imagePath, isNot(original.path));
+    expect(File(still.imagePath).existsSync(), isTrue);
+  });
 }

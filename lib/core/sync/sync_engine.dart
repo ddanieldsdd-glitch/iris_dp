@@ -190,6 +190,9 @@ class SyncEngine {
   /// Proyectos bajados hace poco: el otro equipo sube sus imágenes después
   /// del contenido, así que se vuelven a mirar un rato aunque no cambien.
   final Map<String, DateTime> _recentPulls = {};
+
+  /// El aviso de imágenes desactivadas va al log una vez por sesión.
+  static bool _warnedMediaOff = false;
   static const _mediaFollowUp = Duration(minutes: 10);
 
   static Future<void> _settled(Future<void>? f) async {
@@ -497,6 +500,18 @@ class SyncEngine {
       // Las imágenes siguen subiendo en segundo plano.
       unawaited(uploadQueue.startWorker());
       bytesSaved = uploadQueue.bytesSavedSession;
+    } else if (!_warnedMediaOff) {
+      // Sin esto las imágenes ni bajan ni suben y no queda rastro.
+      _warnedMediaOff = true;
+      await ErrorLog.record(
+        StateError(
+          'Imágenes desactivadas: esta versión se compiló sin '
+          'CLOUDINARY_CLOUD_NAME / CLOUDINARY_UPLOAD_PRESET '
+          '(usar scripts/run_cloud.sh o los --dart-define).',
+        ),
+        null,
+        context: 'Sincronizar',
+      );
     }
 
     final client = _client;

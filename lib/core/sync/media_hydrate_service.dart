@@ -159,6 +159,20 @@ class MediaHydrateService {
       return false;
     }
 
+    // La ruta llegó de otro equipo, pero la nube tiene justo lo que se subió
+    // desde aquí: se vuelve al original en vez de bajar una copia.
+    final original = await _ownUploadStillCurrent(projectId, asset);
+    if (original != null) {
+      await _applyLocalPath(
+        projectId: projectId,
+        entityType: entityType,
+        entityKey: entityKey,
+        newPath: original,
+      );
+      await _markDownloaded(projectId, projectCloudId, asset, original);
+      return true;
+    }
+
     final ext = p.extension(publicId);
     final safeExt = ext.isEmpty ? '.jpg' : ext;
     // Con la versión en el nombre: una nueva no pisa la ruta de la anterior
@@ -222,6 +236,39 @@ class MediaHydrateService {
     final unchangedHere =
         row.fileStamp == null || row.fileStamp == mediaFileStamp(localPath);
     return unchangedHere;
+  }
+
+  /// El archivo que este equipo subió para este medio, si la nube sigue
+  /// teniendo esa misma subida (mismo `public_id` o ruta de Storage) y el
+  /// archivo sigue aquí. Una versión nueva de otro equipo lleva otro id.
+  Future<String?> _ownUploadStillCurrent(
+    int projectId,
+    Map<String, dynamic> asset,
+  ) async {
+    final cloudIds = {
+      asset['public_id'] as String?,
+      asset['storage_path'] as String?,
+    }..remove(null);
+    if (cloudIds.isEmpty) return null;
+    final row = await (_db.select(_db.pendingMediaUploads)..where(
+          (t) =>
+              t.projectId.equals(projectId) &
+              t.entityType.equals(asset['entity_type'] as String) &
+              t.entityKey.equals(asset['entity_key'] as String),
+        ))
+        .getSingleOrNull();
+    if (row == null ||
+        row.status != 'done' ||
+        !cloudIds.contains(row.publicId)) {
+      return null;
+    }
+    final cloudHash = asset['content_hash'] as String?;
+    if (row.remoteHash != null &&
+        cloudHash != null &&
+        row.remoteHash != cloudHash) {
+      return null;
+    }
+    return File(row.localPath).existsSync() ? row.localPath : null;
   }
 
   /// Lo que se acaba de bajar ya está en la nube: se anota como subido desde
@@ -596,8 +643,11 @@ class MediaHydrateService {
       return null;
     }
 
+    final original = await _ownUploadStillCurrent(projectId, asset);
     final String? newPath;
-    if (slot.kind == MediaKind.file) {
+    if (original != null) {
+      newPath = original;
+    } else if (slot.kind == MediaKind.file) {
       final storagePath = asset['storage_path'] as String?;
       if (storagePath == null) return null;
       final meta = asset['metadata'];
@@ -643,7 +693,9 @@ class MediaHydrateService {
           if (t.actualTableName == slot.table) t,
       },
     );
-    if (current != null) _deleteReplacedDownload(current, newPath, slot.entityType);
+    if (current != null && original == null) {
+      _deleteReplacedDownload(current, newPath, slot.entityType);
+    }
     return newPath;
   }
 
