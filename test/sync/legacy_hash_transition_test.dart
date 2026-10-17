@@ -113,4 +113,35 @@ void main() {
       expect(items.single.action, SyncPlanAction.pushContentLocal);
     },
   );
+
+  test('las rutas de los archivos no cuentan para la huella', () async {
+    // En iOS la carpeta de la app cambia con cada instalación.
+    Map<String, dynamic> withPaths(String root) => {
+      'shots': [
+        {
+          'shotKey': 'shot:1:1',
+          'number': 1,
+          'storyboardImagePath': '$root/projects/2/storyboard/sb.jpg',
+          'cameraPlanImagePath': '["$root/projects/2/references/p.png"]',
+        },
+      ],
+    };
+    final before = withPaths('/var/mobile/Containers/Data/Application/AAA');
+    final after = withPaths('/var/mobile/Containers/Data/Application/BBB');
+
+    expect(
+      ProjectContentBundle.hashBundle(before),
+      ProjectContentBundle.hashBundle(after),
+    );
+    expect(
+      ProjectContentBundle.hashBundle(before),
+      isNot(
+        ProjectContentBundle.hashBundle({
+          'shots': [
+            {...(before['shots'] as List).single as Map, 'number': 2},
+          ],
+        }),
+      ),
+    );
+  });
 }
