@@ -24,6 +24,8 @@ import '../../shared/pdf_export/storyboard_pdf.dart';
 import '../shoot_documents/shoot_document_import_actions.dart';
 import '../technical_script/technical_script_screen.dart';
 import 'storyboard_export_options_sheet.dart';
+import '../../core/utils/share_origin.dart';
+import 'shot_sheet_data.dart';
 import 'storyboard_shot_export_service.dart';
 import 'storyboard_viewer.dart';
 import '../../core/widgets/app_snackbar.dart';
@@ -931,21 +933,24 @@ class _StoryboardFrame extends ConsumerWidget {
 
   Future<void> _exportFrame(BuildContext context, WidgetRef ref) async {
     final db = ref.read(databaseProvider);
-    final style = await showStoryboardExportOptionsSheet(
+    final choice = await showStoryboardExportOptionsSheet(
       context,
-      singleShot: true,
+      showImageChoice: shotHasBothImages(shot),
     );
-    if (style == null) return;
+    if (choice == null) return;
 
     try {
       final project = await db.getProject(scene.projectId);
       if (project == null) return;
+      if (!context.mounted) return;
       final path = await StoryboardShotExportService.exportSingle(
         project: project,
         scene: scene,
         shot: shot,
-        style: style,
+        style: choice.style,
+        imageSource: choice.imageSource,
         db: db,
+        shareOrigin: shareOrigin(context),
       );
       if (!context.mounted || path == null) return;
       AppSnackBar.show(context, 'Plano exportado en $path');

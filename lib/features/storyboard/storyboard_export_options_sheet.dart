@@ -5,72 +5,120 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import 'shot_sheet_data.dart';
 import 'storyboard_export_style.dart';
 import 'storyboard_group_export_options.dart';
 import 'storyboard_image_palette.dart';
 
-/// Opciones de exportación para un solo plano (CLEAN / BASIC / DETAIL / SHOT PLAN).
-Future<StoryboardExportStyle?> showStoryboardExportOptionsSheet(
+/// Opciones de exportación para un solo plano (CLEAN / BASIC / DETAIL /
+/// SHOT PLAN). Con [showImageChoice], deja elegir qué imagen lo representa.
+Future<({StoryboardExportStyle style, ShotImageSource imageSource})?>
+showStoryboardExportOptionsSheet(
   BuildContext context, {
-  required bool singleShot,
+  bool showImageChoice = false,
 }) {
   final palette = context.palette;
 
-  return showModalBottomSheet<StoryboardExportStyle>(
+  return showModalBottomSheet<
+    ({StoryboardExportStyle style, ShotImageSource imageSource})
+  >(
     context: context,
     isScrollControlled: true,
     backgroundColor: palette.surfaceElevated,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
-    builder: (ctx) {
-      final bottom = MediaQuery.paddingOf(ctx).bottom;
-      return SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.md,
-            AppSpacing.lg,
-            AppSpacing.lg + bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _SheetHeader(
-                title: singleShot
-                    ? 'Opciones de exportación de una sola toma'
-                    : 'Opciones de exportación del storyboard',
-                subtitle: singleShot
-                    ? 'Revisa notas y metadata antes de exportar '
-                        'para afinar la planificación del plano.'
-                    : 'Elige qué información incluir en el PDF '
-                        'del storyboard completo.',
-                onClose: () => Navigator.pop(ctx),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              SizedBox(
-                height: 220,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: StoryboardExportStyle.values.length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(width: AppSpacing.md),
-                  itemBuilder: (_, index) {
-                    final style = StoryboardExportStyle.values[index];
-                    return _ShotStyleCard(
-                      style: style,
-                      onTap: () => Navigator.pop(ctx, style),
-                    );
-                  },
-                ),
+    builder: (ctx) => _SingleShotSheet(showImageChoice: showImageChoice),
+  );
+}
+
+class _SingleShotSheet extends StatefulWidget {
+  final bool showImageChoice;
+
+  const _SingleShotSheet({required this.showImageChoice});
+
+  @override
+  State<_SingleShotSheet> createState() => _SingleShotSheetState();
+}
+
+class _SingleShotSheetState extends State<_SingleShotSheet> {
+  ShotImageSource _source = ShotImageSource.storyboard;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.lg,
+          AppSpacing.lg + bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _SheetHeader(
+              title: 'Opciones de exportación de una sola toma',
+              subtitle:
+                  'Revisa notas y metadata antes de exportar '
+                  'para afinar la planificación del plano. Todo sale en PDF.',
+              onClose: () => Navigator.pop(context),
+            ),
+            if (widget.showImageChoice) ...[
+              const SizedBox(height: AppSpacing.md),
+              _ImageSourcePicker(
+                value: _source,
+                onChanged: (v) => setState(() => _source = v),
               ),
             ],
-          ),
+            const SizedBox(height: AppSpacing.lg),
+            SizedBox(
+              height: 220,
+              child: _ShotStylePicker(
+                onSelect: (style) => Navigator.pop(context, (
+                  style: style,
+                  imageSource: _source,
+                )),
+              ),
+            ),
+          ],
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
+}
+
+/// «Imagen del plano: Storyboard | Referencia».
+class _ImageSourcePicker extends StatelessWidget {
+  final ShotImageSource value;
+  final ValueChanged<ShotImageSource> onChanged;
+
+  const _ImageSourcePicker({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Row(
+      children: [
+        Text('Imagen del plano', style: AppTypography.caption(palette)),
+        const SizedBox(width: AppSpacing.md),
+        SegmentedButton<ShotImageSource>(
+          segments: [
+            for (final source in ShotImageSource.values)
+              ButtonSegment(
+                value: source,
+                label: Text(source.label, style: const TextStyle(fontSize: 11)),
+              ),
+          ],
+          selected: {value},
+          showSelectedIcon: false,
+          onSelectionChanged: (s) => onChanged(s.first),
+        ),
+      ],
+    );
+  }
 }
 
 /// Opciones de exportación de grupo: secuencias (STORYBOARD / SHOT LIST) o por plano.
@@ -101,6 +149,7 @@ class _GroupExportSheet extends StatefulWidget {
 
 class _GroupExportSheetState extends State<_GroupExportSheet> {
   StoryboardGroupExportMode _mode = StoryboardGroupExportMode.sequences;
+  ShotImageSource _source = ShotImageSource.storyboard;
 
   @override
   Widget build(BuildContext context) {
@@ -122,7 +171,7 @@ class _GroupExportSheetState extends State<_GroupExportSheet> {
               title: 'Exportar storyboard',
               subtitle: _mode == StoryboardGroupExportMode.sequences
                   ? 'Exporta la secuencia como PDF de storyboard o shot list.'
-                  : 'Exporta cada plano con overlays y metadata individuales.',
+                  : 'Un PDF con una hoja por plano, en el nivel elegido.',
               onClose: () => Navigator.pop(context),
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -141,10 +190,16 @@ class _GroupExportSheetState extends State<_GroupExportSheet> {
                     .toList(),
                 selected: {_mode},
                 showSelectedIcon: false,
-                onSelectionChanged: (s) =>
-                    setState(() => _mode = s.first),
+                onSelectionChanged: (s) => setState(() => _mode = s.first),
               ),
             ),
+            if (_mode == StoryboardGroupExportMode.asShots) ...[
+              const SizedBox(height: AppSpacing.md),
+              _ImageSourcePicker(
+                value: _source,
+                onChanged: (v) => setState(() => _source = v),
+              ),
+            ],
             const SizedBox(height: AppSpacing.lg),
             SizedBox(
               height: 220,
@@ -162,7 +217,10 @@ class _GroupExportSheetState extends State<_GroupExportSheet> {
                         key: const ValueKey('asShots'),
                         onSelect: (style) => Navigator.pop(
                           context,
-                          StoryboardGroupExportChoice.asShots(style),
+                          StoryboardGroupExportChoice.asShots(
+                            style,
+                            imageSource: _source,
+                          ),
                         ),
                       ),
               ),
@@ -224,7 +282,10 @@ class _SequenceLayoutPicker extends StatelessWidget {
       separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
       itemBuilder: (_, index) {
         final layout = StoryboardSequenceLayout.values[index];
-        return _SequenceLayoutCard(layout: layout, onTap: () => onSelect(layout));
+        return _SequenceLayoutCard(
+          layout: layout,
+          onTap: () => onSelect(layout),
+        );
       },
     );
   }
@@ -253,10 +314,7 @@ class _SequenceLayoutCard extends StatelessWidget {
   final StoryboardSequenceLayout layout;
   final VoidCallback onTap;
 
-  const _SequenceLayoutCard({
-    required this.layout,
-    required this.onTap,
-  });
+  const _SequenceLayoutCard({required this.layout, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -321,10 +379,9 @@ class _SequenceLayoutCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         layout.description,
-                        style: AppTypography.caption(palette).copyWith(
-                          height: 1.25,
-                          fontSize: 11,
-                        ),
+                        style: AppTypography.caption(
+                          palette,
+                        ).copyWith(height: 1.25, fontSize: 11),
                         maxLines: 4,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -344,10 +401,7 @@ class _ShotStyleCard extends StatelessWidget {
   final StoryboardExportStyle style;
   final VoidCallback onTap;
 
-  const _ShotStyleCard({
-    required this.style,
-    required this.onTap,
-  });
+  const _ShotStyleCard({required this.style, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -386,12 +440,7 @@ class _ShotStyleCard extends StatelessWidget {
                   Positioned(
                     left: 8,
                     top: 8,
-                    child: _PdfBadge(
-                      palette: palette,
-                      icon: style.singleShotUsesPdf
-                          ? Icons.picture_as_pdf_outlined
-                          : Icons.image_outlined,
-                    ),
+                    child: _PdfBadge(palette: palette),
                   ),
                 ],
               ),
@@ -417,10 +466,9 @@ class _ShotStyleCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         style.description,
-                        style: AppTypography.caption(palette).copyWith(
-                          height: 1.25,
-                          fontSize: 11,
-                        ),
+                        style: AppTypography.caption(
+                          palette,
+                        ).copyWith(height: 1.25, fontSize: 11),
                         maxLines: 4,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -438,12 +486,8 @@ class _ShotStyleCard extends StatelessWidget {
 
 class _PdfBadge extends StatelessWidget {
   final AppPalette palette;
-  final IconData icon;
 
-  const _PdfBadge({
-    required this.palette,
-    this.icon = Icons.picture_as_pdf_outlined,
-  });
+  const _PdfBadge({required this.palette});
 
   @override
   Widget build(BuildContext context) {
@@ -455,7 +499,11 @@ class _PdfBadge extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: palette.accent.withValues(alpha: 0.5)),
       ),
-      child: Icon(icon, size: 16, color: palette.accent),
+      child: Icon(
+        Icons.picture_as_pdf_outlined,
+        size: 16,
+        color: palette.accent,
+      ),
     );
   }
 }
@@ -523,7 +571,12 @@ class _SequencePreviewPainter extends CustomPainter {
       for (var line = 0; line < 3; line++) {
         final lineY = top + 6 + line * 7.0;
         canvas.drawRect(
-          Rect.fromLTWH(inner.left + imgW + 6, lineY, inner.width - imgW - 10, 4),
+          Rect.fromLTWH(
+            inner.left + imgW + 6,
+            lineY,
+            inner.width - imgW - 10,
+            4,
+          ),
           Paint()..color = const Color(0xFF666666),
         );
       }
@@ -540,56 +593,120 @@ class _ShotStylePreviewPainter extends CustomPainter {
 
   _ShotStylePreviewPainter({required this.style});
 
+  static const _image = Color(0xFF6E8A96);
+  static const _paper = Color(0xFFEDEDED);
+  static const _line = Color(0xFFB0B0B0);
+
   @override
   void paint(Canvas canvas, Size size) {
-    final bg = Paint()..color = const Color(0xFF3D3D3D);
-    canvas.drawRect(Offset.zero & size, bg);
-
-    final imgRect = Rect.fromLTWH(
-      size.width * 0.08,
-      size.height * 0.12,
-      size.width * 0.84,
-      size.height * 0.55,
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = const Color(0xFF2A2A2A),
     );
-    canvas.drawRect(imgRect, Paint()..color = const Color(0xFF555555));
-
-    if (style == StoryboardExportStyle.basic) {
-      final badge = Rect.fromLTWH(
-        size.width * 0.62,
-        size.height * 0.58,
-        size.width * 0.32,
-        size.height * 0.34,
-      );
-      canvas.drawArc(
-        badge,
-        math.pi,
-        math.pi,
-        false,
-        Paint()
-          ..color = const Color(0xFF555555)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2,
-      );
-      canvas.drawRect(
-        Rect.fromLTWH(badge.left, badge.bottom - 8, badge.width, 6),
-        Paint()..color = kArtemisLensAccent,
-      );
+    switch (style) {
+      case StoryboardExportStyle.clean:
+        canvas.drawRect(_imageRect(size, 0.5), Paint()..color = _image);
+      case StoryboardExportStyle.basic:
+        final img = _imageRect(size, 0.5);
+        canvas.drawRect(img, Paint()..color = _image);
+        _drawFramelines(canvas, img.deflate(4));
+        _drawFan(canvas, Offset(img.right - 14, img.bottom - 5), 9);
+      case StoryboardExportStyle.detail:
+        final page = _imageRect(size, 0.5).inflate(2);
+        canvas.drawRect(page, Paint()..color = _paper);
+        final img = Rect.fromLTRB(
+          page.left,
+          page.top + 5,
+          page.right,
+          page.bottom - 18,
+        );
+        canvas.drawRect(
+          Rect.fromLTRB(page.left, page.top, page.right, img.top),
+          Paint()..color = Colors.black,
+        );
+        canvas.drawRect(img, Paint()..color = _image);
+        _drawLines(
+          canvas,
+          Rect.fromLTWH(page.left + 4, img.bottom + 4, page.width * 0.3, 10),
+        );
+        _drawFan(canvas, Offset(page.center.dx, img.bottom + 12), 6);
+        canvas.drawRect(
+          Rect.fromLTWH(
+            page.right - page.width * 0.32,
+            img.bottom + 3,
+            page.width * 0.3,
+            12,
+          ),
+          Paint()
+            ..color = _line
+            ..style = PaintingStyle.stroke,
+        );
+      case StoryboardExportStyle.shotPlan:
+        final h = size.height - 10;
+        final page = Rect.fromCenter(
+          center: size.center(Offset.zero),
+          width: h * 0.72,
+          height: h,
+        );
+        canvas.drawRect(page, Paint()..color = _paper);
+        canvas.drawRect(
+          Rect.fromLTWH(page.left + 3, page.top + 3, page.width - 6, 6),
+          Paint()..color = Colors.black,
+        );
+        canvas.drawRect(
+          Rect.fromLTWH(page.left + 3, page.top + 11, page.width - 6, h * 0.32),
+          Paint()..color = _image,
+        );
+        final colTop = page.top + 14 + h * 0.36;
+        final colW = (page.width - 9) / 2;
+        _drawLines(canvas, Rect.fromLTWH(page.left + 3, colTop, colW, 16));
+        canvas.drawRect(
+          Rect.fromLTWH(page.left + 3 + colW + 3, colTop, colW, 18),
+          Paint()
+            ..color = _line
+            ..style = PaintingStyle.stroke,
+        );
+        canvas.drawRect(
+          Rect.fromLTWH(
+            page.left + 3 + colW + 3,
+            colTop + 21,
+            colW,
+            page.bottom - colTop - 24,
+          ),
+          Paint()..color = const Color(0xFF0B1424),
+        );
     }
+  }
 
-    if (style == StoryboardExportStyle.detail) {
-      canvas.drawRect(
-        Rect.fromLTWH(imgRect.left, imgRect.bottom - 14, imgRect.width, 14),
-        Paint()..color = Colors.black.withValues(alpha: 0.65),
-      );
-    }
+  Rect _imageRect(Size size, double heightFactor) => Rect.fromCenter(
+    center: size.center(Offset.zero),
+    width: size.width * 0.84,
+    height: size.height * heightFactor * 1.3,
+  );
 
-    if (style == StoryboardExportStyle.shotPlan) {
-      final docTop = imgRect.bottom + 6;
-      canvas.drawRect(
-        Rect.fromLTWH(8, docTop, size.width - 16, size.height - docTop - 4),
-        Paint()..color = Colors.white.withValues(alpha: 0.12),
-      );
+  void _drawLines(Canvas canvas, Rect area) {
+    final paint = Paint()..color = _line;
+    for (var y = area.top; y < area.bottom; y += 4) {
+      canvas.drawRect(Rect.fromLTWH(area.left, y, area.width, 1.6), paint);
     }
+  }
+
+  void _drawFan(Canvas canvas, Offset center, double radius) {
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    canvas.drawArc(
+      rect,
+      math.pi,
+      math.pi,
+      true,
+      Paint()..color = const Color(0xFFA8A8A8),
+    );
+    canvas.drawArc(
+      rect,
+      -math.pi / 2 - 0.5,
+      1.0,
+      true,
+      Paint()..color = kArtemisLensAccent,
+    );
   }
 
   void _drawFramelines(Canvas canvas, Rect area) {
