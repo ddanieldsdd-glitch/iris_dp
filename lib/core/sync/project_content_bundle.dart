@@ -1115,8 +1115,140 @@ class ProjectContentBundle {
     if (!hasMeaningfulContent(bundle)) return;
     // Todo o nada: si la importación falla a medias, el contenido anterior
     // sigue ahí.
-    await db.transaction(() => _replaceContent(db, projectId, bundle));
+    // Los archivos que este equipo ya tiene se quedan: la misma fila (uid)
+    // vuelve con la ruta de aquí, no con la del otro equipo, y no hay que
+    // bajar una copia de lo que ya está en disco.
+    final localFiles = await _localFilesByUid(db, projectId);
+    await db.transaction(() async {
+      await _replaceContent(db, projectId, bundle);
+      await _restoreLocalFiles(db, projectId, localFiles);
+    });
     await _clearMissingSlotPaths(db, projectId);
+  }
+
+  /// Tablas con archivo por fila: (tabla, columna, SELECT id, uid, ruta del
+  /// proyecto) — las de siempre más los huecos ([kMediaSlots]).
+  static List<(String, String, String, bool)> get _fileColumns => [
+    (
+      'shot_references',
+      'image_path',
+      'SELECT r.id, r.uid, r.image_path AS path FROM shot_references r '
+          'JOIN shots s ON s.id = r.shot_id WHERE s.project_id = ?',
+      false,
+    ),
+    (
+      'moodboard_images',
+      'image_path',
+      'SELECT id, uid, image_path AS path FROM moodboard_images '
+          'WHERE project_id = ?',
+      false,
+    ),
+    (
+      'site_images',
+      'image_path',
+      'SELECT i.id, i.uid, i.image_path AS path FROM site_images i '
+          'JOIN location_sites s ON s.id = i.site_id WHERE s.project_id = ?',
+      false,
+    ),
+    (
+      'location_images',
+      'image_path',
+      'SELECT i.id, i.uid, i.image_path AS path FROM location_images i '
+          'JOIN location_base_plans b ON b.id = i.location_id '
+          'WHERE b.project_id = ?',
+      false,
+    ),
+    for (final slot in kMediaSlots)
+      (slot.table, slot.column, slot.selectForProject, slot.isList),
+  ];
+
+  static String _fileKey(String table, String column, String uid) =>
+      '$table.$column.$uid';
+
+  /// Ruta (o lista de rutas) de cada fila con archivo de este proyecto, por
+  /// uid, solo si algo de ella existe en disco.
+  static Future<Map<String, String>> _localFilesByUid(
+    AppDatabase db,
+    int projectId,
+  ) async {
+    final out = <String, String>{};
+    for (final (table, column, select, isList) in _fileColumns) {
+      final rows = await db
+          .customSelect(select, variables: [Variable.withInt(projectId)])
+          .get();
+      for (final row in rows) {
+        final uid = row.read<String?>('uid');
+        final raw = row.read<String?>('path');
+        if (uid == null || raw == null || raw.isEmpty) continue;
+        final paths = isList ? decodeSlotPaths(raw) : [raw];
+        if (paths.any((p) => File(p).existsSync())) {
+          out[_fileKey(table, column, uid)] = raw;
+        }
+      }
+    }
+    return out;
+  }
+
+  /// Tras importar: donde el bundle trae una ruta que aquí no existe y la
+  /// fila (por uid) tenía un archivo aquí, vuelve el de aquí. En las listas,
+  /// posición a posición. La principal de cada plano sigue a su referencia.
+  static Future<void> _restoreLocalFiles(
+    AppDatabase db,
+    int projectId,
+    Map<String, String> localFiles,
+  ) async {
+    if (localFiles.isEmpty) return;
+    for (final (table, column, select, isList) in _fileColumns) {
+      final rows = await db
+          .customSelect(select, variables: [Variable.withInt(projectId)])
+          .get();
+      for (final row in rows) {
+        final uid = row.read<String?>('uid');
+        final imported = row.read<String?>('path');
+        if (uid == null) continue;
+        final local = localFiles[_fileKey(table, column, uid)];
+        if (local == null) continue;
+        final String? value;
+        if (isList) {
+          final here = decodeSlotPaths(local);
+          final there = decodeSlotPaths(imported);
+          final merged = [
+            for (var i = 0; i < there.length || i < here.length; i++)
+              i < there.length && File(there[i]).existsSync()
+                  ? there[i]
+                  : i < here.length && File(here[i]).existsSync()
+                  ? here[i]
+                  : (i < there.length ? there[i] : here[i]),
+          ];
+          value = jsonEncode(merged);
+          if (value == imported) continue;
+        } else {
+          if (imported != null && File(imported).existsSync()) continue;
+          if (!File(local).existsSync()) continue;
+          value = local;
+        }
+        await db.customUpdate(
+          'UPDATE $table SET $column = ? WHERE id = ?',
+          variables: [Variable.withString(value), Variable.withInt(row.read<int>('id'))],
+          updates: {
+            for (final t in db.allTables)
+              if (t.actualTableName == table) t,
+          },
+        );
+        if (table == 'shot_references' && imported != null) {
+          await db.customUpdate(
+            'UPDATE shots SET reference_image_path = ? '
+            'WHERE reference_image_path = ? AND project_id = ?',
+            variables: [
+              Variable.withString(value),
+              Variable.withString(imported),
+              Variable.withInt(projectId),
+            ],
+            updates: {db.shots},
+          );
+        }
+      }
+    }
   }
 
   /// El bundle trae rutas del dispositivo de origen. Las que no existen aquí

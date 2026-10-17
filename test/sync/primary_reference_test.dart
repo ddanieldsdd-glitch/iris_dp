@@ -165,4 +165,31 @@ void main() {
       expect(shot.referenceImagePath, ref);
     },
   );
+
+  test(
+    'al importar, lo que este equipo ya tiene se queda con su archivo',
+    () async {
+      // Visto en el Mac (2026-10-17): la descarga dejó todas las referencias
+      // con rutas del iPad aunque los originales estaban en disco.
+      final original = file('shot_76_original.png', [4, 4, 4]);
+      final reference = await addReference(original);
+      final bundle = await ProjectContentBundle.export(db, projectId);
+      // El bundle llega del iPad: misma fila (uid), ruta del iPad.
+      final row = Map<String, dynamic>.from(
+        (bundle['shotReferences'] as List).single as Map,
+      );
+      row['imagePath'] =
+          '/var/mobile/Containers/Data/Application/X/references/shot_reference_1.jpg';
+      bundle['shotReferences'] = [row];
+      (bundle['shots'] as List).single['referenceImagePath'] = row['imagePath'];
+
+      await ProjectContentBundle.importBundle(db, projectId, bundle);
+
+      final imported = await db.select(db.shotReferences).getSingle();
+      expect(imported.uid, reference.uid);
+      expect(imported.imagePath, original);
+      final shot = await db.select(db.shots).getSingle();
+      expect(shot.referenceImagePath, original);
+    },
+  );
 }

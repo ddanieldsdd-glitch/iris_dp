@@ -6,6 +6,7 @@ import '../cloud/cloud_session.dart';
 import 'project_content_sync_service.dart';
 import 'project_content_bundle.dart' show bundleIntOr;
 import 'sync_plan.dart';
+import '../utils/error_log.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Aplica un [SyncPlan] confirmado por el usuario.
@@ -24,13 +25,31 @@ class SyncPlanApplier {
     var pulled = 0;
     var deleted = 0;
 
+    // Un ítem que falle no deja sin aplicar los demás; el primer error se
+    // relanza al final para que se vea.
+    Object? firstError;
+    StackTrace? firstStack;
     for (final item in plan.items) {
       if (item.choice == SyncResolutionChoice.skip) continue;
-
-      final applied = await _applyItem(item, workspaceId);
-      pushed += applied.pushed;
-      pulled += applied.pulled;
-      deleted += applied.deleted;
+      try {
+        final applied = await _applyItem(item, workspaceId);
+        pushed += applied.pushed;
+        pulled += applied.pulled;
+        deleted += applied.deleted;
+      } catch (e, st) {
+        await ErrorLog.record(e, st, context: 'Sincronizar ${item.title}');
+        firstError ??= e;
+        firstStack ??= st;
+      }
+    }
+    if (firstError != null) {
+      throw SyncApplyException(
+        firstError,
+        firstStack,
+        pushed: pushed,
+        pulled: pulled,
+        deleted: deleted,
+      );
     }
 
     return (pushed: pushed, pulled: pulled, deleted: deleted);
@@ -251,3 +270,24 @@ class SyncPlanApplier {
     );
   }
 }
+
+/// Algún ítem del plan falló; los demás se aplicaron (estas cuentas).
+class SyncApplyException implements Exception {
+  final Object error;
+  final StackTrace? stack;
+  final int pushed;
+  final int pulled;
+  final int deleted;
+
+  const SyncApplyException(
+    this.error,
+    this.stack, {
+    required this.pushed,
+    required this.pulled,
+    required this.deleted,
+  });
+
+  @override
+  String toString() => '$error';
+}
+
