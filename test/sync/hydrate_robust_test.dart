@@ -136,31 +136,75 @@ void main() {
     expect(cloud.uploads, isEmpty);
   });
 
-  test('lo que ya estaba en cola tras bajarlo sale de la cola', () async {
-    // Como en el iPad: la imagen se bajó antes del arreglo y quedó en cola.
-    final downloaded =
-        (File('${dir.path}/moodboard_123.jpg')..writeAsBytesSync([1])).path;
-    final uid = await addStill(downloaded);
-    await db
-        .into(db.pendingMediaUploads)
-        .insert(
-          PendingMediaUploadsCompanion.insert(
-            projectId: projectId,
-            projectCloudId: const Value('cloud-1'),
-            entityType: MediaEntityType.moodboard,
-            entityKey: MediaEntityKeys.byUid(uid),
-            localPath: downloaded,
-          ),
-        );
-    final cloud = _FakeCloud([
-      asset(uid, 'https://res.cloudinary.com/x/buena'),
-    ], dir);
+  Map<String, dynamic> versioned(String uid, String hash) => {
+    ...asset(uid, 'https://res.cloudinary.com/x/v$hash'),
+    'content_hash': hash.padRight(64, '0'),
+  };
 
-    await MediaHydrateService(db, cloud).hydrateProject(projectId, 'cloud-1');
-    final queue = MediaUploadQueue(db: db, cloud: cloud, isEnabled: () => true);
-    await queue.scanAndEnqueueProject(projectId);
-    await queue.startWorker();
+  test(
+    'un boceto redibujado encima del mismo archivo se vuelve a subir',
+    () async {
+      final uid = await addStill('/no/existe/1.png');
+      final cloud = _FakeCloud([versioned(uid, 'aaaaaaaa')], dir);
+      await MediaHydrateService(db, cloud).hydrateProject(projectId, 'cloud-1');
+      final still = await db.select(db.moodboardImages).getSingle();
 
-    expect(cloud.uploads, isEmpty);
+      // Se dibuja encima: misma ruta, otro contenido y otra fecha.
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      File(still.imagePath).writeAsBytesSync([7, 7, 7, 7]);
+      final queue = MediaUploadQueue(
+        db: db,
+        cloud: cloud,
+        isEnabled: () => true,
+      );
+      await queue.scanAndEnqueueProject(projectId);
+      await queue.startWorker();
+
+      expect(cloud.uploads, ['uid:$uid']);
+    },
+  );
+
+  test('una versión nueva en la nube se baja con otro nombre', () async {
+    final uid = await addStill('/no/existe/1.png');
+    await MediaHydrateService(
+      db,
+      _FakeCloud([versioned(uid, 'aaaaaaaa')], dir),
+    ).hydrateProject(projectId, 'cloud-1');
+    final first = (await db.select(db.moodboardImages).getSingle()).imagePath;
+
+    await MediaHydrateService(
+      db,
+      _FakeCloud([versioned(uid, 'bbbbbbbb')], dir),
+    ).hydrateProject(projectId, 'cloud-1');
+    final second = (await db.select(db.moodboardImages).getSingle()).imagePath;
+
+    expect(second, isNot(first));
+    expect(second, contains('bbbbbbbb'));
+    expect(File(first).existsSync(), isFalse);
   });
+
+  test(
+    'si aquí se tocó el archivo, la versión de la nube no lo pisa',
+    () async {
+      final uid = await addStill('/no/existe/1.png');
+      await MediaHydrateService(
+        db,
+        _FakeCloud([versioned(uid, 'aaaaaaaa')], dir),
+      ).hydrateProject(projectId, 'cloud-1');
+      final local = (await db.select(db.moodboardImages).getSingle()).imagePath;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      File(local).writeAsBytesSync([5, 5, 5]);
+
+      await MediaHydrateService(
+        db,
+        _FakeCloud([versioned(uid, 'bbbbbbbb')], dir),
+      ).hydrateProject(projectId, 'cloud-1');
+
+      expect(
+        (await db.select(db.moodboardImages).getSingle()).imagePath,
+        local,
+      );
+      expect(File(local).readAsBytesSync(), [5, 5, 5]);
+    },
+  );
 }

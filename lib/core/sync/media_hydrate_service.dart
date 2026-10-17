@@ -8,6 +8,7 @@ import '../database/app_database.dart';
 import 'cloud_media_service.dart';
 import 'media_entity_keys.dart';
 import 'media_entity_types.dart';
+import 'media_file_stamp.dart';
 import 'media_slots.dart';
 import 'primary_reference_repair.dart' as repair_refs;
 import '../utils/error_log.dart';
@@ -23,7 +24,12 @@ class MediaHydrateService {
     final assets = await _cloud.fetchProjectAssets(projectCloudId);
     var downloaded = 0;
 
+    final strokes = <Map<String, dynamic>>[];
     for (final asset in assets) {
+      if (asset['entity_type'] == MediaEntityType.sketchStrokes) {
+        strokes.add(asset);
+        continue;
+      }
       try {
         if (await _hydrateAsset(projectId, projectCloudId, asset)) {
           downloaded++;
@@ -38,7 +44,78 @@ class MediaHydrateService {
       }
     }
 
+    // Los trazos, después: van junto a la ruta actual de su imagen, que puede
+    // haber cambiado en esta misma pasada (versión nueva con otro nombre).
+    for (final asset in strokes) {
+      try {
+        if (await _hydrateStrokes(projectId, projectCloudId, asset)) {
+          downloaded++;
+        }
+      } catch (e, st) {
+        await ErrorLog.record(
+          e,
+          st,
+          context: 'Bajar trazos ${asset['entity_key']}',
+        );
+      }
+    }
+
     return downloaded;
+  }
+
+  /// Escribe los trazos de un boceto junto a su imagen. Devuelve si los bajó.
+  Future<bool> _hydrateStrokes(
+    int projectId,
+    String projectCloudId,
+    Map<String, dynamic> asset,
+  ) async {
+    final parsed = parseSketchStrokesKey(asset['entity_key'] as String? ?? '');
+    final storagePath = asset['storage_path'] as String?;
+    if (parsed == null || storagePath == null) return false;
+    final (imageType, imageKey) = parsed;
+    final image = await _localPathOf(projectId, imageType, imageKey);
+    if (image == null || !File(image).existsSync()) return false;
+    final target = sketchStrokesPathOf(image);
+    if (File(target).existsSync() &&
+        !await _cloudIsNewer(projectId, projectCloudId, asset, target)) {
+      return false;
+    }
+    final bytes = await _cloud.downloadStorageBytes(storagePath);
+    await File(target).writeAsBytes(bytes, flush: true);
+    await _markDownloaded(projectId, projectCloudId, asset, target);
+    return true;
+  }
+
+  /// Ruta local de la imagen de un medio (de los de siempre o de un hueco).
+  Future<String?> _localPathOf(
+    int projectId,
+    String entityType,
+    String entityKey,
+  ) async {
+    final slot = mediaSlotFor(entityType);
+    if (slot == null) {
+      return _resolveLocalPath(
+        projectId: projectId,
+        entityType: entityType,
+        entityKey: entityKey,
+      );
+    }
+    final parsed = parseMediaSlotKey(entityKey);
+    if (parsed == null) return null;
+    final (uid, index) = parsed;
+    final rows = await _db
+        .customSelect(
+          slot.selectForProject,
+          variables: [Variable.withInt(projectId)],
+        )
+        .get();
+    final row = rows.where((r) => r.read<String?>('uid') == uid).firstOrNull;
+    if (row == null) return null;
+    final raw = row.read<String?>('path');
+    if (!slot.isList) return raw;
+    final paths = decodeSlotPaths(raw);
+    final at = index ?? 0;
+    return at < paths.length ? paths[at] : null;
   }
 
   /// Baja un medio y lo coloca. Devuelve si lo bajó.
@@ -76,15 +153,20 @@ class MediaHydrateService {
       entityType: entityType,
       entityKey: entityKey,
     );
-    if (localPath != null && File(localPath).existsSync()) {
-      await _forgetIfDownloaded(projectId, projectCloudId, asset, localPath);
+    if (localPath != null &&
+        File(localPath).existsSync() &&
+        !await _cloudIsNewer(projectId, projectCloudId, asset, localPath)) {
       return false;
     }
 
     final ext = p.extension(publicId);
     final safeExt = ext.isEmpty ? '.jpg' : ext;
-    final fileName = '${entityType}_${entityKey.hashCode.abs()}$safeExt'
-        .replaceAll(':', '_');
+    // Con la versión en el nombre: una nueva no pisa la ruta de la anterior
+    // (la pantalla la tendría en caché) y queda claro cuál es cuál.
+    final fileName =
+        '${entityType}_${entityKey.hashCode.abs()}${_versionSuffix(asset)}'
+                '$safeExt'
+            .replaceAll(':', '_');
     final newPath = await _cloud.downloadToLocal(
       localProjectId: projectId,
       deliveryUrl: deliveryUrl,
@@ -100,22 +182,46 @@ class MediaHydrateService {
       newPath: newPath,
     );
     await _markDownloaded(projectId, projectCloudId, asset, newPath);
+    _deleteReplacedDownload(localPath, newPath, entityType);
     return true;
   }
 
-  /// Un archivo que ya está aquí y que bajó la app (su nombre empieza por el
-  /// tipo, como `shot_reference_294749529.jpg`) no es un cambio de este
-  /// equipo: si estaba en cola para subirse, sale de ella (antes de este
-  /// arreglo, lo bajado se ponía en cola y se subía recomprimido).
-  Future<void> _forgetIfDownloaded(
+  /// Si la nube tiene una versión de este medio distinta de la que había la
+  /// última vez que coincidió con el archivo de aquí, y aquí no se ha tocado
+  /// desde entonces. Si se tocó aquí, gana lo de aquí (es lo que se subirá).
+  Future<bool> _cloudIsNewer(
     int projectId,
     String projectCloudId,
     Map<String, dynamic> asset,
     String localPath,
   ) async {
-    final type = asset['entity_type'] as String?;
-    if (type == null || !p.basename(localPath).startsWith('${type}_')) return;
-    await _markDownloaded(projectId, projectCloudId, asset, localPath);
+    final cloudHash = asset['content_hash'] as String?;
+    if (cloudHash == null) return false;
+    final row = await (_db.select(_db.pendingMediaUploads)..where(
+          (t) =>
+              t.projectId.equals(projectId) &
+              t.entityType.equals(asset['entity_type'] as String) &
+              t.entityKey.equals(asset['entity_key'] as String),
+        ))
+        .getSingleOrNull();
+    if (row == null) {
+      // Sin historia (bajado o subido antes de las versiones): lo de aquí
+      // se toma como la versión de la nube.
+      await _markDownloaded(projectId, projectCloudId, asset, localPath);
+      return false;
+    }
+    if (row.remoteHash == cloudHash) return false;
+    if (row.status != 'done' || row.localPath != localPath) return false;
+    if (row.remoteHash == null) {
+      // Fila de antes de las versiones: ahora se sabe cuál es la de la nube.
+      await (_db.update(_db.pendingMediaUploads)
+            ..where((t) => t.id.equals(row.id)))
+          .write(PendingMediaUploadsCompanion(remoteHash: Value(cloudHash)));
+      return false;
+    }
+    final unchangedHere =
+        row.fileStamp == null || row.fileStamp == mediaFileStamp(localPath);
+    return unchangedHere;
   }
 
   /// Lo que se acaba de bajar ya está en la nube: se anota como subido desde
@@ -149,6 +255,8 @@ class MediaHydrateService {
               asset['public_id'] as String? ?? asset['storage_path'] as String?,
             ),
             status: const Value('done'),
+            fileStamp: Value(mediaFileStamp(localPath)),
+            remoteHash: Value(asset['content_hash'] as String?),
           ),
         );
   }
@@ -481,8 +589,10 @@ class MediaHydrateService {
     final current = slot.isList
         ? (index != null && index < list().length ? list()[index] : null)
         : raw;
-    if (current != null && current.isNotEmpty && File(current).existsSync()) {
-      await _forgetIfDownloaded(projectId, projectCloudId, asset, current);
+    if (current != null &&
+        current.isNotEmpty &&
+        File(current).existsSync() &&
+        !await _cloudIsNewer(projectId, projectCloudId, asset, current)) {
       return null;
     }
 
@@ -507,7 +617,8 @@ class MediaHydrateService {
         localProjectId: projectId,
         deliveryUrl: url,
         subfolder: slot.subfolder,
-        fileName: '${slot.entityType}_$uid${index ?? ''}.jpg',
+        fileName:
+            '${slot.entityType}_$uid${index ?? ''}${_versionSuffix(asset)}.jpg',
       );
     }
     if (newPath == null) return null;
@@ -532,7 +643,31 @@ class MediaHydrateService {
           if (t.actualTableName == slot.table) t,
       },
     );
+    if (current != null) _deleteReplacedDownload(current, newPath, slot.entityType);
     return newPath;
+  }
+
+  /// `_<8 primeros de la huella>` del medio, o vacío si no la trae.
+  static String _versionSuffix(Map<String, dynamic> asset) {
+    final hash = asset['content_hash'] as String?;
+    return hash == null || hash.length < 8 ? '' : '_${hash.substring(0, 8)}';
+  }
+
+  /// Borra la versión anterior si la bajó la app (no un archivo del usuario).
+  static void _deleteReplacedDownload(
+    String? old,
+    String replacement,
+    String entityType,
+  ) {
+    if (old == null || old == replacement) return;
+    if (!p.basename(old).startsWith('${entityType}_')) return;
+    // Con sus trazos: los de la versión nueva los pone después la pasada de
+    // trazos, junto a la imagen nueva.
+    try {
+      final strokes = File(sketchStrokesPathOf(old));
+      if (strokes.existsSync()) strokes.deleteSync();
+      File(old).deleteSync();
+    } catch (_) {}
   }
 }
 

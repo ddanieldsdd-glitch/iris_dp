@@ -543,6 +543,12 @@ class AppDatabase extends _$AppDatabase {
           );
         }
       }
+      if (from < 52) {
+        // Versiones de las imágenes: saber si un archivo cambió aquí o en
+        // la nube aunque conserve la ruta.
+        await add(pendingMediaUploads, pendingMediaUploads.fileStamp);
+        await add(pendingMediaUploads, pendingMediaUploads.remoteHash);
+      }
     },
   );
 
@@ -4677,7 +4683,7 @@ LazyDatabase _openConnection() {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 51;
+const kSchemaVersion = 52;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

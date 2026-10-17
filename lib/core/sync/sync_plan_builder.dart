@@ -324,7 +324,12 @@ class SyncPlanBuilder {
           cloudHash != null &&
           ProjectContentBundle.isLegacyHash(cloudHash) ==
               ProjectContentBundle.isLegacyHash(base.cloudHash);
-      final cloudChanged = !sameFormat && cloudContent is Map
+      // Con el contenido de la nube a mano se compara el contenido (vale la
+      // huella con o sin rutas); si no, la huella guardada.
+      final compareContent =
+          cloudContent is Map &&
+          !(sameFormat && ProjectContentBundle.isLegacyHash(base.cloudHash));
+      final cloudChanged = compareContent
           ? !ProjectContentBundle.bundleMatchesHash(
               Map<String, dynamic>.from(cloudContent),
               base.cloudHash,

@@ -11,6 +11,7 @@ import 'cloud_media_service.dart';
 import 'cloudinary_public_id.dart';
 import 'media_entity_keys.dart';
 import 'media_entity_types.dart';
+import 'media_file_stamp.dart';
 import 'media_slots.dart';
 
 /// Progreso global de la cola de subidas.
@@ -107,6 +108,22 @@ class MediaUploadQueue {
     if (!_isEnabled()) return false;
     if (!File(localPath).existsSync()) return false;
 
+    // Los trazos de un boceto viajan con su imagen, como archivo aparte.
+    if (entityType != MediaEntityType.sketchStrokes) {
+      final strokes = sketchStrokesPathOf(localPath);
+      if (File(strokes).existsSync()) {
+        await enqueue(
+          projectId: projectId,
+          projectCloudId: projectCloudId,
+          entityType: MediaEntityType.sketchStrokes,
+          entityKey: sketchStrokesKey(entityType, entityKey),
+          localPath: strokes,
+          sortOrder: sortOrder,
+          source: source,
+        );
+      }
+    }
+
     // Una fila por imagen: se reutiliza aunque fallara antes (y se quitan
     // los duplicados que dejaban versiones anteriores).
     final rows = await (_db.select(_db.pendingMediaUploads)
@@ -125,12 +142,25 @@ class MediaUploadQueue {
           .go();
     }
 
-    // Ya subida desde este mismo archivo: cada sincronización vuelve a
-    // recorrer las imágenes, y antes las subía todas otra vez.
+    // Ya subida desde este mismo archivo y sin cambios: cada sincronización
+    // vuelve a recorrer las imágenes. Si el archivo cambió (un boceto
+    // redibujado encima conserva la ruta), se vuelve a subir.
+    final stamp = mediaFileStamp(localPath);
     if (existing != null &&
         existing.status == 'done' &&
         existing.localPath == localPath) {
-      return false;
+      if (existing.fileStamp == stamp) return false;
+      // Filas de antes de los sellos: el archivo cuenta como cambiado solo si
+      // se modificó después de subirse o bajarse (un boceto redibujado).
+      if (existing.fileStamp == null &&
+          !File(localPath).statSync().modified.isAfter(
+            existing.createdAt.add(const Duration(seconds: 2)),
+          )) {
+        await (_db.update(_db.pendingMediaUploads)
+              ..where((t) => t.id.equals(existing.id)))
+            .write(PendingMediaUploadsCompanion(fileStamp: Value(stamp)));
+        return false;
+      }
     }
 
     if (existing != null) {
@@ -146,6 +176,7 @@ class MediaUploadQueue {
         status: const Value('pending'),
         retries: const Value(0),
         lastError: const Value(null),
+        fileStamp: Value(stamp),
       ));
       _notBefore.remove(existing.id);
     } else {
@@ -160,6 +191,7 @@ class MediaUploadQueue {
               sortOrder: Value(sortOrder),
               priority: Value(priority),
               source: Value(source),
+              fileStamp: Value(stamp),
             ),
           );
     }
@@ -276,7 +308,10 @@ class MediaUploadQueue {
           );
 
       final slot = mediaSlotFor(row.entityType);
-      final result = slot?.kind == MediaKind.file
+      final isFile =
+          slot?.kind == MediaKind.file ||
+          row.entityType == MediaEntityType.sketchStrokes;
+      final result = isFile
           ? await _cloud.uploadRawFile(
               localPath: row.localPath,
               projectCloudId: cloudId,
@@ -309,6 +344,8 @@ class MediaUploadQueue {
         projectCloudId: Value(cloudId),
         publicId: Value(result.publicId),
         lastError: const Value(null),
+        remoteHash: Value(result.contentHash),
+        fileStamp: Value(mediaFileStamp(row.localPath)),
       ));
     } catch (e, st) {
       debugPrint('MediaUploadQueue error: $e\n$st');

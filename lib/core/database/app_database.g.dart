@@ -33922,6 +33922,28 @@ class $PendingMediaUploadsTable extends PendingMediaUploads
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _fileStampMeta = const VerificationMeta(
+    'fileStamp',
+  );
+  @override
+  late final GeneratedColumn<String> fileStamp = GeneratedColumn<String>(
+    'file_stamp',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _remoteHashMeta = const VerificationMeta(
+    'remoteHash',
+  );
+  @override
+  late final GeneratedColumn<String> remoteHash = GeneratedColumn<String>(
+    'remote_hash',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
   late final GeneratedColumn<String> status = GeneratedColumn<String>(
@@ -33958,6 +33980,8 @@ class $PendingMediaUploadsTable extends PendingMediaUploads
     retries,
     source,
     lastError,
+    fileStamp,
+    remoteHash,
     status,
     createdAt,
   ];
@@ -34053,6 +34077,18 @@ class $PendingMediaUploadsTable extends PendingMediaUploads
         lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta),
       );
     }
+    if (data.containsKey('file_stamp')) {
+      context.handle(
+        _fileStampMeta,
+        fileStamp.isAcceptableOrUnknown(data['file_stamp']!, _fileStampMeta),
+      );
+    }
+    if (data.containsKey('remote_hash')) {
+      context.handle(
+        _remoteHashMeta,
+        remoteHash.isAcceptableOrUnknown(data['remote_hash']!, _remoteHashMeta),
+      );
+    }
     if (data.containsKey('status')) {
       context.handle(
         _statusMeta,
@@ -34122,6 +34158,14 @@ class $PendingMediaUploadsTable extends PendingMediaUploads
         DriftSqlType.string,
         data['${effectivePrefix}last_error'],
       ),
+      fileStamp: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}file_stamp'],
+      ),
+      remoteHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_hash'],
+      ),
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}status'],
@@ -34153,6 +34197,14 @@ class PendingMediaUpload extends DataClass
   final int retries;
   final String? source;
   final String? lastError;
+
+  /// «tamaño:modificado» del archivo cuando se subió o se bajó: si cambia
+  /// (un boceto redibujado encima), hay que volver a subirlo.
+  final String? fileStamp;
+
+  /// Huella del contenido en la nube la última vez que coincidió con este
+  /// archivo: si la nube trae otra, hay una versión nueva que bajar.
+  final String? remoteHash;
   final String status;
   final DateTime createdAt;
   const PendingMediaUpload({
@@ -34168,6 +34220,8 @@ class PendingMediaUpload extends DataClass
     required this.retries,
     this.source,
     this.lastError,
+    this.fileStamp,
+    this.remoteHash,
     required this.status,
     required this.createdAt,
   });
@@ -34193,6 +34247,12 @@ class PendingMediaUpload extends DataClass
     }
     if (!nullToAbsent || lastError != null) {
       map['last_error'] = Variable<String>(lastError);
+    }
+    if (!nullToAbsent || fileStamp != null) {
+      map['file_stamp'] = Variable<String>(fileStamp);
+    }
+    if (!nullToAbsent || remoteHash != null) {
+      map['remote_hash'] = Variable<String>(remoteHash);
     }
     map['status'] = Variable<String>(status);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -34221,6 +34281,12 @@ class PendingMediaUpload extends DataClass
       lastError: lastError == null && nullToAbsent
           ? const Value.absent()
           : Value(lastError),
+      fileStamp: fileStamp == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fileStamp),
+      remoteHash: remoteHash == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteHash),
       status: Value(status),
       createdAt: Value(createdAt),
     );
@@ -34244,6 +34310,8 @@ class PendingMediaUpload extends DataClass
       retries: serializer.fromJson<int>(json['retries']),
       source: serializer.fromJson<String?>(json['source']),
       lastError: serializer.fromJson<String?>(json['lastError']),
+      fileStamp: serializer.fromJson<String?>(json['fileStamp']),
+      remoteHash: serializer.fromJson<String?>(json['remoteHash']),
       status: serializer.fromJson<String>(json['status']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -34264,6 +34332,8 @@ class PendingMediaUpload extends DataClass
       'retries': serializer.toJson<int>(retries),
       'source': serializer.toJson<String?>(source),
       'lastError': serializer.toJson<String?>(lastError),
+      'fileStamp': serializer.toJson<String?>(fileStamp),
+      'remoteHash': serializer.toJson<String?>(remoteHash),
       'status': serializer.toJson<String>(status),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -34282,6 +34352,8 @@ class PendingMediaUpload extends DataClass
     int? retries,
     Value<String?> source = const Value.absent(),
     Value<String?> lastError = const Value.absent(),
+    Value<String?> fileStamp = const Value.absent(),
+    Value<String?> remoteHash = const Value.absent(),
     String? status,
     DateTime? createdAt,
   }) => PendingMediaUpload(
@@ -34299,6 +34371,8 @@ class PendingMediaUpload extends DataClass
     retries: retries ?? this.retries,
     source: source.present ? source.value : this.source,
     lastError: lastError.present ? lastError.value : this.lastError,
+    fileStamp: fileStamp.present ? fileStamp.value : this.fileStamp,
+    remoteHash: remoteHash.present ? remoteHash.value : this.remoteHash,
     status: status ?? this.status,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -34320,6 +34394,10 @@ class PendingMediaUpload extends DataClass
       retries: data.retries.present ? data.retries.value : this.retries,
       source: data.source.present ? data.source.value : this.source,
       lastError: data.lastError.present ? data.lastError.value : this.lastError,
+      fileStamp: data.fileStamp.present ? data.fileStamp.value : this.fileStamp,
+      remoteHash: data.remoteHash.present
+          ? data.remoteHash.value
+          : this.remoteHash,
       status: data.status.present ? data.status.value : this.status,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -34340,6 +34418,8 @@ class PendingMediaUpload extends DataClass
           ..write('retries: $retries, ')
           ..write('source: $source, ')
           ..write('lastError: $lastError, ')
+          ..write('fileStamp: $fileStamp, ')
+          ..write('remoteHash: $remoteHash, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -34360,6 +34440,8 @@ class PendingMediaUpload extends DataClass
     retries,
     source,
     lastError,
+    fileStamp,
+    remoteHash,
     status,
     createdAt,
   );
@@ -34379,6 +34461,8 @@ class PendingMediaUpload extends DataClass
           other.retries == this.retries &&
           other.source == this.source &&
           other.lastError == this.lastError &&
+          other.fileStamp == this.fileStamp &&
+          other.remoteHash == this.remoteHash &&
           other.status == this.status &&
           other.createdAt == this.createdAt);
 }
@@ -34396,6 +34480,8 @@ class PendingMediaUploadsCompanion extends UpdateCompanion<PendingMediaUpload> {
   final Value<int> retries;
   final Value<String?> source;
   final Value<String?> lastError;
+  final Value<String?> fileStamp;
+  final Value<String?> remoteHash;
   final Value<String> status;
   final Value<DateTime> createdAt;
   const PendingMediaUploadsCompanion({
@@ -34411,6 +34497,8 @@ class PendingMediaUploadsCompanion extends UpdateCompanion<PendingMediaUpload> {
     this.retries = const Value.absent(),
     this.source = const Value.absent(),
     this.lastError = const Value.absent(),
+    this.fileStamp = const Value.absent(),
+    this.remoteHash = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
@@ -34427,6 +34515,8 @@ class PendingMediaUploadsCompanion extends UpdateCompanion<PendingMediaUpload> {
     this.retries = const Value.absent(),
     this.source = const Value.absent(),
     this.lastError = const Value.absent(),
+    this.fileStamp = const Value.absent(),
+    this.remoteHash = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
   }) : projectId = Value(projectId),
@@ -34446,6 +34536,8 @@ class PendingMediaUploadsCompanion extends UpdateCompanion<PendingMediaUpload> {
     Expression<int>? retries,
     Expression<String>? source,
     Expression<String>? lastError,
+    Expression<String>? fileStamp,
+    Expression<String>? remoteHash,
     Expression<String>? status,
     Expression<DateTime>? createdAt,
   }) {
@@ -34462,6 +34554,8 @@ class PendingMediaUploadsCompanion extends UpdateCompanion<PendingMediaUpload> {
       if (retries != null) 'retries': retries,
       if (source != null) 'source': source,
       if (lastError != null) 'last_error': lastError,
+      if (fileStamp != null) 'file_stamp': fileStamp,
+      if (remoteHash != null) 'remote_hash': remoteHash,
       if (status != null) 'status': status,
       if (createdAt != null) 'created_at': createdAt,
     });
@@ -34480,6 +34574,8 @@ class PendingMediaUploadsCompanion extends UpdateCompanion<PendingMediaUpload> {
     Value<int>? retries,
     Value<String?>? source,
     Value<String?>? lastError,
+    Value<String?>? fileStamp,
+    Value<String?>? remoteHash,
     Value<String>? status,
     Value<DateTime>? createdAt,
   }) {
@@ -34496,6 +34592,8 @@ class PendingMediaUploadsCompanion extends UpdateCompanion<PendingMediaUpload> {
       retries: retries ?? this.retries,
       source: source ?? this.source,
       lastError: lastError ?? this.lastError,
+      fileStamp: fileStamp ?? this.fileStamp,
+      remoteHash: remoteHash ?? this.remoteHash,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -34540,6 +34638,12 @@ class PendingMediaUploadsCompanion extends UpdateCompanion<PendingMediaUpload> {
     if (lastError.present) {
       map['last_error'] = Variable<String>(lastError.value);
     }
+    if (fileStamp.present) {
+      map['file_stamp'] = Variable<String>(fileStamp.value);
+    }
+    if (remoteHash.present) {
+      map['remote_hash'] = Variable<String>(remoteHash.value);
+    }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
     }
@@ -34564,6 +34668,8 @@ class PendingMediaUploadsCompanion extends UpdateCompanion<PendingMediaUpload> {
           ..write('retries: $retries, ')
           ..write('source: $source, ')
           ..write('lastError: $lastError, ')
+          ..write('fileStamp: $fileStamp, ')
+          ..write('remoteHash: $remoteHash, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -62831,6 +62937,8 @@ typedef $$PendingMediaUploadsTableCreateCompanionBuilder =
       Value<int> retries,
       Value<String?> source,
       Value<String?> lastError,
+      Value<String?> fileStamp,
+      Value<String?> remoteHash,
       Value<String> status,
       Value<DateTime> createdAt,
     });
@@ -62848,6 +62956,8 @@ typedef $$PendingMediaUploadsTableUpdateCompanionBuilder =
       Value<int> retries,
       Value<String?> source,
       Value<String?> lastError,
+      Value<String?> fileStamp,
+      Value<String?> remoteHash,
       Value<String> status,
       Value<DateTime> createdAt,
     });
@@ -62949,6 +63059,16 @@ class $$PendingMediaUploadsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get fileStamp => $composableBuilder(
+    column: $table.fileStamp,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteHash => $composableBuilder(
+    column: $table.remoteHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get status => $composableBuilder(
     column: $table.status,
     builder: (column) => ColumnFilters(column),
@@ -63047,6 +63167,16 @@ class $$PendingMediaUploadsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get fileStamp => $composableBuilder(
+    column: $table.fileStamp,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remoteHash => $composableBuilder(
+    column: $table.remoteHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
     builder: (column) => ColumnOrderings(column),
@@ -63127,6 +63257,14 @@ class $$PendingMediaUploadsTableAnnotationComposer
   GeneratedColumn<String> get lastError =>
       $composableBuilder(column: $table.lastError, builder: (column) => column);
 
+  GeneratedColumn<String> get fileStamp =>
+      $composableBuilder(column: $table.fileStamp, builder: (column) => column);
+
+  GeneratedColumn<String> get remoteHash => $composableBuilder(
+    column: $table.remoteHash,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
 
@@ -63205,6 +63343,8 @@ class $$PendingMediaUploadsTableTableManager
                 Value<int> retries = const Value.absent(),
                 Value<String?> source = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
+                Value<String?> fileStamp = const Value.absent(),
+                Value<String?> remoteHash = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => PendingMediaUploadsCompanion(
@@ -63220,6 +63360,8 @@ class $$PendingMediaUploadsTableTableManager
                 retries: retries,
                 source: source,
                 lastError: lastError,
+                fileStamp: fileStamp,
+                remoteHash: remoteHash,
                 status: status,
                 createdAt: createdAt,
               ),
@@ -63237,6 +63379,8 @@ class $$PendingMediaUploadsTableTableManager
                 Value<int> retries = const Value.absent(),
                 Value<String?> source = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
+                Value<String?> fileStamp = const Value.absent(),
+                Value<String?> remoteHash = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => PendingMediaUploadsCompanion.insert(
@@ -63252,6 +63396,8 @@ class $$PendingMediaUploadsTableTableManager
                 retries: retries,
                 source: source,
                 lastError: lastError,
+                fileStamp: fileStamp,
+                remoteHash: remoteHash,
                 status: status,
                 createdAt: createdAt,
               ),

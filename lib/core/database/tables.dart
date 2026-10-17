@@ -903,6 +903,14 @@ class PendingMediaUploads extends Table {
   IntColumn get retries => integer().withDefault(const Constant(0))();
   TextColumn get source => text().nullable()();
   TextColumn get lastError => text().nullable()();
+
+  /// «tamaño:modificado» del archivo cuando se subió o se bajó: si cambia
+  /// (un boceto redibujado encima), hay que volver a subirlo.
+  TextColumn get fileStamp => text().nullable()();
+
+  /// Huella del contenido en la nube la última vez que coincidió con este
+  /// archivo: si la nube trae otra, hay una versión nueva que bajar.
+  TextColumn get remoteHash => text().nullable()();
   TextColumn get status => text().withDefault(
     const Constant('pending'),
   )(); // pending|processing|done|failed

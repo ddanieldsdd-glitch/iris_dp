@@ -106,9 +106,13 @@ class CloudMediaService {
       storedBytes =
           (same['bytes_stored'] as num?)?.toInt() ?? optimized.optimizedBytes;
     } else {
+      // Una versión nueva va con otro nombre: una subida sin firma no puede
+      // sobrescribir la anterior en Cloudinary, y se quedaría la vieja.
       final uploadResponse = await _uploadToCloudinary(
         bytes: optimized.bytes,
-        publicId: publicId,
+        publicId: existing != null
+            ? '$publicId-${contentHash.substring(0, 8)}'
+            : publicId,
         extension: optimized.extension,
       );
       if (uploadResponse == null) return null;
@@ -241,6 +245,11 @@ class CloudMediaService {
       contentHash: contentHash,
     );
   }
+
+  /// Los bytes de un archivo de Supabase Storage.
+  Future<Uint8List> downloadStorageBytes(String storagePath) => _client.storage
+      .from(SupabaseConfig.storageBucket)
+      .download(storagePath);
 
   /// Descarga un archivo de Supabase Storage al proyecto.
   Future<String?> downloadStorageFile({

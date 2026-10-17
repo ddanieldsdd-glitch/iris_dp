@@ -72,6 +72,10 @@ class _FakeCloud extends CloudMediaService {
   }) async => '/descargas/$subfolder/$fileName';
 
   @override
+  Future<Uint8List> downloadStorageBytes(String storagePath) async =>
+      Uint8List.fromList(utf8.encode('{"trazos":[1,2,3]}'));
+
+  @override
   Future<String?> downloadStorageFile({
     required int localProjectId,
     required String storagePath,
@@ -213,4 +217,77 @@ void main() {
     expect(decodeSlotPaths('["/a.png","setup:3"]'), ['/a.png', 'setup:3']);
     expect(decodeSlotPaths(null), isEmpty);
   });
+
+  test('los trazos de un boceto suben con su imagen, como archivo', () async {
+    final sb = file('sb.png');
+    File('$sb.trazos.json').writeAsStringSync('{"trazos":[]}');
+    final uid = await shotUid(storyboard: sb);
+
+    final cloud = _FakeCloud();
+    final queue = MediaUploadQueue(db: db, cloud: cloud, isEnabled: () => true);
+    await queue.scanAndEnqueueProject(projectId);
+    await queue.startWorker();
+
+    expect(
+      cloud.images,
+      contains('${MediaEntityType.shotStoryboard} uid:$uid'),
+    );
+    expect(
+      cloud.files,
+      contains(
+        '${MediaEntityType.sketchStrokes} '
+        '${MediaEntityType.shotStoryboard}|uid:$uid',
+      ),
+    );
+  });
+
+  test('al bajar, los trazos quedan junto a su imagen', () async {
+    final uid = await shotUid();
+    final dirPath = Directory.systemTemp.createTempSync('iris_strokes').path;
+    final hydrate = MediaHydrateService(
+      db,
+      _DownloadingCloud(dirPath, [
+        {
+          'entity_type': MediaEntityType.sketchStrokes,
+          'entity_key':
+              '${MediaEntityType.shotStoryboard}|${mediaSlotKey(uid)}',
+          'storage_path':
+              'projects/cloud-1/sketch_strokes/x/sb.png.trazos.json',
+          'content_hash': 'b' * 64,
+        },
+        {
+          'entity_type': MediaEntityType.shotStoryboard,
+          'entity_key': mediaSlotKey(uid),
+          'delivery_url': 'https://res.cloudinary.com/x/sb',
+          'public_id': 'iris/ws/p/shot_storyboard/$uid',
+          'content_hash': 'a' * 64,
+        },
+      ]),
+    );
+
+    await hydrate.hydrateProject(projectId, 'cloud-1');
+
+    final shot = await (db.select(
+      db.shots,
+    )..where((s) => s.uid.equals(uid))).getSingle();
+    final strokes = File('${shot.storyboardImagePath}.trazos.json');
+    expect(strokes.existsSync(), isTrue);
+    expect(strokes.readAsStringSync(), '{"trazos":[1,2,3]}');
+  });
+}
+
+/// Nube que escribe de verdad lo que baja, para que exista junto a la imagen.
+class _DownloadingCloud extends _FakeCloud {
+  _DownloadingCloud(this.dir, List<Map<String, dynamic>> assets)
+    : super(assets: assets);
+
+  final String dir;
+
+  @override
+  Future<String?> downloadToLocal({
+    required int localProjectId,
+    required String deliveryUrl,
+    required String subfolder,
+    required String fileName,
+  }) async => (File('$dir/$fileName')..writeAsBytesSync([1])).path;
 }

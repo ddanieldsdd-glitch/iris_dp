@@ -927,14 +927,24 @@ class ProjectContentBundle {
 
   /// Huella del contenido: SHA-256 del JSON canónico, igual en cualquier
   /// plataforma y versión de Dart.
+  ///
+  /// Sin las rutas de los archivos: son de cada equipo (en iOS, la carpeta de
+  /// la app cambia con cada instalación) y los archivos viajan por su lado.
+  /// Con ellas, cada build nueva del iPad hacía parecer que había cambios.
   static String hashBundle(Map<String, dynamic> bundle) =>
       sha256.convert(utf8.encode(_canonicalJson(bundle))).toString();
+
+  /// La huella SHA-256 de antes, con las rutas: solo para reconocer huellas
+  /// que se guardaron así.
+  static String _hashWithPaths(Map<String, dynamic> bundle) => sha256
+      .convert(utf8.encode(_canonicalJson(bundle, withPaths: true)))
+      .toString();
 
   /// Huella de versiones anteriores (`String.hashCode`, 32 bits y sin
   /// garantía entre versiones de Dart). Solo para comparar con huellas que se
   /// guardaron así, hasta que el proyecto vuelva a sincronizarse.
   static String legacyHashBundle(Map<String, dynamic> bundle) =>
-      _canonicalJson(bundle).hashCode.toRadixString(16);
+      _canonicalJson(bundle, withPaths: true).hashCode.toRadixString(16);
 
   static bool isLegacyHash(String hash) => hash.length != 64;
 
@@ -963,9 +973,14 @@ class ProjectContentBundle {
   static bool bundleMatchesHash(Map<String, dynamic> bundle, String hash) =>
       isLegacyHash(hash)
           ? legacyHashBundle(bundle) == hash
-          : hashBundle(bundle) == hash;
+          : hashBundle(bundle) == hash || _hashWithPaths(bundle) == hash;
 
-  static String _canonicalJson(Map<String, dynamic> bundle) {
+  static final _pathKey = RegExp(r'(Path|Paths)$');
+
+  static String _canonicalJson(
+    Map<String, dynamic> bundle, {
+    bool withPaths = false,
+  }) {
     final copy = Map<String, dynamic>.from(bundle);
     // De los stills cuentan sus datos (título, notas, asignaciones), no su
     // ruta local ni su id.
@@ -992,7 +1007,13 @@ class ProjectContentBundle {
       if (rows is List) {
         copy[key] = [
           for (final row in rows)
-            row is Map ? (Map<String, dynamic>.from(row)..remove('uid')) : row,
+            row is Map
+                ? (Map<String, dynamic>.from(row)
+                    ..remove('uid')
+                    ..removeWhere(
+                      (k, _) => !withPaths && _pathKey.hasMatch(k),
+                    ))
+                : row,
         ];
       }
     }
