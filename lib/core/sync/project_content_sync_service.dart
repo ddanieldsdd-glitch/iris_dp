@@ -7,6 +7,7 @@ import '../database/app_database.dart';
 import '../database/local_database_backup.dart';
 import 'content_sync_base_store.dart';
 import 'device_label.dart';
+import 'sync_merge_store.dart';
 import 'project_content_bundle.dart';
 
 /// La tabla `cloud_project_snapshots` aún no está en Supabase (migración 007).
@@ -50,6 +51,39 @@ class ProjectContentSyncService {
     required String? expectedCloudHash,
   }) async {
     final bundle = await ProjectContentBundle.export(_db, localProjectId);
+    final hash = await uploadBundle(
+      projectCloudId,
+      bundle,
+      expectedCloudHash: expectedCloudHash,
+    );
+
+    final syncedAt = DateTime.now().toUtc();
+    await (_db.update(_db.projects)
+          ..where((p) => p.id.equals(localProjectId)))
+        .write(ProjectsCompanion(
+      contentSyncUpdatedAt: Value(syncedAt),
+    ));
+    // Este dispositivo y la nube quedan iguales: punto de partida para
+    // saber quién cambia después.
+    await ContentSyncBaseStore.save(_db, localProjectId,
+      ContentSyncBase(localHash: hash, cloudHash: hash),
+    );
+    // Lo subido es la base para mezclar la próxima vez.
+    await ContentBaseBundleStore.save(
+      _db,
+      localProjectId,
+      local: bundle,
+      cloud: bundle,
+    );
+  }
+
+  /// Escribe [bundle] en la nube con la misma condición que [upload], sin
+  /// tocar nada de aquí. Devuelve su huella.
+  Future<String> uploadBundle(
+    String projectCloudId,
+    Map<String, dynamic> bundle, {
+    required String? expectedCloudHash,
+  }) async {
     final hash = ProjectContentBundle.hashBundle(bundle);
     final summary = ProjectContentBundle.summarize(bundle);
     final row = {
@@ -71,18 +105,7 @@ class ProjectContentSyncService {
       row.remove('updated_device');
       await _write(projectCloudId, expectedCloudHash, row);
     }
-
-    final syncedAt = DateTime.now().toUtc();
-    await (_db.update(_db.projects)
-          ..where((p) => p.id.equals(localProjectId)))
-        .write(ProjectsCompanion(
-      contentSyncUpdatedAt: Value(syncedAt),
-    ));
-    // Este dispositivo y la nube quedan iguales: punto de partida para
-    // saber quién cambia después.
-    await ContentSyncBaseStore.save(_db, localProjectId,
-      ContentSyncBase(localHash: hash, cloudHash: hash),
-    );
+    return hash;
   }
 
   /// Inserta (no había copia) o actualiza solo si la nube sigue igual.
@@ -177,16 +200,20 @@ class ProjectContentSyncService {
     }
 
     await ProjectContentBundle.importBundle(_db, localProjectId, bundle);
+    final imported = await ProjectContentBundle.export(_db, localProjectId);
     await ContentSyncBaseStore.save(_db, localProjectId,
       ContentSyncBase(
-        localHash: await ProjectContentBundle.computeLocalHash(
-          _db,
-          localProjectId,
-        ),
+        localHash: ProjectContentBundle.hashBundle(imported),
         cloudHash:
             row['content_hash'] as String? ??
             ProjectContentBundle.hashBundle(bundle),
       ),
+    );
+    await ContentBaseBundleStore.save(
+      _db,
+      localProjectId,
+      local: imported,
+      cloud: bundle,
     );
 
     final cloudUpdated =
