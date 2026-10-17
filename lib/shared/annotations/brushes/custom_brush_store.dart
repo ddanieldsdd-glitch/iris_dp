@@ -47,6 +47,24 @@ class CustomBrushStore {
   /// Carga una vez los pinceles guardados y los registra en el catálogo.
   Future<void> ensureLoaded() => _loading ??= _load();
 
+  /// Pinceles marcados con estrella (propios o de la app).
+  final Set<String> favorites = {};
+
+  bool isFavorite(String id) => favorites.contains(id);
+
+  Future<void> toggleFavorite(String id) async {
+    if (!favorites.remove(id)) favorites.add(id);
+    try {
+      final dir = await _root();
+      dir.createSync(recursive: true);
+      File(
+        p.join(dir.path, 'favoritos.json'),
+      ).writeAsStringSync(jsonEncode(favorites.toList()));
+    } catch (_) {
+      // Sin carpeta de datos (pruebas): la estrella dura la sesión.
+    }
+  }
+
   Future<void> _load() async {
     final Directory dir;
     try {
@@ -55,6 +73,14 @@ class CustomBrushStore {
     } catch (_) {
       return;
     }
+    try {
+      final fav = File(p.join(dir.path, 'favoritos.json'));
+      if (fav.existsSync()) {
+        favorites.addAll(
+          (jsonDecode(fav.readAsStringSync()) as List).whereType<String>(),
+        );
+      }
+    } catch (_) {}
     for (final entry in dir.listSync().whereType<Directory>()) {
       try {
         await _loadOne(entry);

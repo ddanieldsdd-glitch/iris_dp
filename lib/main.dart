@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,10 +19,14 @@ import 'features/onboarding/onboarding_gate.dart';
 import 'features/projects/projects_screen.dart';
 import 'core/update/update_available_banner.dart';
 import 'core/utils/error_log.dart';
+import 'shared/annotations/brushes/auto_import.dart';
 
 Future<void> _bootstrapApp() async {
   await AppStorageConfig.ensureLoaded();
   await initializeCloud();
+  // Pinceles, papeles y paletas dejados en Documents/Importar: en segundo
+  // plano, sin retrasar el arranque.
+  unawaited(AutoImport.run());
 }
 
 Future<void> main() async {

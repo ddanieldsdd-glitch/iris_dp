@@ -118,7 +118,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Pinceles'), findsOneWidget);
     await _shot(tester, 'ui_pinceles');
-    await tester.tap(find.byKey(const ValueKey('brush-fineliner.05')));
+    await tester.tap(find.byKey(const ValueKey('brush-ink.brushpen')));
     await tester.pumpAndSettle();
 
     final sheet = tester.getRect(find.byType(AnnotationCanvas));
@@ -129,7 +129,7 @@ void main() {
     );
     expect(
       _controllerOf(tester).document.strokes.single.brushId,
-      'fineliner.05',
+      'ink.brushpen',
     );
 
     await tester.tap(find.byTooltip('Borrar'));

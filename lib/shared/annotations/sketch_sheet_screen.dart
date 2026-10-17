@@ -15,6 +15,7 @@ import 'annotation_canvas.dart';
 import 'annotation_document.dart';
 import 'annotation_raster.dart';
 import 'annotation_tools.dart';
+import 'brushes/auto_import.dart';
 import 'brushes/custom_brush_store.dart';
 import 'brushes/paper_library.dart';
 import 'sheet/brush_studio.dart';
@@ -195,6 +196,26 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     PaperLibrary.instance.ensureLoaded().then((_) {
       if (mounted) setState(() {});
     });
+    _autoImport();
+  }
+
+  /// Lo que haya en `Documents/Importar` entra solo, en segundo plano.
+  Future<void> _autoImport() async {
+    final result = await AutoImport.run();
+    if (!mounted || result.isEmpty) return;
+    setState(() {});
+    final added = result.describe();
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          [
+            if (added.isNotEmpty) 'Importado de la carpeta Importar: $added.',
+            if (result.failed.isNotEmpty)
+              'No se pudo leer: ${result.failed.join(', ')}.',
+          ].join('\n'),
+        ),
+      ),
+    );
   }
 
   /// Importa papeles (PNG o JPG) y pone el último en el folio.
@@ -555,6 +576,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
       _eyedropper = false;
       if (_mode == mode && mode != _Mode.smudge) {
         _panel = _panel == _Panel.brushes ? null : _Panel.brushes;
+        if (_panel == _Panel.brushes) _autoImport();
       } else {
         _mode = mode;
         if (_panel == _Panel.brushes) _panel = null;
@@ -1271,6 +1293,11 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
           onImport: _importBrushes,
           onTune: erase ? null : _tuneBrush,
           onDelete: _deleteBrush,
+          favorites: CustomBrushStore.instance.favorites,
+          onToggleFavorite: (brush) async {
+            await CustomBrushStore.instance.toggleFavorite(brush.id);
+            if (mounted) setState(() {});
+          },
         );
       case _Panel.layers:
         return LayersPanel(
