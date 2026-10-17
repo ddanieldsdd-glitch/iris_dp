@@ -78,13 +78,25 @@ class SyncEngine {
     SyncPlan plan,
     String workspaceId,
   ) async {
-    final counts = await _applyPlan(plan, workspaceId);
-    return _finishSync(
-      workspaceId,
-      pushed: counts.pushed,
-      pulled: counts.pulled,
-      deleted: counts.deleted,
-    );
+    try {
+      final counts = await _applyPlan(plan, workspaceId);
+      return _finishSync(
+        workspaceId,
+        pushed: counts.pushed,
+        pulled: counts.pulled,
+        deleted: counts.deleted,
+      );
+    } on SyncApplyException catch (e) {
+      // Lo que sí se aplicó necesita sus medios: si no, un proyecto
+      // descargado se queda sin imágenes. Después se enseña el error.
+      await _finishSync(
+        workspaceId,
+        pushed: e.pushed,
+        pulled: e.pulled,
+        deleted: e.deleted,
+      );
+      rethrow;
+    }
   }
 
   /// Tras aplicar cambios, re-analiza y actualiza el estado pendiente.
@@ -215,7 +227,18 @@ class SyncEngine {
       item.choice = SyncResolutionChoice.skip;
     }
 
-    final counts = await _applyPlan(plan, workspaceId);
+    final ({int pushed, int pulled, int deleted}) counts;
+    try {
+      counts = await _applyPlan(plan, workspaceId);
+    } on SyncApplyException catch (e) {
+      await _finishSync(
+        workspaceId,
+        pushed: e.pushed,
+        pulled: e.pulled,
+        deleted: e.deleted,
+      );
+      rethrow;
+    }
     _ref.read(pendingSyncPlanProvider.notifier).state = conflicts.isEmpty
         ? null
         : SyncPlan(
