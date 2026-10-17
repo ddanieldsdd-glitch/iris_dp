@@ -46,8 +46,9 @@ abstract final class AnnotationTools {
       'Toca para colocar. Arrastra antes de soltar para orientarlo.',
     AnnotationToolType.text => 'Toca donde quieras escribir.',
     AnnotationToolType.select =>
-      'Arrastra un sello para moverlo; el punto azul lo gira y el ámbar '
-          'abre o alarga el haz. Tócalo otra vez para ponerle nombre.',
+      'Toca un trazo o un sello para moverlo, o rodea varios con el lazo y '
+          'arrástralos juntos. En un sello, el punto azul lo gira y el ámbar '
+          'abre o alarga el haz; tócalo otra vez para ponerle nombre.',
     AnnotationToolType.eraseArea => 'Borra como una goma de verdad.',
     AnnotationToolType.eraser => 'Toca un trazo o sello para quitarlo entero.',
     AnnotationToolType.highlighter => 'Marca translúcida para resaltar.',

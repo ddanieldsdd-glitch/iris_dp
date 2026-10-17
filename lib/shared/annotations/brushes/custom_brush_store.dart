@@ -52,6 +52,20 @@ class CustomBrushStore {
 
   bool isFavorite(String id) => favorites.contains(id);
 
+  /// Ya se ha dibujado con Apple Pencil en este dispositivo: el dedo pasa
+  /// a mover el folio desde que se abre.
+  bool pencilSeen = false;
+
+  Future<void> markPencilSeen() async {
+    if (pencilSeen) return;
+    pencilSeen = true;
+    try {
+      final dir = await _root();
+      dir.createSync(recursive: true);
+      File(p.join(dir.path, 'pencil.json')).writeAsStringSync('true');
+    } catch (_) {}
+  }
+
   Future<void> toggleFavorite(String id) async {
     if (!favorites.remove(id)) favorites.add(id);
     try {
@@ -73,6 +87,7 @@ class CustomBrushStore {
     } catch (_) {
       return;
     }
+    pencilSeen = File(p.join(dir.path, 'pencil.json')).existsSync();
     try {
       final fav = File(p.join(dir.path, 'favoritos.json'));
       if (fav.existsSync()) {

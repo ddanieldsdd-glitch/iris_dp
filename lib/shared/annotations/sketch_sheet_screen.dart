@@ -190,8 +190,17 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     _baseline = _controller.document;
     _selectBrush(BrushCatalog.byId(_style.shelf.first)!, notify: false);
     // Pinceles propios (importados o variantes): se cargan aparte.
+    _stylusSeen = CustomBrushStore.instance.pencilSeen;
+    _fingerDraws = !_stylusSeen;
     CustomBrushStore.instance.ensureLoaded().then((_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() {
+        // Si en este dispositivo ya se usó el Pencil, el dedo mueve.
+        if (CustomBrushStore.instance.pencilSeen && !_stylusSeen) {
+          _stylusSeen = true;
+          _fingerDraws = false;
+        }
+      });
     });
     PaperLibrary.instance.ensureLoaded().then((_) {
       if (mounted) setState(() {});
@@ -678,6 +687,11 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
   }
 
   void _deleteSelected() {
+    if (_controller.selectionCount > 1 ||
+        _controller.selectedStrokeIds.isNotEmpty) {
+      _controller.deleteSelection();
+      return;
+    }
     final selected = _controller.selectedStamp;
     if (selected != null) _controller.removeStamp(selected.id);
   }
@@ -738,6 +752,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
           _stylusSeen = true;
           _fingerDraws = false;
         });
+        CustomBrushStore.instance.markPencilSeen();
       }
       return;
     }
@@ -1648,6 +1663,33 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                 min: 0.03,
                 max: 0.2,
                 onChanged: (v) => setState(() => _stampSize = v),
+              ),
+            ],
+            if (_mode == _Mode.select &&
+                selected == null &&
+                _controller.hasSelection) ...[
+              const SizedBox(height: 8),
+              Text(
+                _controller.selectionCount == 1
+                    ? '1 elemento seleccionado'
+                    : '${_controller.selectionCount} elementos seleccionados',
+                style: AppTypography.label(palette),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _controller.clearSelection,
+                    icon: const Icon(Icons.deselect, size: 16),
+                    label: const Text('Soltar'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _controller.deleteSelection,
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Borrar'),
+                  ),
+                ],
               ),
             ],
             if (selected != null) ...[

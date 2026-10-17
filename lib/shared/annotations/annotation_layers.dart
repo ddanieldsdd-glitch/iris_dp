@@ -44,10 +44,17 @@ class AnnotationCompositor {
   }
 
   /// Imagen de la capa [layerId] con sus trazos, o `null` si está vacía.
-  ui.Image? layerImage(AnnotationDocument document, String layerId, Size size) {
+  ui.Image? layerImage(
+    AnnotationDocument document,
+    String layerId,
+    Size size, {
+    Set<String> exclude = const {},
+  }) {
     final strokes = [
       for (final stroke in document.strokes)
-        if (document.strokeLayerId(stroke) == layerId) stroke,
+        if (document.strokeLayerId(stroke) == layerId &&
+            !exclude.contains(stroke.id))
+          stroke,
     ];
     final cached = _cache[layerId];
     if (strokes.isEmpty) {
@@ -159,6 +166,9 @@ class AnnotationCompositor {
     AnnotationStamp? liveStamp,
     String? selectedStampId,
     bool paintPaper = true,
+    Set<String> liftedStrokes = const {},
+    Set<String> liftedStamps = const {},
+    Offset liftOffset = Offset.zero,
   }) {
     final paperTexture = PaperLibrary.paper(document.paperImage);
     final paperKey = paperTexture?.id;
@@ -182,6 +192,9 @@ class AnnotationCompositor {
         live: live,
         liveStamp: liveStamp,
         selectedStampId: selectedStampId,
+        liftedStrokes: liftedStrokes,
+        liftedStamps: liftedStamps,
+        liftOffset: liftOffset,
       );
     } finally {
       BrushEngine.paperGrain = previousGrain;
@@ -195,6 +208,9 @@ class AnnotationCompositor {
     AnnotationStroke? live,
     AnnotationStamp? liveStamp,
     String? selectedStampId,
+    Set<String> liftedStrokes = const {},
+    Set<String> liftedStamps = const {},
+    Offset liftOffset = Offset.zero,
   }) {
     final rect = Offset.zero & size;
     final layers = document.effectiveLayers;
@@ -205,14 +221,29 @@ class AnnotationCompositor {
     for (var i = 0; i < layers.length; i++) {
       final layer = layers[i];
       if (!layer.visible) continue;
-      final image = layerImage(document, layer.id, size);
+      final image = layerImage(
+        document,
+        layer.id,
+        size,
+        exclude: liftedStrokes,
+      );
+      final lifted = [
+        for (final stroke in document.strokes)
+          if (liftedStrokes.contains(stroke.id) &&
+              document.strokeLayerId(stroke) == layer.id)
+            stroke,
+      ];
       final stamps = [
         for (final stamp in document.stamps)
           if (document.stampLayerId(stamp) == layer.id) stamp,
       ];
       final hasLive = liveLayer == layer.id;
       final hasLiveStamp = liveStampLayer == layer.id;
-      if (image == null && stamps.isEmpty && !hasLive && !hasLiveStamp) {
+      if (image == null &&
+          stamps.isEmpty &&
+          lifted.isEmpty &&
+          !hasLive &&
+          !hasLiveStamp) {
         continue;
       }
       _LayerBase? clipBase;
@@ -232,14 +263,28 @@ class AnnotationCompositor {
         _drawImage(canvas, image, size);
         canvas.restore();
       }
+      if (lifted.isNotEmpty) {
+        canvas.save();
+        canvas.translate(liftOffset.dx, liftOffset.dy);
+        for (final stroke in lifted) {
+          _paintStroke(canvas, size, stroke);
+        }
+        canvas.restore();
+      }
       if (hasLive) _paintLive(canvas, size, live!, image);
       for (final stamp in stamps) {
+        final moving = liftedStamps.contains(stamp.id);
+        if (moving) {
+          canvas.save();
+          canvas.translate(liftOffset.dx, liftOffset.dy);
+        }
         AnnotationBrushes.paintStamp(
           canvas,
           size,
           stamp,
           selected: stamp.id == selectedStampId,
         );
+        if (moving) canvas.restore();
       }
       if (hasLiveStamp) AnnotationBrushes.paintStamp(canvas, size, liveStamp!);
       if (clipBase != null) {
