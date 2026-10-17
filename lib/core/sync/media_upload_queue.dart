@@ -108,6 +108,22 @@ class MediaUploadQueue {
     if (!_isEnabled()) return false;
     if (!File(localPath).existsSync()) return false;
 
+    // Los trazos de un boceto viajan con su imagen, como archivo aparte.
+    if (entityType != MediaEntityType.sketchStrokes) {
+      final strokes = sketchStrokesPathOf(localPath);
+      if (File(strokes).existsSync()) {
+        await enqueue(
+          projectId: projectId,
+          projectCloudId: projectCloudId,
+          entityType: MediaEntityType.sketchStrokes,
+          entityKey: sketchStrokesKey(entityType, entityKey),
+          localPath: strokes,
+          sortOrder: sortOrder,
+          source: source,
+        );
+      }
+    }
+
     // Una fila por imagen: se reutiliza aunque fallara antes (y se quitan
     // los duplicados que dejaban versiones anteriores).
     final rows = await (_db.select(_db.pendingMediaUploads)
@@ -292,7 +308,10 @@ class MediaUploadQueue {
           );
 
       final slot = mediaSlotFor(row.entityType);
-      final result = slot?.kind == MediaKind.file
+      final isFile =
+          slot?.kind == MediaKind.file ||
+          row.entityType == MediaEntityType.sketchStrokes;
+      final result = isFile
           ? await _cloud.uploadRawFile(
               localPath: row.localPath,
               projectCloudId: cloudId,

@@ -24,6 +24,10 @@ abstract final class MediaEntityType {
   static const setScan = 'set_scan';
   static const setModel3d = 'set_model3d';
   static const siteScan = 'site_scan';
+
+  /// Trazos editables de un boceto (`<imagen>.trazos.json`), que viajan con
+  /// su imagen. Clave: `<tipo de la imagen>|<clave de la imagen>`.
+  static const sketchStrokes = 'sketch_strokes';
 }
 
 /// Origen de una imagen ingerida.

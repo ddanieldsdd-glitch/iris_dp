@@ -24,7 +24,12 @@ class MediaHydrateService {
     final assets = await _cloud.fetchProjectAssets(projectCloudId);
     var downloaded = 0;
 
+    final strokes = <Map<String, dynamic>>[];
     for (final asset in assets) {
+      if (asset['entity_type'] == MediaEntityType.sketchStrokes) {
+        strokes.add(asset);
+        continue;
+      }
       try {
         if (await _hydrateAsset(projectId, projectCloudId, asset)) {
           downloaded++;
@@ -39,7 +44,78 @@ class MediaHydrateService {
       }
     }
 
+    // Los trazos, después: van junto a la ruta actual de su imagen, que puede
+    // haber cambiado en esta misma pasada (versión nueva con otro nombre).
+    for (final asset in strokes) {
+      try {
+        if (await _hydrateStrokes(projectId, projectCloudId, asset)) {
+          downloaded++;
+        }
+      } catch (e, st) {
+        await ErrorLog.record(
+          e,
+          st,
+          context: 'Bajar trazos ${asset['entity_key']}',
+        );
+      }
+    }
+
     return downloaded;
+  }
+
+  /// Escribe los trazos de un boceto junto a su imagen. Devuelve si los bajó.
+  Future<bool> _hydrateStrokes(
+    int projectId,
+    String projectCloudId,
+    Map<String, dynamic> asset,
+  ) async {
+    final parsed = parseSketchStrokesKey(asset['entity_key'] as String? ?? '');
+    final storagePath = asset['storage_path'] as String?;
+    if (parsed == null || storagePath == null) return false;
+    final (imageType, imageKey) = parsed;
+    final image = await _localPathOf(projectId, imageType, imageKey);
+    if (image == null || !File(image).existsSync()) return false;
+    final target = sketchStrokesPathOf(image);
+    if (File(target).existsSync() &&
+        !await _cloudIsNewer(projectId, projectCloudId, asset, target)) {
+      return false;
+    }
+    final bytes = await _cloud.downloadStorageBytes(storagePath);
+    await File(target).writeAsBytes(bytes, flush: true);
+    await _markDownloaded(projectId, projectCloudId, asset, target);
+    return true;
+  }
+
+  /// Ruta local de la imagen de un medio (de los de siempre o de un hueco).
+  Future<String?> _localPathOf(
+    int projectId,
+    String entityType,
+    String entityKey,
+  ) async {
+    final slot = mediaSlotFor(entityType);
+    if (slot == null) {
+      return _resolveLocalPath(
+        projectId: projectId,
+        entityType: entityType,
+        entityKey: entityKey,
+      );
+    }
+    final parsed = parseMediaSlotKey(entityKey);
+    if (parsed == null) return null;
+    final (uid, index) = parsed;
+    final rows = await _db
+        .customSelect(
+          slot.selectForProject,
+          variables: [Variable.withInt(projectId)],
+        )
+        .get();
+    final row = rows.where((r) => r.read<String?>('uid') == uid).firstOrNull;
+    if (row == null) return null;
+    final raw = row.read<String?>('path');
+    if (!slot.isList) return raw;
+    final paths = decodeSlotPaths(raw);
+    final at = index ?? 0;
+    return at < paths.length ? paths[at] : null;
   }
 
   /// Baja un medio y lo coloca. Devuelve si lo bajó.
@@ -585,7 +661,11 @@ class MediaHydrateService {
   ) {
     if (old == null || old == replacement) return;
     if (!p.basename(old).startsWith('${entityType}_')) return;
+    // Con sus trazos: los de la versión nueva los pone después la pasada de
+    // trazos, junto a la imagen nueva.
     try {
+      final strokes = File(sketchStrokesPathOf(old));
+      if (strokes.existsSync()) strokes.deleteSync();
       File(old).deleteSync();
     } catch (_) {}
   }

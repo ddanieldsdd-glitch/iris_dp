@@ -246,6 +246,11 @@ class CloudMediaService {
     );
   }
 
+  /// Los bytes de un archivo de Supabase Storage.
+  Future<Uint8List> downloadStorageBytes(String storagePath) => _client.storage
+      .from(SupabaseConfig.storageBucket)
+      .download(storagePath);
+
   /// Descarga un archivo de Supabase Storage al proyecto.
   Future<String?> downloadStorageFile({
     required int localProjectId,
