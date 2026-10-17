@@ -7,6 +7,7 @@ import 'core/cloud/connectivity_gate.dart';
 import 'core/storage/app_lifecycle_persistence.dart';
 import 'core/storage/app_storage_config.dart';
 import 'core/storage/storage_relocation_gate.dart';
+import 'core/sync/auto_sync_scheduler.dart';
 import 'core/sync/media_sync_binder.dart';
 import 'core/theme/app_theme.dart';
 import 'core/update/app_update_gate.dart';
@@ -50,15 +51,17 @@ class IrisDPApp extends StatelessWidget {
           child: AppBackground(
             child: StorageRelocationGate(
               child: ConnectivityGate(
-                child: AppUpdateGate(
-                  child: MediaSyncBinder(
-                    child: OnboardingGate(
-                      homeContentBuilder: (_) => const Column(
-                        children: [
-                          AuthRequiredBanner(),
-                          UpdateAvailableBanner(),
-                          Expanded(child: ProjectsScreen()),
-                        ],
+                child: AutoSyncScheduler(
+                  child: AppUpdateGate(
+                    child: MediaSyncBinder(
+                      child: OnboardingGate(
+                        homeContentBuilder: (_) => const Column(
+                          children: [
+                            AuthRequiredBanner(),
+                            UpdateAvailableBanner(),
+                            Expanded(child: ProjectsScreen()),
+                          ],
+                        ),
                       ),
                     ),
                   ),

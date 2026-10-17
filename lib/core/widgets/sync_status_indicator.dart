@@ -6,6 +6,7 @@ import '../cloud/cloud_session.dart';
 import '../cloud/cloud_runtime_config.dart';
 import '../sync/pending_sync_queue_provider.dart';
 import '../sync/media_sync_providers.dart';
+import '../sync/sync_engine.dart';
 import 'sync/sync_flow_coordinator.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
@@ -67,6 +68,7 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
     }
 
     final pendingCount = ref.watch(pendingSyncQueueCountProvider);
+    final lastEdit = ref.watch(lastCloudEditProvider);
     final mediaProgress = ref.watch(mediaUploadProgressProvider);
     final mediaPending = mediaProgress.maybeWhen(
       data: (p) => p.pending,
@@ -97,8 +99,11 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
             if (lastSync != null) {
               final mins = DateTime.now().difference(lastSync).inMinutes;
               tooltip = mins < 1
-                  ? 'Última sync: ahora'
-                  : 'Última sync: hace $mins min';
+                  ? 'Sincronizado ahora'
+                  : 'Sincronizado hace $mins min';
+            }
+            if (lastEdit != null) {
+              tooltip += ' · ${lastEdit.describe(DateTime.now())}';
             }
             if (queueCount > 0) {
               tooltip += ' · $queueCount cambio(s) pendiente(s)';

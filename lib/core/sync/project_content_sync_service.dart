@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../database/app_database.dart';
 import '../database/local_database_backup.dart';
 import 'content_sync_base_store.dart';
+import 'device_label.dart';
 import 'project_content_bundle.dart';
 
 /// La tabla `cloud_project_snapshots` aún no está en Supabase (migración 007).
@@ -19,6 +20,13 @@ class SnapshotsTableMissing implements Exception {
 class CloudContentChanged implements Exception {
   const CloudContentChanged();
 }
+
+/// La columna `updated_device` aún no está en Supabase (migración 011).
+bool isMissingDeviceColumn(PostgrestException error) =>
+    error.message.contains('updated_device');
+
+/// Se deja de enviar `updated_device` al ver que falta la columna.
+bool hasDeviceColumn = true;
 
 bool isMissingSnapshotsTable(Object error) {
   if (error is! PostgrestException) return false;
@@ -51,24 +59,17 @@ class ProjectContentSyncService {
       'scene_count': summary.sceneCount,
       'shot_count': summary.shotCount,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
+      if (hasDeviceColumn) 'updated_device': deviceLabel(),
     };
 
     try {
-      if (expectedCloudHash == null) {
-        // Sin copia en la nube: si alguien la ha creado entretanto, el insert
-        // choca con la clave y no se pisa.
-        await _client.from('cloud_project_snapshots').insert(row);
-      } else if (!await _updateIfUnchanged(
-        projectCloudId,
-        expectedCloudHash,
-        row,
-      )) {
-        throw const CloudContentChanged();
-      }
+      await _write(projectCloudId, expectedCloudHash, row);
     } on PostgrestException catch (e) {
-      if (isMissingSnapshotsTable(e)) throw const SnapshotsTableMissing();
-      if (e.code == '23505') throw const CloudContentChanged();
-      rethrow;
+      // Supabase sin la migración 011: se sube igual, sin decir el equipo.
+      if (!isMissingDeviceColumn(e)) rethrow;
+      hasDeviceColumn = false;
+      row.remove('updated_device');
+      await _write(projectCloudId, expectedCloudHash, row);
     }
 
     final syncedAt = DateTime.now().toUtc();
@@ -82,6 +83,33 @@ class ProjectContentSyncService {
     await ContentSyncBaseStore.save(_db, localProjectId,
       ContentSyncBase(localHash: hash, cloudHash: hash),
     );
+  }
+
+  /// Inserta (no había copia) o actualiza solo si la nube sigue igual.
+  Future<void> _write(
+    String projectCloudId,
+    String? expectedCloudHash,
+    Map<String, dynamic> row,
+  ) async {
+    try {
+      if (expectedCloudHash == null) {
+        // Sin copia en la nube: si alguien la ha creado entretanto, el insert
+        // choca con la clave y no se pisa.
+        await _client.from('cloud_project_snapshots').insert(row);
+      } else if (!await _updateIfUnchanged(
+        projectCloudId,
+        expectedCloudHash,
+        row,
+      )) {
+        throw const CloudContentChanged();
+      }
+    } on PostgrestException catch (e) {
+      // El aviso de columna que falta también nombra la tabla.
+      if (isMissingDeviceColumn(e)) rethrow;
+      if (isMissingSnapshotsTable(e)) throw const SnapshotsTableMissing();
+      if (e.code == '23505') throw const CloudContentChanged();
+      rethrow;
+    }
   }
 
   /// Escribe [row] solo si la copia de la nube tiene la huella [expected].
