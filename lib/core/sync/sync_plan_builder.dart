@@ -3,6 +3,7 @@ import '../cloud/cloud_session.dart';
 import 'content_sync_base_store.dart';
 import 'project_content_bundle.dart';
 import 'project_content_sync_service.dart';
+import 'sync_merge_store.dart';
 import 'sync_plan.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -233,9 +234,20 @@ class SyncPlanBuilder {
           cloudHash: cloudHash ?? localHash,
         );
         final base = await ContentSyncBaseStore.load(_db, local.id);
-        if (base?.localHash != synced.localHash ||
-            base?.cloudHash != synced.cloudHash) {
+        final baseMoved = base?.localHash != synced.localHash ||
+            base?.cloudHash != synced.cloudHash;
+        if (baseMoved) {
           await ContentSyncBaseStore.save(_db, local.id, synced);
+        }
+        // También es la base para mezclar si un día cambian los dos lados.
+        if (cloudContent is Map &&
+            (baseMoved || !await ContentBaseBundleStore.has(_db, local.id))) {
+          await ContentBaseBundleStore.save(
+            _db,
+            local.id,
+            local: localBundle,
+            cloud: Map<String, dynamic>.from(cloudContent),
+          );
         }
         // Mismo contenido, pero con uid distintos (este equipo bajó el
         // proyecto antes de que los uid viajaran): sus imágenes no encuentran

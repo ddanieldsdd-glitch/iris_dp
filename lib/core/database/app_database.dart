@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import '../storage/app_storage_config.dart';
+import '../sync/sync_merge_store.dart';
 import '../utils/error_log.dart';
 import '../utils/media_storage.dart';
 import '../utils/scene_color.dart';
@@ -97,6 +98,7 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
+      await SyncMergeTables.create(this);
       await importEmbeddedCatalog(this);
     },
     onUpgrade: (m, from, to) async {
@@ -547,6 +549,10 @@ class AppDatabase extends _$AppDatabase {
         // la nube aunque conserve la ruta.
         await add(pendingMediaUploads, pendingMediaUploads.fileStamp);
         await add(pendingMediaUploads, pendingMediaUploads.remoteHash);
+      }
+      if (from < 53) {
+        // Mezcla por elemento: la base de cada proyecto y lo que descartó.
+        await SyncMergeTables.create(this);
       }
     },
   );
@@ -4667,7 +4673,7 @@ LazyDatabase _openConnection() {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 52;
+const kSchemaVersion = 53;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

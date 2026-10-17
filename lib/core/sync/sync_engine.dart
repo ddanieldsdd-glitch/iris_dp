@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../cloud/cloud_providers.dart';
 import '../cloud/cloud_session.dart';
 import '../database/database_provider.dart';
+import 'content_merge_service.dart';
 import 'device_label.dart';
 import 'media_hydrate_service.dart';
 import 'media_sync_providers.dart';
@@ -245,8 +246,33 @@ class SyncEngine {
 
     final db = _ref.read(databaseProvider);
     final plan = await SyncPlanBuilder(db, client).build(workspaceId);
-    final review = plan.reviewItems;
-    for (final item in review) {
+
+    // Cambiado aquí y en la nube: se mezcla elemento a elemento. Sin base
+    // para mezclar queda para revisarlo.
+    final merged = <SyncPlanItem>[];
+    for (final item in plan.items) {
+      if (item.action != SyncPlanAction.contentConflict) continue;
+      final id = item.localProjectId;
+      final cloudId = item.cloudId;
+      if (id == null || cloudId == null) continue;
+      try {
+        final discarded =
+            await ContentMergeService(db, client).mergeAndSync(id, cloudId);
+        if (discarded == null) continue;
+        merged.add(item);
+        if (discarded > 0) {
+          _ref.read(mergeDiscardsProvider.notifier).state += discarded;
+        }
+      } catch (e, st) {
+        await ErrorLog.record(e, st, context: 'Mezclar ${item.title}');
+      }
+    }
+
+    final review = [
+      for (final item in plan.reviewItems)
+        if (!merged.contains(item)) item,
+    ];
+    for (final item in [...review, ...merged]) {
       item.choice = SyncResolutionChoice.skip;
     }
     final applied = [
@@ -269,11 +295,19 @@ class SyncEngine {
       }
     }
 
+    counts = (
+      pushed: counts.pushed + merged.length,
+      pulled: counts.pulled + merged.length,
+      deleted: counts.deleted,
+    );
+    final touched = [...applied, ...merged];
+
     final now = DateTime.now();
-    for (final item in applied) {
+    for (final item in touched) {
       final cloudId = item.cloudId;
       if (cloudId == null) continue;
-      if (item.action == SyncPlanAction.pullContentCloud ||
+      if (item.action == SyncPlanAction.contentConflict ||
+          item.action == SyncPlanAction.pullContentCloud ||
           item.action == SyncPlanAction.importFromCloud ||
           item.action == SyncPlanAction.updateLocalFromCloud) {
         _recentPulls[cloudId] = now;
@@ -284,11 +318,11 @@ class SyncEngine {
     Set<int>? mediaProjects;
     if (!allMedia) {
       final touchedLocal = {
-        for (final item in applied)
+        for (final item in touched)
           if (item.localProjectId != null) item.localProjectId!,
       };
       final touchedCloud = {
-        for (final item in applied)
+        for (final item in touched)
           if (item.cloudId != null) item.cloudId!,
         ..._recentPulls.keys,
       };
@@ -606,6 +640,10 @@ class SyncResult {
 final syncEngineProvider = Provider<SyncEngine>((ref) => SyncEngine(ref));
 
 final pendingSyncPlanProvider = StateProvider<SyncPlan?>((ref) => null);
+
+/// Ediciones que la mezcla descartó en esta sesión (están en el historial
+/// de conflictos).
+final mergeDiscardsProvider = StateProvider<int>((ref) => 0);
 
 /// La última subida a la nube que se ha visto (ver [CloudEdit]).
 final lastCloudEditProvider = StateProvider<CloudEdit?>((ref) => null);
