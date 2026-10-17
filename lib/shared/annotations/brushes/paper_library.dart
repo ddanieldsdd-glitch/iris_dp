@@ -19,12 +19,28 @@ class PaperTexture {
   final ui.Image background;
   final ui.Image grain;
 
+  /// Colección: la carpeta de origen o el tipo (Papeles, Lienzos…).
+  final String group;
+  final bool favorite;
+
   const PaperTexture({
     required this.id,
     required this.name,
     required this.background,
     required this.grain,
+    this.group = 'Papeles',
+    this.favorite = false,
   });
+
+  PaperTexture copyWith({String? name, String? group, bool? favorite}) =>
+      PaperTexture(
+        id: id,
+        name: name ?? this.name,
+        background: background,
+        grain: grain,
+        group: group ?? this.group,
+        favorite: favorite ?? this.favorite,
+      );
 }
 
 /// Una paleta importada (`.swatches` de Procreate).
@@ -73,7 +89,49 @@ class PaperLibrary {
 
   static PaperTexture? paper(String? id) => id == null ? null : _papers[id];
 
-  static List<PaperTexture> get papers => _papers.values.toList();
+  /// Favoritos primero; luego por colección y nombre.
+  static List<PaperTexture> get papers => _papers.values.toList()
+    ..sort((a, b) {
+      if (a.favorite != b.favorite) return a.favorite ? -1 : 1;
+      final g = a.group.compareTo(b.group);
+      return g != 0 ? g : a.name.compareTo(b.name);
+    });
+
+  /// Papeles importados por colección (favoritos aparte).
+  static Map<String, List<PaperTexture>> get groups {
+    final out = <String, List<PaperTexture>>{};
+    for (final paper in papers) {
+      out.putIfAbsent(paper.group, () => []).add(paper);
+    }
+    return out;
+  }
+
+  /// Nombre limpio a partir del archivo: «Leonardo_s Sketchbook.JPG» →
+  /// «Leonardo's Sketchbook».
+  static String cleanName(String path) {
+    var name = p.basenameWithoutExtension(path);
+    name = name.replaceAll(RegExp(r'_s\b'), "'s");
+    name = name.replaceAll(RegExp(r'[_]+'), ' ');
+    name = name.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return name.isEmpty ? 'Papel' : name;
+  }
+
+  /// Colección por el nombre, si no viene de una carpeta.
+  static String guessGroup(String name) {
+    final n = name.toLowerCase();
+    if (n.contains('canvas') || n.contains('lienzo') || n.contains('linen')) {
+      return 'Lienzos';
+    }
+    if (n.contains('parchment') ||
+        n.contains('pergamino') ||
+        n.contains('vellum')) {
+      return 'Pergaminos';
+    }
+    if (n.contains('kraft') || n.contains('brown') || n.contains('recycled')) {
+      return 'Kraft y reciclados';
+    }
+    return 'Papeles';
+  }
 
   static List<ImportedPalette> get palettes => _palettes.values.toList();
 
@@ -119,11 +177,14 @@ class PaperLibrary {
     final json = jsonDecode(meta.readAsStringSync()) as Map<String, dynamic>;
     final id = json['id'] as String;
     final dir = meta.parent.path;
+    final name = json['name'] as String;
     final paper = PaperTexture(
       id: id,
-      name: json['name'] as String,
+      name: name,
       background: await _decode(File(p.join(dir, '$id.jpg'))),
       grain: await _decode(File(p.join(dir, '$id.grano.png'))),
+      group: json['group'] as String? ?? guessGroup(name),
+      favorite: json['favorite'] == true,
     );
     _papers[id] = paper;
     return paper;
@@ -136,12 +197,28 @@ class PaperLibrary {
     return frame.image;
   }
 
-  /// Importa una imagen de papel (PNG o JPG): se reduce, se guarda en los
-  /// datos del usuario y se saca su grano.
-  Future<PaperTexture> importPaper(String path) async {
+  /// Importa una imagen de papel (PNG, JPG, HEIC o la primera página de
+  /// un PDF): se reduce, se guarda en los datos del usuario y se saca su
+  /// grano. [group] es la colección (la carpeta de origen); si no, se
+  /// deduce del nombre.
+  Future<PaperTexture> importPaper(
+    String path, {
+    String? group,
+    Future<Uint8List?> Function(String path)? rasterize,
+  }) async {
     await ensureLoaded();
-    final name = p.basenameWithoutExtension(path).replaceAll('_', ' ');
-    final prepared = await Isolate.run(() => _prepare(path));
+    final name = cleanName(path);
+    final ext = p.extension(path).toLowerCase();
+    // HEIC y PDF los decodifica el sistema; aquí llegan ya como PNG.
+    Uint8List? converted;
+    if (const ['.heic', '.heif', '.pdf'].contains(ext)) {
+      converted = await (rasterize ?? _rasterizeWithSystem)(path);
+      if (converted == null) {
+        throw const FormatException('No se puede leer la imagen del papel');
+      }
+    }
+    final pngBytes = converted;
+    final prepared = await Isolate.run(() => _prepare(path, pngBytes));
     final existing = _papers[prepared.id];
     if (existing != null) return existing;
     final dir = await _dir('papeles');
@@ -153,8 +230,61 @@ class PaperLibrary {
       p.join(dir.path, '${prepared.id}.grano.png'),
     ).writeAsBytesSync(prepared.grainPng);
     final meta = File(p.join(dir.path, '${prepared.id}.json'))
-      ..writeAsStringSync(jsonEncode({'id': prepared.id, 'name': name}));
+      ..writeAsStringSync(
+        jsonEncode({
+          'id': prepared.id,
+          'name': name,
+          'group': group ?? guessGroup(name),
+        }),
+      );
     return _loadPaper(meta);
+  }
+
+  /// HEIC o PDF a PNG con el decodificador del sistema (iOS y macOS
+  /// abren HEIC; el PDF lo pinta [rasterizePdf] si se le pasa).
+  static Future<Uint8List?> Function(String path)? rasterizePdf;
+
+  static Future<Uint8List?> _rasterizeWithSystem(String path) async {
+    if (p.extension(path).toLowerCase() == '.pdf') {
+      return rasterizePdf?.call(path);
+    }
+    try {
+      final codec = await ui.instantiateImageCodec(
+        await File(path).readAsBytes(),
+      );
+      final frame = await codec.getNextFrame();
+      codec.dispose();
+      final data = await frame.image.toByteData(format: ui.ImageByteFormat.png);
+      frame.image.dispose();
+      return data?.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _saveMeta(PaperTexture paper) async {
+    final dir = await _dir('papeles');
+    File(p.join(dir.path, '${paper.id}.json')).writeAsStringSync(
+      jsonEncode({
+        'id': paper.id,
+        'name': paper.name,
+        'group': paper.group,
+        'favorite': paper.favorite,
+      }),
+    );
+    _papers[paper.id] = paper;
+  }
+
+  Future<void> toggleFavorite(String id) async {
+    final paper = _papers[id];
+    if (paper == null) return;
+    await _saveMeta(paper.copyWith(favorite: !paper.favorite));
+  }
+
+  Future<void> renamePaper(String id, String name) async {
+    final paper = _papers[id];
+    if (paper == null || name.trim().isEmpty) return;
+    await _saveMeta(paper.copyWith(name: name.trim()));
   }
 
   Future<void> deletePaper(String id) async {
@@ -166,10 +296,11 @@ class PaperLibrary {
     _papers.remove(id);
   }
 
-  static _PreparedPaper _prepare(String path) {
+  static _PreparedPaper _prepare(String path, Uint8List? converted) {
     final bytes = File(path).readAsBytesSync();
+    // La clave sale del archivo original: igual en el Mac y en el iPad.
     final id = 'papel_${sha1.convert(bytes).toString().substring(0, 12)}';
-    var image = img.decodeImage(bytes);
+    var image = img.decodeImage(converted ?? bytes);
     if (image == null) {
       throw const FormatException('No se puede leer la imagen del papel');
     }

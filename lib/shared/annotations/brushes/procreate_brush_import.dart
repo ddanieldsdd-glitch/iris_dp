@@ -27,6 +27,13 @@ class ImportedBrushData {
   /// La punta gira con la dirección del trazo.
   final bool followDirection;
 
+  /// Grupo en la biblioteca: el nombre del set, o null en un `.brush`
+  /// suelto (lo decide quien importa).
+  final String? group;
+
+  /// Posición dentro del set original.
+  final int order;
+
   const ImportedBrushData({
     required this.name,
     this.shapePng,
@@ -35,6 +42,8 @@ class ImportedBrushData {
     this.multiply = false,
     this.wet = false,
     this.followDirection = false,
+    this.group,
+    this.order = 0,
   });
 }
 
@@ -83,20 +92,42 @@ abstract final class ProcreateBrushImport {
       final dir = p.posix.dirname(name);
       groups.putIfAbsent(dir, () => {})[p.posix.basename(name)] = file;
     }
-    final brushGroups = groups.values
+    final brushGroups = groups.entries
         .where(
-          (files) =>
-              files.containsKey('Brush.archive') ||
-              files.containsKey('Shape.png'),
+          (e) =>
+              e.value.containsKey('Brush.archive') ||
+              e.value.containsKey('Shape.png'),
         )
         .toList();
+    // En un `.brushset`, brushset.plist da el nombre y el orden del set.
+    final setInfo = _setInfo(groups['.']?['brushset.plist']);
+    final order = setInfo.order;
+    int rank(String dir) {
+      final i = order.indexOf(p.posix.basename(dir));
+      return i < 0 ? order.length : i;
+    }
+
+    brushGroups.sort((a, b) {
+      final byRank = rank(a.key).compareTo(rank(b.key));
+      return byRank != 0 ? byRank : a.key.compareTo(b.key);
+    });
+    final isSet =
+        fileName?.toLowerCase().endsWith('.brushset') == true ||
+        groups['.']?.containsKey('brushset.plist') == true ||
+        brushGroups.length > 1;
+    final setName = isSet
+        ? (fileName != null ? cleanName(fileName) : setInfo.name) ??
+              setInfo.name ??
+              'Importados'
+        : null;
     final out = <ImportedBrushData>[];
     final seen = <String>{};
     final fallback = fileName == null
         ? 'Pincel'
         : p.basenameWithoutExtension(fileName);
     var n = 0;
-    for (final files in brushGroups) {
+    for (final entry in brushGroups) {
+      final files = entry.value;
       final settings = _settings(files['Brush.archive']);
       final rawName = settings['name'] is String
           ? (settings['name'] as String).trim()
@@ -146,6 +177,8 @@ abstract final class ProcreateBrushImport {
           // aclaran con poca presión: esos se dejan acumular.
           wet: pressureOpacity.abs() < 0.3,
           followDirection: (_num(settings, ['shapeRotation']) ?? 0) > 0.5,
+          group: setName,
+          order: out.length,
         ),
       );
     }
@@ -153,6 +186,41 @@ abstract final class ProcreateBrushImport {
       throw const FormatException('No hay ningún pincel dentro del archivo');
     }
     return out;
+  }
+
+  /// Nombre limpio a partir de un archivo: «W.H_The_Pen.brushset» →
+  /// «W.H The Pen».
+  static String? cleanName(String fileName) {
+    var name = p.basenameWithoutExtension(fileName);
+    name = name.replaceAll(RegExp(r'[_]+'), ' ');
+    name = name.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return name.isEmpty ? null : name;
+  }
+
+  /// Nombre y orden de pinceles del `brushset.plist` (XML).
+  static ({String? name, List<String> order}) _setInfo(ArchiveFile? file) {
+    if (file == null) return (name: null, order: const []);
+    try {
+      final xml = String.fromCharCodes(_bytes(file));
+      final name = RegExp(
+        r'<key>name</key>\s*<string>([^<]*)</string>',
+      ).firstMatch(xml)?.group(1)?.trim();
+      final array = RegExp(
+        r'<key>brushes</key>\s*<array>(.*?)</array>',
+        dotAll: true,
+      ).firstMatch(xml)?.group(1);
+      final order = array == null
+          ? const <String>[]
+          : [
+              for (final m in RegExp(
+                r'<string>([^<]*)</string>',
+              ).allMatches(array))
+                m.group(1)!.trim(),
+            ];
+      return (name: name == null || name.isEmpty ? null : name, order: order);
+    } catch (_) {
+      return (name: null, order: const []);
+    }
   }
 
   /// «Dense marker», «Dense marker 2»… si quedan dos con el mismo nombre.

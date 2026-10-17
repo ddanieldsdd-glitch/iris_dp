@@ -9,6 +9,7 @@ import '../annotation_brush_catalog.dart';
 import '../annotation_brushes.dart';
 import '../annotation_canvas.dart';
 import '../annotation_document.dart';
+import '../brushes/custom_brush_store.dart';
 
 /// Panel flotante del folio (pinceles, capas, color), al estilo Procreate.
 class SheetPanel extends StatelessWidget {
@@ -162,18 +163,18 @@ class BrushPreviewPainter extends CustomPainter {
       old.brush != brush || old.color != color || old.paper != paper;
 }
 
-/// Biblioteca de pinceles: estante del estilo y categorías.
+/// Biblioteca de pinceles, corta y por secciones plegables: favoritos, los
+/// grupos de la app (Dibujo, Tinta, Color, Efectos) y debajo los grupos
+/// importados, que se pueden renombrar, reordenar y borrar.
 class BrushLibraryPanel extends StatefulWidget {
   final String selectedId;
-  final List<String> shelf;
-  final String shelfName;
   final Color color;
   final AnnotationPaper paper;
   final bool Function(BrushSpec brush) filter;
   final ValueChanged<BrushSpec> onSelect;
   final String title;
 
-  /// Importar pinceles de Procreate (en «Míos»).
+  /// Importar pinceles de Procreate.
   final VoidCallback? onImport;
 
   /// Abrir el estudio con un pincel para guardar una variante.
@@ -181,19 +182,21 @@ class BrushLibraryPanel extends StatefulWidget {
 
   final ValueChanged<BrushSpec>? onDelete;
 
-  /// Pinceles con estrella: su estante sale el primero.
+  /// Pinceles con estrella: su sección sale la primera.
   final Set<String> favorites;
   final ValueChanged<BrushSpec>? onToggleFavorite;
+
+  /// Grupos importados y qué secciones están abiertas.
+  final CustomBrushStore store;
 
   const BrushLibraryPanel({
     super.key,
     required this.selectedId,
-    required this.shelf,
-    required this.shelfName,
     required this.color,
     required this.paper,
     required this.filter,
     required this.onSelect,
+    required this.store,
     this.title = 'Pinceles',
     this.onImport,
     this.onTune,
@@ -207,190 +210,312 @@ class BrushLibraryPanel extends StatefulWidget {
 }
 
 class _BrushLibraryPanelState extends State<BrushLibraryPanel> {
-  /// Estante a la vista: favoritos, el del estilo o una categoría.
-  late _Shelf _shelf = widget.favorites.isEmpty
-      ? const _Shelf.style()
-      : const _Shelf.favorites();
+  CustomBrushStore get _store => widget.store;
+
+  Future<void> _rename(BrushGroup group) async {
+    final text = TextEditingController(text: group.title);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Nombre del grupo'),
+        content: TextField(
+          controller: text,
+          autofocus: true,
+          onSubmitted: (v) => Navigator.pop(context, v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, text.text),
+            child: const Text('Aceptar'),
+          ),
+        ],
+      ),
+    );
+    text.dispose();
+    if (name == null) return;
+    await _store.renameGroup(group.id, name);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _deleteGroup(BrushGroup group) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('¿Quitar el grupo «${group.title}»?'),
+        content: Text(
+          'Se quitan sus ${group.brushes.length} pinceles de este '
+          'dispositivo. Lo ya dibujado con ellos se sigue viendo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Quitar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _store.deleteGroup(group.id);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _move(BrushGroup group, int delta) async {
+    await _store.moveGroup(group.id, delta);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _toggle(String id, bool open) async {
+    await _store.setExpanded(id, open);
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final Iterable<BrushSpec> source = switch (_shelf) {
-      _Shelf(favorites: true) =>
-        widget.favorites.map(BrushCatalog.byId).whereType<BrushSpec>(),
-      _Shelf(category: final c?) => BrushCatalog.inCategory(c),
-      _ => widget.shelf.map(BrushCatalog.byId).whereType<BrushSpec>(),
-    };
-    final brushes = source.where(widget.filter).toList();
-    Widget tab(String label, _Shelf shelf, {IconData? icon}) {
-      final selected = _shelf == shelf;
-      return Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: ChoiceChip(
-          avatar: icon == null ? null : Icon(icon, size: 16),
-          label: Text(label),
-          selected: selected,
-          onSelected: (_) => setState(() => _shelf = shelf),
-          visualDensity: VisualDensity.compact,
+    final children = <Widget>[];
+
+    void section(
+      String id,
+      String title,
+      List<BrushSpec> brushes, {
+      required bool openByDefault,
+      IconData? icon,
+      BrushGroup? group,
+    }) {
+      final shown = brushes.where(widget.filter).toList();
+      if (shown.isEmpty) return;
+      final open = _store.isExpanded(id, byDefault: openByDefault);
+      children.add(
+        _SectionHeader(
+          title: title,
+          count: shown.length,
+          open: open,
+          icon: icon,
+          onTap: () => _toggle(id, !open),
+          menu: group == null
+              ? null
+              : PopupMenuButton<String>(
+                  tooltip: 'Opciones del grupo',
+                  icon: const Icon(Icons.more_horiz, size: 18),
+                  onSelected: (action) => switch (action) {
+                    'rename' => _rename(group),
+                    'up' => _move(group, -1),
+                    'down' => _move(group, 1),
+                    _ => _deleteGroup(group),
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'rename', child: Text('Renombrar')),
+                    PopupMenuItem(value: 'up', child: Text('Subir')),
+                    PopupMenuItem(value: 'down', child: Text('Bajar')),
+                    PopupMenuItem(value: 'delete', child: Text('Quitar grupo')),
+                  ],
+                ),
         ),
+      );
+      if (!open) return;
+      for (final brush in shown) {
+        children.add(_row(brush, palette));
+      }
+    }
+
+    section(
+      'fav',
+      'Favoritos',
+      [
+        for (final id in widget.favorites)
+          if (BrushCatalog.byId(id) case final b?) b,
+      ],
+      openByDefault: true,
+      icon: Icons.star_rounded,
+    );
+    for (final (name, ids) in BrushCatalog.appGroups) {
+      section('app:$name', name, [
+        for (final id in ids)
+          if (BrushCatalog.byId(id) case final b?) b,
+      ], openByDefault: true);
+    }
+    for (final group in _store.groups) {
+      section(
+        group.id,
+        group.title,
+        group.brushes,
+        openByDefault: false,
+        group: group,
       );
     }
 
     return SheetPanel(
       title: widget.title,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      actions: [
+        if (widget.onImport != null)
+          IconButton(
+            tooltip: 'Importar de Procreate (.brushset, .brush)',
+            icon: const Icon(Icons.file_download_outlined),
+            onPressed: widget.onImport,
+          ),
+      ],
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+        children: children,
+      ),
+    );
+  }
+
+  Widget _row(BrushSpec brush, AppPalette palette) {
+    final selected = brush.id == widget.selectedId;
+    final favorite = widget.favorites.contains(brush.id);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: selected
+            ? palette.accent.withValues(alpha: 0.18)
+            : palette.surface,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          key: ValueKey('brush-${brush.id}'),
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => widget.onSelect(brush),
+          onLongPress: widget.onToggleFavorite == null
+              ? null
+              : () => widget.onToggleFavorite!(brush),
+          child: Padding(
+            padding: const EdgeInsets.all(4),
             child: Row(
               children: [
-                if (widget.favorites.isNotEmpty)
-                  tab(
-                    'Favoritos',
-                    const _Shelf.favorites(),
-                    icon: Icons.star_rounded,
+                if (widget.onToggleFavorite != null)
+                  IconButton(
+                    tooltip: favorite
+                        ? 'Quitar de favoritos'
+                        : 'Añadir a favoritos',
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 18,
+                    color: favorite
+                        ? const Color(0xFFFFC107)
+                        : palette.textTertiary,
+                    icon: Icon(
+                      favorite ? Icons.star_rounded : Icons.star_border_rounded,
+                    ),
+                    onPressed: () => widget.onToggleFavorite!(brush),
                   ),
-                tab(widget.shelfName, const _Shelf.style()),
-                for (final category in BrushCategory.values)
-                  tab(
-                    BrushCatalog.categoryLabel(category),
-                    _Shelf.category(category),
+                SizedBox(
+                  width: 104,
+                  child: Text(
+                    brush.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodyMedium(palette).copyWith(
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
                   ),
-              ],
-            ),
-          ),
-          if (_shelf.category == BrushCategory.custom) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: OutlinedButton.icon(
-                onPressed: widget.onImport,
-                icon: const Icon(Icons.file_download_outlined, size: 18),
-                label: const Text('Importar de Procreate (.brushset)'),
-              ),
-            ),
-            if (brushes.isEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                child: Text(
-                  'Aquí aparecen los pinceles que importes y las variantes '
-                  'que guardes desde el estudio de pincel. Se guardan en '
-                  'este dispositivo.',
-                  style: AppTypography.caption(palette),
                 ),
-              ),
-          ],
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
-              itemCount: brushes.length,
-              itemBuilder: (context, i) {
-                final brush = brushes[i];
-                final selected = brush.id == widget.selectedId;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Material(
-                    color: selected
-                        ? palette.accent.withValues(alpha: 0.18)
-                        : palette.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    child: InkWell(
-                      key: ValueKey('brush-${brush.id}'),
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: () => widget.onSelect(brush),
-                      onLongPress: widget.onToggleFavorite == null
-                          ? null
-                          : () => widget.onToggleFavorite!(brush),
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Row(
-                          children: [
-                            if (widget.onToggleFavorite != null)
-                              IconButton(
-                                tooltip: widget.favorites.contains(brush.id)
-                                    ? 'Quitar de favoritos'
-                                    : 'Añadir a favoritos',
-                                visualDensity: VisualDensity.compact,
-                                iconSize: 18,
-                                color: widget.favorites.contains(brush.id)
-                                    ? const Color(0xFFFFC107)
-                                    : palette.textTertiary,
-                                icon: Icon(
-                                  widget.favorites.contains(brush.id)
-                                      ? Icons.star_rounded
-                                      : Icons.star_border_rounded,
-                                ),
-                                onPressed: () =>
-                                    widget.onToggleFavorite!(brush),
-                              ),
-                            SizedBox(
-                              width: 104,
-                              child: Text(
-                                brush.name,
-                                style: AppTypography.bodyMedium(palette)
-                                    .copyWith(
-                                      fontWeight: selected
-                                          ? FontWeight.w600
-                                          : FontWeight.w400,
-                                    ),
-                              ),
-                            ),
-                            if (selected && widget.onTune != null)
-                              IconButton(
-                                tooltip: 'Estudio de pincel',
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.tune, size: 18),
-                                onPressed: () => widget.onTune!(brush),
-                              ),
-                            if (brush.category == BrushCategory.custom &&
-                                widget.onDelete != null)
-                              IconButton(
-                                tooltip: 'Quitar pincel',
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  size: 18,
-                                ),
-                                onPressed: () => widget.onDelete!(brush),
-                              ),
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: SizedBox(
-                                  height: 44,
-                                  child: RepaintBoundary(
-                                    child: CustomPaint(
-                                      painter: BrushPreviewPainter(
-                                        brush: brush,
-                                        color: brush.mode == BrushMode.paint
-                                            ? widget.color
-                                            : Colors.black,
-                                        paper: widget.paper,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                if (selected && widget.onTune != null)
+                  IconButton(
+                    tooltip: 'Estudio de pincel',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.tune, size: 18),
+                    onPressed: () => widget.onTune!(brush),
+                  ),
+                if (brush.category == BrushCategory.custom &&
+                    widget.onDelete != null &&
+                    selected)
+                  IconButton(
+                    tooltip: 'Quitar pincel',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    onPressed: () => widget.onDelete!(brush),
+                  ),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(
+                      height: 40,
+                      child: RepaintBoundary(
+                        child: CustomPaint(
+                          painter: BrushPreviewPainter(
+                            brush: brush,
+                            color: brush.mode == BrushMode.paint
+                                ? widget.color
+                                : Colors.black,
+                            paper: widget.paper,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                );
-              },
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-// ─── Capas ───────────────────────────────────────────────────────────────────
+/// Cabecera plegable de una sección de la biblioteca.
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final int count;
+  final bool open;
+  final IconData? icon;
+  final VoidCallback onTap;
+  final Widget? menu;
+
+  const _SectionHeader({
+    required this.title,
+    required this.count,
+    required this.open,
+    required this.onTap,
+    this.icon,
+    this.menu,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(4, 8, 0, 6),
+        child: Row(
+          children: [
+            Icon(
+              open ? Icons.expand_more : Icons.chevron_right,
+              size: 18,
+              color: palette.textSecondary,
+            ),
+            if (icon != null) ...[
+              const SizedBox(width: 2),
+              Icon(icon, size: 16, color: const Color(0xFFFFC107)),
+            ],
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.label(palette),
+              ),
+            ),
+            Text('$count', style: AppTypography.caption(palette)),
+            ?menu,
+            if (menu == null) const SizedBox(width: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// Panel de capas: miniatura, ojo y opciones de la capa activa.
 class LayersPanel extends StatelessWidget {
@@ -886,25 +1011,4 @@ class SheetSwatch extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Estante de la biblioteca de pinceles.
-class _Shelf {
-  final bool favorites;
-  final BrushCategory? category;
-
-  const _Shelf.favorites() : favorites = true, category = null;
-
-  const _Shelf.style() : favorites = false, category = null;
-
-  const _Shelf.category(BrushCategory this.category) : favorites = false;
-
-  @override
-  bool operator ==(Object other) =>
-      other is _Shelf &&
-      other.favorites == favorites &&
-      other.category == category;
-
-  @override
-  int get hashCode => Object.hash(favorites, category);
 }

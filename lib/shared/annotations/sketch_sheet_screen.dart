@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:pdf_render_maintained/pdf_render_maintained.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -54,7 +55,7 @@ enum _Mode {
   eraseStroke,
 }
 
-enum _Panel { brushes, layers, color, actions, settings }
+enum _Panel { brushes, layers, color, actions, settings, paper }
 
 /// Folio a pantalla completa para dibujar a mano, al estilo de Procreate:
 /// pinceles con textura, capas, difumino, goma con cualquier pincel y gestos
@@ -202,6 +203,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
         }
       });
     });
+    PaperLibrary.rasterizePdf ??= _pdfFirstPage;
     PaperLibrary.instance.ensureLoaded().then((_) {
       if (mounted) setState(() {});
     });
@@ -227,12 +229,26 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     );
   }
 
-  /// Importa papeles (PNG o JPG) y pone el último en el folio.
-  Future<void> _importPapers() async {
-    final picked = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: true,
-    );
+  /// Importa papeles desde Archivos (PNG, JPG, HEIC o PDF) o desde Fotos,
+  /// y pone el último en el folio.
+  Future<void> _importPapers({bool fromPhotos = false}) async {
+    final picked = fromPhotos
+        ? await FilePicker.platform.pickFiles(
+            type: FileType.image,
+            allowMultiple: true,
+          )
+        : await FilePicker.platform.pickFiles(
+            type: FileType.custom,
+            allowedExtensions: const [
+              'png',
+              'jpg',
+              'jpeg',
+              'heic',
+              'heif',
+              'pdf',
+            ],
+            allowMultiple: true,
+          );
     final paths = [
       for (final f in picked?.files ?? const <PlatformFile>[])
         if (f.path != null) f.path!,
@@ -273,6 +289,32 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
           ),
         ),
       );
+  }
+
+  /// Primera página de un PDF como PNG (para usarla de papel).
+  static Future<Uint8List?> _pdfFirstPage(String path) async {
+    final doc = await PdfDocument.openFile(path);
+    try {
+      final page = await doc.getPage(1);
+      final scale = 2048 / math.max(page.width, page.height);
+      final w = (page.width * scale).round();
+      final h = (page.height * scale).round();
+      final rendered = await page.render(
+        width: w,
+        height: h,
+        fullWidth: w.toDouble(),
+        fullHeight: h.toDouble(),
+      );
+      final image = await rendered.createImageDetached();
+      rendered.dispose();
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      return data?.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    } finally {
+      await doc.dispose();
+    }
   }
 
   Future<void> _importPalette() async {
@@ -1294,8 +1336,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
         return BrushLibraryPanel(
           title: erase ? 'Borrar con…' : 'Pinceles',
           selectedId: _brushId,
-          shelf: erase ? ['eraser.kneaded', ..._style.shelf] : _style.shelf,
-          shelfName: _style.name,
+          store: CustomBrushStore.instance,
           color: _color,
           paper: paper,
           filter: (brush) => erase
@@ -1333,6 +1374,8 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
         return _buildActions();
       case _Panel.settings:
         return _buildSettings();
+      case _Panel.paper:
+        return _buildPaperPanel();
     }
   }
 
@@ -1362,59 +1405,17 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
               },
             ),
           const SizedBox(height: 8),
-          Text('Papel', style: AppTypography.label(palette)),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final paper in AnnotationPaper.values)
-                ChoiceChip(
-                  label: Text(BrushCatalog.paperLabel(paper)),
-                  selected: doc.paperImage == null && doc.paper == paper,
-                  onSelected: (_) => _controller.setPaper(paper),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (PaperLibrary.papers.isNotEmpty)
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final paper in PaperLibrary.papers)
-                  Tooltip(
-                    message: paper.name,
-                    child: InkWell(
-                      onTap: () => _controller.setPaperImage(paper.id),
-                      onLongPress: () => _deletePaper(paper),
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        width: 64,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: doc.paperImage == paper.id
-                                ? palette.accent
-                                : Colors.white24,
-                            width: doc.paperImage == paper.id ? 2.5 : 1,
-                          ),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: RawImage(
-                          image: paper.background,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.texture),
+            title: const Text('Papel'),
+            subtitle: Text(
+              PaperLibrary.paper(doc.paperImage)?.name ??
+                  BrushCatalog.paperLabel(doc.paper ?? AnnotationPaper.white),
             ),
-          TextButton.icon(
-            onPressed: _importPapers,
-            icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
-            label: const Text('Importar papel (PNG o JPG)'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => setState(() => _panel = _Panel.paper),
           ),
           const SizedBox(height: 8),
           SwitchListTile(
@@ -1536,6 +1537,233 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
         ],
       ),
     );
+  }
+
+  final Set<String> _closedPaperGroups = {};
+
+  Widget _buildPaperPanel() {
+    final palette = context.palette;
+    final doc = _controller.document;
+    Widget header(String id, String title, {IconData? icon}) {
+      final open = !_closedPaperGroups.contains(id);
+      return InkWell(
+        onTap: () => setState(() {
+          if (open) {
+            _closedPaperGroups.add(id);
+          } else {
+            _closedPaperGroups.remove(id);
+          }
+        }),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(0, 10, 0, 6),
+          child: Row(
+            children: [
+              Icon(
+                open ? Icons.expand_more : Icons.chevron_right,
+                size: 18,
+                color: palette.textSecondary,
+              ),
+              if (icon != null)
+                Icon(icon, size: 16, color: const Color(0xFFFFC107)),
+              const SizedBox(width: 4),
+              Text(title, style: AppTypography.label(palette)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget tile({
+      required String name,
+      required bool selected,
+      required Widget image,
+      required VoidCallback onTap,
+      VoidCallback? onLongPress,
+      bool? favorite,
+      VoidCallback? onFavorite,
+    }) {
+      return SizedBox(
+        width: 92,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                InkWell(
+                  onTap: onTap,
+                  onLongPress: onLongPress,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    width: 92,
+                    height: 66,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: selected ? palette.accent : Colors.white24,
+                        width: selected ? 2.5 : 1,
+                      ),
+                    ),
+                    child: image,
+                  ),
+                ),
+                if (favorite != null)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: IconButton(
+                      tooltip: favorite
+                          ? 'Quitar de favoritos'
+                          : 'Añadir a favoritos',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 18,
+                      color: favorite
+                          ? const Color(0xFFFFC107)
+                          : Colors.black54,
+                      icon: Icon(
+                        favorite
+                            ? Icons.star_rounded
+                            : Icons.star_border_rounded,
+                      ),
+                      onPressed: onFavorite,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            Text(
+              name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption(palette),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget paperTile(PaperTexture paper) => tile(
+      name: paper.name,
+      selected: doc.paperImage == paper.id,
+      image: RawImage(image: paper.background, fit: BoxFit.cover),
+      onTap: () => _controller.setPaperImage(paper.id),
+      onLongPress: () => _paperMenu(paper),
+      favorite: paper.favorite,
+      onFavorite: () async {
+        await PaperLibrary.instance.toggleFavorite(paper.id);
+        if (mounted) setState(() {});
+      },
+    );
+
+    Widget grid(List<Widget> tiles) =>
+        Wrap(spacing: 8, runSpacing: 8, children: tiles);
+
+    final favorites = PaperLibrary.papers.where((p) => p.favorite).toList();
+    final groups = PaperLibrary.groups;
+    return SheetPanel(
+      title: 'Papel',
+      actions: [
+        IconButton(
+          tooltip: 'Importar desde Archivos (PNG, JPG, HEIC, PDF)',
+          icon: const Icon(Icons.folder_open_outlined),
+          onPressed: () => _importPapers(),
+        ),
+        IconButton(
+          tooltip: 'Importar desde Fotos',
+          icon: const Icon(Icons.photo_library_outlined),
+          onPressed: () => _importPapers(fromPhotos: true),
+        ),
+      ],
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        children: [
+          header('app', 'De la app'),
+          if (!_closedPaperGroups.contains('app'))
+            grid([
+              for (final paper in AnnotationPaper.values)
+                tile(
+                  name: BrushCatalog.paperLabel(paper),
+                  selected: doc.paperImage == null && doc.paper == paper,
+                  image: ColoredBox(color: BrushCatalog.paperColor(paper)),
+                  onTap: () => _controller.setPaper(paper),
+                ),
+            ]),
+          if (favorites.isNotEmpty) ...[
+            header('fav', 'Favoritos', icon: Icons.star_rounded),
+            if (!_closedPaperGroups.contains('fav'))
+              grid([for (final p in favorites) paperTile(p)]),
+          ],
+          for (final entry in groups.entries) ...[
+            header('g:${entry.key}', '${entry.key} · ${entry.value.length}'),
+            if (!_closedPaperGroups.contains('g:${entry.key}'))
+              grid([for (final p in entry.value) paperTile(p)]),
+          ],
+          if (groups.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                'Importa tus papeles desde Archivos o Fotos, o déjalos en '
+                'Archivos › En mi iPad › IRIS DP › Importar › Papeles '
+                '(una subcarpeta por colección).',
+                style: AppTypography.caption(palette),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _paperMenu(PaperTexture paper) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Renombrar'),
+              onTap: () => Navigator.pop(context, 'rename'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Quitar papel'),
+              onTap: () => Navigator.pop(context, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'delete') return _deletePaper(paper);
+    if (action != 'rename') return;
+    final text = TextEditingController(text: paper.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Nombre del papel'),
+        content: TextField(
+          controller: text,
+          autofocus: true,
+          onSubmitted: (v) => Navigator.pop(context, v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, text.text),
+            child: const Text('Aceptar'),
+          ),
+        ],
+      ),
+    );
+    text.dispose();
+    if (name == null) return;
+    await PaperLibrary.instance.renamePaper(paper.id, name);
+    if (mounted) setState(() {});
   }
 
   Widget _buildSettings() {

@@ -522,6 +522,14 @@ abstract final class BrushCatalog {
     ),
   ];
 
+  /// Secciones de la biblioteca, de lo más usado a lo menos.
+  static const appGroups = <(String, List<String>)>[
+    ('Dibujo', ['graphite.hb', 'graphite.8b', 'charcoal.vine']),
+    ('Tinta', ['fineliner.03', 'ink.brushpen', 'ink.hatch']),
+    ('Color', ['marker.chisel', 'wash.sepia', 'marker.tone']),
+    ('Efectos', ['marker.mist', 'marker.light', 'eraser.kneaded']),
+  ];
+
   /// Pinceles retirados: sus trazos se pintan con el más parecido de hoy.
   static const retired = <String, String>{
     'graphite.2h': 'graphite.hb',
