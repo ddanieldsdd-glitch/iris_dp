@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../sync/sync_engine.dart';
+import '../../sync/sync_plan_applier.dart';
+import '../../utils/error_log.dart';
 import 'sync_conflict_resolution_sheet.dart';
 
 /// Orquesta el flujo de sync manual: motor de datos + UI de revisión.
@@ -13,7 +15,15 @@ abstract final class SyncFlowCoordinator {
     WidgetRef ref,
   ) async {
     final engine = ref.read(syncEngineProvider);
-    final start = await engine.prepareManualSync();
+    final SyncManualStart start;
+    try {
+      start = await engine.prepareManualSync();
+    } catch (e, st) {
+      // Lo que se pudo aplicar ya está aplicado; el detalle queda en el log.
+      await ErrorLog.record(e, st, context: 'Sincronizar');
+      final detail = e is SyncApplyException ? e.error : e;
+      return SyncResult(message: 'No se pudo sincronizar todo: $detail');
+    }
 
     if (start.isSkipped) {
       return SyncResult.skipped(start.skipReason!);

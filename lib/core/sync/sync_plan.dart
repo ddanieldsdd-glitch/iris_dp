@@ -93,6 +93,21 @@ class SyncPlanItem {
     };
   }
 
+  /// Se aplica sin preguntar: solo cambió un lado, o es una decisión que el
+  /// usuario ya tomó en este equipo (borrar un proyecto aquí). Queda para
+  /// revisar lo que puede perder trabajo: los conflictos y borrar aquí un
+  /// proyecto porque ya no aparece en la nube.
+  bool get appliesSilently => switch (action) {
+        SyncPlanAction.conflict ||
+        SyncPlanAction.contentConflict ||
+        SyncPlanAction.deleteLocal =>
+          false,
+        _ => true,
+      };
+
+  /// La elección con la que se presenta el ítem si nadie la cambia.
+  SyncResolutionChoice get defaultChoice => _defaultChoice(action);
+
   bool get requiresReview =>
       action == SyncPlanAction.conflict ||
       action == SyncPlanAction.contentConflict ||
@@ -131,6 +146,10 @@ class SyncPlan {
       items.any((i) =>
           i.action == SyncPlanAction.conflict ||
           i.action == SyncPlanAction.contentConflict);
+
+  /// Lo que no se aplica solo: ver [SyncPlanItem.appliesSilently].
+  List<SyncPlanItem> get reviewItems =>
+      [for (final i in items) if (!i.appliesSilently) i];
 
   int get pendingCount => items.where((i) => i.choice != SyncResolutionChoice.skip).length;
 }

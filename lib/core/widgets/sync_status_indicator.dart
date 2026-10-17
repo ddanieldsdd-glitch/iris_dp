@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../cloud/cloud_providers.dart';
 import '../cloud/cloud_session.dart';
 import '../cloud/cloud_runtime_config.dart';
+import '../cloud/cloudinary_config.dart';
 import '../sync/pending_sync_queue_provider.dart';
 import '../sync/media_sync_providers.dart';
+import '../sync/sync_engine.dart';
 import 'sync/sync_flow_coordinator.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
@@ -67,6 +69,7 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
     }
 
     final pendingCount = ref.watch(pendingSyncQueueCountProvider);
+    final lastEdit = ref.watch(lastCloudEditProvider);
     final mediaProgress = ref.watch(mediaUploadProgressProvider);
     final mediaPending = mediaProgress.maybeWhen(
       data: (p) => p.pending,
@@ -89,7 +92,8 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
             final lastSync = syncSnap.data;
             final queueCount = pendingCount.valueOrNull ?? 0;
             final hasPending = queueCount > 0 || mediaPending > 0;
-            final iconColor = hasPending
+            final mediaOff = !CloudinaryConfig.isConfigured;
+            final iconColor = hasPending || mediaOff
                 ? context.palette.warning
                 : context.palette.success;
 
@@ -97,14 +101,20 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
             if (lastSync != null) {
               final mins = DateTime.now().difference(lastSync).inMinutes;
               tooltip = mins < 1
-                  ? 'Última sync: ahora'
-                  : 'Última sync: hace $mins min';
+                  ? 'Sincronizado ahora'
+                  : 'Sincronizado hace $mins min';
+            }
+            if (lastEdit != null) {
+              tooltip += ' · ${lastEdit.describe(DateTime.now())}';
             }
             if (queueCount > 0) {
               tooltip += ' · $queueCount cambio(s) pendiente(s)';
             }
             if (mediaPending > 0) {
               tooltip += ' · ↑$mediaPending img en cola';
+            }
+            if (mediaOff) {
+              tooltip += ' · imágenes desactivadas en esta versión';
             }
 
             return Row(
