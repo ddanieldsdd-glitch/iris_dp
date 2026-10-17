@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -16,6 +17,7 @@ Future<SketchSheetResult?> Function() _open(
   WidgetTester tester, {
   SketchSheetPurpose purpose = SketchSheetPurpose.storyboard,
   AnnotationDocument document = const AnnotationDocument(),
+  ImageProvider? onionSkin,
 }) {
   return () async {
     tester.view.physicalSize = const Size(1600, 1000);
@@ -38,6 +40,8 @@ Future<SketchSheetResult?> Function() _open(
                       title: 'Plano 12',
                       document: document,
                       purpose: purpose,
+                      onionSkin: onionSkin,
+                      onionSkinLabel: onionSkin == null ? null : 'Plano 1',
                     );
                     closed = true;
                   },
@@ -218,5 +222,23 @@ void main() {
     final after = tester.getRect(find.byType(AnnotationCanvas));
     expect(after.center.dx, greaterThan(before.center.dx + 60));
     expect(_controllerOf(tester).document.strokes, hasLength(1));
+  });
+
+  testWidgets('el papel cebolla empieza apagado y se pone y quita con su '
+      'etiqueta', (tester) async {
+    final pixel = base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ'
+      'DwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    );
+    await _open(tester, onionSkin: MemoryImage(pixel))();
+    expect(find.text('Ver Plano 1 debajo'), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+    await tester.tap(find.text('Ver Plano 1 debajo'));
+    await tester.pump();
+    expect(find.text('Papel cebolla · Plano 1  ✕'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
+    await tester.tap(find.text('Papel cebolla · Plano 1  ✕'));
+    await tester.pump();
+    expect(find.byType(Image), findsNothing);
   });
 }
