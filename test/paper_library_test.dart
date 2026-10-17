@@ -43,6 +43,38 @@ AnnotationDocument _pencilOn(String? paperImage) => AnnotationDocument(
 void main() {
   tearDown(PaperLibrary.clearForTest);
 
+  test('nombres limpios y colección por el nombre', () {
+    expect(
+      PaperLibrary.cleanName('/x/Leonardo_s Sketchbook.JPG'),
+      "Leonardo's Sketchbook",
+    );
+    expect(PaperLibrary.cleanName('/x/Worn_Paper.PNG'), 'Worn Paper');
+    expect(PaperLibrary.guessGroup('Grungy Canvas'), 'Lienzos');
+    expect(PaperLibrary.guessGroup('Aged Parchment'), 'Pergaminos');
+    expect(
+      PaperLibrary.guessGroup('Brown Paper Recycled Toothy'),
+      'Kraft y reciclados',
+    );
+    expect(PaperLibrary.guessGroup('Smooth Notebook Paper'), 'Papeles');
+  });
+
+  testWidgets('un papel favorito sale el primero', (tester) async {
+    final dir = Directory.systemTemp.createTempSync('iris_papel_fav');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final library = PaperLibrary(root: () async => dir);
+    final a = (await tester.runAsync(
+      () => library.importPaper(_paperFile(dir).path, group: 'Mis papeles'),
+    ))!;
+    expect(a.group, 'Mis papeles');
+    final other = File('${dir.path}/Aged_Parchment.png')
+      ..writeAsBytesSync(img.encodePng(img.Image(width: 40, height: 30)));
+    final b = (await tester.runAsync(() => library.importPaper(other.path)))!;
+    expect(b.group, 'Pergaminos');
+    await tester.runAsync(() => library.toggleFavorite(b.id));
+    expect(PaperLibrary.papers.first.id, b.id);
+    expect(PaperLibrary.papers.first.favorite, isTrue);
+  });
+
   test('el documento guarda la clave del papel', () {
     final back = AnnotationDocument.decode(_pencilOn('papel_abc').encode());
     expect(back.paperImage, 'papel_abc');

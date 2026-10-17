@@ -294,6 +294,73 @@ void main() {
     timeout: const Timeout(Duration(minutes: 8)),
   );
 
+  Uint8List orderedSet() {
+    final archive = Archive();
+    void add(String name, Uint8List data) =>
+        archive.addFile(ArchiveFile(name, data.length, data));
+    for (final (dir, name) in [('ZZZ', 'Primero'), ('AAA', 'Segundo')]) {
+      add('$dir/Brush.archive', _brushArchive(name));
+      add('$dir/Shape.png', _png(32, disc: true));
+    }
+    final plist = utf8.encode(
+      '<?xml version="1.0"?><plist><dict><key>brushes</key><array>'
+      '<string>ZZZ</string><string>AAA</string></array>'
+      '<key>name</key><string>The Pen</string></dict></plist>',
+    );
+    add('brushset.plist', Uint8List.fromList(plist));
+    return Uint8List.fromList(ZipEncoder().encode(archive)!);
+  }
+
+  test('un set queda como un grupo con su nombre y en su orden', () {
+    final brushes = ProcreateBrushImport.parse(
+      orderedSet(),
+      fileName: 'W.H_The_Pen.brushset',
+    );
+    expect(brushes.map((b) => b.name), ['Primero', 'Segundo']);
+    expect(brushes.map((b) => b.group).toSet(), {'W.H The Pen'});
+    expect(brushes.map((b) => b.order), [0, 1]);
+  });
+
+  testWidgets('grupos importados: sin repetidos al reimportar, renombrar, '
+      'reordenar y quitar', (tester) async {
+    final dir = Directory.systemTemp.createTempSync('iris_grupos');
+    addTearDown(() {
+      dir.deleteSync(recursive: true);
+      for (final b in BrushCatalog.custom) {
+        BrushCatalog.unregister(b.id);
+      }
+    });
+    final store = CustomBrushStore(root: () async => dir);
+    await tester.runAsync(
+      () => store.importProcreate(orderedSet(), fileName: 'The Pen.brushset'),
+    );
+    final again = (await tester.runAsync(
+      () => store.importProcreate(orderedSet(), fileName: 'The Pen.brushset'),
+    ))!;
+    expect(again, isEmpty);
+    await tester.runAsync(
+      () => store.importProcreate(_brushset(), fileName: 'Vintage.brushset'),
+    );
+    expect(store.groups.map((g) => g.id), ['The Pen', 'Vintage']);
+    expect(store.groups.first.brushes.map((b) => b.name), [
+      'Primero',
+      'Segundo',
+    ]);
+    await tester.runAsync(() => store.moveGroup('Vintage', -1));
+    await tester.runAsync(() => store.renameGroup('The Pen', 'Plumas'));
+    expect(store.groups.map((g) => g.title), ['Vintage', 'Plumas']);
+
+    // Otro arranque conserva grupos, orden y nombre.
+    for (final b in BrushCatalog.custom) {
+      BrushCatalog.unregister(b.id);
+    }
+    final reloaded = CustomBrushStore(root: () async => dir);
+    await tester.runAsync(reloaded.ensureLoaded);
+    expect(reloaded.groups.map((g) => g.title), ['Vintage', 'Plumas']);
+    await tester.runAsync(() => reloaded.deleteGroup('Vintage'));
+    expect(reloaded.groups.map((g) => g.title), ['Plumas']);
+  });
+
   test('un archivo que no es pincel avisa', () {
     expect(
       () => ProcreateBrushImport.parse(Uint8List.fromList([1, 2, 3])),

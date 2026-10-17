@@ -77,20 +77,23 @@ abstract final class AutoImport {
     Future<void> each(
       String folder,
       bool Function(String ext) accepts,
-      Future<int> Function(String path) importer,
+      Future<int> Function(String path, String? group) importer,
     ) async {
       final dir = Directory(p.join(root.path, folder));
+      // También en subcarpetas: cada carpeta de kit es un grupo.
       final files =
           dir
-              .listSync()
+              .listSync(recursive: true)
               .whereType<File>()
               .where((f) => accepts(p.extension(f.path).toLowerCase()))
               .toList()
             ..sort((a, b) => a.path.compareTo(b.path));
       for (final file in files) {
         var ok = false;
+        final relative = p.relative(file.parent.path, from: dir.path);
+        final group = relative == '.' ? null : p.split(relative).first;
         try {
-          final added = await importer(file.path);
+          final added = await importer(file.path, group);
           ok = true;
           if (folder == 'Pinceles') brushes += added;
           if (folder == 'Papeles') papers += added;
@@ -108,20 +111,21 @@ abstract final class AutoImport {
     await each(
       'Pinceles',
       (ext) => ext == '.brushset' || ext == '.brush',
-      (path) async => (await brushStore.importProcreateFile(path)).length,
+      (path, group) async =>
+          (await brushStore.importProcreateFile(path, group: group)).length,
     );
     await each(
       'Papeles',
       (ext) => const ['.png', '.jpg', '.jpeg'].contains(ext),
-      (path) async {
-        await paperLibrary.importPaper(path);
+      (path, group) async {
+        await paperLibrary.importPaper(path, group: group);
         return 1;
       },
     );
     await each(
       'Paletas',
       (ext) => ext == '.swatches',
-      (path) async => (await paperLibrary.importSwatches(path)).length,
+      (path, group) async => (await paperLibrary.importSwatches(path)).length,
     );
     return AutoImportResult(
       brushes: brushes,
