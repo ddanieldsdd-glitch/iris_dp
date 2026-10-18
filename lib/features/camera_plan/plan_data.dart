@@ -84,18 +84,34 @@ class PlanProjectData {
   List<LocationBasePlan> get orphanSets =>
       sets.where((s) => site(s.siteId) == null).toList();
 
+  /// Esquemas de verdad (los que llevan planos); sin los bocetos.
+  Iterable<LightSetup> get planSetups =>
+      setups.where((s) => !LightSetupKind.isSketch(s));
+
   List<LightSetup> setupsOfSet(int setId) =>
-      setups.where((s) => s.locationBasePlanId == setId).toList();
+      planSetups.where((s) => s.locationBasePlanId == setId).toList();
 
   /// Esquemas de la localización que no son de ningún set.
-  List<LightSetup> setupsOfSite(int siteId) => setups
+  List<LightSetup> setupsOfSite(int siteId) => planSetups
       .where((s) => s.locationBasePlanId == null && s.locationSiteId == siteId)
       .toList();
 
   /// Plantas libres: sin set ni localización.
-  List<LightSetup> get freeSetups => setups
+  List<LightSetup> get freeSetups => planSetups
       .where((s) => s.locationBasePlanId == null && s.locationSiteId == null)
       .toList();
+
+  /// Bocetos de una escena (con elementos o a mano), en orden de creación.
+  List<LightSetup> sketchesOfScene(int sceneId) => [
+    for (final s in setups)
+      if (LightSetupKind.isSketch(s) && s.sceneId == sceneId) s,
+  ];
+
+  /// Bocetos que no son de ninguna escena.
+  List<LightSetup> get freeSketches => [
+    for (final s in setups)
+      if (LightSetupKind.isSketch(s) && scene(s.sceneId) == null) s,
+  ];
 
   /// Localización a la que pertenece un esquema, directa o por su set.
   int? siteIdOfSetup(LightSetup setup) =>
@@ -166,7 +182,7 @@ class PlanProjectData {
   /// localización y las plantas libres.
   List<LightSetup> setupsForScene(Scene scene) {
     final siteId = scene.locationSiteId ?? set(scene.locationId)?.siteId;
-    return setups.where((s) {
+    return planSetups.where((s) {
       if (s.locationBasePlanId != null) {
         return s.locationBasePlanId == scene.locationId;
       }
@@ -233,12 +249,17 @@ class PlanProjectData {
 
   /// ¿Tiene el esquema algo dibujado, con elementos o a mano?
   bool setupHasDrawing(LightSetup setup) =>
-      ownOfSetup(setup).isNotEmpty || drawingsOfSetup(setup).isNotEmpty;
+      setup.sketchImagePath != null ||
+      ownOfSetup(setup).isNotEmpty ||
+      drawingsOfSetup(setup).isNotEmpty;
 
   /// Bocetos que se pueden enseñar en una escena: esquemas en estado
   /// «boceto» con algo dibujado, primero los del set de la escena.
   List<LightSetup> sketchesForScene(Scene scene) {
     final list = [
+      // Primero los bocetos de la propia escena.
+      for (final s in sketchesOfScene(scene.id))
+        if (setupHasDrawing(s)) s,
       for (final s in setupsForScene(scene))
         if (s.status == 'boceto' && setupHasDrawing(s)) s,
     ];
@@ -352,7 +373,7 @@ class PlanProjectData {
         if (setup(shot.lightSetupId) != null) shot.lightSetupId!,
     };
     return [
-      for (final s in setups)
+      for (final s in planSetups)
         if ((setId != null && s.locationBasePlanId == setId) ||
             used.contains(s.id))
           s,

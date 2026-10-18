@@ -272,6 +272,11 @@ class LightSetups extends Table {
   TextColumn get sketchJson => text().nullable()();
   TextColumn get sketchImagePath => text().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  // Qué es (schemaVersion 54): planta (esquema de luz de verdad, con sus
+  // planos), boceto_elementos o boceto_mano. Un boceto no lleva planos.
+  TextColumn get kind => text().withDefault(const Constant('planta'))();
+  // Escena a la que pertenece un boceto; nula = boceto libre.
+  IntColumn get sceneId => integer().nullable().references(Scenes, #id)();
 }
 
 class CameraPathPoints extends Table {

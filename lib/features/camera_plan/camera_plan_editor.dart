@@ -32,6 +32,7 @@ import 'plan_data.dart' show kLightSetupColors;
 import 'plan_cast.dart';
 import 'plan_gear_list.dart';
 import 'plan_guide.dart';
+import 'plan_sketch.dart' show moveDrawingToFreehandSketch;
 import 'plan_light_map.dart';
 import 'plan_project_gear_dialog.dart';
 import 'plan_marks.dart';
@@ -72,9 +73,6 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   /// Tramo de un plano secuencia: su set, su luz y lo colocado en él.
   final int? leg;
 
-  /// Abrir ya con el lápiz en la mano (un boceto a mano alzada).
-  final bool startDrawing;
-
   /// En la pantalla de trabajo, abrir otra planta cambia la que se ve en
   /// lugar de apilar una pantalla nueva.
   final void Function(PlanTarget target)? onNavigate;
@@ -93,7 +91,6 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     this.shotId,
     this.leg,
     this.onNavigate,
-    this.startDrawing = false,
     this.guide,
   });
 
@@ -106,7 +103,6 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     this.onNavigate,
     this.guide,
   }) : label = siteName,
-       startDrawing = false,
        scope = FloorPlanScope.site,
        setId = null,
        lightSetupId = null,
@@ -121,7 +117,6 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required String setName,
     this.onNavigate,
   }) : label = setName,
-       startDrawing = false,
        scope = FloorPlanScope.set,
        siteId = null,
        lightSetupId = null,
@@ -136,7 +131,6 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required int this.lightSetupId,
     required String setupName,
     this.onNavigate,
-    this.startDrawing = false,
   }) : label = setupName,
        scope = FloorPlanScope.lightSetup,
        siteId = null,
@@ -154,7 +148,6 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     this.leg,
     this.onNavigate,
   }) : label = shotLabel,
-       startDrawing = false,
        scope = FloorPlanScope.shot,
        siteId = null,
        setId = null,
@@ -370,10 +363,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   ui.Image? _backgroundImage;
   Rect? _backgroundRect;
   double _backgroundOpacity = 0.85;
-  late bool _annotationMode = widget.startDrawing;
-  AnnotationToolType _annotationTool = AnnotationToolType.pen;
-  Color _annotationColor = const Color(0xFF007AFF);
-  double _annotationWidth = 6;
   late FloorPlanRepository _repo;
 
   bool get _isShotMode => widget.scope == FloorPlanScope.shot;
@@ -505,6 +494,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       lightSetup = setupById(_pickedSetupId);
     } else if (lightSetup == null) {
       for (final s in projectSetups) {
+        if (LightSetupKind.isSketch(s)) continue;
         final matches = linkedSet != null
             ? s.locationBasePlanId == linkedSet.id
             : linkedSite != null &&
@@ -862,6 +852,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     } else {
       final all = await db0.getLightSetupsForProject(widget.projectId);
       setups = all.where((s) {
+        if (LightSetupKind.isSketch(s)) return false;
         if (_linkedSet != null) {
           return s.locationBasePlanId == _linkedSet!.id ||
               (s.locationBasePlanId == null &&
@@ -1194,6 +1185,76 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (!mounted) return;
     setState(() {});
     _showSnack('Capas ordenadas.');
+  }
+
+  // ── Dibujo a mano de antes ────────────────────────────────────────────────
+
+  /// Un dibujo hecho encima de la planta (de antes) se pasa a un boceto a
+  /// mano de la escena, o se borra. No se pierde sin preguntar.
+  Future<void> _resolveOldDrawing() async {
+    final palette = context.palette;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.surfaceElevated,
+        title: Text(
+          '¿Qué hago con el dibujo a mano?',
+          style: AppTypography.titleMedium(palette),
+        ),
+        content: Text(
+          'Ya no se dibuja encima de la planta. Pásalo a un boceto a mano '
+          '(en su propio lienzo, con la escena) o bórralo.',
+          style: AppTypography.bodyMedium(palette),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'delete'),
+            child: Text(
+              'Borrar dibujo',
+              style: TextStyle(color: palette.error),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, 'sketch'),
+            child: const Text('Pasar a boceto a mano'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final db = ref.read(databaseProvider);
+    final document = _annotationController.document;
+    if (choice == 'sketch') {
+      await moveDrawingToFreehandSketch(
+        db,
+        projectId: widget.projectId,
+        document: document,
+        name: 'Boceto · ${widget.label}',
+        sceneId: _scene?.id,
+        setId: _linkedSet?.id,
+        siteId: _linkedSet == null ? _linkedSite?.id : null,
+        shot: _shot,
+        size: _annotationDocumentSize,
+      );
+    }
+    await db.deleteProjectAnnotationDocument(
+      projectId: widget.projectId,
+      targetType: _annotationTargetType,
+      targetId: _annotationTargetId,
+    );
+    await db.touchProjectContent(widget.projectId);
+    if (!mounted) return;
+    await _load();
+    if (!mounted) return;
+    _showSnack(
+      choice == 'sketch'
+          ? 'El dibujo está ahora en un boceto a mano de la escena.'
+          : 'Dibujo borrado.',
+    );
   }
 
   // ── Guía localización › sets › planos ─────────────────────────────────────
@@ -3198,20 +3259,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 target: ShotImageTarget.planSketch,
               ),
             ),
-          IconButton(
-            tooltip: _annotationMode
-                ? 'Volver a editar elementos'
-                : 'Dibujar a mano (ratón o Apple Pencil)',
-            icon: Icon(
-              _annotationMode ? Icons.edit_off_outlined : Icons.draw_outlined,
-              color: _annotationMode ? palette.accent : palette.textSecondary,
-            ),
-            onPressed: () => setState(() {
-              _annotationMode = !_annotationMode;
-              _selected = null;
-              _selectedPathIndex = null;
-            }),
-          ),
           if (!_isShotMode && _linkedSet != null)
             IconButton(
               tooltip: 'Asociar planos a «${_linkedSet!.locationName}»',
@@ -3301,7 +3348,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           : Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (_wide && !_annotationMode)
+                if (_wide)
                   PlanPalette(
                     tool: _tool,
                     onTool: _setTool,
@@ -3383,6 +3430,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                           actionLabel: 'Ordenar capas',
                           onAction: _tidyLayers,
                         )
+                      else if (!_annotationController.document.isEmpty)
+                        _Notice(
+                          palette: palette,
+                          icon: Icons.draw_outlined,
+                          text:
+                              'Esta planta tiene un dibujo a mano encima. Los '
+                              'bocetos a mano van ahora en su propio lienzo.',
+                          actionLabel: 'Pasar a boceto…',
+                          onAction: _resolveOldDrawing,
+                        )
                       else if (_linkedSet != null &&
                           _linkedSite != null &&
                           _setZone == null)
@@ -3418,7 +3475,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                       fit: StackFit.expand,
                                       children: [
                                         IgnorePointer(
-                                          ignoring: _annotationMode,
+                                          ignoring: false,
                                           child: CallbackShortcuts(
                                             bindings: _shortcuts,
                                             child: Focus(
@@ -3672,14 +3729,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                             ),
                                           ),
                                         ),
+                                        // Un dibujo a mano de antes se ve,
+                                        // pero ya no se dibuja encima de la
+                                        // planta: va a un boceto aparte.
                                         IgnorePointer(
-                                          ignoring: !_annotationMode,
                                           child: AnnotationCanvas(
                                             controller: _annotationController,
-                                            enabled: _annotationMode,
-                                            tool: _annotationTool,
-                                            color: _annotationColor,
-                                            width: _annotationWidth,
+                                            enabled: false,
+                                            tool: AnnotationToolType.pen,
+                                            color: const Color(0xFF007AFF),
+                                            width: 6,
                                             viewport: AnnotationViewport(
                                               documentSize:
                                                   _annotationDocumentSize,
@@ -3783,20 +3842,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                           ],
                         ),
                       ),
-                      if (_annotationMode)
-                        _PlanAnnotationToolbar(
-                          palette: palette,
-                          controller: _annotationController,
-                          tool: _annotationTool,
-                          color: _annotationColor,
-                          width: _annotationWidth,
-                          onToolChanged: (tool) =>
-                              setState(() => _annotationTool = tool),
-                          onColorChanged: (color) =>
-                              setState(() => _annotationColor = color),
-                          onWidthChanged: (width) =>
-                              setState(() => _annotationWidth = width),
-                        ),
                       if (!_wide)
                         _BottomToolbar(
                           palette: palette,
@@ -3925,177 +3970,6 @@ class _LayerChip extends StatelessWidget {
       ),
     );
   }
-}
-
-class _PlanAnnotationToolbar extends StatelessWidget {
-  static const _colors = [
-    Color(0xFF007AFF),
-    Color(0xFFFF3B30),
-    Color(0xFFFFCC00),
-    Color(0xFF34C759),
-    Color(0xFFAF52DE),
-    Color(0xFF111111),
-  ];
-
-  final AppPalette palette;
-  final AnnotationCanvasController controller;
-  final AnnotationToolType tool;
-  final Color color;
-  final double width;
-  final ValueChanged<AnnotationToolType> onToolChanged;
-  final ValueChanged<Color> onColorChanged;
-  final ValueChanged<double> onWidthChanged;
-
-  const _PlanAnnotationToolbar({
-    required this.palette,
-    required this.controller,
-    required this.tool,
-    required this.color,
-    required this.width,
-    required this.onToolChanged,
-    required this.onColorChanged,
-    required this.onWidthChanged,
-  });
-
-  Future<void> _addNote(BuildContext context) async {
-    final textController = TextEditingController();
-    final text = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Añadir post-it'),
-        content: TextField(
-          controller: textController,
-          autofocus: true,
-          maxLines: 4,
-          decoration: const InputDecoration(
-            hintText: 'Escribe una aclaración…',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, textController.text.trim()),
-            child: const Text('Añadir'),
-          ),
-        ],
-      ),
-    );
-    textController.dispose();
-    if (text == null || text.isEmpty) return;
-    controller.addNote(
-      AnnotationNote(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
-        text: text,
-        x: 0.36,
-        y: 0.34,
-        width: 0.28,
-        height: 0.18,
-        colorArgb: const Color(0xFFFFE082).toARGB32(),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: palette.surfaceElevated,
-      child: SizedBox(
-        height: 64,
-        child: ListenableBuilder(
-          listenable: controller,
-          builder: (context, _) => ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            children: [
-              _annotationToolButton(
-                icon: Icons.edit_outlined,
-                tooltip: 'Lápiz',
-                value: AnnotationToolType.pen,
-              ),
-              _annotationToolButton(
-                icon: Icons.border_color_outlined,
-                tooltip: 'Subrayador',
-                value: AnnotationToolType.highlighter,
-              ),
-              _annotationToolButton(
-                icon: Icons.north_east,
-                tooltip: 'Flecha',
-                value: AnnotationToolType.arrow,
-              ),
-              _annotationToolButton(
-                icon: Icons.auto_fix_normal_outlined,
-                tooltip: 'Goma',
-                value: AnnotationToolType.eraser,
-              ),
-              const VerticalDivider(indent: 12, endIndent: 12),
-              for (final choice in _colors)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: () => onColorChanged(choice),
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      margin: const EdgeInsets.symmetric(vertical: 18),
-                      decoration: BoxDecoration(
-                        color: choice,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: choice == color
-                              ? palette.textPrimary
-                              : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 140,
-                child: Slider(
-                  value: width,
-                  min: 2,
-                  max: 24,
-                  onChanged: onWidthChanged,
-                ),
-              ),
-              IconButton(
-                tooltip: 'Añadir post-it',
-                onPressed: () => _addNote(context),
-                icon: const Icon(Icons.note_add_outlined),
-              ),
-              IconButton(
-                tooltip: 'Deshacer',
-                onPressed: controller.canUndo ? controller.undo : null,
-                icon: const Icon(Icons.undo),
-              ),
-              IconButton(
-                tooltip: 'Rehacer',
-                onPressed: controller.canRedo ? controller.redo : null,
-                icon: const Icon(Icons.redo),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _annotationToolButton({
-    required IconData icon,
-    required String tooltip,
-    required AnnotationToolType value,
-  }) => IconButton(
-    tooltip: tooltip,
-    onPressed: () => onToolChanged(value),
-    color: tool == value ? palette.accent : palette.textSecondary,
-    icon: Icon(icon),
-  );
 }
 
 class _BottomToolbar extends StatelessWidget {

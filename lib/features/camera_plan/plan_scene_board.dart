@@ -93,34 +93,59 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
         siteId: set == null ? _data.siteIdOfScene(_scene) : null,
       );
 
-  /// Crea un boceto en el set y lo abre para dibujarlo. Con [shot], el
-  /// boceto queda además a la vista en ese plano (en el guion técnico).
-  Future<void> _newSketch(LocationBasePlan? set, {Shot? shot}) async {
+  /// Crea un boceto de la escena y lo abre. Con [shot], el boceto queda
+  /// además a la vista en ese plano (en el guion técnico), pero no lleva
+  /// planos: es para pensar la luz.
+  Future<void> _newSketch({Shot? shot, String? kind}) async {
+    final setId = shot == null ? _scene.locationId : _data.setIdOfShot(shot);
     final created = await createPlanSketch(
       context,
       _db,
       projectId: widget.projectId,
-      setId: set?.id,
+      sceneId: _scene.id,
+      setId: setId,
       siteId: _data.siteIdOfScene(_scene),
+      kind: kind,
       label: shot == null
           ? 'Esc ${_scene.number}'
           : 'Esc ${_scene.number} P${shot.number}',
     );
-    if (created == null) return;
+    if (created == null || !mounted) return;
     if (shot != null) {
-      await addShotPlanSketchSetup(
-        db: _db,
-        shot: shot,
-        setupId: created.setup.id,
-      );
+      await addShotPlanSketchSetup(db: _db, shot: shot, setupId: created.id);
+      if (!mounted) return;
     }
-    widget.onOpen(
-      PlanTarget.lightSetup(
-        created.setup.id,
-        created.setup.name,
-        draw: created.freehand,
+    await _openSketch(created);
+  }
+
+  /// Un boceto con elementos pasa a ser un esquema de verdad del set de la
+  /// escena (una copia: el boceto se queda).
+  Future<void> _sketchToPlan(LightSetup sketch) async {
+    final setId = _scene.locationId;
+    final copy = await FloorPlanRepository(_db).copyLightSetup(
+      sketch,
+      setId: setId,
+      siteId: setId == null ? _data.siteIdOfScene(_scene) : null,
+      name: sketch.name.replaceFirst('Boceto · ', 'Setup · '),
+      kind: LightSetupKind.plan,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          '«${copy.name}» es ya un esquema de luz: arrastra a él los planos '
+          'que se ruedan así.',
+        ),
       ),
     );
+  }
+
+  Future<void> _openSketch(LightSetup sketch) async {
+    if (sketch.kind == LightSetupKind.sketchFreehand) {
+      await drawFreehandSketch(context, _db, sketch);
+    } else {
+      widget.onOpen(PlanTarget.lightSetup(sketch.id, sketch.name));
+    }
   }
 
   Future<void> _makeSequence(Shot shot) async {
@@ -230,6 +255,17 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
             onSave: (legs) => _saveRoute(shot, legs),
             onNewSetup: (set) => _newSetup(set),
           ),
+        PlanSketchStrip(
+          title: 'BOCETOS DE ESTA ESCENA',
+          sketches: _data.sketchesOfScene(_scene.id),
+          data: _data,
+          onOpen: _openSketch,
+          onNewElements: () =>
+              _newSketch(kind: LightSetupKind.sketchElements),
+          onNewFreehand: () =>
+              _newSketch(kind: LightSetupKind.sketchFreehand),
+          onToPlan: _sketchToPlan,
+        ),
         for (final set in sets) _setSection(palette, set),
         if (addable.isNotEmpty)
           Align(
@@ -353,7 +389,6 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
                 children: [
                   _NewSetupColumn(
                     onTap: () => _newSetup(set),
-                    onSketch: () => _newSketch(set),
                     onDrop: (shots) async =>
                         _move(shots, set, await _newSetup(set)),
                   ),
@@ -490,7 +525,7 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
                     if (!_picked.remove(shot.id)) _picked.add(shot.id);
                   }),
                   onSequence: () => _makeSequence(shot),
-                  onSketch: () => _newSketch(set, shot: shot),
+                  onSketch: () => _newSketch(shot: shot),
                 ),
               ),
             if (shots.isEmpty)
@@ -589,35 +624,12 @@ class _MasterPlanChip extends StatelessWidget {
 /// con ellos dentro.
 class _NewSetupColumn extends StatelessWidget {
   final VoidCallback onTap;
-
-  /// Crear un boceto: un esquema para dibujar a mano o con elementos.
-  final VoidCallback onSketch;
   final ValueChanged<List<Shot>> onDrop;
 
-  const _NewSetupColumn({
-    required this.onTap,
-    required this.onSketch,
-    required this.onDrop,
-  });
+  const _NewSetupColumn({required this.onTap, required this.onDrop});
 
   @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _target(palette),
-        SizedBox(
-          width: 120,
-          child: TextButton.icon(
-            onPressed: onSketch,
-            icon: const Icon(Icons.draw_outlined, size: 15),
-            label: const Text('Boceto nuevo'),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => _target(context.palette);
 
   Widget _target(AppPalette palette) {
     return DragTarget<List<Shot>>(

@@ -38,6 +38,20 @@ class PlanLayers {
   List<PlanElement> get all => [...environment, ...set, ...light, ...shot];
 }
 
+/// Qué es un esquema de luz (`LightSetups.kind`).
+abstract final class LightSetupKind {
+  /// Esquema de verdad: lo comparten planos del guion técnico.
+  static const plan = 'planta';
+
+  /// Boceto con elementos de la planta, sin planos.
+  static const sketchElements = 'boceto_elementos';
+
+  /// Boceto a mano alzada, en su propio lienzo.
+  static const sketchFreehand = 'boceto_mano';
+
+  static bool isSketch(LightSetup setup) => setup.kind != plan;
+}
+
 /// Resuelve y persiste las capas de planta.
 class FloorPlanRepository {
   final AppDatabase db;
@@ -356,10 +370,15 @@ class FloorPlanRepository {
     int? siteId,
     String status = 'boceto',
     String origin = 'planta',
+    String kind = LightSetupKind.plan,
+    int? sceneId,
   }) async {
     final existing = (await db.getLightSetupsForProject(projectId))
         .where(
-          (s) => s.locationBasePlanId == setId && s.locationSiteId == siteId,
+          (s) =>
+              s.locationBasePlanId == setId &&
+              s.locationSiteId == siteId &&
+              s.kind == kind,
         )
         .toList();
     final id = await db.insertLightSetup(
@@ -371,6 +390,8 @@ class FloorPlanRepository {
         status: Value(status),
         origin: Value(origin),
         sortOrder: Value(existing.length),
+        kind: Value(kind),
+        sceneId: Value(sceneId),
       ),
     );
     return (await db.getLightSetupById(id))!;
@@ -391,6 +412,7 @@ class FloorPlanRepository {
     int? setId,
     int? siteId,
     String? name,
+    String? kind,
   }) async {
     final siblings = (await db.getLightSetupsForProject(source.projectId))
         .where(
@@ -415,6 +437,11 @@ class FloorPlanRepository {
         sketchJson: Value(source.sketchJson),
         sketchImagePath: Value(source.sketchImagePath),
         sortOrder: Value(siblings.length),
+        kind: Value(kind ?? source.kind),
+        // Un boceto sigue en su escena; un esquema de verdad no tiene.
+        sceneId: Value(
+          (kind ?? source.kind) == LightSetupKind.plan ? null : source.sceneId,
+        ),
       ),
     );
     return (await db.getLightSetupById(id))!;
@@ -494,6 +521,8 @@ class FloorPlanRepository {
       siteId = (await db.getLocationById(scene.locationId!))?.siteId;
     }
     return all.where((s) {
+      // Los bocetos no llevan planos.
+      if (s.kind != LightSetupKind.plan) return false;
       if (s.locationBasePlanId != null) {
         return s.locationBasePlanId == scene.locationId;
       }

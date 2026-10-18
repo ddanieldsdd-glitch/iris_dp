@@ -553,6 +553,11 @@ class AppDatabase extends _$AppDatabase {
         // Papelera de la planta: borrar o vaciar se puede deshacer.
         await m.createTable(planTrash);
       }
+      if (from < 54) {
+        // Bocetos por escena: con elementos o a mano alzada, sin planos.
+        await add(lightSetups, lightSetups.kind);
+        await add(lightSetups, lightSetups.sceneId);
+      }
     },
   );
 
@@ -4672,7 +4677,7 @@ LazyDatabase _openConnection() {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 53;
+const kSchemaVersion = 54;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

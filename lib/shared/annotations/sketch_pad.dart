@@ -43,14 +43,53 @@ Future<void> writeSketchDocument(
   AnnotationDocument document,
 ) => File(sketchSidecarPath(imagePath)).writeAsString(document.encode());
 
-/// Pinta [document] sobre papel blanco y lo devuelve en PNG.
+/// Papel cuadriculado de los bocetos técnicos (plantas a mano): una
+/// cuadrícula suave, con línea más marcada cada cinco.
+class SketchGridPainter extends CustomPainter {
+  const SketchGridPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final step = size.width / 40;
+    final thin = Paint()
+      ..color = const Color(0xFFD6E4F0)
+      ..strokeWidth = 1;
+    final thick = Paint()
+      ..color = const Color(0xFFB4CCE2)
+      ..strokeWidth = 1.4;
+    var i = 0;
+    for (var x = 0.0; x <= size.width; x += step, i++) {
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, size.height),
+        i % 5 == 0 ? thick : thin,
+      );
+    }
+    i = 0;
+    for (var y = 0.0; y <= size.height; y += step, i++) {
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        i % 5 == 0 ? thick : thin,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(SketchGridPainter oldDelegate) => false;
+}
+
+/// Pinta [document] sobre papel blanco (o cuadriculado, con [gridPaper]) y
+/// lo devuelve en PNG.
 Future<Uint8List> renderSketchPng(
   AnnotationDocument document, {
   Size size = const Size(1600, 900),
+  bool gridPaper = false,
 }) async {
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder, Offset.zero & size);
   canvas.drawRect(Offset.zero & size, Paint()..color = Colors.white);
+  if (gridPaper) const SketchGridPainter().paint(canvas, size);
   AnnotationPainter(document: document).paint(canvas, size);
   final image = await recorder.endRecording().toImage(
     size.width.round(),
@@ -68,12 +107,17 @@ Future<SketchResult?> showSketchPad(
   required String title,
   AnnotationDocument initial = const AnnotationDocument(),
   double aspectRatio = 16 / 9,
+  bool gridPaper = false,
 }) {
   return Navigator.of(context, rootNavigator: true).push<SketchResult>(
     MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) =>
-          SketchPad(title: title, initial: initial, aspectRatio: aspectRatio),
+      builder: (_) => SketchPad(
+        title: title,
+        initial: initial,
+        aspectRatio: aspectRatio,
+        gridPaper: gridPaper,
+      ),
     ),
   );
 }
@@ -85,11 +129,15 @@ class SketchPad extends StatefulWidget {
   final AnnotationDocument initial;
   final double aspectRatio;
 
+  /// Papel cuadriculado, para los bocetos de planta.
+  final bool gridPaper;
+
   const SketchPad({
     super.key,
     required this.title,
     this.initial = const AnnotationDocument(),
     this.aspectRatio = 16 / 9,
+    this.gridPaper = false,
   });
 
   @override
@@ -116,6 +164,7 @@ class _SketchPadState extends State<SketchPad> {
     final png = await renderSketchPng(
       document,
       size: Size(1600, 1600 / widget.aspectRatio),
+      gridPaper: widget.gridPaper,
     );
     if (!mounted) return;
     Navigator.of(context).pop(SketchResult(png: png, document: document));
@@ -230,7 +279,12 @@ class _SketchPadState extends State<SketchPad> {
                               color: _color,
                               width: _width,
                               acceptTouch: true,
-                              child: const SizedBox.expand(),
+                              child: widget.gridPaper
+                                  ? const CustomPaint(
+                                      painter: SketchGridPainter(),
+                                      child: SizedBox.expand(),
+                                    )
+                                  : const SizedBox.expand(),
                             ),
                           ),
                         ),

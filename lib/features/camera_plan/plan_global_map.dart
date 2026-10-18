@@ -12,6 +12,7 @@ import 'light_setup_actions.dart';
 import 'plan_data.dart';
 import 'plan_item_actions.dart';
 import 'plan_shot_card.dart';
+import 'plan_sketch.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
 import 'plan_trash_ui.dart';
@@ -64,6 +65,28 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
         );
     if (!mounted) return;
     widget.onOpen(PlanTarget.lightSetup(setup.id, setup.name));
+  }
+
+  Future<void> _newFreeSketch(String kind) async {
+    final created = await createPlanSketch(
+      context,
+      ref.read(databaseProvider),
+      projectId: widget.projectId,
+      sceneId: null,
+      setId: null,
+      siteId: null,
+      kind: kind,
+      label: 'libre',
+    );
+    if (created != null && mounted) await _openSketch(created);
+  }
+
+  Future<void> _openSketch(LightSetup sketch) async {
+    if (sketch.kind == LightSetupKind.sketchFreehand) {
+      await drawFreehandSketch(context, ref.read(databaseProvider), sketch);
+    } else {
+      widget.onOpen(PlanTarget.lightSetup(sketch.id, sketch.name));
+    }
   }
 
   Future<void> _newSet(LocationSite site) async {
@@ -161,6 +184,16 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
                 _data.freeSetups,
                 paste: const PlanPasteTarget.free(),
                 onAdd: () => _newSetup(),
+              ),
+              PlanSketchStrip(
+                title: 'BOCETOS SIN ESCENA',
+                sketches: _data.freeSketches,
+                data: _data,
+                onOpen: _openSketch,
+                onNewElements: () =>
+                    _newFreeSketch(LightSetupKind.sketchElements),
+                onNewFreehand: () =>
+                    _newFreeSketch(LightSetupKind.sketchFreehand),
               ),
             ],
           ),

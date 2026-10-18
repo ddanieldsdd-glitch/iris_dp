@@ -630,6 +630,8 @@ class ProjectContentBundle {
               'sketchJson': s.sketchJson,
               'sketchImagePath': s.sketchImagePath,
               'sortOrder': s.sortOrder,
+              'kind': s.kind,
+              'sceneKey': s.sceneId != null ? sceneKeyById[s.sceneId!] : null,
             },
           )
           .toList(),
@@ -1427,6 +1429,8 @@ class ProjectContentBundle {
     }
 
     final lightSetupKeyToId = <String, int>{};
+    // Bocetos y su escena: las escenas llegan después.
+    final sketchSceneKeys = <int, String>{};
     for (final row in bundle['lightSetups'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final siteKey = m['siteKey'] as String?;
@@ -1447,9 +1451,13 @@ class ProjectContentBundle {
           sketchJson: Value(m['sketchJson'] as String?),
           sketchImagePath: Value(m['sketchImagePath'] as String?),
           sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+          kind: Value(m['kind'] as String? ?? 'planta'),
         ),
       );
       lightSetupKeyToId[m['lightSetupKey'] as String] = id;
+      if (m['sceneKey'] case final String sceneKey) {
+        sketchSceneKeys[id] = sceneKey;
+      }
     }
 
     for (final row in bundle['locationImages'] as List? ?? []) {
@@ -1505,6 +1513,13 @@ class ProjectContentBundle {
             ),
           );
       sceneKeyToId[m['sceneKey'] as String] = id;
+    }
+    for (final MapEntry(key: setupId, value: sceneKey)
+        in sketchSceneKeys.entries) {
+      final sceneId = sceneKeyToId[sceneKey];
+      if (sceneId == null) continue;
+      await (db.update(db.lightSetups)..where((s) => s.id.equals(setupId)))
+          .write(LightSetupsCompanion(sceneId: Value(sceneId)));
     }
 
     final shotKeyToId = <String, int>{};

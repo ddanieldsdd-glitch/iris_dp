@@ -5029,6 +5029,30 @@ class $LightSetupsTable extends LightSetups
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('planta'),
+  );
+  static const VerificationMeta _sceneIdMeta = const VerificationMeta(
+    'sceneId',
+  );
+  @override
+  late final GeneratedColumn<int> sceneId = GeneratedColumn<int>(
+    'scene_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES scenes (id)',
+    ),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -5044,6 +5068,8 @@ class $LightSetupsTable extends LightSetups
     sketchJson,
     sketchImagePath,
     sortOrder,
+    kind,
+    sceneId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5145,6 +5171,18 @@ class $LightSetupsTable extends LightSetups
         sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
       );
     }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    }
+    if (data.containsKey('scene_id')) {
+      context.handle(
+        _sceneIdMeta,
+        sceneId.isAcceptableOrUnknown(data['scene_id']!, _sceneIdMeta),
+      );
+    }
     return context;
   }
 
@@ -5206,6 +5244,14 @@ class $LightSetupsTable extends LightSetups
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
       )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      sceneId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}scene_id'],
+      ),
     );
   }
 
@@ -5231,6 +5277,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
   final String? sketchJson;
   final String? sketchImagePath;
   final int sortOrder;
+  final String kind;
+  final int? sceneId;
   const LightSetup({
     required this.id,
     this.uid,
@@ -5245,6 +5293,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     this.sketchJson,
     this.sketchImagePath,
     required this.sortOrder,
+    required this.kind,
+    this.sceneId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -5276,6 +5326,10 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
       map['sketch_image_path'] = Variable<String>(sketchImagePath);
     }
     map['sort_order'] = Variable<int>(sortOrder);
+    map['kind'] = Variable<String>(kind);
+    if (!nullToAbsent || sceneId != null) {
+      map['scene_id'] = Variable<int>(sceneId);
+    }
     return map;
   }
 
@@ -5306,6 +5360,10 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
           ? const Value.absent()
           : Value(sketchImagePath),
       sortOrder: Value(sortOrder),
+      kind: Value(kind),
+      sceneId: sceneId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sceneId),
     );
   }
 
@@ -5328,6 +5386,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
       sketchJson: serializer.fromJson<String?>(json['sketchJson']),
       sketchImagePath: serializer.fromJson<String?>(json['sketchImagePath']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      kind: serializer.fromJson<String>(json['kind']),
+      sceneId: serializer.fromJson<int?>(json['sceneId']),
     );
   }
   @override
@@ -5347,6 +5407,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
       'sketchJson': serializer.toJson<String?>(sketchJson),
       'sketchImagePath': serializer.toJson<String?>(sketchImagePath),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'kind': serializer.toJson<String>(kind),
+      'sceneId': serializer.toJson<int?>(sceneId),
     };
   }
 
@@ -5364,6 +5426,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     Value<String?> sketchJson = const Value.absent(),
     Value<String?> sketchImagePath = const Value.absent(),
     int? sortOrder,
+    String? kind,
+    Value<int?> sceneId = const Value.absent(),
   }) => LightSetup(
     id: id ?? this.id,
     uid: uid.present ? uid.value : this.uid,
@@ -5384,6 +5448,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
         ? sketchImagePath.value
         : this.sketchImagePath,
     sortOrder: sortOrder ?? this.sortOrder,
+    kind: kind ?? this.kind,
+    sceneId: sceneId.present ? sceneId.value : this.sceneId,
   );
   LightSetup copyWithCompanion(LightSetupsCompanion data) {
     return LightSetup(
@@ -5408,6 +5474,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
           ? data.sketchImagePath.value
           : this.sketchImagePath,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      sceneId: data.sceneId.present ? data.sceneId.value : this.sceneId,
     );
   }
 
@@ -5426,7 +5494,9 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
           ..write('planJson: $planJson, ')
           ..write('sketchJson: $sketchJson, ')
           ..write('sketchImagePath: $sketchImagePath, ')
-          ..write('sortOrder: $sortOrder')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('kind: $kind, ')
+          ..write('sceneId: $sceneId')
           ..write(')'))
         .toString();
   }
@@ -5446,6 +5516,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     sketchJson,
     sketchImagePath,
     sortOrder,
+    kind,
+    sceneId,
   );
   @override
   bool operator ==(Object other) =>
@@ -5463,7 +5535,9 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
           other.planJson == this.planJson &&
           other.sketchJson == this.sketchJson &&
           other.sketchImagePath == this.sketchImagePath &&
-          other.sortOrder == this.sortOrder);
+          other.sortOrder == this.sortOrder &&
+          other.kind == this.kind &&
+          other.sceneId == this.sceneId);
 }
 
 class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
@@ -5480,6 +5554,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
   final Value<String?> sketchJson;
   final Value<String?> sketchImagePath;
   final Value<int> sortOrder;
+  final Value<String> kind;
+  final Value<int?> sceneId;
   const LightSetupsCompanion({
     this.id = const Value.absent(),
     this.uid = const Value.absent(),
@@ -5494,6 +5570,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     this.sketchJson = const Value.absent(),
     this.sketchImagePath = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.sceneId = const Value.absent(),
   });
   LightSetupsCompanion.insert({
     this.id = const Value.absent(),
@@ -5509,6 +5587,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     this.sketchJson = const Value.absent(),
     this.sketchImagePath = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.sceneId = const Value.absent(),
   }) : projectId = Value(projectId),
        name = Value(name);
   static Insertable<LightSetup> custom({
@@ -5525,6 +5605,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     Expression<String>? sketchJson,
     Expression<String>? sketchImagePath,
     Expression<int>? sortOrder,
+    Expression<String>? kind,
+    Expression<int>? sceneId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -5541,6 +5623,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
       if (sketchJson != null) 'sketch_json': sketchJson,
       if (sketchImagePath != null) 'sketch_image_path': sketchImagePath,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (kind != null) 'kind': kind,
+      if (sceneId != null) 'scene_id': sceneId,
     });
   }
 
@@ -5558,6 +5642,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     Value<String?>? sketchJson,
     Value<String?>? sketchImagePath,
     Value<int>? sortOrder,
+    Value<String>? kind,
+    Value<int?>? sceneId,
   }) {
     return LightSetupsCompanion(
       id: id ?? this.id,
@@ -5573,6 +5659,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
       sketchJson: sketchJson ?? this.sketchJson,
       sketchImagePath: sketchImagePath ?? this.sketchImagePath,
       sortOrder: sortOrder ?? this.sortOrder,
+      kind: kind ?? this.kind,
+      sceneId: sceneId ?? this.sceneId,
     );
   }
 
@@ -5618,6 +5706,12 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (sceneId.present) {
+      map['scene_id'] = Variable<int>(sceneId.value);
+    }
     return map;
   }
 
@@ -5636,7 +5730,9 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
           ..write('planJson: $planJson, ')
           ..write('sketchJson: $sketchJson, ')
           ..write('sketchImagePath: $sketchImagePath, ')
-          ..write('sortOrder: $sortOrder')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('kind: $kind, ')
+          ..write('sceneId: $sceneId')
           ..write(')'))
         .toString();
   }
@@ -41126,6 +41222,24 @@ final class $$ScenesTableReferences
     );
   }
 
+  static MultiTypedResultKey<$LightSetupsTable, List<LightSetup>>
+  _lightSetupsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.lightSetups,
+    aliasName: $_aliasNameGenerator(db.scenes.id, db.lightSetups.sceneId),
+  );
+
+  $$LightSetupsTableProcessedTableManager get lightSetupsRefs {
+    final manager = $$LightSetupsTableTableManager(
+      $_db,
+      $_db.lightSetups,
+    ).filter((f) => f.sceneId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_lightSetupsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$ShotsTable, List<Shot>> _shotsRefsTable(
     _$AppDatabase db,
   ) => MultiTypedResultKey.fromTable(
@@ -41349,6 +41463,31 @@ class $$ScenesTableFilterComposer
           ),
     );
     return composer;
+  }
+
+  Expression<bool> lightSetupsRefs(
+    Expression<bool> Function($$LightSetupsTableFilterComposer f) f,
+  ) {
+    final $$LightSetupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lightSetups,
+      getReferencedColumn: (t) => t.sceneId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LightSetupsTableFilterComposer(
+            $db: $db,
+            $table: $db.lightSetups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
   }
 
   Expression<bool> shotsRefs(
@@ -41744,6 +41883,31 @@ class $$ScenesTableAnnotationComposer
     return composer;
   }
 
+  Expression<T> lightSetupsRefs<T extends Object>(
+    Expression<T> Function($$LightSetupsTableAnnotationComposer a) f,
+  ) {
+    final $$LightSetupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lightSetups,
+      getReferencedColumn: (t) => t.sceneId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LightSetupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.lightSetups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> shotsRefs<T extends Object>(
     Expression<T> Function($$ShotsTableAnnotationComposer a) f,
   ) {
@@ -41813,6 +41977,7 @@ class $$ScenesTableTableManager
             bool projectId,
             bool locationSiteId,
             bool locationId,
+            bool lightSetupsRefs,
             bool shotsRefs,
             bool shootDocumentBlocksRefs,
           })
@@ -41939,12 +42104,14 @@ class $$ScenesTableTableManager
                 projectId = false,
                 locationSiteId = false,
                 locationId = false,
+                lightSetupsRefs = false,
                 shotsRefs = false,
                 shootDocumentBlocksRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
+                    if (lightSetupsRefs) db.lightSetups,
                     if (shotsRefs) db.shots,
                     if (shootDocumentBlocksRefs) db.shootDocumentBlocks,
                   ],
@@ -42008,6 +42175,27 @@ class $$ScenesTableTableManager
                       },
                   getPrefetchedDataCallback: (items) async {
                     return [
+                      if (lightSetupsRefs)
+                        await $_getPrefetchedData<
+                          Scene,
+                          $ScenesTable,
+                          LightSetup
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ScenesTableReferences
+                              ._lightSetupsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ScenesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).lightSetupsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.sceneId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (shotsRefs)
                         await $_getPrefetchedData<Scene, $ScenesTable, Shot>(
                           currentTable: table,
@@ -42066,6 +42254,7 @@ typedef $$ScenesTableProcessedTableManager =
         bool projectId,
         bool locationSiteId,
         bool locationId,
+        bool lightSetupsRefs,
         bool shotsRefs,
         bool shootDocumentBlocksRefs,
       })
@@ -42085,6 +42274,8 @@ typedef $$LightSetupsTableCreateCompanionBuilder =
       Value<String?> sketchJson,
       Value<String?> sketchImagePath,
       Value<int> sortOrder,
+      Value<String> kind,
+      Value<int?> sceneId,
     });
 typedef $$LightSetupsTableUpdateCompanionBuilder =
     LightSetupsCompanion Function({
@@ -42101,6 +42292,8 @@ typedef $$LightSetupsTableUpdateCompanionBuilder =
       Value<String?> sketchJson,
       Value<String?> sketchImagePath,
       Value<int> sortOrder,
+      Value<String> kind,
+      Value<int?> sceneId,
     });
 
 final class $$LightSetupsTableReferences
@@ -42164,6 +42357,24 @@ final class $$LightSetupsTableReferences
       $_db.locationBasePlans,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_locationBasePlanIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $ScenesTable _sceneIdTable(_$AppDatabase db) => db.scenes.createAlias(
+    $_aliasNameGenerator(db.lightSetups.sceneId, db.scenes.id),
+  );
+
+  $$ScenesTableProcessedTableManager? get sceneId {
+    final $_column = $_itemColumn<int>('scene_id');
+    if ($_column == null) return null;
+    final manager = $$ScenesTableTableManager(
+      $_db,
+      $_db.scenes,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_sceneIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -42270,6 +42481,11 @@ class $$LightSetupsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$ProjectsTableFilterComposer get projectId {
     final $$ProjectsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -42330,6 +42546,29 @@ class $$LightSetupsTableFilterComposer
           }) => $$LocationBasePlansTableFilterComposer(
             $db: $db,
             $table: $db.locationBasePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ScenesTableFilterComposer get sceneId {
+    final $$ScenesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sceneId,
+      referencedTable: $db.scenes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ScenesTableFilterComposer(
+            $db: $db,
+            $table: $db.scenes,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -42449,6 +42688,11 @@ class $$LightSetupsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ProjectsTableOrderingComposer get projectId {
     final $$ProjectsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -42517,6 +42761,29 @@ class $$LightSetupsTableOrderingComposer
     );
     return composer;
   }
+
+  $$ScenesTableOrderingComposer get sceneId {
+    final $$ScenesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sceneId,
+      referencedTable: $db.scenes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ScenesTableOrderingComposer(
+            $db: $db,
+            $table: $db.scenes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$LightSetupsTableAnnotationComposer
@@ -42561,6 +42828,9 @@ class $$LightSetupsTableAnnotationComposer
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
 
   $$ProjectsTableAnnotationComposer get projectId {
     final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
@@ -42632,6 +42902,29 @@ class $$LightSetupsTableAnnotationComposer
     return composer;
   }
 
+  $$ScenesTableAnnotationComposer get sceneId {
+    final $$ScenesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sceneId,
+      referencedTable: $db.scenes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ScenesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.scenes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
   Expression<T> shotsRefs<T extends Object>(
     Expression<T> Function($$ShotsTableAnnotationComposer a) f,
   ) {
@@ -42700,6 +42993,7 @@ class $$LightSetupsTableTableManager
             bool projectId,
             bool locationSiteId,
             bool locationBasePlanId,
+            bool sceneId,
             bool shotsRefs,
             bool lightingSetupsRefs,
           })
@@ -42730,6 +43024,8 @@ class $$LightSetupsTableTableManager
                 Value<String?> sketchJson = const Value.absent(),
                 Value<String?> sketchImagePath = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<int?> sceneId = const Value.absent(),
               }) => LightSetupsCompanion(
                 id: id,
                 uid: uid,
@@ -42744,6 +43040,8 @@ class $$LightSetupsTableTableManager
                 sketchJson: sketchJson,
                 sketchImagePath: sketchImagePath,
                 sortOrder: sortOrder,
+                kind: kind,
+                sceneId: sceneId,
               ),
           createCompanionCallback:
               ({
@@ -42760,6 +43058,8 @@ class $$LightSetupsTableTableManager
                 Value<String?> sketchJson = const Value.absent(),
                 Value<String?> sketchImagePath = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<int?> sceneId = const Value.absent(),
               }) => LightSetupsCompanion.insert(
                 id: id,
                 uid: uid,
@@ -42774,6 +43074,8 @@ class $$LightSetupsTableTableManager
                 sketchJson: sketchJson,
                 sketchImagePath: sketchImagePath,
                 sortOrder: sortOrder,
+                kind: kind,
+                sceneId: sceneId,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -42788,6 +43090,7 @@ class $$LightSetupsTableTableManager
                 projectId = false,
                 locationSiteId = false,
                 locationBasePlanId = false,
+                sceneId = false,
                 shotsRefs = false,
                 lightingSetupsRefs = false,
               }) {
@@ -42854,6 +43157,21 @@ class $$LightSetupsTableTableManager
                                     referencedColumn:
                                         $$LightSetupsTableReferences
                                             ._locationBasePlanIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (sceneId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.sceneId,
+                                    referencedTable:
+                                        $$LightSetupsTableReferences
+                                            ._sceneIdTable(db),
+                                    referencedColumn:
+                                        $$LightSetupsTableReferences
+                                            ._sceneIdTable(db)
                                             .id,
                                   )
                                   as T;
@@ -42929,6 +43247,7 @@ typedef $$LightSetupsTableProcessedTableManager =
         bool projectId,
         bool locationSiteId,
         bool locationBasePlanId,
+        bool sceneId,
         bool shotsRefs,
         bool lightingSetupsRefs,
       })
