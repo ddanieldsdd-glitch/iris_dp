@@ -5,12 +5,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../cloud/cloud_providers.dart';
 import '../cloud/cloud_runtime_config.dart';
+import '../cloud/cloud_session.dart';
 import '../cloud/connectivity_status_provider.dart';
+import '../database/app_database.dart';
 import '../database/database_provider.dart';
 import '../utils/error_log.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/sync/sync_conflict_history_sheet.dart';
+import 'content_sync_base_store.dart';
 import 'editing_guard.dart';
+import 'project_content_sync_service.dart';
+import 'realtime_hub.dart';
 import 'sync_engine.dart';
 import 'sync_plan_applier.dart';
 
@@ -25,6 +30,9 @@ class AutoSyncScheduler extends ConsumerStatefulWidget {
 
   static const tick = Duration(seconds: 60);
   static const afterEdit = Duration(seconds: 5);
+
+  /// Tras un aviso en vivo de otro equipo.
+  static const liveDelay = Duration(seconds: 1);
 
   /// Al volver muchas veces seguidas (en el Mac, cada vez que la ventana
   /// recupera el foco) no se repite la pasada completa.
@@ -49,6 +57,7 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
     WidgetsBinding.instance.addObserver(this);
     EditingGuard.active.addListener(_onEditingChanged);
     _startTicker();
+    unawaited(_connectLive());
     final db = ref.read(databaseProvider);
     // Cada edición deja una entrada en la cola de contenido: cuando crece,
     // hay algo nuevo que subir.
@@ -63,6 +72,9 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     EditingGuard.active.removeListener(_onEditingChanged);
+    _liveNotices?.cancel();
+    _liveDebounce?.cancel();
+    ProjectContentSyncService.onUploaded = null;
     _ticker?.cancel();
     _editDebounce?.cancel();
     _queueWatch?.cancel();
@@ -76,6 +88,7 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
         final wasAway = !_foreground;
         _foreground = true;
         _startTicker();
+        unawaited(_connectLive());
         final last = _lastFullPass;
         final full = wasAway ||
             last == null ||
@@ -94,6 +107,37 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
         // En el Mac es solo perder el foco: la ventana sigue a la vista.
         break;
     }
+  }
+
+  StreamSubscription<SnapshotNotice>? _liveNotices;
+  RealtimeHub? _liveHub;
+  Timer? _liveDebounce;
+
+  /// Canal en vivo: lo que sube otro equipo se baja en segundos.
+  Future<void> _connectLive() async {
+    if (!_canSync) return;
+    final hub = ref.read(realtimeHubProvider);
+    final workspaceId = await CloudSessionStore.workspaceId();
+    if (hub == null || workspaceId == null || !mounted) return;
+    try {
+      await hub.connect(workspaceId);
+    } catch (e) {
+      debugPrint('Canal en vivo: $e');
+      return;
+    }
+    ProjectContentSyncService.onUploaded = hub.announceSnapshot;
+    if (!identical(hub, _liveHub)) {
+      await _liveNotices?.cancel();
+      _liveHub = hub;
+      _liveNotices = hub.snapshotNotices.listen(_onLiveNotice);
+    }
+  }
+
+  Future<void> _onLiveNotice(SnapshotNotice notice) async {
+    if (!await liveNoticeIsNew(ref.read(databaseProvider), notice)) return;
+    // Un segundo de margen: si llegan varios seguidos, una sola pasada.
+    _liveDebounce?.cancel();
+    _liveDebounce = Timer(AutoSyncScheduler.liveDelay, () => _run(full: false));
   }
 
   /// Al salir del campo se aplica lo que se retuvo mientras se escribía.
@@ -168,4 +212,16 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
     });
     return widget.child;
   }
+}
+
+/// Si el aviso trae algo que aquí no está: si la última versión que este
+/// equipo conoce de ese proyecto ya es esa (la mezcló o subió él), no hace
+/// falta bajar nada.
+Future<bool> liveNoticeIsNew(AppDatabase db, SnapshotNotice notice) async {
+  final project = await (db.select(db.projects)
+        ..where((p) => p.cloudId.equals(notice.projectCloudId)))
+      .getSingleOrNull();
+  if (project == null) return true;
+  final base = await ContentSyncBaseStore.load(db, project.id);
+  return base?.cloudHash != notice.hash;
 }
