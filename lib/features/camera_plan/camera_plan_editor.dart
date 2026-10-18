@@ -371,7 +371,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// Mientras la planta de un plano está abierta, los demás equipos lo ven
   /// bloqueado.
-  late final LiveEditing _live = ref.read(liveEditingProvider);
+  LiveEditing? _live;
   String? _liveShotUid;
 
   @override
@@ -383,7 +383,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   @override
   void dispose() {
-    _live.blurShot(_liveShotUid);
+    _live?.blurShot(_liveShotUid);
     _lightMap.dispose();
     _annotationController.dispose();
     _canvasFocus.dispose();
@@ -426,7 +426,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       )..where((s) => s.id.equals(widget.shotId!))).getSingleOrNull();
       if (mounted && shot?.uid != null) {
         _liveShotUid = shot!.uid;
-        _live.focusShot(_liveShotUid);
+        final live = ref.read(liveEditingProvider);
+        _live = live;
+        live.focusShot(_liveShotUid);
       }
 
       if (shot != null) {
