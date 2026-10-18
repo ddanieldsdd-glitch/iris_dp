@@ -556,6 +556,12 @@ class AppDatabase extends _$AppDatabase {
         await SyncMergeTables.create(this);
       }
     },
+    // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
+    // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
+    // paso de arriba ya no vuelve a correr. Crearlas es idempotente.
+    beforeOpen: (details) async {
+      if (!details.wasCreated) await SyncMergeTables.create(this);
+    },
   );
 
   /// Añade la columna solo si no existe. `createTable` crea las tablas con
