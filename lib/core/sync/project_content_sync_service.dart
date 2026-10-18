@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
@@ -41,6 +42,10 @@ class ProjectContentSyncService {
   final SupabaseClient _client;
 
   ProjectContentSyncService(this._db, this._client);
+
+  /// Tras cada subida: el canal en vivo lo avisa a los otros equipos (ver
+  /// `RealtimeHub`). Sin canal, no hace nada.
+  static Future<void> Function(String projectCloudId, String hash)? onUploaded;
 
   /// Sube el contenido local solo si la nube sigue en [expectedCloudHash], la
   /// huella que se vio al decidir subir (`null`: no había copia en la nube).
@@ -105,6 +110,7 @@ class ProjectContentSyncService {
       row.remove('updated_device');
       await _write(projectCloudId, expectedCloudHash, row);
     }
+    unawaited(onUploaded?.call(projectCloudId, hash));
     return hash;
   }
 

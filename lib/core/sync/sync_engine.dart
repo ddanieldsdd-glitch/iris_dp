@@ -8,6 +8,7 @@ import '../cloud/cloud_session.dart';
 import '../database/database_provider.dart';
 import 'content_merge_service.dart';
 import 'device_label.dart';
+import 'editing_guard.dart';
 import 'media_hydrate_service.dart';
 import 'media_sync_providers.dart';
 import 'media_upload_queue.dart';
@@ -192,6 +193,21 @@ class SyncEngine {
   /// del contenido, así que se vuelven a mirar un rato aunque no cambien.
   final Map<String, DateTime> _recentPulls = {};
 
+  /// La última pasada dejó bajadas sin aplicar porque se estaba escribiendo.
+  bool _heldDownloads = false;
+  bool get hasHeldDownloads => _heldDownloads;
+
+  /// Lo que cambia filas aquí: se retiene mientras se escribe.
+  static bool _bringsDown(SyncPlanItem item) => switch (item.action) {
+        SyncPlanAction.pullContentCloud ||
+        SyncPlanAction.importFromCloud ||
+        SyncPlanAction.updateLocalFromCloud ||
+        SyncPlanAction.contentConflict ||
+        SyncPlanAction.deleteLocal =>
+          true,
+        _ => false,
+      };
+
   /// El aviso de imágenes desactivadas va al log una vez por sesión.
   static bool _warnedMediaOff = false;
   static const _mediaFollowUp = Duration(minutes: 10);
@@ -247,11 +263,26 @@ class SyncEngine {
     final db = _ref.read(databaseProvider);
     final plan = await SyncPlanBuilder(db, client).build(workspaceId);
 
+    // Mientras se escribe aquí se sube lo guardado, pero no se baja ni se
+    // mezcla nada: rehace filas y cortaría lo que se escribe. Se hace al
+    // salir del campo (ver [EditingGuard] y [AutoSyncScheduler]).
+    final held = EditingGuard.isEditing
+        ? [
+            for (final item in plan.items)
+              if (_bringsDown(item)) item,
+          ]
+        : const <SyncPlanItem>[];
+    _heldDownloads = held.isNotEmpty;
+    for (final item in held) {
+      item.choice = SyncResolutionChoice.skip;
+    }
+
     // Cambiado aquí y en la nube: se mezcla elemento a elemento. Sin base
     // para mezclar queda para revisarlo.
     final merged = <SyncPlanItem>[];
     for (final item in plan.items) {
       if (item.action != SyncPlanAction.contentConflict) continue;
+      if (held.contains(item)) continue;
       final id = item.localProjectId;
       final cloudId = item.cloudId;
       if (id == null || cloudId == null) continue;
@@ -275,14 +306,14 @@ class SyncEngine {
 
     final review = [
       for (final item in plan.reviewItems)
-        if (!merged.contains(item)) item,
+        if (!merged.contains(item) && !held.contains(item)) item,
     ];
     for (final item in [...review, ...merged]) {
       item.choice = SyncResolutionChoice.skip;
     }
     final applied = [
       for (final item in plan.items)
-        if (item.appliesSilently) item,
+        if (item.appliesSilently && !held.contains(item)) item,
     ];
 
     var counts = (pushed: 0, pulled: 0, deleted: 0);
