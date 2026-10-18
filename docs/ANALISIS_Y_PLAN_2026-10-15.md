@@ -131,6 +131,31 @@ Cada punto es un PR pequeño con `flutter analyze` y `flutter test` en verde, co
 - [ ] **C5. Limpieza del repositorio:** logs y `.venv_*` fuera, V2 y Look Bible antiguo según la Fase 5.
 - [ ] **C6. Rendimiento percibido:** arranque, apertura de la biblia con muchas imágenes y PDF de ~20 páginas medidos en iPad.
 
+### Fase D — Trabajar a la vez desde varios aparatos (tiempo real)
+
+Idea de Daniel (2026-10-18), al estilo de Miro: lo que se edita en un equipo aparece solo en el otro, y lo que alguien está editando se ve bloqueado en los demás. Así no hay duplicados ni conflictos.
+
+Ya hecho y que sirve de base: sincronización automática (al volver, cada minuto y 5 s después de editar), mezcla por elemento con «gana la última edición» e historial de conflictos (`plan/sync-mezcla`).
+
+- [ ] **D1. Presencia por proyecto.**
+  - Un canal de Supabase Realtime por proyecto: qué equipos lo tienen abierto y en qué pantalla.
+  - En la tarjeta y en la cabecera, «iPad aquí».
+- [ ] **D2. Bloqueo de lo que se está editando.**
+  - Al entrar a editar un plano, una escena, una planta o una sección de la biblia, el equipo avisa por el canal: «editando plano 3/2».
+  - En los demás, ese elemento sale bloqueado, con el nombre del equipo, en solo lectura y con el borde del color del equipo.
+  - El bloqueo se mantiene con un latido cada ~10 s. Caduca solo si el equipo se cierra o pierde la red (~30 s), y se suelta al salir del editor.
+  - Lo bloqueado se puede abrir igualmente si se pide, y entonces se avisa al otro.
+- [ ] **D3. Cambios en vivo.**
+  - Escuchar `cloud_project_snapshots` (postgres_changes): cuando el otro sube, este equipo baja y mezcla en segundos, sin esperar al minuto.
+  - La subida tras editar pasa de 5 s a ~1–2 s mientras haya alguien más en el proyecto.
+  - Lo que cambia se repinta sin recargar la pantalla. Opcional: un destello breve en lo recién llegado.
+- [ ] **D4. Después, si hace falta:** filas por elemento en la nube (escenas y planos en tablas propias) en vez de un único snapshot por proyecto. Así se suben y bajan solo los cambios. Solo merece la pena si D3 se nota lento con proyectos grandes.
+- Decisiones abiertas para Daniel:
+  - qué se bloquea: plano entero, campo o pantalla;
+  - si un bloqueo se puede forzar;
+  - si la presencia se ve también fuera del proyecto.
+- Requisito: Realtime activado en Supabase para `cloud_project_snapshots` y un canal de presencia; no hace falta guardar los bloqueos en la base.
+
 ## 5. Orden recomendado
 
 1. Fase 0 (sin ella, todo lo demás se pierde entre ramas).
