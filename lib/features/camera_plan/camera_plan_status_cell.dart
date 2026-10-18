@@ -7,8 +7,58 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'camera_plan_editor.dart';
 import 'floor_plan_repository.dart';
+import 'plan_guide.dart';
 
 enum CameraPlanStatus { empty, inheritable, hasPlan }
+
+/// Abre la planta de un plano. Si le falta la localización o el set, abre
+/// antes el plano maestro con la guía localización › sets › planos.
+Future<void> openShotPlan(
+  BuildContext context,
+  AppDatabase db,
+  Shot shot, {
+  required String label,
+}) async {
+  final navigator = Navigator.of(context);
+  var state = await PlanEntryState.resolve(db, shot);
+  if (!context.mounted) return;
+  if (state.need == PlanEntryNeed.none) {
+    navigator.push(
+      MaterialPageRoute<void>(
+        builder: (_) => CameraPlanEditor.shot(
+          projectId: shot.projectId,
+          shotId: shot.id,
+          shotLabel: label,
+        ),
+      ),
+    );
+    return;
+  }
+  if (state.site == null) {
+    final scene = state.scene;
+    if (scene == null) return;
+    final site = await pickSiteForScene(context, db, scene);
+    if (site == null) return;
+    state = await PlanEntryState.resolve(db, shot);
+  }
+  final site = state.site;
+  if (site == null) return;
+  navigator.push(
+    MaterialPageRoute<void>(
+      builder: (_) => CameraPlanEditor.site(
+        projectId: shot.projectId,
+        siteId: site.id,
+        siteName: site.name,
+        guide: PlanGuide(
+          sceneId: shot.sceneId,
+          shotId: shot.id,
+          shotLabel: label,
+          startStep: state.startStep,
+        ),
+      ),
+    ),
+  );
+}
 
 /// Celda compacta de estado de planta (guion técnico y listados).
 class CameraPlanStatusCell extends ConsumerWidget {
@@ -60,10 +110,22 @@ class CameraPlanStatusCell extends ConsumerWidget {
           );
         }
 
-        return FutureBuilder<String?>(
-          future: FloorPlanRepository(db).resolveTemplateJsonForScene(scene!),
-          builder: (context, templateSnap) {
-            final inheritable = templateSnap.data != null;
+        return FutureBuilder<(PlanEntryState, String?)>(
+          future: _entryAndTemplate(db),
+          builder: (context, snap) {
+            final missing = snap.data?.$1.missingLabel;
+            if (missing != null) {
+              return _buildCell(
+                context: context,
+                palette: palette,
+                icon: Icons.route_outlined,
+                iconColor: palette.textSecondary,
+                borderColor: palette.divider,
+                background: palette.surfaceOverlay.withValues(alpha: 0.4),
+                caption: missing,
+              );
+            }
+            final inheritable = snap.data?.$2 != null;
             return _buildCell(
               context: context,
               palette: palette,
@@ -87,6 +149,12 @@ class CameraPlanStatusCell extends ConsumerWidget {
     );
   }
 
+  Future<(PlanEntryState, String?)> _entryAndTemplate(AppDatabase db) async =>
+      (
+        await PlanEntryState.resolve(db, shot),
+        await FloorPlanRepository(db).resolveTemplateJsonForScene(scene!),
+      );
+
   Widget _buildCell({
     required BuildContext context,
     required AppPalette palette,
@@ -97,17 +165,12 @@ class CameraPlanStatusCell extends ConsumerWidget {
     required String caption,
   }) {
     return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => CameraPlanEditor.shot(
-              projectId: shot.projectId,
-              shotId: shot.id,
-              shotLabel: _label,
-            ),
-          ),
-        );
-      },
+      onTap: () => openShotPlan(
+        context,
+        ProviderScope.containerOf(context).read(databaseProvider),
+        shot,
+        label: _label,
+      ),
       child: Container(
         height: 72,
         decoration: BoxDecoration(

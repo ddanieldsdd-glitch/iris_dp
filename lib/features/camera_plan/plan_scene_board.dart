@@ -16,6 +16,7 @@ import 'camera_plan_scene_badge.dart';
 import 'floor_plan_repository.dart';
 import 'light_setup_actions.dart';
 import 'plan_data.dart';
+import 'plan_guide.dart';
 import 'plan_item_actions.dart';
 import 'plan_sketch.dart';
 import 'plan_target.dart';
@@ -299,6 +300,16 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
           ),
         const Spacer(),
         if (set != null) ...[
+          TextButton.icon(
+            onPressed: () => showAssociateShotsDialog(
+              context,
+              ref.read(databaseProvider),
+              set: set,
+              scenes: [_scene],
+            ),
+            icon: const Icon(Icons.playlist_add_check, size: 15),
+            label: const Text('Asociar planos…'),
+          ),
           TextButton.icon(
             onPressed: () =>
                 widget.onOpen(PlanTarget.set(set.id, set.locationName)),

@@ -31,6 +31,7 @@ import 'light_beam.dart';
 import 'plan_data.dart' show kLightSetupColors;
 import 'plan_cast.dart';
 import 'plan_gear_list.dart';
+import 'plan_guide.dart';
 import 'plan_light_map.dart';
 import 'plan_project_gear_dialog.dart';
 import 'plan_marks.dart';
@@ -39,6 +40,7 @@ import 'plan_trash_ui.dart';
 import 'light/ambient.dart';
 import 'light/exposure.dart';
 import 'light_overrides.dart';
+import 'light_setup_actions.dart' show askPlanName;
 import 'plan_ambient_sheet.dart';
 import 'plan_equipment.dart';
 import 'light/light_scene.dart';
@@ -77,6 +79,9 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   /// lugar de apilar una pantalla nueva.
   final void Function(PlanTarget target)? onNavigate;
 
+  /// Guía localización › sets › planos, cuando a un plano le falta algo.
+  final PlanGuide? guide;
+
   const CameraPlanEditor({
     super.key,
     required this.projectId,
@@ -89,6 +94,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     this.leg,
     this.onNavigate,
     this.startDrawing = false,
+    this.guide,
   });
 
   /// Plano maestro de localización.
@@ -98,6 +104,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required int this.siteId,
     required String siteName,
     this.onNavigate,
+    this.guide,
   }) : label = siteName,
        startDrawing = false,
        scope = FloorPlanScope.site,
@@ -119,7 +126,8 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
        siteId = null,
        lightSetupId = null,
        shotId = null,
-       leg = null;
+       leg = null,
+       guide = null;
 
   /// Esquema de luz compartido entre planos.
   const CameraPlanEditor.lightSetup({
@@ -134,7 +142,8 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
        siteId = null,
        setId = null,
        shotId = null,
-       leg = null;
+       leg = null,
+       guide = null;
 
   /// Planta de cámara de un plano concreto.
   const CameraPlanEditor.shot({
@@ -149,7 +158,8 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
        scope = FloorPlanScope.shot,
        siteId = null,
        setId = null,
-       lightSetupId = null;
+       lightSetupId = null,
+       guide = null;
 
   @override
   ConsumerState<CameraPlanEditor> createState() => _CameraPlanEditorState();
@@ -189,6 +199,17 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   List<PlanZone> _zones = const [];
   Rect? _setZone;
   bool _zoneMode = false;
+
+  /// Set cuya zona se está marcando desde la guía (en el plano maestro no
+  /// hay set abierto).
+  LocationBasePlan? _zoneTarget;
+
+  /// Paso de la guía; nulo sin guía o con la guía cerrada.
+  late PlanGuideStep? _guideStep = widget.guide?.startStep;
+  List<LocationBasePlan> _guideSets = const [];
+  Set<int> _guideZoned = const {};
+  Set<int> _guideSetsWithShots = const {};
+  bool _guideShotReady = false;
   Offset? _zoneStart;
   Rect? _zoneDraft;
   Rect? _pendingFit;
@@ -660,7 +681,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _annotationController.replaceDocument(
       AnnotationDocument.decode(annotationRow?.documentJson),
     );
+    final guide = await _loadGuide(db, linkedSite, allSets);
+    if (!mounted) return;
     setState(() {
+      if (guide != null) {
+        _guideSets = guide.sets;
+        _guideZoned = guide.zoned;
+        _guideSetsWithShots = guide.withShots;
+        _guideShotReady = guide.shotReady;
+      }
       _elements
         ..clear()
         ..addAll(elements);
@@ -1167,10 +1196,168 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _showSnack('Capas ordenadas.');
   }
 
+  // ── Guía localización › sets › planos ─────────────────────────────────────
+
+  Future<
+    ({
+      List<LocationBasePlan> sets,
+      Set<int> zoned,
+      Set<int> withShots,
+      bool shotReady,
+    })?
+  >
+  _loadGuide(
+    AppDatabase db,
+    LocationSite? site,
+    List<LocationBasePlan> allSets,
+  ) async {
+    final guide = widget.guide;
+    if (guide == null || site == null) return null;
+    final sets = [
+      for (final s in allSets)
+        if (s.siteId == site.id) s,
+    ]..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    final scene = await (db.select(
+      db.scenes,
+    )..where((s) => s.id.equals(guide.sceneId))).getSingleOrNull();
+    final shots = await (db.select(
+      db.shots,
+    )..where((s) => s.sceneId.equals(guide.sceneId))).get();
+    final withShots = {
+      for (final shot in shots)
+        if ((shot.locationBasePlanId ?? scene?.locationId) case final id?) id,
+    };
+    final start = shots.where((s) => s.id == guide.shotId).firstOrNull;
+    return (
+      sets: sets,
+      zoned: {
+        for (final s in sets)
+          if (SetZone.decode(s.sitePlacementJson) != null) s.id,
+      },
+      withShots: withShots,
+      shotReady:
+          start == null ||
+          (start.locationBasePlanId ?? scene?.locationId) != null,
+    );
+  }
+
+  Widget _buildGuideBar() => PlanGuideBar(
+    step: _guideStep!,
+    siteName: _linkedSite?.name ?? widget.label,
+    sets: _guideSets,
+    zonedSetIds: _guideZoned,
+    setsWithShots: _guideSetsWithShots,
+    shotLabel: widget.guide?.shotLabel,
+    shotReady: _guideShotReady,
+    onStep: (step) => setState(() => _guideStep = step),
+    onNewSet: _guideNewSet,
+    onMarkZone: _guideMarkZone,
+    onAssociate: _guideAssociate,
+    onFinish: _guideFinish,
+    onClose: () => setState(() => _guideStep = null),
+  );
+
+  Future<void> _guideNewSet() async {
+    final site = _linkedSite;
+    if (site == null) return;
+    final name = await askPlanName(
+      context,
+      title: 'Nuevo set en ${site.name}',
+      hint: 'Cocina, río, pasillo…',
+    );
+    if (name == null || !mounted) return;
+    final db = ref.read(databaseProvider);
+    final id = await db.insertSetUnderSite(
+      projectId: widget.projectId,
+      siteId: site.id,
+      name: name,
+    );
+    final set = await db.getLocationById(id);
+    await _load();
+    if (set != null && mounted) _guideMarkZone(set);
+  }
+
+  void _guideMarkZone(LocationBasePlan set) => setState(() {
+    _zoneTarget = set;
+    _zoneMode = true;
+    _selected = null;
+  });
+
+  Future<void> _guideAssociate(LocationBasePlan set) async {
+    final guide = widget.guide;
+    if (guide == null) return;
+    final db = ref.read(databaseProvider);
+    final scene = await (db.select(
+      db.scenes,
+    )..where((s) => s.id.equals(guide.sceneId))).getSingleOrNull();
+    if (scene == null || !mounted) return;
+    final fresh = await db.getLocationById(set.id) ?? set;
+    if (!mounted) return;
+    final done = await showAssociateShotsDialog(
+      context,
+      db,
+      set: fresh,
+      scenes: [scene],
+    );
+    if (done && mounted) await _load();
+  }
+
+  /// Planos de las escenas del set (y de su localización sin set) que se
+  /// pueden llevar a él; cada uno entra con su cámara.
+  Future<void> _associateToLinkedSet() async {
+    final set = _linkedSet;
+    if (set == null) return;
+    final db = ref.read(databaseProvider);
+    final scenes = [
+      for (final scene in await (db.select(
+        db.scenes,
+      )..where((s) => s.projectId.equals(widget.projectId))).get())
+        if (scene.locationId == set.id ||
+            (set.siteId != null &&
+                scene.locationSiteId == set.siteId &&
+                scene.locationId == null))
+          scene,
+    ]..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    if (!mounted) return;
+    final done = await showAssociateShotsDialog(
+      context,
+      db,
+      set: set,
+      scenes: scenes,
+    );
+    if (done && mounted) await _load();
+  }
+
+  /// Fin de la guía: se abre la planta del plano del que se partió.
+  void _guideFinish() {
+    final guide = widget.guide;
+    final shotId = guide?.shotId;
+    if (shotId == null) {
+      setState(() => _guideStep = null);
+      return;
+    }
+    final label = guide?.shotLabel ?? 'Plano';
+    final navigate = widget.onNavigate;
+    if (navigate != null) {
+      navigate(PlanTarget.shot(shotId, label));
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => CameraPlanEditor.shot(
+          projectId: widget.projectId,
+          shotId: shotId,
+          shotLabel: label,
+        ),
+      ),
+    );
+  }
+
   // ── Zona del set ──────────────────────────────────────────────────────────
 
   Future<void> _saveZone(Rect rect) async {
-    final set = _linkedSet;
+    final set = _zoneTarget ?? _linkedSet;
+    _zoneTarget = null;
     if (set == null) return;
     final db = ref.read(databaseProvider);
     await db.updateLocation(
@@ -3025,6 +3212,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               _selectedPathIndex = null;
             }),
           ),
+          if (!_isShotMode && _linkedSet != null)
+            IconButton(
+              tooltip: 'Asociar planos a «${_linkedSet!.locationName}»',
+              icon: Icon(
+                Icons.playlist_add_check,
+                color: palette.textSecondary,
+              ),
+              onPressed: _associateToLinkedSet,
+            ),
           _clearPlanMenu(palette),
           IconButton(
             tooltip: 'Deshacer',
@@ -3132,6 +3328,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 Expanded(
                   child: Column(
                     children: [
+                      if (_guideStep != null) _buildGuideBar(),
                       _buildLayerBar(palette),
                       if (_zoneEditRect != null)
                         _Notice(
@@ -3168,11 +3365,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                           icon: Icons.crop_free,
                           text:
                               'Arrastra sobre el plano para marcar la zona de '
-                              '«${_linkedSet?.locationName ?? ''}».',
+                              '«${(_zoneTarget ?? _linkedSet)?.locationName ?? ''}».',
                           actionLabel: 'Cancelar',
                           onAction: () => setState(() {
                             _zoneMode = false;
                             _zoneDraft = null;
+                            _zoneTarget = null;
                           }),
                         )
                       else if (_misplaced.isNotEmpty)
