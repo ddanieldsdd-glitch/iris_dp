@@ -3,13 +3,15 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:drift/drift.dart' show Value;
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show listEquals, mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
+import '../../core/sync/live_editing.dart';
+import '../../core/sync/realtime_hub.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -46,6 +48,110 @@ import '../../core/widgets/scene_meta_display.dart';
 // Re-export para compatibilidad con imports existentes.
 const kMovements = kShotMovements;
 const kAngles = kShotAngles;
+
+/// Color de lo que edita otro equipo (borde, etiqueta y texto en vivo).
+const _kPeerColor = Color(0xFF7F77DD);
+
+/// Lo que se ve de otro equipo en una fila: quién la edita y qué escribe.
+class _RowLock {
+  final String device;
+  final Map<String, String> typing;
+
+  const _RowLock(this.device, this.typing);
+
+  static _RowLock? of(LiveEditing live, String? shotUid) {
+    final holder = live.holderOf(shotUid);
+    if (holder == null) return null;
+    return _RowLock(holder.device, {
+      for (final column in const [
+        'encuadre',
+        'lens',
+        'f',
+        'pers',
+        'dur',
+        'action',
+        'notes',
+      ])
+        if (live.typingIn(shotUid, column) case final text?) column: text,
+    });
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is _RowLock &&
+      other.device == device &&
+      mapEquals(other.typing, typing);
+
+  @override
+  int get hashCode => Object.hash(
+    device,
+    Object.hashAllUnordered([
+      for (final e in typing.entries) '${e.key}=${e.value}',
+    ]),
+  );
+}
+
+/// Un plano que edita otro equipo: borde de su color, la etiqueta
+/// «Editando en iPad» encima y sin poder tocarlo aquí mientras tanto.
+class _LockedShot extends StatelessWidget {
+  final String device;
+  final Widget child;
+
+  const _LockedShot({required this.device, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => AppSnackBar.show(
+            context,
+            'Lo está editando el $device. Podrás tocarlo cuando lo deje.',
+          ),
+          child: AbsorbPointer(
+            child: Container(
+              foregroundDecoration: BoxDecoration(
+                border: Border.all(color: _kPeerColor, width: 1.5),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: child,
+            ),
+          ),
+        ),
+        Positioned(
+          top: -9,
+          right: 12,
+          child: IgnorePointer(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+              decoration: BoxDecoration(
+                color: _kPeerColor,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    device == 'Mac' ? Icons.laptop_mac : Icons.tablet_mac,
+                    size: 12,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Editando en $device',
+                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 /// Plano en el que se está trabajando: el de la última celda tocada. La barra
 /// de formato actúa sobre él.
@@ -1850,8 +1956,14 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
     final scene = widget.scene;
     final cols = widget.cols;
     final active = ref.watch(_activeShotProvider.select((id) => id == shot.id));
+    // Si otro equipo edita este plano: quién y lo que va escribiendo.
+    final lock = ref.watch(
+      liveEditingProvider.select((l) => _RowLock.of(l, shot.uid)),
+    );
+    final live = ref.read(liveEditingProvider);
 
     Widget field({
+      required String column,
       required String? value,
       required String hintText,
       required ValueChanged<String> onChanged,
@@ -1867,6 +1979,10 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
       minLines: minLines,
       textAlign: align,
       onChanged: onChanged,
+      onTyping: (text) => live.typing(shot.uid, column, text),
+      onEditEnd: () => live.typingEnd(shot.uid, column),
+      liveText: lock?.typing[column],
+      liveColor: _kPeerColor,
     );
 
     void write(ShotsCompanion fields) => writeShotFields(
@@ -1891,7 +2007,13 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
       canRequestFocus: false,
       skipTraversal: true,
       onFocusChange: (focused) {
-        if (focused) ref.read(_activeShotProvider.notifier).state = shot.id;
+        if (focused) {
+          ref.read(_activeShotProvider.notifier).state = shot.id;
+          // Los demás equipos lo ven bloqueado mientras se trabaja en él.
+          live.focusShot(shot.uid);
+        } else {
+          live.blurShot(shot.uid);
+        }
       },
       child: Container(
         decoration: BoxDecoration(
@@ -1920,6 +2042,7 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                   column: 'encuadre',
                   alignment: Alignment.center,
                   child: field(
+                    column: 'encuadre',
                     value: shot.framing,
                     hintText: 'PD, PMC...',
                     rich: true,
@@ -1936,6 +2059,7 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       field(
+                        column: 'lens',
                         value: shot.lens,
                         hintText: '50mm',
                         align: TextAlign.center,
@@ -1964,6 +2088,7 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                   column: 'f',
                   alignment: Alignment.center,
                   child: field(
+                    column: 'f',
                     value: shot.fStop,
                     hintText: 'T2.8',
                     align: TextAlign.center,
@@ -1975,6 +2100,7 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                   shot: shot,
                   column: 'pers',
                   child: field(
+                    column: 'pers',
                     value: decodeSceneCharacters(
                       shot.charactersJson,
                     ).join(', '),
@@ -1995,6 +2121,7 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                   column: 'dur',
                   alignment: Alignment.center,
                   child: field(
+                    column: 'dur',
                     value: shot.durationSeconds?.toString(),
                     hintText: 'seg',
                     align: TextAlign.center,
@@ -2010,6 +2137,7 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                   shot: shot,
                   column: 'action',
                   child: field(
+                    column: 'action',
                     value: shot.action,
                     hintText: 'Descripción de la acción...',
                     rich: true,
@@ -2049,6 +2177,7 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                   shot: shot,
                   column: 'notes',
                   child: field(
+                    column: 'notes',
                     value: shot.notes,
                     hintText: 'Apuntes...',
                     rich: true,
@@ -2063,7 +2192,7 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
       ),
     );
 
-    return MouseRegion(
+    final content = MouseRegion(
       onEnter: (_) => _hovered.value = true,
       onExit: (_) => _hovered.value = false,
       child: Row(
@@ -2135,6 +2264,8 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
         ],
       ),
     );
+    if (lock == null) return content;
+    return _LockedShot(device: lock.device, child: content);
   }
 }
 

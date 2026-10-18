@@ -11,6 +11,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
+import '../../core/sync/live_editing.dart';
+import '../../core/sync/realtime_hub.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -367,6 +369,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     return id?.toString() ?? '${widget.scope.name}:${widget.label}';
   }
 
+  /// Mientras la planta de un plano está abierta, los demás equipos lo ven
+  /// bloqueado.
+  late final LiveEditing _live = ref.read(liveEditingProvider);
+  String? _liveShotUid;
+
   @override
   void initState() {
     super.initState();
@@ -376,6 +383,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   @override
   void dispose() {
+    _live.blurShot(_liveShotUid);
     _lightMap.dispose();
     _annotationController.dispose();
     _canvasFocus.dispose();
@@ -416,6 +424,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       shot = await (db.select(
         db.shots,
       )..where((s) => s.id.equals(widget.shotId!))).getSingleOrNull();
+      if (mounted && shot?.uid != null) {
+        _liveShotUid = shot!.uid;
+        _live.focusShot(_liveShotUid);
+      }
 
       if (shot != null) {
         scene = await (db.select(

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/sync/editing_guard.dart';
+import '../../core/sync/realtime_hub.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -210,6 +211,14 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
                         child: _TitleField(
                           key: ValueKey('titulo_${shot.id}'),
                           initial: scriptMarkupToPlain(shot.framing),
+                          // Escribiendo el título, el plano sale bloqueado en
+                          // los demás equipos.
+                          onFocusChanged: (focused) {
+                            final live = ref.read(liveEditingProvider);
+                            focused
+                                ? live.focusShot(shot.uid)
+                                : live.blurShot(shot.uid);
+                          },
                           onChanged: (text) => db.updateShotFields(
                             shot.id,
                             ShotsCompanion(
@@ -384,11 +393,13 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
 class _TitleField extends StatefulWidget {
   final String initial;
   final ValueChanged<String> onChanged;
+  final ValueChanged<bool>? onFocusChanged;
 
   const _TitleField({
     super.key,
     required this.initial,
     required this.onChanged,
+    this.onFocusChanged,
   });
 
   @override
@@ -422,6 +433,7 @@ class _TitleFieldState extends State<_TitleField> {
     final palette = context.palette;
     return Focus(
       onFocusChange: (focused) {
+        widget.onFocusChanged?.call(focused);
         if (focused) {
           _releaseGuard ??= EditingGuard.hold();
           return;
