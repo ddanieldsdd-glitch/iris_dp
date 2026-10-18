@@ -85,10 +85,22 @@ Future<Uint8List> renderSketchPng(
   AnnotationDocument document, {
   Size size = const Size(1600, 900),
   bool gridPaper = false,
+  String? underlayPath,
 }) async {
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder, Offset.zero & size);
   canvas.drawRect(Offset.zero & size, Paint()..color = Colors.white);
+  final underlay = await _decodeFile(underlayPath);
+  if (underlay != null) {
+    paintImage(
+      canvas: canvas,
+      rect: Offset.zero & size,
+      image: underlay,
+      fit: BoxFit.contain,
+      opacity: kSketchUnderlayOpacity,
+    );
+    underlay.dispose();
+  }
   if (gridPaper) const SketchGridPainter().paint(canvas, size);
   AnnotationPainter(document: document).paint(canvas, size);
   final image = await recorder.endRecording().toImage(
@@ -100,6 +112,21 @@ Future<Uint8List> renderSketchPng(
   return data!.buffer.asUint8List();
 }
 
+/// Transparencia de la imagen que se calca debajo del papel.
+const kSketchUnderlayOpacity = 0.5;
+
+Future<ui.Image?> _decodeFile(String? path) async {
+  if (path == null) return null;
+  final file = File(path);
+  if (!file.existsSync()) return null;
+  try {
+    final codec = await ui.instantiateImageCodec(await file.readAsBytes());
+    return (await codec.getNextFrame()).image;
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Abre el lienzo de dibujo. Devuelve el dibujo al guardar; nulo si se
 /// cierra sin guardar.
 Future<SketchResult?> showSketchPad(
@@ -108,6 +135,8 @@ Future<SketchResult?> showSketchPad(
   AnnotationDocument initial = const AnnotationDocument(),
   double aspectRatio = 16 / 9,
   bool gridPaper = false,
+  String? underlayPath,
+  Future<String?> Function(BuildContext context)? onPickUnderlay,
 }) {
   return Navigator.of(context, rootNavigator: true).push<SketchResult>(
     MaterialPageRoute(
@@ -117,6 +146,8 @@ Future<SketchResult?> showSketchPad(
         initial: initial,
         aspectRatio: aspectRatio,
         gridPaper: gridPaper,
+        underlayPath: underlayPath,
+        onPickUnderlay: onPickUnderlay,
       ),
     ),
   );
@@ -132,12 +163,21 @@ class SketchPad extends StatefulWidget {
   /// Papel cuadriculado, para los bocetos de planta.
   final bool gridPaper;
 
+  /// Imagen que se calca debajo del papel (una cenital, un storyboard).
+  final String? underlayPath;
+
+  /// Con él, un botón para poner o cambiar la imagen de debajo; devuelve la
+  /// ruta nueva (o nula para quitarla).
+  final Future<String?> Function(BuildContext context)? onPickUnderlay;
+
   const SketchPad({
     super.key,
     required this.title,
     this.initial = const AnnotationDocument(),
     this.aspectRatio = 16 / 9,
     this.gridPaper = false,
+    this.underlayPath,
+    this.onPickUnderlay,
   });
 
   @override
@@ -150,6 +190,7 @@ class _SketchPadState extends State<SketchPad> {
   Color _color = SketchToolbar.colors.first;
   double _width = 6;
   bool _saving = false;
+  late String? _underlay = widget.underlayPath;
 
   @override
   void dispose() {
@@ -165,6 +206,7 @@ class _SketchPadState extends State<SketchPad> {
       document,
       size: Size(1600, 1600 / widget.aspectRatio),
       gridPaper: widget.gridPaper,
+      underlayPath: _underlay,
     );
     if (!mounted) return;
     Navigator.of(context).pop(SketchResult(png: png, document: document));
@@ -233,6 +275,21 @@ class _SketchPadState extends State<SketchPad> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (widget.onPickUnderlay case final pick?)
+                        TextButton.icon(
+                          onPressed: _saving
+                              ? null
+                              : () async {
+                                  final path = await pick(context);
+                                  if (mounted) setState(() => _underlay = path);
+                                },
+                          icon: const Icon(Icons.image_outlined, size: 18),
+                          label: Text(
+                            _underlay == null
+                                ? 'Imagen debajo'
+                                : 'Cambiar imagen',
+                          ),
+                        ),
                       TextButton(
                         onPressed: _saving ? null : _close,
                         child: const Text('Cancelar'),
@@ -279,12 +336,24 @@ class _SketchPadState extends State<SketchPad> {
                               color: _color,
                               width: _width,
                               acceptTouch: true,
-                              child: widget.gridPaper
-                                  ? const CustomPaint(
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  if (_underlay != null &&
+                                      File(_underlay!).existsSync())
+                                    Opacity(
+                                      opacity: kSketchUnderlayOpacity,
+                                      child: Image.file(
+                                        File(_underlay!),
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                  if (widget.gridPaper)
+                                    const CustomPaint(
                                       painter: SketchGridPainter(),
-                                      child: SizedBox.expand(),
-                                    )
-                                  : const SizedBox.expand(),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

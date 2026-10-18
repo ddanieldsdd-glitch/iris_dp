@@ -250,6 +250,9 @@ class PlanTrashService {
         : const <CameraPlanElement>[];
     final points = await _pathPointsOf(elements.map((e) => e.id).toSet());
     final drawing = await _drawingOf(target.projectId, scope, id);
+    final images = await _imagesWhere(target.projectId, {
+      '${scope.name}/$id',
+    });
     final payload = <String, dynamic>{
       'v': 1,
       'plan': {
@@ -261,6 +264,7 @@ class PlanTrashService {
       'elements': [for (final e in elements) e.toJson()],
       'pathPoints': [for (final p in points) p.toJson()],
       'drawings': [if (drawing != null) drawing.toJson()],
+      'images': [for (final i in images) i.toJson()],
     };
     late int trashId;
     await db.transaction(() async {
@@ -390,6 +394,14 @@ class PlanTrashService {
       (d) => drawingKeys.contains('${d.targetType}/${d.targetId}'),
     );
 
+    final imageKeys = {
+      for (final id in siteIds) 'site/$id',
+      for (final id in setIds) 'set/$id',
+      for (final id in setupIds) 'lightSetup/$id',
+      for (final id in fullShotIds) 'shot/$id',
+    };
+    final images = await _imagesWhere(scope.projectId, imageKeys);
+
     final bibleLinks = setupIds.isEmpty
         ? const <LightingSetup>[]
         : await (db.select(
@@ -415,6 +427,7 @@ class PlanTrashService {
       'elements': [for (final e in elements) e.toJson()],
       'pathPoints': [for (final p in points) p.toJson()],
       'drawings': [for (final d in drawings) d.toJson()],
+      'images': [for (final i in images) i.toJson()],
       // Enlaces que se rompen, con lo que valían.
       'scenes': [
         for (final s in scope.scenes)
@@ -509,6 +522,12 @@ class PlanTrashService {
         db.projectAnnotationDocuments,
       )..where((d) => d.id.isIn(drawingIds))).go();
     }
+    final imageIds = _ids(payload['images']);
+    if (imageIds.isNotEmpty) {
+      await (db.delete(
+        db.planImages,
+      )..where((i) => i.id.isIn(imageIds))).go();
+    }
     if (setIds.isNotEmpty) {
       await (db.delete(
         db.locationImages,
@@ -573,6 +592,12 @@ class PlanTrashService {
         db.projectAnnotationDocuments,
       )..where((d) => d.id.isIn(drawingIds))).go();
     }
+    final imageIds = _ids(payload['images']);
+    if (imageIds.isNotEmpty) {
+      await (db.delete(
+        db.planImages,
+      )..where((i) => i.id.isIn(imageIds))).go();
+    }
   }
 
   /// Devuelve una planta vaciada. Si entretanto se empezó de nuevo, lo
@@ -606,6 +631,7 @@ class PlanTrashService {
     final ids = _IdMaps();
     await _insertElements(payload, ids, liveShots: {id});
     await _insertDrawings(payload, ids);
+    await _insertImages(payload, ids, liveShots: {id});
     return const PlanRestoreResult();
   }
 
@@ -782,6 +808,7 @@ class PlanTrashService {
 
     await _insertElements(payload, ids, liveShots: liveShots);
     await _insertDrawings(payload, ids, liveShots: liveShots);
+    await _insertImages(payload, ids, liveShots: liveShots);
     return PlanRestoreResult(keptShots: keptShots, orphanSets: orphanSets);
   }
 
@@ -845,6 +872,47 @@ class PlanTrashService {
                 .copyWith(id: const Value.absent(), targetId: Value('$newId')),
             mode: InsertMode.insertOrIgnore,
           );
+    }
+  }
+
+  /// Imágenes de la planta en las capas `tipo/id` de [keys].
+  Future<List<PlanImage>> _imagesWhere(int projectId, Set<String> keys) async {
+    if (keys.isEmpty) return const [];
+    final rows = await (db.select(
+      db.planImages,
+    )..where((i) => i.projectId.equals(projectId))).get();
+    return [
+      for (final r in rows)
+        if (keys.contains('${r.targetType}/${r.targetId}')) r,
+    ];
+  }
+
+  Future<void> _insertImages(
+    Map<String, dynamic> payload,
+    _IdMaps ids, {
+    required Set<int> liveShots,
+  }) async {
+    for (final json in _maps(payload['images'])) {
+      final row = PlanImage.fromJson(json);
+      final targetId = switch (row.targetType) {
+        'site' => await ids.site(db, row.targetId),
+        'set' => await ids.set(db, row.targetId),
+        'lightSetup' => await ids.setup(db, row.targetId),
+        'shot' => liveShots.contains(row.targetId) ? row.targetId : null,
+        _ => null,
+      };
+      if (targetId == null) continue;
+      final free = await (db.select(
+        db.planImages,
+      )..where((i) => i.id.equals(row.id))).getSingleOrNull() == null;
+      final fixed = row.copyWith(targetId: targetId);
+      if (free) {
+        await db.into(db.planImages).insert(fixed);
+      } else {
+        await db
+            .into(db.planImages)
+            .insert(fixed.toCompanion(false).copyWith(id: const Value.absent()));
+      }
     }
   }
 
@@ -1052,6 +1120,16 @@ class _PlanTarget {
                   d.targetId.equals('$id'),
             ))
             .getSingleOrNull();
-    return drawing == null;
+    if (drawing != null) return false;
+    final image = await (db.select(db.planImages)
+          ..where(
+            (i) =>
+                i.projectId.equals(projectId) &
+                i.targetType.equals(scope.name) &
+                i.targetId.equals(id),
+          )
+          ..limit(1))
+        .getSingleOrNull();
+    return image == null;
   }
 }

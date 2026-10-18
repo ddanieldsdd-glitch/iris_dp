@@ -15,6 +15,7 @@ import 'light_beam.dart';
 import 'light_symbols.dart';
 import 'light/modifiers.dart';
 import 'light/surfaces.dart';
+import 'plan_images.dart';
 import 'plan_light_map.dart';
 import 'plan_marks.dart';
 import 'plan_opening.dart';
@@ -115,6 +116,10 @@ class CameraPlanPainter extends CustomPainter {
   /// en vez de con un haz por fuente. Sin él (miniaturas), los haces.
   final PlanLightMapCache? lightMap;
 
+  /// Imágenes puestas en la planta (cenitales, storyboard, referencias),
+  /// debajo o encima de los elementos.
+  final List<PlanImageDraw> images;
+
   CameraPlanPainter({
     required this.elements,
     required this.palette,
@@ -143,6 +148,7 @@ class CameraPlanPainter extends CustomPainter {
     this.backgroundRect,
     this.backgroundOpacity = 0.85,
     this.lightMap,
+    this.images = const [],
   }) : super(repaint: lightMap);
 
   @override
@@ -154,6 +160,9 @@ class CameraPlanPainter extends CustomPainter {
     canvas.scale(scale);
 
     _drawBackgroundImage(canvas);
+    for (final image in images) {
+      if (!image.above) _drawPlanImage(canvas, image);
+    }
     if (showGrid) _drawGrid(canvas, size);
     for (final zone in zones) {
       _drawZone(canvas, zone);
@@ -245,6 +254,16 @@ class CameraPlanPainter extends CustomPainter {
         ringed: alsoSelected.contains(el),
         body: !PlanTerrainPainter.isTerrain(el),
       );
+    }
+
+    for (final image in images) {
+      if (image.above) _drawPlanImage(canvas, image);
+    }
+    for (final image in images) {
+      if (image.linkTo != null) _drawImageLink(canvas, image);
+    }
+    for (final image in images) {
+      if (image.selected) _drawImageSelection(canvas, image);
     }
 
     _drawOverlays(canvas);
@@ -759,6 +778,94 @@ class CameraPlanPainter extends CustomPainter {
       Offset.zero & size,
       Paint()..color = _CanvasColors.background,
     );
+  }
+
+  void _drawPlanImage(Canvas canvas, PlanImageDraw draw) {
+    final rect = draw.rect;
+    canvas.save();
+    if (draw.rotation != 0) {
+      canvas.translate(rect.center.dx, rect.center.dy);
+      canvas.rotate(draw.rotation);
+      canvas.translate(-rect.center.dx, -rect.center.dy);
+    }
+    final image = draw.image;
+    if (image == null) {
+      // Aún cargando (o sin archivo en este equipo): su hueco.
+      canvas.drawRect(
+        rect,
+        Paint()..color = const Color(0x33FFFFFF),
+      );
+    } else {
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        rect,
+        Paint()
+          ..filterQuality = FilterQuality.medium
+          ..color = Colors.white.withValues(alpha: draw.opacity.clamp(0, 1)),
+      );
+    }
+    if (draw.hasComments) {
+      final at = rect.topRight + Offset(-10 / scale, 10 / scale);
+      canvas.drawCircle(
+        at,
+        7 / scale,
+        Paint()..color = const Color(0xFFFAC775),
+      );
+    }
+    canvas.restore();
+  }
+
+  /// Línea discontinua de la imagen a la cámara del plano que la enseña.
+  void _drawImageLink(Canvas canvas, PlanImageDraw draw) {
+    final from = draw.linkTo!;
+    final rect = draw.rect;
+    // Al borde de la imagen más cercano a la cámara.
+    final to = Offset(
+      from.dx.clamp(rect.left, rect.right),
+      from.dy.clamp(rect.top, rect.bottom),
+    );
+    final paint = Paint()
+      ..color = const Color(0xFFEF9F27)
+      ..strokeWidth = 1.5 / scale;
+    final length = (to - from).distance;
+    if (length <= 0) return;
+    final dir = (to - from) / length;
+    final dash = 8 / scale;
+    for (var d = 0.0; d < length; d += dash * 1.8) {
+      canvas.drawLine(
+        from + dir * d,
+        from + dir * math.min(d + dash, length),
+        paint,
+      );
+    }
+  }
+
+  /// Marco de la imagen elegida, con sus asas en las esquinas.
+  void _drawImageSelection(Canvas canvas, PlanImageDraw draw) {
+    final rect = draw.rect;
+    canvas.save();
+    if (draw.rotation != 0) {
+      canvas.translate(rect.center.dx, rect.center.dy);
+      canvas.rotate(draw.rotation);
+      canvas.translate(-rect.center.dx, -rect.center.dy);
+    }
+    final line = Paint()
+      ..color = const Color(0xFF378ADD)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6 / scale;
+    canvas.drawRect(rect, line);
+    final fill = Paint()..color = Colors.white;
+    for (final corner in [
+      rect.topLeft,
+      rect.topRight,
+      rect.bottomLeft,
+      rect.bottomRight,
+    ]) {
+      canvas.drawCircle(corner, 6 / scale, fill);
+      canvas.drawCircle(corner, 6 / scale, line);
+    }
+    canvas.restore();
   }
 
   void _drawBackgroundImage(Canvas canvas) {
@@ -2255,6 +2362,7 @@ class CameraPlanPainter extends CustomPainter {
   @override
   bool shouldRepaint(CameraPlanPainter old) =>
       old.elements != elements ||
+      old.images != images ||
       old.inheritedElements != inheritedElements ||
       old.inheritedOpacity != inheritedOpacity ||
       old.showGrid != showGrid ||

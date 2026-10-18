@@ -79,6 +79,15 @@ const kMediaSlots = <MediaSlot>[
     subfolder: 'light_sketches',
   ),
   MediaSlot(
+    entityType: MediaEntityType.planImage,
+    kind: MediaKind.image,
+    table: 'plan_images',
+    column: 'path',
+    selectForProject:
+        'SELECT id, uid, path AS path FROM plan_images WHERE project_id = ?',
+    subfolder: 'plan_images',
+  ),
+  MediaSlot(
     entityType: MediaEntityType.lightingReference,
     kind: MediaKind.image,
     table: 'lighting_setups',

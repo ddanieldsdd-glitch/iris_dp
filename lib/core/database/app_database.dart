@@ -84,6 +84,7 @@ typedef WorkspaceScene = ({
     PendingMediaUploads,
     VisualBibleDocuments,
     PlanTrash,
+    PlanImages,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -558,6 +559,10 @@ class AppDatabase extends _$AppDatabase {
         await add(lightSetups, lightSetups.kind);
         await add(lightSetups, lightSetups.sceneId);
       }
+      if (from < 55) {
+        // Imágenes sobre la planta, debajo o encima de los elementos.
+        await m.createTable(planImages);
+      }
     },
   );
 
@@ -739,6 +744,8 @@ class AppDatabase extends _$AppDatabase {
           ))
           .write(const LightingSetupsCompanion(planSetupId: Value(null)));
       await (delete(lightSetups)..where((s) => s.projectId.equals(id))).go();
+      await (delete(planImages)..where((i) => i.projectId.equals(id))).go();
+      await (delete(planTrash)..where((t) => t.projectId.equals(id))).go();
       await (delete(
         projectEquipment,
       )..where((e) => e.projectId.equals(id))).go();
@@ -853,6 +860,8 @@ class AppDatabase extends _$AppDatabase {
       await (delete(shots)..where((s) => s.projectId.equals(id))).go();
       await (delete(scenes)..where((s) => s.projectId.equals(id))).go();
       await (delete(lightSetups)..where((s) => s.projectId.equals(id))).go();
+      // La papelera se queda: es de este equipo y sabe volver sola.
+      await (delete(planImages)..where((i) => i.projectId.equals(id))).go();
       await (delete(
         projectEquipment,
       )..where((e) => e.projectId.equals(id))).go();
@@ -4677,7 +4686,7 @@ LazyDatabase _openConnection() {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 54;
+const kSchemaVersion = 55;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

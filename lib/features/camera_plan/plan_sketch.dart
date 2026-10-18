@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -9,6 +10,8 @@ import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/utils/clipboard_image_reader.dart';
+import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/media_storage.dart';
 import '../../core/utils/shot_reference_import.dart';
 import '../../shared/annotations/annotation_document.dart';
@@ -16,6 +19,9 @@ import '../../shared/annotations/sketch_pad.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
 import 'camera_plan_editor.dart';
 import 'floor_plan_repository.dart';
+import 'floor_plan_scope.dart';
+import 'plan_image_widgets.dart';
+import 'plan_images.dart';
 import 'light_setup_actions.dart';
 import 'plan_item_actions.dart';
 import 'plan_data.dart';
@@ -106,6 +112,15 @@ Future<void> drawFreehandSketch(
   LightSetup setup,
 ) async {
   final current = setup.sketchImagePath;
+  final store = PlanImageStore(db);
+  // La imagen que se calca debajo es una imagen de la planta del boceto:
+  // viaja como las demás.
+  Future<PlanImage?> underlay() async => (await store.forLayers(
+    projectId: setup.projectId,
+    lightSetupId: setup.id,
+  )).lastOrNull;
+  final firstUnderlay = (await underlay())?.path;
+  if (!context.mounted) return;
   final result = await showSketchPad(
     context,
     title: setup.name,
@@ -114,6 +129,31 @@ Future<void> drawFreehandSketch(
         : readSketchDocument(current),
     aspectRatio: 4 / 3,
     gridPaper: true,
+    underlayPath: firstUnderlay,
+    onPickUnderlay: (context) async {
+      final previous = await underlay();
+      if (!context.mounted) return previous?.path;
+      final picked = await _pickUnderlayBytes(
+        context,
+        db,
+        setup.projectId,
+        canRemove: previous != null,
+      );
+      if (picked == null) return previous?.path;
+      if (previous != null) await store.delete(previous);
+      if (picked.remove) return null;
+      final image = await store.add(
+        projectId: setup.projectId,
+        scope: FloorPlanScope.lightSetup,
+        targetId: setup.id,
+        bytes: picked.bytes!,
+        extension: picked.extension,
+        source: picked.source,
+        center: const Offset(800, 600),
+        longSide: 1600,
+      );
+      return image.path;
+    },
   );
   if (result == null) return;
   // Cada boceto tiene su archivo (una copia duplicada no pisa el original).
@@ -166,6 +206,97 @@ Future<LightSetup> moveDrawingToFreehandSketch(
     await addShotPlanSketchSetup(db: db, shot: shot, setupId: setup.id);
   }
   return withImage;
+}
+
+/// Qué imagen poner debajo del boceto a mano: pegada, del moodboard o de
+/// un archivo; o quitar la que hay.
+Future<
+  ({Uint8List? bytes, String extension, String source, bool remove})?
+>
+_pickUnderlayBytes(
+  BuildContext context,
+  AppDatabase db,
+  int projectId, {
+  required bool canRemove,
+}) async {
+  final palette = context.palette;
+  final choice = await showDialog<String>(
+    context: context,
+    builder: (ctx) => SimpleDialog(
+      backgroundColor: palette.surfaceElevated,
+      title: Text(
+        'Imagen debajo del papel',
+        style: AppTypography.titleMedium(palette),
+      ),
+      children: [
+        SimpleDialogOption(
+          onPressed: () => Navigator.pop(ctx, 'paste'),
+          child: const ListTile(
+            leading: Icon(Icons.content_paste),
+            title: Text('Pegar (Google Maps, Miro, navegador…)'),
+          ),
+        ),
+        SimpleDialogOption(
+          onPressed: () => Navigator.pop(ctx, 'moodboard'),
+          child: const ListTile(
+            leading: Icon(Icons.photo_library_outlined),
+            title: Text('Del moodboard'),
+          ),
+        ),
+        SimpleDialogOption(
+          onPressed: () => Navigator.pop(ctx, 'file'),
+          child: const ListTile(
+            leading: Icon(Icons.folder_open_outlined),
+            title: Text('Archivo…'),
+          ),
+        ),
+        if (canRemove)
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'remove'),
+            child: const ListTile(
+              leading: Icon(Icons.hide_image_outlined),
+              title: Text('Quitar la imagen'),
+            ),
+          ),
+      ],
+    ),
+  );
+  Future<({Uint8List? bytes, String extension, String source, bool remove})?>
+  fromPath(String? path, String source) async {
+    if (path == null || !File(path).existsSync()) return null;
+    final ext = path.contains('.')
+        ? path.substring(path.lastIndexOf('.'))
+        : '.jpg';
+    return (
+      bytes: await File(path).readAsBytes(),
+      extension: ext,
+      source: source,
+      remove: false,
+    );
+  }
+
+  switch (choice) {
+    case 'remove':
+      return (bytes: null, extension: '', source: '', remove: true);
+    case 'paste':
+      final result = await ClipboardImageReader.read();
+      final payload = result.payload;
+      if (payload == null) return null;
+      return (
+        bytes: payload.bytes,
+        extension: payload.extension,
+        source: PlanImageSource.pasted,
+        remove: false,
+      );
+    case 'moodboard':
+      if (!context.mounted) return null;
+      final picked = await pickMoodboardImage(context, db, projectId);
+      return fromPath(picked?.imagePath, PlanImageSource.moodboard);
+    case 'file':
+      final file = await UserFilePicker.pickImage();
+      return fromPath(file?.path, PlanImageSource.file);
+  }
+  return null;
 }
 
 /// Abre un boceto: el de elementos en el editor de planta, el de mano

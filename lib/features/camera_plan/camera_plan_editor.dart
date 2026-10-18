@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -15,6 +16,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/project_color_scheme.dart';
+import '../../core/utils/clipboard_image_reader.dart';
+import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/scene_color.dart';
 import '../../shared/annotations/annotation_canvas.dart';
 import '../../shared/annotations/annotation_document.dart';
@@ -32,6 +35,9 @@ import 'plan_data.dart' show kLightSetupColors;
 import 'plan_cast.dart';
 import 'plan_gear_list.dart';
 import 'plan_guide.dart';
+import 'plan_image_widgets.dart';
+import 'plan_images.dart';
+import 'plan_item_actions.dart' show PlanMenuRow;
 import 'plan_sketch.dart' show moveDrawingToFreehandSketch;
 import 'plan_light_map.dart';
 import 'plan_project_gear_dialog.dart';
@@ -203,6 +209,24 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Set<int> _guideZoned = const {};
   Set<int> _guideSetsWithShots = const {};
   bool _guideShotReady = false;
+
+  // ── Imágenes de la planta (como en Miro) ──
+  late final PlanImageStore _imageStore = PlanImageStore(
+    ref.read(databaseProvider),
+  );
+  final PlanImageCache _imageCache = PlanImageCache();
+  List<PlanImage> _images = const [];
+  int? _selectedImageId;
+
+  /// Arrastre de la imagen elegida: -1 la mueve, 0–3 una esquina.
+  int? _imageGrip;
+  Offset? _imageGripStart;
+  Rect? _imageGripRect;
+  Rect? _imageDraft;
+
+  /// Poniendo a escala una cenital: la imagen y los puntos tocados.
+  PlanImage? _calibrating;
+  final List<Offset> _calibrationPoints = [];
   Offset? _zoneStart;
   Rect? _zoneDraft;
   Rect? _pendingFit;
@@ -338,6 +362,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// Lo copiado, compartido entre plantas mientras dure la sesión.
   static String? _clipboard;
+  static const _clipboardMark = 'iris-dp:planta';
 
   static const double _minScale = 0.1;
   static const double _maxScale = 6;
@@ -382,12 +407,21 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   void initState() {
     super.initState();
     _repo = FloorPlanRepository(ref.read(databaseProvider));
+    _imageCache.addListener(_onImageLoaded);
     _load();
+  }
+
+  void _onImageLoaded() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _lightMap.dispose();
+    _opacityDebounce?.cancel();
+    _imageCache
+      ..removeListener(_onImageLoaded)
+      ..dispose();
     _annotationController.dispose();
     _canvasFocus.dispose();
     super.dispose();
@@ -672,8 +706,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       AnnotationDocument.decode(annotationRow?.documentJson),
     );
     final guide = await _loadGuide(db, linkedSite, allSets);
+    final planImages = await _imageStore.forLayers(
+      projectId: widget.projectId,
+      siteId: linkedSite?.id ?? widget.siteId,
+      setId: linkedSet?.id ?? widget.setId,
+      lightSetupId: lightSetup?.id ?? widget.lightSetupId,
+      shotId: shot?.id,
+    );
+    _imageCache.ensure(planImages);
     if (!mounted) return;
     setState(() {
+      _images = planImages;
+      if (!planImages.any((i) => i.id == _selectedImageId)) {
+        _selectedImageId = null;
+      }
       if (guide != null) {
         _guideSets = guide.sets;
         _guideZoned = guide.zoned;
@@ -1185,6 +1231,392 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (!mounted) return;
     setState(() {});
     _showSnack('Capas ordenadas.');
+  }
+
+  // ── Imágenes de la planta ─────────────────────────────────────────────────
+
+  PlanImage? get _selectedImage =>
+      _images.where((i) => i.id == _selectedImageId).firstOrNull;
+
+  /// La capa de esta planta: ahí van las imágenes nuevas.
+  (FloorPlanScope, int)? get _ownImageLayer {
+    final id = switch (widget.scope) {
+      FloorPlanScope.site => widget.siteId,
+      FloorPlanScope.set => widget.setId,
+      FloorPlanScope.lightSetup => widget.lightSetupId ?? _lightSetup?.id,
+      FloorPlanScope.shot => widget.shotId,
+    };
+    return id == null ? null : (widget.scope, id);
+  }
+
+  /// Planos a cuya cámara se puede unir una imagen: este y los demás del
+  /// esquema que se ven.
+  List<PlanImageShotOption> get _imageShotOptions {
+    final seen = <int>{};
+    return [
+      if (_isShotMode && widget.shotId != null && seen.add(widget.shotId!))
+        PlanImageShotOption(widget.shotId!, widget.label),
+      for (final target in _otherCameraShot.values)
+        if (seen.add(target.id)) PlanImageShotOption(target.id, target.label),
+    ];
+  }
+
+  /// Dónde está la cámara de un plano en el lienzo.
+  Offset? _cameraOfShot(int shotId) {
+    if (_isShotMode && shotId == widget.shotId) {
+      for (final el in _elements) {
+        if (el.type == ElementType.camera && el.layer == PlanLayer.shot) {
+          return el.position;
+        }
+      }
+    }
+    for (final MapEntry(key: el, value: target) in _otherCameraShot.entries) {
+      if (target.id == shotId) return el.position;
+    }
+    return null;
+  }
+
+  List<PlanImageDraw> get _imageDraws => [
+    for (final image in _images)
+      PlanImageDraw(
+        image: _imageCache[image.path],
+        rect: image.id == _selectedImageId && _imageDraft != null
+            ? _imageDraft!
+            : planImageRect(image),
+        rotation: image.rotation,
+        opacity: image.opacity,
+        above: image.above,
+        selected: image.id == _selectedImageId,
+        hasComments: (image.commentsJson ?? '').length > 2,
+        linkTo: image.linkedShotId == null
+            ? null
+            : _cameraOfShot(image.linkedShotId!),
+      ),
+  ];
+
+  /// La imagen bajo [p]: con [onTopOnly], solo las de encima y sueltas
+  /// (tapan lo de debajo); si no, cualquiera, la de más arriba primero.
+  PlanImage? _imageAt(Offset p, {required bool onTopOnly}) {
+    final ordered = [
+      ..._images.where((i) => !i.above),
+      ..._images.where((i) => i.above),
+    ];
+    for (final image in ordered.reversed) {
+      if (onTopOnly && (!image.above || image.locked)) continue;
+      if (planImageContains(image, p)) return image;
+    }
+    return null;
+  }
+
+  void _selectImage(PlanImage image) => setState(() {
+    _selectedImageId = image.id;
+    _selected = null;
+    _selectedPathIndex = null;
+    _multi.clear();
+  });
+
+  /// -1 para moverla desde dentro, 0–3 para una esquina, o nulo.
+  int? _imageGripAt(PlanImage image, Offset p) {
+    final rect = planImageRect(image);
+    final reach = 14 / _scale;
+    final corners = [
+      rect.topLeft,
+      rect.topRight,
+      rect.bottomLeft,
+      rect.bottomRight,
+    ];
+    for (var i = 0; i < corners.length; i++) {
+      if ((corners[i] - p).distance < reach) return i;
+    }
+    return planImageContains(image, p) ? -1 : null;
+  }
+
+  /// Rectángulo mientras se arrastra: se mueve entera, o se escala desde
+  /// la esquina contraria sin deformarla.
+  Rect? _imageDragRect(Offset p) {
+    final start = _imageGripStart;
+    final rect = _imageGripRect;
+    final grip = _imageGrip;
+    if (start == null || rect == null || grip == null) return null;
+    if (grip == -1) return rect.shift(p - start);
+    final fixed = switch (grip) {
+      0 => rect.bottomRight,
+      1 => rect.bottomLeft,
+      2 => rect.topRight,
+      _ => rect.topLeft,
+    };
+    final aspect = rect.height / rect.width;
+    final width = math.max(24.0, (p.dx - fixed.dx).abs());
+    final height = width * aspect;
+    final left = grip == 0 || grip == 2 ? fixed.dx - width : fixed.dx;
+    final top = grip == 0 || grip == 1 ? fixed.dy - height : fixed.dy;
+    return Rect.fromLTWH(left, top, width, height);
+  }
+
+  Future<void> _reloadImages() async {
+    final images = await _imageStore.forLayers(
+      projectId: widget.projectId,
+      siteId: _linkedSite?.id ?? widget.siteId,
+      setId: _linkedSet?.id ?? widget.setId,
+      lightSetupId: _lightSetup?.id ?? widget.lightSetupId,
+      shotId: _shot?.id,
+    );
+    _imageCache.ensure(images);
+    if (mounted) setState(() => _images = images);
+  }
+
+  Future<void> _saveImage(PlanImage image) async {
+    await _imageStore.save(image);
+    await _reloadImages();
+  }
+
+  Widget _imageToolbar(PlanImage image) => PlanImageToolbar(
+    image: image,
+    shots: _imageShotOptions,
+    onAbove: (v) => _saveImage(image.copyWith(above: v, terrain: v ? false : null)),
+    onOpacity: (v) {
+      // Al momento en pantalla; se guarda al soltar el deslizador.
+      setState(() {
+        _images = [
+          for (final i in _images) i.id == image.id ? i.copyWith(opacity: v) : i,
+        ];
+      });
+      _opacityDebounce?.cancel();
+      _opacityDebounce = Timer(
+        const Duration(milliseconds: 400),
+        () => _imageStore.save(image.copyWith(opacity: v)),
+      );
+    },
+    onLocked: (v) => _saveImage(image.copyWith(locked: v)),
+    onLink: (shotId) => _saveImage(image.copyWith(linkedShotId: Value(shotId))),
+    onComments: () async {
+      await showPlanImageComments(context, _imageStore, image);
+      await _reloadImages();
+    },
+    onTerrain: () => _startTerrain(image),
+    onRotate: () => _saveImage(
+      image.copyWith(rotation: (image.rotation + math.pi / 2) % (2 * math.pi)),
+    ),
+    onFront: () async {
+      await _imageStore.bringToFront(image);
+      await _reloadImages();
+    },
+    onDelete: () => _deleteImage(image),
+    onClose: () => setState(() => _selectedImageId = null),
+  );
+
+  Timer? _opacityDebounce;
+
+  Future<void> _deleteImage(PlanImage image) async {
+    await _imageStore.delete(image);
+    if (!mounted) return;
+    setState(() => _selectedImageId = null);
+    await _reloadImages();
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('Imagen quitada de la planta.'),
+          action: SnackBarAction(
+            label: 'Deshacer',
+            onPressed: () async {
+              await ref.read(databaseProvider).into(
+                ref.read(databaseProvider).planImages,
+              ).insert(image);
+              await ref
+                  .read(databaseProvider)
+                  .touchProjectContent(image.projectId);
+              await _reloadImages();
+            },
+          ),
+        ),
+      );
+  }
+
+  /// Terreno: la imagen va al entorno de la localización (si la hay),
+  /// debajo y bloqueada, y se pone a escala con dos puntos.
+  Future<void> _startTerrain(PlanImage image) async {
+    final site = _linkedSite;
+    final moved = image.copyWith(
+      above: false,
+      locked: true,
+      terrain: true,
+      targetType: site == null ? null : PlanImageStore.targetType(FloorPlanScope.site),
+      targetId: site?.id,
+    );
+    await _saveImage(moved);
+    if (!mounted) return;
+    setState(() {
+      _calibrating = moved;
+      _calibrationPoints.clear();
+    });
+  }
+
+  Future<void> _addCalibrationPoint(Offset p) async {
+    final image = _calibrating;
+    if (image == null) return;
+    setState(() => _calibrationPoints.add(p));
+    if (_calibrationPoints.length < 2) return;
+    final from = _calibrationPoints[0];
+    final to = _calibrationPoints[1];
+    final meters = await askCalibrationMeters(context);
+    if (!mounted) return;
+    setState(() {
+      _calibrating = null;
+      _calibrationPoints.clear();
+    });
+    if (meters == null) return;
+    final fresh = await _imageStore.get(image.id) ?? image;
+    final rect = calibratePlanImage(
+      rect: planImageRect(fresh),
+      from: from,
+      to: to,
+      meters: meters,
+      metersPerUnit: _metersPerUnit,
+    );
+    await _saveImage(
+      fresh.copyWith(x: rect.left, y: rect.top, w: rect.width, h: rect.height),
+    );
+    if (mounted) {
+      _showSnack(
+        'Terreno a escala: ${meters.toStringAsFixed(meters % 1 == 0 ? 0 : 1)} m '
+        'entre los dos puntos.',
+      );
+    }
+  }
+
+  /// Pone una imagen nueva en el centro de lo que se ve, en esta planta.
+  Future<void> _addImage(
+    Uint8List bytes,
+    String extension, {
+    required String source,
+    String? caption,
+    int? linkedShotId,
+  }) async {
+    final layer = _ownImageLayer;
+    if (layer == null) {
+      _showSnack('Guarda antes la planta para poder poner imágenes.');
+      return;
+    }
+    final visible = _canvasSize.isEmpty
+        ? 360.0
+        : math.min(_canvasSize.width, _canvasSize.height) * 0.5 / _scale;
+    final image = await _imageStore.add(
+      projectId: widget.projectId,
+      scope: layer.$1,
+      targetId: layer.$2,
+      bytes: bytes,
+      extension: extension,
+      source: source,
+      center: _viewCenter,
+      longSide: visible,
+      caption: caption,
+      linkedShotId: linkedShotId,
+    );
+    await _reloadImages();
+    if (mounted) _selectImage(image);
+  }
+
+  Future<void> _addImageFromFile(
+    String path, {
+    required String source,
+    String? caption,
+    int? linkedShotId,
+  }) async {
+    final file = File(path);
+    if (!await file.exists()) {
+      _showSnack('No encuentro esa imagen en este equipo.');
+      return;
+    }
+    final ext = path.contains('.') ? path.substring(path.lastIndexOf('.')) : '.jpg';
+    await _addImage(
+      await file.readAsBytes(),
+      ext,
+      source: source,
+      caption: caption,
+      linkedShotId: linkedShotId,
+    );
+  }
+
+  /// ¿Sigue en el portapapeles lo copiado en la planta? Sin portapapeles
+  /// del sistema (o sin poder leerlo), lo de aquí.
+  Future<bool> _clipboardIsOurs() async {
+    if (_clipboard == null) return false;
+    try {
+      final data = await Clipboard.getData(
+        Clipboard.kTextPlain,
+      ).timeout(const Duration(milliseconds: 400));
+      return data?.text == _clipboardMark;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Pega una imagen del portapapeles (navegador, Miro, Google Docs…).
+  /// Devuelve si había una.
+  Future<bool> _pasteImage({bool quiet = false}) async {
+    final ClipboardImageReadResult result;
+    try {
+      // Una URL se descarga: con margen, pero sin quedarse colgado.
+      result = await ClipboardImageReader.read().timeout(
+        const Duration(seconds: 15),
+      );
+    } catch (_) {
+      if (!quiet && mounted) _showSnack('No se pudo leer el portapapeles.');
+      return false;
+    }
+    final payload = result.payload;
+    if (result.status != ClipboardImageReadStatus.success || payload == null) {
+      if (!quiet && mounted) {
+        _showSnack('No hay ninguna imagen en el portapapeles.');
+      }
+      return false;
+    }
+    await _addImage(
+      payload.bytes,
+      payload.extension,
+      source: PlanImageSource.pasted,
+    );
+    return true;
+  }
+
+  Future<void> _onAddImage(String action) async {
+    switch (action) {
+      case 'paste':
+        await _pasteImage();
+      case 'moodboard':
+        final picked = await pickMoodboardImage(
+          context,
+          ref.read(databaseProvider),
+          widget.projectId,
+        );
+        if (picked != null) {
+          await _addImageFromFile(
+            picked.imagePath,
+            source: PlanImageSource.moodboard,
+            caption: picked.caption,
+          );
+        }
+      case 'storyboard':
+        final path = _shot?.storyboardImagePath;
+        if (path == null) {
+          _showSnack('Este plano aún no tiene storyboard.');
+          return;
+        }
+        await _addImageFromFile(
+          path,
+          source: PlanImageSource.storyboard,
+          caption: 'Storyboard · ${widget.label}',
+          linkedShotId: widget.shotId,
+        );
+      case 'file':
+        final file = await UserFilePicker.pickImage();
+        final path = file?.path;
+        if (path != null) {
+          await _addImageFromFile(path, source: PlanImageSource.file);
+        }
+    }
   }
 
   // ── Dibujo a mano de antes ────────────────────────────────────────────────
@@ -2096,6 +2528,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   Future<void> _deleteSelected() async {
+    if (_selectedImage case final image?) {
+      await _deleteImage(image);
+      return;
+    }
     final doomed = _selection;
     if (doomed.isEmpty) return;
     final db = ref.read(databaseProvider);
@@ -2289,6 +2725,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       if (_zoneGrip == null && zoneEdit.contains(canvasPos)) _zoneGrip = -1;
       return;
     }
+    final image = _selectedImage;
+    if (image != null && !image.locked) {
+      final grip = _imageGripAt(image, canvasPos);
+      if (grip != null) {
+        _imageGrip = grip;
+        _imageGripStart = canvasPos;
+        _imageGripRect = planImageRect(image);
+        return;
+      }
+    }
     if (_tool.drawsSegment) {
       setState(() {
         _segmentStart ??= _snapSegmentPoint(canvasPos);
@@ -2342,6 +2788,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   void _onPanUpdate(DragUpdateDetails d) {
     final canvasPos = _toCanvasCoords(d.localPosition);
+    if (_imageGrip != null) {
+      setState(() => _imageDraft = _imageDragRect(canvasPos));
+      return;
+    }
     if (_zoneMode) {
       final start = _zoneStart;
       if (start == null) return;
@@ -2490,6 +2940,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final picked = _selection;
     if (picked.isEmpty) return;
     _clipboard = FloorPlanJson.encode(picked);
+    // Marca en el portapapeles del sistema: si al pegar sigue ahí, se pega
+    // esto; si no, lo último copiado fue de fuera (una imagen, quizá).
+    Clipboard.setData(const ClipboardData(text: _clipboardMark)).catchError(
+      (_) {},
+    );
     _showSnack(
       picked.length == 1 ? 'Copiado.' : '${picked.length} elementos copiados.',
     );
@@ -2503,6 +2958,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// Pega lo copiado donde está el cursor (o en el centro de la vista).
   Future<void> _paste() async {
+    // Lo copiado aquí manda mientras su marca siga en el portapapeles; si
+    // no, lo último copiado vino de fuera: una imagen va a la planta.
+    if (!await _clipboardIsOurs() && await _pasteImage(quiet: true)) return;
     final stored = _clipboard;
     if (stored == null) return;
     final copies = FloorPlanJson.decode(stored);
@@ -2696,6 +3154,26 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   Future<void> _onPanEnd(DragEndDetails d) async {
+    if (_imageGrip != null) {
+      final draft = _imageDraft;
+      final image = _selectedImage;
+      _imageGrip = null;
+      _imageGripStart = null;
+      _imageGripRect = null;
+      if (draft != null && image != null) {
+        await _imageStore.save(
+          image.copyWith(
+            x: draft.left,
+            y: draft.top,
+            w: draft.width,
+            h: draft.height,
+          ),
+        );
+        await _reloadImages();
+      }
+      if (mounted) setState(() => _imageDraft = null);
+      return;
+    }
     if (_zoneMode) {
       final draft = _zoneDraft;
       setState(() {
@@ -2774,6 +3252,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _canvasFocus.requestFocus();
     if (_zoneMode || _zoneEditRect != null) return;
     final canvasPos = _toCanvasCoords(d.localPosition);
+    if (_calibrating != null) {
+      _addCalibrationPoint(canvasPos);
+      return;
+    }
+    // Una imagen encima (y suelta) se coge antes que lo que tapa.
+    final onTop = _imageAt(canvasPos, onTopOnly: true);
+    if (onTop != null) {
+      _selectImage(onTop);
+      return;
+    }
     if (_tool.drawsSegment) {
       final point = _snapSegmentPoint(canvasPos);
       final from = _segmentStart;
@@ -2823,6 +3311,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         }
       }
     }
+    if (hit == null) {
+      // En vacío: una imagen de debajo (o bloqueada) se elige.
+      final below = _imageAt(canvasPos, onTopOnly: false);
+      if (below != null) {
+        _selectImage(below);
+        return;
+      }
+    }
+    if (_selectedImageId != null) setState(() => _selectedImageId = null);
     _select(hit, add: HardwareKeyboard.instance.isShiftPressed);
     // Tocar el suelo de un recinto cerrado abre sus propiedades.
     final room = hit == null ? _lightScene.roomAt(canvasPos) : null;
@@ -2951,7 +3448,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// Esc: suelta lo que se esté haciendo.
   void _cancel() {
-    if (_zoneEditRect != null) {
+    if (_calibrating != null || _selectedImageId != null) {
+      setState(() {
+        _calibrating = null;
+        _calibrationPoints.clear();
+        _selectedImageId = null;
+      });
+    } else if (_zoneEditRect != null) {
       setState(() => _zoneEditRect = null);
     } else if (_segmentStart != null || _measure != null) {
       setState(() {
@@ -3268,6 +3771,31 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               ),
               onPressed: _associateToLinkedSet,
             ),
+          PopupMenuButton<String>(
+            tooltip: 'Poner una imagen en la planta',
+            icon: Icon(
+              Icons.add_photo_alternate_outlined,
+              color: palette.textSecondary,
+            ),
+            onSelected: _onAddImage,
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'paste',
+                child: PlanMenuRow('Pegar imagen', '⌘V'),
+              ),
+              const PopupMenuItem(
+                value: 'moodboard',
+                child: Text('Del moodboard…'),
+              ),
+              if (_isShotMode)
+                PopupMenuItem(
+                  value: 'storyboard',
+                  enabled: _shot?.storyboardImagePath != null,
+                  child: const Text('Storyboard de este plano'),
+                ),
+              const PopupMenuItem(value: 'file', child: Text('Archivo…')),
+            ],
+          ),
           _clearPlanMenu(palette),
           IconButton(
             tooltip: 'Deshacer',
@@ -3377,7 +3905,22 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     children: [
                       if (_guideStep != null) _buildGuideBar(),
                       _buildLayerBar(palette),
-                      if (_zoneEditRect != null)
+                      if (_calibrating != null)
+                        _Notice(
+                          palette: palette,
+                          icon: Icons.straighten,
+                          text: _calibrationPoints.isEmpty
+                              ? 'Terreno a escala: toca un extremo de algo '
+                                    'cuya medida conozcas (una calle, una '
+                                    'fachada).'
+                              : 'Ahora el otro extremo.',
+                          actionLabel: 'Cancelar',
+                          onAction: () => setState(() {
+                            _calibrating = null;
+                            _calibrationPoints.clear();
+                          }),
+                        )
+                      else if (_zoneEditRect != null)
                         _Notice(
                           palette: palette,
                           icon: Icons.crop_free,
@@ -3634,6 +4177,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                         constraints.maxHeight,
                                                       ),
                                                       painter: CameraPlanPainter(
+                                                        images: _imageDraws,
                                                         elements:
                                                             _visibleElements,
                                                         inheritedElements:
@@ -3748,6 +4292,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                             onChanged: _saveAnnotations,
                                           ),
                                         ),
+                                        if (_selectedImage case final image?)
+                                          Positioned(
+                                            top: 8,
+                                            left: 8,
+                                            right: 8,
+                                            child: Center(
+                                              child: _imageToolbar(image),
+                                            ),
+                                          ),
                                       ],
                                     ),
                                   );

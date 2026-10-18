@@ -107,14 +107,15 @@ Future<bool> confirmClearPlan(
 }) async {
   final what = switch (scope) {
     FloorPlanScope.site =>
-      'el plano maestro (paredes, puertas, terreno, props) y su dibujo. '
+      'el plano maestro (paredes, puertas, terreno, props), su dibujo y '
+          'sus imágenes. '
           'Los sets y sus zonas se quedan',
-    FloorPlanScope.set => 'la planta del set y su dibujo. Sus esquemas y '
+    FloorPlanScope.set => 'la planta del set, su dibujo y sus imágenes. Sus esquemas y '
         'planos se quedan',
-    FloorPlanScope.lightSetup => 'las luces, el grip y el ambiente del '
-        'esquema. Sus planos siguen asignados',
-    FloorPlanScope.shot => 'las cámaras, los actores y los ajustes de luz '
-        'propios del plano. Sigue en su set y su esquema',
+    FloorPlanScope.lightSetup => 'las luces, el grip, el ambiente y las '
+        'imágenes del esquema. Sus planos siguen asignados',
+    FloorPlanScope.shot => 'las cámaras, los actores, las imágenes y los '
+        'ajustes de luz propios del plano. Sigue en su set y su esquema',
   };
   final ok = await showDialog<bool>(
     context: context,

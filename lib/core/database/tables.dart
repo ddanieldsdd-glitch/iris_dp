@@ -951,3 +951,39 @@ class PlanTrash extends Table {
   TextColumn get payloadJson => text()();
   DateTimeColumn get deletedAt => dateTime().withDefault(currentDateAndTime)();
 }
+
+/// Imágenes puestas sobre una planta, como en Miro (schemaVersion 55): una
+/// cenital de Google Maps, un fotograma del storyboard, una referencia del
+/// moodboard o algo pegado del navegador. Cada una va debajo o encima de
+/// los elementos de la planta, y se puede comentar.
+class PlanImages extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  TextColumn get targetType => text()();
+  // site | set | lightSetup | shot (la capa de la planta a la que va)
+  IntColumn get targetId => integer()();
+  TextColumn get path => text().nullable()();
+  TextColumn get source => text().withDefault(const Constant('archivo'))();
+  // pegada | moodboard | storyboard | archivo
+  TextColumn get caption => text().nullable()();
+  // Rectángulo en coordenadas de la planta.
+  RealColumn get x => real()();
+  RealColumn get y => real()();
+  RealColumn get w => real()();
+  RealColumn get h => real()();
+  RealColumn get rotation => real().withDefault(const Constant(0.0))();
+  RealColumn get opacity => real().withDefault(const Constant(1.0))();
+  // Encima de cámaras, personajes y luces; si no, debajo.
+  BoolColumn get above => boolean().withDefault(const Constant(false))();
+  BoolColumn get locked => boolean().withDefault(const Constant(false))();
+  // Terreno: una cenital puesta a escala con dos puntos de medida conocida.
+  BoolColumn get terrain => boolean().withDefault(const Constant(false))();
+  // Plano cuya cámara enseña esta imagen (una línea las une).
+  IntColumn get linkedShotId => integer().nullable()();
+  // Comentarios: [{"author": "dp", "text": "…", "at": "ISO"}]
+  TextColumn get commentsJson => text().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+}

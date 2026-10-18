@@ -526,6 +526,9 @@ class ProjectContentBundle {
     final annotatedPdfs = await (db.select(
       db.projectAnnotatedPdfs,
     )..where((p) => p.projectId.equals(projectId))).get();
+    final planImageRows = await (db.select(
+      db.planImages,
+    )..where((i) => i.projectId.equals(projectId))).get();
     final annotationDocuments = await (db.select(
       db.projectAnnotationDocuments,
     )..where((a) => a.projectId.equals(projectId))).get();
@@ -812,6 +815,18 @@ class ProjectContentBundle {
       'visualBibleNarrativeCards': narrativeCards,
       'bibleSectionEvidence': sectionEvidence,
       'projectAnnotatedPdfs': annotatedPdfs.map((p) => p.toJson()).toList(),
+      'planImages': [
+        for (final image in planImageRows)
+          if (_planImageExport(
+                image,
+                siteKeyById: siteKeyById,
+                setKeyById: setKeyById,
+                shotKeyById: shotKeyById,
+                lightSetupKeyById: lightSetupKeyById,
+              )
+              case final exported?)
+            exported,
+      ],
       'projectAnnotationDocuments': [
         for (final document in annotationDocuments)
           if (_annotationExport(
@@ -840,6 +855,47 @@ class ProjectContentBundle {
     'moodboard_image',
     'lighting_setup',
   };
+
+  /// Una imagen de la planta para el bundle, con la clave de su capa en vez
+  /// del id local; nula si su capa ya no existe.
+  static Map<String, dynamic>? _planImageExport(
+    PlanImage image, {
+    required Map<int, String> siteKeyById,
+    required Map<int, String> setKeyById,
+    required Map<int, String> shotKeyById,
+    required Map<int, String> lightSetupKeyById,
+  }) {
+    final targetKey = switch (image.targetType) {
+      'site' => siteKeyById[image.targetId],
+      'set' => setKeyById[image.targetId],
+      'lightSetup' => lightSetupKeyById[image.targetId],
+      'shot' => shotKeyById[image.targetId],
+      _ => null,
+    };
+    if (targetKey == null) return null;
+    return {
+      'uid': image.uid,
+      'targetType': image.targetType,
+      'targetKey': targetKey,
+      'path': image.path,
+      'source': image.source,
+      'caption': image.caption,
+      'x': image.x,
+      'y': image.y,
+      'w': image.w,
+      'h': image.h,
+      'rotation': image.rotation,
+      'opacity': image.opacity,
+      'above': image.above,
+      'locked': image.locked,
+      'terrain': image.terrain,
+      'linkedShotKey': image.linkedShotId == null
+          ? null
+          : shotKeyById[image.linkedShotId!],
+      'commentsJson': image.commentsJson,
+      'sortOrder': image.sortOrder,
+    };
+  }
 
   /// Un documento de dibujo para el bundle, o nulo si su destino ya no
   /// existe (un dibujo huérfano no tiene adónde volver al importar y antes
@@ -2131,6 +2187,46 @@ class ProjectContentBundle {
               projectId: projectId,
               moduleType: m['moduleType'] as String,
               pdfPath: m['pdfPath'] as String,
+            ),
+          );
+    }
+
+    for (final row in bundle['planImages'] as List? ?? []) {
+      final m = Map<String, dynamic>.from(row as Map);
+      final key = m['targetKey'] as String?;
+      final targetType = m['targetType'] as String? ?? '';
+      final targetId = switch (targetType) {
+        'site' => siteKeyToId[key],
+        'set' => setKeyToId[key],
+        'lightSetup' => lightSetupKeyToId[key],
+        'shot' => shotKeyToId[key],
+        _ => null,
+      };
+      if (targetId == null) continue;
+      double num0(Object? v, double or) => (v as num?)?.toDouble() ?? or;
+      await db
+          .into(db.planImages)
+          .insert(
+            PlanImagesCompanion.insert(
+              uid: bundleUid(m['uid']),
+              projectId: projectId,
+              targetType: targetType,
+              targetId: targetId,
+              path: Value(m['path'] as String?),
+              source: Value(m['source'] as String? ?? 'archivo'),
+              caption: Value(m['caption'] as String?),
+              x: num0(m['x'], 0),
+              y: num0(m['y'], 0),
+              w: num0(m['w'], 200),
+              h: num0(m['h'], 150),
+              rotation: Value(num0(m['rotation'], 0)),
+              opacity: Value(num0(m['opacity'], 1)),
+              above: Value(m['above'] as bool? ?? false),
+              locked: Value(m['locked'] as bool? ?? false),
+              terrain: Value(m['terrain'] as bool? ?? false),
+              linkedShotId: Value(shotKeyToId[m['linkedShotKey']]),
+              commentsJson: Value(m['commentsJson'] as String?),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
             ),
           );
     }
