@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,6 +8,8 @@ import '../cloud/cloud_runtime_config.dart';
 import '../cloud/connectivity_status_provider.dart';
 import '../database/database_provider.dart';
 import '../utils/error_log.dart';
+import '../widgets/app_snackbar.dart';
+import '../widgets/sync/sync_conflict_history_sheet.dart';
 import 'sync_engine.dart';
 import 'sync_plan_applier.dart';
 
@@ -142,5 +143,19 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    // La mezcla descartó algo: se avisa una vez y «Ver» abre el historial.
+    ref.listen<MergeNotice?>(mergeNoticeProvider, (_, notice) {
+      if (notice == null) return;
+      ref.read(mergeNoticeProvider.notifier).state = null;
+      AppSnackBar.show(
+        context,
+        notice.message,
+        duration: const Duration(seconds: 8),
+        actionLabel: 'Ver',
+        onAction: () => SyncConflictHistorySheet.show(context),
+      );
+    });
+    return widget.child;
+  }
 }

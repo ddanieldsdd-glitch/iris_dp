@@ -256,12 +256,17 @@ class SyncEngine {
       final cloudId = item.cloudId;
       if (id == null || cloudId == null) continue;
       try {
-        final discarded =
+        final outcome =
             await ContentMergeService(db, client).mergeAndSync(id, cloudId);
-        if (discarded == null) continue;
+        if (outcome == null) continue;
         merged.add(item);
-        if (discarded > 0) {
-          _ref.read(mergeDiscardsProvider.notifier).state += discarded;
+        if (outcome.discarded > 0) {
+          _ref.read(mergeDiscardsProvider.notifier).state += outcome.discarded;
+          _ref.read(mergeNoticeProvider.notifier).state = MergeNotice(
+            projectName: item.localProject?.name ?? item.title,
+            discarded: outcome.discarded,
+            mine: outcome.mine,
+          );
         }
       } catch (e, st) {
         await ErrorLog.record(e, st, context: 'Mezclar ${item.title}');
@@ -644,6 +649,31 @@ final pendingSyncPlanProvider = StateProvider<SyncPlan?>((ref) => null);
 /// Ediciones que la mezcla descartó en esta sesión (están en el historial
 /// de conflictos).
 final mergeDiscardsProvider = StateProvider<int>((ref) => 0);
+
+/// Aviso de la última mezcla que descartó algo (lo enseña [AutoSyncScheduler]).
+class MergeNotice {
+  final String projectName;
+  final int discarded;
+  final int mine;
+
+  const MergeNotice({
+    required this.projectName,
+    required this.discarded,
+    required this.mine,
+  });
+
+  String get message {
+    String n(int count, String one, String many) =>
+        count == 1 ? '1 $one' : '$count $many';
+    final what = mine > 0
+        ? n(mine, 'cambio tuyo se descartó', 'cambios tuyos se descartaron')
+        : n(discarded, 'cambio del otro equipo se descartó',
+            'cambios del otro equipo se descartaron');
+    return '$projectName se mezcló con el otro equipo · $what';
+  }
+}
+
+final mergeNoticeProvider = StateProvider<MergeNotice?>((ref) => null);
 
 /// La última subida a la nube que se ha visto (ver [CloudEdit]).
 final lastCloudEditProvider = StateProvider<CloudEdit?>((ref) => null);

@@ -8,6 +8,7 @@ import '../cloud/cloudinary_config.dart';
 import '../sync/pending_sync_queue_provider.dart';
 import '../sync/media_sync_providers.dart';
 import '../sync/sync_engine.dart';
+import 'sync/sync_conflict_history_sheet.dart';
 import 'sync/sync_flow_coordinator.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
@@ -70,6 +71,7 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
 
     final pendingCount = ref.watch(pendingSyncQueueCountProvider);
     final lastEdit = ref.watch(lastCloudEditProvider);
+    final unseen = ref.watch(unseenConflictCountProvider).valueOrNull ?? 0;
     final mediaProgress = ref.watch(mediaUploadProgressProvider);
     final mediaPending = mediaProgress.maybeWhen(
       data: (p) => p.pending,
@@ -131,26 +133,103 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
                       ),
                     ),
                   ),
-                IconButton(
+                PopupMenuButton<_CloudAction>(
                   tooltip: tooltip,
-                  icon: _syncing || mediaUploading
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: iconColor,
-                          ),
-                        )
-                      : Icon(Icons.cloud_sync_outlined,
-                          size: 20, color: iconColor),
-                  onPressed: (_syncing || mediaUploading) ? null : _runSync,
+                  position: PopupMenuPosition.under,
+                  color: context.palette.surfaceElevated,
+                  onSelected: (action) => switch (action) {
+                    _CloudAction.sync => _runSync(),
+                    _CloudAction.history =>
+                      SyncConflictHistorySheet.show(context),
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem<_CloudAction>(
+                      enabled: false,
+                      child: Text(
+                        tooltip,
+                        style: AppTypography.caption(context.palette),
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: _CloudAction.sync,
+                      child: _MenuRow(
+                        icon: Icons.sync,
+                        label: _syncing ? 'Sincronizando…' : 'Sincronizar ahora',
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _CloudAction.history,
+                      child: _MenuRow(
+                        icon: Icons.history,
+                        label: 'Historial de conflictos',
+                        count: unseen,
+                      ),
+                    ),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Badge(
+                      isLabelVisible: unseen > 0,
+                      label: Text('$unseen'),
+                      backgroundColor: context.palette.warning,
+                      child: _syncing || mediaUploading
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: iconColor,
+                              ),
+                            )
+                          : Icon(Icons.cloud_sync_outlined,
+                              size: 20, color: iconColor),
+                    ),
+                  ),
                 ),
               ],
             );
           },
         );
       },
+    );
+  }
+}
+
+enum _CloudAction { sync, history }
+
+class _MenuRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int count;
+
+  const _MenuRow({required this.icon, required this.label, this.count = 0});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: palette.textSecondary),
+        const SizedBox(width: 10),
+        Text(label, style: AppTypography.bodyMedium(palette)),
+        if (count > 0) ...[
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              color: palette.warning.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '$count',
+              style: AppTypography.caption(palette).copyWith(
+                color: palette.warning,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

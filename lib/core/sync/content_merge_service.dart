@@ -12,6 +12,13 @@ import 'project_content_bundle.dart';
 import 'project_content_sync_service.dart';
 import 'sync_merge_store.dart';
 
+class MergeOutcome {
+  final int discarded;
+  final int mine;
+
+  const MergeOutcome({required this.discarded, required this.mine});
+}
+
 /// Resuelve sin preguntar un proyecto cambiado aquí y en la nube: mezcla lo
 /// de los dos lados sobre la base, lo aplica aquí y sube el resultado.
 class ContentMergeService {
@@ -24,10 +31,10 @@ class ContentMergeService {
   /// suyo, como mucho estas veces.
   static const maxAttempts = 3;
 
-  /// Devuelve cuántas ediciones se descartaron (0 si ninguna), o `null` si
-  /// no se pudo mezclar (sin base guardada, o la nube no paraba de cambiar):
-  /// entonces queda para revisarlo como antes.
-  Future<int?> mergeAndSync(int localProjectId, String cloudId) async {
+  /// Devuelve cuántas ediciones se descartaron ([MergeOutcome.mine]: de las
+  /// de este equipo), o `null` si no se pudo mezclar (sin base guardada, o la
+  /// nube no paraba de cambiar): entonces queda para revisarlo como antes.
+  Future<MergeOutcome?> mergeAndSync(int localProjectId, String cloudId) async {
     final syncBase = await ContentSyncBaseStore.load(_db, localProjectId);
     if (syncBase == null) return null;
     final base = await ContentBaseBundleStore.load(
@@ -123,7 +130,12 @@ class ContentMergeService {
           ),
       ]);
 
-      return result.discards.length;
+      return MergeOutcome(
+        discarded: result.discards.length,
+        mine: result.discards
+            .where((d) => d.discardedSide == MergeSide.local)
+            .length,
+      );
     }
     // La nube no paraba de cambiar: aquí no se tocó nada y la próxima pasada
     // lo vuelve a intentar.

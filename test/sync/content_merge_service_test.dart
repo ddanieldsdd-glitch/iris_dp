@@ -157,10 +157,10 @@ void main() {
     await ipad.edit(2, const ShotsCompanion(notes: Value('grúa')));
     await ipadUploads();
 
-    final discarded = await ContentMergeService(mac.db, client)
+    final outcome = await ContentMergeService(mac.db, client)
         .mergeAndSync(mac.projectId, 'c1');
 
-    expect(discarded, 0);
+    expect(outcome!.discarded, 0);
     final shots = await mac.shots();
     expect(shots.map((s) => s.lens), ['35mm', null, null]);
     expect(shots.map((s) => s.notes), [null, 'grúa', null]);
@@ -188,8 +188,10 @@ void main() {
     await ipad.edit(1, const ShotsCompanion(lens: Value('85mm')));
     await ipadUploads();
 
-    await ContentMergeService(mac.db, client).mergeAndSync(mac.projectId, 'c1');
+    final outcome = await ContentMergeService(mac.db, client)
+        .mergeAndSync(mac.projectId, 'c1');
 
+    expect(outcome!.mine, 1);
     expect((await mac.shots()).first.lens, '85mm');
     final log = await SyncConflictLog.list(mac.db);
     expect(log, hasLength(1));
@@ -216,10 +218,10 @@ void main() {
       row['content_hash'] = ProjectContentBundle.hashBundle(content);
     };
 
-    final discarded = await ContentMergeService(mac.db, client)
+    final outcome = await ContentMergeService(mac.db, client)
         .mergeAndSync(mac.projectId, 'c1');
 
-    expect(discarded, 0);
+    expect(outcome!.discarded, 0);
     final shots = await mac.shots();
     expect(shots.map((s) => s.notes), [null, 'grúa', 'añadido entremedias']);
     expect(shots.first.lens, '35mm');
