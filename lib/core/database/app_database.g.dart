@@ -3620,6 +3620,17 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _numberSuffixMeta = const VerificationMeta(
+    'numberSuffix',
+  );
+  @override
+  late final GeneratedColumn<String> numberSuffix = GeneratedColumn<String>(
+    'number_suffix',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
@@ -3854,6 +3865,7 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
     uid,
     projectId,
     number,
+    numberSuffix,
     name,
     locationCanonical,
     locationPureName,
@@ -3910,6 +3922,15 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
       );
     } else if (isInserting) {
       context.missing(_numberMeta);
+    }
+    if (data.containsKey('number_suffix')) {
+      context.handle(
+        _numberSuffixMeta,
+        numberSuffix.isAcceptableOrUnknown(
+          data['number_suffix']!,
+          _numberSuffixMeta,
+        ),
+      );
     }
     if (data.containsKey('name')) {
       context.handle(
@@ -4092,6 +4113,10 @@ class $ScenesTable extends Scenes with TableInfo<$ScenesTable, Scene> {
         DriftSqlType.int,
         data['${effectivePrefix}number'],
       )!,
+      numberSuffix: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}number_suffix'],
+      ),
       name: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}name'],
@@ -4184,6 +4209,7 @@ class Scene extends DataClass implements Insertable<Scene> {
   final String? uid;
   final int projectId;
   final int number;
+  final String? numberSuffix;
   final String name;
   final String locationCanonical;
   final String locationPureName;
@@ -4208,6 +4234,7 @@ class Scene extends DataClass implements Insertable<Scene> {
     this.uid,
     required this.projectId,
     required this.number,
+    this.numberSuffix,
     required this.name,
     required this.locationCanonical,
     required this.locationPureName,
@@ -4237,6 +4264,9 @@ class Scene extends DataClass implements Insertable<Scene> {
     }
     map['project_id'] = Variable<int>(projectId);
     map['number'] = Variable<int>(number);
+    if (!nullToAbsent || numberSuffix != null) {
+      map['number_suffix'] = Variable<String>(numberSuffix);
+    }
     map['name'] = Variable<String>(name);
     map['location_canonical'] = Variable<String>(locationCanonical);
     map['location_pure_name'] = Variable<String>(locationPureName);
@@ -4283,6 +4313,9 @@ class Scene extends DataClass implements Insertable<Scene> {
       uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       projectId: Value(projectId),
       number: Value(number),
+      numberSuffix: numberSuffix == null && nullToAbsent
+          ? const Value.absent()
+          : Value(numberSuffix),
       name: Value(name),
       locationCanonical: Value(locationCanonical),
       locationPureName: Value(locationPureName),
@@ -4333,6 +4366,7 @@ class Scene extends DataClass implements Insertable<Scene> {
       uid: serializer.fromJson<String?>(json['uid']),
       projectId: serializer.fromJson<int>(json['projectId']),
       number: serializer.fromJson<int>(json['number']),
+      numberSuffix: serializer.fromJson<String?>(json['numberSuffix']),
       name: serializer.fromJson<String>(json['name']),
       locationCanonical: serializer.fromJson<String>(json['locationCanonical']),
       locationPureName: serializer.fromJson<String>(json['locationPureName']),
@@ -4362,6 +4396,7 @@ class Scene extends DataClass implements Insertable<Scene> {
       'uid': serializer.toJson<String?>(uid),
       'projectId': serializer.toJson<int>(projectId),
       'number': serializer.toJson<int>(number),
+      'numberSuffix': serializer.toJson<String?>(numberSuffix),
       'name': serializer.toJson<String>(name),
       'locationCanonical': serializer.toJson<String>(locationCanonical),
       'locationPureName': serializer.toJson<String>(locationPureName),
@@ -4389,6 +4424,7 @@ class Scene extends DataClass implements Insertable<Scene> {
     Value<String?> uid = const Value.absent(),
     int? projectId,
     int? number,
+    Value<String?> numberSuffix = const Value.absent(),
     String? name,
     String? locationCanonical,
     String? locationPureName,
@@ -4413,6 +4449,7 @@ class Scene extends DataClass implements Insertable<Scene> {
     uid: uid.present ? uid.value : this.uid,
     projectId: projectId ?? this.projectId,
     number: number ?? this.number,
+    numberSuffix: numberSuffix.present ? numberSuffix.value : this.numberSuffix,
     name: name ?? this.name,
     locationCanonical: locationCanonical ?? this.locationCanonical,
     locationPureName: locationPureName ?? this.locationPureName,
@@ -4451,6 +4488,9 @@ class Scene extends DataClass implements Insertable<Scene> {
       uid: data.uid.present ? data.uid.value : this.uid,
       projectId: data.projectId.present ? data.projectId.value : this.projectId,
       number: data.number.present ? data.number.value : this.number,
+      numberSuffix: data.numberSuffix.present
+          ? data.numberSuffix.value
+          : this.numberSuffix,
       name: data.name.present ? data.name.value : this.name,
       locationCanonical: data.locationCanonical.present
           ? data.locationCanonical.value
@@ -4508,6 +4548,7 @@ class Scene extends DataClass implements Insertable<Scene> {
           ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('number: $number, ')
+          ..write('numberSuffix: $numberSuffix, ')
           ..write('name: $name, ')
           ..write('locationCanonical: $locationCanonical, ')
           ..write('locationPureName: $locationPureName, ')
@@ -4537,6 +4578,7 @@ class Scene extends DataClass implements Insertable<Scene> {
     uid,
     projectId,
     number,
+    numberSuffix,
     name,
     locationCanonical,
     locationPureName,
@@ -4565,6 +4607,7 @@ class Scene extends DataClass implements Insertable<Scene> {
           other.uid == this.uid &&
           other.projectId == this.projectId &&
           other.number == this.number &&
+          other.numberSuffix == this.numberSuffix &&
           other.name == this.name &&
           other.locationCanonical == this.locationCanonical &&
           other.locationPureName == this.locationPureName &&
@@ -4591,6 +4634,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
   final Value<String?> uid;
   final Value<int> projectId;
   final Value<int> number;
+  final Value<String?> numberSuffix;
   final Value<String> name;
   final Value<String> locationCanonical;
   final Value<String> locationPureName;
@@ -4615,6 +4659,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     this.uid = const Value.absent(),
     this.projectId = const Value.absent(),
     this.number = const Value.absent(),
+    this.numberSuffix = const Value.absent(),
     this.name = const Value.absent(),
     this.locationCanonical = const Value.absent(),
     this.locationPureName = const Value.absent(),
@@ -4640,6 +4685,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     this.uid = const Value.absent(),
     required int projectId,
     required int number,
+    this.numberSuffix = const Value.absent(),
     required String name,
     required String locationCanonical,
     required String locationPureName,
@@ -4669,6 +4715,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     Expression<String>? uid,
     Expression<int>? projectId,
     Expression<int>? number,
+    Expression<String>? numberSuffix,
     Expression<String>? name,
     Expression<String>? locationCanonical,
     Expression<String>? locationPureName,
@@ -4694,6 +4741,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
       if (uid != null) 'uid': uid,
       if (projectId != null) 'project_id': projectId,
       if (number != null) 'number': number,
+      if (numberSuffix != null) 'number_suffix': numberSuffix,
       if (name != null) 'name': name,
       if (locationCanonical != null) 'location_canonical': locationCanonical,
       if (locationPureName != null) 'location_pure_name': locationPureName,
@@ -4721,6 +4769,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     Value<String?>? uid,
     Value<int>? projectId,
     Value<int>? number,
+    Value<String?>? numberSuffix,
     Value<String>? name,
     Value<String>? locationCanonical,
     Value<String>? locationPureName,
@@ -4746,6 +4795,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
       uid: uid ?? this.uid,
       projectId: projectId ?? this.projectId,
       number: number ?? this.number,
+      numberSuffix: numberSuffix ?? this.numberSuffix,
       name: name ?? this.name,
       locationCanonical: locationCanonical ?? this.locationCanonical,
       locationPureName: locationPureName ?? this.locationPureName,
@@ -4782,6 +4832,9 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
     }
     if (number.present) {
       map['number'] = Variable<int>(number.value);
+    }
+    if (numberSuffix.present) {
+      map['number_suffix'] = Variable<String>(numberSuffix.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -4850,6 +4903,7 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
           ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('number: $number, ')
+          ..write('numberSuffix: $numberSuffix, ')
           ..write('name: $name, ')
           ..write('locationCanonical: $locationCanonical, ')
           ..write('locationPureName: $locationPureName, ')
@@ -40477,6 +40531,7 @@ typedef $$ScenesTableCreateCompanionBuilder =
       Value<String?> uid,
       required int projectId,
       required int number,
+      Value<String?> numberSuffix,
       required String name,
       required String locationCanonical,
       required String locationPureName,
@@ -40503,6 +40558,7 @@ typedef $$ScenesTableUpdateCompanionBuilder =
       Value<String?> uid,
       Value<int> projectId,
       Value<int> number,
+      Value<String?> numberSuffix,
       Value<String> name,
       Value<String> locationCanonical,
       Value<String> locationPureName,
@@ -40651,6 +40707,11 @@ class $$ScenesTableFilterComposer
 
   ColumnFilters<int> get number => $composableBuilder(
     column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get numberSuffix => $composableBuilder(
+    column: $table.numberSuffix,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -40883,6 +40944,11 @@ class $$ScenesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get numberSuffix => $composableBuilder(
+    column: $table.numberSuffix,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -41055,6 +41121,11 @@ class $$ScenesTableAnnotationComposer
 
   GeneratedColumn<int> get number =>
       $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get numberSuffix => $composableBuilder(
+    column: $table.numberSuffix,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -41291,6 +41362,7 @@ class $$ScenesTableTableManager
                 Value<String?> uid = const Value.absent(),
                 Value<int> projectId = const Value.absent(),
                 Value<int> number = const Value.absent(),
+                Value<String?> numberSuffix = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> locationCanonical = const Value.absent(),
                 Value<String> locationPureName = const Value.absent(),
@@ -41315,6 +41387,7 @@ class $$ScenesTableTableManager
                 uid: uid,
                 projectId: projectId,
                 number: number,
+                numberSuffix: numberSuffix,
                 name: name,
                 locationCanonical: locationCanonical,
                 locationPureName: locationPureName,
@@ -41341,6 +41414,7 @@ class $$ScenesTableTableManager
                 Value<String?> uid = const Value.absent(),
                 required int projectId,
                 required int number,
+                Value<String?> numberSuffix = const Value.absent(),
                 required String name,
                 required String locationCanonical,
                 required String locationPureName,
@@ -41365,6 +41439,7 @@ class $$ScenesTableTableManager
                 uid: uid,
                 projectId: projectId,
                 number: number,
+                numberSuffix: numberSuffix,
                 name: name,
                 locationCanonical: locationCanonical,
                 locationPureName: locationPureName,

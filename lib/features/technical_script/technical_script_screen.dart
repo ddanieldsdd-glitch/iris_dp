@@ -37,6 +37,7 @@ import '../locations/where_field.dart';
 import 'scene_form_sheet.dart';
 import 'table/editable_cell.dart';
 import 'table/script_sheet_theme.dart';
+import 'import/technical_script_import_action.dart';
 import 'technical_script_export.dart';
 import 'technical_script_settings.dart';
 import '../../core/utils/shot_technical_options.dart';
@@ -116,6 +117,12 @@ class TechnicalScriptScreen extends ConsumerWidget {
             ],
           ),
           IconButton(
+            tooltip: 'Importar guion técnico (.docx)',
+            icon: Icon(Icons.upload_file_outlined, color: palette.accent),
+            onPressed: () =>
+                importTechnicalScriptDocx(context, ref, projectId: projectId),
+          ),
+          IconButton(
             tooltip: 'Añadir escena',
             icon: Icon(Icons.add, color: palette.accent),
             onPressed: () => showSceneFormSheet(context, projectId: projectId),
@@ -146,6 +153,16 @@ class TechnicalScriptScreen extends ConsumerWidget {
                             icon: Icons.add,
                             onTap: () => showSceneFormSheet(
                               context,
+                              projectId: projectId,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          AppButton(
+                            label: 'Importar guion técnico (.docx)',
+                            icon: Icons.upload_file_outlined,
+                            onTap: () => importTechnicalScriptDocx(
+                              context,
+                              ref,
                               projectId: projectId,
                             ),
                           ),
@@ -1230,7 +1247,7 @@ class _SceneTitle extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  '¿Dónde ocurre la escena ${scene.number}?',
+                  '¿Dónde ocurre la escena ${scene.label}?',
                   style: AppTypography.titleMedium(palette),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -1288,7 +1305,7 @@ class _SceneTitle extends ConsumerWidget {
 
     return Row(
       children: [
-        Text('${scene.number}.', style: style),
+        Text('${scene.label}.', style: style),
         const SizedBox(width: 3),
         menu(
           scene.intExt,
@@ -1345,7 +1362,7 @@ class _SceneHeader extends ConsumerWidget {
     };
     final ok = await _confirmDelete(
       context,
-      title: 'Eliminar la escena ${scene.number}',
+      title: 'Eliminar la escena ${scene.label}',
       body: '$planos Las demás escenas conservan su número.',
     );
     if (!ok) return;
@@ -1907,7 +1924,7 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                 _Cell(
                   width: cols.esc,
                   alignment: Alignment.center,
-                  child: Text('${scene.number}', style: sheet.text),
+                  child: Text(scene.label, style: sheet.text),
                 ),
                 _Cell(
                   width: cols.plano,
@@ -2185,7 +2202,7 @@ class _PlanCell extends ConsumerWidget {
               ? CameraPlanEditor.shot(
                   projectId: shot.projectId,
                   shotId: shot.id,
-                  shotLabel: 'Esc ${scene.number} · Plano ${shot.number}',
+                  shotLabel: 'Esc ${scene.label} · Plano ${shot.number}',
                 )
               : LocationsScreen(
                   projectId: shot.projectId,

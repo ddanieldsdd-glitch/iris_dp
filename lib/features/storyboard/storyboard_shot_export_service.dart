@@ -22,7 +22,7 @@ class StoryboardShotExportService {
     final safeProject =
         project.name.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
     final base = safeProject.isEmpty ? 'proyecto' : safeProject;
-    final suffix = '_Sc${scene.number}_${shot.number}_${style.artemisFileSuffix}';
+    final suffix = '_Sc${scene.label}_${shot.number}_${style.artemisFileSuffix}';
 
     if (style == StoryboardExportStyle.clean) {
       final copied = await _exportCleanOriginal(shot, base, suffix);

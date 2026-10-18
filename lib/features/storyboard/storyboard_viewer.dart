@@ -194,7 +194,7 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            'Esc ${scene.number} · Plano ${shot.number}',
+                            'Esc ${scene.label} · Plano ${shot.number}',
                             style: AppTypography.titleMedium(palette),
                           ),
                           Text(

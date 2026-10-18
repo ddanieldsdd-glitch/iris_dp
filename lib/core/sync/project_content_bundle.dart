@@ -199,16 +199,17 @@ class ProjectContentBundle {
     // fuera del guion conserva el suyo): la repetida lleva un sufijo, para
     // que sus planos no acaben en la otra al importar.
     final sceneKeyById = <int, String>{};
-    final seenSceneNumbers = <int, int>{};
+    final seenSceneNumbers = <String, int>{};
     for (final s in scenes) {
       final times = seenSceneNumbers.update(
-        s.number,
+        '${s.number}${s.numberSuffix ?? ''}',
         (n) => n + 1,
         ifAbsent: () => 1,
       );
+      final label = '${s.number}${s.numberSuffix ?? ''}';
       sceneKeyById[s.id] = times == 1
-          ? 'scene:${s.number}'
-          : 'scene:${s.number}#$times';
+          ? 'scene:$label'
+          : 'scene:$label#$times';
     }
 
     final sceneById = {for (final s in scenes) s.id: s};
@@ -224,9 +225,12 @@ class ProjectContentBundle {
     ];
     final shotKeyById = <int, String>{};
 
+    // La clave del plano sale de la de su escena: dos escenas con el mismo
+    // número (13A y 13B, o una fuera del guion) no mezclan sus planos.
     for (final shot in shots) {
-      final scene = sceneById[shot.sceneId]!;
-      shotKeyById[shot.id] = 'shot:${scene.number}:${shot.number}';
+      final sceneKey = sceneKeyById[shot.sceneId]!;
+      shotKeyById[shot.id] =
+          'shot:${sceneKey.substring('scene:'.length)}:${shot.number}';
     }
 
     final shotReferences = <Map<String, dynamic>>[];
@@ -637,6 +641,7 @@ class ProjectContentBundle {
               'uid': s.uid,
               'sceneKey': sceneKeyById[s.id],
               'number': s.number,
+              'numberSuffix': s.numberSuffix,
               'name': s.name,
               'locationCanonical': s.locationCanonical,
               'locationPureName': s.locationPureName,
@@ -1473,6 +1478,7 @@ class ProjectContentBundle {
               uid: bundleUid(m['uid']),
               projectId: projectId,
               number: bundleIntOr(m['number'], 0),
+              numberSuffix: Value(m['numberSuffix'] as String?),
               name: m['name'] as String,
               locationCanonical: m['locationCanonical'] as String,
               locationPureName: m['locationPureName'] as String,

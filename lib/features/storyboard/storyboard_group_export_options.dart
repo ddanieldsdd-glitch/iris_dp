@@ -50,7 +50,7 @@ extension StoryboardSequenceLayoutX on StoryboardSequenceLayout {
     final safe =
         project.name.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
     final base = safe.isEmpty ? 'proyecto' : safe;
-    return '${base}_Sc${scene.number}_$artemisFileSuffix.pdf';
+    return '${base}_Sc${scene.label}_$artemisFileSuffix.pdf';
   }
 }
 

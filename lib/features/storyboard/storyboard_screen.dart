@@ -429,7 +429,7 @@ class _StoryboardBody extends ConsumerWidget {
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: Text(
-                          'Esc ${scene.number} · $location',
+                          'Esc ${scene.label} · $location',
                           style: AppTypography.titleMedium(
                             palette,
                           ).copyWith(color: sceneColor),
@@ -670,7 +670,7 @@ class _SceneGridBreakHeader extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              'Esc ${scene.number} · $location',
+              'Esc ${scene.label} · $location',
               style: AppTypography.label(
                 palette,
               ).copyWith(color: color, fontWeight: FontWeight.w700),
@@ -838,7 +838,7 @@ class _SceneBreakMarker extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${scene.number}',
+                  '${scene.label}',
                   style: AppTypography.titleMedium(palette).copyWith(
                     color: color,
                     fontWeight: FontWeight.w800,
@@ -1024,7 +1024,7 @@ class _StoryboardFrame extends ConsumerWidget {
                 left: 8,
                 top: 8,
                 child: _FrameBadge(
-                  label: 'Esc ${scene.number} · ${shot.number}',
+                  label: 'Esc ${scene.label} · ${shot.number}',
                   color: sceneColor,
                 ),
               ),
@@ -1169,7 +1169,7 @@ class _StoryboardFrame extends ConsumerWidget {
                 border: Border.all(color: sceneColor.withValues(alpha: 0.4)),
               ),
               child: Text(
-                'Esc ${scene.number} · $sceneLocation',
+                'Esc ${scene.label} · $sceneLocation',
                 style: AppTypography.caption(palette).copyWith(
                   color: sceneColor,
                   fontWeight: FontWeight.w700,
@@ -1267,7 +1267,7 @@ class _FrameDetailSheet extends ConsumerWidget {
           controller: scrollCtrl,
           children: [
             Text(
-              'Esc ${scene.number} · Plano ${shot.number}',
+              'Esc ${scene.label} · Plano ${shot.number}',
               style: AppTypography.titleLarge(palette),
             ),
             Text(location, style: AppTypography.bodyMedium(palette)),

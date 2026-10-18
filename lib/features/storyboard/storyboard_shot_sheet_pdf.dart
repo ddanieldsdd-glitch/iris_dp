@@ -176,7 +176,7 @@ class StoryboardShotSheetPdf {
                               ),
                               pw.SizedBox(height: 4),
                               pw.Text(
-                                'Sc. ${scene.number}',
+                                'Sc. ${scene.label}',
                                 style: const pw.TextStyle(fontSize: 11),
                               ),
                               pw.Text(

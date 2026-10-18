@@ -290,7 +290,7 @@ class IrisDpExportService {
         .trim()
         .replaceAll(' ', '_')
         .toLowerCase();
-    final safe = slug.isEmpty ? 'escena_${scene.number}' : slug;
+    final safe = slug.isEmpty ? 'escena_${scene.label}' : slug;
     return 'iris_dp_$safe.json';
   }
 

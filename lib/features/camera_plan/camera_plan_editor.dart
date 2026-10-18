@@ -589,7 +589,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         }
         final sceneNumber = allScenes
             .where((s) => s.id == other.sceneId)
-            .map((s) => s.number)
+            .map((s) => s.label)
             .firstOrNull;
         final tag = sceneNumber == null
             ? 'P${other.number}'
@@ -756,7 +756,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           CameraPlanNavTarget(
             shotId: shot.id,
             sceneId: scene.id,
-            sceneNumber: scene.number,
+            sceneNumber: scene.label,
             shotNumber: shot.number,
             sceneName: scene.name,
             sceneColor: color,
@@ -2897,7 +2897,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             ? Row(
                 children: [
                   SceneNumberBadge(
-                    sceneNumber: _scene!.number,
+                    sceneNumber: _scene!.label,
                     color: _sceneColor,
                     size: 28,
                   ),

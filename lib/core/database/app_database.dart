@@ -548,6 +548,10 @@ class AppDatabase extends _$AppDatabase {
         await add(pendingMediaUploads, pendingMediaUploads.fileStamp);
         await add(pendingMediaUploads, pendingMediaUploads.remoteHash);
       }
+      if (from < 53) {
+        // Escenas partidas del guion técnico importado: 13A, 13B.
+        await add(scenes, scenes.numberSuffix);
+      }
     },
   );
 
@@ -4666,8 +4670,13 @@ LazyDatabase _openConnection() {
   });
 }
 
+/// Número visible de la escena, con su letra si la tiene: «13», «13A».
+extension SceneLabel on Scene {
+  String get label => '$number${numberSuffix ?? ''}';
+}
+
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 52;
+const kSchemaVersion = 53;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

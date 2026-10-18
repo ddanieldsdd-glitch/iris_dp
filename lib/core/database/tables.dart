@@ -81,6 +81,8 @@ class Scenes extends Table {
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
   IntColumn get number => integer()();
+  // Letra tras el número, para escenas partidas: 13A, 13B (schemaVersion 53).
+  TextColumn get numberSuffix => text().nullable()();
   TextColumn get name => text()();
   // Nombre visible editable: ej. "La huida de Gala"
   TextColumn get locationCanonical => text()();

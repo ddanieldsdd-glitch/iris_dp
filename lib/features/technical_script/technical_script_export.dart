@@ -72,7 +72,7 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
     sections.add(
       ScriptDocSection(
         title:
-            '${scene.number}. ${scene.locationCanonical}'
+            '${scene.label}. ${scene.locationCanonical}'
             '${scene.offScript ? ' (fuera del guion)' : ''}',
         headerFill: _rgb(sheet.headerFill(colors.sceneColor(scene))),
         rows: rows,
@@ -137,7 +137,7 @@ Future<ScriptDocRow> _docRow(
   return ScriptDocRow(
     cells: {
       if (order != null) 'orden': '$order',
-      'esc': '${scene.number}',
+      'esc': scene.label,
       'plano': '${shot.number}',
       'encuadre': shot.framing ?? '',
       'lens': [
@@ -343,7 +343,7 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
     if (scene == null || rows.isEmpty) return;
     sections.add(
       ScriptDocSection(
-        title: '${scene.number}. ${scene.locationCanonical}',
+        title: '${scene.label}. ${scene.locationCanonical}',
         headerFill: _rgb(sheet.headerFill(colors.sceneColor(scene))),
         rows: rows,
       ),

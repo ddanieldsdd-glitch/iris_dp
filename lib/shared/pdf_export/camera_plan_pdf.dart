@@ -321,7 +321,7 @@ class CameraPlanPdfExporter {
     for (final scene in ordered) {
       blocks.add(
         pw.Text(
-          'Esc ${scene.number} · ${scene.locationCanonical}',
+          'Esc ${scene.label} · ${scene.locationCanonical}',
           style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
         ),
       );
