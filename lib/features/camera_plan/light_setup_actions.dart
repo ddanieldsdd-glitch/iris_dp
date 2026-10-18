@@ -100,6 +100,7 @@ class LightSetupMenuButton extends ConsumerWidget {
               value: 'paste',
               child: PlanMenuRow('Pegar «${clip!.name}» al lado', '⌘V'),
             ),
+          const PopupMenuItem(value: 'clear', child: Text('Vaciar planta…')),
           const PopupMenuItem(
             value: 'delete',
             child: PlanMenuRow('Borrar', 'Supr'),
@@ -171,6 +172,8 @@ class LightSetupMenuButton extends ConsumerWidget {
         await LightSetupActions(context, db, setup, shotCount).duplicate();
       case 'paste':
         await LightSetupActions(context, db, setup, shotCount).pasteBeside();
+      case 'clear':
+        await LightSetupActions(context, db, setup, shotCount).clear();
       case 'delete':
         await LightSetupActions(context, db, setup, shotCount).delete();
     }

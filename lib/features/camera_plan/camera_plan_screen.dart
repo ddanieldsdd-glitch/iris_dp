@@ -18,6 +18,7 @@ import 'plan_global_map.dart';
 import 'plan_index.dart';
 import 'plan_scene_board.dart';
 import 'plan_target.dart';
+import 'plan_trash_ui.dart';
 import 'plan_workspace_screen.dart';
 
 /// Entrada a las plantas de luz y cámara. A la izquierda, el índice
@@ -93,6 +94,11 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
               PopupMenuItem(value: 'site', child: Text('Nueva localización')),
               PopupMenuItem(value: 'free', child: Text('Nueva planta libre')),
             ],
+          ),
+          IconButton(
+            tooltip: 'Papelera de plantas',
+            icon: Icon(Icons.delete_outline, color: palette.textSecondary),
+            onPressed: () => PlanTrashScreen.open(context, projectId),
           ),
           GoodNotesPdfActions(
             projectId: projectId,

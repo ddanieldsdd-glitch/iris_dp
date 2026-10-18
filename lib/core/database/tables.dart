@@ -928,3 +928,21 @@ class VisualBibleDocuments extends Table {
       integer().withDefault(const Constant(1))();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
+
+/// Papelera de la planta de luz y cámara (schemaVersion 53). Cada entrada es
+/// una foto de lo borrado o vaciado (localización con sus sets, set con sus
+/// esquemas y las cámaras de sus planos, contenido de una planta), para
+/// devolverlo tal cual. Es de este equipo: no viaja en la sincronización.
+@DataClassName('PlanTrashEntry')
+class PlanTrash extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  TextColumn get kind => text()();
+  // site | set | light_setup | plan_contents
+  TextColumn get label => text()();
+  // «Localización «Bosque»», para la lista de la papelera
+  TextColumn get detail => text().nullable()();
+  // «2 sets · 3 planos sin planta»
+  TextColumn get payloadJson => text()();
+  DateTimeColumn get deletedAt => dateTime().withDefault(currentDateAndTime)();
+}

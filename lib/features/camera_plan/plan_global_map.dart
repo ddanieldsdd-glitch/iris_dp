@@ -14,6 +14,7 @@ import 'plan_item_actions.dart';
 import 'plan_shot_card.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
+import 'plan_trash_ui.dart';
 
 /// Mapa global de plantas: cada localización con su entorno, sus sets y los
 /// esquemas de luz de cada set, en miniaturas. Tocar una abre la pantalla de
@@ -232,6 +233,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
             ),
             onTap: () => widget.onOpen(PlanTarget.site(site.id, site.name)),
           ),
+          SiteMenuButton(site: site),
         ],
       ),
       children: [

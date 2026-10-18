@@ -83,6 +83,7 @@ typedef WorkspaceScene = ({
     CloudSyncQueue,
     PendingMediaUploads,
     VisualBibleDocuments,
+    PlanTrash,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -547,6 +548,10 @@ class AppDatabase extends _$AppDatabase {
         // la nube aunque conserve la ruta.
         await add(pendingMediaUploads, pendingMediaUploads.fileStamp);
         await add(pendingMediaUploads, pendingMediaUploads.remoteHash);
+      }
+      if (from < 53) {
+        // Papelera de la planta: borrar o vaciar se puede deshacer.
+        await m.createTable(planTrash);
       }
     },
   );
@@ -4667,7 +4672,7 @@ LazyDatabase _openConnection() {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 52;
+const kSchemaVersion = 53;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

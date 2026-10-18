@@ -35,6 +35,7 @@ import 'plan_light_map.dart';
 import 'plan_project_gear_dialog.dart';
 import 'plan_marks.dart';
 import 'plan_room_panel.dart';
+import 'plan_trash_ui.dart';
 import 'light/ambient.dart';
 import 'light/exposure.dart';
 import 'light_overrides.dart';
@@ -2880,6 +2881,65 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     );
   }
 
+  /// «Vaciar planta»: cada capa abierta se puede empezar de cero. Lo
+  /// vaciado va a la Papelera de plantas.
+  Widget _clearPlanMenu(AppPalette palette) {
+    final site = _linkedSite;
+    final set = _linkedSet;
+    final setup = _lightSetup;
+    final siteId = site?.id ?? widget.siteId;
+    final options = <(FloorPlanScope, int, String, String)>[
+      if (siteId != null)
+        (
+          FloorPlanScope.site,
+          siteId,
+          site?.name ?? widget.label,
+          'Vaciar el entorno (localización)…',
+        ),
+      if (set != null || widget.setId != null)
+        (
+          FloorPlanScope.set,
+          set?.id ?? widget.setId!,
+          set?.locationName ?? widget.label,
+          'Vaciar el set…',
+        ),
+      if (setup != null)
+        (FloorPlanScope.lightSetup, setup.id, setup.name, 'Vaciar la luz…'),
+      if (_isShotMode && widget.shotId != null)
+        (
+          FloorPlanScope.shot,
+          widget.shotId!,
+          widget.label,
+          'Vaciar las cámaras y actores del plano…',
+        ),
+    ];
+    if (options.isEmpty) return const SizedBox.shrink();
+    return PopupMenuButton<int>(
+      tooltip: 'Vaciar planta',
+      icon: Icon(Icons.layers_clear_outlined, color: palette.textSecondary),
+      onSelected: (i) async {
+        final (scope, id, name, _) = options[i];
+        final cleared = await confirmClearPlan(
+          context,
+          ref.read(databaseProvider),
+          scope: scope,
+          id: id,
+          name: name,
+          // «Deshacer» devuelve la planta: hay que volver a leerla, o lo
+          // siguiente que se guarde la pisaría.
+          onRestored: () {
+            if (mounted) _load();
+          },
+        );
+        if (cleared && mounted) await _load();
+      },
+      itemBuilder: (_) => [
+        for (final (i, option) in options.indexed)
+          PopupMenuItem(value: i, child: Text(option.$4)),
+      ],
+    );
+  }
+
   /// Con sitio de sobra, la paleta va fija a la izquierda y el panel de
   /// material y propiedades a la derecha.
   bool _wide = false;
@@ -2965,6 +3025,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               _selectedPathIndex = null;
             }),
           ),
+          _clearPlanMenu(palette),
           IconButton(
             tooltip: 'Deshacer',
             icon: const Icon(Icons.undo),

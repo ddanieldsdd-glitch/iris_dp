@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show BooleanExpressionOperators;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iris_dp/core/database/app_database.dart';
@@ -100,5 +101,40 @@ void main() {
       db.lightSetups,
     )..where((s) => s.projectId.equals(target))).getSingle();
     expect((await drawingsOf(target)).single.targetId, '${setup.id}');
+  });
+
+  test('el boceto de una ficha de luz de la biblia vuelve a su ficha', () async {
+    final bible = await db.ensureVisualBibleForProject(projectId);
+    // Una ficha antes para que los ids de los dos proyectos no coincidan.
+    await db
+        .into(db.lightingSetups)
+        .insert(
+          LightingSetupsCompanion.insert(
+            bibleId: bible.id,
+            setupName: 'Relleno',
+            diagramJson: '{}',
+          ),
+        );
+    final lightingId = await db
+        .into(db.lightingSetups)
+        .insert(
+          LightingSetupsCompanion.insert(
+            bibleId: bible.id,
+            setupName: 'Clave',
+            diagramJson: '{}',
+          ),
+        );
+    await addDrawing('lighting_setup', '$lightingId');
+    final bundle = await ProjectContentBundle.export(db, projectId);
+    final target = await db.insertProject(ProjectsCompanion.insert(name: 'otro'));
+
+    await ProjectContentBundle.importBundle(db, target, bundle);
+
+    final targetBible = await db.ensureVisualBibleForProject(target);
+    final clave = await (db.select(db.lightingSetups)..where(
+          (s) => s.bibleId.equals(targetBible.id) & s.setupName.equals('Clave'),
+        ))
+        .getSingle();
+    expect((await drawingsOf(target)).single.targetId, '${clave.id}');
   });
 }

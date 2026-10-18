@@ -35102,6 +35102,454 @@ class VisualBibleDocumentsCompanion
   }
 }
 
+class $PlanTrashTable extends PlanTrash
+    with TableInfo<$PlanTrashTable, PlanTrashEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PlanTrashTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailMeta = const VerificationMeta('detail');
+  @override
+  late final GeneratedColumn<String> detail = GeneratedColumn<String>(
+    'detail',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    projectId,
+    kind,
+    label,
+    detail,
+    payloadJson,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'plan_trash';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PlanTrashEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_labelMeta);
+    }
+    if (data.containsKey('detail')) {
+      context.handle(
+        _detailMeta,
+        detail.isAcceptableOrUnknown(data['detail']!, _detailMeta),
+      );
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadJsonMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PlanTrashEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PlanTrashEntry(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      label: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}label'],
+      )!,
+      detail: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}detail'],
+      ),
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PlanTrashTable createAlias(String alias) {
+    return $PlanTrashTable(attachedDatabase, alias);
+  }
+}
+
+class PlanTrashEntry extends DataClass implements Insertable<PlanTrashEntry> {
+  final int id;
+  final int projectId;
+  final String kind;
+  final String label;
+  final String? detail;
+  final String payloadJson;
+  final DateTime deletedAt;
+  const PlanTrashEntry({
+    required this.id,
+    required this.projectId,
+    required this.kind,
+    required this.label,
+    this.detail,
+    required this.payloadJson,
+    required this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['project_id'] = Variable<int>(projectId);
+    map['kind'] = Variable<String>(kind);
+    map['label'] = Variable<String>(label);
+    if (!nullToAbsent || detail != null) {
+      map['detail'] = Variable<String>(detail);
+    }
+    map['payload_json'] = Variable<String>(payloadJson);
+    map['deleted_at'] = Variable<DateTime>(deletedAt);
+    return map;
+  }
+
+  PlanTrashCompanion toCompanion(bool nullToAbsent) {
+    return PlanTrashCompanion(
+      id: Value(id),
+      projectId: Value(projectId),
+      kind: Value(kind),
+      label: Value(label),
+      detail: detail == null && nullToAbsent
+          ? const Value.absent()
+          : Value(detail),
+      payloadJson: Value(payloadJson),
+      deletedAt: Value(deletedAt),
+    );
+  }
+
+  factory PlanTrashEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PlanTrashEntry(
+      id: serializer.fromJson<int>(json['id']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      kind: serializer.fromJson<String>(json['kind']),
+      label: serializer.fromJson<String>(json['label']),
+      detail: serializer.fromJson<String?>(json['detail']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+      deletedAt: serializer.fromJson<DateTime>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'projectId': serializer.toJson<int>(projectId),
+      'kind': serializer.toJson<String>(kind),
+      'label': serializer.toJson<String>(label),
+      'detail': serializer.toJson<String?>(detail),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+      'deletedAt': serializer.toJson<DateTime>(deletedAt),
+    };
+  }
+
+  PlanTrashEntry copyWith({
+    int? id,
+    int? projectId,
+    String? kind,
+    String? label,
+    Value<String?> detail = const Value.absent(),
+    String? payloadJson,
+    DateTime? deletedAt,
+  }) => PlanTrashEntry(
+    id: id ?? this.id,
+    projectId: projectId ?? this.projectId,
+    kind: kind ?? this.kind,
+    label: label ?? this.label,
+    detail: detail.present ? detail.value : this.detail,
+    payloadJson: payloadJson ?? this.payloadJson,
+    deletedAt: deletedAt ?? this.deletedAt,
+  );
+  PlanTrashEntry copyWithCompanion(PlanTrashCompanion data) {
+    return PlanTrashEntry(
+      id: data.id.present ? data.id.value : this.id,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      label: data.label.present ? data.label.value : this.label,
+      detail: data.detail.present ? data.detail.value : this.detail,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlanTrashEntry(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('kind: $kind, ')
+          ..write('label: $label, ')
+          ..write('detail: $detail, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, projectId, kind, label, detail, payloadJson, deletedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PlanTrashEntry &&
+          other.id == this.id &&
+          other.projectId == this.projectId &&
+          other.kind == this.kind &&
+          other.label == this.label &&
+          other.detail == this.detail &&
+          other.payloadJson == this.payloadJson &&
+          other.deletedAt == this.deletedAt);
+}
+
+class PlanTrashCompanion extends UpdateCompanion<PlanTrashEntry> {
+  final Value<int> id;
+  final Value<int> projectId;
+  final Value<String> kind;
+  final Value<String> label;
+  final Value<String?> detail;
+  final Value<String> payloadJson;
+  final Value<DateTime> deletedAt;
+  const PlanTrashCompanion({
+    this.id = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.label = const Value.absent(),
+    this.detail = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+  });
+  PlanTrashCompanion.insert({
+    this.id = const Value.absent(),
+    required int projectId,
+    required String kind,
+    required String label,
+    this.detail = const Value.absent(),
+    required String payloadJson,
+    this.deletedAt = const Value.absent(),
+  }) : projectId = Value(projectId),
+       kind = Value(kind),
+       label = Value(label),
+       payloadJson = Value(payloadJson);
+  static Insertable<PlanTrashEntry> custom({
+    Expression<int>? id,
+    Expression<int>? projectId,
+    Expression<String>? kind,
+    Expression<String>? label,
+    Expression<String>? detail,
+    Expression<String>? payloadJson,
+    Expression<DateTime>? deletedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (projectId != null) 'project_id': projectId,
+      if (kind != null) 'kind': kind,
+      if (label != null) 'label': label,
+      if (detail != null) 'detail': detail,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+    });
+  }
+
+  PlanTrashCompanion copyWith({
+    Value<int>? id,
+    Value<int>? projectId,
+    Value<String>? kind,
+    Value<String>? label,
+    Value<String?>? detail,
+    Value<String>? payloadJson,
+    Value<DateTime>? deletedAt,
+  }) {
+    return PlanTrashCompanion(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      kind: kind ?? this.kind,
+      label: label ?? this.label,
+      detail: detail ?? this.detail,
+      payloadJson: payloadJson ?? this.payloadJson,
+      deletedAt: deletedAt ?? this.deletedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (detail.present) {
+      map['detail'] = Variable<String>(detail.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlanTrashCompanion(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('kind: $kind, ')
+          ..write('label: $label, ')
+          ..write('detail: $detail, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -35173,6 +35621,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $PendingMediaUploadsTable(this);
   late final $VisualBibleDocumentsTable visualBibleDocuments =
       $VisualBibleDocumentsTable(this);
+  late final $PlanTrashTable planTrash = $PlanTrashTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -35220,6 +35669,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     cloudSyncQueue,
     pendingMediaUploads,
     visualBibleDocuments,
+    planTrash,
   ];
 }
 
@@ -35926,6 +36376,24 @@ final class $$ProjectsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$PlanTrashTable, List<PlanTrashEntry>>
+  _planTrashRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.planTrash,
+    aliasName: $_aliasNameGenerator(db.projects.id, db.planTrash.projectId),
+  );
+
+  $$PlanTrashTableProcessedTableManager get planTrashRefs {
+    final manager = $$PlanTrashTableTableManager(
+      $_db,
+      $_db.planTrash,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_planTrashRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ProjectsTableFilterComposer
@@ -36483,6 +36951,31 @@ class $$ProjectsTableFilterComposer
           }) => $$VisualBibleDocumentsTableFilterComposer(
             $db: $db,
             $table: $db.visualBibleDocuments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> planTrashRefs(
+    Expression<bool> Function($$PlanTrashTableFilterComposer f) f,
+  ) {
+    final $$PlanTrashTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.planTrash,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PlanTrashTableFilterComposer(
+            $db: $db,
+            $table: $db.planTrash,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -37203,6 +37696,31 @@ class $$ProjectsTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> planTrashRefs<T extends Object>(
+    Expression<T> Function($$PlanTrashTableAnnotationComposer a) f,
+  ) {
+    final $$PlanTrashTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.planTrash,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PlanTrashTableAnnotationComposer(
+            $db: $db,
+            $table: $db.planTrash,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ProjectsTableTableManager
@@ -37236,6 +37754,7 @@ class $$ProjectsTableTableManager
             bool opticsLabSamplesRefs,
             bool pendingMediaUploadsRefs,
             bool visualBibleDocumentsRefs,
+            bool planTrashRefs,
           })
         > {
   $$ProjectsTableTableManager(_$AppDatabase db, $ProjectsTable table)
@@ -37392,6 +37911,7 @@ class $$ProjectsTableTableManager
                 opticsLabSamplesRefs = false,
                 pendingMediaUploadsRefs = false,
                 visualBibleDocumentsRefs = false,
+                planTrashRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -37413,6 +37933,7 @@ class $$ProjectsTableTableManager
                     if (opticsLabSamplesRefs) db.opticsLabSamples,
                     if (pendingMediaUploadsRefs) db.pendingMediaUploads,
                     if (visualBibleDocumentsRefs) db.visualBibleDocuments,
+                    if (planTrashRefs) db.planTrash,
                   ],
                   addJoins:
                       <
@@ -37784,6 +38305,27 @@ class $$ProjectsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (planTrashRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          PlanTrashEntry
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._planTrashRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).planTrashRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -37822,6 +38364,7 @@ typedef $$ProjectsTableProcessedTableManager =
         bool opticsLabSamplesRefs,
         bool pendingMediaUploadsRefs,
         bool visualBibleDocumentsRefs,
+        bool planTrashRefs,
       })
     >;
 typedef $$LocationSitesTableCreateCompanionBuilder =
@@ -63918,6 +64461,359 @@ typedef $$VisualBibleDocumentsTableProcessedTableManager =
       VisualBibleDocument,
       PrefetchHooks Function({bool bibleId, bool projectId})
     >;
+typedef $$PlanTrashTableCreateCompanionBuilder =
+    PlanTrashCompanion Function({
+      Value<int> id,
+      required int projectId,
+      required String kind,
+      required String label,
+      Value<String?> detail,
+      required String payloadJson,
+      Value<DateTime> deletedAt,
+    });
+typedef $$PlanTrashTableUpdateCompanionBuilder =
+    PlanTrashCompanion Function({
+      Value<int> id,
+      Value<int> projectId,
+      Value<String> kind,
+      Value<String> label,
+      Value<String?> detail,
+      Value<String> payloadJson,
+      Value<DateTime> deletedAt,
+    });
+
+final class $$PlanTrashTableReferences
+    extends BaseReferences<_$AppDatabase, $PlanTrashTable, PlanTrashEntry> {
+  $$PlanTrashTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.planTrash.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$PlanTrashTableFilterComposer
+    extends Composer<_$AppDatabase, $PlanTrashTable> {
+  $$PlanTrashTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detail => $composableBuilder(
+    column: $table.detail,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PlanTrashTableOrderingComposer
+    extends Composer<_$AppDatabase, $PlanTrashTable> {
+  $$PlanTrashTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detail => $composableBuilder(
+    column: $table.detail,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PlanTrashTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PlanTrashTable> {
+  $$PlanTrashTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<String> get detail =>
+      $composableBuilder(column: $table.detail, builder: (column) => column);
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PlanTrashTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PlanTrashTable,
+          PlanTrashEntry,
+          $$PlanTrashTableFilterComposer,
+          $$PlanTrashTableOrderingComposer,
+          $$PlanTrashTableAnnotationComposer,
+          $$PlanTrashTableCreateCompanionBuilder,
+          $$PlanTrashTableUpdateCompanionBuilder,
+          (PlanTrashEntry, $$PlanTrashTableReferences),
+          PlanTrashEntry,
+          PrefetchHooks Function({bool projectId})
+        > {
+  $$PlanTrashTableTableManager(_$AppDatabase db, $PlanTrashTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PlanTrashTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PlanTrashTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PlanTrashTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String> label = const Value.absent(),
+                Value<String?> detail = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<DateTime> deletedAt = const Value.absent(),
+              }) => PlanTrashCompanion(
+                id: id,
+                projectId: projectId,
+                kind: kind,
+                label: label,
+                detail: detail,
+                payloadJson: payloadJson,
+                deletedAt: deletedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int projectId,
+                required String kind,
+                required String label,
+                Value<String?> detail = const Value.absent(),
+                required String payloadJson,
+                Value<DateTime> deletedAt = const Value.absent(),
+              }) => PlanTrashCompanion.insert(
+                id: id,
+                projectId: projectId,
+                kind: kind,
+                label: label,
+                detail: detail,
+                payloadJson: payloadJson,
+                deletedAt: deletedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$PlanTrashTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({projectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (projectId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.projectId,
+                                referencedTable: $$PlanTrashTableReferences
+                                    ._projectIdTable(db),
+                                referencedColumn: $$PlanTrashTableReferences
+                                    ._projectIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$PlanTrashTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PlanTrashTable,
+      PlanTrashEntry,
+      $$PlanTrashTableFilterComposer,
+      $$PlanTrashTableOrderingComposer,
+      $$PlanTrashTableAnnotationComposer,
+      $$PlanTrashTableCreateCompanionBuilder,
+      $$PlanTrashTableUpdateCompanionBuilder,
+      (PlanTrashEntry, $$PlanTrashTableReferences),
+      PlanTrashEntry,
+      PrefetchHooks Function({bool projectId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -64022,4 +64918,6 @@ class $AppDatabaseManager {
       $$PendingMediaUploadsTableTableManager(_db, _db.pendingMediaUploads);
   $$VisualBibleDocumentsTableTableManager get visualBibleDocuments =>
       $$VisualBibleDocumentsTableTableManager(_db, _db.visualBibleDocuments);
+  $$PlanTrashTableTableManager get planTrash =>
+      $$PlanTrashTableTableManager(_db, _db.planTrash);
 }

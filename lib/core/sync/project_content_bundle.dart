@@ -368,6 +368,8 @@ class ProjectContentBundle {
     final bibleComments = <Map<String, dynamic>>[];
     final exposureBlocks = <Map<String, dynamic>>[];
     final lightingSetups = <Map<String, dynamic>>[];
+    // Fichas de luz de la biblia por id: sus dibujos viajan con su uid.
+    final lightingKeyById = <int, String>{};
     final cameraTests = <Map<String, dynamic>>[];
     final visualBibleDocuments = <Map<String, dynamic>>[];
     final narrativeCards = <Map<String, dynamic>>[];
@@ -472,6 +474,7 @@ class ProjectContentBundle {
         db.lightingSetups,
       )..where((s) => s.bibleId.equals(vb.id))).get();
       for (final setup in setups) {
+        if (setup.uid != null) lightingKeyById[setup.id] = setup.uid!;
         lightingSetups.add({
           'uid': setup.uid,
           'bibleKey': vbKey,
@@ -816,6 +819,7 @@ class ProjectContentBundle {
                 shotKeyById: shotKeyById,
                 moodboardKeyById: moodboardKeyById,
                 lightSetupKeyById: lightSetupKeyById,
+                lightingKeyById: lightingKeyById,
               )
               case final exported?)
             exported,
@@ -832,6 +836,7 @@ class ProjectContentBundle {
     'camera_plan_shot',
     'camera_plan_light_setup',
     'moodboard_image',
+    'lighting_setup',
   };
 
   /// Un documento de dibujo para el bundle, o nulo si su destino ya no
@@ -844,6 +849,7 @@ class ProjectContentBundle {
     required Map<int, String> shotKeyById,
     required Map<int, String> moodboardKeyById,
     required Map<int, String> lightSetupKeyById,
+    required Map<int, String> lightingKeyById,
   }) {
         final numericTargetId = int.tryParse(document.targetId);
         final targetKey = switch (document.targetType) {
@@ -857,6 +863,8 @@ class ProjectContentBundle {
             numericTargetId != null ? moodboardKeyById[numericTargetId] : null,
           'camera_plan_light_setup' =>
             numericTargetId != null ? lightSetupKeyById[numericTargetId] : null,
+          'lighting_setup' =>
+            numericTargetId != null ? lightingKeyById[numericTargetId] : null,
           _ => null,
         };
         if (_keyedAnnotationTargets.contains(document.targetType) &&
@@ -2028,11 +2036,12 @@ class ProjectContentBundle {
           );
     }
 
+    final lightingKeyToId = <String, int>{};
     for (final row in bundle['lightingSetups'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final bibleId = vbKeyToId[m['bibleKey'] as String];
       if (bibleId == null) continue;
-      await db
+      final lightingId = await db
           .into(db.lightingSetups)
           .insert(
             LightingSetupsCompanion.insert(
@@ -2050,6 +2059,7 @@ class ProjectContentBundle {
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
             ),
           );
+      if (m['uid'] case final String uid) lightingKeyToId[uid] = lightingId;
     }
 
     for (final row in bundle['cameraTests'] as List? ?? []) {
@@ -2125,6 +2135,8 @@ class ProjectContentBundle {
           targetKey != null ? moodboardKeyToId[targetKey]?.toString() : null,
         'camera_plan_light_setup' =>
           targetKey != null ? lightSetupKeyToId[targetKey]?.toString() : null,
+        'lighting_setup' =>
+          targetKey != null ? lightingKeyToId[targetKey]?.toString() : null,
         _ => null,
       };
       // Un dibujo de una fila que no ha llegado no tiene adónde ir: tomar el
