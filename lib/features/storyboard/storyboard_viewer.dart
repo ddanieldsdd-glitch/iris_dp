@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
+import '../../core/sync/editing_guard.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -405,9 +406,13 @@ class _TitleFieldState extends State<_TitleField> {
     widget.onChanged(text);
   }
 
+  /// Mientras se escribe no se baja nada de la nube.
+  VoidCallback? _releaseGuard;
+
   @override
   void dispose() {
     _commit();
+    _releaseGuard?.call();
     _ctrl.dispose();
     super.dispose();
   }
@@ -417,7 +422,13 @@ class _TitleFieldState extends State<_TitleField> {
     final palette = context.palette;
     return Focus(
       onFocusChange: (focused) {
-        if (!focused) _commit();
+        if (focused) {
+          _releaseGuard ??= EditingGuard.hold();
+          return;
+        }
+        _commit();
+        _releaseGuard?.call();
+        _releaseGuard = null;
       },
       child: TextField(
         controller: _ctrl,

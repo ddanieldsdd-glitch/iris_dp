@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/sync/editing_guard.dart';
 import '../../../shared/rich_text/script_markup.dart';
 
 /// Campo de texto con formato que se está editando ahora, si lo hay. La
@@ -193,6 +194,8 @@ class _EditableCellState extends State<EditableCell> {
     if (_restFocus.hasFocus && !_editing) _startEditing();
   }
 
+  VoidCallback? _releaseGuard;
+
   void _startEditing([Offset? tapPosition]) {
     if (_editing) return;
     var offset = _value.length;
@@ -214,6 +217,8 @@ class _EditableCellState extends State<EditableCell> {
     }
     final focus = FocusNode(debugLabel: 'EditableCell.edit')
       ..addListener(_onEditFocus);
+    // Mientras se escribe no se baja nada de la nube.
+    _releaseGuard = EditingGuard.hold();
     setState(() {
       _editFocus = focus;
       final value = TextEditingValue(
@@ -256,12 +261,15 @@ class _EditableCellState extends State<EditableCell> {
       ctrl.dispose();
     });
     if (text != _value) widget.onChanged(text);
+    _releaseGuard?.call();
+    _releaseGuard = null;
   }
 
   @override
   void dispose() {
     final ctrl = _ctrl;
     if (ctrl != null && ctrl.text != _value) widget.onChanged(ctrl.text);
+    _releaseGuard?.call();
     if (ctrl != null && activeScriptEditor.value == ctrl) {
       // Fuera de este momento: avisar a la barra mientras se desmonta la
       // celda rompería el repintado.

@@ -10,6 +10,7 @@ import '../database/database_provider.dart';
 import '../utils/error_log.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/sync/sync_conflict_history_sheet.dart';
+import 'editing_guard.dart';
 import 'sync_engine.dart';
 import 'sync_plan_applier.dart';
 
@@ -46,6 +47,7 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    EditingGuard.active.addListener(_onEditingChanged);
     _startTicker();
     final db = ref.read(databaseProvider);
     // Cada edición deja una entrada en la cola de contenido: cuando crece,
@@ -60,6 +62,7 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    EditingGuard.active.removeListener(_onEditingChanged);
     _ticker?.cancel();
     _editDebounce?.cancel();
     _queueWatch?.cancel();
@@ -91,6 +94,13 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
         // En el Mac es solo perder el foco: la ventana sigue a la vista.
         break;
     }
+  }
+
+  /// Al salir del campo se aplica lo que se retuvo mientras se escribía.
+  void _onEditingChanged() {
+    if (EditingGuard.isEditing) return;
+    if (!ref.read(syncEngineProvider).hasHeldDownloads) return;
+    _run(full: false);
   }
 
   void _startTicker() {
