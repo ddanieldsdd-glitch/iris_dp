@@ -157,6 +157,17 @@ class EditableCell extends StatefulWidget {
   /// Admite negrita, cursiva, subrayado y marcador.
   final bool rich;
 
+  /// Lo que se va escribiendo, para enseñarlo en vivo en otro equipo.
+  final ValueChanged<String>? onTyping;
+
+  /// Se deja de escribir en la celda (se haya guardado o no).
+  final VoidCallback? onEditEnd;
+
+  /// Lo que otro equipo está escribiendo aquí ahora: se enseña en su color,
+  /// con su cursor, en vez del valor guardado.
+  final String? liveText;
+  final Color? liveColor;
+
   const EditableCell({
     super.key,
     required this.value,
@@ -167,6 +178,10 @@ class EditableCell extends StatefulWidget {
     this.textAlign = TextAlign.start,
     this.minLines = 1,
     this.rich = false,
+    this.onTyping,
+    this.onEditEnd,
+    this.liveText,
+    this.liveColor,
   });
 
   @override
@@ -230,6 +245,17 @@ class _EditableCellState extends State<EditableCell> {
           : TextEditingController.fromValue(value);
     });
     if (widget.rich) activeScriptEditor.value = _ctrl;
+    final onTyping = widget.onTyping;
+    if (onTyping != null) {
+      final ctrl = _ctrl!;
+      var last = ctrl.text;
+      ctrl.addListener(() {
+        // También avisa al mover el cursor: solo cuenta si cambia el texto.
+        if (ctrl.text == last) return;
+        last = ctrl.text;
+        onTyping(widget.rich ? scriptMarkupToPlain(last) : last);
+      });
+    }
     focus.requestFocus();
   }
 
@@ -263,6 +289,7 @@ class _EditableCellState extends State<EditableCell> {
     if (text != _value) widget.onChanged(text);
     _releaseGuard?.call();
     _releaseGuard = null;
+    widget.onEditEnd?.call();
   }
 
   @override
@@ -270,6 +297,7 @@ class _EditableCellState extends State<EditableCell> {
     final ctrl = _ctrl;
     if (ctrl != null && ctrl.text != _value) widget.onChanged(ctrl.text);
     _releaseGuard?.call();
+    if (ctrl != null) widget.onEditEnd?.call();
     if (ctrl != null && activeScriptEditor.value == ctrl) {
       // Fuera de este momento: avisar a la barra mientras se desmonta la
       // celda rompería el repintado.
@@ -350,7 +378,14 @@ class _EditableCellState extends State<EditableCell> {
               minWidth: double.infinity,
             ),
             // Sin formato es texto normal, que es más barato de pintar.
-            child: _value.isEmpty || !widget.rich || !_hasFormat
+            child: widget.liveText != null
+                ? _LiveText(
+                    text: widget.liveText!,
+                    style: widget.style,
+                    color: widget.liveColor ?? widget.style.color,
+                    textAlign: widget.textAlign,
+                  )
+                : _value.isEmpty || !widget.rich || !_hasFormat
                 ? Text(
                     _value.isEmpty ? widget.hint : _value,
                     textAlign: widget.textAlign,
@@ -372,6 +407,45 @@ class _EditableCellState extends State<EditableCell> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Lo que otro equipo escribe en esta celda: en su color, en cursiva y con
+/// un cursor al final, para que se vea que está pasando ahora.
+class _LiveText extends StatelessWidget {
+  final String text;
+  final TextStyle style;
+  final Color? color;
+  final TextAlign textAlign;
+
+  const _LiveText({
+    required this.text,
+    required this.style,
+    required this.color,
+    required this.textAlign,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final live = style.copyWith(color: color, fontStyle: FontStyle.italic);
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: text),
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Container(
+              width: 1.5,
+              height: (style.fontSize ?? 14) * 1.1,
+              margin: const EdgeInsets.only(left: 1),
+              color: color,
+            ),
+          ),
+        ],
+      ),
+      textAlign: textAlign,
+      style: live,
     );
   }
 }
