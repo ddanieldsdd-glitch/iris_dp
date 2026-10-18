@@ -781,7 +781,14 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Elimina todo el contenido del proyecto pero conserva la fila Projects.
-  Future<void> deleteProjectContentOnly(int id) async {
+  ///
+  /// Con [keepScenesAndShots] se quedan las escenas y los planos (sus
+  /// referencias y elementos de planta sí se borran): la importación los
+  /// actualiza en su sitio para que no cambien de id con la pantalla abierta.
+  Future<void> deleteProjectContentOnly(
+    int id, {
+    bool keepScenesAndShots = false,
+  }) async {
     await transaction(() async {
       final vbs = await (select(
         visualBibles,
@@ -852,8 +859,10 @@ class AppDatabase extends _$AppDatabase {
           shotReferences,
         )..where((r) => r.shotId.equals(shot.id))).go();
       }
-      await (delete(shots)..where((s) => s.projectId.equals(id))).go();
-      await (delete(scenes)..where((s) => s.projectId.equals(id))).go();
+      if (!keepScenesAndShots) {
+        await (delete(shots)..where((s) => s.projectId.equals(id))).go();
+        await (delete(scenes)..where((s) => s.projectId.equals(id))).go();
+      }
       await (delete(lightSetups)..where((s) => s.projectId.equals(id))).go();
       await (delete(
         projectEquipment,

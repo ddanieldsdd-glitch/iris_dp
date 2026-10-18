@@ -1315,12 +1315,74 @@ class ProjectContentBundle {
     }
   }
 
+  /// Todas las filas del bundle tienen uid, y sin repetir.
+  static bool _uidsUsable(Object? rows) {
+    if (rows == null) return true;
+    if (rows is! List) return false;
+    return _uniqueUids([
+      for (final r in rows) r is Map ? r['uid'] as String? : null,
+    ]);
+  }
+
+  static bool _uniqueUids(Iterable<String?> uids) {
+    final seen = <String>{};
+    for (final uid in uids) {
+      if (uid == null || uid.isEmpty || !seen.add(uid)) return false;
+    }
+    return true;
+  }
+
+  /// Escribe la escena sobre la que ya existe ([existingId]) o la crea, y
+  /// devuelve su id. Sin pasar por los métodos de la app: una importación no
+  /// marca el proyecto como editado aquí.
+  static Future<int> _upsertScene(
+    AppDatabase db,
+    int? existingId,
+    ScenesCompanion row,
+  ) async {
+    if (existingId == null) return db.into(db.scenes).insert(row);
+    await (db.update(db.scenes)..where((s) => s.id.equals(existingId)))
+        .write(row);
+    return existingId;
+  }
+
+  /// Como [_upsertScene], para un plano.
+  static Future<int> _upsertShot(
+    AppDatabase db,
+    int? existingId,
+    ShotsCompanion row,
+  ) async {
+    if (existingId == null) return db.into(db.shots).insert(row);
+    await (db.update(db.shots)..where((s) => s.id.equals(existingId)))
+        .write(row);
+    return existingId;
+  }
+
   static Future<void> _replaceContent(
     AppDatabase db,
     int projectId,
     Map<String, dynamic> bundle,
   ) async {
-    await db.deleteProjectContentOnly(projectId);
+    // Escenas y planos se actualizan en su sitio por uid: así no cambian de
+    // id y lo que esté abierto (visor de storyboard, planta, deshacer) sigue
+    // apuntando a ellos. Sin uid en todos, como antes: se borran y se crean.
+    final localScenes = await (db.select(db.scenes)
+          ..where((s) => s.projectId.equals(projectId)))
+        .get();
+    final localShots = await (db.select(db.shots)
+          ..where((s) => s.projectId.equals(projectId)))
+        .get();
+    final inPlace = _uidsUsable(bundle['scenes']) &&
+        _uidsUsable(bundle['shots']) &&
+        _uniqueUids(localScenes.map((s) => s.uid)) &&
+        _uniqueUids(localShots.map((s) => s.uid));
+    final sceneIdByUid = inPlace
+        ? {for (final s in localScenes) s.uid!: s.id}
+        : <String, int>{};
+    final shotIdByUid = inPlace
+        ? {for (final s in localShots) s.uid!: s.id}
+        : <String, int>{};
+    await db.deleteProjectContentOnly(projectId, keepScenesAndShots: inPlace);
 
     final projectFields =
         bundle['projectFields'] as Map<String, dynamic>? ?? {};
@@ -1462,95 +1524,109 @@ class ProjectContentBundle {
     }
 
     final sceneKeyToId = <String, int>{};
+    final keptScenes = <int>{};
     for (final row in bundle['scenes'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final siteKey = m['siteKey'] as String?;
       final setKey = m['setKey'] as String?;
-      final id = await db
-          .into(db.scenes)
-          .insert(
-            ScenesCompanion.insert(
-              uid: bundleUid(m['uid']),
-              projectId: projectId,
-              number: bundleIntOr(m['number'], 0),
-              name: m['name'] as String,
-              locationCanonical: m['locationCanonical'] as String,
-              locationPureName: m['locationPureName'] as String,
-              intExt: Value(m['intExt'] as String? ?? 'EXT'),
-              dayNight: Value(m['dayNight'] as String? ?? 'DÍA'),
-              locationColor: Value(m['locationColor'] as String?),
-              charactersJson: Value(m['charactersJson'] as String?),
-              description: Value(m['description'] as String?),
-              actionText: Value(m['actionText'] as String?),
-              sourceStartIndex: Value(bundleInt(m['sourceStartIndex'])),
-              durationMinutes: Value(bundleIntOr(m['durationMinutes'], 0)),
-              autoNumbering: Value(m['autoNumbering'] as bool? ?? true),
-              locationSiteId: Value(
-                siteKey != null ? siteKeyToId[siteKey] : null,
-              ),
-              locationId: Value(setKey != null ? setKeyToId[setKey] : null),
-              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-              scriptLinked: Value(m['scriptLinked'] as bool? ?? false),
-              scriptHeadingKey: Value(m['scriptHeadingKey'] as String?),
-              scriptTextHash: Value(m['scriptTextHash'] as String?),
-              offScript: Value(m['offScript'] as bool? ?? false),
-            ),
-          );
+      final id = await _upsertScene(
+        db,
+        sceneIdByUid[m['uid']],
+        ScenesCompanion.insert(
+          uid: bundleUid(m['uid']),
+          projectId: projectId,
+          number: bundleIntOr(m['number'], 0),
+          name: m['name'] as String,
+          locationCanonical: m['locationCanonical'] as String,
+          locationPureName: m['locationPureName'] as String,
+          intExt: Value(m['intExt'] as String? ?? 'EXT'),
+          dayNight: Value(m['dayNight'] as String? ?? 'DÍA'),
+          locationColor: Value(m['locationColor'] as String?),
+          charactersJson: Value(m['charactersJson'] as String?),
+          description: Value(m['description'] as String?),
+          actionText: Value(m['actionText'] as String?),
+          sourceStartIndex: Value(bundleInt(m['sourceStartIndex'])),
+          durationMinutes: Value(bundleIntOr(m['durationMinutes'], 0)),
+          autoNumbering: Value(m['autoNumbering'] as bool? ?? true),
+          locationSiteId: Value(
+            siteKey != null ? siteKeyToId[siteKey] : null,
+          ),
+          locationId: Value(setKey != null ? setKeyToId[setKey] : null),
+          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+          scriptLinked: Value(m['scriptLinked'] as bool? ?? false),
+          scriptHeadingKey: Value(m['scriptHeadingKey'] as String?),
+          scriptTextHash: Value(m['scriptTextHash'] as String?),
+          offScript: Value(m['offScript'] as bool? ?? false),
+        ),
+      );
+      keptScenes.add(id);
       sceneKeyToId[m['sceneKey'] as String] = id;
+    }
+    if (inPlace) {
+      await (db.delete(db.scenes)
+            ..where((s) => s.projectId.equals(projectId) & s.id.isNotIn(keptScenes)))
+          .go();
     }
 
     final shotKeyToId = <String, int>{};
+    final keptShots = <int>{};
     for (final row in bundle['shots'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final sceneId = sceneKeyToId[m['sceneKey'] as String];
       if (sceneId == null) continue;
-      final id = await db
-          .into(db.shots)
-          .insert(
-            ShotsCompanion.insert(
-              uid: bundleUid(m['uid']),
-              sceneId: sceneId,
-              projectId: projectId,
-              number: bundleIntOr(m['number'], 0),
-              framing: Value(m['framing'] as String?),
-              lens: Value(m['lens'] as String?),
-              angle: Value(m['angle'] as String?),
-              movement: Value(m['movement'] as String?),
-              fStop: Value(m['fStop'] as String?),
-              action: Value(m['action'] as String?),
-              notes: Value(m['notes'] as String?),
-              notesHighlight: Value(m['notesHighlight'] as String?),
-              referenceImagePath: Value(m['referenceImagePath'] as String?),
-              charactersJson: Value(m['charactersJson'] as String?),
-              durationSeconds: Value(bundleInt(m['durationSeconds'])),
-              scriptAnchorIndex: Value(bundleInt(m['scriptAnchorIndex'])),
-              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-              lightSetupId: Value(lightSetupKeyToId[m['lightSetupKey']]),
-              lightOverridesJson: Value(m['lightOverridesJson'] as String?),
-              shutterAngle: Value(m['shutterAngle'] as String?),
-              fps: Value(bundleInt(m['fps'])),
-              description: Value(m['description'] as String?),
-              autoNumbering: Value(m['autoNumbering'] as bool? ?? true),
-              cameraPlanImagePath: Value(m['cameraPlanImagePath'] as String?),
-              storyboardImagePath: Value(
-                m['storyboardImagePath'] as String?,
-              ),
-              cellStylesJson: Value(m['cellStylesJson'] as String?),
-              locationBasePlanId: Value(setKeyToId[m['shotSetKey']]),
-              routeJson: Value(
-                ShotRoute.encode([
-                  for (final leg in m['route'] as List? ?? const [])
-                    if (leg is Map)
-                      ShotLeg(
-                        siteId: siteKeyToId[leg['siteKey']],
-                        setId: setKeyToId[leg['setKey']],
-                        lightSetupId: lightSetupKeyToId[leg['lightSetupKey']],
-                      ),
-                ]),
-              ),
-            ),
-          );
+      final id = await _upsertShot(
+        db,
+        shotIdByUid[m['uid']],
+        ShotsCompanion.insert(
+          uid: bundleUid(m['uid']),
+          sceneId: sceneId,
+          projectId: projectId,
+          number: bundleIntOr(m['number'], 0),
+          framing: Value(m['framing'] as String?),
+          lens: Value(m['lens'] as String?),
+          angle: Value(m['angle'] as String?),
+          movement: Value(m['movement'] as String?),
+          fStop: Value(m['fStop'] as String?),
+          action: Value(m['action'] as String?),
+          notes: Value(m['notes'] as String?),
+          notesHighlight: Value(m['notesHighlight'] as String?),
+          referenceImagePath: Value(m['referenceImagePath'] as String?),
+          charactersJson: Value(m['charactersJson'] as String?),
+          durationSeconds: Value(bundleInt(m['durationSeconds'])),
+          scriptAnchorIndex: Value(bundleInt(m['scriptAnchorIndex'])),
+          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+          lightSetupId: Value(lightSetupKeyToId[m['lightSetupKey']]),
+          lightOverridesJson: Value(m['lightOverridesJson'] as String?),
+          shutterAngle: Value(m['shutterAngle'] as String?),
+          fps: Value(bundleInt(m['fps'])),
+          description: Value(m['description'] as String?),
+          autoNumbering: Value(m['autoNumbering'] as bool? ?? true),
+          cameraPlanImagePath: Value(m['cameraPlanImagePath'] as String?),
+          storyboardImagePath: Value(
+            m['storyboardImagePath'] as String?,
+          ),
+          cellStylesJson: Value(m['cellStylesJson'] as String?),
+          locationBasePlanId: Value(setKeyToId[m['shotSetKey']]),
+          routeJson: Value(
+            ShotRoute.encode([
+              for (final leg in m['route'] as List? ?? const [])
+                if (leg is Map)
+                  ShotLeg(
+                    siteId: siteKeyToId[leg['siteKey']],
+                    setId: setKeyToId[leg['setKey']],
+                    lightSetupId: lightSetupKeyToId[leg['lightSetupKey']],
+                  ),
+            ]),
+          ),
+        ),
+      );
+      keptShots.add(id);
       shotKeyToId[m['shotKey'] as String] = id;
+    }
+    if (inPlace) {
+      await (db.delete(db.shots)
+            ..where((s) => s.projectId.equals(projectId) & s.id.isNotIn(keptShots)))
+          .go();
     }
 
     for (final row in bundle['shotReferences'] as List? ?? []) {
