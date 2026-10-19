@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
+import '../../core/sync/live_editing.dart';
+import '../../core/sync/realtime_hub.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -54,10 +56,23 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
 
   bool get _isEditing => widget.scene != null;
 
+  /// Editando una escena, sale bloqueada en los demás equipos.
+  late final LiveEditing _live;
+  String? _liveKey;
+
   @override
   void initState() {
     super.initState();
     final s = widget.scene;
+    _live = ref.read(liveEditingProvider);
+    final uid = s?.uid;
+    if (uid != null) {
+      final key = _liveKey = LiveKey.scene(uid);
+      // Después de construir: avisar durante la construcción no se puede.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _live.focusShot(key);
+      });
+    }
     _numberCtrl = TextEditingController(text: s?.label ?? '');
     // Un nombre igual al que se genera solo no cuenta como nombre propio:
     // así sigue al lugar si este cambia.
@@ -187,6 +202,9 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
 
   @override
   void dispose() {
+    final live = _live;
+    final key = _liveKey;
+    Future.microtask(() => live.leave(key));
     _numberCtrl.dispose();
     _nameCtrl.dispose();
     _descriptionCtrl.dispose();
@@ -289,8 +307,14 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    // Otro equipo edita esta escena desde antes: se ve, pero no se guarda.
+    final lockedBy = ref.watch(
+      liveEditingProvider.select((l) => l.holderOf(_liveKey)?.device),
+    );
     final canSave =
-        _choice != null && parseSceneNumberLabel(_numberCtrl.text) != null;
+        lockedBy == null &&
+        _choice != null &&
+        parseSceneNumberLabel(_numberCtrl.text) != null;
 
     Widget segmented(
       List<String> options,
@@ -437,6 +461,21 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
+                  if (lockedBy != null) ...[
+                    const Icon(
+                      Icons.lock_outline,
+                      size: 16,
+                      color: Color(0xFF7F77DD),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'La está editando $lockedBy',
+                      style: AppTypography.caption(
+                        palette,
+                      ).copyWith(color: const Color(0xFF7F77DD)),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                  ],
                   FilledButton.icon(
                     onPressed: canSave && !_saving ? _save : null,
                     icon: const Icon(Icons.check, size: 18),

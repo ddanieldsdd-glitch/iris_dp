@@ -2,6 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+/// Qué se edita, como clave del canal en vivo. Un plano va con su uid tal
+/// cual (así lo entienden también las versiones anteriores); lo demás, con
+/// su tipo delante.
+abstract final class LiveKey {
+  static String shot(String uid) => uid;
+  static String site(String uid) => 'site:$uid';
+  static String set(String uid) => 'set:$uid';
+  static String lightSetup(String uid) => 'lightSetup:$uid';
+  static String scene(String uid) => 'scene:$uid';
+}
+
 /// Lo que otro equipo está editando ahora (por el canal en vivo).
 class PeerEditing {
   final String installId;
@@ -112,7 +123,7 @@ class LiveEditing extends ChangeNotifier {
     required this.installId,
     required this.publishEditing,
     required this.publishTyping,
-    this.releaseDelay = const Duration(milliseconds: 400),
+    this.releaseDelay = const Duration(seconds: 20),
   });
 
   /// Id de esta instalación; se completa en cuanto se lee de preferencias.
@@ -125,8 +136,10 @@ class LiveEditing extends ChangeNotifier {
   final void Function(String shotUid, String column, String? text)
       publishTyping;
 
-  /// Al pasar de una celda a otra del mismo plano el foco sale un instante:
-  /// se espera un poco antes de soltarlo para no parpadear.
+  /// Perder el foco no es haber terminado: se esconde el teclado del iPad,
+  /// se abre un menú o se pulsa la barra de formato. Se suelta tras este
+  /// rato sin volver; antes, si se pasa a otro plano, se sale de la
+  /// pantalla ([leave]) o la app se va a segundo plano ([releaseAll]).
   final Duration releaseDelay;
 
   Map<String, PeerEditing> _peers = const {};
@@ -148,6 +161,26 @@ class LiveEditing extends ChangeNotifier {
           mySince: _mySince,
           peers: _peers.values,
         );
+
+  /// El primer otro equipo que edita [key] desde antes de [mine]: lo que
+  /// impide tocarlo aquí aunque este equipo anuncie otra cosa (en la planta,
+  /// el esquema o el set que se ven desde un plano).
+  PeerEditing? holderBefore(String key, DateTime? mine) {
+    PeerEditing? first;
+    for (final p in _peers.values) {
+      if (p.shotUid != key || p.installId == installId) continue;
+      if (first == null ||
+          _before(p.since, p.installId, first.since, first.installId)) {
+        first = p;
+      }
+    }
+    if (first == null) return null;
+    if (mine != null && !first.since.isBefore(mine)) return null;
+    return first;
+  }
+
+  /// Desde cuándo edita este equipo lo que tiene.
+  DateTime? get mySince => _mySince;
 
   /// Lo que otro equipo está escribiendo en esa celda, mientras lo escribe.
   String? typingIn(String? shotUid, String column) =>
@@ -177,6 +210,21 @@ class LiveEditing extends ChangeNotifier {
       notifyListeners();
     });
   }
+
+  /// Este equipo deja [shotUid] del todo (sale de la pantalla): se suelta
+  /// ya, sin esperar.
+  void leave(String? shotUid) {
+    if (shotUid == null || shotUid != _myShot) return;
+    _release?.cancel();
+    _release = null;
+    _myShot = null;
+    _mySince = null;
+    publishEditing(null, null);
+    notifyListeners();
+  }
+
+  /// Suelta lo que tenga (la app se va a segundo plano).
+  void releaseAll() => leave(_myShot);
 
   void typing(String? shotUid, String column, String text) {
     if (shotUid == null || shotUid != _myShot) return;
@@ -216,8 +264,18 @@ class LiveEditing extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    // Un aviso que llega tarde (al salir de una pantalla) no hace nada.
+    if (_disposed) return;
+    super.notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
     _release?.cancel();
     for (final t in _throttles.values) {
       t.cancel();

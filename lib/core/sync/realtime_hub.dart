@@ -70,12 +70,21 @@ class RealtimeHub {
 
   Stream<SnapshotNotice> get snapshotNotices => _notices.stream;
 
-  /// Se une al canal del espacio de trabajo; si ya está, no hace nada.
+  /// ¿Está dentro del canal (o entrando)?
+  bool get isLive => _channel != null && (_subscribed || _joining);
+
+  /// Entrando en el canal, aún sin respuesta.
+  bool _joining = false;
+
+  /// Se une al canal del espacio de trabajo; si ya está dentro, no hace
+  /// nada. Si el canal se cerró o falló (el iPad en segundo plano, una red
+  /// que se cayó), vuelve a entrar.
   Future<void> connect(String workspaceId) async {
-    if (_workspaceId == workspaceId && _channel != null) return;
+    if (_workspaceId == workspaceId && isLive) return;
     await _leave();
     _workspaceId = workspaceId;
     final installId = _installId = await InstallId.get();
+    _joining = true;
     _channel = _client
         .channel(
           'iris-ws-$workspaceId',
@@ -108,6 +117,7 @@ class RealtimeHub {
           },
         )
         .subscribe((status, error) {
+          _joining = false;
           _subscribed = status == RealtimeSubscribeStatus.subscribed;
           // Al conectarse (o reconectarse) se vuelve a decir qué se edita.
           if (_subscribed) unawaited(_track());
@@ -200,6 +210,7 @@ class RealtimeHub {
     _channel = null;
     _workspaceId = null;
     _subscribed = false;
+    _joining = false;
     if (channel != null) {
       try {
         await _client.removeChannel(channel);

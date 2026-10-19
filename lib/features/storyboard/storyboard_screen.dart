@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/sync/realtime_hub.dart';
+
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
@@ -1317,17 +1319,35 @@ class _FrameDetailSheet extends ConsumerWidget {
                   : 'Cambiar la imagen del storyboard',
               icon: Icons.photo_library_outlined,
               variant: AppButtonVariant.secondary,
-              onTap: () {
+              onTap: () async {
                 // El menú se abre sobre la pantalla, no sobre esta hoja que
                 // se cierra.
                 final navigator = Navigator.of(context);
                 final screen = navigator.context;
+                final messenger = ScaffoldMessenger.maybeOf(screen);
+                final live = ref.read(liveEditingProvider);
                 navigator.pop();
-                showShotImageMenu(
+                // Si otro equipo edita este plano, aquí no se cambia su
+                // imagen hasta que termine.
+                final holder = live.holderOf(shot.uid);
+                if (holder != null) {
+                  messenger?.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Lo está editando ${holder.device}. Podrás cambiarlo '
+                        'en cuanto termine.',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+                live.focusShot(shot.uid);
+                await showShotImageMenu(
                   screen,
                   shot,
                   target: ShotImageTarget.storyboard,
                 );
+                live.blurShot(shot.uid);
               },
             ),
             const SizedBox(height: AppSpacing.sm),
