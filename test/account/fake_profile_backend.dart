@@ -11,6 +11,9 @@ class FakeProfileBackend implements ProfileBackend {
   int uploads = 0;
   int downloads = 0;
 
+  /// Error al subir la foto (p. ej. falta el bucket).
+  Object? uploadError;
+
   void _check() {
     if (offline) throw Exception('sin conexión');
   }
@@ -35,6 +38,7 @@ class FakeProfileBackend implements ProfileBackend {
   @override
   Future<String> uploadAvatar(String userId, Uint8List jpeg) async {
     _check();
+    if (uploadError != null) throw uploadError!;
     uploads++;
     final url = 'https://test/avatars/$userId/avatar.jpg?v=$uploads';
     files[url] = jpeg;

@@ -138,6 +138,10 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
             children: [
               Text('Ajustes', style: AppTypography.titleLarge(palette)),
               const SizedBox(height: AppSpacing.lg),
+              if (CloudRuntimeConfig.isActive) ...[
+                const SettingsCloudUsageSection(),
+                const SizedBox(height: AppSpacing.lg),
+              ],
               Text('Almacenamiento', style: AppTypography.titleMedium(palette)),
               const SizedBox(height: AppSpacing.sm),
               Text(
@@ -167,8 +171,6 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
               if (CloudRuntimeConfig.isActive) ...[
                 const SizedBox(height: AppSpacing.lg),
                 const SettingsCloudStorageSection(),
-                const SizedBox(height: AppSpacing.lg),
-                const SettingsCloudUsageSection(),
                 const SizedBox(height: AppSpacing.lg),
                 const SettingsWorkspaceMembersSection(),
                 const SizedBox(height: AppSpacing.lg),

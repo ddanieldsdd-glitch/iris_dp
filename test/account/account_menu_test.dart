@@ -140,6 +140,36 @@ void main() {
     expect(find.text('DD'), findsNothing);
   });
 
+  testWidgets('sin bucket de fotos: guarda el nombre y explica por qué no la foto',
+      (tester) async {
+    backend.uploadError = const ProfileSetupMissing('Bucket not found');
+    final photo = Uint8List.fromList(
+      img.encodePng(img.Image(width: 40, height: 40)),
+    );
+    await tester.pumpWidget(
+      host(AccountMenuButton(pickImage: () async => photo)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('account-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Editar perfil'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Dani');
+    await tester.tap(find.text('Elegir foto'));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Guardar'));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
+    await tester.pumpAndSettle();
+
+    expect(backend.profiles['u-1']?.displayName, 'Dani');
+    expect(find.textContaining('El nombre se ha guardado, la foto no'),
+        findsOneWidget);
+    expect(find.textContaining('migración 012'), findsOneWidget);
+  });
+
   testWidgets('el nombre no puede quedar vacío', (tester) async {
     await tester.pumpWidget(host(const AccountMenuButton()));
     await tester.pumpAndSettle();

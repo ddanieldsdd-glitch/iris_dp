@@ -10,6 +10,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'user_profile.dart';
 
+/// Falta preparar Supabase (migración 012: bucket `avatars` y políticas).
+class ProfileSetupMissing implements Exception {
+  const ProfileSetupMissing(this.detail);
+  final String detail;
+
+  @override
+  String toString() => 'ProfileSetupMissing: $detail';
+}
+
 /// Perfil con la foto ya descargada (para verla sin conexión).
 class ProfileSnapshot {
   const ProfileSnapshot(this.profile, [this.avatarBytes]);
@@ -199,17 +208,29 @@ class SupabaseProfileBackend implements ProfileBackend {
   @override
   Future<String> uploadAvatar(String userId, Uint8List jpeg) async {
     final path = avatarPath(userId);
-    await _client.storage
-        .from(bucket)
-        .uploadBinary(
-          path,
-          jpeg,
-          fileOptions: const FileOptions(
-            contentType: 'image/jpeg',
-            upsert: true,
-            cacheControl: '3600',
-          ),
-        );
+    try {
+      await _client.storage
+          .from(bucket)
+          .uploadBinary(
+            path,
+            jpeg,
+            fileOptions: const FileOptions(
+              contentType: 'image/jpeg',
+              upsert: true,
+              cacheControl: '3600',
+            ),
+          );
+    } on StorageException catch (e) {
+      // Sin bucket o sin políticas: es la migración 012, no la red.
+      final text = '${e.statusCode} ${e.error} ${e.message}'.toLowerCase();
+      if (text.contains('bucket not found') ||
+          text.contains('row-level security') ||
+          e.statusCode == '404' ||
+          e.statusCode == '403') {
+        throw ProfileSetupMissing(e.message);
+      }
+      rethrow;
+    }
     final url = _client.storage.from(bucket).getPublicUrl(path);
     // Misma ruta, otra foto: el parámetro evita que se vea la anterior.
     return '$url?v=${DateTime.now().millisecondsSinceEpoch}';

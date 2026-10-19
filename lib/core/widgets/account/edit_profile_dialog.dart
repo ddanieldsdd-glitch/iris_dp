@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -9,6 +10,7 @@ import '../../cloud/profile_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_typography.dart';
+import '../../utils/error_log.dart';
 import 'user_avatar.dart';
 
 /// Elige una imagen y devuelve sus bytes (o null si se cancela).
@@ -95,9 +97,16 @@ class _EditProfileDialogState extends ConsumerState<EditProfileDialog> {
       _error = null;
     });
     final notifier = ref.read(currentProfileProvider.notifier);
+    var nameSaved = false;
     try {
-      if (name != widget.snapshot.profile.displayName) {
+      final savedName = ref
+          .read(currentProfileProvider)
+          .valueOrNull
+          ?.profile
+          .displayName;
+      if (name != savedName) {
         await notifier.saveName(name);
+        nameSaved = true;
       }
       switch (_photo) {
         case _PhotoChange.replace:
@@ -108,12 +117,23 @@ class _EditProfileDialogState extends ConsumerState<EditProfileDialog> {
           break;
       }
       if (mounted) Navigator.of(context).pop();
-    } on FormatException {
-      setState(
-        () => _error = 'Esa imagen no se puede leer. Prueba con JPG o PNG.',
-      );
-    } catch (e) {
-      setState(() => _error = 'No se pudo guardar el perfil. ¿Hay conexión?');
+    } catch (e, st) {
+      unawaited(ErrorLog.record(e, st, context: 'Editar perfil'));
+      final reason = switch (e) {
+        FormatException() =>
+          'Esa imagen no se puede leer. Prueba con JPG o PNG.',
+        ProfileSetupMissing() =>
+          'La nube aún no admite fotos de perfil: '
+              'falta ejecutar la migración 012 en Supabase.',
+        _ => 'No se pudo guardar: $e',
+      };
+      if (mounted) {
+        setState(
+          () => _error = nameSaved
+              ? 'El nombre se ha guardado, la foto no. $reason'
+              : reason,
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
