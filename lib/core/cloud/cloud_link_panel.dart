@@ -153,7 +153,7 @@ class _CloudLinkPanelState extends ConsumerState<CloudLinkPanel> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reinicia IRIS DP'),
+        title: const Text('Reinicia IRIS'),
         content: Text(message),
         actions: [
           FilledButton(
@@ -180,7 +180,7 @@ class _CloudLinkPanelState extends ConsumerState<CloudLinkPanel> {
         ],
         if (!active) ...[
           Text(
-            'IRIS DP funciona al 100 % en local: proyectos, guion, biblia, '
+            'IRIS funciona al 100 % en local: proyectos, guion, biblia, '
             'imágenes y exportaciones. Puedes vincular Supabase ahora o más '
             'tarde desde Ajustes para sincronizar entre dispositivos.',
             style: AppTypography.caption(palette),

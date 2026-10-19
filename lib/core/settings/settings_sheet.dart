@@ -76,7 +76,7 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
 
   Future<void> _pickAppData() async {
     final path = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: 'Datos técnicos de IRIS DP',
+      dialogTitle: 'Datos técnicos de IRIS',
     );
     if (path == null || _documentsPath == null) return;
     await AppStorageConfig.save(

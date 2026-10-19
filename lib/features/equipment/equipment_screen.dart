@@ -181,7 +181,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
       final dir = await Directory.systemTemp.createTemp('iris_equipo_');
       final file = File('${dir.path}/equipo_proyecto.xlsx');
       await file.writeAsBytes(bytes);
-      await Share.shareXFiles([XFile(file.path)], text: 'Lista de equipo IRIS DP');
+      await Share.shareXFiles([XFile(file.path)], text: 'Lista de equipo IRIS');
     } catch (e) {
       if (mounted) {
         AppSnackBar.show(context, 'Error al compartir: $e', isError: true);

@@ -205,10 +205,10 @@ class TutorialInfoPage extends StatelessWidget {
 List<TutorialInfoStep> buildTutorialInfoSteps({required bool cloudMode}) {
   return [
     const TutorialInfoStep(
-      title: 'Bienvenido a IRIS DP',
+      title: 'Bienvenido a IRIS',
       icon: Icons.movie_filter_outlined,
       paragraphs: [
-        'IRIS DP es tu espacio de preproducción: guion, biblia de fotografía, '
+        'IRIS es tu espacio de preproducción: guion, biblia de fotografía, '
         'moodboard, localizaciones y planos.',
         'Este asistente te guía en pocos pasos. Tardarás unos 2 minutos.',
       ],
@@ -223,7 +223,7 @@ List<TutorialInfoStep> buildTutorialInfoSteps({required bool cloudMode}) {
       title: 'Carpetas en tu Mac',
       icon: Icons.folder_outlined,
       paragraphs: [
-        'IRIS DP guarda una copia local para trabajar offline. '
+        'IRIS guarda una copia local para trabajar offline. '
         'En el siguiente paso elegirás dos carpetas:',
       ],
       bullets: [
@@ -237,7 +237,7 @@ List<TutorialInfoStep> buildTutorialInfoSteps({required bool cloudMode}) {
         title: 'Mantener todos los dispositivos al día',
         icon: Icons.devices_outlined,
         paragraphs: [
-          'Tus proyectos viven en Supabase. Cuando actualices IRIS DP en '
+          'Tus proyectos viven en Supabase. Cuando actualices IRIS en '
           'este Mac, en otro Mac o en el iPad:',
         ],
         bullets: [

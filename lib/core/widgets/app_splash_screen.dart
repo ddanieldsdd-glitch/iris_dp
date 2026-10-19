@@ -68,7 +68,7 @@ class _AppSplashScreenState extends State<AppSplashScreen>
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(28),
                 child: Image.asset(
-                  'assets/branding/iris_dp_logo_master.png',
+                  'assets/branding/iris_logo_master.png',
                   width: 128,
                   height: 128,
                   fit: BoxFit.cover,
@@ -76,7 +76,7 @@ class _AppSplashScreenState extends State<AppSplashScreen>
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            Text('IRIS DP', style: AppTypography.displayMedium(palette)),
+            Text('IRIS', style: AppTypography.displayMedium(palette)),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'Preproducción cinematográfica',

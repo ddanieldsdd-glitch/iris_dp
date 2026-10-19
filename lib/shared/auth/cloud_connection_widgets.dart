@@ -51,7 +51,7 @@ class _CloudConnectionStatusCardState extends State<CloudConnectionStatusCard> {
         color: palette.warning,
         title: 'Modo local',
         body:
-            'IRIS DP funciona al 100 % sin nube. Vincula Supabase en Ajustes '
+            'IRIS funciona al 100 % sin nube. Vincula Supabase en Ajustes '
             'cuando quieras sincronizar entre dispositivos.',
       );
     }

@@ -236,7 +236,7 @@ class EquipmentSpreadsheetService {
   void _writeInstructionsSheet(Excel excel) {
     final sheet = excel[EquipmentSheetNames.instructions];
     const lines = [
-      'IRIS DP — Lista de equipo',
+      'IRIS — Lista de equipo',
       '',
       '1. Exporta desde la app → edita en Excel → importa de nuevo.',
       '2. Pestaña "Proyecto": equipo asignado al proyecto (editable).',

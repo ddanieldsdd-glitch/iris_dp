@@ -83,7 +83,7 @@ class ProjectsScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'IRIS DP',
+                          'IRIS',
                           style: AppTypography.displayMedium(palette),
                         ),
                         Text(

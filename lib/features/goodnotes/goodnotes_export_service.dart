@@ -22,7 +22,7 @@ class GoodNotesExportService {
 
     await Share.shareXFiles(
       [XFile(file.path, mimeType: 'application/pdf')],
-      subject: 'IRIS DP — ${GoodNotesModuleType.label(documentType)}',
+      subject: 'IRIS — ${GoodNotesModuleType.label(documentType)}',
       text: 'Ábrelo en GoodNotes para anotar a mano con el Apple Pencil.',
     );
   }

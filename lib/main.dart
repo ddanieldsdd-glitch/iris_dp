@@ -37,7 +37,7 @@ class IrisDPApp extends ConsumerWidget {
 
     return MaterialApp(
       key: ValueKey(themeMode),
-      title: 'IRIS DP',
+      title: 'IRIS',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: themeMode,
