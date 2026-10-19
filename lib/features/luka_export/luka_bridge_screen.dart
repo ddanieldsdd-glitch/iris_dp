@@ -404,7 +404,7 @@ class _LukaBridgeScreenState extends ConsumerState<LukaBridgeScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Esc ${scene.number} · $location',
+                                      'Esc ${scene.label} · $location',
                                       style: AppTypography.bodyLarge(palette),
                                     ),
                                     Text(

@@ -13,7 +13,7 @@ enum CameraPlanStatus { empty, inheritable, hasPlan }
 /// Celda compacta de estado de planta (guion técnico y listados).
 class CameraPlanStatusCell extends ConsumerWidget {
   final Shot shot;
-  final int sceneNumber;
+  final String sceneNumber;
   final Scene? scene;
 
   const CameraPlanStatusCell({

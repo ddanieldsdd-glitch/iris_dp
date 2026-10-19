@@ -154,7 +154,7 @@ class _ScriptPickerDialogState extends State<_ScriptPickerDialog> {
         onChanged: available.isEmpty ? null : (_) => _toggleScene(scene),
       ),
       title: Text(
-        '${scene.number}. ${scene.locationCanonical}',
+        '${scene.label}. ${scene.locationCanonical}',
         style: AppTypography.bodyLarge(palette),
       ),
       subtitle: Text(

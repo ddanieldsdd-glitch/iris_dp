@@ -107,7 +107,8 @@ class ShotSheetSun {
 /// Lo que no se sabe queda nulo: la hoja deja el hueco, no se lo inventa.
 class ShotSheetData {
   final String projectName;
-  final int sceneNumber;
+  /// Número de la escena con su letra: «13A».
+  final String sceneNumber;
   final String sceneTitle;
 
   /// «INT. SALA - DÍA».
@@ -219,7 +220,7 @@ class ShotSheetData {
 
     return ShotSheetData(
       projectName: project.name,
-      sceneNumber: scene.number,
+      sceneNumber: scene.label,
       sceneTitle: scene.name.trim(),
       sceneSlug: sceneLocationLine(scene),
       placeDescription:

@@ -116,7 +116,7 @@ class StoryboardPdfExporter {
     final safe = project.name.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
     final base = safe.isEmpty ? 'proyecto' : safe;
     final tag = choice.exportLabel.toLowerCase().replaceAll(' ', '_');
-    return '${base}_Sc${scene.number}_$tag.pdf';
+    return '${base}_Sc${scene.label}_$tag.pdf';
   }
 
   static Future<Uint8List> _buildPdf(
@@ -326,7 +326,7 @@ class StoryboardPdfExporter {
           crossAxisAlignment: pw.CrossAxisAlignment.end,
           children: [
             pw.Text(
-              'Sc. ${scene.number}',
+              'Sc. ${scene.label}',
               style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold),
             ),
             pw.Spacer(),

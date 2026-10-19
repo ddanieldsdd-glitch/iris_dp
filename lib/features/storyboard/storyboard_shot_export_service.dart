@@ -21,7 +21,7 @@ class StoryboardShotExportService {
   ) {
     final safe = project.name.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
     final base = safe.isEmpty ? 'proyecto' : safe;
-    return '${base}_Sc${scene.number}_${shot.number}_${style.artemisFileSuffix}';
+    return '${base}_Sc${scene.label}_${shot.number}_${style.artemisFileSuffix}';
   }
 
   static Future<Uint8List> buildBytes({

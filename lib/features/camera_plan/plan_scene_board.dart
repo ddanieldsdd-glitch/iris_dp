@@ -102,8 +102,8 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
       setId: set?.id,
       siteId: _data.siteIdOfScene(_scene),
       label: shot == null
-          ? 'Esc ${_scene.number}'
-          : 'Esc ${_scene.number} P${shot.number}',
+          ? 'Esc ${_scene.label}'
+          : 'Esc ${_scene.label} P${shot.number}',
     );
     if (created == null) return;
     if (shot != null) {
@@ -174,12 +174,12 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
           children: [
             Expanded(
               child: SceneHeaderRow(
-                sceneNumber: _scene.number,
+                sceneNumber: _scene.label,
                 sceneColor: color,
                 title: _scene.name.isNotEmpty
                     ? _scene.name
                     : formatSceneTitle(
-                        number: _scene.number,
+                        number: _scene.label,
                         intExt: _scene.intExt,
                         dayNight: _scene.dayNight,
                         location: location,

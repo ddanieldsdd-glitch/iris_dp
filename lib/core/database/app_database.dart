@@ -555,6 +555,10 @@ class AppDatabase extends _$AppDatabase {
         // Mezcla por elemento: la base de cada proyecto y lo que descartó.
         await SyncMergeTables.create(this);
       }
+      if (from < 54) {
+        // Escenas partidas del guion técnico importado: 13A, 13B.
+        await add(scenes, scenes.numberSuffix);
+      }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
     // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
@@ -4703,8 +4707,13 @@ LazyDatabase _openConnection() {
   });
 }
 
+/// Número visible de la escena, con su letra si la tiene: «13», «13A».
+extension SceneLabel on Scene {
+  String get label => '$number${numberSuffix ?? ''}';
+}
+
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 53;
+const kSchemaVersion = 54;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

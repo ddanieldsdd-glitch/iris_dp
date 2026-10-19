@@ -58,7 +58,7 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
   void initState() {
     super.initState();
     final s = widget.scene;
-    _numberCtrl = TextEditingController(text: '${s?.number ?? ''}');
+    _numberCtrl = TextEditingController(text: s?.label ?? '');
     // Un nombre igual al que se genera solo no cuenta como nombre propio:
     // así sigue al lugar si este cambia.
     final autoName = s == null
@@ -217,7 +217,8 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
   }
 
   Future<void> _save() async {
-    final number = int.tryParse(_numberCtrl.text.trim());
+    final parsed = parseSceneNumberLabel(_numberCtrl.text);
+    final number = parsed?.number;
     final choice = _choice;
     if (number == null || choice == null || _saving) return;
 
@@ -240,6 +241,7 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
       await db.updateScene(
         s.copyWith(
           number: number,
+          numberSuffix: Value(parsed!.suffix),
           name: name,
           locationCanonical: canonical,
           locationPureName: choice.set.locationName,
@@ -257,6 +259,7 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
         ScenesCompanion.insert(
           projectId: widget.projectId,
           number: number,
+          numberSuffix: Value(parsed!.suffix),
           name: name,
           locationCanonical: canonical,
           locationPureName: choice.set.locationName,
@@ -287,7 +290,7 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final canSave =
-        _choice != null && int.tryParse(_numberCtrl.text.trim()) != null;
+        _choice != null && parseSceneNumberLabel(_numberCtrl.text) != null;
 
     Widget segmented(
       List<String> options,
@@ -345,7 +348,6 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
                         const SizedBox(height: 6),
                         TextField(
                           controller: _numberCtrl,
-                          keyboardType: TextInputType.number,
                           textAlign: TextAlign.center,
                           style: AppTypography.bodyLarge(palette),
                           decoration: const InputDecoration(isDense: true),

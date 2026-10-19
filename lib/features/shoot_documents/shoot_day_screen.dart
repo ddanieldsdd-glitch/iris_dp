@@ -617,7 +617,7 @@ class _OrderList extends ConsumerWidget {
                                     bottom: 4,
                                   ),
                                   child: Text(
-                                    '${scene.number}. ${scene.locationCanonical}',
+                                    '${scene.label}. ${scene.locationCanonical}',
                                     style: AppTypography.label(
                                       palette,
                                     ).copyWith(color: palette.accent),

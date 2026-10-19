@@ -356,8 +356,8 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
   List<Widget> _sceneItems(Scene scene) => [
     _subHeader(
       scene.name.isNotEmpty
-          ? 'Esc ${scene.number} · ${scene.name}'
-          : 'Esc ${scene.number}',
+          ? 'Esc ${scene.label} · ${scene.name}'
+          : 'Esc ${scene.label}',
     ),
     for (final shot in _data.shotsOfScene(scene.id)) _shotRow(shot, indent: 1),
   ];

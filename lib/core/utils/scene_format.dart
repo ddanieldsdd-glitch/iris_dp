@@ -55,9 +55,16 @@ String _legacyDefaultSceneName({
     '$intExt $dayNight $location';
 
 String formatSceneTitle({
-  required int number,
+  required Object number,
   required String intExt,
   required String dayNight,
   required String location,
 }) =>
     '$number. ${formatSceneMetaLine(intExt: intExt, dayNight: dayNight, location: location)}';
+
+/// «13A» → 13 y A; «7» → 7 sin letra. Nulo si no empieza por un número.
+({int number, String? suffix})? parseSceneNumberLabel(String text) {
+  final m = RegExp(r'^\s*(\d+)\s*([A-Za-z])?\s*$').firstMatch(text);
+  if (m == null) return null;
+  return (number: int.parse(m.group(1)!), suffix: m.group(2)?.toUpperCase());
+}

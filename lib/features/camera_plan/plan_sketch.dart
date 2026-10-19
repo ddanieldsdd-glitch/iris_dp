@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -87,6 +89,17 @@ class PlanSketchThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Boceto que llegó como imagen (la planta de un guion importado).
+    final image = setup.sketchImagePath;
+    if (image != null && File(image).existsSync()) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.file(File(image), fit: BoxFit.contain),
+          const Positioned(left: 3, bottom: 3, child: PlanSketchBadge()),
+        ],
+      );
+    }
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -213,7 +226,7 @@ class _SketchSection extends ConsumerWidget {
             projectId: shot.projectId,
             setId: setId,
             siteId: siteId,
-            label: 'Esc ${scene.number} P${current.number}',
+            label: 'Esc ${scene.label} P${current.number}',
           );
           if (created == null) return;
           await addShotPlanSketchSetup(

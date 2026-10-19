@@ -43,7 +43,7 @@ Future<void> moveSceneToSetWithFeedback(
   final db = ref.read(databaseProvider);
   await db.moveSceneToSet(scene: scene, targetSet: targetSet);
   if (!context.mounted) return;
-  AppSnackBar.show(context, 'Escena ${scene.number} → ${targetSet.locationName}', duration: const Duration(seconds: 2));
+  AppSnackBar.show(context, 'Escena ${scene.label} → ${targetSet.locationName}', duration: const Duration(seconds: 2));
 }
 
 /// Panel de escenas arrastrables hacia un set.
@@ -253,7 +253,7 @@ class DraggableSceneChip extends StatelessWidget {
                   size: 16, color: palette.textTertiary),
               const SizedBox(width: 4),
               SceneNumberBadge(
-                sceneNumber: scene.number,
+                sceneNumber: scene.label,
                 color: sceneColor,
                 size: 22,
               ),
@@ -307,7 +307,7 @@ class DraggableSceneChip extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Text(
-                'Mover escena ${scene.number} a…',
+                'Mover escena ${scene.label} a…',
                 style: AppTypography.titleMedium(context.palette),
               ),
             ),

@@ -15,6 +15,9 @@ abstract final class ShotReferenceSource {
   static const manual = 'manual';
   static const artemisCapture = 'artemis_capture';
   static const unrealRender = 'unreal_render';
+
+  /// Venía en un guion técnico importado (Word).
+  static const document = 'document';
 }
 
 /// Importa una imagen y la vincula al plano (miniatura + registro en [ShotReferences]).
@@ -313,6 +316,19 @@ Future<String> importShotPlanSketch({
     await queue.scanAndEnqueueProject(shot.projectId);
   }
   return stored;
+}
+
+/// Enseña en el plano un boceto de planta que ya está guardado (la planta
+/// de una escena que comparten sus planos), detrás de los que tenga.
+Future<void> addShotPlanSketchPath({
+  required AppDatabase db,
+  required Shot shot,
+  required String path,
+}) async {
+  final current = await db.getShotById(shot.id) ?? shot;
+  final stored = _storedPlanSketches(current);
+  if (stored.contains(path)) return;
+  await _savePlanSketches(db, shot.id, [...stored, path]);
 }
 
 /// Quita un boceto de planta del plano: [path] es su ruta o `setup:<id>`.

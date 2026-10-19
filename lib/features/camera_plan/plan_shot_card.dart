@@ -254,12 +254,12 @@ class PlanSceneBlock extends StatelessWidget {
           InkWell(
             onTap: onScene == null ? null : () => onScene!(scene),
             child: SceneHeaderRow(
-              sceneNumber: scene.number,
+              sceneNumber: scene.label,
               sceneColor: color,
               title: scene.name.isNotEmpty
                   ? scene.name
                   : formatSceneTitle(
-                      number: scene.number,
+                      number: scene.label,
                       intExt: scene.intExt,
                       dayNight: scene.dayNight,
                       location: location,

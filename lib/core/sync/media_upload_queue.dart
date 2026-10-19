@@ -472,7 +472,8 @@ class MediaUploadQueue {
     for (final shot in shots) {
       final scene = sceneById[shot.sceneId];
       if (scene == null) continue;
-      final shotKey = 'scene:${scene.number}:${shot.number}';
+      final shotKey =
+          'scene:${scene.number}${scene.numberSuffix ?? ''}:${shot.number}';
       final refs = await (_db.select(_db.shotReferences)
             ..where((r) => r.shotId.equals(shot.id))
             ..orderBy([(r) => OrderingTerm.asc(r.sortOrder)]))

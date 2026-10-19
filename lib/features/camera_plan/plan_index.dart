@@ -80,7 +80,7 @@ class PlanIndex extends StatelessWidget {
                   border: Border.all(color: color),
                 ),
                 child: Text(
-                  '${scene.number}',
+                  '${scene.label}',
                   style: AppTypography.caption(palette).copyWith(
                     color: palette.textPrimary,
                     fontWeight: FontWeight.w700,
