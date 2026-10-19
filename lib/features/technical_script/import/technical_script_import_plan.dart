@@ -1,3 +1,4 @@
+import '../../../core/utils/image_fingerprint.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/script/script_scene_matcher.dart';
 import '../../../core/utils/scene_characters.dart';
@@ -411,6 +412,26 @@ TechnicalScriptImportPlan buildTechnicalScriptImportPlan({
       used.add(scene.id);
     }
   }
+  // Una escena partida en el documento (13A, 13B) frente a la nuestra sin
+  // letra (13): la primera parte es la nuestra; las demás entran nuevas.
+  for (final imported in document.scenes) {
+    if (matched.containsKey(imported) || imported.suffix == null) continue;
+    final scene = scenes
+        .where(
+          (s) =>
+              s.number == imported.number &&
+              s.numberSuffix == null &&
+              !used.contains(s.id),
+        )
+        .firstOrNull;
+    if (scene == null) continue;
+    matched[imported] = scene;
+    used.add(scene.id);
+  }
+  // Por cabecera, solo con escenas del mismo número o con un número que el
+  // documento ya no tiene (renumeradas): si no, 13B se pegaba a la 15 por
+  // ser también INT. KEBAB - NOCHE.
+  final docNumbers = {for (final s in document.scenes) s.number};
   for (final imported in document.scenes) {
     if (matched.containsKey(imported)) continue;
     final candidates =
@@ -419,7 +440,13 @@ TechnicalScriptImportPlan buildTechnicalScriptImportPlan({
           location: imported.location,
           dayNight: imported.dayNight,
         )];
-    final scene = candidates?.where((s) => !used.contains(s.id)).firstOrNull;
+    final scene = candidates
+        ?.where(
+          (s) =>
+              !used.contains(s.id) &&
+              (s.number == imported.number || !docNumbers.contains(s.number)),
+        )
+        .firstOrNull;
     matched[imported] = scene;
     if (scene != null) used.add(scene.id);
   }
@@ -495,9 +522,11 @@ List<ShotMatch> _matchShots({
         diffs: mine == null ? const [] : shotDiffs(mine, shot),
         newReferences: [
           for (final ref in shot.references)
-            if (!haveRefs.contains(ref.hash)) ref,
+            if (!alreadyHaveImage(haveRefs, ref)) ref,
         ],
-        newPlan: plan != null && !havePlans.contains(plan.hash) ? plan : null,
+        newPlan: plan != null && !alreadyHaveImage(havePlans, plan)
+            ? plan
+            : null,
       ),
     );
   }
@@ -509,11 +538,27 @@ List<ShotMatch> _matchShots({
   return result;
 }
 
+/// ¿Ya tiene el plano esta imagen? Por su contenido exacto o, si el Word
+/// la trae recomprimida, porque se ve igual. [have] lleva las huellas
+/// exactas y las visuales con `v:` delante.
+bool alreadyHaveImage(Set<String> have, ImportedImage image) {
+  if (have.contains(image.hash)) return true;
+  final visual = image.visual;
+  if (visual == null) return false;
+  for (final h in have) {
+    if (h.startsWith('v:') && sameImage(h.substring(2), visual)) return true;
+  }
+  return false;
+}
+
 List<FieldDiff> _headingDiffs(Scene ours, ImportedScene doc) {
   final location = ours.locationPureName.isNotEmpty
       ? ours.locationPureName
       : ours.locationCanonical;
   return [
+    // 13 → 13A: el documento la ha partido.
+    if (ours.number == doc.number && ours.label != doc.label)
+      FieldDiff('label', 'Número', ours.label, doc.label),
     if (!_same(ours.intExt, doc.intExt))
       FieldDiff('intExt', 'Int/Ext', ours.intExt, doc.intExt),
     if (doc.location.isNotEmpty && !_same(location, doc.location))

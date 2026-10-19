@@ -1,3 +1,4 @@
+import '../../../core/utils/image_fingerprint.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -14,10 +15,15 @@ class ImportedImage {
   final String fileName;
   final String hash;
 
+  /// Huella visual ([visualFingerprint]): reconoce la misma imagen aunque el
+  /// Word la traiga recomprimida o a otro tamaño.
+  final String? visual;
+
   const ImportedImage({
     required this.bytes,
     required this.fileName,
     required this.hash,
+    this.visual,
   });
 }
 
@@ -116,6 +122,7 @@ abstract final class DocxTechnicalScriptReader {
         bytes: data,
         fileName: path.split('/').last,
         hash: sha1.convert(data).toString(),
+        visual: visualFingerprint(data),
       );
     });
 

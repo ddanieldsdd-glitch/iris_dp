@@ -326,7 +326,7 @@ class _InitialTutorialFlowState extends ConsumerState<InitialTutorialFlow> {
       onBack: _phaseIndex > 0 ? _goBack : null,
       onNext: _goNext,
       nextLabel: isLastInfo
-          ? 'Entrar a IRIS DP'
+          ? 'Entrar a IRIS'
           : (isSyncStep ? 'Entendido, continuar' : 'Siguiente'),
     );
   }

@@ -88,17 +88,14 @@ void main() {
   testWidgets('un storyboard nuevo ofrece estilos y elegir uno pone sus '
       'capas y su papel', (tester) async {
     await _open(tester)();
-    expect(find.text('Rotulador gris'), findsOneWidget);
+    // Dos estilos: dibujo y planta de cámara y luz.
+    expect(find.text('Dibujo'), findsOneWidget);
+    expect(find.text('Planta de cámara y luz'), findsOneWidget);
     await _shot(tester, 'ui_inicio');
-    await tester.tap(find.text('Rotulador gris'));
+    await tester.tap(find.text('Dibujo'));
     await tester.pumpAndSettle();
     final doc = _controllerOf(tester).document;
-    expect(doc.layers.map((l) => l.name), [
-      'Lápiz guía',
-      'Grises',
-      'Línea',
-      'Luces',
-    ]);
+    expect(doc.layers.map((l) => l.name), ['Lápiz guía', 'Tonos', 'Línea']);
     expect(doc.paper, AnnotationPaper.white);
 
     // Se dibuja en la capa de inicio con su pincel.
@@ -111,7 +108,7 @@ void main() {
     final stroke = _controllerOf(tester).document.strokes.single;
     expect(stroke.layerId, 'guia');
     expect(stroke.brushId, 'graphite.hb');
-    expect(find.text('Rotulador gris'), findsNothing);
+    expect(find.text('Planta de cámara y luz'), findsNothing);
   });
 
   testWidgets('la biblioteca cambia de pincel y la goma usa el suyo', (

@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart' show compute;
+
+import '../../../core/utils/image_fingerprint.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -35,12 +38,16 @@ Future<TechnicalScriptImportPlan> prepareTechnicalScriptImport({
     for (final shot in shots) {
       final refs = await db.watchReferencesForShot(shot.id).first;
       referenceHashes[shot.id] = {
-        for (final path in referenceImagesOf(shot, refs))
+        for (final path in referenceImagesOf(shot, refs)) ...[
           if (await _hashOf(path) case final hash?) hash,
+          if (await _visualOf(path) case final visual?) 'v:$visual',
+        ],
       };
       planHashes[shot.id] = {
-        for (final path in planSketchesOf(shot))
+        for (final path in planSketchesOf(shot)) ...[
           if (await _hashOf(path) case final hash?) hash,
+          if (await _visualOf(path) case final visual?) 'v:$visual',
+        ],
       };
     }
   }
@@ -63,6 +70,19 @@ Future<String?> _hashOf(String path) async {
   if (_hashCache[key] case final hash?) return hash;
   final hash = sha1.convert(await file.readAsBytes()).toString();
   return _hashCache[key] = hash;
+}
+
+final _visualCache = <String, String?>{};
+
+/// Huella visual de una imagen de la app, fuera del hilo de la pantalla
+/// (las referencias pueden ser fotos grandes).
+Future<String?> _visualOf(String path) async {
+  final file = File(path);
+  if (!file.existsSync()) return null;
+  final key = '$path|${file.lengthSync()}|${file.lastModifiedSync()}';
+  if (_visualCache.containsKey(key)) return _visualCache[key];
+  final visual = await compute(visualFingerprintOfFile, path);
+  return _visualCache[key] = visual;
 }
 
 /// Lo que hizo la importación, para contárselo al usuario.
@@ -135,8 +155,20 @@ Future<TechnicalScriptImportResult> applyTechnicalScriptImport({
     Scene scene;
     if (match.existing case final existing?) {
       scene = existing;
+      // La letra de una escena partida (13 → 13A) entra siempre: si no, la
+      // 13B nueva quedaría junto a una 13 sin letra.
+      final split = match.headingDiffs
+          .where((d) => d.field == 'label')
+          .firstOrNull;
+      if (split != null &&
+          !existing.scriptLinked &&
+          imported.suffix != null &&
+          existing.number == imported.number) {
+        scene = existing.copyWith(numberSuffix: Value(imported.suffix));
+        await db.updateScene(scene);
+      }
       if (sceneChoices.text == TextChoice.document && !existing.scriptLinked) {
-        scene = await _applyHeading(db, existing, match.headingDiffs);
+        scene = await _applyHeading(db, scene, match.headingDiffs);
       }
       await _mergeSceneCharacters(db, scene, imported.characters);
     } else {

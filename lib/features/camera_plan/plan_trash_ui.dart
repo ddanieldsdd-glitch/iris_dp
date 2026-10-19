@@ -30,6 +30,8 @@ Future<void> deleteWithUndo(
       SnackBar(
         content: Text('$done Está en la Papelera de plantas.'),
         duration: const Duration(seconds: 8),
+        // Con botón no se queda fijo: se va solo a su tiempo.
+        persist: false,
         action: SnackBarAction(
           label: 'Deshacer',
           onPressed: () async {

@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../cloud/cloud_providers.dart';
 import 'device_label.dart';
+import 'live_drawing.dart';
 import 'live_editing.dart';
 
 /// Id al azar de esta instalación: distingue dos equipos iguales (dos Mac)
@@ -53,6 +54,7 @@ class RealtimeHub {
 
   static const _snapshotEvent = 'snapshot';
   static const _typingEvent = 'typing';
+  static const _drawingEvent = 'drawing';
 
   /// Quién edita qué en los demás equipos (presencia del canal).
   void Function(List<PeerEditing> peers)? onPeers;
@@ -69,6 +71,12 @@ class RealtimeHub {
   final _notices = StreamController<SnapshotNotice>.broadcast();
 
   Stream<SnapshotNotice> get snapshotNotices => _notices.stream;
+
+  final _drawings = StreamController<Map<String, dynamic>>.broadcast();
+  final _drawingParts = DrawingWireAssembler();
+
+  /// Lo que llega de un folio compartido de otro equipo.
+  Stream<Map<String, dynamic>> get drawingMessages => _drawings.stream;
 
   /// ¿Está dentro del canal (o entrando)?
   bool get isLive => _channel != null && (_subscribed || _joining);
@@ -100,6 +108,14 @@ class RealtimeHub {
             if (shot is! String || column is! String) return;
             if (payload['installId'] == installId) return;
             onTyping?.call(shot, column, payload['text'] as String?);
+          },
+        )
+        .onBroadcast(
+          event: _drawingEvent,
+          callback: (payload) {
+            if (payload['installId'] == installId) return;
+            final message = _drawingParts.add(payload);
+            if (message != null) _drawings.add(message);
           },
         )
         .onBroadcast(
@@ -185,6 +201,24 @@ class RealtimeHub {
     }
   }
 
+  /// Envía un mensaje del folio compartido (comprimido y, si es grande, en
+  /// partes: el canal no admite mensajes muy largos).
+  Future<void> sendDrawing(Map<String, dynamic> message) async {
+    final channel = _channel;
+    if (channel == null || !_subscribed) return;
+    try {
+      final installId = await InstallId.get();
+      for (final part in DrawingWire.pack(message)) {
+        await channel.sendBroadcastMessage(
+          event: _drawingEvent,
+          payload: {...part, 'installId': installId},
+        );
+      }
+    } catch (e) {
+      debugPrint('Dibujo en vivo no enviado: $e');
+    }
+  }
+
   /// Avisa de que este equipo acaba de subir [hash] de [projectCloudId].
   Future<void> announceSnapshot(String projectCloudId, String hash) async {
     final channel = _channel;
@@ -221,6 +255,7 @@ class RealtimeHub {
   Future<void> dispose() async {
     await _leave();
     await _notices.close();
+    await _drawings.close();
   }
 }
 

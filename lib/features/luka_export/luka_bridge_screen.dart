@@ -563,7 +563,7 @@ class _LukaBridgeScreenState extends ConsumerState<LukaBridgeScreen> {
               ),
               const _WorkflowStep(
                 number: '3',
-                title: 'Exporta desde IRIS DP',
+                title: 'Exporta desde IRIS',
                 body: 'Genera el JSON de la escena con el botón de arriba',
               ),
               const _WorkflowStep(
@@ -574,7 +574,7 @@ class _LukaBridgeScreenState extends ConsumerState<LukaBridgeScreen> {
               const _WorkflowStep(
                 number: '5',
                 title: 'Renderiza y reimporta',
-                body: 'Movie Render Queue → frames PNG → REFERENCIA en IRIS DP',
+                body: 'Movie Render Queue → frames PNG → REFERENCIA en IRIS',
               ),
             ],
           );

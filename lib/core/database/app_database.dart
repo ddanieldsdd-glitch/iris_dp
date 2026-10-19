@@ -574,6 +574,10 @@ class AppDatabase extends _$AppDatabase {
         // Imágenes sobre la planta, debajo o encima de los elementos.
         await m.createTable(planImages);
       }
+      if (from < 58) {
+        // Encuadres y refuerzos de cada plano al exportarlo.
+        await add(shots, shots.exportLayoutJson);
+      }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
     // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
@@ -4732,7 +4736,7 @@ extension SceneLabel on Scene {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 57;
+const kSchemaVersion = 58;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

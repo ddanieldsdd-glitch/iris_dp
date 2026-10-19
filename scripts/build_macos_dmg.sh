@@ -47,9 +47,9 @@ rm -rf "$STAGING"
 mkdir -p "$STAGING"
 cp -R "$BUILD_DIR/$APP_NAME.app" "$STAGING/"
 ln -s /Applications "$STAGING/Applications"
-cp "$ROOT/assets/branding/iris_dp_logo_master.png" "$STAGING/IRIS-DP-logo.png"
+cp "$ROOT/assets/branding/iris_logo_master.png" "$STAGING/IRIS-logo.png"
 
-hdiutil create -volname "IRIS DP" -srcfolder "$STAGING" -ov -format UDZO "$DMG_DIR/$DMG_NAME"
+hdiutil create -volname "IRIS" -srcfolder "$STAGING" -ov -format UDZO "$DMG_DIR/$DMG_NAME"
 echo "✓ $DMG_DIR/$DMG_NAME"
 
 # Notarización (requiere APPLE_ID, APPLE_APP_PASSWORD, TEAM_ID en entorno):

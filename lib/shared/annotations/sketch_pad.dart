@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'annotation_document.dart';
 import 'annotation_raster.dart';
+import 'live_drawing_link.dart';
 import 'sketch_sheet_screen.dart';
 
 export 'sketch_sheet_screen.dart' show SketchSheetPurpose;
@@ -58,6 +59,7 @@ Future<SketchResult?> showSketchPad(
   SketchSheetPurpose purpose = SketchSheetPurpose.storyboard,
   ImageProvider? onionSkin,
   String? onionSkinLabel,
+  LiveDrawingLink? live,
 }) async {
   final result = await SketchSheetScreen.open(
     context,
@@ -68,6 +70,7 @@ Future<SketchResult?> showSketchPad(
     exportPng: true,
     onionSkin: onionSkin,
     onionSkinLabel: onionSkinLabel,
+    live: live,
   );
   final png = result?.png;
   if (result == null || png == null) return null;

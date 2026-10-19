@@ -84,7 +84,7 @@ class _CloudMigrationWizardState extends ConsumerState<CloudMigrationWizard> {
                   const SizedBox(height: AppSpacing.sm),
                   Text(
                     'Detectamos proyectos en tu carpeta local. '
-                    '¿Quieres sincronizarlos con tu cuenta IRIS DP?',
+                    '¿Quieres sincronizarlos con tu cuenta IRIS?',
                     style: AppTypography.bodyMedium(palette).copyWith(
                       color: palette.textSecondary,
                     ),

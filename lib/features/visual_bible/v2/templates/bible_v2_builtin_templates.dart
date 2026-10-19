@@ -165,7 +165,7 @@ abstract final class BibleV2BuiltinTemplates {
       id: id,
       name: name,
       description: description,
-      author: 'IRIS DP',
+      author: 'IRIS',
       version: 1,
       category: category,
       document: doc,

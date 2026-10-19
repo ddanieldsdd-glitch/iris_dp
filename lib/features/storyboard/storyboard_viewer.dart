@@ -18,6 +18,7 @@ import '../../core/utils/shot_reference_import.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
 import '../camera_plan/camera_plan_grouping.dart';
+import 'shot_frames_export_sheet.dart';
 
 /// Abre el visor del storyboard en [shot]: los planos del proyecto uno a
 /// uno, en orden de guion.
@@ -268,6 +269,15 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
                               },
                         icon: const Icon(Icons.image_outlined, size: 18),
                         label: const Text('Imagen'),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => showShotFramesExportSheet(
+                          context,
+                          scene: scene,
+                          shot: shot,
+                        ),
+                        icon: const Icon(Icons.ios_share, size: 18),
+                        label: const Text('Exportar'),
                       ),
                       TextButton.icon(
                         onPressed: () => _newShot(scene, sequence),

@@ -172,17 +172,7 @@ class _ImportReviewState extends ConsumerState<_ImportReview> {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-        if (!_fresh)
-          Text(
-            _decisions.mode == ImportMode.merge
-                ? 'Se añade lo que falta. En los planos que chocan se queda lo '
-                      'nuestro (lo vacío se rellena); las referencias del '
-                      'documento van detrás.'
-                : 'El documento manda: sus textos, sus referencias delante '
-                      '(las nuestras pasan a 2º plano) y se borra lo que solo '
-                      'está en la app, salvo lo que marques para conservar.',
-            style: AppTypography.caption(palette),
-          ),
+        if (!_fresh) _whatHappens(palette, general),
         const SizedBox(height: AppSpacing.sm),
         Wrap(
           spacing: 6,
@@ -280,6 +270,111 @@ class _ImportReviewState extends ConsumerState<_ImportReview> {
           ],
         ),
       ],
+    );
+  }
+
+  bool? _summaryOpen;
+
+  /// «Qué va a pasar», en frases: lo que hará la importación con lo que
+  /// está elegido ahora (cada escena o plano puede cambiarlo en su ficha).
+  Widget _whatHappens(AppPalette palette, ImportChoices general) {
+    final p = _plan;
+    final lines = <(IconData, String)>[
+      if (general.addNew!)
+        (
+          Icons.add_circle_outline,
+          p.newScenes + p.newShots == 0
+              ? 'No hay escenas ni planos nuevos en el Word.'
+              : 'Se añaden ${p.newScenes} escenas y ${p.newShots} planos '
+                    'nuevos del Word.',
+        )
+      else
+        (Icons.block, 'No se añade nada nuevo del Word.'),
+      (
+        Icons.edit_note,
+        general.text == TextChoice.ours
+            ? 'En los planos que ya tienes se quedan tus textos (encuadre, '
+                  'acción, notas…); lo que tengas vacío se rellena con el Word.'
+            : 'En los planos que ya tienes, los textos se cambian por los '
+                  'del Word.',
+      ),
+      (Icons.photo_library_outlined, switch (general.references!) {
+        ReferenceMode.front =>
+          'Imágenes de referencia: las del Word pasan a ser las principales y '
+              'las tuyas quedan detrás.',
+        ReferenceMode.back =>
+          'Imágenes de referencia: las del Word se añaden detrás de las tuyas.',
+        ReferenceMode.replace =>
+          'Imágenes de referencia: se quitan las tuyas y quedan solo las del '
+              'Word.',
+        ReferenceMode.skip => 'Las imágenes de referencia del Word no se '
+            'importan.',
+      }),
+      if (general.references != ReferenceMode.skip)
+        (
+          Icons.filter_none,
+          'Una imagen que ya tienes no se copia otra vez, aunque el Word la '
+              'traiga más pequeña.',
+        ),
+      if (p.onlyInAppScenes + p.onlyInAppShots > 0)
+        general.deleteOnlyInApp!
+            ? (
+                Icons.delete_outline,
+                'Se borran ${p.onlyInAppScenes + p.onlyInAppShots} escenas o '
+                    'planos que solo están en la app (en su ficha puedes '
+                    'conservarlos).',
+              )
+            : (
+                Icons.check_circle_outline,
+                'Se conservan ${p.onlyInAppScenes + p.onlyInAppShots} escenas '
+                    'o planos que solo están en la app.',
+              ),
+      (Icons.backup_outlined, 'Antes de aplicar se guarda una copia: podrás '
+          'volver atrás desde Importar › Volver al guion anterior.'),
+    ];
+    // En pantallas estrechas empieza plegado: si no, no cabe la lista.
+    final open = _summaryOpen ??= MediaQuery.sizeOf(context).width >= 1000;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: palette.surfaceOverlay.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: palette.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _summaryOpen = !open),
+            child: Row(
+              children: [
+                Text('Qué va a pasar', style: AppTypography.label(palette)),
+                Icon(
+                  open ? Icons.expand_less : Icons.expand_more,
+                  size: 16,
+                  color: palette.textSecondary,
+                ),
+              ],
+            ),
+          ),
+          if (open) const SizedBox(height: 4),
+          if (open)
+          for (final (icon, text) in lines)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, size: 14, color: palette.textSecondary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(text, style: AppTypography.caption(palette)),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 

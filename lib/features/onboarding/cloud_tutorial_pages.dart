@@ -166,7 +166,7 @@ class MacInstallTutorialPage extends StatelessWidget {
             steps: [
               'En Terminal: cd iris_dp && ./scripts/build_macos_dmg.sh',
               'Se genera IRIS-DP.dmg — ábrelo con doble clic',
-              'Arrastra «IRIS DP» a la carpeta Aplicaciones',
+              'Arrastra «IRIS» a la carpeta Aplicaciones',
               'Abre desde Launchpad o Aplicaciones (clic derecho → Abrir la primera vez)',
               'La app instalada debe compilarse con las mismas claves Supabase (--dart-define)',
             ],

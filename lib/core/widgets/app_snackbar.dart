@@ -29,6 +29,9 @@ class AppSnackBar {
           style: AppTypography.snackBar(palette),
         ),
         duration: duration,
+        // Con botón («Ver», «Deshacer») Flutter lo deja fijo hasta pulsarlo;
+        // aquí se va solo a su tiempo.
+        persist: false,
         action: actionLabel != null && onAction != null
             ? SnackBarAction(
                 label: actionLabel,
