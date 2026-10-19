@@ -383,6 +383,8 @@ Future<LocationSite?> changeSceneSite(
         content: Text(
           'La escena ${scene.number} se rueda ahora en «${site.name}».',
         ),
+        // Con botón no se queda fijo: se va solo a su tiempo.
+        persist: false,
         action: SnackBarAction(
           label: 'Deshacer',
           onPressed: () => change.undo(db),

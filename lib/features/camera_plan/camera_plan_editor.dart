@@ -1478,6 +1478,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       ..showSnackBar(
         SnackBar(
           content: const Text('Imagen quitada de la planta.'),
+          // Con botón no se queda fijo: se va solo a su tiempo.
+          persist: false,
           action: SnackBarAction(
             label: 'Deshacer',
             onPressed: () async {
