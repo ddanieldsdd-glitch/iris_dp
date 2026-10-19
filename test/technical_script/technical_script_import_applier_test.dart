@@ -277,4 +277,57 @@ void main() {
     expect(again.looseSketches, 0);
     expect(await db.getLightSetupsForProject(projectId), hasLength(1));
   });
+
+  final realDoc = File(
+    '${Platform.environment['HOME']}/Downloads/'
+    'GUION TECNICO KEBAB KHALED - Manu Roma (1).docx',
+  );
+  test(
+    'Word real de Kebab Khaled: en vacío, editar y reimportar',
+    () async {
+      final doc = DocxTechnicalScriptReader.read(realDoc.readAsBytesSync());
+      final totalRefs = doc.scenes
+          .expand((s) => s.shots)
+          .fold<int>(0, (n, s) => n + s.references.length);
+      final first = await run(doc, ImportDecisions());
+      // ignore: avoid_print
+      print('1ª importación: ${first.summary}');
+      expect(first.scenesAdded, doc.scenes.length);
+      expect(first.shotsAdded, doc.shotCount);
+      expect(first.referencesAdded, totalRefs);
+
+      final all = await scenes();
+      expect(
+        all.map((s) => s.label),
+        containsAllInOrder(['12', '13A', '13B', '14']),
+      );
+
+      // Cambio a mano y un plano propio.
+      final s1 = all.first;
+      final p1 = (await shotsOf(s1)).first;
+      await db.updateShotFields(
+        p1.id,
+        const ShotsCompanion(lens: Value('18mm')),
+      );
+      await db.insertShot(
+        ShotsCompanion.insert(sceneId: s1.id, projectId: projectId, number: 9),
+      );
+
+      final merge = await run(doc, ImportDecisions());
+      // ignore: avoid_print
+      print('Reimportar (fusionar): ${merge.summary}');
+      expect(merge.referencesAdded, 0);
+      expect(merge.shotsAdded, 0);
+      expect((await db.getShotById(p1.id))!.lens, '18mm');
+      expect(await shotsOf(s1), hasLength(doc.scenes.first.shots.length + 1));
+
+      final over = await run(doc, ImportDecisions(mode: ImportMode.overwrite));
+      // ignore: avoid_print
+      print('Reimportar (sobrescribir): ${over.summary}');
+      expect((await db.getShotById(p1.id))!.lens, '25mm');
+      expect(over.shotsDeleted, 1);
+      expect(over.referencesAdded, 0);
+    },
+    skip: realDoc.existsSync() ? false : 'No está el documento de ejemplo',
+  );
 }
