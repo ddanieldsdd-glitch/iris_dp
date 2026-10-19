@@ -274,6 +274,11 @@ class LightSetups extends Table {
   TextColumn get sketchJson => text().nullable()();
   TextColumn get sketchImagePath => text().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  // Qué es (schemaVersion 54): planta (esquema de luz de verdad, con sus
+  // planos), boceto_elementos o boceto_mano. Un boceto no lleva planos.
+  TextColumn get kind => text().withDefault(const Constant('planta'))();
+  // Escena a la que pertenece un boceto; nula = boceto libre.
+  IntColumn get sceneId => integer().nullable().references(Scenes, #id)();
 }
 
 class CameraPathPoints extends Table {
@@ -929,4 +934,58 @@ class VisualBibleDocuments extends Table {
   IntColumn get documentSchemaVersion =>
       integer().withDefault(const Constant(1))();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+/// Papelera de la planta de luz y cámara (schemaVersion 53). Cada entrada es
+/// una foto de lo borrado o vaciado (localización con sus sets, set con sus
+/// esquemas y las cámaras de sus planos, contenido de una planta), para
+/// devolverlo tal cual. Es de este equipo: no viaja en la sincronización.
+@DataClassName('PlanTrashEntry')
+class PlanTrash extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  TextColumn get kind => text()();
+  // site | set | light_setup | plan_contents
+  TextColumn get label => text()();
+  // «Localización «Bosque»», para la lista de la papelera
+  TextColumn get detail => text().nullable()();
+  // «2 sets · 3 planos sin planta»
+  TextColumn get payloadJson => text()();
+  DateTimeColumn get deletedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+/// Imágenes puestas sobre una planta, como en Miro (schemaVersion 55): una
+/// cenital de Google Maps, un fotograma del storyboard, una referencia del
+/// moodboard o algo pegado del navegador. Cada una va debajo o encima de
+/// los elementos de la planta, y se puede comentar.
+class PlanImages extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  TextColumn get targetType => text()();
+  // site | set | lightSetup | shot (la capa de la planta a la que va)
+  IntColumn get targetId => integer()();
+  TextColumn get path => text().nullable()();
+  TextColumn get source => text().withDefault(const Constant('archivo'))();
+  // pegada | moodboard | storyboard | archivo
+  TextColumn get caption => text().nullable()();
+  // Rectángulo en coordenadas de la planta.
+  RealColumn get x => real()();
+  RealColumn get y => real()();
+  RealColumn get w => real()();
+  RealColumn get h => real()();
+  RealColumn get rotation => real().withDefault(const Constant(0.0))();
+  RealColumn get opacity => real().withDefault(const Constant(1.0))();
+  // Encima de cámaras, personajes y luces; si no, debajo.
+  BoolColumn get above => boolean().withDefault(const Constant(false))();
+  BoolColumn get locked => boolean().withDefault(const Constant(false))();
+  // Terreno: una cenital puesta a escala con dos puntos de medida conocida.
+  BoolColumn get terrain => boolean().withDefault(const Constant(false))();
+  // Plano cuya cámara enseña esta imagen (una línea las une).
+  IntColumn get linkedShotId => integer().nullable()();
+  // Comentarios: [{"author": "dp", "text": "…", "at": "ISO"}]
+  TextColumn get commentsJson => text().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 }

@@ -372,6 +372,8 @@ class ProjectContentBundle {
     final bibleComments = <Map<String, dynamic>>[];
     final exposureBlocks = <Map<String, dynamic>>[];
     final lightingSetups = <Map<String, dynamic>>[];
+    // Fichas de luz de la biblia por id: sus dibujos viajan con su uid.
+    final lightingKeyById = <int, String>{};
     final cameraTests = <Map<String, dynamic>>[];
     final visualBibleDocuments = <Map<String, dynamic>>[];
     final narrativeCards = <Map<String, dynamic>>[];
@@ -476,6 +478,7 @@ class ProjectContentBundle {
         db.lightingSetups,
       )..where((s) => s.bibleId.equals(vb.id))).get();
       for (final setup in setups) {
+        if (setup.uid != null) lightingKeyById[setup.id] = setup.uid!;
         lightingSetups.add({
           'uid': setup.uid,
           'bibleKey': vbKey,
@@ -527,6 +530,9 @@ class ProjectContentBundle {
     final annotatedPdfs = await (db.select(
       db.projectAnnotatedPdfs,
     )..where((p) => p.projectId.equals(projectId))).get();
+    final planImageRows = await (db.select(
+      db.planImages,
+    )..where((i) => i.projectId.equals(projectId))).get();
     final annotationDocuments = await (db.select(
       db.projectAnnotationDocuments,
     )..where((a) => a.projectId.equals(projectId))).get();
@@ -536,6 +542,12 @@ class ProjectContentBundle {
     )..where((o) => o.projectId.equals(projectId))).get();
 
     final lightSetupRows = await db.getLightSetupsForProject(projectId);
+    // Bocetos que enseña un plano (`setup:<id>`): viajan con el uid del
+    // boceto, que es el mismo en todos los equipos.
+    final lightSetupUidById = {
+      for (final s in await db.getLightSetupsForProject(projectId))
+        if (s.uid != null) s.id: s.uid!,
+    };
     final lightSetupKeyById = {
       for (var i = 0; i < lightSetupRows.length; i++)
         lightSetupRows[i].id: 'lightSetup:$i',
@@ -631,6 +643,8 @@ class ProjectContentBundle {
               'sketchJson': s.sketchJson,
               'sketchImagePath': s.sketchImagePath,
               'sortOrder': s.sortOrder,
+              'kind': s.kind,
+              'sceneKey': s.sceneId != null ? sceneKeyById[s.sceneId!] : null,
             },
           )
           .toList(),
@@ -701,7 +715,10 @@ class ProjectContentBundle {
           if (shot.description != null) 'description': shot.description,
           if (!shot.autoNumbering) 'autoNumbering': false,
           if (shot.cameraPlanImagePath != null)
-            'cameraPlanImagePath': shot.cameraPlanImagePath,
+            'cameraPlanImagePath': _sketchLinksOut(
+              shot.cameraPlanImagePath!,
+              lightSetupUidById,
+            ),
           'lightSetupKey': shot.lightSetupId != null
               ? lightSetupKeyById[shot.lightSetupId!]
               : null,
@@ -812,6 +829,18 @@ class ProjectContentBundle {
       'visualBibleNarrativeCards': narrativeCards,
       'bibleSectionEvidence': sectionEvidence,
       'projectAnnotatedPdfs': annotatedPdfs.map((p) => p.toJson()).toList(),
+      'planImages': [
+        for (final image in planImageRows)
+          if (_planImageExport(
+                image,
+                siteKeyById: siteKeyById,
+                setKeyById: setKeyById,
+                shotKeyById: shotKeyById,
+                lightSetupKeyById: lightSetupKeyById,
+              )
+              case final exported?)
+            exported,
+      ],
       'projectAnnotationDocuments': [
         for (final document in annotationDocuments)
           if (_annotationExport(
@@ -821,6 +850,7 @@ class ProjectContentBundle {
                 shotKeyById: shotKeyById,
                 moodboardKeyById: moodboardKeyById,
                 lightSetupKeyById: lightSetupKeyById,
+                lightingKeyById: lightingKeyById,
               )
               case final exported?)
             exported,
@@ -837,7 +867,49 @@ class ProjectContentBundle {
     'camera_plan_shot',
     'camera_plan_light_setup',
     'moodboard_image',
+    'lighting_setup',
   };
+
+  /// Una imagen de la planta para el bundle, con la clave de su capa en vez
+  /// del id local; nula si su capa ya no existe.
+  static Map<String, dynamic>? _planImageExport(
+    PlanImage image, {
+    required Map<int, String> siteKeyById,
+    required Map<int, String> setKeyById,
+    required Map<int, String> shotKeyById,
+    required Map<int, String> lightSetupKeyById,
+  }) {
+    final targetKey = switch (image.targetType) {
+      'site' => siteKeyById[image.targetId],
+      'set' => setKeyById[image.targetId],
+      'lightSetup' => lightSetupKeyById[image.targetId],
+      'shot' => shotKeyById[image.targetId],
+      _ => null,
+    };
+    if (targetKey == null) return null;
+    return {
+      'uid': image.uid,
+      'targetType': image.targetType,
+      'targetKey': targetKey,
+      'path': image.path,
+      'source': image.source,
+      'caption': image.caption,
+      'x': image.x,
+      'y': image.y,
+      'w': image.w,
+      'h': image.h,
+      'rotation': image.rotation,
+      'opacity': image.opacity,
+      'above': image.above,
+      'locked': image.locked,
+      'terrain': image.terrain,
+      'linkedShotKey': image.linkedShotId == null
+          ? null
+          : shotKeyById[image.linkedShotId!],
+      'commentsJson': image.commentsJson,
+      'sortOrder': image.sortOrder,
+    };
+  }
 
   /// Un documento de dibujo para el bundle, o nulo si su destino ya no
   /// existe (un dibujo huérfano no tiene adónde volver al importar y antes
@@ -849,6 +921,7 @@ class ProjectContentBundle {
     required Map<int, String> shotKeyById,
     required Map<int, String> moodboardKeyById,
     required Map<int, String> lightSetupKeyById,
+    required Map<int, String> lightingKeyById,
   }) {
         final numericTargetId = int.tryParse(document.targetId);
         final targetKey = switch (document.targetType) {
@@ -862,6 +935,8 @@ class ProjectContentBundle {
             numericTargetId != null ? moodboardKeyById[numericTargetId] : null,
           'camera_plan_light_setup' =>
             numericTargetId != null ? lightSetupKeyById[numericTargetId] : null,
+          'lighting_setup' =>
+            numericTargetId != null ? lightingKeyById[numericTargetId] : null,
           _ => null,
         };
         if (_keyedAnnotationTargets.contains(document.targetType) &&
@@ -1276,6 +1351,37 @@ class ProjectContentBundle {
     return null;
   }
 
+  /// `setup:<id>` → `setupUid:<uid>` en la lista de bocetos de un plano.
+  /// Cada entrada conserva su sitio (la descarga de archivos va posición a
+  /// posición): lo que no se puede traducir se queda como estaba.
+  static String _sketchLinksOut(String raw, Map<int, String> uidById) {
+    final entries = decodeSlotPaths(raw);
+    if (!entries.any((e) => e.startsWith('setup:'))) return raw;
+    return jsonEncode([
+      for (final e in entries)
+        if (e.startsWith('setup:') &&
+            uidById[int.tryParse(e.substring(6))] != null)
+          'setupUid:${uidById[int.tryParse(e.substring(6))]}'
+        else
+          e,
+    ]);
+  }
+
+  /// Al importar, `setupUid:<uid>` vuelve a `setup:<id>` de este equipo;
+  /// el resto, en su sitio.
+  static String? _sketchLinksIn(String? raw, Map<String, int> idByUid) {
+    if (raw == null) return null;
+    final entries = decodeSlotPaths(raw);
+    if (!entries.any((e) => e.startsWith('setupUid:'))) return raw;
+    return jsonEncode([
+      for (final e in entries)
+        if (e.startsWith('setupUid:') && idByUid[e.substring(9)] != null)
+          'setup:${idByUid[e.substring(9)]}'
+        else
+          e,
+    ]);
+  }
+
   static bool _looksLikeFilePath(String value) =>
       value.startsWith('/') || RegExp(r'^[A-Za-z]:[\\/]').hasMatch(value);
 
@@ -1486,6 +1592,9 @@ class ProjectContentBundle {
     }
 
     final lightSetupKeyToId = <String, int>{};
+    final lightSetupIdByUid = <String, int>{};
+    // Bocetos y su escena: las escenas llegan después.
+    final sketchSceneKeys = <int, String>{};
     for (final row in bundle['lightSetups'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final siteKey = m['siteKey'] as String?;
@@ -1506,9 +1615,14 @@ class ProjectContentBundle {
           sketchJson: Value(m['sketchJson'] as String?),
           sketchImagePath: Value(m['sketchImagePath'] as String?),
           sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+          kind: Value(m['kind'] as String? ?? 'planta'),
         ),
       );
       lightSetupKeyToId[m['lightSetupKey'] as String] = id;
+      if (m['uid'] case final String uid) lightSetupIdByUid[uid] = id;
+      if (m['sceneKey'] case final String sceneKey) {
+        sketchSceneKeys[id] = sceneKey;
+      }
     }
 
     for (final row in bundle['locationImages'] as List? ?? []) {
@@ -1568,6 +1682,13 @@ class ProjectContentBundle {
       keptScenes.add(id);
       sceneKeyToId[m['sceneKey'] as String] = id;
     }
+    for (final MapEntry(key: setupId, value: sceneKey)
+        in sketchSceneKeys.entries) {
+      final sceneId = sceneKeyToId[sceneKey];
+      if (sceneId == null) continue;
+      await (db.update(db.lightSetups)..where((s) => s.id.equals(setupId)))
+          .write(LightSetupsCompanion(sceneId: Value(sceneId)));
+    }
     if (inPlace) {
       await (db.delete(db.scenes)
             ..where((s) => s.projectId.equals(projectId) & s.id.isNotIn(keptScenes)))
@@ -1607,7 +1728,12 @@ class ProjectContentBundle {
           fps: Value(bundleInt(m['fps'])),
           description: Value(m['description'] as String?),
           autoNumbering: Value(m['autoNumbering'] as bool? ?? true),
-          cameraPlanImagePath: Value(m['cameraPlanImagePath'] as String?),
+          cameraPlanImagePath: Value(
+            _sketchLinksIn(
+              m['cameraPlanImagePath'] as String?,
+              lightSetupIdByUid,
+            ),
+          ),
           storyboardImagePath: Value(
             m['storyboardImagePath'] as String?,
           ),
@@ -2110,11 +2236,12 @@ class ProjectContentBundle {
           );
     }
 
+    final lightingKeyToId = <String, int>{};
     for (final row in bundle['lightingSetups'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final bibleId = vbKeyToId[m['bibleKey'] as String];
       if (bibleId == null) continue;
-      await db
+      final lightingId = await db
           .into(db.lightingSetups)
           .insert(
             LightingSetupsCompanion.insert(
@@ -2132,6 +2259,7 @@ class ProjectContentBundle {
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
             ),
           );
+      if (m['uid'] case final String uid) lightingKeyToId[uid] = lightingId;
     }
 
     for (final row in bundle['cameraTests'] as List? ?? []) {
@@ -2192,6 +2320,46 @@ class ProjectContentBundle {
           );
     }
 
+    for (final row in bundle['planImages'] as List? ?? []) {
+      final m = Map<String, dynamic>.from(row as Map);
+      final key = m['targetKey'] as String?;
+      final targetType = m['targetType'] as String? ?? '';
+      final targetId = switch (targetType) {
+        'site' => siteKeyToId[key],
+        'set' => setKeyToId[key],
+        'lightSetup' => lightSetupKeyToId[key],
+        'shot' => shotKeyToId[key],
+        _ => null,
+      };
+      if (targetId == null) continue;
+      double num0(Object? v, double or) => (v as num?)?.toDouble() ?? or;
+      await db
+          .into(db.planImages)
+          .insert(
+            PlanImagesCompanion.insert(
+              uid: bundleUid(m['uid']),
+              projectId: projectId,
+              targetType: targetType,
+              targetId: targetId,
+              path: Value(m['path'] as String?),
+              source: Value(m['source'] as String? ?? 'archivo'),
+              caption: Value(m['caption'] as String?),
+              x: num0(m['x'], 0),
+              y: num0(m['y'], 0),
+              w: num0(m['w'], 200),
+              h: num0(m['h'], 150),
+              rotation: Value(num0(m['rotation'], 0)),
+              opacity: Value(num0(m['opacity'], 1)),
+              above: Value(m['above'] as bool? ?? false),
+              locked: Value(m['locked'] as bool? ?? false),
+              terrain: Value(m['terrain'] as bool? ?? false),
+              linkedShotId: Value(shotKeyToId[m['linkedShotKey']]),
+              commentsJson: Value(m['commentsJson'] as String?),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+            ),
+          );
+    }
+
     for (final row in bundle['projectAnnotationDocuments'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final targetType = m['targetType'] as String? ?? 'unknown';
@@ -2207,6 +2375,8 @@ class ProjectContentBundle {
           targetKey != null ? moodboardKeyToId[targetKey]?.toString() : null,
         'camera_plan_light_setup' =>
           targetKey != null ? lightSetupKeyToId[targetKey]?.toString() : null,
+        'lighting_setup' =>
+          targetKey != null ? lightingKeyToId[targetKey]?.toString() : null,
         _ => null,
       };
       // Un dibujo de una fila que no ha llegado no tiene adónde ir: tomar el

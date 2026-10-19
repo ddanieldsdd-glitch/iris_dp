@@ -537,7 +537,7 @@ void main() {
       // Borrar el set Quirófano desde su menú se lleva su esquema.
       await tester.tap(find.byTooltip('Opciones del set').last);
       await settle(tester);
-      await tester.tap(find.text('Borrar set'));
+      await tester.tap(find.text('Borrar set…'));
       await settle(tester);
       expect(
         find.textContaining('¿Borrar el set «Quirófano»?'),
@@ -550,6 +550,10 @@ void main() {
       all = await setups();
       expect(all.where((s) => s.locationBasePlanId == otherSetId), isEmpty);
       expect(all, hasLength(2));
+      // Queda en la papelera, y se ofrece deshacer.
+      expect(find.text('Deshacer'), findsOneWidget);
+      final trash = await tester.runAsync(() => db.select(db.planTrash).get());
+      expect(trash!.map((t) => t.label), ['Set «Quirófano»']);
 
       // Supr sobre el esquema copia lo borra, tras confirmar; el plano no
       // se toca porque no lo usa.

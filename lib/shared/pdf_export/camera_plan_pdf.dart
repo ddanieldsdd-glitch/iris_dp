@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -10,7 +12,35 @@ import '../../features/camera_plan/camera_plan_constants.dart';
 import '../../features/camera_plan/camera_plan_element_model.dart';
 import '../../features/camera_plan/camera_plan_grouping.dart';
 import '../../features/camera_plan/floor_plan_repository.dart';
+import '../../features/camera_plan/plan_images.dart';
 import '../../features/camera_plan/plan_segment.dart';
+
+/// Una imagen de la planta lista para el PDF.
+class CameraPlanPdfImage {
+  final List<int> bytes;
+  final double x;
+  final double y;
+  final double w;
+  final double h;
+  final double rotation;
+  final double opacity;
+  final bool above;
+
+  /// Número de su nota de comentarios (1, 2…), o nulo sin comentarios.
+  final int? note;
+
+  const CameraPlanPdfImage({
+    required this.bytes,
+    required this.x,
+    required this.y,
+    required this.w,
+    required this.h,
+    this.rotation = 0,
+    this.opacity = 1,
+    this.above = false,
+    this.note,
+  });
+}
 
 /// Representación cenital vectorial de una planta de cámara.
 ///
@@ -25,6 +55,7 @@ abstract final class CameraPlanPdfDiagram {
   static pw.Widget build({
     required List<PlanElement> elements,
     required AnnotationDocument annotations,
+    List<CameraPlanPdfImage> images = const [],
   }) {
     return pw.Container(
       width: width,
@@ -33,8 +64,11 @@ abstract final class CameraPlanPdfDiagram {
         color: PdfColors.white,
         border: pw.Border.all(color: PdfColors.grey400, width: 0.7),
       ),
-      child: pw.Stack(
+      child: pw.ClipRect(
+        child: pw.Stack(
         children: [
+          for (final image in images)
+            if (!image.above) _buildImage(image),
           pw.CustomPaint(
             size: const PdfPoint(width, height),
             painter: (canvas, size) => _paintPlan(canvas, size, elements),
@@ -45,9 +79,110 @@ abstract final class CameraPlanPdfDiagram {
             width: width,
             height: height,
           ),
+          for (final image in images)
+            if (image.above) _buildImage(image),
+          for (final image in images)
+            if (image.note != null) _buildNoteMark(image),
         ],
+        ),
       ),
     );
+  }
+
+  static pw.Widget _buildImage(CameraPlanPdfImage image) {
+    const scaleX = width / documentWidth;
+    const scaleY = height / documentHeight;
+    pw.Widget child = pw.Image(
+      pw.MemoryImage(Uint8List.fromList(image.bytes)),
+      fit: pw.BoxFit.fill,
+    );
+    if (image.opacity < 1) {
+      child = pw.Opacity(opacity: image.opacity.clamp(0.05, 1), child: child);
+    }
+    if (image.rotation != 0) {
+      child = pw.Transform.rotate(angle: -image.rotation, child: child);
+    }
+    return pw.Positioned(
+      left: image.x * scaleX,
+      top: image.y * scaleY,
+      child: pw.SizedBox(
+        width: image.w * scaleX,
+        height: image.h * scaleY,
+        child: child,
+      ),
+    );
+  }
+
+  /// Número de la nota de comentarios, en la esquina de la imagen.
+  static pw.Widget _buildNoteMark(CameraPlanPdfImage image) {
+    const scaleX = width / documentWidth;
+    const scaleY = height / documentHeight;
+    return pw.Positioned(
+      left: (image.x + image.w) * scaleX - 10,
+      top: image.y * scaleY + 2,
+      child: pw.Container(
+        width: 9,
+        height: 9,
+        alignment: pw.Alignment.center,
+        decoration: const pw.BoxDecoration(
+          color: PdfColors.amber300,
+          shape: pw.BoxShape.circle,
+        ),
+        child: pw.Text(
+          '${image.note}',
+          style: const pw.TextStyle(fontSize: 5.5),
+        ),
+      ),
+    );
+  }
+
+  /// Las imágenes de las capas de un plano (localización, set, luz y el
+  /// propio plano), y sus comentarios como notas numeradas.
+  static Future<({List<CameraPlanPdfImage> images, List<String> notes})>
+  imagesForShot(AppDatabase db, Shot shot) async {
+    final scene = await (db.select(
+      db.scenes,
+    )..where((s) => s.id.equals(shot.sceneId))).getSingleOrNull();
+    final setId = shot.locationBasePlanId ?? scene?.locationId;
+    final set = setId == null ? null : await db.getLocationById(setId);
+    final rows = await PlanImageStore(db).forLayers(
+      projectId: shot.projectId,
+      siteId: set?.siteId ?? scene?.locationSiteId,
+      setId: setId,
+      lightSetupId: shot.lightSetupId,
+      shotId: shot.id,
+    );
+    final images = <CameraPlanPdfImage>[];
+    final notes = <String>[];
+    for (final row in rows) {
+      final path = row.path;
+      if (path == null) continue;
+      final file = File(path);
+      if (!file.existsSync()) continue;
+      final comments = PlanImageComment.decode(row.commentsJson);
+      int? note;
+      if (comments.isNotEmpty) {
+        note = notes.length + 1;
+        notes.add(
+          '[$note] ${row.caption ?? 'Imagen'}: '
+          '${comments.map((c) => '${kPlanImageAuthors[c.author] ?? c.author}: ${c.text}').join(' · ')}',
+        );
+      }
+      images.add(
+        CameraPlanPdfImage(
+          bytes: await file.readAsBytes(),
+          x: row.x,
+          y: row.y,
+          w: row.w,
+          h: row.h,
+          rotation: row.rotation,
+          opacity: row.opacity,
+          above: row.above,
+          note: note,
+        ),
+      );
+    }
+    return (images: images, notes: notes);
   }
 
   static pw.Widget _buildLabel(PlanElement element) {
@@ -357,12 +492,22 @@ class CameraPlanPdfExporter {
         );
 
         blocks.add(pw.SizedBox(height: 4));
+        final planImages = await CameraPlanPdfDiagram.imagesForShot(db, shot);
         blocks.add(
           CameraPlanPdfDiagram.build(
             elements: elements,
             annotations: annotations,
+            images: planImages.images,
           ),
         );
+        for (final note in planImages.notes) {
+          blocks.add(
+            pw.Text(
+              note,
+              style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey800),
+            ),
+          );
+        }
         blocks.add(pw.SizedBox(height: 6));
 
         if (elements.isEmpty) {

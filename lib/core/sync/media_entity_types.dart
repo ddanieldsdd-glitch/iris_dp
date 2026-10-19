@@ -14,6 +14,7 @@ abstract final class MediaEntityType {
   /// subido con este tipo se ignora al bajar.
   static const shotMainReference = 'shot_main_reference';
   static const lightSketch = 'light_sketch';
+  static const planImage = 'plan_image';
   static const lightingReference = 'lighting_reference';
   static const setPlan = 'set_plan';
   static const bibleEvidence = 'bible_evidence';

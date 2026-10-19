@@ -13,6 +13,7 @@ import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/scene_color_picker.dart';
+import '../camera_plan/plan_trash_ui.dart';
 import 'location_form_sheet.dart';
 import 'location_site_form_sheet.dart';
 import 'location_site_tabs.dart';
@@ -120,40 +121,11 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen> {
         return;
       }
     }
-    final count = await db.countScenesForLocation(set.id);
     if (!mounted) return;
-    final palette = context.palette;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: palette.surfaceElevated,
-        title: Text('Eliminar set de rodaje',
-            style: AppTypography.titleLarge(palette)),
-        content: Text(
-          count > 0
-              ? '«${set.locationName}» tiene $count escena(s) vinculada(s). '
-                  'Se desvincularán pero no se borrarán.'
-              : '¿Eliminar «${set.locationName}»?',
-          style: AppTypography.bodyLarge(palette),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancelar', style: AppTypography.bodyMedium(palette)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('Eliminar',
-                style: AppTypography.bodyMedium(palette)
-                    .copyWith(color: palette.error)),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true) return;
-
-    await db.deleteLocation(set.id);
+    // Pide confirmación diciendo qué planos pierden la planta, y deja el set
+    // en la Papelera de plantas.
+    await confirmDeleteSet(context, db, set);
+    if (await db.getLocationById(set.id) != null) return;
     if (mounted && _expandedSetId == set.id) {
       setState(() => _expandedSetId = null);
     }
@@ -161,40 +133,9 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen> {
 
   Future<void> _deleteSite(LocationSite site) async {
     final db = ref.read(databaseProvider);
-    final setCount = await db.countSetsForSite(site.id);
-    if (!mounted) return;
-    final palette = context.palette;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: palette.surfaceElevated,
-        title:
-            Text('Eliminar localización', style: AppTypography.titleLarge(palette)),
-        content: Text(
-          setCount > 0
-              ? '«${site.name}» tiene $setCount set(s). Los sets quedarán sueltos '
-                  'pero no se borrarán.'
-              : '¿Eliminar «${site.name}»?',
-          style: AppTypography.bodyLarge(palette),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancelar', style: AppTypography.bodyMedium(palette)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('Eliminar',
-                style: AppTypography.bodyMedium(palette)
-                    .copyWith(color: palette.error)),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true) return;
-
-    await db.deleteSite(site.id);
+    // Se van también sus sets; queda todo en la Papelera de plantas.
+    await confirmDeleteSite(context, db, site);
+    if (await db.getSiteById(site.id) != null) return;
     if (mounted && _selectedSiteId == site.id) {
       setState(() {
         _selectedSiteId = null;

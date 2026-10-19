@@ -5083,6 +5083,30 @@ class $LightSetupsTable extends LightSetups
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('planta'),
+  );
+  static const VerificationMeta _sceneIdMeta = const VerificationMeta(
+    'sceneId',
+  );
+  @override
+  late final GeneratedColumn<int> sceneId = GeneratedColumn<int>(
+    'scene_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES scenes (id)',
+    ),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -5098,6 +5122,8 @@ class $LightSetupsTable extends LightSetups
     sketchJson,
     sketchImagePath,
     sortOrder,
+    kind,
+    sceneId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5199,6 +5225,18 @@ class $LightSetupsTable extends LightSetups
         sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
       );
     }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    }
+    if (data.containsKey('scene_id')) {
+      context.handle(
+        _sceneIdMeta,
+        sceneId.isAcceptableOrUnknown(data['scene_id']!, _sceneIdMeta),
+      );
+    }
     return context;
   }
 
@@ -5260,6 +5298,14 @@ class $LightSetupsTable extends LightSetups
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
       )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      sceneId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}scene_id'],
+      ),
     );
   }
 
@@ -5285,6 +5331,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
   final String? sketchJson;
   final String? sketchImagePath;
   final int sortOrder;
+  final String kind;
+  final int? sceneId;
   const LightSetup({
     required this.id,
     this.uid,
@@ -5299,6 +5347,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     this.sketchJson,
     this.sketchImagePath,
     required this.sortOrder,
+    required this.kind,
+    this.sceneId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -5330,6 +5380,10 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
       map['sketch_image_path'] = Variable<String>(sketchImagePath);
     }
     map['sort_order'] = Variable<int>(sortOrder);
+    map['kind'] = Variable<String>(kind);
+    if (!nullToAbsent || sceneId != null) {
+      map['scene_id'] = Variable<int>(sceneId);
+    }
     return map;
   }
 
@@ -5360,6 +5414,10 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
           ? const Value.absent()
           : Value(sketchImagePath),
       sortOrder: Value(sortOrder),
+      kind: Value(kind),
+      sceneId: sceneId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sceneId),
     );
   }
 
@@ -5382,6 +5440,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
       sketchJson: serializer.fromJson<String?>(json['sketchJson']),
       sketchImagePath: serializer.fromJson<String?>(json['sketchImagePath']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      kind: serializer.fromJson<String>(json['kind']),
+      sceneId: serializer.fromJson<int?>(json['sceneId']),
     );
   }
   @override
@@ -5401,6 +5461,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
       'sketchJson': serializer.toJson<String?>(sketchJson),
       'sketchImagePath': serializer.toJson<String?>(sketchImagePath),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'kind': serializer.toJson<String>(kind),
+      'sceneId': serializer.toJson<int?>(sceneId),
     };
   }
 
@@ -5418,6 +5480,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     Value<String?> sketchJson = const Value.absent(),
     Value<String?> sketchImagePath = const Value.absent(),
     int? sortOrder,
+    String? kind,
+    Value<int?> sceneId = const Value.absent(),
   }) => LightSetup(
     id: id ?? this.id,
     uid: uid.present ? uid.value : this.uid,
@@ -5438,6 +5502,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
         ? sketchImagePath.value
         : this.sketchImagePath,
     sortOrder: sortOrder ?? this.sortOrder,
+    kind: kind ?? this.kind,
+    sceneId: sceneId.present ? sceneId.value : this.sceneId,
   );
   LightSetup copyWithCompanion(LightSetupsCompanion data) {
     return LightSetup(
@@ -5462,6 +5528,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
           ? data.sketchImagePath.value
           : this.sketchImagePath,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      sceneId: data.sceneId.present ? data.sceneId.value : this.sceneId,
     );
   }
 
@@ -5480,7 +5548,9 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
           ..write('planJson: $planJson, ')
           ..write('sketchJson: $sketchJson, ')
           ..write('sketchImagePath: $sketchImagePath, ')
-          ..write('sortOrder: $sortOrder')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('kind: $kind, ')
+          ..write('sceneId: $sceneId')
           ..write(')'))
         .toString();
   }
@@ -5500,6 +5570,8 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     sketchJson,
     sketchImagePath,
     sortOrder,
+    kind,
+    sceneId,
   );
   @override
   bool operator ==(Object other) =>
@@ -5517,7 +5589,9 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
           other.planJson == this.planJson &&
           other.sketchJson == this.sketchJson &&
           other.sketchImagePath == this.sketchImagePath &&
-          other.sortOrder == this.sortOrder);
+          other.sortOrder == this.sortOrder &&
+          other.kind == this.kind &&
+          other.sceneId == this.sceneId);
 }
 
 class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
@@ -5534,6 +5608,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
   final Value<String?> sketchJson;
   final Value<String?> sketchImagePath;
   final Value<int> sortOrder;
+  final Value<String> kind;
+  final Value<int?> sceneId;
   const LightSetupsCompanion({
     this.id = const Value.absent(),
     this.uid = const Value.absent(),
@@ -5548,6 +5624,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     this.sketchJson = const Value.absent(),
     this.sketchImagePath = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.sceneId = const Value.absent(),
   });
   LightSetupsCompanion.insert({
     this.id = const Value.absent(),
@@ -5563,6 +5641,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     this.sketchJson = const Value.absent(),
     this.sketchImagePath = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.sceneId = const Value.absent(),
   }) : projectId = Value(projectId),
        name = Value(name);
   static Insertable<LightSetup> custom({
@@ -5579,6 +5659,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     Expression<String>? sketchJson,
     Expression<String>? sketchImagePath,
     Expression<int>? sortOrder,
+    Expression<String>? kind,
+    Expression<int>? sceneId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -5595,6 +5677,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
       if (sketchJson != null) 'sketch_json': sketchJson,
       if (sketchImagePath != null) 'sketch_image_path': sketchImagePath,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (kind != null) 'kind': kind,
+      if (sceneId != null) 'scene_id': sceneId,
     });
   }
 
@@ -5612,6 +5696,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     Value<String?>? sketchJson,
     Value<String?>? sketchImagePath,
     Value<int>? sortOrder,
+    Value<String>? kind,
+    Value<int?>? sceneId,
   }) {
     return LightSetupsCompanion(
       id: id ?? this.id,
@@ -5627,6 +5713,8 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
       sketchJson: sketchJson ?? this.sketchJson,
       sketchImagePath: sketchImagePath ?? this.sketchImagePath,
       sortOrder: sortOrder ?? this.sortOrder,
+      kind: kind ?? this.kind,
+      sceneId: sceneId ?? this.sceneId,
     );
   }
 
@@ -5672,6 +5760,12 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (sceneId.present) {
+      map['scene_id'] = Variable<int>(sceneId.value);
+    }
     return map;
   }
 
@@ -5690,7 +5784,9 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
           ..write('planJson: $planJson, ')
           ..write('sketchJson: $sketchJson, ')
           ..write('sketchImagePath: $sketchImagePath, ')
-          ..write('sortOrder: $sortOrder')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('kind: $kind, ')
+          ..write('sceneId: $sceneId')
           ..write(')'))
         .toString();
   }
@@ -35156,6 +35252,1516 @@ class VisualBibleDocumentsCompanion
   }
 }
 
+class $PlanTrashTable extends PlanTrash
+    with TableInfo<$PlanTrashTable, PlanTrashEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PlanTrashTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailMeta = const VerificationMeta('detail');
+  @override
+  late final GeneratedColumn<String> detail = GeneratedColumn<String>(
+    'detail',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    projectId,
+    kind,
+    label,
+    detail,
+    payloadJson,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'plan_trash';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PlanTrashEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_labelMeta);
+    }
+    if (data.containsKey('detail')) {
+      context.handle(
+        _detailMeta,
+        detail.isAcceptableOrUnknown(data['detail']!, _detailMeta),
+      );
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadJsonMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PlanTrashEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PlanTrashEntry(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      label: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}label'],
+      )!,
+      detail: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}detail'],
+      ),
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PlanTrashTable createAlias(String alias) {
+    return $PlanTrashTable(attachedDatabase, alias);
+  }
+}
+
+class PlanTrashEntry extends DataClass implements Insertable<PlanTrashEntry> {
+  final int id;
+  final int projectId;
+  final String kind;
+  final String label;
+  final String? detail;
+  final String payloadJson;
+  final DateTime deletedAt;
+  const PlanTrashEntry({
+    required this.id,
+    required this.projectId,
+    required this.kind,
+    required this.label,
+    this.detail,
+    required this.payloadJson,
+    required this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['project_id'] = Variable<int>(projectId);
+    map['kind'] = Variable<String>(kind);
+    map['label'] = Variable<String>(label);
+    if (!nullToAbsent || detail != null) {
+      map['detail'] = Variable<String>(detail);
+    }
+    map['payload_json'] = Variable<String>(payloadJson);
+    map['deleted_at'] = Variable<DateTime>(deletedAt);
+    return map;
+  }
+
+  PlanTrashCompanion toCompanion(bool nullToAbsent) {
+    return PlanTrashCompanion(
+      id: Value(id),
+      projectId: Value(projectId),
+      kind: Value(kind),
+      label: Value(label),
+      detail: detail == null && nullToAbsent
+          ? const Value.absent()
+          : Value(detail),
+      payloadJson: Value(payloadJson),
+      deletedAt: Value(deletedAt),
+    );
+  }
+
+  factory PlanTrashEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PlanTrashEntry(
+      id: serializer.fromJson<int>(json['id']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      kind: serializer.fromJson<String>(json['kind']),
+      label: serializer.fromJson<String>(json['label']),
+      detail: serializer.fromJson<String?>(json['detail']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+      deletedAt: serializer.fromJson<DateTime>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'projectId': serializer.toJson<int>(projectId),
+      'kind': serializer.toJson<String>(kind),
+      'label': serializer.toJson<String>(label),
+      'detail': serializer.toJson<String?>(detail),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+      'deletedAt': serializer.toJson<DateTime>(deletedAt),
+    };
+  }
+
+  PlanTrashEntry copyWith({
+    int? id,
+    int? projectId,
+    String? kind,
+    String? label,
+    Value<String?> detail = const Value.absent(),
+    String? payloadJson,
+    DateTime? deletedAt,
+  }) => PlanTrashEntry(
+    id: id ?? this.id,
+    projectId: projectId ?? this.projectId,
+    kind: kind ?? this.kind,
+    label: label ?? this.label,
+    detail: detail.present ? detail.value : this.detail,
+    payloadJson: payloadJson ?? this.payloadJson,
+    deletedAt: deletedAt ?? this.deletedAt,
+  );
+  PlanTrashEntry copyWithCompanion(PlanTrashCompanion data) {
+    return PlanTrashEntry(
+      id: data.id.present ? data.id.value : this.id,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      label: data.label.present ? data.label.value : this.label,
+      detail: data.detail.present ? data.detail.value : this.detail,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlanTrashEntry(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('kind: $kind, ')
+          ..write('label: $label, ')
+          ..write('detail: $detail, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, projectId, kind, label, detail, payloadJson, deletedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PlanTrashEntry &&
+          other.id == this.id &&
+          other.projectId == this.projectId &&
+          other.kind == this.kind &&
+          other.label == this.label &&
+          other.detail == this.detail &&
+          other.payloadJson == this.payloadJson &&
+          other.deletedAt == this.deletedAt);
+}
+
+class PlanTrashCompanion extends UpdateCompanion<PlanTrashEntry> {
+  final Value<int> id;
+  final Value<int> projectId;
+  final Value<String> kind;
+  final Value<String> label;
+  final Value<String?> detail;
+  final Value<String> payloadJson;
+  final Value<DateTime> deletedAt;
+  const PlanTrashCompanion({
+    this.id = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.label = const Value.absent(),
+    this.detail = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+  });
+  PlanTrashCompanion.insert({
+    this.id = const Value.absent(),
+    required int projectId,
+    required String kind,
+    required String label,
+    this.detail = const Value.absent(),
+    required String payloadJson,
+    this.deletedAt = const Value.absent(),
+  }) : projectId = Value(projectId),
+       kind = Value(kind),
+       label = Value(label),
+       payloadJson = Value(payloadJson);
+  static Insertable<PlanTrashEntry> custom({
+    Expression<int>? id,
+    Expression<int>? projectId,
+    Expression<String>? kind,
+    Expression<String>? label,
+    Expression<String>? detail,
+    Expression<String>? payloadJson,
+    Expression<DateTime>? deletedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (projectId != null) 'project_id': projectId,
+      if (kind != null) 'kind': kind,
+      if (label != null) 'label': label,
+      if (detail != null) 'detail': detail,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+    });
+  }
+
+  PlanTrashCompanion copyWith({
+    Value<int>? id,
+    Value<int>? projectId,
+    Value<String>? kind,
+    Value<String>? label,
+    Value<String?>? detail,
+    Value<String>? payloadJson,
+    Value<DateTime>? deletedAt,
+  }) {
+    return PlanTrashCompanion(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      kind: kind ?? this.kind,
+      label: label ?? this.label,
+      detail: detail ?? this.detail,
+      payloadJson: payloadJson ?? this.payloadJson,
+      deletedAt: deletedAt ?? this.deletedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (detail.present) {
+      map['detail'] = Variable<String>(detail.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlanTrashCompanion(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('kind: $kind, ')
+          ..write('label: $label, ')
+          ..write('detail: $detail, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $PlanImagesTable extends PlanImages
+    with TableInfo<$PlanImagesTable, PlanImage> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PlanImagesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _targetTypeMeta = const VerificationMeta(
+    'targetType',
+  );
+  @override
+  late final GeneratedColumn<String> targetType = GeneratedColumn<String>(
+    'target_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetIdMeta = const VerificationMeta(
+    'targetId',
+  );
+  @override
+  late final GeneratedColumn<int> targetId = GeneratedColumn<int>(
+    'target_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pathMeta = const VerificationMeta('path');
+  @override
+  late final GeneratedColumn<String> path = GeneratedColumn<String>(
+    'path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+    'source',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('archivo'),
+  );
+  static const VerificationMeta _captionMeta = const VerificationMeta(
+    'caption',
+  );
+  @override
+  late final GeneratedColumn<String> caption = GeneratedColumn<String>(
+    'caption',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _xMeta = const VerificationMeta('x');
+  @override
+  late final GeneratedColumn<double> x = GeneratedColumn<double>(
+    'x',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _yMeta = const VerificationMeta('y');
+  @override
+  late final GeneratedColumn<double> y = GeneratedColumn<double>(
+    'y',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _wMeta = const VerificationMeta('w');
+  @override
+  late final GeneratedColumn<double> w = GeneratedColumn<double>(
+    'w',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hMeta = const VerificationMeta('h');
+  @override
+  late final GeneratedColumn<double> h = GeneratedColumn<double>(
+    'h',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _rotationMeta = const VerificationMeta(
+    'rotation',
+  );
+  @override
+  late final GeneratedColumn<double> rotation = GeneratedColumn<double>(
+    'rotation',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0.0),
+  );
+  static const VerificationMeta _opacityMeta = const VerificationMeta(
+    'opacity',
+  );
+  @override
+  late final GeneratedColumn<double> opacity = GeneratedColumn<double>(
+    'opacity',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1.0),
+  );
+  static const VerificationMeta _aboveMeta = const VerificationMeta('above');
+  @override
+  late final GeneratedColumn<bool> above = GeneratedColumn<bool>(
+    'above',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("above" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _lockedMeta = const VerificationMeta('locked');
+  @override
+  late final GeneratedColumn<bool> locked = GeneratedColumn<bool>(
+    'locked',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("locked" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _terrainMeta = const VerificationMeta(
+    'terrain',
+  );
+  @override
+  late final GeneratedColumn<bool> terrain = GeneratedColumn<bool>(
+    'terrain',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("terrain" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _linkedShotIdMeta = const VerificationMeta(
+    'linkedShotId',
+  );
+  @override
+  late final GeneratedColumn<int> linkedShotId = GeneratedColumn<int>(
+    'linked_shot_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _commentsJsonMeta = const VerificationMeta(
+    'commentsJson',
+  );
+  @override
+  late final GeneratedColumn<String> commentsJson = GeneratedColumn<String>(
+    'comments_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    uid,
+    projectId,
+    targetType,
+    targetId,
+    path,
+    source,
+    caption,
+    x,
+    y,
+    w,
+    h,
+    rotation,
+    opacity,
+    above,
+    locked,
+    terrain,
+    linkedShotId,
+    commentsJson,
+    sortOrder,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'plan_images';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PlanImage> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('target_type')) {
+      context.handle(
+        _targetTypeMeta,
+        targetType.isAcceptableOrUnknown(data['target_type']!, _targetTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetTypeMeta);
+    }
+    if (data.containsKey('target_id')) {
+      context.handle(
+        _targetIdMeta,
+        targetId.isAcceptableOrUnknown(data['target_id']!, _targetIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetIdMeta);
+    }
+    if (data.containsKey('path')) {
+      context.handle(
+        _pathMeta,
+        path.isAcceptableOrUnknown(data['path']!, _pathMeta),
+      );
+    }
+    if (data.containsKey('source')) {
+      context.handle(
+        _sourceMeta,
+        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    }
+    if (data.containsKey('caption')) {
+      context.handle(
+        _captionMeta,
+        caption.isAcceptableOrUnknown(data['caption']!, _captionMeta),
+      );
+    }
+    if (data.containsKey('x')) {
+      context.handle(_xMeta, x.isAcceptableOrUnknown(data['x']!, _xMeta));
+    } else if (isInserting) {
+      context.missing(_xMeta);
+    }
+    if (data.containsKey('y')) {
+      context.handle(_yMeta, y.isAcceptableOrUnknown(data['y']!, _yMeta));
+    } else if (isInserting) {
+      context.missing(_yMeta);
+    }
+    if (data.containsKey('w')) {
+      context.handle(_wMeta, w.isAcceptableOrUnknown(data['w']!, _wMeta));
+    } else if (isInserting) {
+      context.missing(_wMeta);
+    }
+    if (data.containsKey('h')) {
+      context.handle(_hMeta, h.isAcceptableOrUnknown(data['h']!, _hMeta));
+    } else if (isInserting) {
+      context.missing(_hMeta);
+    }
+    if (data.containsKey('rotation')) {
+      context.handle(
+        _rotationMeta,
+        rotation.isAcceptableOrUnknown(data['rotation']!, _rotationMeta),
+      );
+    }
+    if (data.containsKey('opacity')) {
+      context.handle(
+        _opacityMeta,
+        opacity.isAcceptableOrUnknown(data['opacity']!, _opacityMeta),
+      );
+    }
+    if (data.containsKey('above')) {
+      context.handle(
+        _aboveMeta,
+        above.isAcceptableOrUnknown(data['above']!, _aboveMeta),
+      );
+    }
+    if (data.containsKey('locked')) {
+      context.handle(
+        _lockedMeta,
+        locked.isAcceptableOrUnknown(data['locked']!, _lockedMeta),
+      );
+    }
+    if (data.containsKey('terrain')) {
+      context.handle(
+        _terrainMeta,
+        terrain.isAcceptableOrUnknown(data['terrain']!, _terrainMeta),
+      );
+    }
+    if (data.containsKey('linked_shot_id')) {
+      context.handle(
+        _linkedShotIdMeta,
+        linkedShotId.isAcceptableOrUnknown(
+          data['linked_shot_id']!,
+          _linkedShotIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('comments_json')) {
+      context.handle(
+        _commentsJsonMeta,
+        commentsJson.isAcceptableOrUnknown(
+          data['comments_json']!,
+          _commentsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PlanImage map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PlanImage(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      targetType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_type'],
+      )!,
+      targetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}target_id'],
+      )!,
+      path: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}path'],
+      ),
+      source: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source'],
+      )!,
+      caption: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}caption'],
+      ),
+      x: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}x'],
+      )!,
+      y: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}y'],
+      )!,
+      w: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}w'],
+      )!,
+      h: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}h'],
+      )!,
+      rotation: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}rotation'],
+      )!,
+      opacity: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}opacity'],
+      )!,
+      above: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}above'],
+      )!,
+      locked: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}locked'],
+      )!,
+      terrain: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}terrain'],
+      )!,
+      linkedShotId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}linked_shot_id'],
+      ),
+      commentsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}comments_json'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+    );
+  }
+
+  @override
+  $PlanImagesTable createAlias(String alias) {
+    return $PlanImagesTable(attachedDatabase, alias);
+  }
+}
+
+class PlanImage extends DataClass implements Insertable<PlanImage> {
+  final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
+  final int projectId;
+  final String targetType;
+  final int targetId;
+  final String? path;
+  final String source;
+  final String? caption;
+  final double x;
+  final double y;
+  final double w;
+  final double h;
+  final double rotation;
+  final double opacity;
+  final bool above;
+  final bool locked;
+  final bool terrain;
+  final int? linkedShotId;
+  final String? commentsJson;
+  final int sortOrder;
+  const PlanImage({
+    required this.id,
+    this.uid,
+    required this.projectId,
+    required this.targetType,
+    required this.targetId,
+    this.path,
+    required this.source,
+    this.caption,
+    required this.x,
+    required this.y,
+    required this.w,
+    required this.h,
+    required this.rotation,
+    required this.opacity,
+    required this.above,
+    required this.locked,
+    required this.terrain,
+    this.linkedShotId,
+    this.commentsJson,
+    required this.sortOrder,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
+    map['project_id'] = Variable<int>(projectId);
+    map['target_type'] = Variable<String>(targetType);
+    map['target_id'] = Variable<int>(targetId);
+    if (!nullToAbsent || path != null) {
+      map['path'] = Variable<String>(path);
+    }
+    map['source'] = Variable<String>(source);
+    if (!nullToAbsent || caption != null) {
+      map['caption'] = Variable<String>(caption);
+    }
+    map['x'] = Variable<double>(x);
+    map['y'] = Variable<double>(y);
+    map['w'] = Variable<double>(w);
+    map['h'] = Variable<double>(h);
+    map['rotation'] = Variable<double>(rotation);
+    map['opacity'] = Variable<double>(opacity);
+    map['above'] = Variable<bool>(above);
+    map['locked'] = Variable<bool>(locked);
+    map['terrain'] = Variable<bool>(terrain);
+    if (!nullToAbsent || linkedShotId != null) {
+      map['linked_shot_id'] = Variable<int>(linkedShotId);
+    }
+    if (!nullToAbsent || commentsJson != null) {
+      map['comments_json'] = Variable<String>(commentsJson);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    return map;
+  }
+
+  PlanImagesCompanion toCompanion(bool nullToAbsent) {
+    return PlanImagesCompanion(
+      id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
+      projectId: Value(projectId),
+      targetType: Value(targetType),
+      targetId: Value(targetId),
+      path: path == null && nullToAbsent ? const Value.absent() : Value(path),
+      source: Value(source),
+      caption: caption == null && nullToAbsent
+          ? const Value.absent()
+          : Value(caption),
+      x: Value(x),
+      y: Value(y),
+      w: Value(w),
+      h: Value(h),
+      rotation: Value(rotation),
+      opacity: Value(opacity),
+      above: Value(above),
+      locked: Value(locked),
+      terrain: Value(terrain),
+      linkedShotId: linkedShotId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(linkedShotId),
+      commentsJson: commentsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(commentsJson),
+      sortOrder: Value(sortOrder),
+    );
+  }
+
+  factory PlanImage.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PlanImage(
+      id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      targetType: serializer.fromJson<String>(json['targetType']),
+      targetId: serializer.fromJson<int>(json['targetId']),
+      path: serializer.fromJson<String?>(json['path']),
+      source: serializer.fromJson<String>(json['source']),
+      caption: serializer.fromJson<String?>(json['caption']),
+      x: serializer.fromJson<double>(json['x']),
+      y: serializer.fromJson<double>(json['y']),
+      w: serializer.fromJson<double>(json['w']),
+      h: serializer.fromJson<double>(json['h']),
+      rotation: serializer.fromJson<double>(json['rotation']),
+      opacity: serializer.fromJson<double>(json['opacity']),
+      above: serializer.fromJson<bool>(json['above']),
+      locked: serializer.fromJson<bool>(json['locked']),
+      terrain: serializer.fromJson<bool>(json['terrain']),
+      linkedShotId: serializer.fromJson<int?>(json['linkedShotId']),
+      commentsJson: serializer.fromJson<String?>(json['commentsJson']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
+      'projectId': serializer.toJson<int>(projectId),
+      'targetType': serializer.toJson<String>(targetType),
+      'targetId': serializer.toJson<int>(targetId),
+      'path': serializer.toJson<String?>(path),
+      'source': serializer.toJson<String>(source),
+      'caption': serializer.toJson<String?>(caption),
+      'x': serializer.toJson<double>(x),
+      'y': serializer.toJson<double>(y),
+      'w': serializer.toJson<double>(w),
+      'h': serializer.toJson<double>(h),
+      'rotation': serializer.toJson<double>(rotation),
+      'opacity': serializer.toJson<double>(opacity),
+      'above': serializer.toJson<bool>(above),
+      'locked': serializer.toJson<bool>(locked),
+      'terrain': serializer.toJson<bool>(terrain),
+      'linkedShotId': serializer.toJson<int?>(linkedShotId),
+      'commentsJson': serializer.toJson<String?>(commentsJson),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+    };
+  }
+
+  PlanImage copyWith({
+    int? id,
+    Value<String?> uid = const Value.absent(),
+    int? projectId,
+    String? targetType,
+    int? targetId,
+    Value<String?> path = const Value.absent(),
+    String? source,
+    Value<String?> caption = const Value.absent(),
+    double? x,
+    double? y,
+    double? w,
+    double? h,
+    double? rotation,
+    double? opacity,
+    bool? above,
+    bool? locked,
+    bool? terrain,
+    Value<int?> linkedShotId = const Value.absent(),
+    Value<String?> commentsJson = const Value.absent(),
+    int? sortOrder,
+  }) => PlanImage(
+    id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
+    projectId: projectId ?? this.projectId,
+    targetType: targetType ?? this.targetType,
+    targetId: targetId ?? this.targetId,
+    path: path.present ? path.value : this.path,
+    source: source ?? this.source,
+    caption: caption.present ? caption.value : this.caption,
+    x: x ?? this.x,
+    y: y ?? this.y,
+    w: w ?? this.w,
+    h: h ?? this.h,
+    rotation: rotation ?? this.rotation,
+    opacity: opacity ?? this.opacity,
+    above: above ?? this.above,
+    locked: locked ?? this.locked,
+    terrain: terrain ?? this.terrain,
+    linkedShotId: linkedShotId.present ? linkedShotId.value : this.linkedShotId,
+    commentsJson: commentsJson.present ? commentsJson.value : this.commentsJson,
+    sortOrder: sortOrder ?? this.sortOrder,
+  );
+  PlanImage copyWithCompanion(PlanImagesCompanion data) {
+    return PlanImage(
+      id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      targetType: data.targetType.present
+          ? data.targetType.value
+          : this.targetType,
+      targetId: data.targetId.present ? data.targetId.value : this.targetId,
+      path: data.path.present ? data.path.value : this.path,
+      source: data.source.present ? data.source.value : this.source,
+      caption: data.caption.present ? data.caption.value : this.caption,
+      x: data.x.present ? data.x.value : this.x,
+      y: data.y.present ? data.y.value : this.y,
+      w: data.w.present ? data.w.value : this.w,
+      h: data.h.present ? data.h.value : this.h,
+      rotation: data.rotation.present ? data.rotation.value : this.rotation,
+      opacity: data.opacity.present ? data.opacity.value : this.opacity,
+      above: data.above.present ? data.above.value : this.above,
+      locked: data.locked.present ? data.locked.value : this.locked,
+      terrain: data.terrain.present ? data.terrain.value : this.terrain,
+      linkedShotId: data.linkedShotId.present
+          ? data.linkedShotId.value
+          : this.linkedShotId,
+      commentsJson: data.commentsJson.present
+          ? data.commentsJson.value
+          : this.commentsJson,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlanImage(')
+          ..write('id: $id, ')
+          ..write('uid: $uid, ')
+          ..write('projectId: $projectId, ')
+          ..write('targetType: $targetType, ')
+          ..write('targetId: $targetId, ')
+          ..write('path: $path, ')
+          ..write('source: $source, ')
+          ..write('caption: $caption, ')
+          ..write('x: $x, ')
+          ..write('y: $y, ')
+          ..write('w: $w, ')
+          ..write('h: $h, ')
+          ..write('rotation: $rotation, ')
+          ..write('opacity: $opacity, ')
+          ..write('above: $above, ')
+          ..write('locked: $locked, ')
+          ..write('terrain: $terrain, ')
+          ..write('linkedShotId: $linkedShotId, ')
+          ..write('commentsJson: $commentsJson, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    uid,
+    projectId,
+    targetType,
+    targetId,
+    path,
+    source,
+    caption,
+    x,
+    y,
+    w,
+    h,
+    rotation,
+    opacity,
+    above,
+    locked,
+    terrain,
+    linkedShotId,
+    commentsJson,
+    sortOrder,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PlanImage &&
+          other.id == this.id &&
+          other.uid == this.uid &&
+          other.projectId == this.projectId &&
+          other.targetType == this.targetType &&
+          other.targetId == this.targetId &&
+          other.path == this.path &&
+          other.source == this.source &&
+          other.caption == this.caption &&
+          other.x == this.x &&
+          other.y == this.y &&
+          other.w == this.w &&
+          other.h == this.h &&
+          other.rotation == this.rotation &&
+          other.opacity == this.opacity &&
+          other.above == this.above &&
+          other.locked == this.locked &&
+          other.terrain == this.terrain &&
+          other.linkedShotId == this.linkedShotId &&
+          other.commentsJson == this.commentsJson &&
+          other.sortOrder == this.sortOrder);
+}
+
+class PlanImagesCompanion extends UpdateCompanion<PlanImage> {
+  final Value<int> id;
+  final Value<String?> uid;
+  final Value<int> projectId;
+  final Value<String> targetType;
+  final Value<int> targetId;
+  final Value<String?> path;
+  final Value<String> source;
+  final Value<String?> caption;
+  final Value<double> x;
+  final Value<double> y;
+  final Value<double> w;
+  final Value<double> h;
+  final Value<double> rotation;
+  final Value<double> opacity;
+  final Value<bool> above;
+  final Value<bool> locked;
+  final Value<bool> terrain;
+  final Value<int?> linkedShotId;
+  final Value<String?> commentsJson;
+  final Value<int> sortOrder;
+  const PlanImagesCompanion({
+    this.id = const Value.absent(),
+    this.uid = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.targetType = const Value.absent(),
+    this.targetId = const Value.absent(),
+    this.path = const Value.absent(),
+    this.source = const Value.absent(),
+    this.caption = const Value.absent(),
+    this.x = const Value.absent(),
+    this.y = const Value.absent(),
+    this.w = const Value.absent(),
+    this.h = const Value.absent(),
+    this.rotation = const Value.absent(),
+    this.opacity = const Value.absent(),
+    this.above = const Value.absent(),
+    this.locked = const Value.absent(),
+    this.terrain = const Value.absent(),
+    this.linkedShotId = const Value.absent(),
+    this.commentsJson = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  });
+  PlanImagesCompanion.insert({
+    this.id = const Value.absent(),
+    this.uid = const Value.absent(),
+    required int projectId,
+    required String targetType,
+    required int targetId,
+    this.path = const Value.absent(),
+    this.source = const Value.absent(),
+    this.caption = const Value.absent(),
+    required double x,
+    required double y,
+    required double w,
+    required double h,
+    this.rotation = const Value.absent(),
+    this.opacity = const Value.absent(),
+    this.above = const Value.absent(),
+    this.locked = const Value.absent(),
+    this.terrain = const Value.absent(),
+    this.linkedShotId = const Value.absent(),
+    this.commentsJson = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  }) : projectId = Value(projectId),
+       targetType = Value(targetType),
+       targetId = Value(targetId),
+       x = Value(x),
+       y = Value(y),
+       w = Value(w),
+       h = Value(h);
+  static Insertable<PlanImage> custom({
+    Expression<int>? id,
+    Expression<String>? uid,
+    Expression<int>? projectId,
+    Expression<String>? targetType,
+    Expression<int>? targetId,
+    Expression<String>? path,
+    Expression<String>? source,
+    Expression<String>? caption,
+    Expression<double>? x,
+    Expression<double>? y,
+    Expression<double>? w,
+    Expression<double>? h,
+    Expression<double>? rotation,
+    Expression<double>? opacity,
+    Expression<bool>? above,
+    Expression<bool>? locked,
+    Expression<bool>? terrain,
+    Expression<int>? linkedShotId,
+    Expression<String>? commentsJson,
+    Expression<int>? sortOrder,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
+      if (projectId != null) 'project_id': projectId,
+      if (targetType != null) 'target_type': targetType,
+      if (targetId != null) 'target_id': targetId,
+      if (path != null) 'path': path,
+      if (source != null) 'source': source,
+      if (caption != null) 'caption': caption,
+      if (x != null) 'x': x,
+      if (y != null) 'y': y,
+      if (w != null) 'w': w,
+      if (h != null) 'h': h,
+      if (rotation != null) 'rotation': rotation,
+      if (opacity != null) 'opacity': opacity,
+      if (above != null) 'above': above,
+      if (locked != null) 'locked': locked,
+      if (terrain != null) 'terrain': terrain,
+      if (linkedShotId != null) 'linked_shot_id': linkedShotId,
+      if (commentsJson != null) 'comments_json': commentsJson,
+      if (sortOrder != null) 'sort_order': sortOrder,
+    });
+  }
+
+  PlanImagesCompanion copyWith({
+    Value<int>? id,
+    Value<String?>? uid,
+    Value<int>? projectId,
+    Value<String>? targetType,
+    Value<int>? targetId,
+    Value<String?>? path,
+    Value<String>? source,
+    Value<String?>? caption,
+    Value<double>? x,
+    Value<double>? y,
+    Value<double>? w,
+    Value<double>? h,
+    Value<double>? rotation,
+    Value<double>? opacity,
+    Value<bool>? above,
+    Value<bool>? locked,
+    Value<bool>? terrain,
+    Value<int?>? linkedShotId,
+    Value<String?>? commentsJson,
+    Value<int>? sortOrder,
+  }) {
+    return PlanImagesCompanion(
+      id: id ?? this.id,
+      uid: uid ?? this.uid,
+      projectId: projectId ?? this.projectId,
+      targetType: targetType ?? this.targetType,
+      targetId: targetId ?? this.targetId,
+      path: path ?? this.path,
+      source: source ?? this.source,
+      caption: caption ?? this.caption,
+      x: x ?? this.x,
+      y: y ?? this.y,
+      w: w ?? this.w,
+      h: h ?? this.h,
+      rotation: rotation ?? this.rotation,
+      opacity: opacity ?? this.opacity,
+      above: above ?? this.above,
+      locked: locked ?? this.locked,
+      terrain: terrain ?? this.terrain,
+      linkedShotId: linkedShotId ?? this.linkedShotId,
+      commentsJson: commentsJson ?? this.commentsJson,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (targetType.present) {
+      map['target_type'] = Variable<String>(targetType.value);
+    }
+    if (targetId.present) {
+      map['target_id'] = Variable<int>(targetId.value);
+    }
+    if (path.present) {
+      map['path'] = Variable<String>(path.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (caption.present) {
+      map['caption'] = Variable<String>(caption.value);
+    }
+    if (x.present) {
+      map['x'] = Variable<double>(x.value);
+    }
+    if (y.present) {
+      map['y'] = Variable<double>(y.value);
+    }
+    if (w.present) {
+      map['w'] = Variable<double>(w.value);
+    }
+    if (h.present) {
+      map['h'] = Variable<double>(h.value);
+    }
+    if (rotation.present) {
+      map['rotation'] = Variable<double>(rotation.value);
+    }
+    if (opacity.present) {
+      map['opacity'] = Variable<double>(opacity.value);
+    }
+    if (above.present) {
+      map['above'] = Variable<bool>(above.value);
+    }
+    if (locked.present) {
+      map['locked'] = Variable<bool>(locked.value);
+    }
+    if (terrain.present) {
+      map['terrain'] = Variable<bool>(terrain.value);
+    }
+    if (linkedShotId.present) {
+      map['linked_shot_id'] = Variable<int>(linkedShotId.value);
+    }
+    if (commentsJson.present) {
+      map['comments_json'] = Variable<String>(commentsJson.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlanImagesCompanion(')
+          ..write('id: $id, ')
+          ..write('uid: $uid, ')
+          ..write('projectId: $projectId, ')
+          ..write('targetType: $targetType, ')
+          ..write('targetId: $targetId, ')
+          ..write('path: $path, ')
+          ..write('source: $source, ')
+          ..write('caption: $caption, ')
+          ..write('x: $x, ')
+          ..write('y: $y, ')
+          ..write('w: $w, ')
+          ..write('h: $h, ')
+          ..write('rotation: $rotation, ')
+          ..write('opacity: $opacity, ')
+          ..write('above: $above, ')
+          ..write('locked: $locked, ')
+          ..write('terrain: $terrain, ')
+          ..write('linkedShotId: $linkedShotId, ')
+          ..write('commentsJson: $commentsJson, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -35227,6 +36833,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $PendingMediaUploadsTable(this);
   late final $VisualBibleDocumentsTable visualBibleDocuments =
       $VisualBibleDocumentsTable(this);
+  late final $PlanTrashTable planTrash = $PlanTrashTable(this);
+  late final $PlanImagesTable planImages = $PlanImagesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -35274,6 +36882,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     cloudSyncQueue,
     pendingMediaUploads,
     visualBibleDocuments,
+    planTrash,
+    planImages,
   ];
 }
 
@@ -35980,6 +37590,42 @@ final class $$ProjectsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$PlanTrashTable, List<PlanTrashEntry>>
+  _planTrashRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.planTrash,
+    aliasName: $_aliasNameGenerator(db.projects.id, db.planTrash.projectId),
+  );
+
+  $$PlanTrashTableProcessedTableManager get planTrashRefs {
+    final manager = $$PlanTrashTableTableManager(
+      $_db,
+      $_db.planTrash,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_planTrashRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$PlanImagesTable, List<PlanImage>>
+  _planImagesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.planImages,
+    aliasName: $_aliasNameGenerator(db.projects.id, db.planImages.projectId),
+  );
+
+  $$PlanImagesTableProcessedTableManager get planImagesRefs {
+    final manager = $$PlanImagesTableTableManager(
+      $_db,
+      $_db.planImages,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_planImagesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ProjectsTableFilterComposer
@@ -36537,6 +38183,56 @@ class $$ProjectsTableFilterComposer
           }) => $$VisualBibleDocumentsTableFilterComposer(
             $db: $db,
             $table: $db.visualBibleDocuments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> planTrashRefs(
+    Expression<bool> Function($$PlanTrashTableFilterComposer f) f,
+  ) {
+    final $$PlanTrashTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.planTrash,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PlanTrashTableFilterComposer(
+            $db: $db,
+            $table: $db.planTrash,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> planImagesRefs(
+    Expression<bool> Function($$PlanImagesTableFilterComposer f) f,
+  ) {
+    final $$PlanImagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.planImages,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PlanImagesTableFilterComposer(
+            $db: $db,
+            $table: $db.planImages,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -37257,6 +38953,56 @@ class $$ProjectsTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> planTrashRefs<T extends Object>(
+    Expression<T> Function($$PlanTrashTableAnnotationComposer a) f,
+  ) {
+    final $$PlanTrashTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.planTrash,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PlanTrashTableAnnotationComposer(
+            $db: $db,
+            $table: $db.planTrash,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> planImagesRefs<T extends Object>(
+    Expression<T> Function($$PlanImagesTableAnnotationComposer a) f,
+  ) {
+    final $$PlanImagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.planImages,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PlanImagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.planImages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ProjectsTableTableManager
@@ -37290,6 +39036,8 @@ class $$ProjectsTableTableManager
             bool opticsLabSamplesRefs,
             bool pendingMediaUploadsRefs,
             bool visualBibleDocumentsRefs,
+            bool planTrashRefs,
+            bool planImagesRefs,
           })
         > {
   $$ProjectsTableTableManager(_$AppDatabase db, $ProjectsTable table)
@@ -37446,6 +39194,8 @@ class $$ProjectsTableTableManager
                 opticsLabSamplesRefs = false,
                 pendingMediaUploadsRefs = false,
                 visualBibleDocumentsRefs = false,
+                planTrashRefs = false,
+                planImagesRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -37467,6 +39217,8 @@ class $$ProjectsTableTableManager
                     if (opticsLabSamplesRefs) db.opticsLabSamples,
                     if (pendingMediaUploadsRefs) db.pendingMediaUploads,
                     if (visualBibleDocumentsRefs) db.visualBibleDocuments,
+                    if (planTrashRefs) db.planTrash,
+                    if (planImagesRefs) db.planImages,
                   ],
                   addJoins:
                       <
@@ -37838,6 +39590,48 @@ class $$ProjectsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (planTrashRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          PlanTrashEntry
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._planTrashRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).planTrashRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (planImagesRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          PlanImage
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._planImagesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).planImagesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -37876,6 +39670,8 @@ typedef $$ProjectsTableProcessedTableManager =
         bool opticsLabSamplesRefs,
         bool pendingMediaUploadsRefs,
         bool visualBibleDocumentsRefs,
+        bool planTrashRefs,
+        bool planImagesRefs,
       })
     >;
 typedef $$LocationSitesTableCreateCompanionBuilder =
@@ -40639,6 +42435,24 @@ final class $$ScenesTableReferences
     );
   }
 
+  static MultiTypedResultKey<$LightSetupsTable, List<LightSetup>>
+  _lightSetupsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.lightSetups,
+    aliasName: $_aliasNameGenerator(db.scenes.id, db.lightSetups.sceneId),
+  );
+
+  $$LightSetupsTableProcessedTableManager get lightSetupsRefs {
+    final manager = $$LightSetupsTableTableManager(
+      $_db,
+      $_db.lightSetups,
+    ).filter((f) => f.sceneId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_lightSetupsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$ShotsTable, List<Shot>> _shotsRefsTable(
     _$AppDatabase db,
   ) => MultiTypedResultKey.fromTable(
@@ -40867,6 +42681,31 @@ class $$ScenesTableFilterComposer
           ),
     );
     return composer;
+  }
+
+  Expression<bool> lightSetupsRefs(
+    Expression<bool> Function($$LightSetupsTableFilterComposer f) f,
+  ) {
+    final $$LightSetupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lightSetups,
+      getReferencedColumn: (t) => t.sceneId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LightSetupsTableFilterComposer(
+            $db: $db,
+            $table: $db.lightSetups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
   }
 
   Expression<bool> shotsRefs(
@@ -41272,6 +43111,31 @@ class $$ScenesTableAnnotationComposer
     return composer;
   }
 
+  Expression<T> lightSetupsRefs<T extends Object>(
+    Expression<T> Function($$LightSetupsTableAnnotationComposer a) f,
+  ) {
+    final $$LightSetupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lightSetups,
+      getReferencedColumn: (t) => t.sceneId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LightSetupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.lightSetups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> shotsRefs<T extends Object>(
     Expression<T> Function($$ShotsTableAnnotationComposer a) f,
   ) {
@@ -41341,6 +43205,7 @@ class $$ScenesTableTableManager
             bool projectId,
             bool locationSiteId,
             bool locationId,
+            bool lightSetupsRefs,
             bool shotsRefs,
             bool shootDocumentBlocksRefs,
           })
@@ -41471,12 +43336,14 @@ class $$ScenesTableTableManager
                 projectId = false,
                 locationSiteId = false,
                 locationId = false,
+                lightSetupsRefs = false,
                 shotsRefs = false,
                 shootDocumentBlocksRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
+                    if (lightSetupsRefs) db.lightSetups,
                     if (shotsRefs) db.shots,
                     if (shootDocumentBlocksRefs) db.shootDocumentBlocks,
                   ],
@@ -41540,6 +43407,27 @@ class $$ScenesTableTableManager
                       },
                   getPrefetchedDataCallback: (items) async {
                     return [
+                      if (lightSetupsRefs)
+                        await $_getPrefetchedData<
+                          Scene,
+                          $ScenesTable,
+                          LightSetup
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ScenesTableReferences
+                              ._lightSetupsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ScenesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).lightSetupsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.sceneId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (shotsRefs)
                         await $_getPrefetchedData<Scene, $ScenesTable, Shot>(
                           currentTable: table,
@@ -41598,6 +43486,7 @@ typedef $$ScenesTableProcessedTableManager =
         bool projectId,
         bool locationSiteId,
         bool locationId,
+        bool lightSetupsRefs,
         bool shotsRefs,
         bool shootDocumentBlocksRefs,
       })
@@ -41617,6 +43506,8 @@ typedef $$LightSetupsTableCreateCompanionBuilder =
       Value<String?> sketchJson,
       Value<String?> sketchImagePath,
       Value<int> sortOrder,
+      Value<String> kind,
+      Value<int?> sceneId,
     });
 typedef $$LightSetupsTableUpdateCompanionBuilder =
     LightSetupsCompanion Function({
@@ -41633,6 +43524,8 @@ typedef $$LightSetupsTableUpdateCompanionBuilder =
       Value<String?> sketchJson,
       Value<String?> sketchImagePath,
       Value<int> sortOrder,
+      Value<String> kind,
+      Value<int?> sceneId,
     });
 
 final class $$LightSetupsTableReferences
@@ -41696,6 +43589,24 @@ final class $$LightSetupsTableReferences
       $_db.locationBasePlans,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_locationBasePlanIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $ScenesTable _sceneIdTable(_$AppDatabase db) => db.scenes.createAlias(
+    $_aliasNameGenerator(db.lightSetups.sceneId, db.scenes.id),
+  );
+
+  $$ScenesTableProcessedTableManager? get sceneId {
+    final $_column = $_itemColumn<int>('scene_id');
+    if ($_column == null) return null;
+    final manager = $$ScenesTableTableManager(
+      $_db,
+      $_db.scenes,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_sceneIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -41802,6 +43713,11 @@ class $$LightSetupsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$ProjectsTableFilterComposer get projectId {
     final $$ProjectsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -41862,6 +43778,29 @@ class $$LightSetupsTableFilterComposer
           }) => $$LocationBasePlansTableFilterComposer(
             $db: $db,
             $table: $db.locationBasePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ScenesTableFilterComposer get sceneId {
+    final $$ScenesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sceneId,
+      referencedTable: $db.scenes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ScenesTableFilterComposer(
+            $db: $db,
+            $table: $db.scenes,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -41981,6 +43920,11 @@ class $$LightSetupsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ProjectsTableOrderingComposer get projectId {
     final $$ProjectsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -42049,6 +43993,29 @@ class $$LightSetupsTableOrderingComposer
     );
     return composer;
   }
+
+  $$ScenesTableOrderingComposer get sceneId {
+    final $$ScenesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sceneId,
+      referencedTable: $db.scenes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ScenesTableOrderingComposer(
+            $db: $db,
+            $table: $db.scenes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$LightSetupsTableAnnotationComposer
@@ -42093,6 +44060,9 @@ class $$LightSetupsTableAnnotationComposer
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
 
   $$ProjectsTableAnnotationComposer get projectId {
     final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
@@ -42164,6 +44134,29 @@ class $$LightSetupsTableAnnotationComposer
     return composer;
   }
 
+  $$ScenesTableAnnotationComposer get sceneId {
+    final $$ScenesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sceneId,
+      referencedTable: $db.scenes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ScenesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.scenes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
   Expression<T> shotsRefs<T extends Object>(
     Expression<T> Function($$ShotsTableAnnotationComposer a) f,
   ) {
@@ -42232,6 +44225,7 @@ class $$LightSetupsTableTableManager
             bool projectId,
             bool locationSiteId,
             bool locationBasePlanId,
+            bool sceneId,
             bool shotsRefs,
             bool lightingSetupsRefs,
           })
@@ -42262,6 +44256,8 @@ class $$LightSetupsTableTableManager
                 Value<String?> sketchJson = const Value.absent(),
                 Value<String?> sketchImagePath = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<int?> sceneId = const Value.absent(),
               }) => LightSetupsCompanion(
                 id: id,
                 uid: uid,
@@ -42276,6 +44272,8 @@ class $$LightSetupsTableTableManager
                 sketchJson: sketchJson,
                 sketchImagePath: sketchImagePath,
                 sortOrder: sortOrder,
+                kind: kind,
+                sceneId: sceneId,
               ),
           createCompanionCallback:
               ({
@@ -42292,6 +44290,8 @@ class $$LightSetupsTableTableManager
                 Value<String?> sketchJson = const Value.absent(),
                 Value<String?> sketchImagePath = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<int?> sceneId = const Value.absent(),
               }) => LightSetupsCompanion.insert(
                 id: id,
                 uid: uid,
@@ -42306,6 +44306,8 @@ class $$LightSetupsTableTableManager
                 sketchJson: sketchJson,
                 sketchImagePath: sketchImagePath,
                 sortOrder: sortOrder,
+                kind: kind,
+                sceneId: sceneId,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -42320,6 +44322,7 @@ class $$LightSetupsTableTableManager
                 projectId = false,
                 locationSiteId = false,
                 locationBasePlanId = false,
+                sceneId = false,
                 shotsRefs = false,
                 lightingSetupsRefs = false,
               }) {
@@ -42386,6 +44389,21 @@ class $$LightSetupsTableTableManager
                                     referencedColumn:
                                         $$LightSetupsTableReferences
                                             ._locationBasePlanIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (sceneId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.sceneId,
+                                    referencedTable:
+                                        $$LightSetupsTableReferences
+                                            ._sceneIdTable(db),
+                                    referencedColumn:
+                                        $$LightSetupsTableReferences
+                                            ._sceneIdTable(db)
                                             .id,
                                   )
                                   as T;
@@ -42461,6 +44479,7 @@ typedef $$LightSetupsTableProcessedTableManager =
         bool projectId,
         bool locationSiteId,
         bool locationBasePlanId,
+        bool sceneId,
         bool shotsRefs,
         bool lightingSetupsRefs,
       })
@@ -63993,6 +66012,963 @@ typedef $$VisualBibleDocumentsTableProcessedTableManager =
       VisualBibleDocument,
       PrefetchHooks Function({bool bibleId, bool projectId})
     >;
+typedef $$PlanTrashTableCreateCompanionBuilder =
+    PlanTrashCompanion Function({
+      Value<int> id,
+      required int projectId,
+      required String kind,
+      required String label,
+      Value<String?> detail,
+      required String payloadJson,
+      Value<DateTime> deletedAt,
+    });
+typedef $$PlanTrashTableUpdateCompanionBuilder =
+    PlanTrashCompanion Function({
+      Value<int> id,
+      Value<int> projectId,
+      Value<String> kind,
+      Value<String> label,
+      Value<String?> detail,
+      Value<String> payloadJson,
+      Value<DateTime> deletedAt,
+    });
+
+final class $$PlanTrashTableReferences
+    extends BaseReferences<_$AppDatabase, $PlanTrashTable, PlanTrashEntry> {
+  $$PlanTrashTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.planTrash.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$PlanTrashTableFilterComposer
+    extends Composer<_$AppDatabase, $PlanTrashTable> {
+  $$PlanTrashTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detail => $composableBuilder(
+    column: $table.detail,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PlanTrashTableOrderingComposer
+    extends Composer<_$AppDatabase, $PlanTrashTable> {
+  $$PlanTrashTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detail => $composableBuilder(
+    column: $table.detail,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PlanTrashTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PlanTrashTable> {
+  $$PlanTrashTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<String> get detail =>
+      $composableBuilder(column: $table.detail, builder: (column) => column);
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PlanTrashTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PlanTrashTable,
+          PlanTrashEntry,
+          $$PlanTrashTableFilterComposer,
+          $$PlanTrashTableOrderingComposer,
+          $$PlanTrashTableAnnotationComposer,
+          $$PlanTrashTableCreateCompanionBuilder,
+          $$PlanTrashTableUpdateCompanionBuilder,
+          (PlanTrashEntry, $$PlanTrashTableReferences),
+          PlanTrashEntry,
+          PrefetchHooks Function({bool projectId})
+        > {
+  $$PlanTrashTableTableManager(_$AppDatabase db, $PlanTrashTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PlanTrashTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PlanTrashTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PlanTrashTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String> label = const Value.absent(),
+                Value<String?> detail = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<DateTime> deletedAt = const Value.absent(),
+              }) => PlanTrashCompanion(
+                id: id,
+                projectId: projectId,
+                kind: kind,
+                label: label,
+                detail: detail,
+                payloadJson: payloadJson,
+                deletedAt: deletedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int projectId,
+                required String kind,
+                required String label,
+                Value<String?> detail = const Value.absent(),
+                required String payloadJson,
+                Value<DateTime> deletedAt = const Value.absent(),
+              }) => PlanTrashCompanion.insert(
+                id: id,
+                projectId: projectId,
+                kind: kind,
+                label: label,
+                detail: detail,
+                payloadJson: payloadJson,
+                deletedAt: deletedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$PlanTrashTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({projectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (projectId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.projectId,
+                                referencedTable: $$PlanTrashTableReferences
+                                    ._projectIdTable(db),
+                                referencedColumn: $$PlanTrashTableReferences
+                                    ._projectIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$PlanTrashTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PlanTrashTable,
+      PlanTrashEntry,
+      $$PlanTrashTableFilterComposer,
+      $$PlanTrashTableOrderingComposer,
+      $$PlanTrashTableAnnotationComposer,
+      $$PlanTrashTableCreateCompanionBuilder,
+      $$PlanTrashTableUpdateCompanionBuilder,
+      (PlanTrashEntry, $$PlanTrashTableReferences),
+      PlanTrashEntry,
+      PrefetchHooks Function({bool projectId})
+    >;
+typedef $$PlanImagesTableCreateCompanionBuilder =
+    PlanImagesCompanion Function({
+      Value<int> id,
+      Value<String?> uid,
+      required int projectId,
+      required String targetType,
+      required int targetId,
+      Value<String?> path,
+      Value<String> source,
+      Value<String?> caption,
+      required double x,
+      required double y,
+      required double w,
+      required double h,
+      Value<double> rotation,
+      Value<double> opacity,
+      Value<bool> above,
+      Value<bool> locked,
+      Value<bool> terrain,
+      Value<int?> linkedShotId,
+      Value<String?> commentsJson,
+      Value<int> sortOrder,
+    });
+typedef $$PlanImagesTableUpdateCompanionBuilder =
+    PlanImagesCompanion Function({
+      Value<int> id,
+      Value<String?> uid,
+      Value<int> projectId,
+      Value<String> targetType,
+      Value<int> targetId,
+      Value<String?> path,
+      Value<String> source,
+      Value<String?> caption,
+      Value<double> x,
+      Value<double> y,
+      Value<double> w,
+      Value<double> h,
+      Value<double> rotation,
+      Value<double> opacity,
+      Value<bool> above,
+      Value<bool> locked,
+      Value<bool> terrain,
+      Value<int?> linkedShotId,
+      Value<String?> commentsJson,
+      Value<int> sortOrder,
+    });
+
+final class $$PlanImagesTableReferences
+    extends BaseReferences<_$AppDatabase, $PlanImagesTable, PlanImage> {
+  $$PlanImagesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.planImages.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$PlanImagesTableFilterComposer
+    extends Composer<_$AppDatabase, $PlanImagesTable> {
+  $$PlanImagesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get path => $composableBuilder(
+    column: $table.path,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get caption => $composableBuilder(
+    column: $table.caption,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get x => $composableBuilder(
+    column: $table.x,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get y => $composableBuilder(
+    column: $table.y,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get w => $composableBuilder(
+    column: $table.w,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get h => $composableBuilder(
+    column: $table.h,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get rotation => $composableBuilder(
+    column: $table.rotation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get above => $composableBuilder(
+    column: $table.above,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get locked => $composableBuilder(
+    column: $table.locked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get terrain => $composableBuilder(
+    column: $table.terrain,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get linkedShotId => $composableBuilder(
+    column: $table.linkedShotId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get commentsJson => $composableBuilder(
+    column: $table.commentsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PlanImagesTableOrderingComposer
+    extends Composer<_$AppDatabase, $PlanImagesTable> {
+  $$PlanImagesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get path => $composableBuilder(
+    column: $table.path,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get caption => $composableBuilder(
+    column: $table.caption,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get x => $composableBuilder(
+    column: $table.x,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get y => $composableBuilder(
+    column: $table.y,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get w => $composableBuilder(
+    column: $table.w,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get h => $composableBuilder(
+    column: $table.h,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get rotation => $composableBuilder(
+    column: $table.rotation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get above => $composableBuilder(
+    column: $table.above,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get locked => $composableBuilder(
+    column: $table.locked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get terrain => $composableBuilder(
+    column: $table.terrain,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get linkedShotId => $composableBuilder(
+    column: $table.linkedShotId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get commentsJson => $composableBuilder(
+    column: $table.commentsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PlanImagesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PlanImagesTable> {
+  $$PlanImagesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
+
+  GeneratedColumn<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get targetId =>
+      $composableBuilder(column: $table.targetId, builder: (column) => column);
+
+  GeneratedColumn<String> get path =>
+      $composableBuilder(column: $table.path, builder: (column) => column);
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<String> get caption =>
+      $composableBuilder(column: $table.caption, builder: (column) => column);
+
+  GeneratedColumn<double> get x =>
+      $composableBuilder(column: $table.x, builder: (column) => column);
+
+  GeneratedColumn<double> get y =>
+      $composableBuilder(column: $table.y, builder: (column) => column);
+
+  GeneratedColumn<double> get w =>
+      $composableBuilder(column: $table.w, builder: (column) => column);
+
+  GeneratedColumn<double> get h =>
+      $composableBuilder(column: $table.h, builder: (column) => column);
+
+  GeneratedColumn<double> get rotation =>
+      $composableBuilder(column: $table.rotation, builder: (column) => column);
+
+  GeneratedColumn<double> get opacity =>
+      $composableBuilder(column: $table.opacity, builder: (column) => column);
+
+  GeneratedColumn<bool> get above =>
+      $composableBuilder(column: $table.above, builder: (column) => column);
+
+  GeneratedColumn<bool> get locked =>
+      $composableBuilder(column: $table.locked, builder: (column) => column);
+
+  GeneratedColumn<bool> get terrain =>
+      $composableBuilder(column: $table.terrain, builder: (column) => column);
+
+  GeneratedColumn<int> get linkedShotId => $composableBuilder(
+    column: $table.linkedShotId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get commentsJson => $composableBuilder(
+    column: $table.commentsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PlanImagesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PlanImagesTable,
+          PlanImage,
+          $$PlanImagesTableFilterComposer,
+          $$PlanImagesTableOrderingComposer,
+          $$PlanImagesTableAnnotationComposer,
+          $$PlanImagesTableCreateCompanionBuilder,
+          $$PlanImagesTableUpdateCompanionBuilder,
+          (PlanImage, $$PlanImagesTableReferences),
+          PlanImage,
+          PrefetchHooks Function({bool projectId})
+        > {
+  $$PlanImagesTableTableManager(_$AppDatabase db, $PlanImagesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PlanImagesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PlanImagesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PlanImagesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<String> targetType = const Value.absent(),
+                Value<int> targetId = const Value.absent(),
+                Value<String?> path = const Value.absent(),
+                Value<String> source = const Value.absent(),
+                Value<String?> caption = const Value.absent(),
+                Value<double> x = const Value.absent(),
+                Value<double> y = const Value.absent(),
+                Value<double> w = const Value.absent(),
+                Value<double> h = const Value.absent(),
+                Value<double> rotation = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
+                Value<bool> above = const Value.absent(),
+                Value<bool> locked = const Value.absent(),
+                Value<bool> terrain = const Value.absent(),
+                Value<int?> linkedShotId = const Value.absent(),
+                Value<String?> commentsJson = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => PlanImagesCompanion(
+                id: id,
+                uid: uid,
+                projectId: projectId,
+                targetType: targetType,
+                targetId: targetId,
+                path: path,
+                source: source,
+                caption: caption,
+                x: x,
+                y: y,
+                w: w,
+                h: h,
+                rotation: rotation,
+                opacity: opacity,
+                above: above,
+                locked: locked,
+                terrain: terrain,
+                linkedShotId: linkedShotId,
+                commentsJson: commentsJson,
+                sortOrder: sortOrder,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
+                required int projectId,
+                required String targetType,
+                required int targetId,
+                Value<String?> path = const Value.absent(),
+                Value<String> source = const Value.absent(),
+                Value<String?> caption = const Value.absent(),
+                required double x,
+                required double y,
+                required double w,
+                required double h,
+                Value<double> rotation = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
+                Value<bool> above = const Value.absent(),
+                Value<bool> locked = const Value.absent(),
+                Value<bool> terrain = const Value.absent(),
+                Value<int?> linkedShotId = const Value.absent(),
+                Value<String?> commentsJson = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => PlanImagesCompanion.insert(
+                id: id,
+                uid: uid,
+                projectId: projectId,
+                targetType: targetType,
+                targetId: targetId,
+                path: path,
+                source: source,
+                caption: caption,
+                x: x,
+                y: y,
+                w: w,
+                h: h,
+                rotation: rotation,
+                opacity: opacity,
+                above: above,
+                locked: locked,
+                terrain: terrain,
+                linkedShotId: linkedShotId,
+                commentsJson: commentsJson,
+                sortOrder: sortOrder,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$PlanImagesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({projectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (projectId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.projectId,
+                                referencedTable: $$PlanImagesTableReferences
+                                    ._projectIdTable(db),
+                                referencedColumn: $$PlanImagesTableReferences
+                                    ._projectIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$PlanImagesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PlanImagesTable,
+      PlanImage,
+      $$PlanImagesTableFilterComposer,
+      $$PlanImagesTableOrderingComposer,
+      $$PlanImagesTableAnnotationComposer,
+      $$PlanImagesTableCreateCompanionBuilder,
+      $$PlanImagesTableUpdateCompanionBuilder,
+      (PlanImage, $$PlanImagesTableReferences),
+      PlanImage,
+      PrefetchHooks Function({bool projectId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -64097,4 +67073,8 @@ class $AppDatabaseManager {
       $$PendingMediaUploadsTableTableManager(_db, _db.pendingMediaUploads);
   $$VisualBibleDocumentsTableTableManager get visualBibleDocuments =>
       $$VisualBibleDocumentsTableTableManager(_db, _db.visualBibleDocuments);
+  $$PlanTrashTableTableManager get planTrash =>
+      $$PlanTrashTableTableManager(_db, _db.planTrash);
+  $$PlanImagesTableTableManager get planImages =>
+      $$PlanImagesTableTableManager(_db, _db.planImages);
 }

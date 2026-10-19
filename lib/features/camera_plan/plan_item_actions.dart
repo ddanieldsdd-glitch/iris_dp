@@ -7,7 +7,9 @@ import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'floor_plan_repository.dart';
+import 'floor_plan_scope.dart';
 import 'light_setup_actions.dart';
+import 'plan_trash_ui.dart';
 
 /// Qué hay copiado en la pantalla de plantas: un esquema de luz o un set.
 enum PlanClipKind { setup, set }
@@ -218,10 +220,26 @@ class LightSetupActions {
           ? 'Se borra el esquema de luz con su planta.'
           : 'Se borra el esquema de luz con su planta. '
                 '$shotCount plano${shotCount == 1 ? '' : 's'} '
-                'se quedará${shotCount == 1 ? '' : 'n'} sin luz.',
+                'se quedará${shotCount == 1 ? '' : 'n'} sin luz, con sus '
+                'cámaras. Podrás recuperarlo desde la Papelera de plantas.',
     );
-    if (ok) await db.deleteLightSetup(setup.id);
+    if (!ok || !context.mounted) return;
+    await deleteWithUndo(
+      context,
+      db,
+      done: 'Esquema «${setup.name}» borrado.',
+      delete: (trash) => trash.deleteLightSetup(setup.id),
+    );
   }
+
+  /// Quita luces, grip y ambiente para empezar el esquema de cero.
+  Future<void> clear() => confirmClearPlan(
+    context,
+    db,
+    scope: FloorPlanScope.lightSetup,
+    id: setup.id,
+    name: setup.name,
+  );
 }
 
 /// Pide confirmación para borrar.
@@ -306,22 +324,18 @@ class SetActions {
     if (name != null) await db.updateLocation(set.copyWith(locationName: name));
   }
 
-  Future<void> delete() async {
-    final ok = await confirmPlanDelete(
-      context,
-      title: '¿Borrar el set «${set.locationName}»?',
-      body: [
-        'Se borra el set con su planta'
-            '${setupCount == 0 ? '' : ' y sus $setupCount esquema${setupCount == 1 ? '' : 's'} de luz'}.',
-        if (sceneCount > 0)
-          '$sceneCount escena${sceneCount == 1 ? '' : 's'} se '
-              'quedará${sceneCount == 1 ? '' : 'n'} sin set; sus planos no '
-              'se borran.',
-        'También desaparece de Localizaciones.',
-      ].join(' '),
-    );
-    if (ok) await FloorPlanRepository(db).deleteSet(set);
-  }
+  /// Borra el set con sus esquemas; sus planos pierden la planta. Se puede
+  /// deshacer y queda en la Papelera de plantas.
+  Future<void> delete() => confirmDeleteSet(context, db, set);
+
+  /// Vacía la planta del set para empezarla de cero.
+  Future<void> clear() => confirmClearPlan(
+    context,
+    db,
+    scope: FloorPlanScope.set,
+    id: set.id,
+    name: set.locationName,
+  );
 }
 
 /// Menú «⋯» de un set.
@@ -362,6 +376,8 @@ class SetMenuButton extends ConsumerWidget {
               actions.duplicate();
             case 'paste':
               actions.paste();
+            case 'clear':
+              actions.clear();
             case 'delete':
               actions.delete();
           }
@@ -386,9 +402,10 @@ class SetMenuButton extends ConsumerWidget {
                 '⌘V',
               ),
             ),
+          const PopupMenuItem(value: 'clear', child: Text('Vaciar planta…')),
           PopupMenuItem(
             value: 'delete',
-            child: Text('Borrar set', style: TextStyle(color: palette.error)),
+            child: Text('Borrar set…', style: TextStyle(color: palette.error)),
           ),
         ],
       ),

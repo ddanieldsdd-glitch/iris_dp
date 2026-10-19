@@ -20,13 +20,12 @@ import '../../core/utils/scene_format.dart';
 import '../../core/utils/scene_characters.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
-import '../camera_plan/camera_plan_editor.dart';
+import '../camera_plan/camera_plan_status_cell.dart';
 import '../../shared/history/edit_history.dart';
 import '../../shared/history/shot_edits.dart';
 import '../camera_plan/plan_data.dart';
 import '../camera_plan/plan_sketch.dart';
 import '../camera_plan/plan_thumbnail.dart';
-import '../locations/locations_screen.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
@@ -2326,22 +2325,14 @@ class _PlanCell extends ConsumerWidget {
       icon = Icons.add_location_alt_outlined;
     }
 
-    void open() {
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => setId != null
-              ? CameraPlanEditor.shot(
-                  projectId: shot.projectId,
-                  shotId: shot.id,
-                  shotLabel: 'Esc ${scene.label} · Plano ${shot.number}',
-                )
-              : LocationsScreen(
-                  projectId: shot.projectId,
-                  initialSiteId: scene.locationSiteId,
-                ),
-        ),
-      );
-    }
+    // Sin localización o sin set, la planta guía: localización › sets ›
+    // planos, y al final abre la de este plano.
+    void open() => openShotPlan(
+      context,
+      ProviderScope.containerOf(context).read(databaseProvider),
+      shot,
+      label: 'Esc ${scene.label} · Plano ${shot.number}',
+    );
 
     // Imágenes y bocetos dibujados que el plano ha elegido enseñar.
     final sketches = [

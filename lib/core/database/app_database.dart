@@ -85,6 +85,8 @@ typedef WorkspaceScene = ({
     CloudSyncQueue,
     PendingMediaUploads,
     VisualBibleDocuments,
+    PlanTrash,
+    PlanImages,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -559,6 +561,19 @@ class AppDatabase extends _$AppDatabase {
         // Escenas partidas del guion técnico importado: 13A, 13B.
         await add(scenes, scenes.numberSuffix);
       }
+      if (from < 55) {
+        // Papelera de la planta: borrar o vaciar se puede deshacer.
+        await m.createTable(planTrash);
+      }
+      if (from < 56) {
+        // Bocetos por escena: con elementos o a mano alzada, sin planos.
+        await add(lightSetups, lightSetups.kind);
+        await add(lightSetups, lightSetups.sceneId);
+      }
+      if (from < 57) {
+        // Imágenes sobre la planta, debajo o encima de los elementos.
+        await m.createTable(planImages);
+      }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
     // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
@@ -746,6 +761,8 @@ class AppDatabase extends _$AppDatabase {
           ))
           .write(const LightingSetupsCompanion(planSetupId: Value(null)));
       await (delete(lightSetups)..where((s) => s.projectId.equals(id))).go();
+      await (delete(planImages)..where((i) => i.projectId.equals(id))).go();
+      await (delete(planTrash)..where((t) => t.projectId.equals(id))).go();
       await (delete(
         projectEquipment,
       )..where((e) => e.projectId.equals(id))).go();
@@ -869,6 +886,8 @@ class AppDatabase extends _$AppDatabase {
         await (delete(scenes)..where((s) => s.projectId.equals(id))).go();
       }
       await (delete(lightSetups)..where((s) => s.projectId.equals(id))).go();
+      // La papelera se queda: es de este equipo y sabe volver sola.
+      await (delete(planImages)..where((i) => i.projectId.equals(id))).go();
       await (delete(
         projectEquipment,
       )..where((e) => e.projectId.equals(id))).go();
@@ -4713,7 +4732,7 @@ extension SceneLabel on Scene {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 54;
+const kSchemaVersion = 57;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

@@ -60,7 +60,6 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
         projectId: widget.projectId,
         lightSetupId: _target.id,
         setupName: _target.label,
-        startDrawing: _target.draw,
         onNavigate: _open,
       ),
       FloorPlanScope.shot => CameraPlanEditor.shot(

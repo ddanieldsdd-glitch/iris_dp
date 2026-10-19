@@ -10,31 +10,24 @@ class PlanTarget {
   /// Tramo de un plano secuencia. `null` = el plano entero.
   final int? leg;
 
-  /// Abrir ya dibujando a mano (un boceto recién creado).
-  final bool draw;
-
   const PlanTarget({
     required this.scope,
     required this.id,
     required this.label,
     this.leg,
-    this.draw = false,
   });
 
   const PlanTarget.site(this.id, this.label)
     : scope = FloorPlanScope.site,
-      leg = null,
-      draw = false;
+      leg = null;
   const PlanTarget.set(this.id, this.label)
     : scope = FloorPlanScope.set,
-      leg = null,
-      draw = false;
-  const PlanTarget.lightSetup(this.id, this.label, {this.draw = false})
+      leg = null;
+  const PlanTarget.lightSetup(this.id, this.label)
     : scope = FloorPlanScope.lightSetup,
       leg = null;
   const PlanTarget.shot(this.id, this.label, {this.leg})
-    : scope = FloorPlanScope.shot,
-      draw = false;
+    : scope = FloorPlanScope.shot;
 
   @override
   bool operator ==(Object other) =>
