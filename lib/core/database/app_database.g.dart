@@ -6119,6 +6119,17 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _exportLayoutJsonMeta = const VerificationMeta(
+    'exportLayoutJson',
+  );
+  @override
+  late final GeneratedColumn<String> exportLayoutJson = GeneratedColumn<String>(
+    'export_layout_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -6150,6 +6161,7 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
     routeJson,
     storyboardImagePath,
     cellStylesJson,
+    exportLayoutJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -6382,6 +6394,15 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         ),
       );
     }
+    if (data.containsKey('export_layout_json')) {
+      context.handle(
+        _exportLayoutJsonMeta,
+        exportLayoutJson.isAcceptableOrUnknown(
+          data['export_layout_json']!,
+          _exportLayoutJsonMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -6507,6 +6528,10 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         DriftSqlType.string,
         data['${effectivePrefix}cell_styles_json'],
       ),
+      exportLayoutJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}export_layout_json'],
+      ),
     );
   }
 
@@ -6548,6 +6573,7 @@ class Shot extends DataClass implements Insertable<Shot> {
   final String? routeJson;
   final String? storyboardImagePath;
   final String? cellStylesJson;
+  final String? exportLayoutJson;
   const Shot({
     required this.id,
     this.uid,
@@ -6578,6 +6604,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     this.routeJson,
     this.storyboardImagePath,
     this.cellStylesJson,
+    this.exportLayoutJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6657,6 +6684,9 @@ class Shot extends DataClass implements Insertable<Shot> {
     if (!nullToAbsent || cellStylesJson != null) {
       map['cell_styles_json'] = Variable<String>(cellStylesJson);
     }
+    if (!nullToAbsent || exportLayoutJson != null) {
+      map['export_layout_json'] = Variable<String>(exportLayoutJson);
+    }
     return map;
   }
 
@@ -6731,6 +6761,9 @@ class Shot extends DataClass implements Insertable<Shot> {
       cellStylesJson: cellStylesJson == null && nullToAbsent
           ? const Value.absent()
           : Value(cellStylesJson),
+      exportLayoutJson: exportLayoutJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(exportLayoutJson),
     );
   }
 
@@ -6777,6 +6810,7 @@ class Shot extends DataClass implements Insertable<Shot> {
         json['storyboardImagePath'],
       ),
       cellStylesJson: serializer.fromJson<String?>(json['cellStylesJson']),
+      exportLayoutJson: serializer.fromJson<String?>(json['exportLayoutJson']),
     );
   }
   @override
@@ -6812,6 +6846,7 @@ class Shot extends DataClass implements Insertable<Shot> {
       'routeJson': serializer.toJson<String?>(routeJson),
       'storyboardImagePath': serializer.toJson<String?>(storyboardImagePath),
       'cellStylesJson': serializer.toJson<String?>(cellStylesJson),
+      'exportLayoutJson': serializer.toJson<String?>(exportLayoutJson),
     };
   }
 
@@ -6845,6 +6880,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     Value<String?> routeJson = const Value.absent(),
     Value<String?> storyboardImagePath = const Value.absent(),
     Value<String?> cellStylesJson = const Value.absent(),
+    Value<String?> exportLayoutJson = const Value.absent(),
   }) => Shot(
     id: id ?? this.id,
     uid: uid.present ? uid.value : this.uid,
@@ -6895,6 +6931,9 @@ class Shot extends DataClass implements Insertable<Shot> {
     cellStylesJson: cellStylesJson.present
         ? cellStylesJson.value
         : this.cellStylesJson,
+    exportLayoutJson: exportLayoutJson.present
+        ? exportLayoutJson.value
+        : this.exportLayoutJson,
   );
   Shot copyWithCompanion(ShotsCompanion data) {
     return Shot(
@@ -6955,6 +6994,9 @@ class Shot extends DataClass implements Insertable<Shot> {
       cellStylesJson: data.cellStylesJson.present
           ? data.cellStylesJson.value
           : this.cellStylesJson,
+      exportLayoutJson: data.exportLayoutJson.present
+          ? data.exportLayoutJson.value
+          : this.exportLayoutJson,
     );
   }
 
@@ -6989,7 +7031,8 @@ class Shot extends DataClass implements Insertable<Shot> {
           ..write('locationBasePlanId: $locationBasePlanId, ')
           ..write('routeJson: $routeJson, ')
           ..write('storyboardImagePath: $storyboardImagePath, ')
-          ..write('cellStylesJson: $cellStylesJson')
+          ..write('cellStylesJson: $cellStylesJson, ')
+          ..write('exportLayoutJson: $exportLayoutJson')
           ..write(')'))
         .toString();
   }
@@ -7025,6 +7068,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     routeJson,
     storyboardImagePath,
     cellStylesJson,
+    exportLayoutJson,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -7058,7 +7102,8 @@ class Shot extends DataClass implements Insertable<Shot> {
           other.locationBasePlanId == this.locationBasePlanId &&
           other.routeJson == this.routeJson &&
           other.storyboardImagePath == this.storyboardImagePath &&
-          other.cellStylesJson == this.cellStylesJson);
+          other.cellStylesJson == this.cellStylesJson &&
+          other.exportLayoutJson == this.exportLayoutJson);
 }
 
 class ShotsCompanion extends UpdateCompanion<Shot> {
@@ -7091,6 +7136,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
   final Value<String?> routeJson;
   final Value<String?> storyboardImagePath;
   final Value<String?> cellStylesJson;
+  final Value<String?> exportLayoutJson;
   const ShotsCompanion({
     this.id = const Value.absent(),
     this.uid = const Value.absent(),
@@ -7121,6 +7167,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     this.routeJson = const Value.absent(),
     this.storyboardImagePath = const Value.absent(),
     this.cellStylesJson = const Value.absent(),
+    this.exportLayoutJson = const Value.absent(),
   });
   ShotsCompanion.insert({
     this.id = const Value.absent(),
@@ -7152,6 +7199,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     this.routeJson = const Value.absent(),
     this.storyboardImagePath = const Value.absent(),
     this.cellStylesJson = const Value.absent(),
+    this.exportLayoutJson = const Value.absent(),
   }) : sceneId = Value(sceneId),
        projectId = Value(projectId),
        number = Value(number);
@@ -7185,6 +7233,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     Expression<String>? routeJson,
     Expression<String>? storyboardImagePath,
     Expression<String>? cellStylesJson,
+    Expression<String>? exportLayoutJson,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -7221,6 +7270,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
       if (storyboardImagePath != null)
         'storyboard_image_path': storyboardImagePath,
       if (cellStylesJson != null) 'cell_styles_json': cellStylesJson,
+      if (exportLayoutJson != null) 'export_layout_json': exportLayoutJson,
     });
   }
 
@@ -7254,6 +7304,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     Value<String?>? routeJson,
     Value<String?>? storyboardImagePath,
     Value<String?>? cellStylesJson,
+    Value<String?>? exportLayoutJson,
   }) {
     return ShotsCompanion(
       id: id ?? this.id,
@@ -7285,6 +7336,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
       routeJson: routeJson ?? this.routeJson,
       storyboardImagePath: storyboardImagePath ?? this.storyboardImagePath,
       cellStylesJson: cellStylesJson ?? this.cellStylesJson,
+      exportLayoutJson: exportLayoutJson ?? this.exportLayoutJson,
     );
   }
 
@@ -7382,6 +7434,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     if (cellStylesJson.present) {
       map['cell_styles_json'] = Variable<String>(cellStylesJson.value);
     }
+    if (exportLayoutJson.present) {
+      map['export_layout_json'] = Variable<String>(exportLayoutJson.value);
+    }
     return map;
   }
 
@@ -7416,7 +7471,8 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
           ..write('locationBasePlanId: $locationBasePlanId, ')
           ..write('routeJson: $routeJson, ')
           ..write('storyboardImagePath: $storyboardImagePath, ')
-          ..write('cellStylesJson: $cellStylesJson')
+          ..write('cellStylesJson: $cellStylesJson, ')
+          ..write('exportLayoutJson: $exportLayoutJson')
           ..write(')'))
         .toString();
   }
@@ -44515,6 +44571,7 @@ typedef $$ShotsTableCreateCompanionBuilder =
       Value<String?> routeJson,
       Value<String?> storyboardImagePath,
       Value<String?> cellStylesJson,
+      Value<String?> exportLayoutJson,
     });
 typedef $$ShotsTableUpdateCompanionBuilder =
     ShotsCompanion Function({
@@ -44547,6 +44604,7 @@ typedef $$ShotsTableUpdateCompanionBuilder =
       Value<String?> routeJson,
       Value<String?> storyboardImagePath,
       Value<String?> cellStylesJson,
+      Value<String?> exportLayoutJson,
     });
 
 final class $$ShotsTableReferences
@@ -44829,6 +44887,11 @@ class $$ShotsTableFilterComposer extends Composer<_$AppDatabase, $ShotsTable> {
 
   ColumnFilters<String> get cellStylesJson => $composableBuilder(
     column: $table.cellStylesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get exportLayoutJson => $composableBuilder(
+    column: $table.exportLayoutJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -45134,6 +45197,11 @@ class $$ShotsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get exportLayoutJson => $composableBuilder(
+    column: $table.exportLayoutJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ScenesTableOrderingComposer get sceneId {
     final $$ScenesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -45332,6 +45400,11 @@ class $$ShotsTableAnnotationComposer
 
   GeneratedColumn<String> get cellStylesJson => $composableBuilder(
     column: $table.cellStylesJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get exportLayoutJson => $composableBuilder(
+    column: $table.exportLayoutJson,
     builder: (column) => column,
   );
 
@@ -45571,6 +45644,7 @@ class $$ShotsTableTableManager
                 Value<String?> routeJson = const Value.absent(),
                 Value<String?> storyboardImagePath = const Value.absent(),
                 Value<String?> cellStylesJson = const Value.absent(),
+                Value<String?> exportLayoutJson = const Value.absent(),
               }) => ShotsCompanion(
                 id: id,
                 uid: uid,
@@ -45601,6 +45675,7 @@ class $$ShotsTableTableManager
                 routeJson: routeJson,
                 storyboardImagePath: storyboardImagePath,
                 cellStylesJson: cellStylesJson,
+                exportLayoutJson: exportLayoutJson,
               ),
           createCompanionCallback:
               ({
@@ -45633,6 +45708,7 @@ class $$ShotsTableTableManager
                 Value<String?> routeJson = const Value.absent(),
                 Value<String?> storyboardImagePath = const Value.absent(),
                 Value<String?> cellStylesJson = const Value.absent(),
+                Value<String?> exportLayoutJson = const Value.absent(),
               }) => ShotsCompanion.insert(
                 id: id,
                 uid: uid,
@@ -45663,6 +45739,7 @@ class $$ShotsTableTableManager
                 routeJson: routeJson,
                 storyboardImagePath: storyboardImagePath,
                 cellStylesJson: cellStylesJson,
+                exportLayoutJson: exportLayoutJson,
               ),
           withReferenceMapper: (p0) => p0
               .map(

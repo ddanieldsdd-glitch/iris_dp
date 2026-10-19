@@ -165,6 +165,10 @@ class Shots extends Table {
   // Color de celdas sueltas del guion técnico: {"action": "green"}
   // (schemaVersion 45).
   TextColumn get cellStylesJson => text().nullable()();
+  // Cómo sale el plano al exportarlo con sus imágenes: encuadres en orden
+  // (paneo: antes y después; secuencia: partes) y refuerzos
+  // (schemaVersion 58). Nulo = lo decide la app.
+  TextColumn get exportLayoutJson => text().nullable()();
 }
 
 /// Documento de rodaje (Plani, jornada, referencia en set).

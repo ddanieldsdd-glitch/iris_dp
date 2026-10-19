@@ -714,6 +714,8 @@ class ProjectContentBundle {
           if (shot.fps != null) 'fps': shot.fps,
           if (shot.description != null) 'description': shot.description,
           if (!shot.autoNumbering) 'autoNumbering': false,
+          if (shot.exportLayoutJson != null)
+            'exportLayoutJson': shot.exportLayoutJson,
           if (shot.cameraPlanImagePath != null)
             'cameraPlanImagePath': _sketchLinksOut(
               shot.cameraPlanImagePath!,
@@ -1780,6 +1782,7 @@ class ProjectContentBundle {
             m['storyboardImagePath'] as String?,
           ),
           cellStylesJson: Value(m['cellStylesJson'] as String?),
+          exportLayoutJson: Value(m['exportLayoutJson'] as String?),
           locationBasePlanId: Value(setKeyToId[m['shotSetKey']]),
           routeJson: Value(
             ShotRoute.encode([
