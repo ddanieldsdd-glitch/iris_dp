@@ -11,6 +11,9 @@ abstract final class LiveKey {
   static String set(String uid) => 'set:$uid';
   static String lightSetup(String uid) => 'lightSetup:$uid';
   static String scene(String uid) => 'scene:$uid';
+
+  /// Un folio de dibujo: [what] dice cuál («storyboard:<uid del plano>»).
+  static String drawing(String what) => 'drawing:$what';
 }
 
 /// Lo que otro equipo está editando ahora (por el canal en vivo).

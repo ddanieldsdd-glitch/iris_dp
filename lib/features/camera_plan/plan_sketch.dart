@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
+import '../../core/sync/live_drawing.dart';
+import '../../core/sync/live_editing.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -173,6 +175,10 @@ Future<void> drawFreehandSketch(
         ? FileImage(File(trace))
         : null,
     onionSkinLabel: 'Imagen para calcar',
+    live: liveDrawingLinkFor(
+      context,
+      LiveKey.drawing('sketch:${setup.uid ?? 'id${setup.id}'}'),
+    ),
   );
   if (result == null) return;
   // Cada boceto tiene su archivo (una copia duplicada no pisa el original).

@@ -44,6 +44,32 @@ class AnnotationCanvasController extends ChangeNotifier {
   /// Descarta el trazo a medio dibujar (al empezar un gesto de dos dedos).
   void cancelLiveStroke() => _cancelLive?.call();
 
+  /// El trazo a medio hacer aquí, cada vez que cambia (`null`: se levantó
+  /// el lápiz). Para enseñarlo en vivo en otro equipo.
+  ValueChanged<AnnotationStroke?>? onLiveStroke;
+  AnnotationStroke? _reported;
+
+  void _reportLive(AnnotationStroke? stroke) {
+    final last = _reported;
+    if (stroke == null && last == null) return;
+    if (stroke != null &&
+        last != null &&
+        stroke.points.length == last.points.length) {
+      return;
+    }
+    _reported = stroke;
+    onLiveStroke?.call(stroke);
+  }
+
+  /// El trazo que otro equipo está haciendo ahora: se pinta encima.
+  AnnotationStroke? get remoteStroke => _remoteStroke;
+  AnnotationStroke? _remoteStroke;
+  set remoteStroke(AnnotationStroke? stroke) {
+    if (identical(stroke, _remoteStroke)) return;
+    _remoteStroke = stroke;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     compositor.dispose();
@@ -1473,6 +1499,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
                 layerId: widget.layerId,
                 alphaLocked: widget.alphaLocked,
               );
+        widget.controller._reportLive(live);
         return Stack(
           fit: StackFit.expand,
           children: [
@@ -1485,7 +1512,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
               child: CustomPaint(
                 foregroundPainter: AnnotationPainter(
                   document: widget.controller.document,
-                  liveStroke: live,
+                  liveStroke: live ?? widget.controller.remoteStroke,
                   liveStamp: _liveStamp,
                   selectedStampId: widget.tool == AnnotationToolType.select
                       ? widget.controller.selectedStampId

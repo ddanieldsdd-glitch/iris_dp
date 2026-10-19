@@ -9,6 +9,9 @@ import 'package:path/path.dart' as p;
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
+import '../../core/sync/live_drawing.dart';
+import '../../core/sync/live_editing.dart';
+import '../../core/sync/realtime_hub.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -476,6 +479,11 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
 
   /// Abre el lienzo blanco y guarda el dibujo como imagen del plano. Con
   /// [editing], sigue un dibujo que ya estaba: el nuevo ocupa su sitio.
+  /// El folio de este plano y este destino, compartido entre equipos.
+  String get _liveKey => LiveKey.drawing(
+    '${widget.target.name}:${widget.shot.uid ?? 'id${widget.shot.id}'}',
+  );
+
   Future<void> _draw({String? editing}) async {
     if (_busy) return;
     final onionSkin = await _previousStoryboardFrame();
@@ -492,6 +500,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
           : SketchSheetPurpose.storyboard,
       onionSkin: onionSkin?.$1,
       onionSkinLabel: onionSkin?.$2,
+      live: liveDrawingLinkFor(context, _liveKey),
     );
     if (result == null || !mounted) return;
     await _run(() async {
@@ -687,6 +696,8 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
           ShotImageTarget.reference => widget.shot.storyboardImagePath,
         };
     final hasOwn = own != null && File(own).existsSync();
+    // Otro equipo dibuja este folio ahora: se puede mirar en vivo.
+    final drawer = ref.watch(liveEditingProvider).holderOf(_liveKey)?.device;
     final hasImage = path != null && File(path).existsSync();
 
     return CallbackShortcuts(
@@ -804,11 +815,23 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                           icon: const Icon(Icons.content_paste, size: 18),
                           label: const Text('Pegar'),
                         ),
-                        FilledButton.tonalIcon(
-                          onPressed: _busy ? null : _draw,
-                          icon: const Icon(Icons.draw_outlined, size: 18),
-                          label: const Text('Dibujar'),
-                        ),
+                        if (drawer != null)
+                          FilledButton.icon(
+                            onPressed: _busy
+                                ? null
+                                : () => _draw(editing: hasOwn ? own : null),
+                            icon: const Icon(
+                              Icons.visibility_outlined,
+                              size: 18,
+                            ),
+                            label: Text('Ver en vivo · dibuja $drawer'),
+                          )
+                        else
+                          FilledButton.tonalIcon(
+                            onPressed: _busy ? null : _draw,
+                            icon: const Icon(Icons.draw_outlined, size: 18),
+                            label: const Text('Dibujar'),
+                          ),
                         // El dibujo del storyboard, como una referencia más
                         // del plano (sale en el guion técnico y al exportar).
                         if (!_story &&

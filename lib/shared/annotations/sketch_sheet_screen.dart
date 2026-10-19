@@ -20,6 +20,7 @@ import 'annotation_tools.dart';
 import 'brushes/auto_import.dart';
 import 'brushes/custom_brush_store.dart';
 import 'brushes/paper_library.dart';
+import 'live_drawing_link.dart';
 import 'sheet/brush_studio.dart';
 import 'sheet/sheet_guides.dart';
 import 'sheet/sheet_panels.dart';
@@ -77,6 +78,9 @@ class SketchSheetScreen extends StatefulWidget {
   /// De dónde es esa viñeta («Plano 1»), para la etiqueta del folio.
   final String? onionSkinLabel;
 
+  /// Dibujo compartido por turnos con otros equipos (nulo: solo aquí).
+  final LiveDrawingLink? live;
+
   const SketchSheetScreen({
     super.key,
     required this.title,
@@ -86,6 +90,7 @@ class SketchSheetScreen extends StatefulWidget {
     this.exportPng = false,
     this.onionSkin,
     this.onionSkinLabel,
+    this.live,
   });
 
   static Future<SketchSheetResult?> open(
@@ -97,6 +102,7 @@ class SketchSheetScreen extends StatefulWidget {
     bool exportPng = false,
     ImageProvider? onionSkin,
     String? onionSkinLabel,
+    LiveDrawingLink? live,
   }) {
     return Navigator.of(context, rootNavigator: true).push<SketchSheetResult>(
       MaterialPageRoute(
@@ -111,6 +117,7 @@ class SketchSheetScreen extends StatefulWidget {
           exportPng: exportPng,
           onionSkin: onionSkin,
           onionSkinLabel: onionSkinLabel,
+          live: live,
         ),
       ),
     );
@@ -220,6 +227,128 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
       if (mounted) setState(() {});
     });
     _autoImport();
+    _startLive();
+  }
+
+  // ─── Dibujo compartido por turnos ──────────────────────────────────────────
+
+  /// Otro equipo tiene el folio: aquí solo se mira.
+  bool get _watching => widget.live != null && !widget.live!.mine.value;
+
+  /// Quién lo tenía la última vez (para decir que lo ha soltado).
+  String? _lastDrawer;
+
+  void _startLive() {
+    final live = widget.live;
+    if (live == null) return;
+    live.mine.addListener(_onLiveTurn);
+    live.otherDrawer.addListener(_onLiveTurn);
+    live.remoteDocument.addListener(_onRemoteDocument);
+    live.remoteStroke.addListener(_onRemoteStroke);
+    _controller.addListener(_publishLive);
+    _controller.onLiveStroke = (stroke) {
+      if (live.mine.value) live.publishStroke(stroke);
+    };
+    _lastDrawer = live.otherDrawer.value;
+    // Tras el primer cuadro: tomar el folio avisa y repinta.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (live.otherDrawer.value == null) live.claim();
+      _onRemoteDocument();
+    });
+  }
+
+  void _stopLive() {
+    final live = widget.live;
+    if (live == null) return;
+    live.mine.removeListener(_onLiveTurn);
+    live.otherDrawer.removeListener(_onLiveTurn);
+    live.remoteDocument.removeListener(_onRemoteDocument);
+    live.remoteStroke.removeListener(_onRemoteStroke);
+    _controller.removeListener(_publishLive);
+    _controller.onLiveStroke = null;
+  }
+
+  void _onLiveTurn() {
+    if (!mounted) return;
+    final live = widget.live!;
+    final other = live.otherDrawer.value;
+    if (other != null) _lastDrawer = other;
+    if (live.mine.value) {
+      _controller.remoteStroke = null;
+      _publishLive();
+    }
+    setState(() {});
+  }
+
+  void _publishLive() {
+    final live = widget.live;
+    if (live != null && live.mine.value) live.publish(_controller.document);
+  }
+
+  void _onRemoteDocument() {
+    final doc = widget.live?.remoteDocument.value;
+    if (doc == null || !_watching || !mounted) return;
+    _controller.replaceDocument(doc);
+    _controller.remoteStroke = null;
+    _baseline = doc;
+    if (_controller.layerById(_activeLayerId) == null) {
+      _activeLayerId = _controller.layers.last.id;
+    }
+    setState(() => _chooseStyle = false);
+  }
+
+  void _onRemoteStroke() {
+    if (!_watching) return;
+    _controller.remoteStroke = widget.live?.remoteStroke.value;
+  }
+
+  void _undo() {
+    if (!_watching) _controller.undo();
+  }
+
+  void _redo() {
+    if (!_watching) _controller.redo();
+  }
+
+  Widget _buildLiveBanner() {
+    final other = widget.live!.otherDrawer.value;
+    final who = other ?? _lastDrawer ?? 'El otro equipo';
+    return Material(
+      color: const Color(0xE6202124),
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              other != null ? Icons.visibility_outlined : Icons.edit_outlined,
+              size: 16,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              other != null
+                  ? 'Dibuja $who · lo ves en vivo'
+                  : '$who ha soltado el folio',
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+            ),
+            const SizedBox(width: 8),
+            if (other == null)
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: widget.live!.claim,
+                child: const Text('Dibujar yo'),
+              )
+            else
+              const SizedBox(width: 6),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Lo que haya en `Documents/Importar` entra solo, en segundo plano.
@@ -518,6 +647,8 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
   @override
   void dispose() {
     _sizingOff?.cancel();
+    _stopLive();
+    widget.live?.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -872,8 +1003,8 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     final quick =
         DateTime.now().difference(started) < const Duration(milliseconds: 350);
     if (!quick) return;
-    if (_maxTouches == 2) _controller.undo();
-    if (_maxTouches == 3) _controller.redo();
+    if (_maxTouches == 2) _undo();
+    if (_maxTouches == 3) _redo();
   }
 
   bool _navigates(ScaleUpdateDetails details) =>
@@ -928,17 +1059,15 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     final palette = context.palette;
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true):
-            _controller.undo,
-        const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
-            _controller.undo,
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): _undo,
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): _undo,
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
-            _controller.redo,
+            _redo,
         const SingleActivator(
           LogicalKeyboardKey.keyZ,
           control: true,
           shift: true,
-        ): _controller.redo,
+        ): _redo,
         const SingleActivator(LogicalKeyboardKey.backspace): _deleteSelected,
         const SingleActivator(LogicalKeyboardKey.delete): _deleteSelected,
         const SingleActivator(LogicalKeyboardKey.keyB): () =>
@@ -967,7 +1096,12 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                     Expanded(
                       child: Stack(
                         children: [
-                          Positioned.fill(child: _buildWorkspace()),
+                          Positioned.fill(
+                            child: AbsorbPointer(
+                              absorbing: _watching,
+                              child: _buildWorkspace(),
+                            ),
+                          ),
                           if (_sizing)
                             Positioned.fill(
                               child: IgnorePointer(
@@ -984,7 +1118,12 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                             left: 10,
                             top: 0,
                             bottom: 0,
-                            child: Center(child: _buildSideBar()),
+                            child: Center(
+                              child: AbsorbPointer(
+                                absorbing: _watching,
+                                child: _buildSideBar(),
+                              ),
+                            ),
                           ),
                           if (_panel != null)
                             Positioned(
@@ -1006,7 +1145,9 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                               bottom: 12,
                               child: _buildToolOptions(palette),
                             ),
-                          if (_chooseStyle && _controller.document.isEmpty)
+                          if (_chooseStyle &&
+                              !_watching &&
+                              _controller.document.isEmpty)
                             Positioned(
                               left: 0,
                               right: 0,
@@ -1019,7 +1160,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                               top: 10,
                               child: _buildOnionChip(),
                             ),
-                          if (_layerBlocked)
+                          if (_layerBlocked && !_watching)
                             Positioned(
                               top: 10,
                               left: 0,
@@ -1036,6 +1177,15 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                                             'para dibujar',
                                 ),
                               ),
+                            ),
+                          if (widget.live != null &&
+                              (_watching ||
+                                  widget.live!.otherDrawer.value != null))
+                            Positioned(
+                              top: 10,
+                              left: 0,
+                              right: 0,
+                              child: Center(child: _buildLiveBanner()),
                             ),
                         ],
                       ),
@@ -1154,7 +1304,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 9),
             child: FilledButton.icon(
-              onPressed: _saving ? null : _done,
+              onPressed: _saving || _watching ? null : _done,
               icon: _saving
                   ? const SizedBox(
                       width: 14,
@@ -1319,7 +1469,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     final layer = _controller.layerById(_targetLayerId);
     final canvas = AnnotationCanvas(
       controller: _controller,
-      enabled: !_saving && !_eyedropper && !_layerBlocked,
+      enabled: !_saving && !_eyedropper && !_layerBlocked && !_watching,
       tool: _canvasTool,
       brushId: _canvasBrushId,
       layerId: _targetLayerId,
