@@ -538,6 +538,12 @@ class ProjectContentBundle {
     )..where((o) => o.projectId.equals(projectId))).get();
 
     final lightSetupRows = await db.getLightSetupsForProject(projectId);
+    // Bocetos que enseña un plano (`setup:<id>`): viajan con el uid del
+    // boceto, que es el mismo en todos los equipos.
+    final lightSetupUidById = {
+      for (final s in await db.getLightSetupsForProject(projectId))
+        if (s.uid != null) s.id: s.uid!,
+    };
     final lightSetupKeyById = {
       for (var i = 0; i < lightSetupRows.length; i++)
         lightSetupRows[i].id: 'lightSetup:$i',
@@ -704,7 +710,10 @@ class ProjectContentBundle {
           if (shot.description != null) 'description': shot.description,
           if (!shot.autoNumbering) 'autoNumbering': false,
           if (shot.cameraPlanImagePath != null)
-            'cameraPlanImagePath': shot.cameraPlanImagePath,
+            'cameraPlanImagePath': _sketchLinksOut(
+              shot.cameraPlanImagePath!,
+              lightSetupUidById,
+            ),
           'lightSetupKey': shot.lightSetupId != null
               ? lightSetupKeyById[shot.lightSetupId!]
               : null,
@@ -1337,6 +1346,37 @@ class ProjectContentBundle {
     return null;
   }
 
+  /// `setup:<id>` → `setupUid:<uid>` en la lista de bocetos de un plano.
+  /// Cada entrada conserva su sitio (la descarga de archivos va posición a
+  /// posición): lo que no se puede traducir se queda como estaba.
+  static String _sketchLinksOut(String raw, Map<int, String> uidById) {
+    final entries = decodeSlotPaths(raw);
+    if (!entries.any((e) => e.startsWith('setup:'))) return raw;
+    return jsonEncode([
+      for (final e in entries)
+        if (e.startsWith('setup:') &&
+            uidById[int.tryParse(e.substring(6))] != null)
+          'setupUid:${uidById[int.tryParse(e.substring(6))]}'
+        else
+          e,
+    ]);
+  }
+
+  /// Al importar, `setupUid:<uid>` vuelve a `setup:<id>` de este equipo;
+  /// el resto, en su sitio.
+  static String? _sketchLinksIn(String? raw, Map<String, int> idByUid) {
+    if (raw == null) return null;
+    final entries = decodeSlotPaths(raw);
+    if (!entries.any((e) => e.startsWith('setupUid:'))) return raw;
+    return jsonEncode([
+      for (final e in entries)
+        if (e.startsWith('setupUid:') && idByUid[e.substring(9)] != null)
+          'setup:${idByUid[e.substring(9)]}'
+        else
+          e,
+    ]);
+  }
+
   static bool _looksLikeFilePath(String value) =>
       value.startsWith('/') || RegExp(r'^[A-Za-z]:[\\/]').hasMatch(value);
 
@@ -1485,6 +1525,7 @@ class ProjectContentBundle {
     }
 
     final lightSetupKeyToId = <String, int>{};
+    final lightSetupIdByUid = <String, int>{};
     // Bocetos y su escena: las escenas llegan después.
     final sketchSceneKeys = <int, String>{};
     for (final row in bundle['lightSetups'] as List? ?? []) {
@@ -1511,6 +1552,7 @@ class ProjectContentBundle {
         ),
       );
       lightSetupKeyToId[m['lightSetupKey'] as String] = id;
+      if (m['uid'] case final String uid) lightSetupIdByUid[uid] = id;
       if (m['sceneKey'] case final String sceneKey) {
         sketchSceneKeys[id] = sceneKey;
       }
@@ -1610,7 +1652,12 @@ class ProjectContentBundle {
               fps: Value(bundleInt(m['fps'])),
               description: Value(m['description'] as String?),
               autoNumbering: Value(m['autoNumbering'] as bool? ?? true),
-              cameraPlanImagePath: Value(m['cameraPlanImagePath'] as String?),
+              cameraPlanImagePath: Value(
+                _sketchLinksIn(
+                  m['cameraPlanImagePath'] as String?,
+                  lightSetupIdByUid,
+                ),
+              ),
               storyboardImagePath: Value(
                 m['storyboardImagePath'] as String?,
               ),

@@ -225,13 +225,27 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
                 data: _data,
                 onTap: () => widget.onOpen(PlanTarget.site(site.id, site.name)),
               ),
+            IconButton(
+              tooltip: site == null
+                  ? 'Elegir la localización de la escena'
+                  : 'Cambiar la localización de la escena',
+              icon: Icon(
+                site == null
+                    ? Icons.add_location_alt_outlined
+                    : Icons.edit_location_alt_outlined,
+                color: palette.textSecondary,
+              ),
+              onPressed: () => site == null
+                  ? pickSiteForScene(context, _db, _scene)
+                  : changeSceneSite(context, _db, _scene),
+            ),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           site == null
-              ? 'Esta escena aún no tiene localización. Asígnale una en '
-                    'Localizaciones para repartir sus planos por sets.'
+              ? 'Esta escena aún no tiene localización. Elígela con el botón '
+                    'de arriba para repartir sus planos por sets.'
               : 'Arrastra cada plano al esquema de luz con el que se rueda. '
                     'Con Mayús o Cmd se marcan varios para moverlos juntos.',
           style: AppTypography.caption(

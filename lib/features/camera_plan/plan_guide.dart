@@ -1,4 +1,5 @@
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart'
+    show BooleanExpressionOperators, Constant, Value;
 import 'package:flutter/material.dart';
 
 import '../../core/database/app_database.dart';
@@ -9,6 +10,7 @@ import 'camera_plan_element_model.dart';
 import 'floor_plan_json.dart';
 import 'floor_plan_repository.dart';
 import 'floor_plan_scope.dart';
+import 'plan_trash_service.dart';
 
 /// Orden de trabajo de la planta: primero la localización, luego sus sets y
 /// por último los planos de cada set.
@@ -122,6 +124,23 @@ Future<LocationSite?> pickSiteForScene(
   AppDatabase db,
   Scene scene,
 ) async {
+  final site = await _chooseSite(context, db, scene);
+  if (site == null) return null;
+  await (db.update(db.scenes)..where((s) => s.id.equals(scene.id))).write(
+    ScenesCompanion(locationSiteId: Value(site.id)),
+  );
+  await db.touchProjectContent(scene.projectId);
+  return site;
+}
+
+/// La lista de localizaciones (y una nueva) para una escena. La actual sale
+/// marcada y no se puede elegir.
+Future<LocationSite?> _chooseSite(
+  BuildContext context,
+  AppDatabase db,
+  Scene scene, {
+  int? currentSiteId,
+}) async {
   final sites = await (db.select(
     db.locationSites,
   )..where((s) => s.projectId.equals(scene.projectId))).get();
@@ -129,14 +148,18 @@ Future<LocationSite?> pickSiteForScene(
   final suggested = scene.locationPureName.trim().isEmpty
       ? 'Localización'
       : scene.locationPureName.trim();
-  final controller = TextEditingController(text: suggested);
+  final controller = TextEditingController(
+    text: currentSiteId == null ? suggested : '',
+  );
   final palette = context.palette;
   final picked = await showDialog<Object>(
     context: context,
     builder: (ctx) => AlertDialog(
       backgroundColor: palette.surfaceElevated,
       title: Text(
-        '¿Dónde se rueda la escena ${scene.number}?',
+        currentSiteId == null
+            ? '¿Dónde se rueda la escena ${scene.number}?'
+            : 'Cambiar la localización de la escena ${scene.number}',
         style: AppTypography.titleMedium(palette),
       ),
       content: SizedBox(
@@ -146,8 +169,12 @@ Future<LocationSite?> pickSiteForScene(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Primero la localización: su plano maestro lleva el entorno. '
-              'Después se marcan los sets y se reparten los planos.',
+              currentSiteId == null
+                  ? 'Primero la localización: su plano maestro lleva el '
+                        'entorno. Después se marcan los sets y se reparten '
+                        'los planos.'
+                  : 'Sus planos dejan el set y la luz de la localización '
+                        'anterior; sus cámaras y actores se quedan.',
               style: AppTypography.bodyMedium(
                 palette,
               ).copyWith(color: palette.textSecondary),
@@ -158,8 +185,16 @@ Future<LocationSite?> pickSiteForScene(
                 ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.location_city_outlined),
+                  leading: Icon(
+                    site.id == currentSiteId
+                        ? Icons.check
+                        : Icons.location_city_outlined,
+                  ),
                   title: Text(site.name),
+                  subtitle: site.id == currentSiteId
+                      ? const Text('La de ahora')
+                      : null,
+                  enabled: site.id != currentSiteId,
                   onTap: () => Navigator.pop(ctx, site),
                 ),
               const Divider(),
@@ -188,20 +223,204 @@ Future<LocationSite?> pickSiteForScene(
       ],
     ),
   );
-  LocationSite? site;
-  if (picked is LocationSite) {
-    site = picked;
-  } else if (picked is String && picked.trim().isNotEmpty) {
-    site = await db.ensureSite(
-      projectId: scene.projectId,
-      siteName: picked.trim(),
-    );
+  controller.dispose();
+  if (picked is LocationSite) return picked;
+  if (picked is String && picked.trim().isNotEmpty) {
+    return db.ensureSite(projectId: scene.projectId, siteName: picked.trim());
   }
-  if (site == null) return null;
-  await (db.update(db.scenes)..where((s) => s.id.equals(scene.id))).write(
-    ScenesCompanion(locationSiteId: Value(site.id)),
-  );
+  return null;
+}
+
+/// Lo que cambió al llevar una escena a otra localización, para deshacerlo.
+class SceneSiteChange {
+  final int sceneId;
+  final int? oldSiteId;
+  final int? oldSetId;
+
+  /// Planos tocados: su set y su esquema de antes.
+  final List<({int shotId, int? setId, int? setupId})> shots;
+
+  const SceneSiteChange({
+    required this.sceneId,
+    required this.oldSiteId,
+    required this.oldSetId,
+    required this.shots,
+  });
+
+  /// Vuelve la escena y sus planos a como estaban.
+  Future<void> undo(AppDatabase db) async {
+    await db.transaction(() async {
+      await (db.update(db.scenes)..where((s) => s.id.equals(sceneId))).write(
+        ScenesCompanion(
+          locationSiteId: Value(oldSiteId),
+          locationId: Value(oldSetId),
+        ),
+      );
+      for (final s in shots) {
+        await (db.update(db.shots)..where((x) => x.id.equals(s.shotId))).write(
+          ShotsCompanion(
+            locationBasePlanId: Value(s.setId),
+            lightSetupId: Value(s.setupId),
+          ),
+        );
+      }
+    });
+    final scene = await (db.select(
+      db.scenes,
+    )..where((s) => s.id.equals(sceneId))).getSingleOrNull();
+    if (scene != null) await db.touchProjectContent(scene.projectId);
+  }
+}
+
+/// Lleva la escena a [siteId]: deja su set, y sus planos dejan el set y el
+/// esquema de luz de la localización anterior (sus cámaras se quedan).
+Future<SceneSiteChange> applySceneSite(
+  AppDatabase db,
+  Scene scene,
+  int siteId,
+) async {
+  final oldSiteId = scene.locationSiteId;
+  final oldSets = oldSiteId == null
+      ? <int>{}
+      : await _setIdsOfSite(db, oldSiteId);
+  if (scene.locationId != null) oldSets.add(scene.locationId!);
+  final oldSetups = {
+    for (final s in await db.getLightSetupsForProject(scene.projectId))
+      if (oldSets.contains(s.locationBasePlanId) ||
+          (oldSiteId != null && s.locationSiteId == oldSiteId))
+        s.id,
+  };
+  final shots = await (db.select(
+    db.shots,
+  )..where((s) => s.sceneId.equals(scene.id))).get();
+  final touched = [
+    for (final shot in shots)
+      if (oldSets.contains(shot.locationBasePlanId) ||
+          oldSetups.contains(shot.lightSetupId))
+        (
+          shotId: shot.id,
+          setId: shot.locationBasePlanId,
+          setupId: shot.lightSetupId,
+        ),
+  ];
+  await db.transaction(() async {
+    await (db.update(db.scenes)..where((s) => s.id.equals(scene.id))).write(
+      ScenesCompanion(
+        locationSiteId: Value(siteId),
+        locationId: const Value(null),
+      ),
+    );
+    for (final t in touched) {
+      await (db.update(db.shots)..where((s) => s.id.equals(t.shotId))).write(
+        ShotsCompanion(
+          locationBasePlanId: oldSets.contains(t.setId)
+              ? const Value(null)
+              : const Value.absent(),
+          lightSetupId: oldSetups.contains(t.setupId)
+              ? const Value(null)
+              : const Value.absent(),
+        ),
+      );
+    }
+  });
   await db.touchProjectContent(scene.projectId);
+  return SceneSiteChange(
+    sceneId: scene.id,
+    oldSiteId: oldSiteId,
+    oldSetId: scene.locationId,
+    shots: touched,
+  );
+}
+
+Future<Set<int>> _setIdsOfSite(AppDatabase db, int siteId) async => {
+  for (final s in await (db.select(
+    db.locationBasePlans,
+  )..where((l) => l.siteId.equals(siteId))).get())
+    s.id,
+};
+
+/// ¿Se ha quedado la localización sin escenas, ni por ella ni por sus sets?
+Future<bool> siteIsUnused(AppDatabase db, int siteId) async {
+  final sets = await _setIdsOfSite(db, siteId);
+  final scenes = await (db.select(db.scenes)..where(
+        (s) =>
+            s.locationSiteId.equals(siteId) |
+            (sets.isEmpty
+                ? const Constant(false)
+                : s.locationId.isIn(sets)),
+      ))
+      .get();
+  return scenes.isEmpty;
+}
+
+/// Cambia la localización de una escena elegida por error: pregunta cuál
+/// es la buena, la cambia con «Deshacer» y, si la anterior se queda sin
+/// escenas, ofrece borrarla (a la papelera). Devuelve la nueva, o nula si
+/// se cancela.
+Future<LocationSite?> changeSceneSite(
+  BuildContext context,
+  AppDatabase db,
+  Scene scene,
+) async {
+  final site = await _chooseSite(
+    context,
+    db,
+    scene,
+    currentSiteId: scene.locationSiteId,
+  );
+  if (site == null || site.id == scene.locationSiteId) return null;
+  if (!context.mounted) return null;
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final oldSite = scene.locationSiteId == null
+      ? null
+      : await db.getSiteById(scene.locationSiteId!);
+  final change = await applySceneSite(db, scene, site.id);
+  messenger
+    ?..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        content: Text(
+          'La escena ${scene.number} se rueda ahora en «${site.name}».',
+        ),
+        action: SnackBarAction(
+          label: 'Deshacer',
+          onPressed: () => change.undo(db),
+        ),
+      ),
+    );
+  if (oldSite != null &&
+      context.mounted &&
+      await siteIsUnused(db, oldSite.id) &&
+      context.mounted) {
+    final palette = context.palette;
+    final drop = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.surfaceElevated,
+        title: Text(
+          '«${oldSite.name}» se ha quedado sin escenas',
+          style: AppTypography.titleMedium(palette),
+        ),
+        content: Text(
+          '¿La borras? Va a la Papelera de plantas con sus sets, por si '
+          'acaso.',
+          style: AppTypography.bodyMedium(palette),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Mantenerla'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Borrar', style: TextStyle(color: palette.error)),
+          ),
+        ],
+      ),
+    );
+    if (drop == true) await PlanTrashService(db).deleteSite(oldSite.id);
+  }
   return site;
 }
 
@@ -436,6 +655,9 @@ class PlanGuideBar extends StatelessWidget {
   final VoidCallback onFinish;
   final VoidCallback onClose;
 
+  /// Si la localización elegida no era: cambiarla.
+  final VoidCallback? onChangeSite;
+
   const PlanGuideBar({
     super.key,
     required this.step,
@@ -451,6 +673,7 @@ class PlanGuideBar extends StatelessWidget {
     required this.onAssociate,
     required this.onFinish,
     required this.onClose,
+    this.onChangeSite,
   });
 
   @override
@@ -561,11 +784,23 @@ class PlanGuideBar extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            hint,
-            style: AppTypography.caption(
-              palette,
-            ).copyWith(color: palette.textSecondary),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  hint,
+                  style: AppTypography.caption(
+                    palette,
+                  ).copyWith(color: palette.textSecondary),
+                ),
+              ),
+              if (step == PlanGuideStep.location && onChangeSite != null)
+                TextButton.icon(
+                  onPressed: onChangeSite,
+                  icon: const Icon(Icons.edit_location_alt_outlined, size: 16),
+                  label: const Text('No es esta localización'),
+                ),
+            ],
           ),
           if (step != PlanGuideStep.location) ...[
             const SizedBox(height: 6),

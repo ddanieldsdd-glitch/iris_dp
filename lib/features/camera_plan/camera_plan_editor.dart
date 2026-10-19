@@ -1748,7 +1748,42 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     onAssociate: _guideAssociate,
     onFinish: _guideFinish,
     onClose: () => setState(() => _guideStep = null),
+    onChangeSite: _guideChangeSite,
   );
+
+  /// Se eligió mal la localización: se cambia y la guía sigue en la nueva.
+  Future<void> _guideChangeSite() async {
+    final guide = widget.guide;
+    if (guide == null) return;
+    final db = ref.read(databaseProvider);
+    final scene = await (db.select(
+      db.scenes,
+    )..where((s) => s.id.equals(guide.sceneId))).getSingleOrNull();
+    if (scene == null || !mounted) return;
+    final site = await changeSceneSite(context, db, scene);
+    if (site == null || !mounted) return;
+    var step = PlanGuideStep.location;
+    if (guide.shotId != null) {
+      final shot = await db.getShotById(guide.shotId!);
+      if (shot != null) step = (await PlanEntryState.resolve(db, shot)).startStep;
+    }
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => CameraPlanEditor.site(
+          projectId: widget.projectId,
+          siteId: site.id,
+          siteName: site.name,
+          guide: PlanGuide(
+            sceneId: guide.sceneId,
+            shotId: guide.shotId,
+            shotLabel: guide.shotLabel,
+            startStep: step,
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _guideNewSet() async {
     final site = _linkedSite;

@@ -112,6 +112,26 @@ Future<Uint8List> renderSketchPng(
   return data!.buffer.asUint8List();
 }
 
+/// Un color del lápiz y lo que significa en ese lienzo.
+class SketchColor {
+  final Color color;
+  final String meaning;
+
+  const SketchColor(this.color, this.meaning);
+}
+
+/// Colores de un boceto de planta: el mismo lienzo que el storyboard, pero
+/// cada color dice qué es, como en una planta de luz.
+const kPlanSketchColors = [
+  SketchColor(Color(0xFF111111), 'Paredes y entorno'),
+  SketchColor(Color(0xFFFF9500), 'Luz cálida (tungsteno, CTO)'),
+  SketchColor(Color(0xFF007AFF), 'Luz fría (HMI, día, luna)'),
+  SketchColor(Color(0xFFFF3B30), 'Cámara y encuadre'),
+  SketchColor(Color(0xFF34C759), 'Personajes y recorridos'),
+  SketchColor(Color(0xFF8E8E93), 'Grip: banderas, telas, rebotes'),
+  SketchColor(Color(0xFFAF52DE), 'Notas'),
+];
+
 /// Transparencia de la imagen que se calca debajo del papel.
 const kSketchUnderlayOpacity = 0.5;
 
@@ -137,6 +157,7 @@ Future<SketchResult?> showSketchPad(
   bool gridPaper = false,
   String? underlayPath,
   Future<String?> Function(BuildContext context)? onPickUnderlay,
+  List<SketchColor>? colors,
 }) {
   return Navigator.of(context, rootNavigator: true).push<SketchResult>(
     MaterialPageRoute(
@@ -148,6 +169,7 @@ Future<SketchResult?> showSketchPad(
         gridPaper: gridPaper,
         underlayPath: underlayPath,
         onPickUnderlay: onPickUnderlay,
+        colors: colors,
       ),
     ),
   );
@@ -170,6 +192,9 @@ class SketchPad extends StatefulWidget {
   /// ruta nueva (o nula para quitarla).
   final Future<String?> Function(BuildContext context)? onPickUnderlay;
 
+  /// Colores con significado (boceto de planta); sin ellos, los de siempre.
+  final List<SketchColor>? colors;
+
   const SketchPad({
     super.key,
     required this.title,
@@ -178,6 +203,7 @@ class SketchPad extends StatefulWidget {
     this.gridPaper = false,
     this.underlayPath,
     this.onPickUnderlay,
+    this.colors,
   });
 
   @override
@@ -187,7 +213,7 @@ class SketchPad extends StatefulWidget {
 class _SketchPadState extends State<SketchPad> {
   late final _controller = AnnotationCanvasController(document: widget.initial);
   AnnotationToolType _tool = AnnotationToolType.pen;
-  Color _color = SketchToolbar.colors.first;
+  late Color _color = widget.colors?.first.color ?? SketchToolbar.colors.first;
   double _width = 6;
   bool _saving = false;
   late String? _underlay = widget.underlayPath;
@@ -304,6 +330,7 @@ class _SketchPadState extends State<SketchPad> {
                   ),
                 ),
                 SketchToolbar(
+                  meanings: widget.colors,
                   controller: _controller,
                   tool: _tool,
                   color: _color,
@@ -393,8 +420,12 @@ class SketchToolbar extends StatelessWidget {
   final ValueChanged<Color> onColorChanged;
   final ValueChanged<double> onWidthChanged;
 
+  /// Colores con significado; sin ellos, [colors] sin nombre.
+  final List<SketchColor>? meanings;
+
   const SketchToolbar({
     super.key,
+    this.meanings,
     required this.controller,
     required this.tool,
     required this.color,
@@ -439,11 +470,16 @@ class SketchToolbar extends StatelessWidget {
                 AnnotationToolType.eraser,
               ),
               const VerticalDivider(indent: 12, endIndent: 12),
-              for (final choice in colors)
+              for (final (choice, meaning) in [
+                if (meanings case final named?)
+                  for (final m in named) (m.color, m.meaning)
+                else
+                  for (final c in colors) (c, 'Color del lápiz'),
+              ])
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 3),
                   child: Tooltip(
-                    message: 'Color del lápiz',
+                    message: meaning,
                     child: InkWell(
                       customBorder: const CircleBorder(),
                       onTap: () => onColorChanged(choice),
@@ -465,6 +501,20 @@ class SketchToolbar extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (meanings case final named?)
+                for (final m in named)
+                  if (m.color == color)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: Text(
+                          m.meaning,
+                          style: AppTypography.caption(
+                            palette,
+                          ).copyWith(color: palette.textSecondary),
+                        ),
+                      ),
+                    ),
               const SizedBox(width: 8),
               Tooltip(
                 message: 'Grosor',

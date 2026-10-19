@@ -18,6 +18,7 @@ import '../../shared/annotations/annotation_document.dart';
 import '../../shared/annotations/sketch_pad.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
 import 'camera_plan_editor.dart';
+import 'camera_plan_grouping.dart';
 import 'floor_plan_repository.dart';
 import 'floor_plan_scope.dart';
 import 'plan_image_widgets.dart';
@@ -129,6 +130,7 @@ Future<void> drawFreehandSketch(
         : readSketchDocument(current),
     aspectRatio: 4 / 3,
     gridPaper: true,
+    colors: kPlanSketchColors,
     underlayPath: firstUnderlay,
     onPickUnderlay: (context) async {
       final previous = await underlay();
@@ -612,7 +614,7 @@ class PlanSketchStrip extends ConsumerWidget {
             )
           else
             SizedBox(
-              height: 142,
+              height: 160,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: sketches.length,
@@ -682,6 +684,22 @@ class PlanSketchStrip extends ConsumerWidget {
                                     }
                                   case 'plan':
                                     onToPlan?.call(sketch);
+                                  case 'shots':
+                                    if (!context.mounted) return;
+                                    await showSketchShotsDialog(
+                                      context,
+                                      db,
+                                      data,
+                                      sketch,
+                                    );
+                                  case 'scene':
+                                    if (!context.mounted) return;
+                                    await moveSketchToScene(
+                                      context,
+                                      db,
+                                      data,
+                                      sketch,
+                                    );
                                   case 'delete':
                                     if (!context.mounted) return;
                                     await LightSetupActions(
@@ -696,6 +714,18 @@ class PlanSketchStrip extends ConsumerWidget {
                                 const PopupMenuItem(
                                   value: 'rename',
                                   child: Text('Renombrar'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'shots',
+                                  child: Text('Asociar a planos…'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'scene',
+                                  child: Text(
+                                    sketch.sceneId == null
+                                        ? 'Llevar a una escena…'
+                                        : 'Cambiar de escena o hacer general…',
+                                  ),
                                 ),
                                 if (!freehand && onToPlan != null)
                                   const PopupMenuItem(
@@ -713,6 +743,16 @@ class PlanSketchStrip extends ConsumerWidget {
                             ),
                           ],
                         ),
+                        if (sketchShotLabels(data, sketch) case final shots
+                            when shots.isNotEmpty)
+                          Text(
+                            'En ${shots.join(', ')}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.caption(
+                              palette,
+                            ).copyWith(color: palette.textTertiary),
+                          ),
                       ],
                     ),
                   );
@@ -723,4 +763,179 @@ class PlanSketchStrip extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Planos que enseñan el boceto: «5·1», «5·2»…
+List<String> sketchShotLabels(PlanProjectData data, LightSetup sketch) {
+  final entry = 'setup:${sketch.id}';
+  return [
+    for (final shot in data.shots)
+      if (planSketchEntriesOf(shot).contains(entry))
+        '${data.scene(shot.sceneId)?.number ?? '?'}·${shot.number}',
+  ];
+}
+
+/// Elige los planos que enseñan el boceto (como referencia: no cambia su
+/// esquema de luz). Un boceto de escena ofrece los planos de su escena; uno
+/// general, los de todas.
+Future<void> showSketchShotsDialog(
+  BuildContext context,
+  AppDatabase db,
+  PlanProjectData data,
+  LightSetup sketch,
+) async {
+  final entry = 'setup:${sketch.id}';
+  final scenes = [
+    for (final scene in scenesInScriptOrder(data.scenes))
+      if (sketch.sceneId == null || scene.id == sketch.sceneId) scene,
+  ];
+  final shots = [
+    for (final scene in scenes) ...data.shotsOfScene(scene.id),
+  ];
+  final before = {
+    for (final shot in shots)
+      if (planSketchEntriesOf(shot).contains(entry)) shot.id,
+  };
+  final picked = {...before};
+  final palette = context.palette;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) => AlertDialog(
+        backgroundColor: palette.surfaceElevated,
+        title: Text(
+          'Planos que enseñan «${sketch.name}»',
+          style: AppTypography.titleMedium(palette),
+        ),
+        content: SizedBox(
+          width: 420,
+          child: shots.isEmpty
+              ? Text(
+                  'No hay planos todavía.',
+                  style: AppTypography.bodyMedium(palette),
+                )
+              : ListView(
+                  shrinkWrap: true,
+                  children: [
+                    Text(
+                      'El boceto se ve en el plano (guion técnico y tablero) '
+                      'como referencia; no cambia su esquema de luz.',
+                      style: AppTypography.caption(
+                        palette,
+                      ).copyWith(color: palette.textSecondary),
+                    ),
+                    for (final scene in scenes)
+                      if (data.shotsOfScene(scene.id).isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Escena ${scene.number} · '
+                            '${scene.locationCanonical}',
+                            style: AppTypography.caption(palette),
+                          ),
+                        ),
+                        for (final shot in data.shotsOfScene(scene.id))
+                          CheckboxListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            value: picked.contains(shot.id),
+                            onChanged: (v) => setState(() {
+                              if (v == true) {
+                                picked.add(shot.id);
+                              } else {
+                                picked.remove(shot.id);
+                              }
+                            }),
+                            title: Text(
+                              [
+                                'Plano ${shot.number}',
+                                ?shot.framing,
+                                ?shot.lens,
+                              ].join(' · '),
+                            ),
+                          ),
+                      ],
+                  ],
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (ok != true) return;
+  for (final shot in shots) {
+    final want = picked.contains(shot.id);
+    final had = before.contains(shot.id);
+    if (want && !had) {
+      await addShotPlanSketchSetup(db: db, shot: shot, setupId: sketch.id);
+    } else if (!want && had) {
+      await removeShotPlanSketch(db: db, shot: shot, path: entry);
+    }
+  }
+}
+
+/// Lleva el boceto a otra escena, o lo deja general (sin escena). Con
+/// elementos, toma el entorno de su nueva escena.
+Future<void> moveSketchToScene(
+  BuildContext context,
+  AppDatabase db,
+  PlanProjectData data,
+  LightSetup sketch,
+) async {
+  final palette = context.palette;
+  // -1 = general.
+  final choice = await showDialog<int>(
+    context: context,
+    builder: (ctx) => SimpleDialog(
+      backgroundColor: palette.surfaceElevated,
+      title: Text(
+        '¿A qué escena va «${sketch.name}»?',
+        style: AppTypography.titleMedium(palette),
+      ),
+      children: [
+        SimpleDialogOption(
+          onPressed: () => Navigator.pop(ctx, -1),
+          child: ListTile(
+            leading: const Icon(Icons.public),
+            title: const Text('General (sin escena)'),
+            selected: sketch.sceneId == null,
+          ),
+        ),
+        for (final scene in scenesInScriptOrder(data.scenes))
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, scene.id),
+            child: ListTile(
+              dense: true,
+              title: Text('Escena ${scene.number} · ${scene.locationCanonical}'),
+              selected: scene.id == sketch.sceneId,
+            ),
+          ),
+      ],
+    ),
+  );
+  if (choice == null) return;
+  if (choice == -1) {
+    await db.updateLightSetup(sketch.copyWith(sceneId: const Value(null)));
+    return;
+  }
+  final scene = data.scene(choice);
+  if (scene == null) return;
+  final setId = scene.locationId;
+  await db.updateLightSetup(
+    sketch.copyWith(
+      sceneId: Value(scene.id),
+      locationBasePlanId: Value(setId),
+      locationSiteId: Value(setId == null ? data.siteIdOfScene(scene) : null),
+    ),
+  );
 }
