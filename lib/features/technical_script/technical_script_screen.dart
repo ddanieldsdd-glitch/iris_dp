@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/sync/live_editing.dart';
+import '../../core/sync/live_editing_scope.dart';
 import '../../core/sync/realtime_hub.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -192,7 +193,8 @@ class TechnicalScriptScreen extends ConsumerWidget {
     final settings = ref.watch(technicalScriptSettingsProvider);
     final theme = ScriptSheetTheme.resolve(settings, palette);
 
-    return Scaffold(
+    // Al salir del guion, el plano que se editaba queda libre al momento.
+    return LiveEditingScope(child: Scaffold(
       appBar: AppBar(
         backgroundColor: palette.surface,
         title: Text('Guion técnico', style: AppTypography.titleLarge(palette)),
@@ -288,7 +290,7 @@ class TechnicalScriptScreen extends ConsumerWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Future<void> _export(

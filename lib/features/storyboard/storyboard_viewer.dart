@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/sync/editing_guard.dart';
+import '../../core/sync/live_editing_scope.dart';
 import '../../core/sync/realtime_hub.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -165,8 +166,12 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
     }
     final (:scene, :shot) = sequence[index];
     final db = ref.read(databaseProvider);
+    // Otro equipo edita este plano: aquí no se toca hasta que termine.
+    final lockedBy = ref.watch(
+      liveEditingProvider.select((l) => l.holderOf(shot.uid)?.device),
+    );
 
-    return CallbackShortcuts(
+    return LiveEditingScope(child: CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): () =>
             Navigator.of(context).maybePop(),
@@ -207,8 +212,25 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
                         ],
                       ),
                       const SizedBox(width: AppSpacing.lg),
+                      if (lockedBy != null) ...[
+                        const Icon(
+                          Icons.lock_outline,
+                          size: 16,
+                          color: Color(0xFF7F77DD),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Editando en $lockedBy',
+                          style: AppTypography.caption(
+                            palette,
+                          ).copyWith(color: const Color(0xFF7F77DD)),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                      ],
                       Expanded(
-                        child: _TitleField(
+                        child: IgnorePointer(
+                          ignoring: lockedBy != null,
+                          child: _TitleField(
                           key: ValueKey('titulo_${shot.id}'),
                           initial: scriptMarkupToPlain(shot.framing),
                           // Escribiendo el título, el plano sale bloqueado en
@@ -226,14 +248,24 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
                             ),
                           ),
                         ),
+                        ),
                       ),
                       const SizedBox(width: AppSpacing.md),
                       TextButton.icon(
-                        onPressed: () => showShotImageMenu(
-                          context,
-                          shot,
-                          target: ShotImageTarget.storyboard,
-                        ),
+                        onPressed: lockedBy != null
+                            ? null
+                            : () async {
+                                // Dibujando o cambiando la imagen, el plano
+                                // sale bloqueado en los demás equipos.
+                                final live = ref.read(liveEditingProvider);
+                                live.focusShot(shot.uid);
+                                await showShotImageMenu(
+                                  context,
+                                  shot,
+                                  target: ShotImageTarget.storyboard,
+                                );
+                                live.blurShot(shot.uid);
+                              },
                         icon: const Icon(Icons.image_outlined, size: 18),
                         label: const Text('Imagen'),
                       ),
@@ -282,7 +314,7 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
           ),
         ),
       ),
-    );
+    ));
   }
 
   Widget _arrow(String tooltip, IconData icon, VoidCallback? onPressed) {

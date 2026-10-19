@@ -104,9 +104,53 @@ void main() {
       expect(published.map((p) => p.$1), ['a']);
       expect(live.myShotUid, 'a');
 
+      // Perder el foco un momento (teclado, menú) no lo suelta…
       live.blurShot('a');
-      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 5));
+      expect(live.myShotUid, 'a');
+      // …pero un rato sin volver, sí.
+      await tester.pump(const Duration(seconds: 20));
       expect(published.map((p) => p.$1), ['a', null]);
+    });
+
+    testWidgets('pasar a otro plano o salir de la pantalla lo suelta ya',
+        (tester) async {
+      live.focusShot('a');
+      live.blurShot('a');
+      live.focusShot('b');
+      expect(published.map((p) => p.$1), ['a', 'b']);
+      live.leave('b');
+      expect(published.map((p) => p.$1), ['a', 'b', null]);
+      live.focusShot('c');
+      live.releaseAll();
+      expect(live.myShotUid, isNull);
+      await tester.pump(const Duration(seconds: 30));
+      expect(published.map((p) => p.$1), ['a', 'b', null, 'c', null]);
+    });
+
+    test('lo que otro empezó antes bloquea aunque aquí se anuncie otra cosa',
+        () {
+      live.focusShot('shot-1');
+      final mine = live.mySince!;
+      live.setPeers([
+        PeerEditing(
+          installId: 'ipad',
+          device: 'iPad',
+          shotUid: LiveKey.lightSetup('s1'),
+          since: mine.subtract(const Duration(seconds: 5)),
+        ),
+      ]);
+      expect(live.holderBefore(LiveKey.lightSetup('s1'), mine)?.device, 'iPad');
+      // Si lo tomó después que este equipo, no bloquea aquí.
+      live.setPeers([
+        PeerEditing(
+          installId: 'ipad',
+          device: 'iPad',
+          shotUid: LiveKey.lightSetup('s1'),
+          since: mine.add(const Duration(seconds: 5)),
+        ),
+      ]);
+      expect(live.holderBefore(LiveKey.lightSetup('s1'), mine), isNull);
     });
 
     test('solo se envía lo que se escribe en el plano que se tiene', () {

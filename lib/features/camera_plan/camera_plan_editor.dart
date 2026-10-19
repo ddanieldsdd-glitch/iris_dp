@@ -407,8 +407,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// Mientras la planta de un plano está abierta, los demás equipos lo ven
   /// bloqueado.
+  /// Edición compartida: lo que esta planta anuncia que edita (su nivel) y
+  /// todas las capas que se ven en ella, para no tocarlas si otro equipo
+  /// las empezó antes.
   LiveEditing? _live;
-  String? _liveShotUid;
+  String? _liveKey;
+  DateTime? _liveSince;
+  List<String> _layerKeys = const [];
+  Timer? _reloadAfterPeer;
 
   @override
   void initState() {
@@ -424,7 +430,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   @override
   void dispose() {
-    _live?.blurShot(_liveShotUid);
+    final live = _live;
+    final key = _liveKey;
+    // Fuera del desmontaje: avisar mientras se quita el árbol no se puede.
+    if (live != null) Future.microtask(() => live.leave(key));
+    _reloadAfterPeer?.cancel();
     _lightMap.dispose();
     _opacityDebounce?.cancel();
     _imageCache
@@ -469,13 +479,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       shot = await (db.select(
         db.shots,
       )..where((s) => s.id.equals(widget.shotId!))).getSingleOrNull();
-      if (mounted && shot?.uid != null) {
-        _liveShotUid = shot!.uid;
-        final live = ref.read(liveEditingProvider);
-        _live = live;
-        live.focusShot(_liveShotUid);
-      }
-
       if (shot != null) {
         scene = await (db.select(
           db.scenes,
@@ -789,6 +792,49 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _loading = false;
     });
     _lastSaved = _snapshot();
+    _claimLive();
+  }
+
+  // ── Edición compartida ────────────────────────────────────────────────────
+
+  /// Anuncia a los demás equipos qué planta se edita aquí.
+  void _claimLive() {
+    if (!mounted) return;
+    final live = ref.read(liveEditingProvider);
+    _live = live;
+    String? keyOf(FloorPlanScope scope) => switch (scope) {
+      FloorPlanScope.site =>
+        _linkedSite?.uid == null ? null : LiveKey.site(_linkedSite!.uid!),
+      FloorPlanScope.set =>
+        _linkedSet?.uid == null ? null : LiveKey.set(_linkedSet!.uid!),
+      FloorPlanScope.lightSetup =>
+        _lightSetup?.uid == null
+            ? null
+            : LiveKey.lightSetup(_lightSetup!.uid!),
+      FloorPlanScope.shot =>
+        _shot?.uid == null ? null : LiveKey.shot(_shot!.uid!),
+    };
+    _layerKeys = [
+      for (final scope in FloorPlanScope.values) ?keyOf(scope),
+    ];
+    final key = keyOf(widget.scope);
+    if (key == null || key == _liveKey) return;
+    _liveKey = key;
+    live.focusShot(key);
+    _liveSince = live.mySince;
+  }
+
+  /// Otro equipo que edita esta planta (o una capa que se ve en ella) desde
+  /// antes: mientras tanto aquí no se toca.
+  String? _peerBlocking(LiveEditing live) {
+    final own = live.holderOf(_liveKey);
+    if (own != null) return own.device;
+    for (final key in _layerKeys) {
+      if (key == _liveKey) continue;
+      final holder = live.holderBefore(key, _liveSince);
+      if (holder != null) return holder.device;
+    }
+    return null;
   }
 
   Future<void> _saveAnnotations(AnnotationDocument document) => ref
@@ -3748,6 +3794,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     _wide = MediaQuery.sizeOf(context).width >= 1100;
+    // Otro equipo edita esta planta: aquí no se toca hasta que termine, y
+    // al soltarla se vuelve a leer para ver lo que cambió.
+    final blocker = _loading
+        ? null
+        : ref.watch(liveEditingProvider.select(_peerBlocking));
+    ref.listen(liveEditingProvider.select(_peerBlocking), (before, now) {
+      if (before == null || now != null) return;
+      _load();
+      // Lo que subió llega unos segundos después.
+      _reloadAfterPeer?.cancel();
+      _reloadAfterPeer = Timer(const Duration(seconds: 8), () {
+        if (mounted) _load();
+      });
+    });
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -3922,7 +3982,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Row(
+          : _LiveLock(
+              device: blocker,
+              child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (_wide)
@@ -4454,6 +4516,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                   ),
                 ),
               ],
+            ),
             ),
     );
   }
@@ -5707,6 +5770,49 @@ class _ElementPanelState extends State<_ElementPanel> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Una planta que edita otro equipo: un aviso arriba y sin poder tocarla
+/// aquí hasta que termine.
+class _LiveLock extends StatelessWidget {
+  final String? device;
+  final Widget child;
+
+  const _LiveLock({required this.device, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final who = device;
+    if (who == null) return child;
+    final palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: const Color(0xFF7F77DD).withValues(alpha: 0.18),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.lock_outline, size: 18, color: Color(0xFF7F77DD)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Lo está editando $who. Podrás editar en cuanto termine; '
+                    'verás sus cambios al momento.',
+                    style: AppTypography.bodyMedium(palette),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: ExcludeFocus(child: AbsorbPointer(child: child)),
+        ),
+      ],
     );
   }
 }

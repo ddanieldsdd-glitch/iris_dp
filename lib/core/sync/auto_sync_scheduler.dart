@@ -58,6 +58,11 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
     EditingGuard.active.addListener(_onEditingChanged);
     _startTicker();
     unawaited(_connectLive());
+    // Al abrir, la sesión aún se está cargando: el canal en vivo se abre en
+    // cuanto hay usuario o vuelve la red (antes solo al volver a la app, y
+    // el iPad se quedaba fuera mientras seguía abierto).
+    ref.listenManual(currentUserProvider, (_, _) => _connectLive());
+    ref.listenManual(connectivityStatusProvider, (_, _) => _connectLive());
     final db = ref.read(databaseProvider);
     // Cada edición deja una entrada en la cola de contenido: cuando crece,
     // hay algo nuevo que subir.
@@ -98,6 +103,8 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
             AppLifecycleState.hidden ||
             AppLifecycleState.detached:
         _foreground = false;
+        // Lo que se editaba queda libre para los demás equipos.
+        ref.read(liveEditingProvider).releaseAll();
         _ticker?.cancel();
         _ticker = null;
         // Lo editado no espera a la próxima vez que se abra la app.
@@ -169,6 +176,10 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
 
   Future<void> _run({required bool full}) async {
     if (!_canSync) return;
+    // Cada pasada comprueba también que se sigue en el canal en vivo.
+    if (!(ref.read(realtimeHubProvider)?.isLive ?? true)) {
+      unawaited(_connectLive());
+    }
     if (full) _lastFullPass = DateTime.now();
     try {
       await ref.read(syncEngineProvider).syncSilently(allMedia: full);
