@@ -1011,8 +1011,32 @@ class ProjectContentBundle {
   /// Sin las rutas de los archivos: son de cada equipo (en iOS, la carpeta de
   /// la app cambia con cada instalación) y los archivos viajan por su lado.
   /// Con ellas, cada build nueva del iPad hacía parecer que había cambios.
+  /// Sí cuenta si hay archivo o no (y cuántos, en las listas): así llegan
+  /// a los demás un dibujo nuevo y uno borrado.
   static String hashBundle(Map<String, dynamic> bundle) =>
       sha256.convert(utf8.encode(_canonicalJson(bundle))).toString();
+
+  /// La huella de antes, sin nada de las rutas: solo para reconocer huellas
+  /// que se guardaron así.
+  static String _hashWithoutPathPresence(Map<String, dynamic> bundle) =>
+      sha256
+          .convert(
+            utf8.encode(_canonicalJson(bundle, pathPresence: false)),
+          )
+          .toString();
+
+  /// Lo que cuenta de una ruta en la huella y en la mezcla: si hay archivo
+  /// (o cuántos, en una lista), no dónde está.
+  static Object? pathPresence(Object? value) {
+    if (value == null) return null;
+    if (value is List) return value.length;
+    if (value is String) {
+      if (value.isEmpty) return null;
+      if (value.trimLeft().startsWith('[')) return decodeSlotPaths(value).length;
+      return 1;
+    }
+    return 1;
+  }
 
   /// La huella SHA-256 de antes, con las rutas: solo para reconocer huellas
   /// que se guardaron así.
@@ -1053,13 +1077,16 @@ class ProjectContentBundle {
   static bool bundleMatchesHash(Map<String, dynamic> bundle, String hash) =>
       isLegacyHash(hash)
           ? legacyHashBundle(bundle) == hash
-          : hashBundle(bundle) == hash || _hashWithPaths(bundle) == hash;
+          : hashBundle(bundle) == hash ||
+                _hashWithoutPathPresence(bundle) == hash ||
+                _hashWithPaths(bundle) == hash;
 
   static final _pathKey = RegExp(r'(Path|Paths)$');
 
   static String _canonicalJson(
     Map<String, dynamic> bundle, {
     bool withPaths = false,
+    bool pathPresence = true,
   }) {
     final copy = Map<String, dynamic>.from(bundle);
     // De los stills cuentan sus datos (título, notas, asignaciones), no su
@@ -1088,11 +1115,21 @@ class ProjectContentBundle {
         copy[key] = [
           for (final row in rows)
             row is Map
-                ? (Map<String, dynamic>.from(row)
-                    ..remove('uid')
-                    ..removeWhere(
-                      (k, _) => !withPaths && _pathKey.hasMatch(k),
-                    ))
+                ? withPaths
+                      ? (Map<String, dynamic>.from(row)..remove('uid'))
+                      : {
+                          for (final e in row.entries)
+                            if (e.key != 'uid' &&
+                                !(e.key is String &&
+                                    _pathKey.hasMatch(e.key as String)))
+                              e.key: e.value
+                            else if (pathPresence &&
+                                e.key is String &&
+                                _pathKey.hasMatch(e.key as String))
+                              e.key: ProjectContentBundle.pathPresence(
+                                e.value,
+                              ),
+                        }
                 : row,
         ];
       }
@@ -1289,21 +1326,25 @@ class ProjectContentBundle {
         final local = localFiles[_fileKey(table, column, uid)];
         if (local == null) continue;
         final String? value;
+        // Sin ruta en lo que llega: se borró en el otro equipo. No se
+        // recupera la de aquí (antes volvía y el borrado no llegaba nunca).
+        if (imported == null || imported.isEmpty) continue;
         if (isList) {
           final here = decodeSlotPaths(local);
           final there = decodeSlotPaths(imported);
+          // Solo las posiciones que siguen: lo que se quitó allí no vuelve.
           final merged = [
-            for (var i = 0; i < there.length || i < here.length; i++)
-              i < there.length && File(there[i]).existsSync()
+            for (var i = 0; i < there.length; i++)
+              File(there[i]).existsSync()
                   ? there[i]
                   : i < here.length && File(here[i]).existsSync()
                   ? here[i]
-                  : (i < there.length ? there[i] : here[i]),
+                  : there[i],
           ];
           value = jsonEncode(merged);
           if (value == imported) continue;
         } else {
-          if (imported != null && File(imported).existsSync()) continue;
+          if (File(imported).existsSync()) continue;
           if (!File(local).existsSync()) continue;
           value = local;
         }
@@ -1397,24 +1438,25 @@ class ProjectContentBundle {
       for (final row in rows) {
         final raw = row.read<String?>('path');
         if (raw == null || raw.isEmpty) continue;
-        final paths = slot.isList ? decodeSlotPaths(raw) : [raw];
+        // Una sola ruta que aquí no existe se deja tal cual hasta que la
+        // descarga la cambie: si se vaciara, la huella diría que aquí se
+        // borró y el borrado subiría a los demás.
+        if (!slot.isList) continue;
+        final paths = decodeSlotPaths(raw);
         // Lo que no es ruta (p. ej. `setup:<id>`, un boceto dibujado) se
-        // queda; las rutas que no existen aquí dejan su sitio vacío, para que
-        // la descarga sepa dónde va cada archivo.
+        // queda; las rutas que no existen aquí dejan su sitio vacío (la
+        // lista conserva su largo), para que la descarga sepa dónde va cada
+        // archivo.
         final here = [
           for (final p in paths)
             if (!_looksLikeFilePath(p) || File(p).existsSync()) p else '',
         ];
         if (here.join('\u0000') == paths.join('\u0000')) continue;
-        final String? value = here.every((p) => p.isEmpty)
-            ? null
-            : slot.isList
-            ? jsonEncode(here)
-            : here.single;
+        final value = jsonEncode(here);
         await db.customUpdate(
           'UPDATE ${slot.table} SET ${slot.column} = ? WHERE id = ?',
           variables: [
-            value == null ? const Variable(null) : Variable.withString(value),
+            Variable.withString(value),
             Variable.withInt(row.read<int>('id')),
           ],
           updates: {

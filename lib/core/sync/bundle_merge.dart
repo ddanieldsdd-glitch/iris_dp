@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'project_content_bundle.dart';
+
 /// De qué lado venía una edición.
 enum MergeSide { local, cloud }
 
@@ -375,9 +377,25 @@ abstract final class BundleMerge {
     for (final k in {...l.keys, ...c.keys}) {
       final MergeSide from;
       if (_isPathKey(k)) {
-        // Las rutas son de cada equipo (y no cuentan en la huella): la de
-        // aquí; los archivos nuevos de la nube los baja el hidratado.
-        from = hasLocal && l.containsKey(k) ? MergeSide.local : MergeSide.cloud;
+        // Las rutas son de cada equipo: la de aquí; los archivos nuevos de
+        // la nube los baja el hidratado. Pero si allí se puso o se quitó el
+        // archivo y aquí no se tocó, manda lo de allí (un dibujo borrado o
+        // uno nuevo).
+        final presenceThere = ProjectContentBundle.pathPresence(c[k]);
+        final presenceHere = ProjectContentBundle.pathPresence(l[k]);
+        final presenceBase = ProjectContentBundle.pathPresence(bc[k]);
+        final changedThere = !_eq(presenceThere, presenceBase);
+        final changedHere = !_eq(
+          presenceHere,
+          ProjectContentBundle.pathPresence(bl[k]),
+        );
+        if (changedThere && !changedHere) {
+          from = MergeSide.cloud;
+        } else {
+          from = hasLocal && l.containsKey(k)
+              ? MergeSide.local
+              : MergeSide.cloud;
+        }
       } else {
         final vl = l[k], vc = c[k];
         final changedHere = !_eq(vl, bl[k]);
@@ -632,13 +650,15 @@ abstract final class BundleMerge {
 
   static bool _isPathKey(String k) => k.endsWith('Path') || k.endsWith('Paths');
 
-  /// Para comparar, como la huella: sin rutas, que son de cada equipo.
+  /// Para comparar, como la huella: de las rutas, que son de cada equipo,
+  /// solo si hay archivo.
   static Object? _comparable(Object? v) {
     if (v is Map) {
       return {
         for (final e in v.entries)
-          if (!(e.key is String && _isPathKey(e.key as String)))
-            e.key: _comparable(e.value),
+          e.key: e.key is String && _isPathKey(e.key as String)
+              ? ProjectContentBundle.pathPresence(e.value)
+              : _comparable(e.value),
       };
     }
     if (v is List) return [for (final e in v) _comparable(e)];

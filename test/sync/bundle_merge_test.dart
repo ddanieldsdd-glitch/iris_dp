@@ -208,7 +208,24 @@ void main() {
     );
     final r = _merge(b, local, cloud);
     expect(_shotOf(r.merged, 'a')['storyboardImagePath'], '/mac/a.jpg');
-    expect(_shotOf(r.merged, 'b')['storyboardImagePath'], isNull);
+    // Un dibujo nuevo allí llega (con su ruta de allí hasta que se baje).
+    expect(
+      _shotOf(r.merged, 'b')['storyboardImagePath'],
+      '/var/mobile/b.jpg',
+    );
+  });
+
+  test('un dibujo borrado en el otro equipo se borra aquí', () {
+    final b = _bundle(
+      scenes: [_scene('s1', 1)],
+      shots: [_shot('a', 1, 1, storyboardImagePath: '/mac/a.jpg')],
+    );
+    final cloud = _bundle(
+      scenes: [_scene('s1', 1)],
+      shots: [_shot('a', 1, 1)],
+    );
+    final r = _merge(b, b, cloud);
+    expect(_shotOf(r.merged, 'a')['storyboardImagePath'], isNull);
   });
 
   test('la biblia va entera: gana el lado que cambió, o el más reciente', () {

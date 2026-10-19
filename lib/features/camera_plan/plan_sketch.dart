@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -105,6 +106,10 @@ Future<LightSetup?> createPlanSketch(
   return setup;
 }
 
+/// Revisión de un boceto a mano: cambia cada vez que se guarda el dibujo.
+String sketchRevision() =>
+    jsonEncode({'rev': DateTime.now().toUtc().millisecondsSinceEpoch});
+
 /// La imagen que se calca en un boceto a mano: una imagen de la planta del
 /// boceto (viaja como las demás).
 Future<PlanImage?> sketchTraceImage(AppDatabase db, LightSetup setup) async =>
@@ -181,7 +186,14 @@ Future<void> drawFreehandSketch(
   await writeSketchDocument(path, result.document);
   await FileImage(File(path)).evict();
   final fresh = await db.getLightSetupById(setup.id) ?? setup;
-  await db.updateLightSetup(fresh.copyWith(sketchImagePath: Value(path)));
+  await db.updateLightSetup(
+    fresh.copyWith(
+      sketchImagePath: Value(path),
+      // La ruta no cuenta en la sincronización (es de cada equipo): la
+      // revisión dice a los demás que hay un dibujo nuevo que bajar.
+      sketchJson: Value(sketchRevision()),
+    ),
+  );
 }
 
 /// Pasa un dibujo hecho encima de una planta (de antes) a un boceto a mano
@@ -214,7 +226,10 @@ Future<LightSetup> moveDrawingToFreehandSketch(
     fileName: 'boceto_${setup.uid ?? setup.id}.png',
   );
   await writeSketchDocument(path, document);
-  final withImage = setup.copyWith(sketchImagePath: Value(path));
+  final withImage = setup.copyWith(
+    sketchImagePath: Value(path),
+    sketchJson: Value(sketchRevision()),
+  );
   await db.updateLightSetup(withImage);
   if (shot != null) {
     await addShotPlanSketchSetup(db: db, shot: shot, setupId: setup.id);
