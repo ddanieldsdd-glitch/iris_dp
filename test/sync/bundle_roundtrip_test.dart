@@ -134,6 +134,7 @@ void main() {
       'description',
       'auto_numbering',
       'camera_plan_image_path',
+      'export_layout_json',
     };
     for (final column in db.shots.$columns) {
       if (shotColumnsAsKeys.contains(column.name)) continue;
