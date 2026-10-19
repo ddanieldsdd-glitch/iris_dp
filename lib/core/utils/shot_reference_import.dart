@@ -18,6 +18,9 @@ abstract final class ShotReferenceSource {
 
   /// Venía en un guion técnico importado (Word).
   static const document = 'document';
+
+  /// El dibujo del storyboard del plano, puesto también como referencia.
+  static const storyboard = 'storyboard';
 }
 
 /// Importa una imagen y la vincula al plano (miniatura + registro en [ShotReferences]).

@@ -429,6 +429,24 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
 
   Future<void> _fromPath(String path) => _fromPaths([path]);
 
+  /// Pone el dibujo del storyboard entre las referencias del plano.
+  Future<void> _useStoryboard() => _run(() async {
+    final shot = await _current();
+    final path = shot.storyboardImagePath;
+    if (path == null || !File(path).existsSync()) {
+      setState(() => _notice = 'Este plano no tiene dibujo de storyboard.');
+      return false;
+    }
+    await importShotReferenceImage(
+      db: _db,
+      shot: shot,
+      sourcePath: path,
+      source: ShotReferenceSource.storyboard,
+      keepPrimary: true,
+    );
+    return true;
+  });
+
   Future<void> _paste() => _run(() async {
     final problem = await pasteShotImageFromClipboard(
       _db,
@@ -791,6 +809,17 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                           icon: const Icon(Icons.draw_outlined, size: 18),
                           label: const Text('Dibujar'),
                         ),
+                        // El dibujo del storyboard, como una referencia más
+                        // del plano (sale en el guion técnico y al exportar).
+                        if (!_story &&
+                            !_sketch &&
+                            widget.shot.storyboardImagePath != null &&
+                            File(widget.shot.storyboardImagePath!).existsSync())
+                          FilledButton.tonalIcon(
+                            onPressed: _busy ? null : _useStoryboard,
+                            icon: const Icon(Icons.movie_filter_outlined, size: 18),
+                            label: const Text('Usar el dibujo del storyboard'),
+                          ),
                         if (_story && hasOwn && isEditableSketch(own))
                           FilledButton.tonalIcon(
                             onPressed: _busy ? null : () => _draw(editing: own),
