@@ -1210,7 +1210,7 @@ class VisualBiblePdfService {
       VisualBibleDepartment.colorist => 'PARA EL COLORISTA',
       VisualBibleDepartment.cameraOp => 'PARA EL OPERADOR',
       VisualBibleDepartment.productionDesign => 'PARA DIRECCIÓN DE ARTE',
-      _ => 'IRIS DP',
+      _ => 'IRIS',
     };
 
     final content = switch (department) {

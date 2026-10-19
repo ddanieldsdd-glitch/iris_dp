@@ -60,7 +60,7 @@ class _SideStoreReminderBannerState extends State<SideStoreReminderBanner> {
                   ),
                   Text(
                     'La firma gratuita dura ~7 días. Abre SideStore en Wi‑Fi '
-                    'para evitar que IRIS DP deje de abrir.',
+                    'para evitar que IRIS deje de abrir.',
                     style: AppTypography.caption(palette).copyWith(
                       color: palette.textSecondary,
                     ),

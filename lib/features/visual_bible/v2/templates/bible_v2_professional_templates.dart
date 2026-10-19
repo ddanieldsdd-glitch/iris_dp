@@ -154,7 +154,7 @@ abstract final class BibleV2ProfessionalTemplates {
       id: id,
       name: name,
       description: description,
-      author: 'IRIS DP',
+      author: 'IRIS',
       version: 1,
       category: category,
       legacyBundle: legacy,

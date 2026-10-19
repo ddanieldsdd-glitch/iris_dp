@@ -41,7 +41,7 @@ class _StorageSetupScreenState extends ConsumerState<StorageSetupScreen> {
 
   Future<void> _pickAppDataPath() async {
     final path = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: 'Carpeta de datos técnicos de IRIS DP',
+      dialogTitle: 'Carpeta de datos técnicos de IRIS',
     );
     if (path != null) setState(() => _appDataPath = path);
   }

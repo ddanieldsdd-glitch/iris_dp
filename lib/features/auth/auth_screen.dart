@@ -65,7 +65,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       return 'La clave de Supabase (API key) no es válida.\n\n'
           '1. En supabase.com → Settings → API copia la «anon public» (eyJ…)\n'
           '2. Pégala en .env como SUPABASE_ANON_KEY\n'
-          '3. Cierra IRIS DP por completo y arranca con ./scripts/run_cloud.sh\n\n'
+          '3. Cierra IRIS por completo y arranca con ./scripts/run_cloud.sh\n\n'
           'Si vinculaste la nube a mano en Ajustes, desvincula y vuelve a '
           'activar con la clave correcta.';
     }
@@ -240,7 +240,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Paso actual: tu cuenta IRIS DP',
+                            'Paso actual: tu cuenta IRIS',
                             style: AppTypography.titleMedium(palette).copyWith(
                               color: palette.accent,
                             ),
@@ -259,7 +259,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     ),
                     const SizedBox(height: AppSpacing.xl),
                   ],
-                  Text('IRIS DP', style: AppTypography.displayMedium(palette)),
+                  Text('IRIS', style: AppTypography.displayMedium(palette)),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     isSignUp

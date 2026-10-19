@@ -184,7 +184,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
       await file.writeAsBytes(bytes);
       await Share.shareXFiles(
         [XFile(file.path)],
-        text: 'Lista de equipo IRIS DP',
+        text: 'Lista de equipo IRIS',
         sharePositionOrigin: mounted ? shareOrigin(context) : shareOrigin(),
       );
     } catch (e) {

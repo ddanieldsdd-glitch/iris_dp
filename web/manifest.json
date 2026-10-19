@@ -1,6 +1,6 @@
 {
-    "name": "iris_dp",
-    "short_name": "iris_dp",
+    "name": "IRIS",
+    "short_name": "IRIS",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -38,7 +38,7 @@ class LookBiblePdfService {
             pw.Row(
               children: [
                 pw.Text(
-                  'IRIS DP',
+                  'IRIS',
                   style: pw.TextStyle(
                     font: fontBold,
                     fontSize: 11,

@@ -47,7 +47,7 @@ class IrisDPApp extends StatelessWidget {
   Widget build(BuildContext context) {
     // Solo tema oscuro: el claro se quitó (2026-10-15).
     return MaterialApp(
-      title: 'IRIS DP',
+      title: 'IRIS',
       theme: AppTheme.dark,
       debugShowCheckedModeBanner: false,
       navigatorObservers: [routeObserver],

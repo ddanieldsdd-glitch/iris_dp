@@ -31,7 +31,7 @@ class InstallUpdateGuideScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(AppSpacing.xl),
         children: [
           _Section(
-            title: 'Instalar IRIS DP',
+            title: 'Instalar IRIS',
             icon: Icons.download_outlined,
             children: [
               const _SubSection(
@@ -190,7 +190,7 @@ class InstallUpdateGuideScreen extends ConsumerWidget {
                   number: 1,
                   title: 'Instala la nueva versión',
                   body:
-                      'En cada dispositivo donde uses IRIS DP, instala la '
+                      'En cada dispositivo donde uses IRIS, instala la '
                       'actualización igual que la primera vez (.dmg, .exe o App Store).',
                 ),
                 const _NumberedStep(
@@ -249,7 +249,7 @@ class InstallUpdateGuideScreen extends ConsumerWidget {
             children: [
               _FaqTile(
                 q: 'Actualicé en el Mac pero el iPad no muestra cambios',
-                a: 'Abre IRIS DP en el iPad, inicia sesión y pulsa sync. '
+                a: 'Abre IRIS en el iPad, inicia sesión y pulsa sync. '
                     'Comprueba conexión a internet.',
               ),
               _FaqTile(

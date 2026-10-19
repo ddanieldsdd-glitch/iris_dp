@@ -284,7 +284,7 @@ class WorkspaceService {
     final wsId = const Uuid().v4();
     await _client.from('workspaces').insert({
       'id': wsId,
-      'name': '$displayName — IRIS DP',
+      'name': '$displayName — IRIS',
       'owner_id': userId,
     });
     await _client.from('workspace_members').insert({
@@ -295,6 +295,6 @@ class WorkspaceService {
 
     await _client.from('profiles').update({'role': 'dp'}).eq('id', userId);
 
-    return (id: wsId, name: '$displayName — IRIS DP');
+    return (id: wsId, name: '$displayName — IRIS');
   }
 }
