@@ -223,11 +223,41 @@ class TechnicalScriptScreen extends ConsumerWidget {
               PopupMenuItem(value: true, child: Text('Word (.docx)')),
             ],
           ),
-          IconButton(
-            tooltip: 'Importar guion técnico (.docx)',
+          PopupMenuButton<String>(
+            tooltip: 'Importar guion técnico',
             icon: Icon(Icons.upload_file_outlined, color: palette.accent),
-            onPressed: () =>
-                importTechnicalScriptDocx(context, ref, projectId: projectId),
+            color: palette.surfaceElevated,
+            onSelected: (action) => switch (action) {
+              'undo' => restoreTechnicalScriptBeforeImport(
+                context,
+                ref,
+                projectId: projectId,
+              ),
+              'dedupe' => removeRepeatedReferences(
+                context,
+                ref,
+                projectId: projectId,
+              ),
+              _ => importTechnicalScriptDocx(
+                context,
+                ref,
+                projectId: projectId,
+              ),
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'import',
+                child: Text('Importar desde Word (.docx)…'),
+              ),
+              PopupMenuItem(
+                value: 'undo',
+                child: Text('Volver al guion anterior…'),
+              ),
+              PopupMenuItem(
+                value: 'dedupe',
+                child: Text('Quitar imágenes de referencia repetidas…'),
+              ),
+            ],
           ),
           IconButton(
             tooltip: 'Añadir escena',
