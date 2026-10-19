@@ -13,7 +13,9 @@ import '../utils/error_log.dart';
 import '../update/settings_update_section.dart';
 import 'settings_cloud_link_section.dart';
 import 'settings_cloud_storage_section.dart';
+import 'settings_cloud_usage_section.dart';
 import 'settings_health_section.dart';
+import 'settings_workspace_members_section.dart';
 import 'user_templates_settings_section.dart';
 
 /// Ajustes de la app.
@@ -165,6 +167,10 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
               if (CloudRuntimeConfig.isActive) ...[
                 const SizedBox(height: AppSpacing.lg),
                 const SettingsCloudStorageSection(),
+                const SizedBox(height: AppSpacing.lg),
+                const SettingsCloudUsageSection(),
+                const SizedBox(height: AppSpacing.lg),
+                const SettingsWorkspaceMembersSection(),
                 const SizedBox(height: AppSpacing.lg),
                 UserTemplatesSettingsSection(
                   onCreateTemplate: widget.onCreateShootTemplate == null

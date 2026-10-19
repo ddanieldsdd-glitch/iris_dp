@@ -28,6 +28,7 @@ import '../../core/widgets/sync/sync_conflict_resolution_sheet.dart';
 import '../../core/widgets/sync/sync_flow_coordinator.dart';
 import '../../core/sync/media_sync_providers.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/widgets/account/account_menu_button.dart';
 import '../../core/widgets/sync_status_indicator.dart';
 import '../../core/update/update_available_banner.dart';
 import '../../core/update/sidestore_reminder_banner.dart';
@@ -172,7 +173,8 @@ class ProjectsScreen extends ConsumerWidget {
                           false,
                     ),
                   ),
-                  SyncStatusIndicator(
+                  const SyncStatusIndicator(),
+                  AccountMenuButton(
                     onLoginAction: () => openAuthScreen(context),
                   ),
                   const SizedBox(width: AppSpacing.sm),
