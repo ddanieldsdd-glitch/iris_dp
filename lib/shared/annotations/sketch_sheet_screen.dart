@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -158,6 +159,9 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
 
   // Vista: zoom, giro y desplazamiento del folio.
   double _zoom = 1;
+
+  /// Ajustando el tamaño: se enseña el diámetro real en el folio.
+  bool _sizing = false;
   double _rotation = 0;
   Offset _pan = Offset.zero;
   double _rasterZoom = 1;
@@ -184,7 +188,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     final doc = widget.initialDocument;
     final fresh = doc.isEmpty && doc.layers.isEmpty;
     _style = _storyboard
-        ? (_styleFromLayers(doc) ?? BrushCatalog.finelinerStyle)
+        ? (_styleFromLayers(doc) ?? BrushCatalog.drawingStyle)
         : BrushCatalog.planStyle;
     if (fresh) {
       _controller.replaceDocument(
@@ -505,7 +509,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
   static SketchStyle? _styleFromLayers(AnnotationDocument doc) {
     final ids = doc.layers.map((l) => l.id).toSet();
     if (ids.isEmpty) return null;
-    for (final style in BrushCatalog.styles) {
+    for (final style in [...BrushCatalog.styles, ...BrushCatalog.legacyStyles]) {
       if (style.layers.every((l) => ids.contains(l.id))) return style;
     }
     return null;
@@ -513,6 +517,7 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
 
   @override
   void dispose() {
+    _sizingOff?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -963,6 +968,18 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                       child: Stack(
                         children: [
                           Positioned.fill(child: _buildWorkspace()),
+                          if (_sizing)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: Center(
+                                  child: _SizePreview(
+                                    diameter: _screenDiameter(),
+                                    label: _sizeLabel(_canvasWidth),
+                                    color: _color,
+                                  ),
+                                ),
+                              ),
+                            ),
                           Positioned(
                             left: 10,
                             top: 0,
@@ -1154,6 +1171,78 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
     );
   }
 
+  static String _sizeLabel(double width) =>
+      width < 10 ? width.toStringAsFixed(1) : '${width.round()}';
+
+  /// Diámetro del pincel en pantalla, como lo pintará en el folio (con el
+  /// zoom de ahora).
+  double _screenDiameter() {
+    final sheet = _sheetKey.currentContext?.size;
+    final spec = _mode == _Mode.line
+        ? BrushCatalog.byId(_paintBrushId)
+        : BrushCatalog.byId(_brushId);
+    final unit = sheet == null
+        ? 1.0
+        : math.min(sheet.width, sheet.height) / 1000;
+    return _canvasWidth * unit * (spec?.sizeScale ?? 1) * _zoom;
+  }
+
+  /// Un paso fino de tamaño: más fino cuanto más fino el pincel.
+  void _stepSize(double width, int direction) {
+    final step = width < 2
+        ? 0.1
+        : width < 10
+        ? 0.5
+        : width < 50
+        ? 1.0
+        : 5.0;
+    setState(() {
+      _widths[_widthKey] = (width + step * direction).clamp(0.5, 300.0);
+      _sizing = true;
+    });
+    _sizingOff?.cancel();
+    _sizingOff = Timer(const Duration(milliseconds: 900), () {
+      if (mounted) setState(() => _sizing = false);
+    });
+  }
+
+  Timer? _sizingOff;
+
+  /// Escribir el tamaño exacto.
+  Future<void> _typeSize(double width) async {
+    final controller = TextEditingController(text: _sizeLabel(width));
+    final value = await showDialog<double>(
+      context: context,
+      builder: (ctx) {
+        void submit() {
+          final v = double.tryParse(controller.text.replaceAll(',', '.'));
+          if (v != null && v > 0) Navigator.pop(ctx, v);
+        }
+
+        return AlertDialog(
+          title: const Text('Tamaño del pincel'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(helperText: 'De 0,5 a 300'),
+            onSubmitted: (_) => submit(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(onPressed: submit, child: const Text('Aplicar')),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    if (value == null || !mounted) return;
+    setState(() => _widths[_widthKey] = value.clamp(0.5, 300.0));
+  }
+
   Widget _buildSideBar() {
     final sizeEditable = _brushMode || _mode == _Mode.line;
     final width = _canvasWidth;
@@ -1175,10 +1264,14 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                 ? (math.log(width / 0.5) / math.log(600)).clamp(0.0, 1.0)
                 : 0,
             enabled: sizeEditable,
-            label: width < 10 ? width.toStringAsFixed(1) : '${width.round()}',
+            label: _sizeLabel(width),
             onChanged: (t) => setState(
               () => _widths[_widthKey] = 0.5 * math.pow(600, t).toDouble(),
             ),
+            onChangeStart: (_) => setState(() => _sizing = true),
+            onChangeEnd: (_) => setState(() => _sizing = false),
+            onStep: sizeEditable ? (dir) => _stepSize(width, dir) : null,
+            onLabelTap: sizeEditable ? () => _typeSize(width) : null,
           ),
           const SizedBox(height: 4),
           IconButton(
@@ -1432,9 +1525,10 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
   Widget _buildActions() {
     final palette = context.palette;
     final doc = _controller.document;
+    // Dos estilos: dibujo y planta (en la planta, primero la planta).
     final styles = _storyboard
         ? BrushCatalog.styles
-        : [BrushCatalog.planStyle, ...BrushCatalog.styles];
+        : BrushCatalog.styles.reversed.toList();
     return SheetPanel(
       title: 'Acciones',
       child: ListView(
@@ -2089,6 +2183,14 @@ class _VerticalSlider extends StatelessWidget {
   final bool enabled;
   final String label;
   final ValueChanged<double> onChanged;
+  final ValueChanged<double>? onChangeStart;
+  final ValueChanged<double>? onChangeEnd;
+
+  /// Pasos finos (+1 / −1) con los botones de arriba y abajo.
+  final ValueChanged<int>? onStep;
+
+  /// Tocar el número para escribirlo.
+  final VoidCallback? onLabelTap;
 
   const _VerticalSlider({
     required this.tooltip,
@@ -2096,6 +2198,10 @@ class _VerticalSlider extends StatelessWidget {
     required this.enabled,
     required this.label,
     required this.onChanged,
+    this.onChangeStart,
+    this.onChangeEnd,
+    this.onStep,
+    this.onLabelTap,
   });
 
   @override
@@ -2104,6 +2210,8 @@ class _VerticalSlider extends StatelessWidget {
       message: tooltip,
       child: Column(
         children: [
+          if (onStep != null)
+            _StepButton(icon: Icons.add, onTap: () => onStep!(1)),
           SizedBox(
             height: 150,
             width: 40,
@@ -2120,13 +2228,26 @@ class _VerticalSlider extends StatelessWidget {
                 child: Slider(
                   value: value.clamp(0.0, 1.0),
                   onChanged: enabled ? onChanged : null,
+                  onChangeStart: onChangeStart,
+                  onChangeEnd: onChangeEnd,
                 ),
               ),
             ),
           ),
-          Text(
-            enabled ? label : '',
-            style: const TextStyle(fontSize: 10, color: Colors.white54),
+          if (onStep != null)
+            _StepButton(icon: Icons.remove, onTap: () => onStep!(-1)),
+          GestureDetector(
+            onTap: onLabelTap,
+            child: Text(
+              enabled ? label : '',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.white54,
+                decoration: onLabelTap == null
+                    ? null
+                    : TextDecoration.underline,
+              ),
+            ),
           ),
         ],
       ),
@@ -2336,4 +2457,68 @@ class _GuidesPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _GuidesPainter oldDelegate) =>
       oldDelegate.thirds != thirds;
+}
+
+/// Botón pequeño de paso fino (+ / −) junto a un deslizador.
+class _StepButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _StepButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    customBorder: const CircleBorder(),
+    child: Padding(
+      padding: const EdgeInsets.all(2),
+      child: Icon(icon, size: 16, color: Colors.white70),
+    ),
+  );
+}
+
+/// El tamaño del pincel tal cual pintará: un círculo de su diámetro en
+/// pantalla, con el número debajo.
+class _SizePreview extends StatelessWidget {
+  final double diameter;
+  final String label;
+  final Color color;
+
+  const _SizePreview({
+    required this.diameter,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final d = diameter.clamp(1.0, 2000.0);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: d,
+          height: d,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color.withValues(alpha: 0.35),
+            border: Border.all(color: Colors.white, width: 1),
+            boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 6)],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.black87,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
+        ),
+      ],
+    );
+  }
 }

@@ -679,7 +679,7 @@ abstract final class BrushCatalog {
   /// Planta de cámara y luz: capas por tipo de elemento.
   static const planStyle = SketchStyle(
     id: 'plan',
-    name: 'Planta',
+    name: 'Planta de cámara y luz',
     description: 'Decorado, personajes, cámaras y luz, cada uno en su capa.',
     paper: AnnotationPaper.white,
     palette: [
@@ -711,11 +711,57 @@ abstract final class BrushCatalog {
     startLayerId: 'decorado',
   );
 
-  /// Estilos para elegir en el storyboard.
-  static const styles = [pencilStyle, finelinerStyle, markerStyle];
+  /// Dibujo: lápiz, tinta y rotulador en un solo estilo, con lápiz guía,
+  /// tonos y línea.
+  static const drawingStyle = SketchStyle(
+    id: 'drawing',
+    name: 'Dibujo',
+    description: 'Lápiz, tinta y rotulador: guía, tonos y línea.',
+    paper: AnnotationPaper.white,
+    palette: [
+      _ink,
+      _graphite,
+      0xFF6E6E6E,
+      0xFFB4B4B4,
+      0xFF5E4029,
+      0xFFA0472F,
+      0xFF6FA8DC,
+      0xFFFFFFFF,
+    ],
+    shelf: [
+      'graphite.hb',
+      'graphite.8b',
+      'charcoal.vine',
+      'fineliner.03',
+      'ink.brushpen',
+      'ink.hatch',
+      'marker.chisel',
+      'marker.tone',
+      'marker.mist',
+      'marker.light',
+      'wash.sepia',
+    ],
+    layers: [
+      AnnotationLayer(id: 'guia', name: 'Lápiz guía', opacity: 0.35),
+      AnnotationLayer(
+        id: 'tonos',
+        name: 'Tonos',
+        blend: AnnotationLayerBlend.multiply,
+      ),
+      AnnotationLayer(id: 'linea', name: 'Línea'),
+    ],
+    startLayerId: 'guia',
+  );
+
+  /// Los dos estilos que se eligen: dibujo y planta de cámara y luz.
+  static const styles = [drawingStyle, planStyle];
+
+  /// Estilos de antes: no se ofrecen, pero un dibujo hecho con ellos se
+  /// sigue abriendo con sus capas.
+  static const legacyStyles = [pencilStyle, finelinerStyle, markerStyle];
 
   static SketchStyle? styleById(String? id) {
-    for (final style in [...styles, planStyle]) {
+    for (final style in [...styles, ...legacyStyles]) {
       if (style.id == id) return style;
     }
     return null;
