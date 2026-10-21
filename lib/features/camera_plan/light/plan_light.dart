@@ -67,6 +67,14 @@ class PlanLight {
   /// «manufacturer» si el dato medido viene del catálogo y no del set.
   static const photometrySourceKey = 'photometrySource';
 
+  /// Haz con el que se tomó el dato medido. Si luego se abre o se cierra el
+  /// aparato, el mismo flujo se reparte en otro ángulo y el eje sube o baja
+  /// con él.
+  static const measuredBeamKey = 'measuredBeam';
+
+  /// Tamaño de la superficie que emite, en metros, si no es el de su tipo.
+  static const sizeKey = 'sizeM';
+
   /// Stops que quitan los modificadores y la regulación juntos.
   double get stopsLost {
     if (bare.candela <= 0 || source.candela <= 0) return 0;
@@ -142,6 +150,8 @@ class PlanLight {
     );
     final measuredLux = read(measuredLuxKey);
     final measuredMeters = read(measuredMetersKey);
+    final measuredBeam = read(measuredBeamKey);
+    final sizeM = read(sizeKey) ?? d.sizeM;
 
     final bare =
         measuredLux != null &&
@@ -149,10 +159,10 @@ class PlanLight {
             measuredMeters != null &&
             measuredMeters > 0
         ? LightSource.measured(
-            lux: measuredLux,
+            lux: measuredLux * _beamScale(measuredBeam, beam.spread),
             meters: measuredMeters,
             beamDeg: beam.spread,
-            sizeM: d.sizeM,
+            sizeM: sizeM,
             cct: beam.cct,
             status:
                 el.props[photometrySourceKey] ==
@@ -164,7 +174,7 @@ class PlanLight {
             watts: watts,
             tech: tech,
             beamDeg: beam.spread,
-            sizeM: d.sizeM,
+            sizeM: sizeM,
             cct: beam.cct,
           );
 
@@ -185,6 +195,15 @@ class PlanLight {
       watts: watts,
       tech: tech,
     );
+  }
+
+  /// Cuánto cambia el eje de un dato medido con [measuredDeg] de haz al
+  /// llevarlo a [beamDeg]: el flujo es el mismo, repartido en otro cono.
+  static double _beamScale(double? measuredDeg, double beamDeg) {
+    if (measuredDeg == null || measuredDeg <= 0 || beamDeg <= 0) return 1;
+    if ((measuredDeg - beamDeg).abs() < 0.5) return 1;
+    return LightSource.solidAngle(measuredDeg) /
+        LightSource.solidAngle(beamDeg);
   }
 
   /// Pone los modificadores delante de la fuente y la regula.

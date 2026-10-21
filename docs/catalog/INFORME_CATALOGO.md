@@ -2,7 +2,7 @@
 
 Generado por `tools/build_catalog.py`. No editar a mano.
 
-Versión del catálogo: 9. Modos de sensor en total: 675.
+Versión del catálogo: 10. Modos de sensor en total: 675.
 
 Grabación: `arri_alexa_sxt` con 6 medios y 41 formatos.
 
@@ -11,7 +11,7 @@ Grabación: `arri_alexa_sxt` con 6 medios y 41 formatos.
 - Cámaras: 75 (5 nuevas respecto a la base). Modos leídos de la lista: 59. Modos confirmados por el master: 5. Modos del flujo v2.0: 72.
 - Ópticas: 431 (62 nuevas de la lista). Con círculo de imagen publicado: 71 (48 de la lista; el resto, del master y del flujo v2.0). Círculos inferidos descartados de la base: 382.
 - Squeeze descartado en 56 ópticas esféricas (VAL-002). 59 anamórficas no traen squeeze en la lista; conservan el de la base, sin verificar. Fichas por focal del master: 16. Familias del master aplicadas: 2. 35 ópticas marcadas `es_custom` en la lista no entran en el catálogo oficial.
-- Luces: 103 (13 nuevas de la lista).
+- Luces: 98 (13 nuevas de la lista, 5 duplicados retirados). Con haz: 59; con fotometría: 7.
 
 ## Estado de los datos
 
@@ -19,7 +19,7 @@ Grabación: `arri_alexa_sxt` con 6 medios y 41 formatos.
 |---|---|---|---|
 | Cámaras | 75 | 11 | PENDIENTE 63, CONFIRMADO 10, CONFLICTO 1, SECUNDARIO 1 |
 | Ópticas | 431 | 105 | PENDIENTE 326, SECUNDARIO 62, CONTRASTADO 24, CONFIRMADO 14, OBSERVADO 5 |
-| Luces | 103 | 1 | PENDIENTE 102, CONFIRMADO 1 |
+| Luces | 98 | 8 | PENDIENTE 87, SECUNDARIO 5, CONFIRMADO 3, CONFLICTO 3 |
 
 ## Incidencias
 
@@ -57,3 +57,28 @@ Grabación: `arri_alexa_sxt` con 6 medios y 41 formatos.
 - Master: `Anamorphic Ultra Wide Zoom` está en estado PARTIAL y no se aplica.
 - Retiradas 18 ópticas heredadas: Familia heredada con datos erróneos (T2.8 y focales 16/20/24 mm que no existen en Super Speed). La sustituyen «Super Speed MKI» y «Super Speed MKII/III».
 - Flujo v2.0: 5 ópticas ZEISS Super Speed con círculo de imagen medido (típico y peor caso).
+- Luces que la revisión corrige y conviene corregir también en el Excel:
+  - `arri_l7c`: tipo_luz «fresnel» → formato «fresnel», tecnologia «led»
+  - `arri_m18`: tipo_luz «hmi» → formato «open», tecnologia «hmi»
+  - `arri_m40`: tipo_luz «hmi» → formato «open», tecnologia «hmi»
+  - `aputure_storm_1200`: tipo_luz «hmi» → formato «cob», tecnologia «led»
+  - `dedolight_dled4`: tipo_luz «led» → formato «fresnel», tecnologia «led»
+  - `creamsource_vortex8`: tipo_luz «led» → formato «panel», tecnologia «led»
+  - `practical_led_strip`: tipo_luz «practical» → formato «practical», tecnologia «led»
+  - `practical_candle`: tipo_luz «practical» → formato «practical», tecnologia «led»
+  - `mole_led_20k`: tipo_luz «fresnel» → formato «fresnel», tecnologia «led»
+  - `mole_led_20k`: potencia_w 20000 → 3000
+  - `dedolight_dled12`: tipo_luz «led» → formato «fresnel», tecnologia «led»
+  - `arri_m12`: tipo_luz «hmi» → formato «open», tecnologia «hmi»
+  - `arri_m8`: tipo_luz «hmi» → formato «open», tecnologia «hmi»
+  - `arri_m8`: potencia_w 8000 → 800
+  - `litegear_litemat`: tipo_luz «led_panel» → formato «flex», tecnologia «led»
+  - `nanlux_dyno_1200c`: tipo_luz «led» → formato «panel», tecnologia «led»
+  - `arri_l5_c`: tipo_luz «fresnel» → formato «fresnel», tecnologia «led»
+  - `creamsource_vortex4`: tipo_luz «led» → formato «panel», tecnologia «led»
+  - `astera_ax9_powerpar`: tipo_luz «LED Point Source» → formato «open», tecnologia «led»
+  - `arri_s60_c_skypanel`: duplicado de `arri_skypanel_s60`; quitar la fila
+  - `arri_skypanel_s60-c`: duplicado de `arri_skypanel_s60`; quitar la fila
+  - `nanlite_pavotube`: duplicado de `nanlite_pavotube_ii_30x`; quitar la fila
+  - `aputure_ls1200d`: duplicado de `aputure_ls_1200d_pro`; quitar la fila
+  - `creamsource_doppio_plus`: duplicado de `creamsource_doppio`; quitar la fila

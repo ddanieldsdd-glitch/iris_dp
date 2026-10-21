@@ -1,5 +1,5 @@
 {
- "version": 9,
+ "version": 10,
  "camerasUrl": "cameras.json",
  "lensesUrl": "lenses.json",
  "lightsUrl": "lights.json",
