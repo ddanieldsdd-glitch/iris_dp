@@ -21,7 +21,11 @@ class _AppUpdateGateState extends ConsumerState<AppUpdateGate>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkIfReady());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Mac: una versión que quedó preparada se instala al cerrar.
+      ref.read(appUpdateProvider.notifier).resumeStaged();
+      _checkIfReady();
+    });
   }
 
   @override

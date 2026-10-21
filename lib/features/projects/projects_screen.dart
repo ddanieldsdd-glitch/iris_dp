@@ -137,7 +137,6 @@ class ProjectsScreen extends ConsumerWidget {
                               homeContentBuilder: (_) => const Column(
                                 children: [
                                   AuthRequiredBanner(),
-                                  UpdateAvailableBanner(),
                                   Expanded(child: ProjectsScreen()),
                                 ],
                               ),
