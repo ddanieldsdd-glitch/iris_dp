@@ -20,6 +20,7 @@ import '../../shared/annotations/annotation_canvas.dart';
 import '../../shared/equipment/light_optics.dart';
 import '../../shared/annotations/annotation_document.dart';
 import 'camera_plan_grouping.dart';
+import '../equipment/widgets/light_quick_add_sheet.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
@@ -31,6 +32,7 @@ import 'light_beam.dart';
 import 'plan_data.dart' show kLightSetupColors;
 import 'plan_cast.dart';
 import 'plan_gear_list.dart';
+import 'plan_elevation_screen.dart';
 import 'plan_light_map.dart';
 import 'plan_project_gear_dialog.dart';
 import 'plan_marks.dart';
@@ -1071,6 +1073,25 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Añade a la planta un aparato del catálogo de Equipo, con sus datos.
   Future<void> _addCatalogLight(Light light) =>
       _addElement(PlanEquipment.lightFromCatalog(light));
+
+  /// Da de alta una luz que no está en el catálogo, la mete en el proyecto
+  /// y la pone en la planta.
+  Future<void> _quickAddLight(String query) async {
+    final light = await showLightQuickAdd(
+      context,
+      initialModel: query,
+      confirmLabel: 'Añadir a la planta',
+    );
+    if (light == null || !mounted) return;
+    final db = ref.read(databaseProvider);
+    await ProjectGearEdits.set(db, widget.projectId, 'light', [
+      light.id,
+    ], inProject: true);
+    final gear = await ProjectGear.load(db, widget.projectId);
+    if (!mounted) return;
+    setState(() => _gear = gear);
+    await _addCatalogLight(light);
+  }
 
   /// Sol, cielo y rebote de paredes: se guardan con el esquema de luz.
   Future<void> _editAmbient() async {
@@ -2667,6 +2688,19 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             ],
           ),
           IconButton(
+            tooltip: 'Alzado y perfil · exportar DXF y MVR',
+            icon: Icon(
+              Icons.view_in_ar_outlined,
+              color: palette.textSecondary,
+            ),
+            onPressed: () => showPlanElevation(
+              context,
+              elements: _visibleElements,
+              metersPerUnit: _metersPerUnit,
+              name: _linkedSet?.locationName ?? _linkedSite?.name ?? 'planta',
+            ),
+          ),
+          IconButton(
             tooltip: _gearLabels
                 ? 'Quitar rótulos de equipo'
                 : 'Rótulos de equipo: unidad, vatios, lúmenes y leyenda',
@@ -2740,6 +2774,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     onAddMeter: _addMeter,
                     projectLights: _gear.lights,
                     onAddCatalogLight: _addCatalogLight,
+                    onQuickAddLight: _quickAddLight,
                     catalogLights: _gear.catalogLights,
                     onAddArchitecture: _addArchitecture,
                     wallsToEnvironment:
