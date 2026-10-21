@@ -244,6 +244,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Mapa de exposición en falso color, en lugar de los haces.
   bool _exposureMap = false;
 
+  /// La luz a la exposición de la cámara o, en «Ver todo», autoexpuesta.
+  LightView _lightView = LightView.camera;
+
   /// Lecturas de diafragma bajo cada actor.
   bool _showReadings = true;
 
@@ -2627,6 +2630,37 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             ),
             onPressed: () => setState(() => _snap = !_snap),
           ),
+          PopupMenuButton<LightView>(
+            tooltip: 'Luz: ${_lightView.label.toLowerCase()}',
+            icon: Icon(
+              _lightView == LightView.camera
+                  ? Icons.camera_outlined
+                  : Icons.visibility_outlined,
+              color: palette.textSecondary,
+            ),
+            initialValue: _lightView,
+            onSelected: (view) => setState(() => _lightView = view),
+            itemBuilder: (_) => [
+              for (final view in LightView.values)
+                CheckedPopupMenuItem<LightView>(
+                  value: view,
+                  checked: view == _lightView,
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(view.label),
+                    subtitle: Text(switch (view) {
+                      LightView.camera =>
+                        'Como la ve la cámara a ${formatStop(_targetStop)}: '
+                            'lo que sobra se quema y lo que falta se apaga',
+                      LightView.all =>
+                        'Lo más iluminado al máximo, para ver hasta dónde '
+                            'llega cada luz',
+                    }),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             tooltip: _exposureMap
                 ? 'Volver a los haces de luz'
@@ -2897,6 +2931,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                       showReadings:
                                                           _showReadings,
                                                       exposureMap: _exposureMap,
+                                                      lightView: _lightView,
                                                       selectedElement:
                                                           _selected,
                                                       selectedPathIndex:

@@ -90,6 +90,10 @@ class CameraPlanPainter extends CustomPainter {
   /// Mapa de exposición en falso color, en lugar de los haces.
   final bool exposureMap;
 
+  /// Contra qué se pinta el brillo de la luz: la exposición de la cámara
+  /// ([exposure] y [targetStop]) o lo más iluminado de la planta.
+  final LightView lightView;
+
   /// Metros por unidad del lienzo; con él se rotulan longitudes y se pinta
   /// la barra de escala. `null` = sin rótulos de medida.
   final double? metersPerUnit;
@@ -129,6 +133,7 @@ class CameraPlanPainter extends CustomPainter {
     this.ambient,
     this.showReadings = false,
     this.exposureMap = false,
+    this.lightView = LightView.camera,
     this.selectedElement,
     this.selectedRoom,
     this.rotating = false,
@@ -197,9 +202,15 @@ class CameraPlanPainter extends CustomPainter {
     if (mapped) {
       // La luz, calculada punto a punto: todas las fuentes sumadas y lo
       // que las tapa.
+      final key = _exposedKeyLux;
       lightMap!
-          .resolve(scene, _lightKey(scene), _lightRect(scene))
-          .paint(canvas, view);
+          .resolve(
+            scene,
+            _lightKey(scene),
+            _lightRect(scene),
+            exposureKeyLux: key,
+          )
+          .paint(canvas, view, exposureKeyLux: key);
       // La mancha de sol de cada ventana, encima y con su filo: el mapa
       // la tiene, pero con el borde blando de su rejilla.
       if (ambient?.hasSun ?? false) {
@@ -259,6 +270,9 @@ class CameraPlanPainter extends CustomPainter {
 
     if (metersPerUnit != null) _drawScaleBar(canvas, size);
     if (exposureMap && exposure != null) _drawExposureLegend(canvas, size);
+    if (!exposureMap && lightView == LightView.camera && lightMap != null) {
+      _drawExposureReference(canvas, size);
+    }
     if (ambient?.hasSun ?? false) _drawSunCompass(canvas, size);
   }
 
@@ -342,6 +356,41 @@ class CameraPlanPainter extends CustomPainter {
         canvas.drawRect(rect, paint);
       }
     }
+  }
+
+  /// Ajustes con los que se pinta la luz cuando no hay cámara que diga
+  /// otros: ISO 800, 180° a 24 fps y T2.8.
+  static const fallbackExposure = ExposureSettings();
+
+  /// Lux que salen bien expuestos y a media luz, o `null` en «Ver todo».
+  double? get _exposedKeyLux => lightView == LightView.camera
+      ? (exposure ?? fallbackExposure).luxFor(targetStop)
+      : null;
+
+  /// Abajo, junto a la escala: a qué exposición se está pintando la luz.
+  void _drawExposureReference(Canvas canvas, Size size) {
+    final e = exposure ?? fallbackExposure;
+    String n(double v) =>
+        v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+    final nd = e.ndStops > 0 ? ' · ND ${n(e.ndStops)}' : '';
+    final tp = TextPainter(
+      text: TextSpan(
+        text:
+            'Luz a ${formatStop(targetStop)} · ISO ${n(e.iso)} · '
+            '${n(e.shutterDeg)}° a ${n(e.fps)} fps$nd',
+        style: const TextStyle(color: _CanvasColors.inkTertiary, fontSize: 10),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final at = Offset(16, size.height - 50);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(at.dx - 6, at.dy - 3, tp.width + 12, tp.height + 6),
+        const Radius.circular(6),
+      ),
+      Paint()..color = _CanvasColors.background.withValues(alpha: 0.8),
+    );
+    tp.paint(canvas, at);
   }
 
   void _drawExposureLegend(Canvas canvas, Size size) {
@@ -1317,23 +1366,42 @@ class CameraPlanPainter extends CustomPainter {
         ? scene.luxFrom(light, meters / mpu, 0)
         : scene.luxOf(light, pool + side * (meters / mpu));
 
-    double alphaFor(double lux) {
+    // A la exposición de la cámara, el haz llega hasta donde la cámara
+    // deja de ver la luz y se quema donde sobra; en «Ver todo», hasta
+    // [_beamFloorLux] y contra una escala fija.
+    final exposedKey = _exposedKeyLux;
+    final floorLux = exposedKey == null
+        ? _beamFloorLux
+        : PlanLightMap.cutoffForExposure(exposedKey) * 2;
+    Color colorAt(double lux, double amount) {
+      if (exposedKey != null) {
+        return PlanLightMap.colorFor(
+          lux,
+          source.cct,
+          exposureKeyLux: exposedKey,
+          strength: strength * amount,
+        );
+      }
       final stops =
           math.log(math.max(lux, _beamFloorLux) / _beamFloorLux) / math.ln2;
-      return math.pow((stops / 16).clamp(0.0, 1.0), 1.7).toDouble() *
-          0.5 *
-          strength;
+      return color.withValues(
+        alpha:
+            math.pow((stops / 16).clamp(0.0, 1.0), 1.7).toDouble() *
+            0.5 *
+            strength *
+            amount,
+      );
     }
 
     // Hasta dónde llega.
     double reachM;
     if (drop == null) {
-      reachM = source.distanceFor(_beamFloorLux).clamp(0.0, 60.0);
+      reachM = source.distanceFor(floorLux).clamp(0.0, 60.0);
     } else {
       // El charco de luz bajo el aparato: se busca dónde baja del suelo.
       reachM = 0;
       for (var r = 0.25; r <= 40; r += 0.25) {
-        if (luxAtFlat(r) < _beamFloorLux) break;
+        if (luxAtFlat(r) < floorLux) break;
         reachM = r;
       }
     }
@@ -1344,14 +1412,11 @@ class CameraPlanPainter extends CustomPainter {
     ui.Shader shaderAt(Offset centre, double amount) =>
         ui.Gradient.radial(centre, reach, [
           for (final f in fractions)
-            color.withValues(
-              alpha:
-                  alphaFor(
-                    drop == null
-                        ? source.illuminance(math.max(reachM * f, 0.05))
-                        : luxAtFlat(reachM * f),
-                  ) *
-                  amount,
+            colorAt(
+              drop == null
+                  ? source.illuminance(math.max(reachM * f, 0.05))
+                  : luxAtFlat(reachM * f),
+              amount,
             ),
         ], fractions);
 
@@ -2094,6 +2159,7 @@ class CameraPlanPainter extends CustomPainter {
       old.ambient != ambient ||
       old.showReadings != showReadings ||
       old.exposureMap != exposureMap ||
+      old.lightView != lightView ||
       old.selectedElement?.id != selectedElement?.id ||
       old.selectedPathIndex != selectedPathIndex ||
       old.scale != scale ||

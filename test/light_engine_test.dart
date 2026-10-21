@@ -1691,6 +1691,90 @@ void main() {
       expect(PlanAmbient.fromJson(a.toJson()).rooms.single.ceilingM, 4);
     });
   });
+  group('exposición de la cámara en el mapa', () {
+    // 50 unidades por metro.
+    const mpu = 0.02;
+    PlanElement practical() => PlanElement(
+      id: 1,
+      type: ElementType.light,
+      position: Offset.zero,
+      lightType: LightType.practical,
+      props: {'intensity': 100, 'watts': 60},
+    );
+    PlanElement fiveK() => PlanElement(
+      id: 2,
+      type: ElementType.light,
+      position: const Offset(1000, 0),
+      rotation: 180,
+      lightType: LightType.fresnelLarge,
+      props: {'intensity': 100, 'watts': 5000},
+    );
+    // ISO 800, 180° a 24 fps, T2.8: unos 160 lx salen bien expuestos.
+    final key = const ExposureSettings().luxFor(2.8);
+    const rect = Rect.fromLTWH(-300, -300, 1600, 800);
+
+    test('una práctica de 60 W y un 5K en la misma planta se pintan muy '
+        'distintos', () {
+      final s = LightScene.from([practical(), fiveK()], metersPerUnit: mpu);
+      // La práctica a un metro; el 5K a tres, en su eje.
+      final bulb = s.sampleAt(const Offset(50, 0)).lux;
+      final fresnel = s.sampleAt(const Offset(1000, 150)).lux;
+      expect(stopsBetweenLux(fresnel, bulb), greaterThan(7));
+
+      final b = PlanLightMap.exposedBrightness(bulb, key);
+      final f = PlanLightMap.exposedBrightness(fresnel, key);
+      // El 5K se quema; la práctica queda por debajo de lo bien expuesto.
+      expect(f, 1);
+      expect(PlanLightMap.burnFor(fresnel, key), 1);
+      expect(b, lessThan(PlanLightMap.exposedLevel));
+      expect(f - b, greaterThan(0.4));
+      // Y su charco es pequeño: a tres metros casi no se ve.
+      final far = s.sampleAt(const Offset(150, 0)).lux;
+      expect(PlanLightMap.exposedBrightness(far, key), lessThan(0.12));
+    });
+
+    test('sola, la práctica no sale al máximo a la exposición de la '
+        'cámara; en «Ver todo», sí', () {
+      final s = LightScene.from([practical()], metersPerUnit: mpu);
+      final map = PlanLightMap.compute(
+        s,
+        rect,
+        budget: 40000,
+        exposureKeyLux: key,
+      );
+      final lit = [
+        for (var i = 0; i < map.lux.length; i++)
+          if (map.lux[i] > 0) map.lux[i],
+      ]..sort();
+      // Lo más iluminado de la planta, sin contar el bulbo mismo.
+      final top = lit[((lit.length - 1) * 0.92).floor()];
+      expect(PlanLightMap.exposedBrightness(top, key), lessThan(0.5));
+      expect(PlanLightMap.brightnessFor(top, map.keyLux), 1);
+    });
+
+    test('bajo techo, «Ver todo» no se adapta más de tres stops', () {
+      final s = LightScene.from([practical(), fiveK()], metersPerUnit: mpu);
+      final map = PlanLightMap.compute(s, rect, budget: 20000);
+      expect(
+        stopsBetweenLux(map.keyLux, map.indoorKeyLux),
+        lessThanOrEqualTo(PlanLightMap.indoorAdaptStops + 1e-6),
+      );
+    });
+
+    test('a la exposición de la cámara se mira la luz hasta donde la ve', () {
+      final s = LightScene.from([practical(), fiveK()], metersPerUnit: mpu);
+      final auto = PlanLightMap.compute(s, rect, budget: 20000);
+      final exposed = PlanLightMap.compute(
+        s,
+        rect,
+        budget: 20000,
+        exposureKeyLux: key,
+      );
+      expect(exposed.cutoff, lessThan(auto.cutoff));
+      expect(exposed.cutoff, lessThanOrEqualTo(key / 64));
+    });
+  });
+
   group('familias de luz', () {
     test('el mismo tipo escrito de varias formas cae en el mismo grupo', () {
       for (final type in ['led_panel', 'LED Panel', 'led-panel']) {

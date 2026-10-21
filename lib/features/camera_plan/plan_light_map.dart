@@ -10,6 +10,26 @@ import 'light/ambient.dart';
 import 'light/light_scene.dart';
 import 'light_beam.dart';
 
+/// Contra qué se mide el brillo con que se pinta la luz.
+enum LightView {
+  /// Como la vería la cámara: lo bien expuesto al diafragma de trabajo
+  /// sale a media luz, lo que sobra se quema y lo que falta se apaga. Una
+  /// práctica y un 5K conservan los stops que los separan.
+  camera,
+
+  /// Todo a la vista: lo más iluminado de la planta sale al máximo, sea lo
+  /// que sea, y bajo techo el brillo se adapta un poco. Sirve para ver
+  /// hasta dónde llega cada luz, no cuánta es.
+  all,
+}
+
+extension LightViewLabel on LightView {
+  String get label => switch (this) {
+    LightView.camera => 'Exposición de la cámara',
+    LightView.all => 'Ver todo',
+  };
+}
+
 /// La luz de la planta calculada punto a punto: cuánta llega a cada sitio,
 /// sumando todas las fuentes (aparatos, telas, rebotes, sol y cielo) y
 /// contando lo que las tapa.
@@ -45,6 +65,10 @@ class PlanLightMap {
   final double openLux;
   final double openCct;
 
+  /// Por debajo de estos lux no se comprobó qué tapa la luz: se dio por
+  /// nada.
+  final double cutoff;
+
   PlanLightMap._({
     required this.rect,
     required this.columns,
@@ -56,6 +80,7 @@ class PlanLightMap {
     required this.indoor,
     required this.openLux,
     required this.openCct,
+    required this.cutoff,
   });
 
   /// Stops por debajo de [keyLux] que todavía se ven.
@@ -65,7 +90,13 @@ class PlanLightMap {
   /// rótulos (claros) dejarían de leerse.
   static const double maxAlpha = 0.5;
 
-  /// Brillo con el que se pinta una cantidad de luz, de 0 a 1.
+  /// Stops que puede bajar la luz bajo techo, en «Ver todo», respecto a lo
+  /// más iluminado de la planta. Sin tope, una lámpara en un cuarto
+  /// cerrado se vería tan fuerte como el sol de fuera.
+  static const double indoorAdaptStops = 3;
+
+  /// Brillo con el que se pinta una cantidad de luz en «Ver todo», de 0 a
+  /// 1: [keyLux] sale al máximo.
   static double brightnessFor(double lux, double keyLux) {
     if (lux <= 0 || keyLux <= 0) return 0;
     final stops = math.log(lux / keyLux) / math.ln2;
@@ -73,14 +104,87 @@ class PlanLightMap {
     return math.pow(v, 1.6).toDouble();
   }
 
+  // Exposición de la cámara.
+
+  /// Stops por debajo del diafragma de trabajo que aún se ven: más abajo,
+  /// en el monitor ya es negro.
+  static const double underStops = 6;
+
+  /// Stops por encima del diafragma de trabajo a los que la luz se quema
+  /// del todo.
+  static const double clipStops = 3;
+
+  /// Brillo de lo que está justo bien expuesto. Lo que sobra va de aquí a
+  /// 1, y además se blanquea: así lo quemado no se confunde con lo bueno.
+  static const double exposedLevel = 0.62;
+
+  /// Lo más que tapa la luz quemada. Lo bien expuesto se queda en
+  /// [exposedLevel] × esto, por debajo del tope de «Ver todo».
+  static const double maxExposedAlpha = 0.6;
+
+  /// Brillo con el que se pinta una cantidad de luz a la exposición de la
+  /// cámara, de 0 a 1. [keyLux] son los lux que dan el diafragma de
+  /// trabajo.
+  static double exposedBrightness(double lux, double keyLux) {
+    final stops = stopsOver(lux, keyLux);
+    if (stops == null || stops <= -underStops) return 0;
+    if (stops <= 0) {
+      final v = (stops + underStops) / underStops;
+      return math.pow(v, 1.5).toDouble() * exposedLevel;
+    }
+    return exposedLevel +
+        (1 - exposedLevel) * (stops / clipStops).clamp(0.0, 1.0);
+  }
+
+  /// Cuánto se blanquea la luz por sobrar, de 0 (bien expuesta o menos) a
+  /// 1 (quemada).
+  static double burnFor(double lux, double keyLux) {
+    final stops = stopsOver(lux, keyLux);
+    if (stops == null || stops <= 0) return 0;
+    return (stops / clipStops).clamp(0.0, 1.0);
+  }
+
+  static double? stopsOver(double lux, double keyLux) {
+    if (lux <= 0 || keyLux <= 0) return null;
+    return math.log(lux / keyLux) / math.ln2;
+  }
+
+  /// Lo que se da por nada al pintar a la exposición de la cámara.
+  static double cutoffForExposure(double keyLux) =>
+      keyLux / math.pow(2, underStops + 1);
+
+  /// Color de una cantidad de luz: su tinte con la opacidad de su brillo.
+  /// Con [exposureKeyLux], a la exposición de la cámara; sin él, contra
+  /// [autoKeyLux] («Ver todo»).
+  static Color colorFor(
+    double lux,
+    double cct, {
+    double? exposureKeyLux,
+    double autoKeyLux = 1,
+    double strength = 1,
+  }) => Color(
+    _argb(
+      lux,
+      cct,
+      exposureKeyLux ?? autoKeyLux,
+      exposureKeyLux != null,
+      strength,
+    ),
+  );
+
   double luxAt(int column, int row) => lux[row * (columns + 1) + column];
 
   /// Calcula el mapa de [rect] con una rejilla tan fina como deje
   /// [budget]: el número de comprobaciones punto–fuente que se permiten.
+  ///
+  /// Con [exposureKeyLux] (los lux bien expuestos de la cámara) se mira la
+  /// luz hasta donde la cámara aún la ve, aunque sea muy poca al lado de la
+  /// fuente más fuerte.
   static PlanLightMap compute(
     LightScene scene,
     Rect rect, {
     required int budget,
+    double? exposureKeyLux,
   }) {
     final env = scene.ambient;
     final sunny = env != null && env.hasSun;
@@ -102,7 +206,10 @@ class PlanLightMap {
     for (final light in scene.lights) {
       strongest = math.max(strongest, light.source.illuminance(2));
     }
-    final cutoff = strongest / math.pow(2, rangeStops + 2);
+    var cutoff = strongest / math.pow(2, rangeStops + 2);
+    if (exposureKeyLux != null && exposureKeyLux > 0) {
+      cutoff = math.min(cutoff, cutoffForExposure(exposureKeyLux));
+    }
 
     final dx = rect.width / columns;
     final dy = rect.height / rows;
@@ -128,9 +235,12 @@ class PlanLightMap {
 
     final key = math.max(keyOf((_) => true, math.max(strongest, 1.0)), 1e-3);
     // Bajo techo, a medio camino entre lo más iluminado de la planta y lo
-    // más iluminado de dentro.
+    // más iluminado de dentro, sin bajar más de [indoorAdaptStops].
     final inside = keyOf((i) => indoor[i] == 1, key);
-    final indoorKey = math.sqrt(key * math.min(key, inside));
+    final indoorKey = math.max(
+      math.sqrt(key * math.min(key, inside)),
+      key / math.pow(2, indoorAdaptStops),
+    );
     final open = env == null
         ? 0.0
         : (sunny ? env.condition.sunLux : 0.0) + (skyLit ? env.skyLux : 0.0);
@@ -145,14 +255,31 @@ class PlanLightMap {
       indoor: indoor,
       openLux: open,
       openCct: sunny ? env.condition.sunCct : (env?.skyCct ?? 5600),
+      cutoff: cutoff,
     );
   }
 
-  static int _argb(double lux, double cct, double keyLux) {
-    final b = brightnessFor(lux, keyLux);
+  static int _argb(
+    double lux,
+    double cct,
+    double keyLux,
+    bool exposed, [
+    double strength = 1,
+  ]) {
+    final b = exposed
+        ? exposedBrightness(lux, keyLux)
+        : brightnessFor(lux, keyLux);
     if (b <= 0.002) return 0;
-    final tint = LightBeam.colorForCct(cct <= 0 ? 5600 : cct);
-    final a = (b * maxAlpha * 255).round().clamp(0, 255);
+    var tint = LightBeam.colorForCct(cct <= 0 ? 5600 : cct);
+    if (exposed) {
+      // Lo quemado se va a blanco: se ve que sobra, no solo que hay luz.
+      final burn = burnFor(lux, keyLux);
+      if (burn > 0) {
+        tint = Color.lerp(tint, const Color(0xFFFFFFFF), burn * 0.75)!;
+      }
+    }
+    final top = exposed ? maxExposedAlpha : maxAlpha;
+    final a = (b * top * strength * 255).round().clamp(0, 255);
     return (a << 24) |
         ((tint.r * 255).round() << 16) |
         ((tint.g * 255).round() << 8) |
@@ -160,15 +287,21 @@ class PlanLightMap {
   }
 
   /// Color con el que se pinta lo que queda fuera del mapa, al aire libre.
-  Color get openColor => Color(_argb(openLux, openCct, keyLux));
+  /// Con [exposureKeyLux], a la exposición de la cámara.
+  Color openColor([double? exposureKeyLux]) => Color(
+    _argb(openLux, openCct, exposureKeyLux ?? keyLux, exposureKeyLux != null),
+  );
 
   ui.Vertices? _vertices;
+  double? _verticesKey;
 
   /// La rejilla como malla: el color se funde solo entre un cruce y el
-  /// siguiente.
-  ui.Vertices get vertices {
+  /// siguiente. Con [exposureKeyLux], a la exposición de la cámara; sin
+  /// él, «Ver todo».
+  ui.Vertices vertices([double? exposureKeyLux]) {
     final cached = _vertices;
-    if (cached != null) return cached;
+    if (cached != null && _verticesKey == exposureKeyLux) return cached;
+    final exposed = exposureKeyLux != null;
     final stride = columns + 1;
     final positions = Float32List((columns + 1) * (rows + 1) * 2);
     final colors = Int32List((columns + 1) * (rows + 1));
@@ -182,7 +315,8 @@ class PlanLightMap {
         colors[i] = _argb(
           lux[i],
           cct[i],
-          indoor[i] == 1 ? indoorKeyLux : keyLux,
+          exposureKeyLux ?? (indoor[i] == 1 ? indoorKeyLux : keyLux),
+          exposed,
         );
       }
     }
@@ -202,6 +336,7 @@ class PlanLightMap {
         indices[k++] = d;
       }
     }
+    _verticesKey = exposureKeyLux;
     return _vertices = ui.Vertices.raw(
       ui.VertexMode.triangles,
       positions,
@@ -210,9 +345,10 @@ class PlanLightMap {
     );
   }
 
-  void paint(Canvas canvas, Rect view) {
+  /// Pinta el mapa. Con [exposureKeyLux], a la exposición de la cámara.
+  void paint(Canvas canvas, Rect view, {double? exposureKeyLux}) {
     // Fuera del mapa: lo que hay al aire libre sin nada delante.
-    final open = openColor;
+    final open = openColor(exposureKeyLux);
     if (open.a > 0) {
       canvas.save();
       canvas.clipPath(
@@ -236,7 +372,7 @@ class PlanLightMap {
           tileMode: TileMode.decal,
         ),
     );
-    canvas.drawVertices(vertices, BlendMode.dst, Paint());
+    canvas.drawVertices(vertices(exposureKeyLux), BlendMode.dst, Paint());
     canvas.restore();
   }
 }
@@ -257,17 +393,41 @@ class PlanLightMapCache extends ChangeNotifier {
   bool _disposed = false;
 
   /// El mapa de una planta. [key] cambia cuando cambia algo que afecta a
-  /// la luz.
-  PlanLightMap resolve(LightScene scene, int key, Rect rect) {
+  /// la luz. Con [exposureKeyLux] el mapa mira la luz hasta donde la ve la
+  /// cámara: si se abre el diafragma y hace falta ver menos luz, se rehace.
+  PlanLightMap resolve(
+    LightScene scene,
+    int key,
+    Rect rect, {
+    double? exposureKeyLux,
+  }) {
     final current = _map;
-    if (current != null && _key == key) return current;
-    final quick = PlanLightMap.compute(scene, rect, budget: coarseBudget);
+    final needed = exposureKeyLux == null
+        ? double.infinity
+        : PlanLightMap.cutoffForExposure(exposureKeyLux);
+    if (current != null && _key == key && current.cutoff <= needed * 1.001) {
+      return current;
+    }
+    // Se mira algo más abajo de lo que hace falta: así un cambio pequeño de
+    // ISO o de diafragma no obliga a rehacerlo.
+    final reach = exposureKeyLux == null ? null : exposureKeyLux / 2;
+    final quick = PlanLightMap.compute(
+      scene,
+      rect,
+      budget: coarseBudget,
+      exposureKeyLux: reach,
+    );
     _key = key;
     _map = quick;
     _refine?.cancel();
     _refine = Timer(const Duration(milliseconds: 280), () {
       if (_disposed || _key != key) return;
-      _map = PlanLightMap.compute(scene, rect, budget: fineBudget);
+      _map = PlanLightMap.compute(
+        scene,
+        rect,
+        budget: fineBudget,
+        exposureKeyLux: reach,
+      );
       notifyListeners();
     });
     return quick;
