@@ -844,7 +844,9 @@ LIGHT_TECHS = ("led", "hmi", "tungsten", "fluorescent")
 # Columnas de la hoja Luces que mandan sobre la revisión cuando vienen
 # rellenas. Las cuatro últimas aún no existen en la lista v1.8.
 LIGHT_EXCEL_COLUMNS = ("formato", "tecnologia", "haz_grados", "fotometria_lux",
-                       "fotometria_distancia_m", "fotometria_condicion")
+                       "fotometria_distancia_m", "fotometria_condicion",
+                       "haz_spot_grados", "haz_flood_grados",
+                       "fotometria_spot_lux", "fotometria_flood_lux")
 
 FORMAT_WORDS = {
     "fresnel": "fresnel", "panel": "panel", "panel flexible": "flex", "flexible": "flex", "flex": "flex",
@@ -984,6 +986,28 @@ def build_lights(lista, matrix, report):
                 }))
         if not light.get("lukaFixtureId"):
             light["lukaCompatible"] = False
+
+        # Óptica: rango de foco y fotometría en varios haces. El Excel manda.
+        optics = {k: v for k, v in (fix.get("optics") or {}).items() if k != "source"}
+        spot, flood = number(row.get("haz_spot_grados")), number(row.get("haz_flood_grados"))
+        if spot is not None:
+            optics["spotDeg"] = spot
+        if flood is not None:
+            optics["floodDeg"] = flood
+        dist = number(row.get("fotometria_distancia_m"))
+        excel_points = [
+            {"beamDeg": beam_deg, "lux": lux_v, "distanceM": dist}
+            for beam_deg, lux_v in ((spot, number(row.get("fotometria_spot_lux"))),
+                                    (flood, number(row.get("fotometria_flood_lux"))))
+            if beam_deg is not None and lux_v is not None and dist is not None
+        ]
+        if excel_points:
+            optics["points"] = excel_points
+        if not optics.get("points") and "photometryLux" in light and "beamAngleDeg" in light:
+            optics["points"] = [{"beamDeg": light["beamAngleDeg"], "lux": light["photometryLux"],
+                                 "distanceM": light["photometryDistanceM"]}]
+        if optics:
+            light["optics"] = optics
 
     # Duplicados: la ficha que queda se completa con lo que traía la otra.
     for old, new in duplicates.items():

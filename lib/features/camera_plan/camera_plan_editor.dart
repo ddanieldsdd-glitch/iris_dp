@@ -17,6 +17,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_color.dart';
 import '../../shared/annotations/annotation_canvas.dart';
+import '../../shared/equipment/light_optics.dart';
 import '../../shared/annotations/annotation_document.dart';
 import 'camera_plan_grouping.dart';
 import 'camera_plan_constants.dart';
@@ -36,6 +37,7 @@ import 'plan_marks.dart';
 import 'plan_room_panel.dart';
 import 'light/ambient.dart';
 import 'light/exposure.dart';
+import 'light/plan_light.dart';
 import 'light_overrides.dart';
 import 'plan_ambient_sheet.dart';
 import 'plan_equipment.dart';
@@ -3947,6 +3949,73 @@ class _ElementPanelState extends State<_ElementPanel> {
     );
   }
 
+  /// Foco de un aparato que enfoca: del spot al flood de su ficha. Al
+  /// abrir, el mismo flujo se reparte en más ángulo y el eje baja.
+  Widget _focusControl(LightOptics optics, double spread) {
+    final palette = widget.palette;
+    final spot = optics.spotDeg!, flood = optics.floodDeg!;
+    final current = spread.clamp(spot, flood).toDouble();
+    String deg(double v) =>
+        '${v == v.roundToDouble() ? v.round() : v.toStringAsFixed(1)}°';
+    void set(double v) {
+      widget.element.props[LightBeam.spreadKey] = v;
+      widget.onUpdate();
+    }
+
+    final light = PlanLight.of(widget.element);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text('Foco', style: AppTypography.caption(palette)),
+            ),
+            Text(deg(current), style: AppTypography.caption(palette)),
+          ],
+        ),
+        Slider(
+          value: current,
+          min: spot,
+          max: flood,
+          onChanged: (v) {
+            widget.element.props[LightBeam.spreadKey] = v.roundToDouble();
+            widget.onPreview();
+          },
+          onChangeEnd: (_) => widget.onUpdate(),
+        ),
+        Row(
+          children: [
+            TextButton(
+              onPressed: () => set(spot),
+              child: Text('Spot ${deg(spot)}'),
+            ),
+            const Spacer(),
+            if (light != null)
+              Text(
+                '${formatLux(light.source.illuminance(3))} a 3 m',
+                style: AppTypography.caption(
+                  palette,
+                ).copyWith(color: palette.textTertiary),
+              ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => set(flood),
+              child: Text('Flood ${deg(flood)}'),
+            ),
+          ],
+        ),
+        if (optics.estimated)
+          Text(
+            'Rango típico de su formato: la ficha no trae el suyo.',
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.textTertiary, fontSize: 10),
+          ),
+      ],
+    );
+  }
+
   void _commitLens(String v) {
     widget.element.lens = v;
     widget.onUpdate();
@@ -4242,14 +4311,18 @@ class _ElementPanelState extends State<_ElementPanel> {
                           10000,
                           step: 100,
                         ),
-                        _beamSlider(
-                          'Apertura del haz',
-                          '${beam.spread.round()}°',
-                          LightBeam.spreadKey,
-                          beam.spread,
-                          5,
-                          360,
-                        ),
+                        if (PlanLight.opticsOf(element) case final optics
+                            when optics.focusable)
+                          _focusControl(optics, beam.spread)
+                        else
+                          _beamSlider(
+                            'Apertura del haz',
+                            '${beam.spread.round()}°',
+                            LightBeam.spreadKey,
+                            beam.spread,
+                            5,
+                            360,
+                          ),
                         PlanLightControls(
                           element: element,
                           exposure: widget.exposure,

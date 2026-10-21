@@ -59,6 +59,15 @@
   "sourceLabel": "Panavision — SkyPanel S60-C (ficha de alquiler) — 5600 K; la ficha lo da como «spot» sin decir qué difusor",
   "sourceUrl": "https://www.panavision.com/lighting/lighting-products/heads/product-detail/hampba0-skypanel-s60-c",
   "verifiedAt": "2026-10-21",
+  "optics": {
+   "points": [
+    {
+     "beamDeg": 105,
+     "lux": 1233,
+     "distanceM": 3
+    }
+   ]
+  },
   "series": "SkyPanel"
  },
  {
@@ -110,7 +119,11 @@
   "lukaCompatible": true,
   "lukaFixtureId": "l7c",
   "vintage": false,
-  "dataStatus": "PENDIENTE"
+  "dataStatus": "PENDIENTE",
+  "optics": {
+   "spotDeg": 15,
+   "floodDeg": 50
+  }
  },
  {
   "externalId": "arri_t24",
@@ -168,7 +181,17 @@
   ],
   "sourceLabel": "B&H — ARRI T5 Location Fresnel — spot total, lámpara de 5000 W (319 fc a 39,6 ft)",
   "sourceUrl": "https://www.bhphotovideo.com/c/product/575733-REG/Arri_551502_T5_Location_Fresnel.html",
-  "verifiedAt": "2026-10-21"
+  "verifiedAt": "2026-10-21",
+  "optics": {
+   "spotDeg": 12,
+   "points": [
+    {
+     "beamDeg": 12,
+     "lux": 3434,
+     "distanceM": 12.07
+    }
+   ]
+  }
  },
  {
   "externalId": "arri_t2",
@@ -210,7 +233,28 @@
   ],
   "sourceLabel": "ARRI — M18 Data Sheet (feb. 2020) — flood (58°), lámpara de 1800 W",
   "sourceUrl": "https://www.arri.com/resource/blob/31484/e974f3cf2d2fbf561d2df18b1d16782c/arri-m-series-m18-data-sheet-de-feb2020-data.pdf",
-  "verifiedAt": "2026-10-21"
+  "verifiedAt": "2026-10-21",
+  "optics": {
+   "spotDeg": 15,
+   "floodDeg": 58,
+   "points": [
+    {
+     "beamDeg": 15,
+     "lux": 11250,
+     "distanceM": 10
+    },
+    {
+     "beamDeg": 40,
+     "lux": 2120,
+     "distanceM": 10
+    },
+    {
+     "beamDeg": 58,
+     "lux": 1100,
+     "distanceM": 10
+    }
+   ]
+  }
  },
  {
   "externalId": "arri_m40",
@@ -268,7 +312,16 @@
   ],
   "sourceLabel": "Aputure — LS 600d Photometrics & Technical Specifications — con 600 Series Hyper Reflector",
   "sourceUrl": "https://help.aputure.com/en/ls600d/photometrics-technical-specifications",
-  "verifiedAt": "2026-10-21"
+  "verifiedAt": "2026-10-21",
+  "optics": {
+   "points": [
+    {
+     "beamDeg": 55,
+     "lux": 8500,
+     "distanceM": 3
+    }
+   ]
+  }
  },
  {
   "externalId": "aputure_ls600c",
@@ -507,7 +560,23 @@
   ],
   "sourceLabel": "Expressway Cine — 5K Mole Fresnel — flood total (219 fc a 20 ft, 26 ft de diámetro)",
   "sourceUrl": "https://www.expresswaycine.com/lighting-equipment/tungsten-units/5k-mole-fresnel",
-  "verifiedAt": "2026-10-21"
+  "verifiedAt": "2026-10-21",
+  "optics": {
+   "spotDeg": 8.6,
+   "floodDeg": 66,
+   "points": [
+    {
+     "beamDeg": 8.6,
+     "lux": 15640,
+     "distanceM": 6.1
+    },
+    {
+     "beamDeg": 66,
+     "lux": 2357,
+     "distanceM": 6.1
+    }
+   ]
+  }
  },
  {
   "externalId": "mole_2k",
@@ -682,7 +751,16 @@
   ],
   "sourceLabel": "Panavision — Creamsource Vortex8 (ficha de alquiler) — 5600 K, haz nativo de 20°",
   "sourceUrl": "https://www.panavision.com/lighting/lighting-products/heads/product-detail/hknoqah-vortex8",
-  "verifiedAt": "2026-10-21"
+  "verifiedAt": "2026-10-21",
+  "optics": {
+   "points": [
+    {
+     "beamDeg": 20,
+     "lux": 13900,
+     "distanceM": 3
+    }
+   ]
+  }
  },
  {
   "externalId": "creamsource_doppio",
@@ -916,7 +994,16 @@
   ],
   "sourceLabel": "Camera Corp / Adorama — Nanlite Forza 500 — 5600 K, con reflector de 55°",
   "sourceUrl": "https://www.cameracorp.com.au/lighting/nanlite-forza-500-5600k-led-monolight/166101-1587561/",
-  "verifiedAt": "2026-10-21"
+  "verifiedAt": "2026-10-21",
+  "optics": {
+   "points": [
+    {
+     "beamDeg": 55,
+     "lux": 6257,
+     "distanceM": 3
+    }
+   ]
+  }
  },
  {
   "externalId": "aputure_ls600x",
@@ -1234,7 +1321,11 @@
   "series": "L Series",
   "vintage": false,
   "dataStatus": "PENDIENTE",
-  "beamAngleDeg": 14
+  "beamAngleDeg": 14,
+  "optics": {
+   "spotDeg": 14,
+   "floodDeg": 50
+  }
  },
  {
   "externalId": "dedolight_tungsten_150",

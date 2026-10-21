@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/app_database.dart';
 import '../../shared/equipment/light_kind.dart';
+import '../../shared/equipment/light_optics.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/meter.dart';
@@ -28,7 +29,15 @@ class PlanEquipment {
     final type = lightTypeFor(light.lightType);
     final kind = LightKind.parse(light.lightType);
     final defaults = LightBeam.defaultsFor(type);
-    final beam = (light.beamAngleDeg ?? kind.format.beamDeg).clamp(5.0, 360.0);
+    // La óptica de la ficha; lo que no diga, la del formato (estimada).
+    final listed = LightOpticsCatalog.of(light.externalId) ?? LightOptics.none;
+    final typical = LightOptics.forKind(kind);
+    final spot = listed.spotDeg ?? typical.spotDeg;
+    final flood = listed.floodDeg ?? typical.floodDeg;
+    final focusable = spot != null && flood != null && flood - spot >= 2;
+    final beam = (light.beamAngleDeg ?? kind.format.beamDeg)
+        .clamp(focusable ? spot : 5.0, focusable ? flood : 360.0)
+        .toDouble();
     final photometry =
         light.photometryLux != null && light.photometryDistanceM != null;
     final cct = defaults.cct
@@ -47,10 +56,18 @@ class PlanEquipment {
         PlanLight.sizeKey: kind.format.sizeM,
         LightBeam.cctKey: cct,
         LightBeam.spreadKey: beam,
+        if (focusable) ...{
+          PlanLight.spotKey: spot,
+          PlanLight.floodKey: flood,
+          if (listed.spotDeg == null || listed.floodDeg == null)
+            PlanLight.focusEstimatedKey: true,
+        },
+        if (listed.points.isNotEmpty)
+          PlanLight.curveKey: [for (final p in listed.points) p.toList()],
         if (photometry) ...{
           PlanLight.measuredLuxKey: light.photometryLux,
           PlanLight.measuredMetersKey: light.photometryDistanceM,
-          PlanLight.measuredBeamKey: beam,
+          PlanLight.measuredBeamKey: light.beamAngleDeg ?? beam,
           PlanLight.photometrySourceKey: PhotometryStatus.manufacturer.name,
         },
       },
@@ -128,6 +145,7 @@ class ProjectGear {
   }
 
   static Future<ProjectGear> load(AppDatabase db, int projectId) async {
+    await LightOpticsCatalog.ensureLoaded();
     final assigned = await db.getProjectEquipment(projectId);
     final lights = <Light>[];
     final cameras = <Camera>[];

@@ -5,91 +5,251 @@
   "Cada corrección de un dato que la lista sí trae (tipo_luz, potencia_w) sale en el informe como «corregir en el Excel», para que la lista acabe diciendo lo mismo y esta capa se pueda vaciar.",
   "formato: fresnel, panel, flex (panel flexible), tube (tubo), cob (COB/puntual), balloon (globo), practical (práctica), open (PAR/abierta), profile (recorte).",
   "tecnologia: led, hmi, tungsten, fluorescent.",
-  "La fotometría vale con el haz de la ficha (beamAngleDeg) y en las condiciones que dice su fuente."
+  "La fotometría vale con el haz de la ficha (beamAngleDeg) y en las condiciones que dice su fuente.",
+  "optics: rango de foco (spotDeg, floodDeg) y fotometría en varios haces (points). Si falta el rango, la app usa el típico del formato, marcado como estimado."
  ],
  "fichas": {
   "arri_l7c": {
-   "format": "fresnel", "technology": "led", "beamAngleDeg": 15,
-   "note": "Fresnel LED, no tungsteno. Haz de 15° a 50°."
+   "format": "fresnel",
+   "technology": "led",
+   "beamAngleDeg": 15,
+   "note": "Fresnel LED, no tungsteno. Haz de 15° a 50°.",
+   "optics": {
+    "spotDeg": 15,
+    "floodDeg": 50,
+    "source": "B&H — ARRI L7-C LE2 (15–50°)"
+   }
   },
   "arri_l5_c": {
-   "format": "fresnel", "technology": "led", "beamAngleDeg": 14,
-   "lukaCompatible": false, "lukaFixtureId": null,
-   "note": "Fresnel LED. LUKA no tiene un modelo del L5-C: se exportaba como L7-C."
+   "format": "fresnel",
+   "technology": "led",
+   "beamAngleDeg": 14,
+   "lukaCompatible": false,
+   "lukaFixtureId": null,
+   "note": "Fresnel LED. LUKA no tiene un modelo del L5-C: se exportaba como L7-C.",
+   "optics": {
+    "spotDeg": 14,
+    "floodDeg": 50,
+    "source": "Team Digital — ARRI L5-C (14–50°)"
+   }
   },
   "mole_led_20k": {
-   "format": "fresnel", "technology": "led", "powerW": 3000,
+   "format": "fresnel",
+   "technology": "led",
+   "powerW": 3000,
    "note": "Fresnel LED de 24\" equivalente a un 20K de tungsteno; consume unos 3000 W (28 A), no 20 000.",
-   "powerSource": {"status": "SECUNDARIO", "sourceLabel": "No Film School — NAB 2019, Mole-Richardson 20K LED", "sourceUrl": "https://nofilmschool.com/20K-LED-Mole-Richardson"}
+   "powerSource": {
+    "status": "SECUNDARIO",
+    "sourceLabel": "No Film School — NAB 2019, Mole-Richardson 20K LED",
+    "sourceUrl": "https://nofilmschool.com/20K-LED-Mole-Richardson"
+   }
   },
   "aputure_storm_1200": {
-   "format": "cob", "technology": "led",
+   "format": "cob",
+   "technology": "led",
    "note": "LED de una fuente (COB), no HMI."
   },
   "arri_m18": {
-   "format": "open", "technology": "hmi", "beamAngleDeg": 58,
-   "photometry": {"lux": 1100, "distanceM": 10, "condition": "flood (58°), lámpara de 1800 W",
-    "status": "CONFIRMADO", "sourceLabel": "ARRI — M18 Data Sheet (feb. 2020)", "sourceUrl": "https://www.arri.com/resource/blob/31484/e974f3cf2d2fbf561d2df18b1d16782c/arri-m-series-m18-data-sheet-de-feb2020-data.pdf", "verifiedAt": "2026-10-21"}
+   "format": "open",
+   "technology": "hmi",
+   "beamAngleDeg": 58,
+   "photometry": {
+    "lux": 1100,
+    "distanceM": 10,
+    "condition": "flood (58°), lámpara de 1800 W",
+    "status": "CONFIRMADO",
+    "sourceLabel": "ARRI — M18 Data Sheet (feb. 2020)",
+    "sourceUrl": "https://www.arri.com/resource/blob/31484/e974f3cf2d2fbf561d2df18b1d16782c/arri-m-series-m18-data-sheet-de-feb2020-data.pdf",
+    "verifiedAt": "2026-10-21"
+   },
+   "optics": {
+    "spotDeg": 15,
+    "floodDeg": 58,
+    "points": [
+     {
+      "beamDeg": 15,
+      "lux": 11250,
+      "distanceM": 10
+     },
+     {
+      "beamDeg": 40,
+      "lux": 2120,
+      "distanceM": 10
+     },
+     {
+      "beamDeg": 58,
+      "lux": 1100,
+      "distanceM": 10
+     }
+    ],
+    "source": "ARRI — M18 Data Sheet (feb. 2020)"
+   }
   },
-  "arri_m40": {"format": "open", "technology": "hmi"},
+  "arri_m40": {
+   "format": "open",
+   "technology": "hmi"
+  },
   "arri_m8": {
-   "format": "open", "technology": "hmi", "powerW": 800,
-   "lukaCompatible": false, "lukaFixtureId": null,
+   "format": "open",
+   "technology": "hmi",
+   "powerW": 800,
+   "lukaCompatible": false,
+   "lukaFixtureId": null,
    "note": "El M8 es de 800 W. LUKA no tiene un modelo del M8.",
-   "powerSource": {"status": "SECUNDARIO", "sourceLabel": "Visuals — ARRI M8 (800 W)", "sourceUrl": "https://www.visuals.co.uk/l1.37200.b.html"}
+   "powerSource": {
+    "status": "SECUNDARIO",
+    "sourceLabel": "Visuals — ARRI M8 (800 W)",
+    "sourceUrl": "https://www.visuals.co.uk/l1.37200.b.html"
+   }
   },
   "arri_m12": {
-   "format": "open", "technology": "hmi",
-   "lukaCompatible": false, "lukaFixtureId": null, "dataStatus": "CONFLICTO",
+   "format": "open",
+   "technology": "hmi",
+   "lukaCompatible": false,
+   "lukaFixtureId": null,
+   "dataStatus": "CONFLICTO",
    "note": "No hay ningún M12 en la gama M de ARRI (M8, M18, M40, M90, ARRIMAX 18/12). Revisar en el Excel qué aparato es."
   },
   "arri_softbox_balloon": {
-   "format": "balloon", "technology": "led",
-   "lukaCompatible": false, "lukaFixtureId": null,
+   "format": "balloon",
+   "technology": "led",
+   "lukaCompatible": false,
+   "lukaFixtureId": null,
    "note": "Globo. LUKA no tiene un modelo de globo: se exportaba como SkyPanel S60."
   },
   "arri_skypanel_s60": {
    "beamAngleDeg": 105,
-   "photometry": {"lux": 1233, "distanceM": 3, "condition": "5600 K; la ficha lo da como «spot» sin decir qué difusor",
-    "status": "SECUNDARIO", "sourceLabel": "Panavision — SkyPanel S60-C (ficha de alquiler)", "sourceUrl": "https://www.panavision.com/lighting/lighting-products/heads/product-detail/hampba0-skypanel-s60-c", "verifiedAt": "2026-10-21"}
+   "photometry": {
+    "lux": 1233,
+    "distanceM": 3,
+    "condition": "5600 K; la ficha lo da como «spot» sin decir qué difusor",
+    "status": "SECUNDARIO",
+    "sourceLabel": "Panavision — SkyPanel S60-C (ficha de alquiler)",
+    "sourceUrl": "https://www.panavision.com/lighting/lighting-products/heads/product-detail/hampba0-skypanel-s60-c",
+    "verifiedAt": "2026-10-21"
+   }
   },
   "arri_t5": {
    "beamAngleDeg": 12,
-   "photometry": {"lux": 3434, "distanceM": 12.07, "condition": "spot total, lámpara de 5000 W (319 fc a 39,6 ft)",
-    "status": "SECUNDARIO", "sourceLabel": "B&H — ARRI T5 Location Fresnel", "sourceUrl": "https://www.bhphotovideo.com/c/product/575733-REG/Arri_551502_T5_Location_Fresnel.html", "verifiedAt": "2026-10-21"}
+   "photometry": {
+    "lux": 3434,
+    "distanceM": 12.07,
+    "condition": "spot total, lámpara de 5000 W (319 fc a 39,6 ft)",
+    "status": "SECUNDARIO",
+    "sourceLabel": "B&H — ARRI T5 Location Fresnel",
+    "sourceUrl": "https://www.bhphotovideo.com/c/product/575733-REG/Arri_551502_T5_Location_Fresnel.html",
+    "verifiedAt": "2026-10-21"
+   },
+   "optics": {
+    "spotDeg": 12,
+    "source": "B&H — ARRI T5 (spot total)"
+   }
   },
   "mole_5k": {
    "beamAngleDeg": 66,
-   "photometry": {"lux": 2357, "distanceM": 6.1, "condition": "flood total (219 fc a 20 ft, 26 ft de diámetro)",
-    "status": "SECUNDARIO", "sourceLabel": "Expressway Cine — 5K Mole Fresnel", "sourceUrl": "https://www.expresswaycine.com/lighting-equipment/tungsten-units/5k-mole-fresnel", "verifiedAt": "2026-10-21"}
+   "photometry": {
+    "lux": 2357,
+    "distanceM": 6.1,
+    "condition": "flood total (219 fc a 20 ft, 26 ft de diámetro)",
+    "status": "SECUNDARIO",
+    "sourceLabel": "Expressway Cine — 5K Mole Fresnel",
+    "sourceUrl": "https://www.expresswaycine.com/lighting-equipment/tungsten-units/5k-mole-fresnel",
+    "verifiedAt": "2026-10-21"
+   },
+   "optics": {
+    "spotDeg": 8.6,
+    "floodDeg": 66,
+    "points": [
+     {
+      "beamDeg": 8.6,
+      "lux": 15640,
+      "distanceM": 6.1
+     },
+     {
+      "beamDeg": 66,
+      "lux": 2357,
+      "distanceM": 6.1
+     }
+    ],
+    "source": "Expressway Cine — 5K Mole Fresnel (1453 fc spot y 219 fc flood a 20 ft)"
+   }
   },
   "aputure_ls600d": {
    "beamAngleDeg": 55,
-   "photometry": {"lux": 8500, "distanceM": 3, "condition": "con 600 Series Hyper Reflector",
-    "status": "CONFIRMADO", "sourceLabel": "Aputure — LS 600d Photometrics & Technical Specifications", "sourceUrl": "https://help.aputure.com/en/ls600d/photometrics-technical-specifications", "verifiedAt": "2026-10-21"}
+   "photometry": {
+    "lux": 8500,
+    "distanceM": 3,
+    "condition": "con 600 Series Hyper Reflector",
+    "status": "CONFIRMADO",
+    "sourceLabel": "Aputure — LS 600d Photometrics & Technical Specifications",
+    "sourceUrl": "https://help.aputure.com/en/ls600d/photometrics-technical-specifications",
+    "verifiedAt": "2026-10-21"
+   }
   },
   "nanlite_forza500": {
    "beamAngleDeg": 55,
-   "photometry": {"lux": 6257, "distanceM": 3, "condition": "5600 K, con reflector de 55°",
-    "status": "SECUNDARIO", "sourceLabel": "Camera Corp / Adorama — Nanlite Forza 500", "sourceUrl": "https://www.cameracorp.com.au/lighting/nanlite-forza-500-5600k-led-monolight/166101-1587561/", "verifiedAt": "2026-10-21"}
+   "photometry": {
+    "lux": 6257,
+    "distanceM": 3,
+    "condition": "5600 K, con reflector de 55°",
+    "status": "SECUNDARIO",
+    "sourceLabel": "Camera Corp / Adorama — Nanlite Forza 500",
+    "sourceUrl": "https://www.cameracorp.com.au/lighting/nanlite-forza-500-5600k-led-monolight/166101-1587561/",
+    "verifiedAt": "2026-10-21"
+   }
   },
   "creamsource_vortex8": {
-   "format": "panel", "beamAngleDeg": 20,
-   "photometry": {"lux": 13900, "distanceM": 3, "condition": "5600 K, haz nativo de 20°",
-    "status": "SECUNDARIO", "sourceLabel": "Panavision — Creamsource Vortex8 (ficha de alquiler)", "sourceUrl": "https://www.panavision.com/lighting/lighting-products/heads/product-detail/hknoqah-vortex8", "verifiedAt": "2026-10-21"}
+   "format": "panel",
+   "beamAngleDeg": 20,
+   "photometry": {
+    "lux": 13900,
+    "distanceM": 3,
+    "condition": "5600 K, haz nativo de 20°",
+    "status": "SECUNDARIO",
+    "sourceLabel": "Panavision — Creamsource Vortex8 (ficha de alquiler)",
+    "sourceUrl": "https://www.panavision.com/lighting/lighting-products/heads/product-detail/hknoqah-vortex8",
+    "verifiedAt": "2026-10-21"
+   }
   },
-  "creamsource_vortex4": {"format": "panel"},
-  "nanlux_dyno_1200c": {"format": "panel"},
-  "dedolight_dled4": {"format": "fresnel"},
-  "dedolight_dled7": {"format": "fresnel", "brand": "Dedolight"},
-  "dedolight_dled12": {"format": "fresnel"},
-  "litegear_litemat": {"format": "flex"},
-  "astera_ax9_powerpar": {"format": "open"},
-  "practical_bulb_60w": {"technology": "tungsten"},
-  "practical_led_strip": {"technology": "led"},
-  "practical_candle": {"technology": "led"},
-  "elinchrom_elc_500": {"dataStatus": "CONFLICTO", "note": "Es un flash de estudio, no una luz continua."},
-  "elinchrom_elb_500": {"dataStatus": "CONFLICTO", "note": "Es un flash de batería, no una luz continua."}
+  "creamsource_vortex4": {
+   "format": "panel"
+  },
+  "nanlux_dyno_1200c": {
+   "format": "panel"
+  },
+  "dedolight_dled4": {
+   "format": "fresnel"
+  },
+  "dedolight_dled7": {
+   "format": "fresnel",
+   "brand": "Dedolight"
+  },
+  "dedolight_dled12": {
+   "format": "fresnel"
+  },
+  "litegear_litemat": {
+   "format": "flex"
+  },
+  "astera_ax9_powerpar": {
+   "format": "open"
+  },
+  "practical_bulb_60w": {
+   "technology": "tungsten"
+  },
+  "practical_led_strip": {
+   "technology": "led"
+  },
+  "practical_candle": {
+   "technology": "led"
+  },
+  "elinchrom_elc_500": {
+   "dataStatus": "CONFLICTO",
+   "note": "Es un flash de estudio, no una luz continua."
+  },
+  "elinchrom_elb_500": {
+   "dataStatus": "CONFLICTO",
+   "note": "Es un flash de batería, no una luz continua."
+  }
  },
  "duplicados": {
   "arri_s60_c_skypanel": "arri_skypanel_s60",

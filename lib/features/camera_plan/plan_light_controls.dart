@@ -8,6 +8,7 @@ import 'light/exposure.dart';
 import 'light/modifiers.dart';
 import 'light/photometry.dart';
 import 'light/plan_light.dart';
+import 'light_beam.dart';
 
 /// Controles fotométricos de una luz: potencia, dato medido, difusión, red
 /// y gelatina, con la lectura de lo que da a tres distancias.
@@ -83,6 +84,13 @@ class _PlanLightControlsState extends State<PlanLightControls> {
       _el.props.remove(key);
     } else {
       _el.props[key] = value;
+    }
+    if (key == PlanLight.measuredLuxKey || key == PlanLight.measuredMetersKey) {
+      // Un dato escrito a mano es del set, tomado con el haz de ahora; manda
+      // sobre la fotometría del catálogo.
+      _el.props.remove(PlanLight.photometrySourceKey);
+      final spread = LightBeam.of(_el)?.spread;
+      if (spread != null) _el.props[PlanLight.measuredBeamKey] = spread;
     }
     setState(() {});
     widget.onUpdate();

@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import '../../../shared/equipment/light_optics.dart';
+
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light_beam.dart';
@@ -74,6 +76,30 @@ class PlanLight {
 
   /// Tamaño de la superficie que emite, en metros, si no es el de su tipo.
   static const sizeKey = 'sizeM';
+
+  /// Rango de foco del aparato: haz más cerrado y más abierto, en grados.
+  static const spotKey = 'spotDeg';
+  static const floodKey = 'floodDeg';
+
+  /// `true` si el rango sale del formato y no de la ficha.
+  static const focusEstimatedKey = 'focusEstimated';
+
+  /// Fotometría del fabricante en varios haces: `[[haz, lux, metros], …]`.
+  static const curveKey = 'photometryCurve';
+
+  /// La óptica guardada en la planta para esta luz.
+  static LightOptics opticsOf(PlanElement el) {
+    double? read(String key) => (el.props[key] as num?)?.toDouble();
+    return LightOptics(
+      spotDeg: read(spotKey),
+      floodDeg: read(floodKey),
+      points: [
+        for (final p in (el.props[curveKey] as List? ?? const []))
+          ?LightPhotometryPoint.fromList(p),
+      ],
+      estimated: el.props[focusEstimatedKey] == true,
+    );
+  }
 
   /// Stops que quitan los modificadores y la regulación juntos.
   double get stopsLost {
@@ -153,8 +179,18 @@ class PlanLight {
     final measuredBeam = read(measuredBeamKey);
     final sizeM = read(sizeKey) ?? d.sizeM;
 
-    final bare =
-        measuredLux != null &&
+    final fromSet = el.props[photometrySourceKey] !=
+        PhotometryStatus.manufacturer.name;
+    final curve = opticsOf(el).candelaAt(beam.spread);
+    final bare = curve != null && !(fromSet && measuredLux != null)
+        ? LightSource(
+            candela: curve,
+            beamDeg: beam.spread,
+            sizeM: sizeM,
+            cct: beam.cct,
+            status: PhotometryStatus.manufacturer,
+          )
+        : measuredLux != null &&
             measuredLux > 0 &&
             measuredMeters != null &&
             measuredMeters > 0

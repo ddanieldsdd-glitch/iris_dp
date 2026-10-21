@@ -311,6 +311,10 @@ class CatalogLightEntry {
   final bool vintage;
   final List<String> rentalTags;
   final Map<String, dynamic>? lukaProfile;
+
+  /// Rango de foco y fotometría en varios haces (ver `LightOptics`). No va
+  /// a la base: la planta la lee de `lights.json` por su `externalId`.
+  final Map<String, dynamic>? optics;
   final CatalogProvenance? provenance;
 
   const CatalogLightEntry({
@@ -333,6 +337,7 @@ class CatalogLightEntry {
     this.vintage = false,
     this.rentalTags = const [],
     this.lukaProfile,
+    this.optics,
     this.provenance,
   });
 
@@ -361,6 +366,7 @@ class CatalogLightEntry {
                 .toList() ??
             const [],
         lukaProfile: json['lukaProfile'] as Map<String, dynamic>?,
+        optics: json['optics'] as Map<String, dynamic>?,
         provenance: _provenance(json),
       );
 
@@ -385,6 +391,7 @@ class CatalogLightEntry {
         'vintage': vintage,
         if (rentalTags.isNotEmpty) 'rentalTags': rentalTags,
         if (lukaProfile != null) 'lukaProfile': lukaProfile,
+        if (optics != null) 'optics': optics,
         ...?provenance?.toJson(),
       };
 }

@@ -45,6 +45,12 @@ Entre la lista v1.8 y la salida hay una capa de revisión, `tools/catalog_base/l
 | `fotometria_lux` | Lux en el eje, a plena potencia | `1100` |
 | `fotometria_distancia_m` | Distancia de esa medida | `10` |
 | `fotometria_condicion` | Accesorio y ajuste (lo pide la regla COND-0003 del master) | `flood, lámpara 1800 W` |
+| `haz_spot_grados` | Haz más cerrado, si el aparato enfoca | `15` |
+| `haz_flood_grados` | Haz más abierto | `58` |
+| `fotometria_spot_lux` | Lux en el eje en spot, a `fotometria_distancia_m` | `11250` |
+| `fotometria_flood_lux` | Lux en el eje en flood, a la misma distancia | `1100` |
+
+Spot y flood salen en `lights.json` como `optics` (rango y puntos de fotometría). No pasan por la base: la planta los lee del asset por `externalId` (`lib/shared/equipment/light_optics.dart`). Un aparato sin rango en la ficha que por formato enfoca (fresnel, abierta, recorte) toma el típico de su formato, marcado como estimado.
 
 La fuente y el estado de la fotometría van en las columnas de verificación de siempre (`fuente_verificacion`, `url_verificacion`, `estado_verificacion`, `campos_verificados`).
 

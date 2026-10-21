@@ -16,6 +16,7 @@ import 'package:iris_dp/shared/equipment/catalog_importer.dart';
 import 'package:iris_dp/shared/equipment/catalog_light_retirement.dart';
 import 'package:iris_dp/shared/equipment/catalog_models.dart';
 import 'package:iris_dp/shared/equipment/light_kind.dart';
+import 'package:iris_dp/shared/equipment/light_optics.dart';
 import 'package:iris_dp/shared/equipment/light_quick_add.dart';
 
 void main() {
@@ -470,5 +471,92 @@ void main() {
     );
     expect(el.props['spread'], 360);
     expect(el.position, Offset.zero);
+  });
+
+  group('spot y flood', () {
+    LightOpticsCatalog.load(
+      File('assets/catalog/lights.json').readAsStringSync(),
+    );
+    Light row(String id) {
+      final e = light(id);
+      return Light(
+        id: 1,
+        brand: e.brand,
+        model: e.model,
+        lightType: e.lightType,
+        powerW: e.powerW,
+        colorTempMin: e.colorTempMin,
+        colorTempMax: e.colorTempMax,
+        isLukaCompatible: false,
+        beamAngleDeg: e.beamAngleDeg,
+        photometryLux: e.photometryLux,
+        photometryDistanceM: e.photometryDistanceM,
+        externalId: e.externalId,
+        isCustom: false,
+        vintage: false,
+      );
+    }
+
+    PlanLight focused(String id, double spread) {
+      final el = PlanEquipment.lightFromCatalog(row(id))
+        ..props['intensity'] = 100
+        ..props['spread'] = spread;
+      return PlanLight.of(el)!;
+    }
+
+    test('la M18 da lo de su ficha en spot, a media y en flood', () {
+      expect(focused('arri_m18', 15).source.illuminance(10), closeTo(11250, 5));
+      expect(focused('arri_m18', 40).source.illuminance(10), closeTo(2120, 5));
+      expect(focused('arri_m18', 58).source.illuminance(10), closeTo(1100, 5));
+      // Entre medias, entre los dos.
+      final mid = focused('arri_m18', 25).source.illuminance(10);
+      expect(mid, inExclusiveRange(2120, 11250));
+    });
+
+    test('el rango de foco viene de la ficha; si no, del formato', () {
+      final m18 = PlanEquipment.lightFromCatalog(row('arri_m18'));
+      expect(PlanLight.opticsOf(m18).spotDeg, 15);
+      expect(PlanLight.opticsOf(m18).floodDeg, 58);
+      expect(PlanLight.opticsOf(m18).estimated, isFalse);
+      // El T5 solo trae su spot: el flood es el típico de un fresnel.
+      final t5 = PlanLight.opticsOf(
+        PlanEquipment.lightFromCatalog(row('arri_t5')),
+      );
+      expect(t5.spotDeg, 12);
+      expect(t5.floodDeg, 55);
+      expect(t5.estimated, isTrue);
+      // Un panel no enfoca.
+      final panel = PlanEquipment.lightFromCatalog(row('arri_skypanel_s60'));
+      expect(PlanLight.opticsOf(panel).focusable, isFalse);
+    });
+
+    test('un 5K abierto en flood baja casi tres stops respecto al spot', () {
+      final spot = focused('mole_5k', 8.6).source.illuminance(6.1);
+      final flood = focused('mole_5k', 66).source.illuminance(6.1);
+      expect(spot, closeTo(15640, 10));
+      expect(flood, closeTo(2357, 5));
+      expect(stopsBetweenLux(spot, flood), closeTo(2.7, 0.1));
+    });
+
+    test('un dato escrito a mano manda sobre la curva del catálogo', () {
+      final el = PlanEquipment.lightFromCatalog(row('arri_m18'))
+        ..props['intensity'] = 100
+        ..props['spread'] = 15
+        ..props[PlanLight.measuredLuxKey] = 5000
+        ..props[PlanLight.measuredMetersKey] = 10
+        ..props[PlanLight.measuredBeamKey] = 15
+        ..props.remove(PlanLight.photometrySourceKey);
+      final lit = PlanLight.of(el)!;
+      expect(lit.source.status, PhotometryStatus.measured);
+      expect(lit.source.illuminance(10), closeTo(5000, 1));
+    });
+
+    test('con un solo dato, fuera de él se reparte el mismo flujo', () {
+      const optics = LightOptics(
+        points: [LightPhotometryPoint(beamDeg: 20, lux: 1000, distanceM: 1)],
+      );
+      expect(optics.candelaAt(20), 1000);
+      expect(optics.candelaAt(40)!, lessThan(300));
+    });
   });
 }
