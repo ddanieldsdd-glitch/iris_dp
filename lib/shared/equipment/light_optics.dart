@@ -156,10 +156,12 @@ class LightOpticsCatalog {
   static Future<void> ensureLoaded([AssetBundle? bundle]) async {
     if (_loaded) return;
     try {
-      final raw = await (bundle ?? rootBundle).loadString(
+      // Bytes y no `loadString`: con un archivo grande, `loadString` lo
+      // decodifica en otro isolate, y aquí no hace falta.
+      final data = await (bundle ?? rootBundle).load(
         'assets/catalog/lights.json',
       );
-      load(raw);
+      load(utf8.decode(data.buffer.asUint8List()));
     } catch (_) {
       _loaded = true;
     }
