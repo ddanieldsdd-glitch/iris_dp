@@ -18,7 +18,6 @@ import 'core/widgets/app_splash_screen.dart';
 import 'features/onboarding/auth_required_banner.dart';
 import 'features/onboarding/onboarding_gate.dart';
 import 'features/projects/projects_screen.dart';
-import 'core/update/update_available_banner.dart';
 import 'core/utils/error_log.dart';
 import 'shared/annotations/brushes/auto_import.dart';
 
@@ -64,7 +63,6 @@ class IrisDPApp extends StatelessWidget {
                         homeContentBuilder: (_) => const Column(
                           children: [
                             AuthRequiredBanner(),
-                            UpdateAvailableBanner(),
                             Expanded(child: ProjectsScreen()),
                           ],
                         ),

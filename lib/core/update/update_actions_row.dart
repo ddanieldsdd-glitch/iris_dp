@@ -26,9 +26,9 @@ Future<void> markAppUpdatedAndSync(BuildContext context, WidgetRef ref) async {
   await ref.read(appUpdateProvider.notifier).markUpdated();
   final syncResult = await syncAfterAppUpdateIfNeeded(ref);
   if (syncResult.message != null && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(syncResult.message!)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(syncResult.message!)));
   }
 }
 
@@ -67,6 +67,40 @@ Future<void> _runDesktopUpdate(
   }
 
   if (!context.mounted) return;
+  if (Platform.isMacOS) {
+    // Se descarga, se prepara y se cambia al cerrarse; luego se vuelve a
+    // abrir.
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        title: Text('Actualizando IRIS'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            LinearProgressIndicator(),
+            SizedBox(height: AppSpacing.sm),
+            Text(
+              'Descargando la versión nueva. IRIS se cerrará y se volverá '
+              'a abrir sola.',
+            ),
+          ],
+        ),
+      ),
+    );
+    try {
+      await ref.read(appUpdateProvider.notifier).restartNow(release);
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('No se pudo actualizar: $e')));
+      }
+    }
+    return;
+  }
   await showDialog<void>(
     context: context,
     barrierDismissible: false,
@@ -78,10 +112,7 @@ class _UpdateDownloadDialog extends StatefulWidget {
   final AppRelease release;
   final void Function(String path)? onComplete;
 
-  const _UpdateDownloadDialog({
-    required this.release,
-    this.onComplete,
-  });
+  const _UpdateDownloadDialog({required this.release, this.onComplete});
 
   @override
   State<_UpdateDownloadDialog> createState() => _UpdateDownloadDialogState();
@@ -143,9 +174,9 @@ class _UpdateDownloadDialogState extends State<_UpdateDownloadDialog> {
           ] else
             Text(
               'Error: $_error',
-              style: AppTypography.bodyMedium(palette).copyWith(
-                color: palette.error,
-              ),
+              style: AppTypography.bodyMedium(
+                palette,
+              ).copyWith(color: palette.error),
             ),
         ],
       ),
