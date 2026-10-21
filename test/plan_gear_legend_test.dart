@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Offset;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
