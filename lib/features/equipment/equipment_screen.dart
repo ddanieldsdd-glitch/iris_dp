@@ -19,6 +19,7 @@ import '../optics_lab/optics_lab_screen.dart';
 import '../storage_calculator/storage_calculator_screen.dart';
 import 'equipment_detail_screen.dart';
 import 'equipment_spec_helpers.dart';
+import 'widgets/light_quick_add_sheet.dart';
 import 'services/catalog_sync_service.dart';
 import 'services/equipment_spreadsheet_service.dart';
 import '../../shared/equipment/official_catalog_import.dart';
@@ -512,9 +513,20 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
                   stream: db.watchAllLights(),
                   builder: (context, snap) {
                     final items = snap.data ?? [];
-                    final types = items.map((l) => l.lightType).toSet().toList()..sort();
+                    final types = items.map(lightKindLabel).toSet().toList()..sort();
                     return Column(
                       children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              icon: const Icon(Icons.add_circle_outline, size: 18),
+                              label: const Text('Nueva luz que no está en el catálogo'),
+                              onPressed: () => _quickAddLight(db),
+                            ),
+                          ),
+                        ),
                         _filterBar(palette, types, _lightFilter, (v) => setState(() => _lightFilter = v)),
                         Expanded(
                           child: StreamBuilder<List<ProjectEquipmentData>>(
@@ -538,7 +550,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
                                 seriesOf: (l) => l.series,
                                 titleOf: (l) => '${l.brand} ${l.model}',
                                 subtitleOf: lightListSubtitle,
-                                filterOf: (l) => l.lightType,
+                                filterOf: lightKindLabel,
                                 trailingBuilder: (l) => l.isLukaCompatible
                                     ? _LukaBadge(palette: palette)
                                     : null,
@@ -576,6 +588,28 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
           equipmentId: id,
         ),
       ),
+    );
+  }
+
+  /// Alta rápida de una luz: queda en el catálogo, pendiente de
+  /// configurar, y entra en el proyecto.
+  Future<void> _quickAddLight(AppDatabase db) async {
+    final light = await showLightQuickAdd(
+      context,
+      confirmLabel: 'Añadir al proyecto',
+    );
+    if (light == null || !mounted) return;
+    final assigned = await db.getProjectEquipment(widget.projectId);
+    final already = assigned.any(
+      (a) => a.equipmentType == 'light' && a.equipmentId == light.id,
+    );
+    if (!already) {
+      await _toggleAssign(db, 'light', light.id, false, assigned);
+    }
+    if (!mounted) return;
+    AppSnackBar.show(
+      context,
+      '${light.brand} ${light.model} en el proyecto, pendiente de configurar.',
     );
   }
 

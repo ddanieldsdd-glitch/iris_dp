@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_card.dart';
 import '../equipment_detail_screen.dart';
+import '../equipment_spec_helpers.dart';
 import '../../optics_lab/optics_lab_screen.dart';
 
 /// Selector unificado de equipo del catálogo / proyecto.
@@ -89,7 +90,7 @@ class EquipmentPicker extends ConsumerWidget {
                 label: label,
                 title: (l) => '${l.brand} ${l.model}',
                 subtitle: (l) => '${l.powerW} W · ${l.colorTempMin}–${l.colorTempMax} K',
-                chip: (l) => l.lightType,
+                chip: lightKindLabel,
               ),
             ),
           _ => const SizedBox.shrink(),
