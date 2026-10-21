@@ -10,6 +10,103 @@ import 'camera_plan_element_model.dart';
 import 'light/plan_light.dart';
 import 'light_beam.dart';
 
+/// Número de unidad de cada aparato que emite, como en una hoja de luces:
+/// U1, U2… en el orden en que están en la planta.
+Map<PlanElement, int> lightUnitNumbers(Iterable<PlanElement> elements) {
+  final numbers = <PlanElement, int>{};
+  for (final el in elements) {
+    if (el.type == ElementType.light && LightBeam.emits(el.lightType)) {
+      numbers[el] = numbers.length + 1;
+    }
+  }
+  return numbers;
+}
+
+/// «1800 W», «7,6 kW».
+String formatWatts(double watts) => watts >= 1000
+    ? '${(watts / 1000).toStringAsFixed(watts >= 10000 ? 0 : 1).replaceAll('.', ',')} kW'
+    : '${watts.round()} W';
+
+/// «850 lm», «26k lm».
+String formatLumens(double lumens) => lumens >= 10000
+    ? '${(lumens / 1000).round()}k lm'
+    : lumens >= 1000
+    ? '${(lumens / 1000).toStringAsFixed(1).replaceAll('.', ',')}k lm'
+    : '${lumens.round()} lm';
+
+/// Una fila de la leyenda de la planta: un modelo de aparato, cuántos hay,
+/// qué potencia y luz da cada uno y qué unidades son.
+class LightLegendRow {
+  final String name;
+  final int count;
+  final double watts;
+  final double lumens;
+  final List<int> units;
+  final LightType? symbol;
+
+  const LightLegendRow({
+    required this.name,
+    required this.count,
+    required this.watts,
+    required this.lumens,
+    required this.units,
+    this.symbol,
+  });
+
+  /// «U1, U4» o «U1–U6».
+  String get unitsLabel {
+    if (units.isEmpty) return '';
+    final sorted = [...units]..sort();
+    final consecutive = sorted.last - sorted.first == sorted.length - 1;
+    if (sorted.length > 2 && consecutive) {
+      return 'U${sorted.first}–U${sorted.last}';
+    }
+    return sorted.map((u) => 'U$u').join(', ');
+  }
+}
+
+/// La leyenda de equipo de una planta, como la de una hoja de WYSIWYG o
+/// de Halfway: cada modelo con su potencia y su luz, y el total.
+class LightLegend {
+  final List<LightLegendRow> rows;
+
+  /// Potencia de lo que está encendido.
+  final double watts;
+
+  const LightLegend(this.rows, this.watts);
+
+  bool get isEmpty => rows.isEmpty;
+
+  factory LightLegend.of(Iterable<PlanElement> elements) {
+    final units = lightUnitNumbers(elements);
+    final rows = <String, LightLegendRow>{};
+    var total = 0.0;
+    for (final MapEntry(key: el, value: unit) in units.entries) {
+      final light = PlanLight.of(el);
+      if (light == null) continue;
+      if (LightBeam.of(el)?.off != true) total += light.watts;
+      final name =
+          (el.props['name'] as String?) ?? el.lightType?.label ?? 'Luz';
+      final row = rows[name];
+      rows[name] = LightLegendRow(
+        name: name,
+        count: (row?.count ?? 0) + 1,
+        watts: light.watts,
+        lumens: light.lumens,
+        units: [...?row?.units, unit],
+        symbol: el.lightType,
+      );
+    }
+    return LightLegend(rows.values.toList(), total);
+  }
+
+  /// «Total 7,6 kW · 33 A a 230 V».
+  String get totalLabel =>
+      'Total ${formatWatts(watts)} · '
+      '${(watts / GearList.mainsVolts).toStringAsFixed(1).replaceAll('.', ',')} A '
+      'a ${GearList.mainsVolts.round()} V';
+}
+
 /// Una línea de la lista de material: cantidad y descripción.
 class GearLine {
   final int count;

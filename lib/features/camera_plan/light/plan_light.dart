@@ -101,6 +101,16 @@ class PlanLight {
     );
   }
 
+  /// Lúmenes que da el aparato a plena potencia y sin nada delante. Con
+  /// fotometría, los que salen de ella; si no, los de vatios y tecnología.
+  double get lumens {
+    if (bare.status == PhotometryStatus.estimated) {
+      return watts * tech.lumensPerWatt * LightSource.opticalEfficiency;
+    }
+    final omega = LightSource.solidAngle(bare.beamDeg);
+    return bare.isOmni ? bare.candela * omega : bare.candela * omega * 0.75 / 0.6;
+  }
+
   /// Stops que quitan los modificadores y la regulación juntos.
   double get stopsLost {
     if (bare.candela <= 0 || source.candela <= 0) return 0;

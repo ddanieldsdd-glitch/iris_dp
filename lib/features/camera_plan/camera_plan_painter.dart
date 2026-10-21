@@ -15,6 +15,7 @@ import 'light_beam.dart';
 import 'light_symbols.dart';
 import 'light/modifiers.dart';
 import 'light/surfaces.dart';
+import 'plan_gear_list.dart';
 import 'plan_light_map.dart';
 import 'plan_marks.dart';
 import 'plan_opening.dart';
@@ -94,6 +95,10 @@ class CameraPlanPainter extends CustomPainter {
   /// ([exposure] y [targetStop]) o lo más iluminado de la planta.
   final LightView lightView;
 
+  /// Rótulos de equipo en cada aparato (unidad, vatios, lúmenes, haz) y
+  /// la leyenda con el total, como en una hoja de luces.
+  final bool gearLabels;
+
   /// Metros por unidad del lienzo; con él se rotulan longitudes y se pinta
   /// la barra de escala. `null` = sin rótulos de medida.
   final double? metersPerUnit;
@@ -134,6 +139,7 @@ class CameraPlanPainter extends CustomPainter {
     this.showReadings = false,
     this.exposureMap = false,
     this.lightView = LightView.camera,
+    this.gearLabels = false,
     this.selectedElement,
     this.selectedRoom,
     this.rotating = false,
@@ -168,6 +174,9 @@ class CameraPlanPainter extends CustomPainter {
       ambient: ambient,
     );
     _scene = scene;
+    _units = gearLabels
+        ? lightUnitNumbers([...inheritedElements, ...elements])
+        : const {};
     final dimmed = {...inheritedElements};
     _drawRooms(canvas, scene);
 
@@ -274,6 +283,75 @@ class CameraPlanPainter extends CustomPainter {
       _drawExposureReference(canvas, size);
     }
     if (ambient?.hasSun ?? false) _drawSunCompass(canvas, size);
+    if (gearLabels) _drawGearLegend(canvas, size);
+  }
+
+  Map<PlanElement, int> _units = const {};
+
+  /// Arriba a la izquierda, la leyenda de equipo: cada modelo con su
+  /// cantidad, potencia, luz y unidades, y el total encendido.
+  void _drawGearLegend(Canvas canvas, Size size) {
+    final legend = LightLegend.of([...inheritedElements, ...elements]);
+    if (legend.isEmpty) return;
+    const pad = 10.0;
+    final lines = <(String, TextStyle)>[
+      (
+        'Equipo de luz',
+        const TextStyle(
+          color: _CanvasColors.ink,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      for (final row in legend.rows)
+        (
+          '${row.count}× ${row.name} · ${formatWatts(row.watts)} · '
+              '${formatLumens(row.lumens)}   ${row.unitsLabel}',
+          const TextStyle(color: _CanvasColors.inkSecondary, fontSize: 10),
+        ),
+      (
+        legend.totalLabel,
+        const TextStyle(
+          color: _CanvasColors.ink,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ];
+    final painters = [
+      for (final (text, style) in lines)
+        TextPainter(
+          text: TextSpan(text: text, style: style),
+          textDirection: TextDirection.ltr,
+          maxLines: 1,
+          ellipsis: '…',
+        )..layout(maxWidth: math.min(340, size.width - 48)),
+    ];
+    final width = painters.fold(0.0, (w, p) => math.max(w, p.width));
+    final height = painters.fold(0.0, (h, p) => h + p.height + 3);
+    const origin = Offset(16, 16);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(origin.dx, origin.dy, width + pad * 2, height + pad * 2),
+        const Radius.circular(8),
+      ),
+      Paint()..color = _CanvasColors.background.withValues(alpha: 0.88),
+    );
+    var y = origin.dy + pad;
+    for (final (i, tp) in painters.indexed) {
+      if (i == painters.length - 1) {
+        canvas.drawLine(
+          Offset(origin.dx + pad, y),
+          Offset(origin.dx + pad + width, y),
+          Paint()
+            ..color = _CanvasColors.inkTertiary
+            ..strokeWidth = 0.5,
+        );
+        y += 3;
+      }
+      tp.paint(canvas, Offset(origin.dx + pad, y));
+      y += tp.height + 3;
+    }
   }
 
   /// Arriba a la derecha, de dónde viene el sol.
@@ -1108,6 +1186,29 @@ class CameraPlanPainter extends CustomPainter {
     final filters = light == null
         ? ''
         : light.modifiers.map((m) => m.name).join(' + ');
+    final unit = _units[el];
+    if (gearLabels && unit != null && beam != null && light != null) {
+      _drawLabelBelow(
+        canvas,
+        [
+          'U$unit · $base',
+          '${formatWatts(light.watts)} · ${formatLumens(light.lumens)}',
+          if (beam.off)
+            'apagada'
+          else
+            '${(light.source.cct / 50).round() * 50}K · '
+                '${beam.spread >= 359 ? 'omni' : '${beam.spread.round()}°'} · '
+                '${beam.intensity.round()}%',
+          if (filters.isNotEmpty) filters,
+          if (PlanLight.isOverhead(el))
+            'techo · ${PlanLight.heightOf(el).toStringAsFixed(1)} m',
+        ].join('\n'),
+        _CanvasColors.inkSecondary,
+        yOffset: 20,
+        maxWidth: 130,
+      );
+      return;
+    }
     final name = beam == null || light == null
         ? base
         : beam.off
@@ -2160,6 +2261,7 @@ class CameraPlanPainter extends CustomPainter {
       old.showReadings != showReadings ||
       old.exposureMap != exposureMap ||
       old.lightView != lightView ||
+      old.gearLabels != gearLabels ||
       old.selectedElement?.id != selectedElement?.id ||
       old.selectedPathIndex != selectedPathIndex ||
       old.scale != scale ||

@@ -249,6 +249,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// La luz a la exposición de la cámara o, en «Ver todo», autoexpuesta.
   LightView _lightView = LightView.camera;
 
+  /// Rótulos de equipo y leyenda, como en una hoja de luces.
+  bool _gearLabels = false;
+
   /// Lecturas de diafragma bajo cada actor.
   bool _showReadings = true;
 
@@ -2664,6 +2667,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             ],
           ),
           IconButton(
+            tooltip: _gearLabels
+                ? 'Quitar rótulos de equipo'
+                : 'Rótulos de equipo: unidad, vatios, lúmenes y leyenda',
+            icon: Icon(
+              Icons.sell_outlined,
+              color: _gearLabels ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: () => setState(() => _gearLabels = !_gearLabels),
+          ),
+          IconButton(
             tooltip: _exposureMap
                 ? 'Volver a los haces de luz'
                 : 'Mapa de exposición',
@@ -2934,6 +2947,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                           _showReadings,
                                                       exposureMap: _exposureMap,
                                                       lightView: _lightView,
+                                                      gearLabels: _gearLabels,
                                                       selectedElement:
                                                           _selected,
                                                       selectedPathIndex:
