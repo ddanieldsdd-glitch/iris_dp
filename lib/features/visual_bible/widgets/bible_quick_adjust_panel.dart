@@ -12,6 +12,7 @@ import '../bible_tutorial.dart';
 import '../moodboard_helpers.dart';
 import 'bible_section_fields_editor.dart';
 import 'moodboard_sources_sidebar.dart';
+import '../../settings/settings_launcher.dart';
 
 /// Panel contextual de ajuste rápido según la sección activa.
 class BibleQuickAdjustPanel extends ConsumerStatefulWidget {
@@ -211,6 +212,16 @@ class _BibleQuickAdjustPanelState extends ConsumerState<BibleQuickAdjustPanel> {
                       onPressed: widget.onOpenMasterConfig,
                       icon: const Icon(Icons.settings_outlined, size: 18),
                       label: const Text('Configuración de la biblia'),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => openScreenSettings(
+                        context,
+                        sectionId: SettingsSectionIds.bible,
+                        projectId: widget.projectId,
+                      ),
+                      icon: const Icon(Icons.tune, size: 18),
+                      label: const Text('Ajustes de la biblia'),
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton.icon(

@@ -47,17 +47,22 @@ class VisualBibleExportConfig {
     this.includeAllMoodboardImages = false,
   });
 
-  factory VisualBibleExportConfig.defaults() {
+  factory VisualBibleExportConfig.defaults({
+    String mode = VisualBibleExportMode.full,
+    VisualBibleExportDestination destination =
+        VisualBibleExportDestination.saveFile,
+  }) {
     return VisualBibleExportConfig(
       id: 'default',
-      name: 'Documento general',
+      name: mode == VisualBibleExportMode.full
+          ? 'Documento general'
+          : VisualBibleExportMode.label(mode),
       audience: VisualBibleExportAudience.general,
-      mode: VisualBibleExportMode.full,
-      sections: defaultSectionsForMode(VisualBibleExportMode.full),
-      destination: VisualBibleExportDestination.saveFile,
+      mode: mode,
+      sections: defaultSectionsForMode(mode),
+      destination: destination,
       updatedAt: DateTime.now(),
-      moodboardLayout:
-          defaultMoodboardLayoutForMode(VisualBibleExportMode.full),
+      moodboardLayout: defaultMoodboardLayoutForMode(mode),
     );
   }
 

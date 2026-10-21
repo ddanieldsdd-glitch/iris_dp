@@ -1,8 +1,10 @@
 import 'package:drift/drift.dart' show Value;
 
 import '../../core/database/app_database.dart';
+import '../../core/settings/app_prefs.dart';
 import 'shoot_document_block_types.dart';
 import 'shoot_document_composer.dart';
+import 'shoot_document_prefs.dart';
 
 /// CRUD y utilidades de documentos de rodaje.
 abstract final class ShootDocumentService {
@@ -18,7 +20,21 @@ abstract final class ShootDocumentService {
       ShootDocumentsCompanion.insert(
         projectId: projectId,
         name: name,
-        layoutPreset: const Value(ShootLayoutPreset.freeform),
+        layoutPreset: Value(
+          AppPrefs.instance.get(
+            ShootDocumentPrefs.layoutPreset,
+            projectId: projectId,
+          ),
+        ),
+        includeCoverInPdf: Value(
+          AppPrefs.instance.get(
+            ShootDocumentPrefs.coverInPdf,
+            projectId: projectId,
+          ),
+        ),
+        defaultVisibilityJson: Value(
+          encodeDocumentVisibility(ShootDocumentPrefs.visibility(projectId)),
+        ),
       ),
     );
 

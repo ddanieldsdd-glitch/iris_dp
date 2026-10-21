@@ -30,6 +30,9 @@ import '../../core/utils/share_origin.dart';
 import 'shot_sheet_data.dart';
 import 'storyboard_shot_export_service.dart';
 import 'storyboard_viewer.dart';
+import 'storyboard_prefs.dart';
+import '../../core/settings/app_prefs.dart';
+import '../settings/settings_launcher.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
@@ -49,8 +52,20 @@ class StoryboardScreen extends ConsumerStatefulWidget {
 }
 
 class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
-  _StoryboardLayout _layout = _StoryboardLayout.linear;
-  _StoryboardFilter _filter = _StoryboardFilter.all;
+  late _StoryboardLayout _layout = _StoryboardLayout.values.firstWhere(
+    (l) =>
+        l.name ==
+        _prefs.get(StoryboardPrefs.layout, projectId: widget.projectId),
+    orElse: () => _StoryboardLayout.linear,
+  );
+  late _StoryboardFilter _filter = _StoryboardFilter.values.firstWhere(
+    (f) =>
+        f.name ==
+        _prefs.get(StoryboardPrefs.filter, projectId: widget.projectId),
+    orElse: () => _StoryboardFilter.all,
+  );
+
+  AppPrefs get _prefs => AppPrefs.instance;
   bool _exporting = false;
 
   Future<void> _exportPdf(BuildContext context) async {
@@ -129,6 +144,10 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
         backgroundColor: palette.surface,
         title: Text('Storyboard', style: AppTypography.titleMedium(palette)),
         actions: [
+          ScreenSettingsButton(
+            sectionId: SettingsSectionIds.storyboard,
+            projectId: widget.projectId,
+          ),
           GoodNotesPdfActions(
             projectId: widget.projectId,
             moduleType: GoodNotesModuleType.storyboard,

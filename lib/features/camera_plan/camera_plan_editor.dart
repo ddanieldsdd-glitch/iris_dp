@@ -68,6 +68,9 @@ import 'plan_element_compat_panel.dart';
 import '../luka_export/luka_light_mapping.dart';
 import 'light_grid_tile.dart';
 import '../../core/widgets/app_snackbar.dart';
+import '../../core/settings/app_prefs.dart';
+import '../settings/settings_launcher.dart';
+import 'plan_prefs.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
   final int projectId;
@@ -247,9 +250,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Asa del tramo seleccionado que se arrastra: 0 inicio, 1 final, 2 curva.
   int? _segmentHandle;
 
+  /// Ajustes de la planta tal como estaban al aplicarlos por última vez.
+  late PlanPrefValues _planPrefs = PlanPrefs.read(widget.projectId);
+
   /// Imán: lo que se mueve o se dibuja se ajusta a la rejilla y a los
   /// extremos de otros tramos.
-  bool _snap = true;
+  late bool _snap = _planPrefs.snap;
 
   /// Selección múltiple (con Mayús); incluye a `_selected`.
   final Set<PlanElement> _multi = {};
@@ -285,17 +291,17 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// qué plano lleva cada una.
   List<PlanElement> _otherCameras = const [];
   final Map<PlanElement, PlanTarget> _otherCameraShot = {};
-  bool _showOtherCameras = true;
+  late bool _showOtherCameras = _planPrefs.otherCameras;
 
   /// Cómo es en el esquema cada luz que este plano tiene ajustada, por su
   /// identificador.
   final Map<String, PlanElement> _setupOriginals = {};
 
   /// Mapa de exposición en falso color, en lugar de los haces.
-  bool _exposureMap = false;
+  late bool _exposureMap = _planPrefs.exposureMap;
 
   /// Lecturas de diafragma bajo cada actor.
-  bool _showReadings = true;
+  late bool _showReadings = _planPrefs.readings;
 
   /// La cámara con la que se lee la luz: la del plano abierto o, si no hay,
   /// la primera que haya en la planta.
@@ -316,22 +322,22 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     double pick(String key, double? fromShot, double fallback) =>
         (camera?.props[key] as num?)?.toDouble() ?? fromShot ?? fallback;
     return ExposureSettings(
-      iso: pick(CameraExposure.isoKey, null, 800),
+      iso: pick(CameraExposure.isoKey, null, _planPrefs.iso),
       shutterDeg: pick(
         CameraExposure.shutterKey,
         CameraExposure.parseStop(shot?.shutterAngle),
-        180,
+        _planPrefs.shutterDeg,
       ),
-      fps: pick(CameraExposure.fpsKey, shot?.fps?.toDouble(), 24),
-      ndStops: pick(CameraExposure.ndKey, null, 0),
+      fps: pick(CameraExposure.fpsKey, shot?.fps?.toDouble(), _planPrefs.fps),
+      ndStops: pick(CameraExposure.ndKey, null, _planPrefs.ndStops),
     );
   }
 
-  /// Diafragma de trabajo: el de la cámara, el del plano o T2.8.
+  /// Diafragma de trabajo: el de la cámara, el del plano o el de Ajustes.
   double get _targetStop =>
       (_meterCamera?.props[CameraExposure.stopKey] as num?)?.toDouble() ??
       CameraExposure.parseStop(_shot?.fStop) ??
-      CameraExposure.defaultStop;
+      _planPrefs.tStop;
 
   /// Lectura de fotómetro donde está un elemento.
   MeterReading _readingFor(PlanElement el) => MeterReading.at(
@@ -421,7 +427,27 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     super.initState();
     _repo = FloorPlanRepository(ref.read(databaseProvider));
     _imageCache.addListener(_onImageLoaded);
+    AppPrefs.instance.addListener(_onPrefsChanged);
     _load();
+  }
+
+  /// Un cambio en Ajustes se ve al momento: solo se toca lo que cambió, para
+  /// no deshacer lo que se haya activado a mano en la barra.
+  void _onPrefsChanged() {
+    final next = PlanPrefs.read(widget.projectId);
+    final prev = _planPrefs;
+    if (!mounted || next == prev) return;
+    setState(() {
+      if (next.snap != prev.snap) _snap = next.snap;
+      if (next.otherCameras != prev.otherCameras) {
+        _showOtherCameras = next.otherCameras;
+      }
+      if (next.exposureMap != prev.exposureMap) {
+        _exposureMap = next.exposureMap;
+      }
+      if (next.readings != prev.readings) _showReadings = next.readings;
+      _planPrefs = next;
+    });
   }
 
   void _onImageLoaded() {
@@ -430,6 +456,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   @override
   void dispose() {
+    AppPrefs.instance.removeListener(_onPrefsChanged);
     final live = _live;
     final key = _liveKey;
     // Fuera del desmontaje: avisar mientras se quita el árbol no se puede.
@@ -3957,6 +3984,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             tooltip: 'Atajos',
             icon: Icon(Icons.keyboard_outlined, color: palette.textSecondary),
             onPressed: _showShortcuts,
+          ),
+          ScreenSettingsButton(
+            sectionId: SettingsSectionIds.cameraPlan,
+            projectId: widget.projectId,
           ),
           IconButton(
             tooltip: 'Encajar todo (⌘0)',

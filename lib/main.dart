@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/navigation/route_observer.dart';
+import 'core/settings/app_prefs.dart';
 import 'core/cloud/cloud_providers.dart';
 import 'core/cloud/connectivity_gate.dart';
 import 'core/storage/app_lifecycle_persistence.dart';
@@ -23,6 +24,7 @@ import 'shared/annotations/brushes/auto_import.dart';
 
 Future<void> _bootstrapApp() async {
   await AppStorageConfig.ensureLoaded();
+  await AppPrefs.ensureLoaded();
   await initializeCloud();
   // Pinceles, papeles y paletas dejados en Documents/Importar: en segundo
   // plano, sin retrasar el arranque.

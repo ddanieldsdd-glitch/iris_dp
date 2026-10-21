@@ -13,13 +13,18 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_snackbar.dart';
 
-/// Sección de ajustes para plantillas de biblia y documentos de rodaje.
+/// Plantillas de documentos de rodaje (y, si [showBible], de biblia).
+///
+/// La biblia ya no muestra las suyas en Ajustes: usa una única plantilla.
 class UserTemplatesSettingsSection extends ConsumerStatefulWidget {
   const UserTemplatesSettingsSection({
     super.key,
     this.onCreateTemplate,
     this.onEditShootTemplate,
+    this.showBible = false,
   });
+
+  final bool showBible;
 
   final VoidCallback? onCreateTemplate;
   final Future<bool> Function(String templateId)? onEditShootTemplate;
@@ -70,46 +75,46 @@ class _UserTemplatesSettingsSectionState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Plantillas personalizadas', style: AppTypography.titleMedium(palette)),
-        const SizedBox(height: AppSpacing.sm),
         Text(
-          'Guarda estructuras de biblia y documentos de rodaje como plantillas '
-          'reutilizables. Elige cuándo aplicarlas automáticamente.',
+          'Guarda documentos de rodaje como plantillas reutilizables y elige '
+          'cuándo aplicarlas al crear uno nuevo. Valen para toda la app.',
           style: AppTypography.caption(palette),
         ),
         const SizedBox(height: AppSpacing.md),
-        Text('Biblia visual', style: AppTypography.label(palette)),
-        const SizedBox(height: AppSpacing.xs),
-        _TemplatePicker(
-          palette: palette,
-          type: UserTemplateType.bibleLayout,
-          db: db,
-          selectedId: prefs.defaultBibleLayoutTemplateId,
-          onSelected: (id) async {
-            prefs.defaultBibleLayoutTemplateId = id;
-            if (id != null && id != kBuiltinBibleLayoutTemplateId) {
-              await UserTemplateService.setDefaultTemplate(
-                db,
-                UserTemplateType.bibleLayout,
-                id,
-              );
-            }
-            await _savePrefs();
-            setState(() {});
-          },
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        _AutoApplyDropdown(
-          palette: palette,
-          value: prefs.bibleAutoApply,
-          onChanged: (mode) async {
-            prefs.bibleAutoApply = mode;
-            await _savePrefs();
-            setState(() {});
-          },
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        Text('Documentos de rodaje', style: AppTypography.label(palette)),
+        if (widget.showBible) ...[
+          Text('Biblia visual', style: AppTypography.label(palette)),
+          const SizedBox(height: AppSpacing.xs),
+          _TemplatePicker(
+            palette: palette,
+            type: UserTemplateType.bibleLayout,
+            db: db,
+            selectedId: prefs.defaultBibleLayoutTemplateId,
+            onSelected: (id) async {
+              prefs.defaultBibleLayoutTemplateId = id;
+              if (id != null && id != kBuiltinBibleLayoutTemplateId) {
+                await UserTemplateService.setDefaultTemplate(
+                  db,
+                  UserTemplateType.bibleLayout,
+                  id,
+                );
+              }
+              await _savePrefs();
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _AutoApplyDropdown(
+            palette: palette,
+            value: prefs.bibleAutoApply,
+            onChanged: (mode) async {
+              prefs.bibleAutoApply = mode;
+              await _savePrefs();
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text('Documentos de rodaje', style: AppTypography.label(palette)),
+        ],
         const SizedBox(height: AppSpacing.xs),
         _TemplatePicker(
           palette: palette,
@@ -194,13 +199,15 @@ class _UserTemplatesSettingsSectionState
                 UserTemplateType.shootDocument,
               ),
               builder: (context, shootSnap) {
-                final bibleTemplates = bibleSnap.data ?? [];
+                final bibleTemplates = widget.showBible
+                    ? bibleSnap.data ?? <UserTemplate>[]
+                    : <UserTemplate>[];
                 final shootTemplates = shootSnap.data ?? [];
                 if (bibleTemplates.isEmpty && shootTemplates.isEmpty) {
                   return Text(
-                    'Aún no hay plantillas guardadas. Créalas desde '
-                    '«Guardar como plantilla», en la configuración de la biblia, o '
-                    'desde un documento de rodaje.',
+                    'Aún no hay plantillas guardadas. Créalas con el botón '
+                    'de arriba o con «Guardar como plantilla» en un documento '
+                    'de rodaje.',
                     style: AppTypography.caption(palette),
                   );
                 }
