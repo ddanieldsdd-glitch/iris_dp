@@ -14,7 +14,6 @@ import 'app_release.dart';
 import 'app_update_installer.dart';
 import 'app_update_providers.dart';
 import 'sidestore_guide_sheet.dart';
-import 'sidestore_install_store.dart';
 
 Future<void> openAppReleaseDownload(String url) async {
   final uri = Uri.tryParse(url);
@@ -40,7 +39,6 @@ Future<void> _downloadIpa(BuildContext context, AppRelease release) async {
     builder: (dialogContext) => _UpdateDownloadDialog(
       release: release,
       onComplete: (path) async {
-        await SideStoreInstallStore.markInstalledNow();
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
