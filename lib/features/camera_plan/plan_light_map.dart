@@ -738,6 +738,107 @@ class PlanLightMapCache extends ChangeNotifier {
   int? _draftKey;
   ui.Picture? _draftPicture;
 
+  /// Lo que ve cada muestra de cada fuente, por lo que tapa la luz, dónde
+  /// está la muestra y hasta dónde llega. Mover un aparato solo recalcula lo
+  /// suyo: las paredes no se han movido y sus rebotes ven lo mismo.
+  final _visible = <int, ({Path path, int pass, bool draft})>{};
+  var _finePass = 0;
+  var _draftPass = 0;
+  bool _recordingDraft = false;
+
+  /// Cuánto se redondea hacia arriba el alcance de una fuente al guardar
+  /// lo que ve: un rebote que recibe algo más o menos luz no lo recalcula.
+  static const double _reachStep = 1.25;
+
+  /// [LightScene.visibleArea], guardado.
+  ///
+  /// Se calcula hasta un alcance algo mayor que [reach]: dentro del círculo
+  /// de [reach] es la misma zona, y lo que se pinta con ella como recorte
+  /// (los haces, de ese radio) no pasa de ahí. Una fuente colgada pinta un
+  /// óvalo que puede salirse, así que va con su alcance justo.
+  Path visibleArea(
+    LightScene scene,
+    Offset origin,
+    double reach, {
+    LightBlocker? ignore,
+    bool fromAbove = false,
+    double? z,
+    int rays = 240,
+  }) {
+    final far = fromAbove
+        ? reach
+        : math
+              .pow(_reachStep, (math.log(reach) / math.log(_reachStep)).ceil())
+              .toDouble();
+    final key = Object.hash(
+      scene.obstacleKey,
+      origin,
+      ignore == null ? -1 : scene.blockers.indexOf(ignore),
+      fromAbove,
+      z,
+      far,
+      rays,
+    );
+    final pass = _recordingDraft ? _draftPass : _finePass;
+    final kept = _visible[key];
+    final path =
+        kept?.path ??
+        scene.visibleArea(
+          origin,
+          far,
+          ignore: ignore,
+          fromAbove: fromAbove,
+          z: z,
+          rays: rays,
+        );
+    _visible[key] = (path: path, pass: pass, draft: _recordingDraft);
+    return path;
+  }
+
+  /// Cada haz grabado, por cómo es la fuente, lo que la tapa y contra qué se
+  /// mide su brillo.
+  final _beams =
+      <int, ({ui.Picture picture, Rect? bounds, int pass, bool draft})>{};
+
+  /// El haz de una fuente, grabado aparte. Mientras la fuente siga igual
+  /// (mismo sitio, misma luz, mismos obstáculos) se reutiliza: al mover un
+  /// aparato solo se graban de nuevo el suyo y los rebotes a los que llega.
+  ({ui.Picture picture, Rect? bounds}) beam(
+    int key,
+    ({ui.Picture picture, Rect? bounds}) Function() record,
+  ) {
+    final pass = _recordingDraft ? _draftPass : _finePass;
+    final kept = _beams[key];
+    final beam = kept == null
+        ? record()
+        : (picture: kept.picture, bounds: kept.bounds);
+    _beams[key] = (
+      picture: beam.picture,
+      bounds: beam.bounds,
+      pass: pass,
+      draft: _recordingDraft,
+    );
+    return beam;
+  }
+
+  /// Graba con [record] y luego olvida lo visto y los haces que no se usaron
+  /// ni en esta grabación ni en la anterior del mismo tipo (borrador o
+  /// afinada).
+  T _recordWith<T>(bool draft, T Function() record) {
+    _recordingDraft = draft;
+    final pass = draft ? ++_draftPass : ++_finePass;
+    final watch = Stopwatch()..start();
+    final result = record();
+    lastRecording = watch.elapsed;
+    _visible.removeWhere((_, v) => v.draft == draft && v.pass < pass - 1);
+    _beams.removeWhere((_, b) {
+      final stale = b.draft == draft && b.pass < pass - 1;
+      if (stale) b.picture.dispose();
+      return stale;
+    });
+    return result;
+  }
+
   /// La luz en borrador, grabada y sin pasar a imagen: cambia en cada
   /// fotograma mientras se arrastra, y rasterizarla aparte costaría más.
   ui.Picture draftPicture(int key, ui.Picture Function() record) {
@@ -745,10 +846,9 @@ class PlanLightMapCache extends ChangeNotifier {
     if (current != null && _draftKey == key) return current;
     current?.dispose();
     _draftKey = key;
-    final watch = Stopwatch()..start();
-    final picture = record();
-    lastRecording = watch.elapsed;
-    return _draftPicture = picture;
+    final picture = _recordWith(true, record);
+    _draftPicture = picture;
+    return picture;
   }
 
   /// Lo que tardó en grabarse la última luz: lo que paga el hilo de la
@@ -781,9 +881,7 @@ class PlanLightMapCache extends ChangeNotifier {
       _layer?.dispose();
       _layer = null;
       _layerKey = key;
-      final watch = Stopwatch()..start();
-      _recording = record();
-      lastRecording = watch.elapsed;
+      _recording = _recordWith(false, record);
     }
     final current = _layer;
     if (current != null && current.unitsPerPixel == unitsPerPixel) {
@@ -847,6 +945,9 @@ class PlanLightMapCache extends ChangeNotifier {
     _recording?.picture.dispose();
     _layer?.dispose();
     _draftPicture?.dispose();
+    for (final b in _beams.values) {
+      b.picture.dispose();
+    }
     _settle?.cancel();
     _quiet?.cancel();
     super.dispose();

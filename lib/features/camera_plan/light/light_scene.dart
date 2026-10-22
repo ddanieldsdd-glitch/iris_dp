@@ -372,6 +372,31 @@ class LightScene {
     for (final gap in apertures) Rect.fromPoints(gap.a, gap.b),
   ]);
 
+  /// Huella de lo que tapa la luz: los topes y los huecos, con su forma y
+  /// sus alturas. Dos plantas con la misma huella ven igual desde cualquier
+  /// punto (ver [visibleArea]), aunque sus luces sean otras.
+  late final int obstacleKey = Object.hash(
+    Object.hashAll([
+      for (final b in blockers)
+        Object.hash(
+          b.a,
+          b.b,
+          b.radius,
+          b.transmission,
+          b.heightM,
+          b.baseM,
+          b.groundM,
+          b.domeRadius,
+          b.stretch,
+          b.turn,
+        ),
+    ]),
+    Object.hashAll([
+      for (final gap in apertures)
+        Object.hash(gap.a, gap.b, gap.sillM, gap.headM, gap.groundM),
+    ]),
+  );
+
   /// Cota del suelo en un punto, en metros: la de la loma más alta que
   /// tenga debajo.
   double groundAt(Offset point) => _groundOf(hills, point);

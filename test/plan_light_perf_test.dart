@@ -270,6 +270,29 @@ void main() {
     expect(frames[frames.length ~/ 2], lessThan(400));
   });
 
+  test('mover una luz y soltarla: se recalcula solo lo suyo', () async {
+    final plan = syntheticPlan();
+    final light = plan.firstWhere((e) => e.type == ElementType.light);
+    final cache = PlanLightMapCache();
+    addTearDown(cache.dispose);
+    recordLayer(plan, LightView.camera, cache: cache).dispose();
+    final times = <double>[];
+    for (var i = 0; i < 5; i++) {
+      // Cambios sueltos, no seguidos: se pinta afinada, no en borrador.
+      await Future<void>.delayed(
+        PlanLightMapCache.settleDelay + const Duration(milliseconds: 20),
+      );
+      light.position += const Offset(9, 4);
+      recordLayer(plan, LightView.camera, cache: cache).dispose();
+      times.add(cache.lastRecording!.inMicroseconds / 1000);
+    }
+    times
+      ..removeAt(0)
+      ..sort();
+    report('grabar la luz tras mover un aparato', times[times.length ~/ 2]);
+    expect(times[times.length ~/ 2], lessThan(1000));
+  });
+
   test('mover la vista no recalcula la luz', () {
     final plan = syntheticPlan();
     final cache = PlanLightMapCache();

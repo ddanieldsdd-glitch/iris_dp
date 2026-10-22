@@ -769,6 +769,62 @@ class CameraPlanPainter extends CustomPainter {
     layer.paint(canvas, view);
   }
 
+  /// [_drawBeam] grabado aparte y guardado (ver
+  /// [PlanLightMapCache.beam]): si la fuente no ha cambiado, no se vuelve a
+  /// grabar.
+  Rect? _cachedBeam(
+    Canvas canvas,
+    LightScene scene,
+    SceneLight light, {
+    double strength = 1,
+    double? keyLux,
+    bool exposed = false,
+    bool draft = false,
+  }) {
+    final source = light.source;
+    final key = Object.hash(
+      Object.hash(
+        light.position,
+        light.aim,
+        light.z,
+        light.overheadM,
+        light.tiltDeg,
+        light.frontOnly,
+        light.surface == null ? -1 : scene.blockers.indexOf(light.surface!),
+        light.isSecondary,
+        light.surface?.element?.type,
+      ),
+      Object.hash(
+        source.candela,
+        source.beamDeg,
+        source.sizeM,
+        source.cct,
+        source.lambertian,
+      ),
+      scene.obstacleKey,
+      scene.metersPerUnit,
+      strength,
+      keyLux,
+      exposed,
+      draft,
+    );
+    final beam = lightMap!.beam(key, () {
+      final recorder = ui.PictureRecorder();
+      final bounds = _drawBeam(
+        Canvas(recorder),
+        scene,
+        light,
+        strength: strength,
+        keyLux: keyLux,
+        exposed: exposed,
+        draft: draft,
+      );
+      return (picture: recorder.endRecording(), bounds: bounds);
+    });
+    if (beam.bounds != null) canvas.drawPicture(beam.picture);
+    return beam.bounds;
+  }
+
   /// Desenfoque de toda la capa en borrador, en metros: el de un aparato
   /// mediano, en lugar del de cada fuente.
   static const double draftBlurM = 0.1;
@@ -836,7 +892,7 @@ class CameraPlanPainter extends CustomPainter {
         );
         if (peak < 0.03) continue;
         take(
-          _drawBeam(
+          _cachedBeam(
             canvas,
             scene,
             light,
@@ -877,7 +933,7 @@ class CameraPlanPainter extends CustomPainter {
         );
         if (peak < 0.03) continue;
         take(
-          _drawBeam(
+          _cachedBeam(
             canvas,
             scene,
             light,
@@ -1972,14 +2028,23 @@ class CameraPlanPainter extends CustomPainter {
       for (final origin in origins)
         scene.blockers.isEmpty
             ? null
-            : scene.visibleArea(
-                origin,
-                reach,
-                ignore: light.surface,
-                fromAbove: drop != null,
-                z: light.z,
-                rays: draft ? 60 : 240,
-              ),
+            : lightMap?.visibleArea(
+                    scene,
+                    origin,
+                    reach,
+                    ignore: light.surface,
+                    fromAbove: drop != null,
+                    z: light.z,
+                    rays: draft ? 60 : 240,
+                  ) ??
+                  scene.visibleArea(
+                    origin,
+                    reach,
+                    ignore: light.surface,
+                    fromAbove: drop != null,
+                    z: light.z,
+                    rays: draft ? 60 : 240,
+                  ),
     ];
 
     // Hasta dónde llega: el círculo de su alcance, recortado por lo que ve
