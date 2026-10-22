@@ -16,6 +16,7 @@ import '../../../../shared/visual_bible/bible_stitch_module_registry.dart';
 import '../../bible_section_fields.dart';
 import '../bible_add_point.dart';
 import '../bible_point_frame.dart';
+import '../bible_render_report.dart';
 import '../bible_screen_hero.dart';
 import '../catalog/bible_widget_catalog.dart';
 
@@ -33,6 +34,11 @@ class BibleSectionScaffold extends ConsumerStatefulWidget {
   final Map<String, Widget> fieldWidgets;
   final String? sectionNumber;
   final String? sectionTitle;
+
+  /// Imagen y subtítulo de la cabecera cuando la pantalla los toma de otro
+  /// sitio (Iluminación: su tratamiento de luz).
+  final int? heroFallbackImageId;
+  final String? heroSubtitle;
 
   /// Los actos del proyecto, si la sección ya los ha resuelto con lo que
   /// había escrito antes de compartirlos.
@@ -56,6 +62,8 @@ class BibleSectionScaffold extends ConsumerStatefulWidget {
     required this.fieldWidgets,
     this.sectionNumber,
     this.sectionTitle,
+    this.heroFallbackImageId,
+    this.heroSubtitle,
     this.sharedActs,
     this.duplicateValues = const {},
     this.legacyPointImages = const {},
@@ -69,6 +77,7 @@ class BibleSectionScaffold extends ConsumerStatefulWidget {
 class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
   static const _contentPadding = EdgeInsets.all(AppSpacing.lg);
   static const double _sectionGap = AppSpacing.xl;
+  static const double _rowBreakpoint = 1100;
 
   /// Veces que se ha reiniciado la pantalla desde que está abierta.
   int _resetCount = 0;
@@ -83,14 +92,28 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
     final values = BibleSectionFieldsConfig.parseValues(
       widget.sectionContentJson,
     );
-    final items = <Widget>[];
+    final points = <(BiblePointWidth, Widget)>[];
+    final unrendered = <String>{};
     for (final field in fields) {
       final w = _buildField(context, field);
-      if (w == null) continue;
-      items.add(
+      if (w == null) {
+        unrendered.add(field.key);
+        continue;
+      }
+      points.add((
+        field.width,
         widget.data.id > 0 ? _framed(fields, values, field, w) : w,
-      );
+      ));
     }
+    // El panel lateral avisa de lo que no se ha podido pintar.
+    final report = ref.read(bibleRenderReportProvider.notifier);
+    final sectionId = widget.sectionId;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => report.report(sectionId, unrendered),
+    );
+    // En estrecho no hay sitio para dos puntos por fila.
+    final wide = MediaQuery.sizeOf(context).width >= _rowBreakpoint;
+    final items = _rows(points, wide: wide);
 
     return ListView(
       padding: _contentPadding,
@@ -100,6 +123,8 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
           bibleId: widget.data.id,
           sectionId: widget.sectionId,
           title: widget.sectionTitle ?? BibleSectionId.label(widget.sectionId),
+          fallbackImageId: widget.heroFallbackImageId,
+          subtitle: widget.heroSubtitle,
           onAfterReset: () {
             // Lo que la pantalla escribe en la biblia, fuera de su definición.
             widget.data.clearSection(widget.sectionId);
@@ -112,7 +137,7 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
           // Tras reiniciar, los campos se montan de nuevo: no deben
           // conservar el texto que tenían.
           KeyedSubtree(
-            key: ValueKey('point_${_resetCount}_$i'),
+            key: ValueKey('point_${_resetCount}_${wide}_$i'),
             child: items[i],
           ),
         ],
@@ -122,6 +147,48 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
         ],
       ],
     );
+  }
+
+  /// Agrupa los puntos estrechos que van seguidos en filas de seis sextos.
+  static List<Widget> _rows(
+    List<(BiblePointWidth, Widget)> points, {
+    required bool wide,
+  }) {
+    if (!wide) return [for (final (_, w) in points) w];
+    final rows = <Widget>[];
+    var row = <(BiblePointWidth, Widget)>[];
+    var used = 0;
+    void flush() {
+      if (row.isEmpty) return;
+      if (row.length == 1 && row.first.$1 == BiblePointWidth.full) {
+        rows.add(row.first.$2);
+      } else {
+        rows.add(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < row.length; i++) ...[
+                if (i > 0) const SizedBox(width: _sectionGap),
+                Expanded(flex: row[i].$1.sixths, child: row[i].$2),
+              ],
+              // Una fila a medias no estira su último punto.
+              if (used < 6) Spacer(flex: 6 - used),
+            ],
+          ),
+        );
+      }
+      row = [];
+      used = 0;
+    }
+
+    for (final point in points) {
+      if (used + point.$1.sixths > 6) flush();
+      row.add(point);
+      used += point.$1.sixths;
+      if (used == 6) flush();
+    }
+    flush();
+    return rows;
   }
 
   /// Valor con el que se duplica [field], o `null` si no se puede.
@@ -159,6 +226,12 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
           ? null
           : () => _duplicate(fields, field, copyValue, extras),
       onRemove: () => _remove(fields, field),
+      width: field.width,
+      onWidthChanged: (width) =>
+          db.saveBibleSectionFields(widget.data.id, widget.sectionId, [
+            for (final f in fields)
+              f.key == field.key ? f.copyWith(width: width) : f,
+          ]),
       child: point,
     );
   }
@@ -338,6 +411,9 @@ class _BibleSectionScaffoldState extends ConsumerState<BibleSectionScaffold> {
       BibleSectionFieldType.cards ||
       BibleSectionFieldType.acts ||
       BibleSectionFieldType.tags ||
+      BibleSectionFieldType.table ||
+      BibleSectionFieldType.meters ||
+      BibleSectionFieldType.equipment ||
       BibleSectionFieldType.referenceDeck => _catalogPoint(field),
       // Módulo del catálogo cuyo widget dedicado aún no está conectado.
       BibleSectionFieldType.blocks => _MissingModulePlaceholder(

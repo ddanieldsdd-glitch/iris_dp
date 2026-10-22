@@ -14,9 +14,9 @@ abstract final class NarrativeCardKind {
 
   static String label(String kind) => switch (kind) {
         overview => 'Visión general',
-        style => 'Contenedor de luz',
-        filmRef => 'Referencia fílmica',
-        locationLight => 'Localización (luz)',
+        style => 'Idea de luz',
+        filmRef => 'Referencia de cine',
+        locationLight => 'Luz de la localización',
         _ => kind,
       };
 }

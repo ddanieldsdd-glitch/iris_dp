@@ -14,6 +14,8 @@ import 'shoot_document_service.dart';
 import 'shoot_document_template_picker.dart';
 import '../../core/templates/user_template_service.dart';
 import 'shoot_template_editor_screen.dart';
+import 'package:drift/drift.dart' show Value;
+import 'shoot_day_screen.dart';
 
 /// Hub de documentos para el rodaje — referencia principal en set.
 class ShootDocumentsScreen extends ConsumerStatefulWidget {
@@ -50,6 +52,16 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
           style: AppTypography.titleMedium(palette),
         ),
         actions: [
+          TextButton.icon(
+            onPressed: () => _createShootDay(context),
+            icon: Icon(Icons.event_note, color: palette.accent, size: 18),
+            label: Text(
+              'Guion técnico de rodaje',
+              style: AppTypography.label(
+                palette,
+              ).copyWith(color: palette.accent),
+            ),
+          ),
           IconButton(
             tooltip: 'Crear documento',
             icon: Icon(Icons.add, color: palette.accent),
@@ -243,7 +255,40 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
     if (doc != null) _openEditor(context, doc);
   }
 
+  /// Crea una jornada nueva y la abre: fecha, lugar, meteorología y los
+  /// planos del guion técnico en su orden de rodaje.
+  Future<void> _createShootDay(BuildContext context) async {
+    final db = ref.read(databaseProvider);
+    final existing = await db
+        .watchShootDocumentsForProject(widget.projectId)
+        .first;
+    final days = existing.where((d) => d.kind == kShootDayKind).length;
+    final id = await db.insertShootDocument(
+      ShootDocumentsCompanion.insert(
+        projectId: widget.projectId,
+        name: 'Jornada ${days + 1}',
+        kind: const Value(kShootDayKind),
+      ),
+    );
+    if (!context.mounted) return;
+    final doc = await db.getShootDocument(id);
+    if (!context.mounted || doc == null) return;
+    _openEditor(context, doc);
+  }
+
   void _openEditor(BuildContext context, ShootDocument doc) {
+    if (doc.kind == kShootDayKind) {
+      Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => ShootDayScreen(
+            projectId: widget.projectId,
+            documentId: doc.id,
+          ),
+        ),
+      );
+      return;
+    }
     Navigator.push<void>(
       context,
       MaterialPageRoute<void>(
@@ -398,48 +443,6 @@ class _DocumentTile extends StatelessWidget {
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CreateDocumentSheet extends StatelessWidget {
-  final String projectName;
-
-  const _CreateDocumentSheet({required this.projectName});
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Plantilla de arranque (opcional)',
-              style: AppTypography.titleMedium(palette),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Tras crear el documento puedes reordenar, borrar y mezclar '
-              'bloques libremente.',
-              style: AppTypography.bodyMedium(palette),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            for (final t in ShootDocumentTemplate.values)
-              ListTile(
-                title: Text(t.label, style: AppTypography.bodyMedium(palette)),
-                subtitle: Text(
-                  t.description,
-                  style: AppTypography.caption(palette),
-                ),
-                onTap: () => Navigator.pop(context, t),
-              ),
-          ],
-        ),
       ),
     );
   }

@@ -22,6 +22,9 @@ class StitchModule {
   /// Kind del catálogo de sub-apartados (nombre + icono reutilizable).
   final BibleSubsectionKindId? subsectionKind;
 
+  /// Ancho con el que nace el punto.
+  final BiblePointWidth width;
+
   const StitchModule({
     required this.key,
     required this.label,
@@ -33,6 +36,7 @@ class StitchModule {
     this.optional = false,
     this.widgetId,
     this.subsectionKind,
+    this.width = BiblePointWidth.full,
   });
 
   BibleSubsectionKind get catalogKind {
@@ -50,6 +54,7 @@ class StitchModule {
         maxLines: maxLines,
         type: type,
         widget: type == BibleSectionFieldType.text ? null : widgetId,
+        width: width,
       );
 }
 
@@ -64,29 +69,39 @@ abstract final class BibleStitchModuleRegistry {
               maxLines: 4,
             ),
             StitchModule(
+              key: 'lightPhilosophy',
+              label: 'Filosofía de luz',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(
+              key: 'shadowTreatment',
+              label: 'Tratamiento de sombras',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(
               key: 'colorPalette',
               label: 'Paleta maestra',
               widgetId: 'palette_master',
+              width: BiblePointWidth.half,
             ),
             StitchModule(
               key: 'colorSymbolism',
               label: 'Simbología de color',
               widgetId: 'palette_symbolism',
+              width: BiblePointWidth.half,
             ),
-            StitchModule(key: 'lightPhilosophy', label: 'Filosofía de luz'),
-            StitchModule(key: 'shadowTreatment', label: 'Tratamiento de sombras'),
             StitchModule(key: 'composition', label: 'Composición'),
             StitchModule(
               key: 'actNotes',
               label: 'Intención visual por acto',
               widgetId: 'acts',
             ),
-            StitchModule(key: 'keyFrame', label: 'Key Frame'),
             StitchModule(
               key: 'references',
-              label: 'Referencias clave',
+              label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
             ),
+            StitchModule(key: 'keyFrame', label: 'Key Frame', optional: true),
             StitchModule(
               key: 'actComposition',
               label: 'Composición por actos',
@@ -105,10 +120,18 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'macroPreview', label: 'Vista macro grano / ruido'),
-            StitchModule(key: 'filmGrain', label: 'Film Grain'),
-            StitchModule(key: 'diffusion', label: 'Diffusion Optics'),
-            StitchModule(key: 'sensorNoise', label: 'Sensor Noise Floor'),
+            StitchModule(key: 'macroPreview', label: 'Comparación de textura'),
+            StitchModule(
+              key: 'filmGrain',
+              label: 'Grano',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(
+              key: 'diffusion',
+              label: 'Difusión',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(key: 'sensorNoise', label: 'Ruido del sensor'),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
@@ -127,13 +150,21 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'lut', label: 'LUT y color science'),
+            StitchModule(
+              key: 'lut',
+              label: 'LUT y ciencia de color',
+              width: BiblePointWidth.twoThirds,
+            ),
+            StitchModule(
+              key: 'baseTemp',
+              label: 'Temperatura base',
+              width: BiblePointWidth.third,
+            ),
             StitchModule(
               key: 'blocks',
               label: 'Paletas por bloque',
               type: BibleSectionFieldType.blocks,
             ),
-            StitchModule(key: 'baseTemp', label: 'Temperatura base (K)'),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
@@ -197,39 +228,78 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'cameraBody', label: 'Cámara y formato'),
-            StitchModule(key: 'philosophy', label: 'Filosofía de cámara'),
-            StitchModule(key: 'movements', label: 'Movimientos de cámara'),
-            StitchModule(key: 'specsReference', label: 'Fichas técnicas'),
+            StitchModule(
+              key: 'equipment',
+              label: 'Cámaras',
+              width: BiblePointWidth.twoThirds,
+            ),
+            StitchModule(
+              key: 'cameraBody',
+              label: 'Ficha del cuerpo',
+              width: BiblePointWidth.third,
+            ),
+            StitchModule(
+              key: 'recording',
+              label: 'Formato de grabación',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(
+              key: 'colorPipeline',
+              label: 'Color en cámara',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(key: 'recordingMatrix', label: 'Matriz de grabación'),
+            StitchModule(key: 'cameraBehavior', label: 'Cómo actúa la cámara'),
+            StitchModule(
+              key: 'accessories',
+              label: 'Filtros, soportes y accesorios',
+            ),
+            StitchModule(key: 'dataManagement', label: 'Gestión de datos'),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
             ),
+            StitchModule(
+              key: 'specsReference',
+              label: 'Referencias técnicas',
+              optional: true,
+            ),
+            // Antes de «Cómo actúa la cámara»: se pueden volver a añadir.
+            StitchModule(
+              key: 'philosophy',
+              label: 'Filosofía de cámara',
+              optional: true,
+            ),
+            StitchModule(
+              key: 'movements',
+              label: 'Movimientos de cámara',
+              optional: true,
+            ),
           ],
         BibleSectionId.lighting => const [
             StitchModule(
               key: 'overview',
-              label: 'Visión general',
+              label: 'Puntos clave',
               type: BibleSectionFieldType.narrative,
               maxLines: 6,
               subsectionKind: BibleSubsectionKindId.narrativeIntent,
             ),
             StitchModule(
               key: 'lightBehaviors',
-              label: 'Comportamiento de la luz',
+              label: 'Ideas de luz',
               type: BibleSectionFieldType.blocks,
               subsectionKind: BibleSubsectionKindId.behaviorMosaic,
             ),
             StitchModule(
               key: 'filmRefs',
-              label: 'Referencias fílmicas',
+              label: 'Referencias de cine',
               type: BibleSectionFieldType.blocks,
               subsectionKind: BibleSubsectionKindId.cardDeck,
             ),
             StitchModule(
               key: 'locationLights',
-              label: 'Localizaciones (luz)',
+              label: 'Luz por localización',
               type: BibleSectionFieldType.blocks,
               subsectionKind: BibleSubsectionKindId.cardDeck,
             ),
@@ -269,7 +339,28 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'opticSettings', label: 'Filosofía y kit de lentes'),
+            StitchModule(
+              key: 'lensKit',
+              label: 'Juegos de lentes',
+              width: BiblePointWidth.twoThirds,
+            ),
+            StitchModule(
+              key: 'filtration',
+              label: 'Filtros',
+              width: BiblePointWidth.third,
+            ),
+            StitchModule(key: 'opticSettings', label: 'Filosofía de lentes'),
+            StitchModule(key: 'character', label: 'Carácter óptico'),
+            StitchModule(
+              key: 'focalTable',
+              label: 'Tabla de focales',
+              width: BiblePointWidth.twoThirds,
+            ),
+            StitchModule(
+              key: 'maintenance',
+              label: 'Revisión del juego',
+              width: BiblePointWidth.third,
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
@@ -283,11 +374,21 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'globalExposure', label: 'Exposición global'),
             StitchModule(
-              key: 'blocks',
-              label: 'Bloques de exposición',
-              type: BibleSectionFieldType.blocks,
+              key: 'globalExposure',
+              label: 'Exposición de trabajo',
+              width: BiblePointWidth.twoThirds,
+            ),
+            StitchModule(
+              key: 'signalLevels',
+              label: 'Niveles de señal',
+              width: BiblePointWidth.third,
+            ),
+            StitchModule(key: 'exposureChain', label: 'Cadena de exposición'),
+            StitchModule(key: 'blocks', label: 'Bloques de exposición'),
+            StitchModule(
+              key: 'byLocation',
+              label: 'Exposición por localización',
             ),
             StitchModule(
               key: 'references',
@@ -296,19 +397,23 @@ abstract final class BibleStitchModuleRegistry {
             ),
           ],
         BibleSectionId.format => const [
-            StitchModule(key: 'header', label: 'Cabecera'),
             StitchModule(
               key: 'narrative',
               label: 'Intención narrativa',
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'formatSettings', label: 'Aspect ratio y entrega'),
+            StitchModule(
+              key: 'formatSettings',
+              label: 'Relación de aspecto y sistema',
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
               type: BibleSectionFieldType.references,
             ),
+            // La cabecera común pone ya el título de la pantalla.
+            StitchModule(key: 'header', label: 'Cabecera', legacyOnly: true),
           ],
         BibleSectionId.workflow => const [
             StitchModule(
@@ -317,7 +422,20 @@ abstract final class BibleStitchModuleRegistry {
               type: BibleSectionFieldType.narrative,
               maxLines: 4,
             ),
-            StitchModule(key: 'workflowSettings', label: 'Pipeline de workflow'),
+            StitchModule(
+              key: 'workflowSettings',
+              label: 'Del rodaje a la entrega',
+            ),
+            StitchModule(
+              key: 'dataTeam',
+              label: 'Equipo de datos',
+              width: BiblePointWidth.half,
+            ),
+            StitchModule(
+              key: 'delivery',
+              label: 'Formatos y entrega',
+              width: BiblePointWidth.half,
+            ),
             StitchModule(
               key: 'references',
               label: 'Referencias visuales',
@@ -420,6 +538,160 @@ abstract final class BibleStitchModuleRegistry {
           if (field.key == 'shadowTreatment')
             module(sectionId, 'composition')!.toField(),
         ],
+      ];
+    }
+
+    // Cámara se partió en la versión 4: lo que iba dentro de «Cámara y
+    // formato» son ahora puntos propios. Se añaden una sola vez a las
+    // biblias guardadas antes, para que nada de lo escrito quede sin
+    // pantalla. Si el usuario quita alguno después, no vuelve.
+    if (layoutVersion < 4 &&
+        sectionId == BibleSectionId.camera &&
+        keys.contains('cameraBody')) {
+      BibleSectionField? add(String key) =>
+          keys.contains(key) ? null : module(sectionId, key)?.toField();
+      final tail = [
+        ?add('accessories'),
+        ?add('dataManagement'),
+      ];
+      final out = <BibleSectionField>[];
+      for (final field in fields) {
+        if (field.key == 'cameraBody') {
+          out.addAll([
+            ?add('equipment'),
+            field.copyWith(label: 'Ficha del cuerpo'),
+            ?add('recording'),
+            ?add('colorPipeline'),
+            ?add('recordingMatrix'),
+          ]);
+        } else if (field.key == 'references') {
+          out
+            ..addAll(tail)
+            ..add(field);
+          tail.clear();
+        } else {
+          out.add(field);
+        }
+      }
+      // Sigue con los cambios posteriores a la versión 4.
+      return normalizeFields(sectionId, [...out, ...tail], layoutVersion: 4);
+    }
+
+    // Óptica se partió en la versión 5: lo que iba dentro de «Filosofía y
+    // kit de lentes» son ahora puntos propios, añadidos una sola vez.
+    if (layoutVersion < 5 &&
+        sectionId == BibleSectionId.optics &&
+        keys.contains('opticSettings')) {
+      BibleSectionField? add(String key) =>
+          keys.contains(key) ? null : module(sectionId, key)?.toField();
+      return [
+        for (final field in fields)
+          if (field.key == 'opticSettings') ...[
+            ?add('lensKit'),
+            ?add('filtration'),
+            field.copyWith(label: 'Filosofía de lentes'),
+            ?add('character'),
+            ?add('focalTable'),
+            ?add('maintenance'),
+          ] else
+            field,
+      ];
+    }
+
+    // Versión 8: filosofía y movimientos de cámara se funden en «Cómo
+    // actúa la cámara», que nace con lo que tuvieran escrito.
+    if (layoutVersion < 8 &&
+        sectionId == BibleSectionId.camera &&
+        !keys.contains('cameraBehavior') &&
+        (keys.contains('philosophy') || keys.contains('movements'))) {
+      final behavior = module(sectionId, 'cameraBehavior')!.toField();
+      var placed = false;
+      return normalizeFields(sectionId, [
+        for (final field in fields)
+          if (field.key == 'philosophy' || field.key == 'movements') ...[
+            if (!placed)
+              () {
+                placed = true;
+                return behavior;
+              }(),
+          ] else
+            field,
+      ], layoutVersion: layoutVersion);
+    }
+
+    // «Formato y cadencia» pasó a llamarse «Formato de grabación».
+    if (sectionId == BibleSectionId.camera &&
+        fields.any((f) => f.key == 'recording' && f.label == 'Formato y cadencia')) {
+      return normalizeFields(sectionId, [
+        for (final field in fields)
+          field.key == 'recording' && field.label == 'Formato y cadencia'
+              ? field.copyWith(label: 'Formato de grabación')
+              : field,
+      ], layoutVersion: layoutVersion);
+    }
+
+    // Textura tenía sus puntos rotulados en inglés: los que conserven el
+    // rótulo de fábrica pasan al nuevo; los que el usuario renombró, no.
+    if (sectionId == BibleSectionId.texture) {
+      const renamed = {
+        'Vista macro grano / ruido': 'Comparación de textura',
+        'Film Grain': 'Grano',
+        'Diffusion Optics': 'Difusión',
+        'Sensor Noise Floor': 'Ruido del sensor',
+      };
+      if (fields.any((f) => renamed.containsKey(f.label))) {
+        return normalizeFields(sectionId, [
+          for (final field in fields)
+            field.copyWith(label: renamed[field.label]),
+        ], layoutVersion: layoutVersion);
+      }
+    }
+
+    // Workflow ganó dos puntos en la versión 7, añadidos una sola vez.
+    if (layoutVersion < 7 &&
+        sectionId == BibleSectionId.workflow &&
+        keys.contains('workflowSettings')) {
+      BibleSectionField? add(String key) =>
+          keys.contains(key) ? null : module(sectionId, key)?.toField();
+      return [
+        for (final field in fields)
+          if (field.key == 'workflowSettings') ...[
+            field.label == 'Pipeline de workflow'
+                ? field.copyWith(label: 'Del rodaje a la entrega')
+                : field,
+            ?add('dataTeam'),
+            ?add('delivery'),
+          ] else
+            field,
+      ];
+    }
+
+    // Formato ya no lleva su propia cabecera: la pone la pantalla.
+    if (sectionId == BibleSectionId.format && keys.contains('header')) {
+      return normalizeFields(sectionId, [
+        for (final field in fields)
+          if (field.key != 'header') field,
+      ], layoutVersion: layoutVersion);
+    }
+
+    // Exposición se partió en la versión 6, igual que Cámara y Óptica.
+    if (layoutVersion < 6 &&
+        sectionId == BibleSectionId.exposure &&
+        keys.contains('globalExposure')) {
+      BibleSectionField? add(String key) =>
+          keys.contains(key) ? null : module(sectionId, key)?.toField();
+      return [
+        for (final field in fields)
+          if (field.key == 'globalExposure') ...[
+            field.copyWith(label: 'Exposición de trabajo'),
+            ?add('signalLevels'),
+            ?add('exposureChain'),
+          ] else if (field.key == 'blocks') ...[
+            // Antes era un tipo propio; ahora es una tabla de la pantalla.
+            module(sectionId, 'blocks')!.toField().copyWith(label: field.label),
+            ?add('byLocation'),
+          ] else
+            field,
       ];
     }
 

@@ -131,14 +131,16 @@ class PlanPalette extends StatelessWidget {
         children: [
           header('HERRAMIENTAS'),
           grid([
+            // «Relieve» ya no se ofrece: las alturas se ponen con colinas.
             for (final t in PlanTool.values)
-              _PaletteButton(
-                icon: Icon(t.icon, size: 16),
-                label: t.label,
-                selected: t == tool,
-                tooltip: t.label,
-                onTap: () => onTool(t),
-              ),
+              if (t != PlanTool.relief)
+                _PaletteButton(
+                  icon: Icon(t.icon, size: 16),
+                  label: t.label,
+                  selected: t == tool,
+                  tooltip: t.label,
+                  onTap: () => onTool(t),
+                ),
           ]),
           header('SUJETOS'),
           grid([
@@ -217,12 +219,15 @@ class PlanPalette extends StatelessWidget {
               ),
             ),
           grid([
+            // La pared se dibuja punto a punto con su herramienta: la pieza
+            // suelta de tamaño fijo ya no se ofrece.
             for (final type in ArchitectureType.values)
-              _PaletteButton(
-                icon: Icon(type.icon, size: 16),
-                label: type.label,
-                onTap: () => onAddArchitecture(type),
-              ),
+              if (type != ArchitectureType.wall)
+                _PaletteButton(
+                  icon: Icon(type.icon, size: 16),
+                  label: type.label,
+                  onTap: () => onAddArchitecture(type),
+                ),
             for (final type in PropType.values)
               if (type != PropType.meter)
                 _PaletteButton(

@@ -6,6 +6,7 @@ import '../camera_plan/camera_plan_grouping.dart';
 import 'luka_camera_plan_export.dart';
 import 'luka_light_mapping.dart';
 import 'unreal_coords.dart';
+import '../../shared/rich_text/script_markup.dart';
 
 /// Exporta datos del proyecto IRIS DP a JSON para Unreal Engine 5 + LUKA.
 class IrisDpExportService {
@@ -256,7 +257,7 @@ class IrisDpExportService {
         'movement': technical?['movement'] ?? shot.movement ?? 'STEADY',
         'movement_kind': technical?['movement_kind'] ??
             movementKind(shot.movement),
-        'framing_note': shot.framing ?? '',
+        'framing_note': scriptMarkupToPlain(shot.framing),
         'angle': shot.angle ?? 'normal',
         'camera_label': primary?['label'],
         'has_camera_path': primary?['has_movement'] ?? false,
@@ -269,15 +270,15 @@ class IrisDpExportService {
 
   Map<String, dynamic> _shotBlock(Shot shot) => {
         'number': shot.number,
-        'framing': shot.framing ?? '',
+        'framing': scriptMarkupToPlain(shot.framing),
         'lens_mm': parseFocalLengthMm(shot.lens),
         'movement': shot.movement ?? 'STEADY',
         'angle': shot.angle ?? 'normal',
         't_stop': parseTStop(shot.fStop),
         'shutter_angle': shot.shutterAngle ?? '180',
         'fps': shot.fps ?? 24,
-        'action': shot.action ?? '',
-        'notes': shot.notes ?? '',
+        'action': scriptMarkupToPlain(shot.action),
+        'notes': scriptMarkupToPlain(shot.notes),
       };
 
   String encodePretty(Map<String, dynamic> data) =>
@@ -289,7 +290,7 @@ class IrisDpExportService {
         .trim()
         .replaceAll(' ', '_')
         .toLowerCase();
-    final safe = slug.isEmpty ? 'escena_${scene.number}' : slug;
+    final safe = slug.isEmpty ? 'escena_${scene.label}' : slug;
     return 'iris_dp_$safe.json';
   }
 

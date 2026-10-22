@@ -3,8 +3,10 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:drift/drift.dart' as drift;
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
@@ -19,9 +21,20 @@ import '../../bible_paste_helpers.dart';
 import '../../bible_section_fields.dart';
 import '../../services/color_extraction_service.dart';
 import '../../visual_bible_model.dart';
-import '../../../../core/project/project_shoot_context.dart';
 import '../../../locations/location_form_sheet.dart';
 import '../../../locations/location_site_form_sheet.dart';
+import '../../../../core/weather/sun_calculator.dart';
+import '../../../locations/site_place.dart';
+import '../../../../core/weather/weather_models.dart';
+import '../../../../core/weather/weather_service.dart';
+import '../../../../core/weather/weather_summary.dart';
+import '../../../../shared/visual_bible/narrative_card_kind.dart';
+import '../../../locations/location_manage_menu.dart';
+import '../lighting/lighting_card_view.dart';
+import '../lighting/lighting_locations_block.dart';
+import '../../../../shared/visual_bible/bible_cards.dart';
+import '../../../../shared/visual_bible/lighting_card_page.dart';
+import '../bible_card_editor.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_paste_zone.dart';
 import '../moodboard_drag.dart';
@@ -30,10 +43,21 @@ import '../moodboard_strip.dart';
 import '../../moodboard_helpers.dart';
 import '../../services/lighting_narrative_cards_service.dart';
 import '../../../../shared/visual_bible/bible_section_ids.dart';
-import '../narrative_deck/narrative_card_detail.dart';
 import '../bible_screen_hero.dart';
 
 /// Localización — layout Stitch (hero + solar + atmósfera + staging).
+/// Fotos que se pueden soltar en la ficha (las del iPhone llegan en HEIC).
+const _kPhotoExtensions = {
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.heic',
+  '.heif',
+  '.webp',
+  '.tif',
+  '.tiff',
+};
+
 class LocationSection extends ConsumerStatefulWidget {
   final int projectId;
   final int bibleId;
@@ -51,8 +75,6 @@ class LocationSection extends ConsumerStatefulWidget {
 }
 
 class _LocationSectionState extends ConsumerState<LocationSection> {
-  int? _selectedPlanId;
-
   Map<String, dynamic> _getCustom() {
     final raw = widget.sectionContentJson;
     if (raw == null || raw.isEmpty) return {};
@@ -121,6 +143,31 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
     await _updateCustom({'byPlan': byPlan, 'selectedPlanId': planId});
   }
 
+  /// La localización abierta: `site:<id>` o `set:<id>` (un set suelto).
+  /// Nulo = se ven todas, en tarjetas.
+  String? _open;
+
+  @override
+  void initState() {
+    super.initState();
+    // Las fichas de luz de cada set, una vez al entrar (no en cada
+    // repintado).
+    if (widget.bibleId > 0) {
+      final db = ref.read(databaseProvider);
+      Future.microtask(
+        () => LightingNarrativeCardsService.ensureSeeded(
+          db: db,
+          bibleId: widget.bibleId,
+          projectId: widget.projectId,
+        ),
+      );
+    }
+  }
+
+  static String _keyOf(LightingSiteGroup group) => group.site != null
+      ? 'site:${group.site!.id}'
+      : 'set:${group.sets.first.id}';
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -128,171 +175,602 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
 
     return StreamBuilder<List<LocationSite>>(
       stream: db.watchSitesForProject(widget.projectId),
-      builder: (context, siteSnap) {
-        final sites = siteSnap.data ?? [];
-        return StreamBuilder<List<LocationBasePlan>>(
-          stream: db.watchLocationsForProject(widget.projectId),
-          builder: (context, locSnap) {
-            final allSets = locSnap.data ?? [];
-            if (sites.isEmpty && allSets.isEmpty) {
-              return Center(
-                child: Text(
-                  'Las localizaciones se generan al importar el guion.',
-                  style: AppTypography.bodyMedium(
-                    palette,
-                  ).copyWith(color: palette.textTertiary),
-                ),
-              );
-            }
-
-            return StreamBuilder<List<VisualBibleLocationRef>>(
+      builder: (context, siteSnap) => StreamBuilder<List<LocationBasePlan>>(
+        stream: db.watchLocationsForProject(widget.projectId),
+        builder: (context, locSnap) =>
+            StreamBuilder<List<VisualBibleLocationRef>>(
               stream: db.watchLocationRefsForBible(widget.bibleId),
-              builder: (context, refSnap) {
-                final refsByPlanId = {
-                  for (final r in refSnap.data ?? [])
-                    if (r.locationBasePlanId != null) r.locationBasePlanId!: r,
-                };
-                final refsByName = {
-                  for (final r in refSnap.data ?? []) r.locationName: r,
-                };
-
-                final custom = _getCustom();
-                final preferred =
-                    _selectedPlanId ??
-                    (custom['selectedPlanId'] as num?)?.toInt() ??
-                    (allSets.isNotEmpty ? allSets.first.id : null);
-                LocationBasePlan? active;
-                for (final s in allSets) {
-                  if (s.id == preferred) {
-                    active = s;
-                    break;
-                  }
-                }
-                active ??= allSets.isNotEmpty ? allSets.first : null;
-
-                String? siteName;
-                if (active?.siteId != null) {
-                  for (final s in sites) {
-                    if (s.id == active!.siteId) {
-                      siteName = s.name;
-                      break;
-                    }
-                  }
-                }
-
-                return ListView(
-                  padding: const EdgeInsets.all(24),
-                  children: [
-                    BibleSectionHero(
-                      projectId: widget.projectId,
-                      bibleId: widget.bibleId,
-                      sectionId: BibleSectionId.location,
-                      title: 'Localización',
+              builder: (context, refSnap) =>
+                  StreamBuilder<List<VisualBibleNarrativeCard>>(
+                    stream: db.watchNarrativeCardsForSection(
+                      widget.bibleId,
+                      BibleSectionId.lighting,
+                      kind: NarrativeCardKind.locationLight,
                     ),
-                    _LocationHubHeader(
-                      palette: palette,
-                      projectId: widget.projectId,
-                      sites: sites,
-                      allSets: allSets,
-                      activeSet: active,
-                      onSelectSet: (set) {
-                        setState(() => _selectedPlanId = set.id);
-                        _updateCustom({'selectedPlanId': set.id});
-                        ref.read(projectShootContextProvider(widget.projectId).notifier).setActive(
-                              siteId: set.siteId,
-                              setId: set.id,
-                            );
-                      },
-                      onCreateSite: () async {
-                        await showLocationSiteFormSheet(
-                          context,
-                          projectId: widget.projectId,
+                    builder: (context, cardSnap) => StreamBuilder<List<Scene>>(
+                      stream: db.watchScenesForProject(widget.projectId),
+                      builder: (context, sceneSnap) {
+                        final groups = LightingSiteGroup.group(
+                          sites: siteSnap.data ?? const [],
+                          sets: locSnap.data ?? const [],
+                          cards: cardSnap.data ?? const [],
                         );
-                      },
-                      onCreateSet: (siteId) async {
-                        await showLocationFormSheet(
-                          context,
-                          projectId: widget.projectId,
-                          siteId: siteId,
+                        final open = groups
+                            .where((g) => _keyOf(g) == _open)
+                            .firstOrNull;
+                        // Una columna, no una lista perezosa: las fichas son
+                        // altas y, construidas al vuelo, la página saltaba.
+                        return SingleChildScrollView(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              BibleSectionHero(
+                                projectId: widget.projectId,
+                                bibleId: widget.bibleId,
+                                sectionId: BibleSectionId.location,
+                                title: 'Localización',
+                              ),
+                              if (open == null)
+                                _hub(
+                                  palette,
+                                  groups,
+                                  refSnap.data ?? const [],
+                                  sceneSnap.data ?? const [],
+                                )
+                              else
+                                ..._page(
+                                  palette,
+                                  db,
+                                  open,
+                                  refSnap.data ?? const [],
+                                ),
+                            ],
+                          ),
                         );
                       },
                     ),
-                    const SizedBox(height: 20),
-                    if (active != null) ...[
-                      Builder(
-                        builder: (_) {
-                          final refRow =
-                              refsByPlanId[active!.id] ??
-                              refsByName[active.locationName];
-                          final model = refRow != null
-                              ? LocationRefModel.fromRow(refRow)
-                              : LocationRefModel(
-                                  id: 0,
-                                  bibleId: widget.bibleId,
-                                  locationName: active.locationName,
-                                  locationSiteId: active.siteId,
-                                  locationBasePlanId: active.id,
-                                );
-                          model.locationBasePlanId ??= active.id;
-                          model.locationSiteId ??= active.siteId;
-                          return _FeaturedLocation(
-                            projectId: widget.projectId,
-                            bibleId: widget.bibleId,
-                            plan: active,
-                            siteName: siteName,
-                            extras: _planExtras(active.id),
-                            model: model,
-                            palette: palette,
-                            onExtras: (patch) =>
-                                _updatePlanExtras(active!.id, patch),
-                            onSaveRef: (m) =>
-                                db.upsertLocationRef(m.toCompanion()),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 28),
-                    ],
-                    for (final site in sites) ...[
-                      _SiteFolderHeader(
-                        siteName: site.name,
-                        onOpenLocations: () =>
-                            BibleNavigationScope.openLocationSet(
-                              context,
-                              siteId: site.id,
-                            ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    if (sites.isEmpty)
-                      TextButton.icon(
-                        onPressed: () =>
-                            BibleNavigationScope.openLocationSet(context),
-                        icon: Icon(
-                          Icons.open_in_new,
-                          size: 16,
-                          color: palette.accent,
-                        ),
-                        label: Text(
-                          'Abrir pantalla Localizaciones',
-                          style: TextStyle(color: palette.accent),
-                        ),
-                      ),
-                  ],
-                );
-              },
+                  ),
+            ),
+      ),
+    );
+  }
+
+  /// Todas las localizaciones, una tarjeta cada una.
+  Widget _hub(
+    AppPalette palette,
+    List<LightingSiteGroup> groups,
+    List<VisualBibleLocationRef> refs,
+    List<Scene> scenes,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                groups.isEmpty
+                    ? 'Aún no hay localizaciones: aparecen al importar el '
+                          'guion o al crearlas.'
+                    : 'Toca una localización para entrar en ella: ubicación, '
+                          'sol, meteorología, su luz y cada uno de sus sets.',
+                style: AppTypography.bodyMedium(
+                  palette,
+                ).copyWith(color: palette.textSecondary),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => showLocationSiteFormSheet(
+                context,
+                projectId: widget.projectId,
+              ),
+              icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+              label: const Text('Nueva localización'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            for (final group in groups)
+              _LocationTile(
+                projectId: widget.projectId,
+                group: group,
+                cover: _coverOf(group, refs),
+                scenes: scenes
+                    .where(
+                      (s) =>
+                          (group.site != null &&
+                              s.locationSiteId == group.site!.id) ||
+                          group.sets.any((set) => set.id == s.locationId),
+                    )
+                    .length,
+                onTap: () => setState(() => _open = _keyOf(group)),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// La primera foto que tenga alguno de sus sets.
+  String? _coverOf(LightingSiteGroup group, List<VisualBibleLocationRef> refs) {
+    for (final set in group.sets) {
+      final extras = _planExtras(set.id);
+      final candidates = [
+        extras['heroImage'],
+        ...?(extras['photos'] as List?),
+        set.imagePath,
+        for (final r in refs)
+          if (r.locationBasePlanId == set.id)
+            ...LocationRefModel.fromRow(r).referenceImages,
+      ];
+      for (final path in candidates) {
+        if (path is String && path.isNotEmpty && File(path).existsSync()) {
+          return path;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// La página de una localización: lo suyo y, debajo, cada set.
+  List<Widget> _page(
+    AppPalette palette,
+    AppDatabase db,
+    LightingSiteGroup group,
+    List<VisualBibleLocationRef> refs,
+  ) {
+    final site = group.site;
+    final refsByPlanId = {
+      for (final r in refs)
+        if (r.locationBasePlanId != null) r.locationBasePlanId!: r,
+    };
+    final refsByName = {for (final r in refs) r.locationName: r};
+    final wholeCard = group.shownSets
+        .map((set) => group.cardBySet[set.id])
+        .whereType<VisualBibleNarrativeCard>()
+        .firstOrNull;
+
+    return [
+      Row(
+        children: [
+          TextButton.icon(
+            onPressed: () => setState(() => _open = null),
+            icon: const Icon(Icons.arrow_back, size: 18),
+            label: const Text('Todas las localizaciones'),
+          ),
+          const Spacer(),
+          TextButton.icon(
+            onPressed: () =>
+                BibleNavigationScope.openLocationSet(context, siteId: site?.id),
+            icon: const Icon(Icons.open_in_new, size: 16),
+            label: const Text('Abrir en Localizaciones'),
+          ),
+          LocationManageMenu(
+            projectId: widget.projectId,
+            site: site,
+            looseSet: site == null ? group.sets.first : null,
+          ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Text(group.name, style: AppTypography.displayMedium(palette)),
+      const SizedBox(height: 16),
+      for (final twin in group.looseTwins) ...[
+        LooseTwinNotice(
+          projectId: widget.projectId,
+          twin: twin,
+          into: group.shownSets.where(group.isWholeSite).firstOrNull,
+        ),
+        const SizedBox(height: 16),
+      ],
+      for (final set in group.shownSets) ...[
+        Text(
+          group.isWholeSite(set)
+              ? 'FICHA DE LA LOCALIZACIÓN'
+              : 'SET · ${set.locationName.toUpperCase()}',
+          style: AppTypography.label(palette),
+        ),
+        const SizedBox(height: 10),
+        Builder(
+          builder: (_) {
+            final refRow = refsByPlanId[set.id] ?? refsByName[set.locationName];
+            final model = refRow != null
+                ? LocationRefModel.fromRow(refRow)
+                : LocationRefModel(
+                    id: 0,
+                    bibleId: widget.bibleId,
+                    locationName: set.locationName,
+                    locationSiteId: set.siteId,
+                    locationBasePlanId: set.id,
+                  );
+            model.locationBasePlanId ??= set.id;
+            model.locationSiteId ??= set.siteId;
+            return _FeaturedLocation(
+              // Cada set con su propia ficha: sin la clave, todas enseñaban
+              // lo del primero.
+              key: ValueKey('featured_${set.id}'),
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+              plan: set,
+              siteName: site?.name,
+              site: site,
+              extras: _planExtras(set.id),
+              model: model,
+              palette: palette,
+              onExtras: (patch) => _updatePlanExtras(set.id, patch),
+              onSaveRef: (m) => db.upsertLocationRef(m.toCompanion()),
             );
           },
-        );
-      },
+        ),
+        const SizedBox(height: 28),
+      ],
+      if (site != null)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => showLocationFormSheet(
+              context,
+              projectId: widget.projectId,
+              siteId: site.id,
+            ),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Añadir un set a esta localización'),
+          ),
+        ),
+      const SizedBox(height: 24),
+      Text('LA LUZ DEL LUGAR', style: AppTypography.label(palette)),
+      const SizedBox(height: 4),
+      Text(
+        'Es la misma ficha que «Luz por localización» de Iluminación: lo '
+        'que escribas aquí aparece allí.',
+        style: AppTypography.caption(palette),
+      ),
+      const SizedBox(height: 10),
+      if (wholeCard != null)
+        LightingCardView(
+          key: ValueKey('loc_light_${wholeCard.id}'),
+          projectId: widget.projectId,
+          bibleId: widget.bibleId,
+          cardId: wholeCard.id,
+          fixedTitle: group.name,
+        )
+      else
+        TextButton.icon(
+          onPressed: () async {
+            await LightingNarrativeCardsService.ensureSeeded(
+              db: db,
+              bibleId: widget.bibleId,
+              projectId: widget.projectId,
+            );
+          },
+          icon: const Icon(Icons.wb_incandescent_outlined, size: 18),
+          label: const Text('Crear la ficha de luz de esta localización'),
+        ),
+      const SizedBox(height: 28),
+      Text(
+        'UBICACIÓN, SOL Y METEOROLOGÍA',
+        style: AppTypography.label(palette),
+      ),
+      const SizedBox(height: 10),
+      if (site != null)
+        _SiteFactsCard(site: site)
+      else
+        Text(
+          'Este set no está dentro de ninguna localización, así que no '
+          'tiene ubicación, sol ni meteorología. Mételo en una desde el '
+          'menú «⋯» de arriba.',
+          style: AppTypography.bodyMedium(
+            palette,
+          ).copyWith(color: palette.textSecondary),
+        ),
+    ];
+  }
+}
+
+/// Tarjeta de una localización en la entrada de la pantalla.
+class _LocationTile extends StatelessWidget {
+  final int projectId;
+  final LightingSiteGroup group;
+  final String? cover;
+  final int scenes;
+  final VoidCallback onTap;
+
+  const _LocationTile({
+    required this.projectId,
+    required this.group,
+    required this.cover,
+    required this.scenes,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final site = group.site;
+    final zones = group.shownSets.where((s) => !group.isWholeSite(s)).length;
+    final located = site?.latitude != null && site?.longitude != null;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Container(
+        width: 280,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: palette.surfaceElevated,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: palette.divider),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: 140,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  cover == null
+                      ? ColoredBox(
+                          color: Colors.black26,
+                          child: Icon(
+                            Icons.place_outlined,
+                            color: palette.textTertiary,
+                            size: 32,
+                          ),
+                        )
+                      : Image.file(
+                          File(cover!),
+                          fit: BoxFit.cover,
+                          cacheWidth: 600,
+                          errorBuilder: (_, _, _) =>
+                              const ColoredBox(color: Colors.black26),
+                        ),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: LocationManageMenu(
+                        projectId: projectId,
+                        site: site,
+                        looseSet: site == null ? group.sets.first : null,
+                        iconColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    group.name,
+                    style: AppTypography.titleMedium(palette),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      if (site == null) 'Set suelto',
+                      if (zones > 0) '$zones ${zones == 1 ? 'set' : 'sets'}',
+                      '$scenes ${scenes == 1 ? 'escena' : 'escenas'}',
+                    ].join(' · '),
+                    style: AppTypography.caption(palette),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        located
+                            ? Icons.place_outlined
+                            : Icons.location_off_outlined,
+                        size: 13,
+                        color: located ? palette.accent : palette.textTertiary,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          located
+                              ? (site!.placeLabel ?? 'Ubicada')
+                              : 'Sin ubicar en el mapa',
+                          style: AppTypography.caption(palette),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
+
+/// Dónde está la localización, cómo llegar, el sol de un día y la
+/// previsión. La ubicación es la misma que en la pantalla Localizaciones.
+class _SiteFactsCard extends ConsumerStatefulWidget {
+  final LocationSite site;
+
+  const _SiteFactsCard({required this.site});
+
+  @override
+  ConsumerState<_SiteFactsCard> createState() => _SiteFactsCardState();
+}
+
+class _SiteFactsCardState extends ConsumerState<_SiteFactsCard> {
+  DateTime _day = DateTime.now();
+  Future<WeatherSnapshot?>? _forecast;
+  String? _forecastKey;
+
+  static String _iso(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
+  void _open(String url) =>
+      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final site = widget.site;
+    final lat = site.latitude;
+    final lon = site.longitude;
+    final located = lat != null && lon != null;
+    final within = isWithinForecast(_day, DateTime.now());
+
+    if (located && within) {
+      final key = '$lat,$lon,${_iso(_day)}';
+      if (key != _forecastKey) {
+        _forecastKey = key;
+        _forecast = ref
+            .read(weatherProviderProvider)
+            .forecast(latitude: lat, longitude: lon, date: _iso(_day))
+            .catchError((Object _) => null);
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SitePlaceCard(site: site),
+        if (located) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final (label, url) in locationMapLinks(lat, lon))
+                OutlinedButton.icon(
+                  onPressed: () => _open(url),
+                  icon: const Icon(Icons.open_in_new, size: 15),
+                  label: Text(label),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: palette.surfaceElevated,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: palette.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.cloud_outlined, size: 18, color: palette.accent),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Meteorología del ${_day.day}/${_day.month}/${_day.year}',
+                        style: AppTypography.bodyLarge(palette),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _day,
+                          firstDate: now,
+                          lastDate: now.add(
+                            const Duration(days: kForecastHorizonDays - 1),
+                          ),
+                          helpText: '¿Qué día ruedas aquí?',
+                        );
+                        if (picked != null) setState(() => _day = picked);
+                      },
+                      child: const Text('Cambiar día'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                if (!within)
+                  Text(
+                    'Solo hay previsión para los próximos '
+                    '$kForecastHorizonDays días.',
+                    style: AppTypography.caption(palette),
+                  )
+                else
+                  FutureBuilder<WeatherSnapshot?>(
+                    future: _forecast,
+                    builder: (context, snap) {
+                      if (snap.connectionState != ConnectionState.done) {
+                        return Text(
+                          'Consultando la previsión…',
+                          style: AppTypography.caption(palette),
+                        );
+                      }
+                      final forecast = snap.data;
+                      if (forecast == null) {
+                        return Text(
+                          'No se ha podido descargar la previsión (sin '
+                          'conexión o sin datos para ese día).',
+                          style: AppTypography.caption(palette),
+                        );
+                      }
+                      final lines = weatherSummaryLines(
+                        options: const WeatherOptions(
+                          sun: false,
+                          blueAndGolden: false,
+                          hourly: false,
+                        ),
+                        sun: null,
+                        forecast: forecast,
+                        utcOffsetSeconds: forecast.utcOffsetSeconds,
+                      );
+                      return Text(
+                        lines.join('\n'),
+                        style: AppTypography.bodyMedium(palette),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Enlaces para abrir unas coordenadas en las apps de mapas.
+List<(String, String)> locationMapLinks(double latitude, double longitude) => [
+  (
+    'Google Maps',
+    'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+  ),
+  ('Waze', 'https://waze.com/ul?ll=$latitude,$longitude&navigate=yes'),
+  ('Google Earth', 'https://earth.google.com/web/search/$latitude,$longitude'),
+  ('Apple Mapas', 'https://maps.apple.com/?ll=$latitude,$longitude&q=Rodaje'),
+];
 
 class _FeaturedLocation extends ConsumerStatefulWidget {
   final int projectId;
   final int bibleId;
   final LocationBasePlan plan;
   final String? siteName;
+
+  /// La localización del set: su ubicación en el mapa se fija aquí o en
+  /// la pantalla de Localizaciones, y es la misma.
+  final LocationSite? site;
   final Map<String, dynamic> extras;
   final LocationRefModel model;
   final AppPalette palette;
@@ -300,10 +778,12 @@ class _FeaturedLocation extends ConsumerStatefulWidget {
   final Future<void> Function(LocationRefModel) onSaveRef;
 
   const _FeaturedLocation({
+    super.key,
     required this.projectId,
     required this.bibleId,
     required this.plan,
     required this.siteName,
+    this.site,
     required this.extras,
     required this.model,
     required this.palette,
@@ -358,7 +838,68 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
         .map((m) => '#${m.group(1)!.toUpperCase()}')
         .toList();
     if (fromNote.isNotEmpty) return fromNote;
-    return const ['#1A1C1E', '#3B4045', '#6C7075', '#A58D70', '#CC9B52'];
+    // Sin colores propios no se inventa una paleta.
+    return const [];
+  }
+
+  /// Edición rápida de un dato: se guarda con Intro o al cerrar; Esc lo
+  /// deja como estaba.
+  Future<String?> _quickEdit(
+    String title,
+    String current, {
+    int lines = 1,
+  }) async {
+    final c = TextEditingController(text: current);
+    var cancelled = false;
+    final submitted = await showDialog<String>(
+      context: context,
+      builder: (ctx) => CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () {
+            cancelled = true;
+            Navigator.pop(ctx);
+          },
+        },
+        child: Dialog(
+          backgroundColor: context.palette.surfaceElevated,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    title.toUpperCase(),
+                    style: AppTypography.mono(context.palette).copyWith(
+                      fontSize: 11,
+                      letterSpacing: 0.66,
+                      color: context.palette.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: c,
+                    autofocus: true,
+                    minLines: lines > 1 ? 3 : 1,
+                    maxLines: lines > 1 ? null : 1,
+                    textInputAction: lines > 1
+                        ? TextInputAction.newline
+                        : TextInputAction.done,
+                    onSubmitted: (v) => Navigator.pop(ctx, v),
+                    decoration: const InputDecoration(isDense: true),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (cancelled) return null;
+    // Tocar fuera cierra y guarda lo escrito.
+    return submitted ?? c.text;
   }
 
   Future<void> _edit(
@@ -368,56 +909,23 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     int lines = 1,
     void Function(String)? also,
   }) async {
-    final c = TextEditingController(text: current);
-    final v = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(controller: c, autofocus: true, maxLines: lines),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, c.text.trim()),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    );
-    if (v == null) return;
+    final raw = await _quickEdit(title, current, lines: lines);
+    if (raw == null) return;
+    final v = raw.trim();
+    if (v == current.trim()) return;
     await widget.onExtras({key: v});
     also?.call(v);
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   Future<void> _editList(String title, String key, List<String> current) async {
-    final c = TextEditingController(text: current.join('\n'));
-    final v = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: c,
-          autofocus: true,
-          maxLines: 6,
-          decoration: const InputDecoration(hintText: 'Una línea por ítem'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, c.text),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
+    final raw = await _quickEdit(
+      '$title · una línea por elemento',
+      current.join('\n'),
+      lines: 6,
     );
-    if (v == null) return;
-    final items = v
+    if (raw == null) return;
+    final items = raw
         .split('\n')
         .map((e) => e.replaceFirst(RegExp(r'^[\s•\-]+'), '').trim())
         .where((e) => e.isNotEmpty)
@@ -451,6 +959,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
       );
       if (stored == null) continue;
       _model.referenceImages.add(stored);
+      await _shareWithLocations(stored);
       final extraction = await ColorExtractionService.extractFromFile(stored);
       if (extraction.estimatedKelvin != null &&
           _model.estimatedColorTempKelvin == null) {
@@ -458,6 +967,42 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
       }
     }
     setState(() {});
+    await widget.onSaveRef(_model);
+  }
+
+  /// La foto también queda en el set de la pantalla Localizaciones.
+  Future<void> _shareWithLocations(String stored) async {
+    final db = ref.read(databaseProvider);
+    final existing = await db.watchImagesForLocation(widget.plan.id).first;
+    if (existing.any((i) => i.imagePath == stored)) return;
+    await db.insertLocationImage(
+      LocationImagesCompanion.insert(
+        locationId: widget.plan.id,
+        imagePath: stored,
+        kind: const drift.Value('scouting'),
+        sortOrder: drift.Value(existing.length),
+      ),
+    );
+  }
+
+  /// Fotos soltadas desde Fotos o Finder (las del iPhone llegan por AirDrop).
+  Future<void> _dropFiles(List<String> paths) async {
+    for (final path in paths) {
+      if (!_kPhotoExtensions.contains(p.extension(path).toLowerCase())) {
+        continue;
+      }
+      final stored = await MediaStorage.copyFileIntoProject(
+        projectId: widget.projectId,
+        sourcePath: path,
+        subfolder: 'visual_bible/locations',
+        fileName:
+            'loc_${DateTime.now().millisecondsSinceEpoch}${p.extension(path)}',
+      );
+      if (stored == null) continue;
+      _model.referenceImages.add(stored);
+      await _shareWithLocations(stored);
+    }
+    if (mounted) setState(() {});
     await widget.onSaveRef(_model);
   }
 
@@ -470,6 +1015,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     );
     if (stored == null) return;
     _model.referenceImages.add(stored);
+    await _shareWithLocations(stored);
     final extraction = await ColorExtractionService.extractFromFile(stored);
     if (extraction.estimatedKelvin != null &&
         _model.estimatedColorTempKelvin == null) {
@@ -526,7 +1072,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
 
   Future<void> _openMaps() async {
     final url = _s('mapsUrl');
-    final coords = _s('coords');
+    final coords = _coordsText();
     final uri = url.isNotEmpty
         ? Uri.tryParse(url)
         : coords.isNotEmpty
@@ -540,9 +1086,36 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  /// Coordenadas de la localización si está ubicada; si no, las escritas
+  /// a mano en la biblia.
+  String _coordsText() {
+    final site = widget.site;
+    if (site?.latitude != null && site?.longitude != null) {
+      return formatCoordinates(site!.latitude!, site.longitude!);
+    }
+    return _s('coords');
+  }
+
+  Future<void> _locateSite() async {
+    final site = widget.site;
+    if (site == null) {
+      await _edit('Coordenadas', 'coords', _s('coords'));
+      return;
+    }
+    final typed = _s('coords');
+    await pickSitePlace(
+      context,
+      ref,
+      site,
+      initialQuery: site.latitude == null && parseCoordinates(typed) != null
+          ? typed
+          : null,
+    );
+  }
+
   Future<void> _openEarth() async {
     final url = _s('earthUrl');
-    final coords = _s('coords');
+    final coords = _coordsText();
     final uri = url.isNotEmpty
         ? Uri.tryParse(url)
         : coords.isNotEmpty
@@ -563,32 +1136,55 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
       'locLabel',
       (widget.siteName ?? widget.plan.locationName).toUpperCase(),
     );
-    final intExt = _s('intExt', 'EXT. DÍA');
-    final azimuth = (x['azimuth'] as num?)?.toDouble() ?? 134;
-    final sunrise = _s('sunrise', '06:42 AM');
-    final sunriseAz = _s('sunriseAz', '72°');
-    final sunset = _s('sunset', '19:15 PM');
-    final sunsetAz = _s('sunsetAz', '288°');
-    final daylight = _s(
-      'daylightWindow',
-      _model.availableLightHours ?? '12h 33m',
-    );
-    final blueHour = _s('blueHour', '19:15 – 19:43');
-    final goldenHour = _s('goldenHour', '18:20 – 19:15');
-    final maxElev = _s('maxElevation', '48° @ 13:00');
-    final shadow = _s('shadowRatio', '1 : 1.1');
-    final coords = _s('coords', '');
+    final intExt = _s('intExt', '');
+    final azimuth = (x['azimuth'] as num?)?.toDouble() ?? 0;
+    // Con la localización en el mapa, el sol se calcula; si no, vale lo
+    // escrito a mano.
+    final lat = widget.site?.latitude;
+    final lon = widget.site?.longitude;
+    final sunDay = DateTime.tryParse(_s('sunDate', '')) ?? DateTime.now();
+    final sun = lat == null || lon == null
+        ? null
+        : SunCalculator.dayPath(
+            year: sunDay.year,
+            month: sunDay.month,
+            day: sunDay.day,
+            latitude: lat,
+            longitude: lon,
+          );
+    final summary = lat == null || lon == null
+        ? null
+        : SunDaySummary.of(sunDay, lat, lon);
+    String az(double? a) => a == null ? '' : '${a.round()}° ${compassPoint(a)}';
+    final sunrise = summary?.sunrise ?? _s('sunrise', '');
+    final sunriseAz = sun != null
+        ? az(sun.sunriseAzimuth)
+        : _s('sunriseAz', '');
+    final sunset = summary?.sunset ?? _s('sunset', '');
+    final sunsetAz = sun != null ? az(sun.sunsetAzimuth) : _s('sunsetAz', '');
+    final daylight =
+        summary?.daylight ??
+        _s('daylightWindow', _model.availableLightHours ?? '');
+    final blueHour = summary?.blueEvening ?? _s('blueHour', '');
+    final goldenHour = summary?.goldenEvening ?? _s('goldenHour', '');
+    final maxElev = sun?.noonAltitude != null
+        ? '${sun!.noonAltitude!.round()}°'
+        : _s('maxElevation', '');
+    final shadow = sun?.noonShadow != null
+        ? '${sun!.noonShadow!.toStringAsFixed(1).replaceAll('.', ',')} m '
+              'por metro de altura'
+        : _s('shadowRatio', '');
     final elevation = _s('elevation', '');
 
-    final contrast = _s('contrastRatio', '1:8 (High)');
-    final quality = _s('lightQuality', 'Hard / Directional');
-    final bounce = _s('bouncePotential', 'Low (Dark surfaces)');
+    final contrast = _s('contrastRatio', '');
+    final quality = _s('lightQuality', '');
+    final bounce = _s('bouncePotential', '');
     final siteLightNote = _s('siteLightNote', _model.lightingNote ?? '');
 
-    final weather = _s('weather', 'Partly Cloudy, 15°C');
-    final humidity = _s('humidity', '65% / Medium Diffusion');
-    final sky = _s('skyQuality', 'Bortle Class 5');
-    final wind = _s('wind', '12 km/h NW');
+    final weather = _s('weather', '');
+    final humidity = _s('humidity', '');
+    final sky = _s('skyQuality', '');
+    final wind = _s('wind', '');
 
     final psychology = _s('spatialPsychology', _model.stagingNote ?? '');
     final strategy = _s('strategy', '');
@@ -597,14 +1193,8 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
     final soundscape = _s('soundscape', '');
     final practicals = _s('practicalsDetail', _model.existingPracticals ?? '');
 
-    final gear = _list('extraGear', const [
-      '2x HMI 18K + Lentes',
-      '4x Skypanel S60',
-    ]);
-    final critical = _list('criticalPoints', const [
-      'Reflejos en ventanales',
-      'Acceso limitado para generador',
-    ]);
+    final gear = _list('extraGear', const []);
+    final critical = _list('criticalPoints', const []);
     final colors = _paletteColors();
 
     final heroPath = _model.referenceImages.isNotEmpty
@@ -619,133 +1209,157 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: BibleTargetZone(
-              hint: 'Clic aquí → ⌘V para pegar foto de hero',
+              hint: 'Clic aquí y ⌘V para pegar la foto principal',
               minHeight: 0,
               onPaste: _pastePhoto,
               onMoodboardDropped: _dropMoodboardPhoto,
-              child: SizedBox(
-                height: 320,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (heroPath != null &&
-                        heroPath.isNotEmpty &&
-                        File(heroPath).existsSync())
-                      Image.file(File(heroPath), fit: BoxFit.cover)
-                    else
-                      StreamBuilder<List<MoodboardImage>>(
-                        stream: ref
-                            .watch(databaseProvider)
-                            .watchMoodboardImagesForSection(
-                              widget.projectId,
-                              BibleSectionId.location,
-                            ),
-                        builder: (context, snap) {
-                          final imgs = snap.data ?? [];
-                          if (imgs.isNotEmpty &&
-                              File(imgs.first.imagePath).existsSync()) {
-                            return Image.file(
-                              File(imgs.first.imagePath),
-                              fit: BoxFit.cover,
-                            );
-                          }
-                          return ColoredBox(
-                            color: palette.surfaceOverlay,
-                            child: Center(
-                              child: TextButton.icon(
-                                onPressed: _addPhoto,
-                                icon: Icon(
-                                  Icons.add_photo_alternate_outlined,
-                                  color: palette.accent,
-                                ),
-                                label: Text(
-                                  'Añadir hero',
-                                  style: TextStyle(color: palette.accent),
+              child: DropTarget(
+                onDragDone: (details) =>
+                    _dropFiles([for (final f in details.files) f.path]),
+                child: SizedBox(
+                  height: 320,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (heroPath != null &&
+                          heroPath.isNotEmpty &&
+                          File(heroPath).existsSync())
+                        Image.file(File(heroPath), fit: BoxFit.cover)
+                      else
+                        // Sin foto propia, la del set en Localizaciones; nunca
+                        // una común a todos.
+                        StreamBuilder<List<LocationImage>>(
+                          stream: ref
+                              .watch(databaseProvider)
+                              .watchImagesForLocation(widget.plan.id),
+                          builder: (context, snap) {
+                            final imgs = [
+                              for (final i
+                                  in snap.data ?? const <LocationImage>[])
+                                if (File(i.imagePath).existsSync()) i,
+                            ];
+                            if (imgs.isNotEmpty) {
+                              return Image.file(
+                                File(imgs.first.imagePath),
+                                fit: BoxFit.cover,
+                              );
+                            }
+                            return ColoredBox(
+                              color: palette.surfaceOverlay,
+                              child: Center(
+                                child: TextButton.icon(
+                                  onPressed: _addPhoto,
+                                  icon: Icon(
+                                    Icons.add_photo_alternate_outlined,
+                                    color: palette.accent,
+                                  ),
+                                  label: Text(
+                                    'Añadir fotos del lugar',
+                                    style: TextStyle(color: palette.accent),
+                                  ),
                                 ),
                               ),
+                            );
+                          },
+                        ),
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: IgnorePointer(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
                             ),
-                          );
-                        },
-                      ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: IgnorePointer(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '⌘V',
-                            style: AppTypography.mono(palette).copyWith(
-                              fontSize: 10,
-                              color: Colors.white70,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.45),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '⌘V',
+                              style: AppTypography.mono(
+                                palette,
+                              ).copyWith(fontSize: 10, color: Colors.white70),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  Positioned(
-                    top: 14,
-                    right: 14,
-                    child: _Glass(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      child: InkWell(
-                        onTap: () async {
-                          await _edit('Coordenadas', 'coords', coords);
-                          await _edit('Elevación', 'elevation', elevation);
-                        },
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              coords.isEmpty ? 'Toca para coords' : coords,
-                              style: AppTypography.mono(
-                                palette,
-                              ).copyWith(fontSize: 11, color: Colors.white),
-                            ),
-                            if (elevation.isNotEmpty)
-                              Text(
-                                elevation,
-                                style: AppTypography.mono(palette).copyWith(
-                                  fontSize: 10,
-                                  color: palette.textTertiary,
+                      Positioned(
+                        top: 14,
+                        right: 14,
+                        child: _Glass(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          child: InkWell(
+                            onTap: _locateSite,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                if (widget.site?.placeLabel != null)
+                                  Text(
+                                    widget.site!.placeLabel!,
+                                    style: AppTypography.mono(palette).copyWith(
+                                      fontSize: 11,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                Text(
+                                  _coordsText().isEmpty
+                                      ? 'Ubicar en el mapa'
+                                      : _coordsText(),
+                                  style: AppTypography.mono(
+                                    palette,
+                                  ).copyWith(fontSize: 11, color: Colors.white),
                                 ),
+                                InkWell(
+                                  onTap: () => _edit(
+                                    'Elevación',
+                                    'elevation',
+                                    elevation,
+                                  ),
+                                  child: Text(
+                                    elevation.isEmpty
+                                        ? 'Añadir elevación'
+                                        : elevation,
+                                    style: AppTypography.mono(palette).copyWith(
+                                      fontSize: 10,
+                                      color: palette.textTertiary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 16,
+                        bottom: 16,
+                        child: Row(
+                          children: [
+                            _Pill(
+                              icon: Icons.wb_sunny_outlined,
+                              label: intExt.isEmpty ? 'INT / EXT' : intExt,
+                              palette: palette,
+                              onTap: () => _edit('INT/EXT', 'intExt', intExt),
+                            ),
+                            const SizedBox(width: 8),
+                            _Pill(
+                              label: 'LOC: $locLabel',
+                              palette: palette,
+                              onTap: () => _edit(
+                                'Nombre del lugar',
+                                'locLabel',
+                                locLabel,
                               ),
+                            ),
                           ],
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                  Positioned(
-                    left: 16,
-                    bottom: 16,
-                    child: Row(
-                      children: [
-                        _Pill(
-                          icon: Icons.wb_sunny_outlined,
-                          label: intExt,
-                          palette: palette,
-                          onTap: () => _edit('INT/EXT', 'intExt', intExt),
-                        ),
-                        const SizedBox(width: 8),
-                        _Pill(
-                          label: 'LOC: $locLabel',
-                          palette: palette,
-                          onTap: () => _edit('Label LOC', 'locLabel', locLabel),
-                        ),
-                      ],
-                    ),
-                  ),
-                  ],
                 ),
               ),
             ),
@@ -763,27 +1377,32 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                     children: [
                       _CardHead(
                         icon: Icons.light_mode_outlined,
-                        label: 'Luz del Sitio',
+                        label: 'Luz del sitio',
                         palette: palette,
                       ),
                       const SizedBox(height: 14),
                       _Kv(
-                        label: 'Contrast Ratio',
+                        label: 'Contraste',
                         value: contrast,
                         onTap: () =>
-                            _edit('Contrast Ratio', 'contrastRatio', contrast),
+                            _edit('Contraste', 'contrastRatio', contrast),
                         palette: palette,
                       ),
                       _Kv(
-                        label: 'Quality of Light',
+                        label: 'Calidad de la luz',
                         value: quality,
-                        onTap: () => _edit('Quality', 'lightQuality', quality),
+                        onTap: () =>
+                            _edit('Calidad de la luz', 'lightQuality', quality),
                         palette: palette,
                       ),
                       _Kv(
-                        label: 'Bounce Potential',
+                        label: 'Rebote del lugar',
                         value: bounce,
-                        onTap: () => _edit('Bounce', 'bouncePotential', bounce),
+                        onTap: () => _edit(
+                          'Rebote del lugar',
+                          'bouncePotential',
+                          bounce,
+                        ),
                         palette: palette,
                       ),
                       const SizedBox(height: 10),
@@ -825,6 +1444,26 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                 ),
                 const SizedBox(height: 16),
                 _SolarCard(
+                  path: sun,
+                  dayLabel: sun == null
+                      ? null
+                      : '${sunDay.day}/${sunDay.month}/${sunDay.year}',
+                  onPickDay: sun == null
+                      ? null
+                      : () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: sunDay,
+                            firstDate: DateTime(sunDay.year - 2),
+                            lastDate: DateTime(sunDay.year + 5),
+                            helpText: '¿Qué día ruedas aquí?',
+                          );
+                          if (picked == null) return;
+                          await widget.onExtras({
+                            'sunDate':
+                                '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}',
+                          });
+                        },
                   azimuth: azimuth,
                   sunrise: sunrise,
                   sunriseAz: sunriseAz,
@@ -837,12 +1476,13 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                   shadow: shadow,
                   solarNote: _model.solarOrientation ?? '',
                   palette: palette,
+                  onCalculate: null,
                   onEditAzimuth: () async {
                     final ctrl = TextEditingController(text: '$azimuth');
                     final v = await showDialog<String>(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                        title: const Text('Azimuth (°)'),
+                        title: const Text('Acimut (°)'),
                         content: TextField(
                           controller: ctrl,
                           keyboardType: TextInputType.number,
@@ -901,33 +1541,34 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                     children: [
                       _CardHead(
                         icon: Icons.cloud_outlined,
-                        label: 'Condiciones Atmosféricas',
+                        label: 'Condiciones atmosféricas',
                         palette: palette,
                       ),
                       const SizedBox(height: 12),
                       _Kv(
-                        label: 'Weather',
+                        label: 'Tiempo',
                         value: weather,
-                        onTap: () => _edit('Weather', 'weather', weather),
+                        onTap: () => _edit('Tiempo', 'weather', weather),
                         palette: palette,
                       ),
                       _Kv(
-                        label: 'Humidity / Haze',
+                        label: 'Humedad y bruma',
                         value: humidity,
-                        onTap: () => _edit('Humidity', 'humidity', humidity),
+                        onTap: () =>
+                            _edit('Humedad y bruma', 'humidity', humidity),
                         palette: palette,
                       ),
                       _Kv(
-                        label: 'Sky Quality',
+                        label: 'Cielo',
                         value: sky,
-                        onTap: () => _edit('Sky', 'skyQuality', sky),
+                        onTap: () => _edit('Cielo', 'skyQuality', sky),
                         palette: palette,
                         accent: true,
                       ),
                       _Kv(
-                        label: 'Wind',
+                        label: 'Viento',
                         value: wind,
-                        onTap: () => _edit('Wind', 'wind', wind),
+                        onTap: () => _edit('Viento', 'wind', wind),
                         palette: palette,
                       ),
                     ],
@@ -948,7 +1589,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                   critical: critical,
                   palette: palette,
                   onEditPsychology: () => _edit(
-                    'Spatial Psychology',
+                    'Psicología del espacio',
                     'spatialPsychology',
                     psychology,
                     lines: 5,
@@ -989,7 +1630,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                     children: [
                       _CardHead(
                         icon: Icons.lightbulb_outline,
-                        label: 'Practical Light Sources',
+                        label: 'Luces del propio lugar',
                         palette: palette,
                       ),
                       const SizedBox(height: 12),
@@ -1132,7 +1773,18 @@ class _SolarCard extends StatelessWidget {
   final void Function(String key, String title, String val) onEditField;
   final VoidCallback onEditSolarNote;
 
+  /// Nulo si la localización no está ubicada en el mapa.
+  final VoidCallback? onCalculate;
+
+  /// El sol calculado con las coordenadas; nulo sin ubicación.
+  final SunDayPath? path;
+  final String? dayLabel;
+  final VoidCallback? onPickDay;
+
   const _SolarCard({
+    this.path,
+    this.dayLabel,
+    this.onPickDay,
     required this.azimuth,
     required this.sunrise,
     required this.sunriseAz,
@@ -1148,6 +1800,7 @@ class _SolarCard extends StatelessWidget {
     required this.onEditAzimuth,
     required this.onEditField,
     required this.onEditSolarNote,
+    this.onCalculate,
   });
 
   @override
@@ -1161,6 +1814,27 @@ class _SolarCard extends StatelessWidget {
             label: 'Orientación Solar',
             palette: palette,
           ),
+          if (path != null)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Calculado con la ubicación · $dayLabel',
+                    style: AppTypography.caption(palette),
+                  ),
+                ),
+                TextButton(
+                  onPressed: onPickDay,
+                  child: const Text('Cambiar día'),
+                ),
+              ],
+            )
+          else
+            Text(
+              'Ubica la localización en el mapa (abajo, en «Ubicación») y el '
+              'sol se calcula solo.',
+              style: AppTypography.caption(palette),
+            ),
           const SizedBox(height: 8),
           InkWell(
             onTap: onEditSolarNote,
@@ -1186,6 +1860,7 @@ class _SolarCard extends StatelessWidget {
                   painter: _AzimuthDialPainter(
                     azimuth: azimuth,
                     accent: palette.accent,
+                    path: path,
                   ),
                   child: Center(
                     child: Column(
@@ -1200,7 +1875,7 @@ class _SolarCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'AZIMUTH',
+                          path == null ? 'ACIMUT' : 'FACHADA',
                           style: AppTypography.mono(
                             palette,
                           ).copyWith(fontSize: 10, color: palette.textTertiary),
@@ -1217,26 +1892,26 @@ class _SolarCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _MiniStat(
-                  label: 'Sunrise',
+                  label: 'Amanecer',
                   value: sunrise,
-                  sub: 'Az: $sunriseAz',
+                  sub: sunriseAz.isEmpty ? null : 'Acimut $sunriseAz',
                   palette: palette,
                   onTap: () {
-                    onEditField('sunrise', 'Sunrise', sunrise);
-                    onEditField('sunriseAz', 'Sunrise Az', sunriseAz);
+                    onEditField('sunrise', 'Amanecer', sunrise);
+                    onEditField('sunriseAz', 'Acimut del amanecer', sunriseAz);
                   },
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _MiniStat(
-                  label: 'Sunset',
+                  label: 'Atardecer',
                   value: sunset,
-                  sub: 'Az: $sunsetAz',
+                  sub: sunsetAz.isEmpty ? null : 'Acimut $sunsetAz',
                   palette: palette,
                   onTap: () {
-                    onEditField('sunset', 'Sunset', sunset);
-                    onEditField('sunsetAz', 'Sunset Az', sunsetAz);
+                    onEditField('sunset', 'Atardecer', sunset);
+                    onEditField('sunsetAz', 'Acimut del atardecer', sunsetAz);
                   },
                 ),
               ),
@@ -1254,27 +1929,32 @@ class _SolarCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _Kv(
-            label: 'Blue Hour',
+            label: 'Hora azul',
             value: blueHour,
-            onTap: () => onEditField('blueHour', 'Blue Hour', blueHour),
+            onTap: () => onEditField('blueHour', 'Hora azul', blueHour),
             palette: palette,
           ),
           _Kv(
-            label: 'Golden Hour',
+            label: 'Hora dorada',
             value: goldenHour,
-            onTap: () => onEditField('goldenHour', 'Golden Hour', goldenHour),
+            onTap: () => onEditField('goldenHour', 'Hora dorada', goldenHour),
             palette: palette,
           ),
           _Kv(
-            label: 'Max Elevation',
+            label: 'Altura máxima del sol',
             value: maxElev,
-            onTap: () => onEditField('maxElevation', 'Max Elevation', maxElev),
+            onTap: () =>
+                onEditField('maxElevation', 'Altura máxima del sol', maxElev),
             palette: palette,
           ),
           _Kv(
-            label: 'Shadow Ratio (Noon)',
+            label: 'Largo de sombra a mediodía',
             value: shadow,
-            onTap: () => onEditField('shadowRatio', 'Shadow Ratio', shadow),
+            onTap: () => onEditField(
+              'shadowRatio',
+              'Largo de sombra a mediodía',
+              shadow,
+            ),
             palette: palette,
           ),
         ],
@@ -1326,7 +2006,7 @@ class _NarrativeStagingCard extends StatelessWidget {
         children: [
           _CardHead(
             icon: Icons.psychology_outlined,
-            label: 'Refuerzo Narrativo & Staging',
+            label: 'Refuerzo narrativo y puesta en escena',
             palette: palette,
           ),
           const SizedBox(height: 16),
@@ -1334,16 +2014,16 @@ class _NarrativeStagingCard extends StatelessWidget {
             builder: (context, c) {
               final wide = c.maxWidth >= 520;
               final a = _NarrativeBlock(
-                title: 'Spatial Psychology',
+                title: 'Psicología del espacio',
                 body: psychology,
-                hint: 'Toca para definir…',
+                hint: 'Qué le hace el lugar al personaje…',
                 onTap: onEditPsychology,
                 palette: palette,
               );
               final b = _NarrativeBlock(
-                title: 'Estrategia General',
+                title: 'Estrategia general',
                 body: strategy,
-                hint: 'Toca para estrategia de luz/staging…',
+                hint: 'Cómo se va a iluminar y a mover la cámara aquí…',
                 onTap: onEditStrategy,
                 palette: palette,
               );
@@ -1362,23 +2042,23 @@ class _NarrativeStagingCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _NarrativeBlock(
-            title: 'Geografía Narrativa',
+            title: 'Geografía narrativa',
             body: narrativeGeo,
-            hint: 'Cómo el espacio fuerza el blocking…',
+            hint: 'Cómo el espacio condiciona los movimientos de los actores…',
             onTap: onEditGeo,
             palette: palette,
           ),
           const SizedBox(height: 12),
           _NarrativeBlock(
-            title: 'Textura y Materialidad',
+            title: 'Textura y materiales',
             body: textureMat,
-            hint: 'Concreto, metal, absorción…',
+            hint: 'Hormigón, metal, cuánto absorbe o devuelve la luz…',
             onTap: onEditTexture,
             palette: palette,
           ),
           const SizedBox(height: 12),
           _NarrativeBlock(
-            title: 'Paisaje Sonoro',
+            title: 'Paisaje sonoro',
             body: soundscape,
             hint: 'Reverberación, ritmo de cámara…',
             onTap: onEditSound,
@@ -1597,7 +2277,7 @@ class _MapsCard extends StatelessWidget {
         children: [
           _CardHead(
             icon: Icons.map_outlined,
-            label: 'Google Earth Location',
+            label: 'En el mapa',
             palette: palette,
           ),
           const SizedBox(height: 12),
@@ -1687,7 +2367,7 @@ class _RefsGallery extends StatelessWidget {
               Expanded(
                 child: _CardHead(
                   icon: Icons.collections_outlined,
-                  label: 'Referencias de Ángulo',
+                  label: 'Referencias de ángulo',
                   palette: palette,
                 ),
               ),
@@ -1748,35 +2428,6 @@ class _RefsGallery extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _SiteFolderHeader extends StatelessWidget {
-  final String siteName;
-  final VoidCallback onOpenLocations;
-
-  const _SiteFolderHeader({
-    required this.siteName,
-    required this.onOpenLocations,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Row(
-      children: [
-        Icon(Icons.folder_outlined, size: 18, color: palette.accent),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(siteName, style: AppTypography.titleMedium(palette)),
-        ),
-        TextButton.icon(
-          onPressed: onOpenLocations,
-          icon: const Icon(Icons.open_in_new, size: 16),
-          label: const Text('Localizaciones'),
-        ),
-      ],
     );
   }
 }
@@ -1862,7 +2513,7 @@ class _Kv extends StatelessWidget {
             ),
             Flexible(
               child: Text(
-                value,
+                value.isEmpty ? '—' : value,
                 textAlign: TextAlign.right,
                 style: AppTypography.mono(palette).copyWith(
                   fontSize: 12,
@@ -1918,7 +2569,7 @@ class _MiniStat extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              value,
+              value.isEmpty ? '—' : value,
               style: AppTypography.mono(palette).copyWith(
                 fontSize: 13,
                 color: accentValue ? palette.accent : Colors.white,
@@ -2032,7 +2683,11 @@ class _AzimuthDialPainter extends CustomPainter {
   final double azimuth;
   final Color accent;
 
-  _AzimuthDialPainter({required this.azimuth, required this.accent});
+  /// Recorrido del sol del día: se dibuja dentro del dial (más cerca del
+  /// centro cuanto más alto), con su salida y su puesta.
+  final SunDayPath? path;
+
+  _AzimuthDialPainter({required this.azimuth, required this.accent, this.path});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2057,6 +2712,44 @@ class _AzimuthDialPainter extends CustomPainter {
       canvas.drawLine(p1, p2, tick);
     }
 
+    final day = path;
+    if (day != null && day.path.isNotEmpty) {
+      Offset at(double az, double alt) {
+        final a = (az - 90) * math.pi / 180;
+        final d = (r - 10) * (1 - (alt.clamp(0, 90) / 90));
+        return Offset(c.dx + math.cos(a) * d, c.dy + math.sin(a) * d);
+      }
+
+      final trail = Path();
+      for (final (i, p) in day.path.indexed) {
+        final o = at(p.azimuth, p.altitude);
+        i == 0 ? trail.moveTo(o.dx, o.dy) : trail.lineTo(o.dx, o.dy);
+      }
+      canvas.drawPath(
+        trail,
+        Paint()
+          ..color = const Color(0xFFFFB347)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+      for (final (az, color) in [
+        (day.sunriseAzimuth, const Color(0xFFFFD27F)),
+        (day.sunsetAzimuth, const Color(0xFFFF8A3D)),
+      ]) {
+        if (az == null) continue;
+        canvas.drawCircle(at(az, 0), 5, Paint()..color = color);
+      }
+      // Norte arriba.
+      final north = TextPainter(
+        text: const TextSpan(
+          text: 'N',
+          style: TextStyle(fontSize: 10, color: Colors.white54),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      north.paint(canvas, Offset(c.dx - north.width / 2, c.dy - r + 10));
+    }
+
     final rad = (azimuth - 90) * math.pi / 180;
     final sun = Offset(
       c.dx + math.cos(rad) * (r - 18),
@@ -2071,122 +2764,10 @@ class _AzimuthDialPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _AzimuthDialPainter oldDelegate) =>
-      oldDelegate.azimuth != azimuth || oldDelegate.accent != accent;
+      oldDelegate.azimuth != azimuth ||
+      oldDelegate.accent != accent ||
+      oldDelegate.path != path;
 }
-
-class _LocationHubHeader extends StatelessWidget {
-  final AppPalette palette;
-  final int projectId;
-  final List<LocationSite> sites;
-  final List<LocationBasePlan> allSets;
-  final LocationBasePlan? activeSet;
-  final ValueChanged<LocationBasePlan> onSelectSet;
-  final VoidCallback onCreateSite;
-  final void Function(int siteId) onCreateSet;
-
-  const _LocationHubHeader({
-    required this.palette,
-    required this.projectId,
-    required this.sites,
-    required this.allSets,
-    required this.activeSet,
-    required this.onSelectSet,
-    required this.onCreateSite,
-    required this.onCreateSet,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final orphanSets = allSets.where((s) => s.siteId == null).toList();
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: palette.surfaceElevated,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: palette.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'LOCALIZACIONES DEL PROYECTO',
-                  style: AppTypography.mono(palette).copyWith(
-                    fontSize: 10,
-                    letterSpacing: 1.2,
-                    color: palette.textSecondary,
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: onCreateSite,
-                icon: const Icon(Icons.add_location_alt_outlined, size: 16),
-                label: const Text('Nueva localización'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (sites.isEmpty && allSets.isEmpty)
-            Text(
-              'Crea una localización (site) y añade sets de rodaje dentro.',
-              style: AppTypography.caption(palette),
-            ),
-          for (final site in sites) ...[
-            Text(
-              site.name.toUpperCase(),
-              style: AppTypography.label(palette).copyWith(
-                fontSize: 11,
-                color: palette.success,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final set in allSets.where((s) => s.siteId == site.id))
-                  ChoiceChip(
-                    label: Text(set.locationName),
-                    selected: activeSet?.id == set.id,
-                    onSelected: (_) => onSelectSet(set),
-                    selectedColor: palette.accent.withValues(alpha: 0.2),
-                  ),
-                ActionChip(
-                  avatar: Icon(Icons.add, size: 16, color: palette.accent),
-                  label: const Text('Añadir set'),
-                  onPressed: () => onCreateSet(site.id),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-          ],
-          if (orphanSets.isNotEmpty) ...[
-            Text(
-              'SETS SIN LOCALIZACIÓN',
-              style: AppTypography.label(palette).copyWith(fontSize: 11),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final set in orphanSets)
-                  ChoiceChip(
-                    label: Text(set.locationName),
-                    selected: activeSet?.id == set.id,
-                    onSelected: (_) => onSelectSet(set),
-                  ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 
 /// Pincelada de luz sincronizada desde Iluminación + CTA de drill-down.
 class _LightingIdeaFromBible extends ConsumerWidget {
@@ -2207,26 +2788,41 @@ class _LightingIdeaFromBible extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseProvider);
-
-    return FutureBuilder<VisualBibleNarrativeCard?>(
-      future: () async {
-        await LightingNarrativeCardsService.ensureSeeded(
-          db: db,
-          bibleId: bibleId,
-          projectId: projectId,
-        );
-        return db.getNarrativeCardForLocationLight(bibleId, planId);
-      }(),
+    // Se escucha la ficha: sin un «cargando» en cada repintado, la página
+    // no cambia de alto mientras se baja.
+    return StreamBuilder<VisualBibleNarrativeCard?>(
+      stream:
+          (db.select(db.visualBibleNarrativeCards)
+                ..where(
+                  (c) =>
+                      c.bibleId.equals(bibleId) &
+                      c.sectionId.equals(BibleSectionId.lighting) &
+                      c.kind.equals(NarrativeCardKind.locationLight) &
+                      c.locationBasePlanId.equals(planId),
+                )
+                ..limit(1))
+              .watchSingleOrNull(),
       builder: (context, snap) {
         final card = snap.data;
-        final summary = card != null
-            ? NarrativeCardModel.fromRow(card).summary
-            : null;
-        final text = (summary?.isNotEmpty == true)
-            ? summary!
+        final page = card == null ? null : lightingCardPageOf(card);
+        final cards = page == null
+            ? const <BibleCard>[]
+            : [
+                for (final c in BibleCard.listFrom(
+                  page.values[LightingCardPage.mosaic],
+                ))
+                  if (!c.isEmpty) c,
+              ];
+        final body = (card?.body ?? '').trim();
+        final text = body.isNotEmpty
+            ? body
             : (lightingNote.isNotEmpty
-                ? lightingNote
-                : 'Sin idea de luz aún — ábrela en Iluminación.');
+                  ? lightingNote
+                  : cards.isEmpty
+                  ? 'Sin idea de luz aún: se desarrolla en Iluminación › Luz '
+                        'por localización.'
+                  : '');
+        final metrics = page?.metrics;
 
         return Container(
           width: double.infinity,
@@ -2249,7 +2845,7 @@ class _LightingIdeaFromBible extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'IDEA DE LUZ (DESDE ILUMINACIÓN)',
+                      'IDEA DE LUZ · CÓMO LA IMAGINAMOS',
                       style: AppTypography.mono(palette).copyWith(
                         fontSize: 11,
                         letterSpacing: 1.1,
@@ -2257,68 +2853,76 @@ class _LightingIdeaFromBible extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  TextButton(
-                    onPressed: () async {
-                      if (card != null) {
-                        await NarrativeCardDetailPage.open(
-                          context,
-                          projectId: projectId,
-                          bibleId: bibleId,
-                          cardId: card.id,
-                        );
-                      } else {
-                        BibleNavigationScope.goToSection(
-                          context,
-                          BibleSectionId.lighting,
-                          planId: planId,
-                        );
-                      }
-                    },
-                    child: Text(
-                      'Abrir en Iluminación',
-                      style: TextStyle(color: palette.accent, fontSize: 12),
+                  if (card != null)
+                    TextButton(
+                      onPressed: () => openLightingCard(
+                        context,
+                        projectId: projectId,
+                        bibleId: bibleId,
+                        cardId: card.id,
+                      ),
+                      child: Text(
+                        'Abrir en Iluminación',
+                        style: TextStyle(color: palette.accent, fontSize: 12),
+                      ),
                     ),
-                  ),
                 ],
               ),
-              const SizedBox(height: 10),
-              Text(
-                text,
-                style: AppTypography.bodyMedium(palette).copyWith(
-                  color: palette.textSecondary,
-                  height: 1.45,
+              if (metrics != null && !metrics.isEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final chip in [
+                      if (metrics.usesColors)
+                        'HSI · ${metrics.colors.map((c) => c.name).join(', ')}'
+                      else if (metrics.kelvin != null)
+                        'CCT · ${metrics.kelvin} K',
+                      if (metrics.ratioOption case final r?) r.label,
+                    ])
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: palette.border),
+                        ),
+                        child: Text(
+                          chip,
+                          style: AppTypography.mono(
+                            palette,
+                          ).copyWith(fontSize: 11),
+                        ),
+                      ),
+                  ],
                 ),
-              ),
-              if (card != null) ...[
+              ],
+              if (text.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  text,
+                  style: AppTypography.bodyMedium(
+                    palette,
+                  ).copyWith(color: palette.textSecondary, height: 1.45),
+                ),
+              ],
+              if (cards.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                SizedBox(
-                  height: 72,
-                  child: StreamBuilder<List<MoodboardImage>>(
-                    stream: db.watchMoodboardImagesForCard(projectId, card.id),
-                    builder: (context, imgSnap) {
-                      final imgs = imgSnap.data ?? [];
-                      if (imgs.isEmpty) return const SizedBox.shrink();
-                      return ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: imgs.length.clamp(0, 8),
-                        separatorBuilder: (_, __) => const SizedBox(width: 6),
-                        itemBuilder: (context, i) {
-                          final path = imgs[i].imagePath;
-                          if (!File(path).existsSync()) {
-                            return const SizedBox(width: 96);
-                          }
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: Image.file(
-                              File(path),
-                              width: 96,
-                              height: 72,
-                              fit: BoxFit.cover,
-                            ),
-                          );
-                        },
-                      );
-                    },
+                BibleImagePaths(
+                  source: BibleCardImageSource(
+                    projectId: projectId,
+                    bibleId: bibleId,
+                    sectionId: BibleSectionId.lighting,
+                  ),
+                  builder: (context, paths) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final c in cards)
+                        _IdeaCardRow(card: c, paths: paths, palette: palette),
+                    ],
                   ),
                 ),
               ],
@@ -2326,6 +2930,75 @@ class _LightingIdeaFromBible extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Una tarjeta de «Cómo la imaginamos»: su imagen, su título y sus
+/// bloques de texto.
+class _IdeaCardRow extends StatelessWidget {
+  final BibleCard card;
+  final Map<int, String> paths;
+  final AppPalette palette;
+
+  const _IdeaCardRow({
+    required this.card,
+    required this.paths,
+    required this.palette,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = card.allImageIds
+        .map((id) => paths[id])
+        .whereType<String>()
+        .where((p) => File(p).existsSync())
+        .firstOrNull;
+    final lines = [
+      if (card.body.trim().isNotEmpty) card.body.trim(),
+      for (final point in card.points)
+        if (!point.isEmpty)
+          [
+            point.title.trim(),
+            point.body.trim(),
+          ].where((t) => t.isNotEmpty).join(': '),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              width: 128,
+              height: 72,
+              child: cover == null
+                  ? const ColoredBox(color: Colors.black26)
+                  : Image.file(File(cover), fit: BoxFit.cover, cacheWidth: 400),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  card.title.trim().isEmpty ? 'Sin título' : card.title,
+                  style: AppTypography.bodyLarge(palette),
+                ),
+                for (final line in lines)
+                  Text(
+                    line,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption(palette),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

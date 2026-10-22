@@ -53,7 +53,7 @@ void main() {
 
   group('BibleSubsectionKindCatalog', () {
     test('cubre los tipos base y de contenedor con icono y fieldType', () {
-      expect(BibleSubsectionKindCatalog.all.length, 10);
+      expect(BibleSubsectionKindCatalog.all.length, 15);
       expect(
         BibleSubsectionKindCatalog.byId(BibleSubsectionKindId.textField)!
             .fieldType,
@@ -106,19 +106,19 @@ void main() {
       );
       expect(
         byKey['lightBehaviors']!.subsectionKind,
-        BibleSubsectionKindId.dynamicBlocks,
+        BibleSubsectionKindId.behaviorMosaic,
       );
       expect(
         byKey['filmRefs']!.subsectionKind,
-        BibleSubsectionKindId.dynamicBlocks,
+        BibleSubsectionKindId.cardDeck,
       );
       expect(
         byKey['locationLights']!.subsectionKind,
-        BibleSubsectionKindId.dynamicBlocks,
+        BibleSubsectionKindId.cardDeck,
       );
       expect(
         byKey['lightBehaviors']!.catalogKind.icon,
-        Icons.view_module_outlined,
+        Icons.grid_view_outlined,
       );
     });
   });

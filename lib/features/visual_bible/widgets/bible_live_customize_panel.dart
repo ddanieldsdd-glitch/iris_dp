@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/visual_bible/bible_section_ids.dart';
+import 'active_bible_pages.dart';
 import 'bible_quick_adjust_panel.dart';
 import 'bible_section_fields_editor.dart';
 import 'bible_structure_editor.dart';
@@ -186,9 +187,21 @@ class _BibleLiveCustomizePanelState
                           embedded: true,
                         )
                       else
-                        _PointsTab(
-                          bibleId: widget.bibleId,
-                          definition: _isSettings || _isOverview ? null : def,
+                        Consumer(
+                          builder: (context, ref, _) {
+                            // Dentro de una ficha, sus widgets; si no, los
+                            // de la pantalla.
+                            final pages = ref.watch(activeBiblePagesProvider);
+                            if (pages.isNotEmpty) {
+                              return ActiveBiblePagesPanel(pages: pages);
+                            }
+                            return _PointsTab(
+                              bibleId: widget.bibleId,
+                              definition: _isSettings || _isOverview
+                                  ? null
+                                  : def,
+                            );
+                          },
                         ),
                       _StructureTab(
                         bibleId: widget.bibleId,
@@ -260,9 +273,7 @@ class _StructureTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: BibleStructureEditor(bibleId: bibleId),
-        ),
+        Expanded(child: BibleStructureEditor(bibleId: bibleId)),
         Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
           child: OutlinedButton.icon(

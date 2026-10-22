@@ -1,4 +1,5 @@
 import '../../core/database/app_database.dart';
+import 'shot_sheet_data.dart';
 import 'storyboard_export_style.dart';
 
 /// Modo de exportación de un grupo de planos.
@@ -21,36 +22,35 @@ enum StoryboardSequenceLayout {
 
 extension StoryboardGroupExportModeX on StoryboardGroupExportMode {
   String get label => switch (this) {
-        StoryboardGroupExportMode.sequences => 'EXPORT SEQUENCES',
-        StoryboardGroupExportMode.asShots => 'EXPORT AS SHOTS',
-      };
+    StoryboardGroupExportMode.sequences => 'EXPORT SEQUENCES',
+    StoryboardGroupExportMode.asShots => 'EXPORT AS SHOTS',
+  };
 }
 
 extension StoryboardSequenceLayoutX on StoryboardSequenceLayout {
   String get title => switch (this) {
-        StoryboardSequenceLayout.storyboard => 'STORYBOARD',
-        StoryboardSequenceLayout.shotList => 'SHOT LIST',
-      };
+    StoryboardSequenceLayout.storyboard => 'STORYBOARD',
+    StoryboardSequenceLayout.shotList => 'SHOT LIST',
+  };
 
   String get description => switch (this) {
-        StoryboardSequenceLayout.storyboard =>
-          'PDF apaisado estilo storyboard (SB), 9 planos por página.',
-        StoryboardSequenceLayout.shotList =>
-          'PDF vertical shot list (SL), 4 planos por página con datos '
+    StoryboardSequenceLayout.storyboard =>
+      'PDF apaisado estilo storyboard (SB), 9 planos por página.',
+    StoryboardSequenceLayout.shotList =>
+      'PDF vertical shot list (SL), 4 planos por página con datos '
           'completos de cámara, óptica y notas.',
-      };
+  };
 
   /// Sufijo Artemis: `_SB` / `_SL`.
   String get artemisFileSuffix => switch (this) {
-        StoryboardSequenceLayout.storyboard => 'SB',
-        StoryboardSequenceLayout.shotList => 'SL',
-      };
+    StoryboardSequenceLayout.storyboard => 'SB',
+    StoryboardSequenceLayout.shotList => 'SL',
+  };
 
   String defaultFilename(Project project, Scene scene) {
-    final safe =
-        project.name.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
+    final safe = project.name.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
     final base = safe.isEmpty ? 'proyecto' : safe;
-    return '${base}_Sc${scene.number}_$artemisFileSuffix.pdf';
+    return '${base}_Sc${scene.label}_$artemisFileSuffix.pdf';
   }
 }
 
@@ -60,29 +60,35 @@ class StoryboardGroupExportChoice {
   final StoryboardSequenceLayout? sequenceLayout;
   final StoryboardExportStyle? shotStyle;
 
+  /// Imagen que representa cada plano al exportarlo como hoja.
+  final ShotImageSource imageSource;
+
   const StoryboardGroupExportChoice._({
     required this.mode,
     this.sequenceLayout,
     this.shotStyle,
+    this.imageSource = ShotImageSource.storyboard,
   });
 
   factory StoryboardGroupExportChoice.sequences(
     StoryboardSequenceLayout layout,
-  ) =>
-      StoryboardGroupExportChoice._(
-        mode: StoryboardGroupExportMode.sequences,
-        sequenceLayout: layout,
-      );
+  ) => StoryboardGroupExportChoice._(
+    mode: StoryboardGroupExportMode.sequences,
+    sequenceLayout: layout,
+  );
 
-  factory StoryboardGroupExportChoice.asShots(StoryboardExportStyle style) =>
-      StoryboardGroupExportChoice._(
-        mode: StoryboardGroupExportMode.asShots,
-        shotStyle: style,
-      );
+  factory StoryboardGroupExportChoice.asShots(
+    StoryboardExportStyle style, {
+    ShotImageSource imageSource = ShotImageSource.storyboard,
+  }) => StoryboardGroupExportChoice._(
+    mode: StoryboardGroupExportMode.asShots,
+    shotStyle: style,
+    imageSource: imageSource,
+  );
 
   String get exportLabel => switch (mode) {
-        StoryboardGroupExportMode.sequences =>
-          sequenceLayout?.artemisFileSuffix ?? 'SEC',
-        StoryboardGroupExportMode.asShots => shotStyle?.title ?? 'PLANOS',
-      };
+    StoryboardGroupExportMode.sequences =>
+      sequenceLayout?.artemisFileSuffix ?? 'SEC',
+    StoryboardGroupExportMode.asShots => shotStyle?.title ?? 'PLANOS',
+  };
 }

@@ -5,7 +5,8 @@ import '../../core/theme/app_typography.dart';
 
 /// Badge circular con número de escena y color representativo (estilo guion técnico).
 class SceneNumberBadge extends StatelessWidget {
-  final int sceneNumber;
+  /// Número visible, con su letra si la tiene («13A»).
+  final String sceneNumber;
   final Color color;
   final double size;
 
@@ -35,7 +36,7 @@ class SceneNumberBadge extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: Text(
-        '$sceneNumber',
+        sceneNumber,
         style: TextStyle(
           color: _contrastText(color),
           fontSize: size * 0.42,
@@ -51,7 +52,8 @@ class SceneNumberBadge extends StatelessWidget {
 }
 
 class SceneHeaderRow extends StatelessWidget {
-  final int sceneNumber;
+  /// Número visible, con su letra si la tiene («13A»).
+  final String sceneNumber;
   final Color sceneColor;
   final String title;
   final String? subtitle;
@@ -98,7 +100,8 @@ class SceneHeaderRow extends StatelessWidget {
 class CameraPlanNavTarget {
   final int shotId;
   final int sceneId;
-  final int sceneNumber;
+  /// Número visible, con su letra si la tiene («13A»).
+  final String sceneNumber;
   final int shotNumber;
   final String sceneName;
   final Color sceneColor;

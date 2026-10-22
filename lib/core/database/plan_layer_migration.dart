@@ -168,7 +168,7 @@ class PlanLayerMigration {
               locationSiteId: Value(set == null ? site?.id : null),
               locationBasePlanId: Value(set?.id),
               name: set == null && site == null
-                  ? 'Escena ${scene.number} · Setup $letter'
+                  ? 'Escena ${scene.label} · Setup $letter'
                   : 'Setup $letter',
               status: const Value('en_desarrollo'),
               origin: const Value('planta'),

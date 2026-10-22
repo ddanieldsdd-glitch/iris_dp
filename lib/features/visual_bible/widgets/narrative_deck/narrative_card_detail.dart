@@ -1,3 +1,9 @@
+import '../../../../shared/visual_bible/bible_cards.dart';
+import '../../../../shared/visual_bible/lighting_metrics.dart';
+import '../bible_card_editor.dart';
+import '../bible_cards_widget.dart';
+import '../bible_point_panel.dart';
+import '../lighting/lighting_metrics_widget.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -415,7 +421,7 @@ class _NarrativeCardDetailPageState
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'STILLS COINCIDENTES',
+                    'IMÁGENES COINCIDENTES',
                     style: AppTypography.mono(palette).copyWith(
                       fontSize: 11,
                       letterSpacing: 1.2,
@@ -946,15 +952,6 @@ class _StyleContainerDetailBodyState extends State<_StyleContainerDetailBody> {
               palette: palette,
               onPalettePersisted: persistPalette,
             ),
-            const SizedBox(height: 16),
-            ContainerMetricsPanel(
-              card: card,
-              palette: palette,
-              onChanged: (updated) async {
-                widget.onCardUpdated(updated);
-                await widget.onPersistMeta(updated);
-              },
-            ),
             if (widget.technicalPanel != null) ...[
               const SizedBox(height: 16),
               ExpansionTile(
@@ -1029,6 +1026,51 @@ class _StyleContainerDetailBodyState extends State<_StyleContainerDetailBody> {
               ],
             );
           },
+        ),
+        const SizedBox(height: 24),
+        BiblePointPanel(
+          label: 'Luz: color y contraste',
+          icon: Icons.wb_incandescent_outlined,
+          child: LightingMetricsWidget(
+            // Lo nuevo va en `light`; si no está, lo que se movió en el
+            // panel antiguo de la ficha.
+            value: card.meta.containsKey('light')
+                ? LightingMetrics.fromJson(card.meta['light'])
+                : LightingMetrics.fromLegacy(
+                    ContainerMetricsPanel.metricsOf(card),
+                  ),
+            onChanged: (next) async {
+              final updated = card.copyWith(
+                meta: {...card.meta, 'light': next.toJson()},
+              );
+              widget.onCardUpdated(updated);
+              await widget.onPersistMeta(updated);
+            },
+          ),
+        ),
+        const SizedBox(height: 24),
+        BiblePointPanel(
+          label: 'Sub-puntos de esta idea',
+          icon: Icons.account_tree_outlined,
+          child: BibleCardsWidget(
+            // Cada sub-punto se abre en su ficha: texto e imágenes propios.
+            cards: BibleCard.listFrom(card.meta['points']),
+            imageSource: BibleCardImageSource(
+              projectId: widget.projectId,
+              bibleId: widget.bibleId,
+              sectionId: card.sectionId,
+            ),
+            onChanged: (points) async {
+              final updated = card.copyWith(
+                meta: {
+                  ...card.meta,
+                  'points': [for (final p in points) p.toJson()],
+                },
+              );
+              widget.onCardUpdated(updated);
+              await widget.onPersistMeta(updated);
+            },
+          ),
         ),
         const SizedBox(height: 24),
         ContainerStillsGrid(

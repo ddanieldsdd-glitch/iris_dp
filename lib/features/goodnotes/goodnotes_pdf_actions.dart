@@ -56,7 +56,6 @@ class GoodNotesPdfActions extends ConsumerWidget {
     WidgetRef ref,
     String action,
   ) async {
-    final palette = context.palette;
     final db = ref.read(databaseProvider);
     final annotated = AnnotatedPdfService(db);
 

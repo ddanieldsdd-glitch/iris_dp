@@ -1,14 +1,21 @@
 name: CI
 
 on:
+  # Todas las ramas: el trabajo vive semanas en ramas plan/* antes de main.
   push:
-    branches: [main, master]
+    branches: ['**']
   pull_request:
-    branches: [main, master]
+
+# Un push nuevo cancela el anterior de la misma rama.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: macos-latest
+    # Sin esto, un paso colgado agota las 6 horas de GitHub.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -20,9 +27,8 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Generate Drift code
-        run: dart run build_runner build --delete-conflicting-outputs
-
+      # El código de Drift (app_database.g.dart) está en el repositorio:
+      # regenerarlo aquí se colgaba siempre.
       - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 

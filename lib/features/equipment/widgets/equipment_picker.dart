@@ -179,14 +179,17 @@ class EquipmentPicker extends ConsumerWidget {
             ),
           ],
         ),
-        if (selectedId != null) ...[
+        // El elegido puede no estar en la lista (borrado del catálogo): sin
+        // él no se pintan sus acciones, en vez de romper la pantalla.
+        if (items.where((i) => idOf(i) == selectedId).firstOrNull
+            case final selected?) ...[
           const SizedBox(height: AppSpacing.sm),
           _EquipmentActions(
             projectId: projectId,
             equipmentType: equipmentType,
-            equipmentId: selectedId,
-            chip: chip(items.firstWhere((i) => idOf(i) == selectedId)),
-            subtitle: subtitle(items.firstWhere((i) => idOf(i) == selectedId)),
+            equipmentId: selectedId!,
+            chip: chip(selected),
+            subtitle: subtitle(selected),
           ),
         ],
       ],

@@ -15,6 +15,10 @@ enum BibleCardsLayout {
 
   /// En columnas, una idea por pilar.
   columns,
+
+  /// Mosaico de imágenes con nota: la primera grande, el resto en fila;
+  /// cada una con su imagen de fondo, sus datos cortos y su texto.
+  mosaic,
 }
 
 /// Tarjetas con título y desarrollo, reutilizables en cualquier pantalla:
@@ -28,12 +32,20 @@ class BibleCardsWidget extends StatelessWidget {
   /// las tarjetas son solo texto.
   final BibleCardImageSource? imageSource;
 
+  /// Textos de la ficha que se abre; nulo, los del diseño elegido.
+  final BibleCardEditorCopy? copy;
+
+  /// Rótulo del botón de añadir en el mosaico.
+  final String? addLabel;
+
   const BibleCardsWidget({
     super.key,
     required this.cards,
     required this.onChanged,
     this.layout = BibleCardsLayout.list,
     this.imageSource,
+    this.copy,
+    this.addLabel,
   });
 
   /// Abre la ficha de la tarjeta [index], o la de una nueva.
@@ -42,7 +54,11 @@ class BibleCardsWidget extends StatelessWidget {
     cards: cards,
     index: index,
     onChanged: onChanged,
-    copy: BibleCardEditorCopy.card,
+    copy:
+        copy ??
+        (layout == BibleCardsLayout.mosaic
+            ? BibleCardEditorCopy.mosaic
+            : BibleCardEditorCopy.card),
     imageSource: imageSource,
   );
 
@@ -76,6 +92,46 @@ class BibleCardsWidget extends StatelessWidget {
             ),
           _AddCard(label: addLabel, onTap: () => _edit(context, null)),
         ],
+      );
+    }
+
+    if (layout == BibleCardsLayout.mosaic) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : MediaQuery.sizeOf(context).width;
+          const gap = AppSpacing.md;
+          final columns = width >= 900 ? 3 : (width >= 520 ? 2 : 1);
+          final unit = (width - gap * (columns - 1)) / columns;
+          // La primera ocupa dos columnas cuando hay sitio.
+          double widthOf(int i) =>
+              i == 0 && columns > 1 ? unit * 2 + gap : unit;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (var i = 0; i < cards.length; i++)
+                SizedBox(
+                  width: widthOf(i),
+                  height: 240,
+                  child: _MosaicTile(
+                    card: cards[i],
+                    cover: _cover(i, paths),
+                    onTap: () => _edit(context, i),
+                  ),
+                ),
+              SizedBox(
+                width: cards.isEmpty ? width : unit,
+                height: cards.isEmpty ? 120 : 240,
+                child: _AddCard(
+                  label: addLabel ?? 'AÑADIR IMAGEN CON NOTA',
+                  onTap: () => _edit(context, null),
+                ),
+              ),
+            ],
+          );
+        },
       );
     }
 
@@ -245,6 +301,154 @@ class _CardTile extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
             ],
             _CardText(kicker: kicker, card: card),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Tarjeta de mosaico: la imagen llena la tarjeta y el texto va encima,
+/// sobre un degradado que lo hace legible.
+class _MosaicTile extends StatelessWidget {
+  final BibleCard card;
+  final String? cover;
+  final VoidCallback onTap;
+
+  const _MosaicTile({required this.card, required this.onTap, this.cover});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    // «CONTRASTE 8:1 · CAÍDA RÁPIDA» → dos pastillas.
+    final chips = [
+      for (final part in card.kicker.split(RegExp(r'[·|;]')))
+        if (part.trim().isNotEmpty) part.trim(),
+    ];
+    final more = card.allImageIds.length - 1;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (cover != null)
+              LayoutBuilder(
+                builder: (context, c) => BibleImageThumb(
+                  path: cover!,
+                  height: c.maxHeight,
+                  width: c.maxWidth,
+                ),
+              )
+            else
+              ColoredBox(
+                color: palette.background.withValues(alpha: 0.5),
+                child: Align(
+                  alignment: const Alignment(0, -0.4),
+                  child: Icon(
+                    Icons.add_photo_alternate_outlined,
+                    color: palette.textTertiary,
+                  ),
+                ),
+              ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Color(0xE6000000)],
+                  stops: [0.25, 1],
+                ),
+              ),
+            ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: palette.border),
+              ),
+            ),
+            if (more > 0)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '+$more',
+                    style: AppTypography.caption(
+                      palette,
+                    ).copyWith(color: Colors.white),
+                  ),
+                ),
+              ),
+            Positioned(
+              left: AppSpacing.md,
+              right: AppSpacing.md,
+              bottom: AppSpacing.md,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    card.title.trim().isEmpty ? 'Sin título' : card.title,
+                    style: AppTypography.titleMedium(palette).copyWith(
+                      color: card.title.trim().isEmpty
+                          ? Colors.white54
+                          : Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (chips.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: [
+                        for (final chip in chips.take(4))
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black45,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.white24),
+                            ),
+                            child: Text(
+                              chip.toUpperCase(),
+                              style: BiblePointPanel.labelStyle(
+                                palette,
+                              ).copyWith(fontSize: 10, color: Colors.white70),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                  if (card.body.trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      card.body,
+                      style: AppTypography.bodyMedium(
+                        palette,
+                      ).copyWith(color: Colors.white70, height: 1.35),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),

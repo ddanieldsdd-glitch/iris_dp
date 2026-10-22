@@ -84,10 +84,10 @@ void main() {
 
   group('NarrativeCardKind', () {
     test('labels', () {
-      expect(NarrativeCardKind.label(NarrativeCardKind.style), 'Contenedor de luz');
+      expect(NarrativeCardKind.label(NarrativeCardKind.style), 'Idea de luz');
       expect(
         NarrativeCardKind.label(NarrativeCardKind.locationLight),
-        'Localización (luz)',
+        'Luz de la localización',
       );
     });
   });

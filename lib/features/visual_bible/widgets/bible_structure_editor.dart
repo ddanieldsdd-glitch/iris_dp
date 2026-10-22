@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import 'bible_navigation_scope.dart';
+import '../../../core/widgets/safe_reorderable_column.dart';
 
 /// Orden de las pantallas visibles, para el panel lateral.
 ///
@@ -75,11 +76,12 @@ class _ReorderList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return ReorderableListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+    return SafeReorderableColumn(
+      scrollable: false,
       itemCount: defs.length,
-      onReorderItem: (oldIndex, newIndex) {
+      keyOf: (index) => ValueKey(defs[index].id),
+      dragLabel: (index) => defs[index].label,
+      onReorder: (oldIndex, newIndex) {
         final next = List<BibleSectionDefinition>.from(defs);
         next.insert(newIndex, next.removeAt(oldIndex));
         onReorder(next.map((d) => d.id).toList());
@@ -87,7 +89,6 @@ class _ReorderList extends StatelessWidget {
       itemBuilder: (context, index) {
         final def = defs[index];
         return Material(
-          key: ValueKey(def.id),
           color: palette.surfaceOverlay,
           borderRadius: BorderRadius.circular(8),
           child: ListTile(

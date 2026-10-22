@@ -2,17 +2,20 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../cloud/cloud_runtime_config.dart';
 import '../storage/app_storage_config.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
-import '../widgets/app_theme_toggle.dart';
+import '../utils/error_log.dart';
 import '../update/settings_update_section.dart';
 import 'settings_cloud_link_section.dart';
 import 'settings_cloud_storage_section.dart';
+import 'settings_cloud_usage_section.dart';
 import 'settings_health_section.dart';
+import 'settings_workspace_members_section.dart';
 import 'user_templates_settings_section.dart';
 
 /// Ajustes de la app.
@@ -74,6 +77,26 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
     _documentsPath = paths?.documentsPath;
   }
 
+  Future<void> _shareErrorLog() async {
+    final log = await ErrorLog.file();
+    if (!mounted) return;
+    if (!log.existsSync() || log.lengthSync() == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay errores registrados')),
+      );
+      return;
+    }
+    final box = context.findRenderObject() as RenderBox?;
+    await Share.shareXFiles(
+      [XFile(log.path)],
+      subject: 'Registro de errores de IRIS DP',
+      // iPad necesita saber desde dónde abrir el menú de compartir.
+      sharePositionOrigin: box == null
+          ? null
+          : box.localToGlobal(Offset.zero) & box.size,
+    );
+  }
+
   Future<void> _pickAppData() async {
     final path = await FilePicker.platform.getDirectoryPath(
       dialogTitle: 'Datos técnicos de IRIS',
@@ -115,10 +138,10 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
             children: [
               Text('Ajustes', style: AppTypography.titleLarge(palette)),
               const SizedBox(height: AppSpacing.lg),
-              Text('Apariencia', style: AppTypography.titleMedium(palette)),
-              const SizedBox(height: AppSpacing.sm),
-              const AppThemeToggle(),
-              const SizedBox(height: AppSpacing.lg),
+              if (CloudRuntimeConfig.isActive) ...[
+                const SettingsCloudUsageSection(),
+                const SizedBox(height: AppSpacing.lg),
+              ],
               Text('Almacenamiento', style: AppTypography.titleMedium(palette)),
               const SizedBox(height: AppSpacing.sm),
               Text(
@@ -148,6 +171,8 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
               if (CloudRuntimeConfig.isActive) ...[
                 const SizedBox(height: AppSpacing.lg),
                 const SettingsCloudStorageSection(),
+                const SizedBox(height: AppSpacing.lg),
+                const SettingsWorkspaceMembersSection(),
                 const SizedBox(height: AppSpacing.lg),
                 UserTemplatesSettingsSection(
                   onCreateTemplate: widget.onCreateShootTemplate == null
@@ -184,6 +209,16 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
                   style: AppTypography.caption(palette),
                 ),
                 onTap: widget.onInstallGuide,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.bug_report_outlined, color: palette.accent),
+                title: const Text('Compartir registro de errores'),
+                subtitle: Text(
+                  'Para enviarlo si algo ha fallado',
+                  style: AppTypography.caption(palette),
+                ),
+                onTap: _shareErrorLog,
               ),
               const SizedBox(height: AppSpacing.lg),
               Align(

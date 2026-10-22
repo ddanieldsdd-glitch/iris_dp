@@ -8,18 +8,16 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../core/database/app_database.dart';
-import '../../core/utils/scene_format.dart';
 import '../../core/utils/shot_technical_options.dart';
-import '../../features/camera_plan/camera_plan_constants.dart';
 import '../../features/camera_plan/camera_plan_grouping.dart';
-import '../../features/camera_plan/floor_plan_repository.dart';
 import '../../features/storyboard/storyboard_export_helpers.dart';
 import '../../features/storyboard/storyboard_export_style.dart';
 import '../../features/storyboard/storyboard_group_export_options.dart';
 import '../../features/storyboard/storyboard_image_palette.dart';
-import '../../features/storyboard/storyboard_shot_export_meta.dart';
+import '../../features/storyboard/shot_sheet_data.dart';
 import '../../features/storyboard/storyboard_shot_sheet_pdf.dart';
-import '../../features/storyboard/storyboard_shot_image_exporter.dart';
+import '../rich_text/script_markup.dart';
+import '../../core/utils/shot_reference_import.dart';
 
 /// PDF de storyboard con estilos CLEAN / BASIC / DETAIL / SHOT PLAN.
 class StoryboardPdfExporter {
@@ -36,46 +34,14 @@ class StoryboardPdfExporter {
     StoryboardGroupExportChoice? groupChoice,
     StoryboardExportStyle style = StoryboardExportStyle.detail,
     AppDatabase? db,
-  }) =>
-      _buildPdf(
-        project,
-        scenes,
-        shotsByScene,
-        groupChoice: groupChoice,
-        style: style,
-        db: db,
-      );
-
-  static Future<Uint8List> buildSingleShotPlanBytes({
-    required Project project,
-    required Scene scene,
-    required Shot shot,
-    AppDatabase? db,
-  }) async {
-    final meta = db != null
-        ? await StoryboardShotExportMeta.resolve(
-            db: db,
-            project: project,
-            scene: scene,
-            shot: shot,
-          )
-        : StoryboardShotExportMeta(
-            cameraHeader: 'Cámara del proyecto',
-            orientationHeader: '1° (U) 46° (NE)',
-            lensSeriesHeader: shot.lens ?? 'Óptica',
-            sensorWidthMm: kDefaultSensorWidthMm,
-            shotIndex: shot.number,
-            totalShotsInScene: shot.number,
-          );
-    return StoryboardShotSheetPdf.buildBytes(
-      project: project,
-      scene: scene,
-      shot: shot,
-      style: StoryboardExportStyle.shotPlan,
-      meta: meta,
-      db: db,
-    );
-  }
+  }) => _buildPdf(
+    project,
+    scenes,
+    shotsByScene,
+    groupChoice: groupChoice,
+    style: style,
+    db: db,
+  );
 
   static Future<String?> exportAndSave({
     required Project project,
@@ -147,11 +113,10 @@ class StoryboardPdfExporter {
         choice.sequenceLayout != null) {
       return choice.sequenceLayout!.defaultFilename(project, scene);
     }
-    final safe =
-        project.name.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
+    final safe = project.name.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
     final base = safe.isEmpty ? 'proyecto' : safe;
     final tag = choice.exportLabel.toLowerCase().replaceAll(' ', '_');
-    return '${base}_Sc${scene.number}_$tag.pdf';
+    return '${base}_Sc${scene.label}_$tag.pdf';
   }
 
   static Future<Uint8List> _buildPdf(
@@ -173,7 +138,8 @@ class StoryboardPdfExporter {
     );
     final imageCache = await _preloadShotImages(shotsByScene);
 
-    final effectiveStyle = groupChoice?.mode == StoryboardGroupExportMode.asShots
+    final effectiveStyle =
+        groupChoice?.mode == StoryboardGroupExportMode.asShots
         ? (groupChoice!.shotStyle ?? StoryboardExportStyle.detail)
         : style;
     final sequenceLayout = groupChoice?.sequenceLayout;
@@ -183,7 +149,11 @@ class StoryboardPdfExporter {
         final shots = _orderedShots(shotsByScene[scene.id] ?? []);
         if (shots.isEmpty) continue;
 
-        for (var start = 0; start < shots.length; start += _shotListRowsPerPage) {
+        for (
+          var start = 0;
+          start < shots.length;
+          start += _shotListRowsPerPage
+        ) {
           final end = (start + _shotListRowsPerPage).clamp(0, shots.length);
           final chunk = shots.sublist(start, end);
           hasPages = true;
@@ -218,21 +188,21 @@ class StoryboardPdfExporter {
           );
         }
       }
-    } else if (effectiveStyle == StoryboardExportStyle.shotPlan) {
+    } else if (groupChoice?.mode == StoryboardGroupExportMode.asShots &&
+        db != null) {
+      // Cada plano en su hoja, en el nivel elegido, todo en un PDF.
       for (final scene in orderedScenes) {
-        final shots = _orderedShots(shotsByScene[scene.id] ?? []);
-        for (final shot in shots) {
+        for (final shot in _orderedShots(shotsByScene[scene.id] ?? [])) {
           hasPages = true;
-          doc.addPage(
-            await _shotPlanPage(
-              project: project,
-              scene: scene,
-              shot: shot,
-              db: db,
-              imageCache: imageCache,
-              theme: pdfTheme,
-            ),
+          final data = await ShotSheetData.resolve(
+            db: db,
+            project: project,
+            scene: scene,
+            shot: shot,
+            imageSource: groupChoice!.imageSource,
+            withPlanAndSun: effectiveStyle == StoryboardExportStyle.shotPlan,
           );
+          await StoryboardShotSheetPdf.addPage(doc, data, effectiveStyle);
         }
       }
     } else {
@@ -303,7 +273,9 @@ class StoryboardPdfExporter {
     final cache = <int, Uint8List>{};
     for (final shots in shotsByScene.values) {
       for (final shot in shots) {
-        final bytes = await PdfSafeImage.loadFromPath(shot.referenceImagePath);
+        final bytes = await PdfSafeImage.loadFromPathMaxEdge(
+          storyboardImageOf(shot),
+        );
         if (bytes != null) cache[shot.id] = bytes;
       }
     }
@@ -341,10 +313,7 @@ class StoryboardPdfExporter {
           children: [
             pw.Text(
               project.name,
-              style: pw.TextStyle(
-                fontSize: 11,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
             ),
             pw.Text(
               tag,
@@ -357,7 +326,7 @@ class StoryboardPdfExporter {
           crossAxisAlignment: pw.CrossAxisAlignment.end,
           children: [
             pw.Text(
-              'Sc. ${scene.number}',
+              'Sc. ${scene.label}',
               style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold),
             ),
             pw.Spacer(),
@@ -536,17 +505,23 @@ class StoryboardPdfExporter {
                 if (shot.fStop?.isNotEmpty == true)
                   pw.Text(
                     'T${shot.fStop}',
-                    style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+                    style: const pw.TextStyle(
+                      fontSize: 8,
+                      color: PdfColors.grey700,
+                    ),
                   ),
                 pw.SizedBox(height: 4),
                 pw.Text(
                   location,
-                  style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+                  style: const pw.TextStyle(
+                    fontSize: 8,
+                    color: PdfColors.grey700,
+                  ),
                 ),
                 if (shot.action?.isNotEmpty == true) ...[
                   pw.SizedBox(height: 4),
                   pw.Text(
-                    shot.action!,
+                    scriptMarkupToPlain(shot.action),
                     style: const pw.TextStyle(fontSize: 8),
                     maxLines: 3,
                   ),
@@ -554,7 +529,7 @@ class StoryboardPdfExporter {
                 if (shot.notes?.isNotEmpty == true) ...[
                   pw.SizedBox(height: 4),
                   pw.Text(
-                    shot.notes!,
+                    scriptMarkupToPlain(shot.notes),
                     style: const pw.TextStyle(
                       fontSize: 8,
                       color: PdfColors.grey800,
@@ -579,8 +554,7 @@ class StoryboardPdfExporter {
     Map<int, Uint8List> imageCache = const {},
   }) {
     final technical = formatShotTechnicalLine(shot);
-    final imageStyle =
-        sequenceStoryboard ? StoryboardExportStyle.clean : style;
+    final imageStyle = sequenceStoryboard ? StoryboardExportStyle.clean : style;
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -626,7 +600,7 @@ class StoryboardPdfExporter {
               style == StoryboardExportStyle.detail &&
               shot.action?.isNotEmpty == true)
             pw.Text(
-              shot.action!,
+              scriptMarkupToPlain(shot.action),
               style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey800),
               maxLines: 2,
               textAlign: pw.TextAlign.center,
@@ -666,7 +640,10 @@ class StoryboardPdfExporter {
             left: 4,
             bottom: 4,
             child: pw.Container(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              padding: const pw.EdgeInsets.symmetric(
+                horizontal: 4,
+                vertical: 2,
+              ),
               color: PdfColors.black,
               child: pw.Text(
                 lensFovLabel(shot.lens),
@@ -684,7 +661,8 @@ class StoryboardPdfExporter {
               padding: const pw.EdgeInsets.all(3),
               child: pw.Text(
                 [
-                  if (shot.framing?.isNotEmpty == true) shot.framing,
+                  if (shot.framing?.isNotEmpty == true)
+                    scriptMarkupToPlain(shot.framing),
                   if (shot.lens?.isNotEmpty == true) shot.lens,
                   if (shot.movement?.isNotEmpty == true) shot.movement,
                 ].whereType<String>().join(' · '),
@@ -735,8 +713,9 @@ class StoryboardPdfExporter {
     required double height,
     Map<int, Uint8List> imageCache = const {},
   }) {
-    final bytes = imageCache[shot.id] ??
-        PdfSafeImage.loadFromPathSync(shot.referenceImagePath);
+    final bytes =
+        imageCache[shot.id] ??
+        PdfSafeImage.loadFromPathSync(storyboardImageOf(shot));
     if (bytes != null) {
       return pw.Container(
         decoration: pw.BoxDecoration(
@@ -764,217 +743,5 @@ class StoryboardPdfExporter {
         style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
       ),
     );
-  }
-
-  static Future<pw.Page> _shotPlanPage({
-    required Project project,
-    required Scene scene,
-    required Shot shot,
-    AppDatabase? db,
-    Map<int, Uint8List> imageCache = const {},
-    pw.ThemeData? theme,
-  }) async {
-    final location = locationFromCanonical(scene.locationCanonical);
-    final meta = sceneLocationLine(scene);
-    final technical = formatShotTechnicalLine(shot);
-    final planSummary = await _cameraPlanSummary(shot, db);
-    final imageBytes = imageCache[shot.id] ??
-        PdfSafeImage.loadFromPathSync(shot.referenceImagePath);
-
-    return pw.Page(
-      theme: theme,
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.all(32),
-      build: (context) {
-        final pageW = context.page.pageFormat.availableWidth;
-        final imageH = pageW * 9 / 16;
-
-        return pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-          children: [
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
-                  project.name,
-                  style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
-                ),
-                pw.Text(
-                  'SHOT PLAN · Plano ${shot.number}',
-                  style: pw.TextStyle(
-                    fontSize: 10,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.grey800,
-                  ),
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 8),
-            pw.Text(
-              'Esc ${scene.number} · $location',
-              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.Text(meta, style: const pw.TextStyle(fontSize: 9)),
-            pw.SizedBox(height: 12),
-            if (imageBytes != null)
-              pw.Image(
-                pw.MemoryImage(imageBytes),
-                height: imageH,
-                fit: pw.BoxFit.cover,
-              )
-            else
-              pw.Container(
-                height: imageH,
-                alignment: pw.Alignment.center,
-                color: PdfColors.grey200,
-                child: pw.Text('Sin referencia'),
-              ),
-            pw.SizedBox(height: 12),
-            pw.Expanded(
-              child: pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Expanded(
-                    flex: 3,
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        _sectionTitle('Cámara y óptica'),
-                        if (technical.isNotEmpty)
-                          pw.Text(technical, style: const pw.TextStyle(fontSize: 9)),
-                        pw.Text(
-                          lensFovLabel(shot.lens),
-                          style: const pw.TextStyle(fontSize: 8),
-                        ),
-                        if (shot.fStop?.isNotEmpty == true)
-                          pw.Text(
-                            'T${shot.fStop}',
-                            style: const pw.TextStyle(fontSize: 8),
-                          ),
-                        pw.SizedBox(height: 10),
-                        _sectionTitle('Acción'),
-                        pw.Text(
-                          shot.action ?? '—',
-                          style: const pw.TextStyle(fontSize: 9),
-                        ),
-                        pw.SizedBox(height: 10),
-                        _sectionTitle('Notas'),
-                        pw.Text(
-                          shot.notes ?? '—',
-                          style: const pw.TextStyle(fontSize: 9),
-                        ),
-                        if (planSummary.isNotEmpty) ...[
-                          pw.SizedBox(height: 10),
-                          _sectionTitle('Planta cenital'),
-                          pw.Text(
-                            planSummary,
-                            style: const pw.TextStyle(fontSize: 8),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  pw.SizedBox(width: 16),
-                  pw.SizedBox(
-                    width: 120,
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.center,
-                      children: [
-                        _sectionTitle('Sol'),
-                        pw.SizedBox(height: 4),
-                        _sunDiagram(scene.dayNight),
-                        pw.SizedBox(height: 12),
-                        _sectionTitle('Referencia'),
-                        pw.SizedBox(height: 4),
-                        if (imageBytes != null)
-                          pw.Image(
-                            pw.MemoryImage(imageBytes),
-                            width: 100,
-                            height: 56,
-                            fit: pw.BoxFit.cover,
-                          )
-                        else
-                          pw.Container(
-                            width: 100,
-                            height: 56,
-                            color: PdfColors.grey200,
-                            alignment: pw.Alignment.center,
-                            child: pw.Text(
-                              '—',
-                              style: const pw.TextStyle(fontSize: 8),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  static pw.Widget _sectionTitle(String text) => pw.Text(
-        text.toUpperCase(),
-        style: pw.TextStyle(
-          fontSize: 8,
-          fontWeight: pw.FontWeight.bold,
-          color: PdfColors.grey700,
-        ),
-      );
-
-  static pw.Widget _sunDiagram(String dayNight) {
-    final angle = sunAngleFromDayNight(dayNight);
-    const cx = 40.0;
-    const cy = 40.0;
-    const r = 32.0;
-    final sunX = cx + r * 0.72 * math.cos(angle);
-    final sunY = cy + r * 0.72 * math.sin(angle);
-
-    return pw.Container(
-      width: 80,
-      height: 80,
-      decoration: pw.BoxDecoration(
-        shape: pw.BoxShape.circle,
-        border: pw.Border.all(color: PdfColors.grey400),
-      ),
-      child: pw.Stack(
-        children: [
-          pw.Positioned(
-            left: sunX - 4,
-            top: sunY - 4,
-            child: pw.Container(
-              width: 8,
-              height: 8,
-              decoration: const pw.BoxDecoration(
-                color: PdfColors.orange300,
-                shape: pw.BoxShape.circle,
-              ),
-            ),
-          ),
-          pw.Center(
-            child: pw.Text(
-              dayNight,
-              style: const pw.TextStyle(fontSize: 6),
-              textAlign: pw.TextAlign.center,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Future<String> _cameraPlanSummary(Shot shot, AppDatabase? db) async {
-    if (db == null) return '';
-    final layers = await FloorPlanRepository(db).layersForShot(shot);
-    final parts = [...layers.light, ...layers.shot].map((el) {
-      final label = el.label?.trim().isNotEmpty == true
-          ? el.label!
-          : el.type.dbValue;
-      return '$label (${el.type.dbValue})';
-    });
-    return parts.join(' · ');
   }
 }

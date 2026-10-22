@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
@@ -6,12 +7,28 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../database/app_database.dart';
 import '../database/local_database_backup.dart';
 import 'content_sync_base_store.dart';
+import 'device_label.dart';
+import 'sync_merge_store.dart';
 import 'project_content_bundle.dart';
 
 /// La tabla `cloud_project_snapshots` aún no está en Supabase (migración 007).
 class SnapshotsTableMissing implements Exception {
   const SnapshotsTableMissing();
 }
+
+/// La nube ya no tiene la versión con la que se decidió subir: otro
+/// dispositivo ha subido entretanto. No se sube; la próxima sincronización lo
+/// presenta como conflicto.
+class CloudContentChanged implements Exception {
+  const CloudContentChanged();
+}
+
+/// La columna `updated_device` aún no está en Supabase (migración 011).
+bool isMissingDeviceColumn(PostgrestException error) =>
+    error.message.contains('updated_device');
+
+/// Se deja de enviar `updated_device` al ver que falta la columna.
+bool hasDeviceColumn = true;
 
 bool isMissingSnapshotsTable(Object error) {
   if (error is! PostgrestException) return false;
@@ -26,24 +43,24 @@ class ProjectContentSyncService {
 
   ProjectContentSyncService(this._db, this._client);
 
-  Future<void> upload(int localProjectId, String projectCloudId) async {
-    final bundle = await ProjectContentBundle.export(_db, localProjectId);
-    final hash = ProjectContentBundle.hashBundle(bundle);
-    final summary = ProjectContentBundle.summarize(bundle);
+  /// Tras cada subida: el canal en vivo lo avisa a los otros equipos (ver
+  /// `RealtimeHub`). Sin canal, no hace nada.
+  static Future<void> Function(String projectCloudId, String hash)? onUploaded;
 
-    try {
-      await _client.from('cloud_project_snapshots').upsert({
-        'project_id': projectCloudId,
-        'content': bundle,
-        'content_hash': hash,
-        'scene_count': summary.sceneCount,
-        'shot_count': summary.shotCount,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      });
-    } catch (e) {
-      if (isMissingSnapshotsTable(e)) throw const SnapshotsTableMissing();
-      rethrow;
-    }
+  /// Sube el contenido local solo si la nube sigue en [expectedCloudHash], la
+  /// huella que se vio al decidir subir (`null`: no había copia en la nube).
+  /// Si ha cambiado, lanza [CloudContentChanged] y no escribe nada.
+  Future<void> upload(
+    int localProjectId,
+    String projectCloudId, {
+    required String? expectedCloudHash,
+  }) async {
+    final bundle = await ProjectContentBundle.export(_db, localProjectId);
+    final hash = await uploadBundle(
+      projectCloudId,
+      bundle,
+      expectedCloudHash: expectedCloudHash,
+    );
 
     final syncedAt = DateTime.now().toUtc();
     await (_db.update(_db.projects)
@@ -53,10 +70,111 @@ class ProjectContentSyncService {
     ));
     // Este dispositivo y la nube quedan iguales: punto de partida para
     // saber quién cambia después.
-    await ContentSyncBaseStore.save(
-      localProjectId,
+    await ContentSyncBaseStore.save(_db, localProjectId,
       ContentSyncBase(localHash: hash, cloudHash: hash),
     );
+    // Lo subido es la base para mezclar la próxima vez.
+    await ContentBaseBundleStore.save(
+      _db,
+      localProjectId,
+      local: bundle,
+      cloud: bundle,
+    );
+  }
+
+  /// Escribe [bundle] en la nube con la misma condición que [upload], sin
+  /// tocar nada de aquí. Devuelve su huella.
+  Future<String> uploadBundle(
+    String projectCloudId,
+    Map<String, dynamic> bundle, {
+    required String? expectedCloudHash,
+  }) async {
+    final hash = ProjectContentBundle.hashBundle(bundle);
+    final summary = ProjectContentBundle.summarize(bundle);
+    final row = {
+      'project_id': projectCloudId,
+      'content': bundle,
+      'content_hash': hash,
+      'scene_count': summary.sceneCount,
+      'shot_count': summary.shotCount,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+      if (hasDeviceColumn) 'updated_device': deviceLabel(),
+    };
+
+    try {
+      await _write(projectCloudId, expectedCloudHash, row);
+    } on PostgrestException catch (e) {
+      // Supabase sin la migración 011: se sube igual, sin decir el equipo.
+      if (!isMissingDeviceColumn(e)) rethrow;
+      hasDeviceColumn = false;
+      row.remove('updated_device');
+      await _write(projectCloudId, expectedCloudHash, row);
+    }
+    unawaited(onUploaded?.call(projectCloudId, hash));
+    return hash;
+  }
+
+  /// Inserta (no había copia) o actualiza solo si la nube sigue igual.
+  Future<void> _write(
+    String projectCloudId,
+    String? expectedCloudHash,
+    Map<String, dynamic> row,
+  ) async {
+    try {
+      if (expectedCloudHash == null) {
+        // Sin copia en la nube: si alguien la ha creado entretanto, el insert
+        // choca con la clave y no se pisa.
+        await _client.from('cloud_project_snapshots').insert(row);
+      } else if (!await _updateIfUnchanged(
+        projectCloudId,
+        expectedCloudHash,
+        row,
+      )) {
+        throw const CloudContentChanged();
+      }
+    } on PostgrestException catch (e) {
+      // El aviso de columna que falta también nombra la tabla.
+      if (isMissingDeviceColumn(e)) rethrow;
+      if (isMissingSnapshotsTable(e)) throw const SnapshotsTableMissing();
+      if (e.code == '23505') throw const CloudContentChanged();
+      rethrow;
+    }
+  }
+
+  /// Escribe [row] solo si la copia de la nube tiene la huella [expected].
+  /// Devuelve si se escribió.
+  Future<bool> _updateIfUnchanged(
+    String projectCloudId,
+    String expected,
+    Map<String, dynamic> row,
+  ) async {
+    final updated = await _client
+        .from('cloud_project_snapshots')
+        .update(row)
+        .eq('project_id', projectCloudId)
+        .eq('content_hash', expected)
+        .select('project_id');
+    if (updated.isNotEmpty) return true;
+
+    // Copias antiguas sin `content_hash`: la huella se calcula del contenido,
+    // como hace el plan.
+    final current = await fetchSnapshotRow(projectCloudId);
+    if (current == null || current['content_hash'] != null) return false;
+    final content = current['content'];
+    if (content is! Map ||
+        !ProjectContentBundle.bundleMatchesHash(
+          Map<String, dynamic>.from(content),
+          expected,
+        )) {
+      return false;
+    }
+    final legacy = await _client
+        .from('cloud_project_snapshots')
+        .update(row)
+        .eq('project_id', projectCloudId)
+        .isFilter('content_hash', null)
+        .select('project_id');
+    return legacy.isNotEmpty;
   }
 
   Future<bool> download(int localProjectId, String projectCloudId) async {
@@ -88,17 +206,20 @@ class ProjectContentSyncService {
     }
 
     await ProjectContentBundle.importBundle(_db, localProjectId, bundle);
-    await ContentSyncBaseStore.save(
-      localProjectId,
+    final imported = await ProjectContentBundle.export(_db, localProjectId);
+    await ContentSyncBaseStore.save(_db, localProjectId,
       ContentSyncBase(
-        localHash: await ProjectContentBundle.computeLocalHash(
-          _db,
-          localProjectId,
-        ),
+        localHash: ProjectContentBundle.hashBundle(imported),
         cloudHash:
             row['content_hash'] as String? ??
             ProjectContentBundle.hashBundle(bundle),
       ),
+    );
+    await ContentBaseBundleStore.save(
+      _db,
+      localProjectId,
+      local: imported,
+      cloud: bundle,
     );
 
     final cloudUpdated =
@@ -203,12 +324,26 @@ class CloudSyncQueueService {
         final localId = int.tryParse(item.localEntityId);
         if (cloudId == null || localId == null) continue;
 
-        await sync.upload(localId, cloudId);
+        // Sin sincronización previa no se sabe quién tiene la buena: lo
+        // decide el usuario en el plan.
+        final base = await ContentSyncBaseStore.load(_db, localId);
+        if (base == null) continue;
+        final local = await ProjectContentBundle.export(_db, localId);
+        if (!ProjectContentBundle.bundleMatchesHash(local, base.localHash)) {
+          // Solo si la nube no ha cambiado desde entonces; si ha cambiado
+          // es un conflicto y queda pendiente para revisarlo.
+          await sync.upload(
+            localId,
+            cloudId,
+            expectedCloudHash: base.cloudHash,
+          );
+        }
         await (_db.update(_db.cloudSyncQueue)
               ..where((q) => q.id.equals(item.id)))
             .write(const CloudSyncQueueCompanion(processed: Value(true)));
         processed++;
       } catch (e) {
+        if (e is CloudContentChanged) continue;
         if (e is SnapshotsTableMissing || isMissingSnapshotsTable(e)) {
           // Migración 007 pendiente en Supabase; se reintentará luego.
           break;

@@ -60,6 +60,10 @@ class LightBlocker {
   /// Nombre con el que sale en el fotómetro cuando emite.
   final String? label;
 
+  /// Cota del suelo donde está, en metros: lo que hay sobre una colina o
+  /// una plataforma tapa desde ahí arriba.
+  final double groundM;
+
   /// Elemento de la planta del que sale, si lo hay.
   final PlanElement? element;
 
@@ -75,6 +79,7 @@ class LightBlocker {
     this.diffuseKeep = 0,
     this.diffuseHeightM,
     this.label,
+    this.groundM = 0,
     this.element,
   }) : radius = 0,
        domeRadius = null,
@@ -90,6 +95,7 @@ class LightBlocker {
     this.domeRadius,
     this.stretch = 1,
     this.turn = 0,
+    this.groundM = 0,
   }) : a = centre,
        b = centre,
        miredShift = 0,
@@ -100,34 +106,38 @@ class LightBlocker {
        diffuseHeightM = null,
        label = null;
 
-  LightBlocker withHeight(double height) => isCircle
+  /// El mismo tope con otra altura o sobre otra cota.
+  LightBlocker copyWith({double? heightM, double? groundM}) => isCircle
       ? LightBlocker.circle(
           a,
           radius,
           element: element,
           transmission: transmission,
-          heightM: height,
+          heightM: heightM ?? this.heightM,
           domeRadius: domeRadius,
           stretch: stretch,
           turn: turn,
+          groundM: groundM ?? this.groundM,
         )
       : LightBlocker(
           a,
           b,
           transmission: transmission,
           miredShift: miredShift,
-          heightM: height,
+          heightM: heightM ?? this.heightM,
           baseM: baseM,
           isWall: isWall,
           diffuseDeg: diffuseDeg,
           diffuseKeep: diffuseKeep,
           diffuseHeightM: diffuseHeightM,
           label: label,
+          groundM: groundM ?? this.groundM,
           element: element,
         );
 
-  /// Demasiado bajo para tapar la luz que viaja a la altura de la cara.
-  bool get isLow => heightM < 1.2;
+  /// Entre qué alturas tapa, contando la cota del suelo.
+  double get bottom => groundM + baseM;
+  double get top => groundM + heightM;
 
   bool get isOpaque => transmission <= 0;
   bool get isCircle => radius > 0;
@@ -159,6 +169,9 @@ class LightAperture {
   final Offset b;
   final double sillM;
   final double headM;
+
+  /// Cota del suelo de su pared.
+  final double groundM;
   final PlanElement? element;
 
   const LightAperture(
@@ -166,6 +179,7 @@ class LightAperture {
     this.b, {
     required this.sillM,
     required this.headM,
+    this.groundM = 0,
     this.element,
   });
 
@@ -182,11 +196,15 @@ class SceneRoom {
   final double ceilingM;
   final SurfaceMaterial floor;
 
+  /// Cota del suelo del recinto.
+  final double groundM;
+
   const SceneRoom(
     this.room, {
     required this.roofed,
     required this.ceilingM,
     required this.floor,
+    this.groundM = 0,
   });
 }
 
@@ -228,11 +246,16 @@ class SceneLight {
   final LightBlocker? surface;
   final String label;
 
+  /// Altura a la que está la fuente, en metros y contando la cota del
+  /// suelo: de ahí sale su rayo.
+  final double z;
+
   const SceneLight({
     required this.source,
     required this.position,
     required this.aim,
     required this.label,
+    this.z = PlanLight.subjectHeightM,
     this.frontOnly = false,
     this.overheadM,
     this.tiltDeg = 0,
@@ -273,7 +296,7 @@ class LightScene {
   /// Recintos cerrados por paredes.
   final List<SceneRoom> rooms;
 
-  const LightScene({
+  LightScene({
     required this.lights,
     required this.blockers,
     required this.metersPerUnit,
@@ -281,6 +304,30 @@ class LightScene {
     this.apertures = const [],
     this.rooms = const [],
   });
+
+  /// Lomas: lo que da cota al suelo.
+  late final List<LightBlocker> hills = [
+    for (final b in blockers)
+      if (b.domeRadius != null) b,
+  ];
+
+  /// Cota del suelo en un punto, en metros: la de la loma más alta que
+  /// tenga debajo.
+  double groundAt(Offset point) => _groundOf(hills, point);
+
+  static double _groundOf(List<LightBlocker> hills, Offset point) {
+    var ground = 0.0;
+    for (final hill in hills) {
+      final distance = hill.localDistance(point);
+      if (distance < hill.domeRadius!) {
+        ground = math.max(ground, hill.domeHeightAt(distance));
+      }
+    }
+    return ground;
+  }
+
+  /// Altura de la cara de alguien de pie en un punto.
+  double _faceAt(Offset point) => groundAt(point) + PlanLight.subjectHeightM;
 
   /// Recinto en el que cae un punto, si está dentro de alguno.
   SceneRoom? roomAt(Offset point) {
@@ -339,15 +386,58 @@ class LightScene {
       roofedAt: (p) => rooms.any((r) => r.roofed && r.room.contains(p)),
     );
     final bounce = wallBounce && (ambient?.wallBounce ?? true);
+    // La cota del suelo la dan las lomas; todo lo demás se apoya en ella.
+    final hills = [
+      for (final b in built.blockers)
+        if (b.domeRadius != null) b,
+    ];
+    double ground(Offset p) => hills.isEmpty ? 0 : _groundOf(hills, p);
+    for (var i = 0; i < rooms.length; i++) {
+      final room = rooms[i];
+      rooms[i] = SceneRoom(
+        room.room,
+        roofed: room.roofed,
+        ceilingM: room.ceilingM,
+        floor: room.floor,
+        groundM: ground(room.room.interiorPoint),
+      );
+    }
     // La pared de un recinto con techo llega hasta él.
     final blockers = <LightBlocker>[
       for (final blocker in built.blockers)
-        if (blocker.isWall)
-          blocker.withHeight(_wallHeight(blocker, rooms))
+        if (blocker.domeRadius != null)
+          blocker
+        else if (blocker.isWall)
+          blocker.copyWith(
+            heightM: _wallHeight(blocker, rooms),
+            groundM: ground((blocker.a + blocker.b) / 2),
+          )
         else
-          blocker,
+          blocker.copyWith(groundM: ground((blocker.a + blocker.b) / 2)),
     ];
-    final apertures = built.apertures;
+    final apertures = [
+      for (final gap in built.apertures)
+        LightAperture(
+          gap.a,
+          gap.b,
+          sillM: gap.sillM,
+          headM: gap.headM,
+          groundM: ground(gap.centre),
+          element: gap.element,
+        ),
+    ];
+    // Altura de cada aparato: en trípode, a la de la cara; colgado, a la
+    // de su techo (o la que se le haya puesto), sin atravesarlo.
+    double fixtureZ(PlanElement el) {
+      final base = ground(el.position);
+      if (!PlanLight.isOverhead(el)) return base + PlanLight.subjectHeightM;
+      final ceiling = _ceilingAt(rooms, el.position);
+      final mount = el.props[PlanLight.heightKey] != null
+          ? PlanLight.heightOf(el)
+          : ceiling ?? PlanLight.defaultCeilingHeight;
+      return base + (ceiling == null ? mount : math.min(mount, ceiling));
+    }
+
     final fixtures = <SceneLight>[
       for (final el in all)
         if (PlanLight.of(el) case final light?)
@@ -365,6 +455,7 @@ class LightScene {
                           PlanLight.subjectHeightM)
                       .clamp(0.3, 50.0),
             tiltDeg: PlanLight.tiltOf(el),
+            z: fixtureZ(el),
             fixture: light,
             label: (el.props['name'] as String?) ?? el.displayLabel,
           ),
@@ -937,19 +1028,28 @@ class LightScene {
     SceneLight light,
     Offset centre,
     Offset normal,
-    LightBlocker? own,
-  ) {
+    LightBlocker? own, {
+    double? z,
+  }) {
     final span = centre - light.position;
     final units = span.distance;
     if (units < 1e-6 || light.source.candela <= 0) return null;
     final toSurface = span / units;
-    // Coseno con el que la luz incide sobre la superficie.
+    // Ley del coseno al incidir: la luz que llega de lado a una superficie
+    // se reparte en más área.
     final cos = -(toSurface.dx * normal.dx + toSurface.dy * normal.dy);
     if (cos <= 0.02) return null;
-    final passed = _throughput(light.position, centre, ignore: own);
+    final height = z ?? _faceAt(centre);
+    final passed = _throughput(
+      light.position,
+      centre,
+      ignore: own,
+      zFrom: light.z,
+      zTo: height,
+    );
     if (passed.transmission <= 0) return null;
     final lux =
-        luxFrom(light, units, _offAxis(light, toSurface)) *
+        luxFrom(light, units, _offAxis(light, toSurface), receiverZ: height) *
         passed.transmission *
         cos;
     if (lux < 0.5) return null;
@@ -990,17 +1090,34 @@ class LightScene {
     }) {
       final areaM2 = lengthUnits * metersPerUnit * heightM;
       final normalA = Offset(-tangent.dy, tangent.dx);
+      // A qué altura está el centro de la superficie.
+      final z = groundAt(centre) + baseM + heightM / 2;
+      // Una superficie mate reparte la luz según el coseno de Lambert, y
+      // el flujo Φ que recibe da Φ/π en su eje. Una brillante (plata,
+      // espejo) conserva el haz: Φ entre su ángulo sólido, y lo manda en
+      // la dirección del reflejo.
+      final matte = beamDeg >= 90;
+      final spread = matte ? math.pi : LightSource.solidAngle(beamDeg);
+      Offset reflected(Offset incoming, Offset normal) {
+        final dot = incoming.dx * normal.dx + incoming.dy * normal.dy;
+        final out = incoming - normal * (2 * dot);
+        return out.distance < 1e-6 ? normal : out / out.distance;
+      }
+
       for (final light in lights) {
         final toLight = light.position - centre;
         // La cara que mira a la fuente.
         final facing = (toLight.dx * normalA.dx + toLight.dy * normalA.dy) >= 0
             ? normalA
             : normalA * -1;
-        final incident = _incident(light, centre, facing, own);
+        final incident = _incident(light, centre, facing, own, z: z);
         if (incident == null) continue;
         final flux = incident.lux * areaM2 * keep;
-        final candela = flux / math.pi;
+        final candela = flux / spread;
         if (candela < 1) continue;
+        final incoming = toLight.distance < 1e-6
+            ? facing * -1
+            : toLight / -toLight.distance;
         result.add(
           SceneLight(
             source: LightSource(
@@ -1009,12 +1126,18 @@ class LightScene {
               sizeM: lengthUnits * metersPerUnit,
               cct: _shift(incident.cct, mired),
               status: light.source.status,
+              lambertian: matte,
             ),
             position: centre,
-            // Una tela emite por la cara contraria a la fuente; un rebote,
-            // por la misma.
-            aim: through ? facing * -1 : facing,
+            // Una tela emite por la cara contraria a la fuente; un rebote
+            // mate, por la misma; uno brillante, hacia el reflejo.
+            aim: through
+                ? facing * -1
+                : matte
+                ? facing
+                : reflected(incoming, facing),
             frontOnly: true,
+            z: z,
             surface: own,
             label: '$label ← ${light.label}',
           ),
@@ -1052,7 +1175,7 @@ class LightScene {
       final cosElevation = 1 / math.sqrt(1 + _sunTan * _sunTan);
       final lux =
           env.condition.sunLux * sun.transmission * cosElevation * dot.abs();
-      final candela = lux * areaM2 * keep / math.pi;
+      final candela = lux * areaM2 * keep / spread;
       if (candela < 1) return;
       result.add(
         SceneLight(
@@ -1062,10 +1185,16 @@ class LightScene {
             sizeM: lengthUnits * metersPerUnit,
             cct: _shift(env.condition.sunCct, sun.miredShift + mired),
             status: PhotometryStatus.estimated,
+            lambertian: matte,
           ),
           position: centre,
-          aim: through ? facing * -1 : facing,
+          aim: through
+              ? facing * -1
+              : matte
+              ? facing
+              : reflected(toward * -1, facing),
           frontOnly: true,
+          z: z,
           surface: own,
           label: '$label ← Sol',
         ),
@@ -1201,37 +1330,111 @@ class LightScene {
   }
 
   /// Lo que queda de la luz entre dos puntos y el tinte que coge.
-  ({double transmission, double miredShift}) _throughput(
+  /// Distancia a la que un rayo cruza el tramo [a]–[b], o `null`.
+  static double? _segmentHit(Offset origin, Offset dir, Offset a, Offset b) {
+    final s = b - a;
+    final denom = dir.dx * s.dy - dir.dy * s.dx;
+    if (denom.abs() < 1e-9) return null;
+    final diff = a - origin;
+    final t = (diff.dx * s.dy - diff.dy * s.dx) / denom;
+    final u = (diff.dx * dir.dy - diff.dy * dir.dx) / denom;
+    if (t <= 1e-6 || u < 0 || u > 1) return null;
+    return t;
+  }
+
+  /// Lo que queda de un rayo de luz que va en línea recta.
+  ///
+  /// Sale de [from] a la altura [zFrom], avanza [length] unidades hacia
+  /// [dir] y cambia de altura [slope] metros por unidad. A cada cosa que
+  /// cruza llega a la altura que le toca: la tapa si cae entre su base y
+  /// su tope. Vale para un aparato (de su altura a la del punto medido),
+  /// para el sol (un rayo que sube sin fin) y para el terreno.
+  ({double transmission, double miredShift}) _ray(
     Offset from,
-    Offset to, {
+    Offset dir,
+    double length,
+    double zFrom,
+    double slope, {
     LightBlocker? ignore,
-    bool fromAbove = false,
+    Offset? receiver,
   }) {
-    final span = to - from;
-    final distance = span.distance;
-    if (distance < 1e-6) return (transmission: 1, miredShift: 0);
-    final dir = span / distance;
+    const none = (transmission: 0.0, miredShift: 0.0);
+    double zAt(double t) => zFrom + t * slope;
+
+    // Los techos: si el rayo cruza la altura de un techo dentro de su
+    // recinto, lo atraviesa.
+    if (slope.abs() > 1e-9) {
+      for (final room in rooms) {
+        if (!room.roofed) continue;
+        final t = (room.groundM + room.ceilingM - zFrom) / slope;
+        if (t > 1e-3 && t < length && room.room.contains(from + dir * t)) {
+          return none;
+        }
+      }
+    }
+
+    // Los huecos: por debajo del alféizar y por encima del dintel hay
+    // pared. Lo que lleve el hueco (cristal, tela, hojas) va como tope.
+    for (final gap in apertures) {
+      final hit = _segmentHit(from, dir, gap.a, gap.b);
+      if (hit == null || hit < 0.5 || hit >= length - 0.5) continue;
+      final z = zAt(hit) - gap.groundM;
+      if (z < gap.sillM || (z > gap.headM && z < _wallTopAt(gap.centre))) {
+        return none;
+      }
+    }
+
     var transmission = 1.0;
     var mired = 0.0;
     for (final blocker in blockers) {
       if (identical(blocker, ignore)) continue;
-      // Lo que no llega a la altura de la cara no tapa.
-      if (blocker.isLow) continue;
-      // La luz que cae del techo pasa por encima de personas y cámaras.
-      if (fromAbove && blocker.isCircle && blocker.heightM <= 2) continue;
+      if (blocker.domeRadius != null) {
+        if (_domeBlocks(from, dir, blocker, zAt, length)) return none;
+        continue;
+      }
       // Quien está dentro del cuerpo de una persona no queda a su sombra.
-      if (blocker.isCircle && blocker.localDistance(to) <= blocker.radius) {
+      if (receiver != null &&
+          blocker.isCircle &&
+          blocker.heightM <= 2 &&
+          (receiver - blocker.a).distance <= blocker.radius) {
         continue;
       }
       final hit = _rayHit(from, dir, blocker);
       // Un tope a ras del punto medido no cuenta: el punto está «en» la
       // pared, no detrás.
-      if (hit == null || hit >= distance - 0.5) continue;
+      if (hit == null || hit < 0.5 || hit >= length - 0.5) continue;
+      final z = zAt(hit);
+      if (z >= blocker.top || z < blocker.bottom) continue;
       transmission *= blocker.transmission;
       mired += blocker.miredShift;
-      if (transmission <= 0) return (transmission: 0, miredShift: 0);
+      if (transmission <= 0) return none;
     }
     return (transmission: transmission, miredShift: mired);
+  }
+
+  /// Lo que queda de la luz entre dos puntos y el tinte que coge. Sin
+  /// alturas, va de cara a cara.
+  ({double transmission, double miredShift}) _throughput(
+    Offset from,
+    Offset to, {
+    LightBlocker? ignore,
+    double? zFrom,
+    double? zTo,
+  }) {
+    final span = to - from;
+    final distance = span.distance;
+    if (distance < 1e-6) return (transmission: 1, miredShift: 0);
+    final start = zFrom ?? _faceAt(from);
+    final end = zTo ?? _faceAt(to);
+    return _ray(
+      from,
+      span / distance,
+      distance,
+      start,
+      (end - start) / distance,
+      ignore: ignore,
+      receiver: to,
+    );
   }
 
   /// Parte de la luz que llega de [from] a [to], según lo que hay en medio.
@@ -1239,22 +1442,81 @@ class LightScene {
   double transmissionBetween(Offset from, Offset to) =>
       _throughput(from, to).transmission;
 
+  /// Hasta dónde ve una fuente a la altura [z] la ladera de una loma: la
+  /// ilumina por el lado que le da la cara y deja a oscuras lo que queda
+  /// tras su perfil.
+  double _domeReach(
+    Offset origin,
+    Offset dir,
+    double max,
+    double z,
+    LightBlocker hill,
+  ) {
+    final radius = hill.domeRadius!;
+    final oc = hill.localVector(origin - hill.a);
+    final d = hill.localVector(dir);
+    final a = d.dx * d.dx + d.dy * d.dy;
+    if (a < 1e-12) return max;
+    final b = oc.dx * d.dx + oc.dy * d.dy;
+    final c = oc.dx * oc.dx + oc.dy * oc.dy - radius * radius;
+    final disc = b * b - a * c;
+    if (disc <= 0) return max;
+    final root = math.sqrt(disc);
+    final enter = math.max(1.0, (-b - root) / a);
+    final exit = math.min(max, (-b + root) / a);
+    if (exit <= enter) return max;
+    // Pendiente de la línea de visión más alta que ha hecho falta hasta
+    // aquí para salvar el terreno.
+    var horizon = double.negativeInfinity;
+    const steps = 32;
+    for (var i = 0; i <= steps; i++) {
+      final t = enter + (exit - enter) * i / steps;
+      final ground = hill.domeHeightAt(hill.localDistance(origin + dir * t));
+      final toFace = (ground + PlanLight.subjectHeightM - z) / t;
+      if (toFace < horizon - 1e-6) return t;
+      horizon = math.max(horizon, (ground - z) / t);
+    }
+    // Detrás de la loma, el suelo vuelve a su cota: ¿se ve por encima?
+    final beyond = exit + 1;
+    final toFace =
+        (groundAt(origin + dir * beyond) + PlanLight.subjectHeightM - z) /
+        beyond;
+    return toFace < horizon ? exit : max;
+  }
+
   /// Distancia hasta el primer tope opaco en una dirección, con [max] de
-  /// límite.
+  /// límite, para una fuente a la altura [z] (la de la cara, si no se da).
   double reachAlong(
     Offset origin,
     Offset dir,
     double max, {
     LightBlocker? ignore,
     bool fromAbove = false,
+    double? z,
   }) {
+    final height = z ?? _faceAt(origin);
     var best = max;
     for (final blocker in blockers) {
       if (!blocker.isOpaque || identical(blocker, ignore)) continue;
-      if (blocker.isLow) continue;
+      if (blocker.domeRadius != null) {
+        best = math.min(best, _domeReach(origin, dir, best, height, blocker));
+        continue;
+      }
       if (fromAbove && blocker.isCircle && blocker.heightM <= 2) continue;
+      if (!fromAbove && (height >= blocker.top || height < blocker.bottom)) {
+        continue;
+      }
       final hit = _rayHit(origin, dir, blocker);
       if (hit != null && hit < best) best = hit;
+    }
+    if (!fromAbove) {
+      // Un hueco más alto o más bajo que la fuente es pared para ella.
+      for (final gap in apertures) {
+        final rel = height - gap.groundM;
+        if (rel >= gap.sillM && rel <= gap.headM) continue;
+        final hit = _segmentHit(origin, dir, gap.a, gap.b);
+        if (hit != null && hit < best) best = hit;
+      }
     }
     return best;
   }
@@ -1266,6 +1528,7 @@ class LightScene {
     double reach, {
     LightBlocker? ignore,
     bool fromAbove = false,
+    double? z,
   }) {
     // Un rayo cada grado y medio, más uno a cada lado de cada esquina para
     // que el corte de la sombra salga limpio. Todos los ángulos van de 0 a
@@ -1283,13 +1546,14 @@ class LightScene {
 
     for (final blocker in blockers) {
       if (!blocker.isOpaque || identical(blocker, ignore)) continue;
-      if (blocker.isLow) continue;
       if (fromAbove && blocker.isCircle && blocker.heightM <= 2) continue;
       if (blocker.isCircle) {
         // Las dos tangentes al círculo.
         final d = blocker.a - origin;
         final distance = d.distance;
-        final wide = blocker.radius * math.max(1.0, blocker.stretch);
+        final wide =
+            (blocker.domeRadius ?? blocker.radius) *
+            math.max(1.0, blocker.stretch);
         if (distance <= wide || distance > reach + wide) {
           continue;
         }
@@ -1301,7 +1565,7 @@ class LightScene {
           }
         }
         // Y unos cuantos por dentro, para que la sombra siga el contorno.
-        final inner = blocker.stretch == 1 ? 6 : 24;
+        final inner = blocker.domeRadius == null ? 6 : 36;
         for (var i = 1; i < inner; i++) {
           angles.add((centre - half + 2 * half * i / inner) % twoPi);
         }
@@ -1325,6 +1589,7 @@ class LightScene {
                 reach,
                 ignore: ignore,
                 fromAbove: fromAbove,
+                z: z,
               );
       if (first) {
         path.moveTo(point.dx, point.dy);
@@ -1360,15 +1625,25 @@ class LightScene {
   /// En trípode, la luz viaja a la altura del sujeto. Colgada del techo,
   /// alumbra hacia abajo: lo que cuenta es la distancia real (en diagonal)
   /// y cuánto se aparta el punto de la vertical del aparato.
-  double luxFrom(SceneLight light, double units, double offAxisDeg) {
+  double luxFrom(
+    SceneLight light,
+    double units,
+    double offAxisDeg, {
+    double? receiverZ,
+  }) {
     final flat = units * metersPerUnit;
-    final drop = light.overheadM;
-    if (drop == null) {
+    if (light.overheadM == null) {
+      // Ley del cuadrado de la distancia, con la distancia real: si la
+      // fuente y el punto están a distinta altura, en diagonal.
+      final rise = receiverZ == null ? 0.0 : receiverZ - light.z;
       return light.source.illuminance(
-        math.max(flat, 0.05),
+        math.max(math.sqrt(flat * flat + rise * rise), 0.05),
         offAxisDeg: offAxisDeg,
       );
     }
+    final drop = receiverZ == null
+        ? light.overheadM!
+        : math.max(0.3, (light.z - receiverZ).abs());
     final distance = math.sqrt(flat * flat + drop * drop);
     // Inclinada, su eje ya no cae a plomo: se aparta de la vertical hacia
     // donde apunta en planta.
@@ -1413,6 +1688,8 @@ class LightScene {
       mired += lux * 1e6 / (kelvin <= 0 ? 5600 : kelvin);
     }
 
+    final face = _faceAt(point);
+
     for (final light in lights) {
       final source = light.source;
       if (source.candela <= 0) continue;
@@ -1430,11 +1707,13 @@ class LightScene {
                 math.pi
           : _offAxis(light, dir);
       if (light.frontOnly && offAxis >= 89) continue;
-      final raw = luxFrom(light, units, offAxis);
+      final raw = luxFrom(light, units, offAxis, receiverZ: face);
       if (raw <= cutoff) continue;
 
       final above = light.overheadM != null;
-      final half = source.sizeM / metersPerUnit / 3;
+      // De borde a borde de la fuente: así la penumbra mide lo que debe,
+      // tamaño × (objeto→suelo) / (fuente→objeto).
+      final half = source.sizeM / metersPerUnit / 2;
       double keep;
       double shift;
       if (half < 5 || above) {
@@ -1442,7 +1721,8 @@ class LightScene {
           light.position,
           point,
           ignore: light.surface,
-          fromAbove: above,
+          zFrom: light.z,
+          zTo: face,
         );
         keep = passed.transmission;
         shift = passed.miredShift;
@@ -1456,6 +1736,8 @@ class LightScene {
             light.position + across * k,
             point,
             ignore: light.surface,
+            zFrom: light.z,
+            zTo: face,
           );
           keep += passed.transmission / 3;
           if (passed.transmission > 0) shift = passed.miredShift;
@@ -1500,14 +1782,17 @@ class LightScene {
                 math.pi
           : _offAxis(light, dir);
       if (light.frontOnly && offAxis >= 89) continue;
+      final face = _faceAt(point);
       final passed = _throughput(
         light.position,
         point,
         ignore: light.surface,
-        fromAbove: light.overheadM != null,
+        zFrom: light.z,
+        zTo: face,
       );
       if (passed.transmission <= 0) continue;
-      final lux = luxFrom(light, units, offAxis) * passed.transmission;
+      final lux =
+          luxFrom(light, units, offAxis, receiverZ: face) * passed.transmission;
       if (lux > 0.01) {
         result.add(
           LightContribution(
@@ -1542,56 +1827,16 @@ class LightScene {
   }) {
     final env = ambient;
     if (env == null || !env.hasSun) return (transmission: 0, miredShift: 0);
-    final toward = env.towardSun;
-    final rise = _sunTan * metersPerUnit;
-    double heightAt(double units) => heightM + units * rise;
-
-    // El techo: si el rayo alcanza la altura del techo todavía dentro del
-    // recinto, lo tiene encima.
-    for (final room in rooms) {
-      if (!room.roofed || room.ceilingM <= heightM) continue;
-      final units = (room.ceilingM - heightM) / rise;
-      if (room.room.contains(point + toward * units)) {
-        return (transmission: 0, miredShift: 0);
-      }
-    }
-
-    var transmission = 1.0;
-    var mired = 0.0;
-    for (final gap in apertures) {
-      final hit = _rayHit(point, toward, LightBlocker(gap.a, gap.b));
-      if (hit == null || hit < 0.5) continue;
-      // Por debajo del alféizar y por encima del dintel hay pared. Lo que
-      // lleve el hueco (cristal, tela, hojas) va aparte, como topes.
-      final h = heightAt(hit);
-      if (h < gap.sillM || (h > gap.headM && h < _wallTopAt(gap.centre))) {
-        return (transmission: 0, miredShift: 0);
-      }
-    }
-    for (final blocker in blockers) {
-      final dome = blocker.domeRadius;
-      if (dome != null) {
-        // Quien está sobre la loma no queda a su sombra.
-        if (blocker.localDistance(point) <= dome) continue;
-        if (_domeBlocks(point, toward, blocker, heightAt)) {
-          return (transmission: 0, miredShift: 0);
-        }
-        continue;
-      }
-      if (blocker.isCircle &&
-          (point - blocker.a).distance <= blocker.radius &&
-          blocker.heightM <= 2) {
-        continue;
-      }
-      final hit = _rayHit(point, toward, blocker);
-      if (hit == null || hit < 0.5) continue;
-      final h = heightAt(hit);
-      if (h >= blocker.heightM || h < blocker.baseM) continue;
-      transmission *= blocker.transmission;
-      mired += blocker.miredShift;
-      if (transmission <= 0) return (transmission: 0, miredShift: 0);
-    }
-    return (transmission: transmission, miredShift: mired);
+    // Rayos paralelos: el sol no cae con la distancia; solo importa qué
+    // cruza su rayo mientras sube.
+    return _ray(
+      point,
+      env.towardSun,
+      double.infinity,
+      groundAt(point) + heightM,
+      _sunTan * metersPerUnit,
+      receiver: point,
+    );
   }
 
   /// Si un rayo que sube choca con la ladera de una loma.
@@ -1599,8 +1844,9 @@ class LightScene {
     Offset origin,
     Offset dir,
     LightBlocker hill,
-    double Function(double units) heightAt,
-  ) {
+    double Function(double units) heightAt, [
+    double length = double.infinity,
+  ]) {
     final radius = hill.domeRadius!;
     final oc = hill.localVector(origin - hill.a);
     final d = hill.localVector(dir);
@@ -1612,13 +1858,15 @@ class LightScene {
     if (disc <= 0) return false;
     final root = math.sqrt(disc);
     final enter = math.max(0.0, (-b - root) / a);
-    final exit = (-b + root) / a;
+    final exit = math.min(length, (-b + root) / a);
     if (exit <= enter) return false;
-    const steps = 16;
-    for (var i = 0; i <= steps; i++) {
+    const steps = 24;
+    // Los extremos se dejan fuera: ahí están la fuente o el punto medido,
+    // apoyados en la ladera.
+    for (var i = 1; i < steps; i++) {
       final t = enter + (exit - enter) * i / steps;
       final distance = hill.localDistance(origin + dir * t);
-      if (heightAt(t) < hill.domeHeightAt(distance)) return true;
+      if (heightAt(t) < hill.domeHeightAt(distance) - 0.02) return true;
     }
     return false;
   }
@@ -1703,6 +1951,7 @@ class LightScene {
           ),
           position: outside,
           aim: inward,
+          z: gap.groundM + (gap.sillM + gap.headM) / 2,
           frontOnly: true,
           label: '${env.day ? 'Cielo' : 'Luna'} por $what',
         ),
@@ -1756,6 +2005,7 @@ class LightScene {
           aim: inward,
           // Emite hacia arriba: la cara queda metro y medio por encima.
           overheadM: PlanLight.subjectHeightM,
+          z: room.groundM + 0.02,
           label: 'Suelo (${room.floor.name.toLowerCase()}) ← Sol',
         ),
       );

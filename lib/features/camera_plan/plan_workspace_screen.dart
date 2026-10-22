@@ -10,6 +10,7 @@ import 'floor_plan_scope.dart';
 import 'plan_data.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
+import '../../shared/rich_text/script_markup.dart';
 
 /// Pantalla única de trabajo: el editor de la planta abierta y, al lado, un
 /// navegador para cambiar de set, esquema de luz, plano o localización sin
@@ -354,8 +355,8 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
   List<Widget> _sceneItems(Scene scene) => [
     _subHeader(
       scene.name.isNotEmpty
-          ? 'Esc ${scene.number} · ${scene.name}'
-          : 'Esc ${scene.number}',
+          ? 'Esc ${scene.label} · ${scene.name}'
+          : 'Esc ${scene.label}',
     ),
     for (final shot in _data.shotsOfScene(scene.id)) _shotRow(shot, indent: 1),
   ];
@@ -373,6 +374,7 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
       thumbnail: PlanThumbnail(
         elements: _data.ownOfSetup(setup),
         inherited: _data.inheritedOfSetup(setup),
+        drawings: _data.drawingsOfSetup(setup),
         inheritedOpacity: 0.22,
         focus: _data.zoneOf(_data.set(setup.locationBasePlanId)),
         emptyIcon: Icons.wb_incandescent_outlined,
@@ -486,7 +488,7 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
     final selected = target == widget.target;
     final setup = _data.setup(shot.lightSetupId);
     final details = [
-      if (shot.framing?.isNotEmpty == true) shot.framing!,
+      if (shot.framing?.isNotEmpty == true) scriptMarkupToPlain(shot.framing),
       if (shot.lens?.isNotEmpty == true) shot.lens!,
     ].join(' · ');
     return Material(

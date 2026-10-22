@@ -108,42 +108,45 @@ Karim espera.
   });
 
   group('NormalizedScene merge', () {
-    test('mergeWithRaw keeps all parser scenes when fewer normalized entries', () {
-      final raw = [
-        const RawSlugline(
-          number: 1,
-          intExt: 'INT',
-          location: 'COCINA',
-          dayNight: 'DÍA',
-          rawLine: 'INT. COCINA - DÍA',
-          startIndex: 0,
-        ),
-        const RawSlugline(
-          number: 2,
-          intExt: 'EXT',
-          location: 'CALLE',
-          dayNight: 'NOCHE',
-          rawLine: 'EXT. CALLE - NOCHE',
-          startIndex: 10,
-        ),
-      ];
+    test(
+      'mergeWithRaw keeps all parser scenes when fewer normalized entries',
+      () {
+        final raw = [
+          const RawSlugline(
+            number: 1,
+            intExt: 'INT',
+            location: 'COCINA',
+            dayNight: 'DÍA',
+            rawLine: 'INT. COCINA - DÍA',
+            startIndex: 0,
+          ),
+          const RawSlugline(
+            number: 2,
+            intExt: 'EXT',
+            location: 'CALLE',
+            dayNight: 'NOCHE',
+            rawLine: 'EXT. CALLE - NOCHE',
+            startIndex: 10,
+          ),
+        ];
 
-      final ai = [
-        const NormalizedScene(
-          number: 1,
-          intExt: 'INT',
-          dayNight: 'DÍA',
-          location: 'COCINA',
-          shootSet: 'CASA',
-          locationSite: 'CASA',
-        ),
-      ];
+        final ai = [
+          const NormalizedScene(
+            number: 1,
+            intExt: 'INT',
+            dayNight: 'DÍA',
+            location: 'COCINA',
+            shootSet: 'CASA',
+            locationSite: 'CASA',
+          ),
+        ];
 
-      final merged = NormalizedScene.mergeWithRaw(raw, ai);
-      expect(merged.length, 2);
-      expect(merged[0].shootSet, 'CASA');
-      expect(merged[1].location, 'CALLE');
-    });
+        final merged = NormalizedScene.mergeWithRaw(raw, ai);
+        expect(merged.length, 2);
+        expect(merged[0].shootSet, 'CASA');
+        expect(merged[1].location, 'CALLE');
+      },
+    );
   });
 
   group('ScriptCharacterExtractor', () {
@@ -176,6 +179,60 @@ Corre.
     });
   });
 
+  group('personajes que aparecen en la acción', () {
+    const script = '''
+EXT. CALLE RAVAL - NOCHE
+
+ALI (25) conduce serio su moto de reparto. El semáforo se pone en ámbar.
+
+Tras él, se acerca otro repartidor (DIEGO, 23). Este se para tras la moto
+de Ali y le cierra el cajón. Casi por instinto, Ali se gira.
+
+INT. KEBAB KHALED - NOCHE
+
+SIMO
+¿Has visto a Diego?
+
+ALI (CONT'D)
+No.
+
+Ali y Simo sacan la basura. La calle está vacía y el raval duerme.
+
+EXT. CALLE RAVAL - AMANECER
+
+La persiana del kebab sigue bajada. No hay nadie.
+''';
+
+    late Map<int, List<String>> characters;
+    late List<RawSlugline> sluglines;
+
+    setUp(() {
+      sluglines = ScriptParser.parse(script);
+      characters = ScriptCharacterExtractor.extractBySlugStartIndex(
+        script,
+        sluglines,
+      );
+    });
+
+    test('detecta a quien actúa sin hablar', () {
+      expect(sluglines.length, 3);
+      expect(characters[sluglines[0].startIndex], ['ALI', 'DIEGO']);
+    });
+
+    test('une variantes del mismo nombre y no cuenta a quien solo se nombra '
+        'en un diálogo', () {
+      // Diego se menciona en la frase de Simo, pero no está en la escena.
+      expect(characters[sluglines[1].startIndex], ['ALI', 'SIMO']);
+    });
+
+    test(
+      'una escena sin personajes queda vacía, y un lugar no es personaje',
+      () {
+        expect(characters[sluglines[2].startIndex], isEmpty);
+      },
+    );
+  });
+
   group('Scenes and shots persistence', () {
     late AppDatabase db;
 
@@ -192,41 +249,47 @@ Corre.
         ProjectsCompanion.insert(name: 'Test'),
       );
 
-      await db.insertScene(ScenesCompanion.insert(
-        projectId: projectId,
-        number: 1,
-        name: 'INT SALÓN DÍA',
-        locationCanonical: 'INT. SALÓN - DÍA',
-        locationPureName: 'CASA DE MARÍA',
-        intExt: const Value('INT'),
-        dayNight: const Value('DÍA'),
-        sortOrder: const Value(1),
-      ));
+      await db.insertScene(
+        ScenesCompanion.insert(
+          projectId: projectId,
+          number: 1,
+          name: 'INT SALÓN DÍA',
+          locationCanonical: 'INT. SALÓN - DÍA',
+          locationPureName: 'CASA DE MARÍA',
+          intExt: const Value('INT'),
+          dayNight: const Value('DÍA'),
+          sortOrder: const Value(1),
+        ),
+      );
 
       final scenes = await db.watchScenesForProject(projectId).first;
       expect(scenes.length, 1);
       expect(scenes.first.locationPureName, 'CASA DE MARÍA');
 
       final sceneId = scenes.first.id;
-      await db.insertShot(ShotsCompanion.insert(
-        sceneId: sceneId,
-        projectId: projectId,
-        number: 1,
-        sortOrder: const Value(0),
-      ));
+      await db.insertShot(
+        ShotsCompanion.insert(
+          sceneId: sceneId,
+          projectId: projectId,
+          number: 1,
+          sortOrder: const Value(0),
+        ),
+      );
 
       var shots = await db.watchShotsForScene(sceneId).first;
       expect(shots.length, 1);
 
-      await db.updateShot(shots.first.copyWith(
-        framing: const Value('PD'),
-        lens: const Value('50mm'),
-        movement: const Value('TRÍPODE'),
-        angle: const Value('Normal'),
-        fStop: const Value('T2.8'),
-        action: const Value('Entra por la puerta'),
-        notes: const Value('Cuidado con el foco'),
-      ));
+      await db.updateShot(
+        shots.first.copyWith(
+          framing: const Value('PD'),
+          lens: const Value('50mm'),
+          movement: const Value('TRÍPODE'),
+          angle: const Value('Normal'),
+          fStop: const Value('T2.8'),
+          action: const Value('Entra por la puerta'),
+          notes: const Value('Cuidado con el foco'),
+        ),
+      );
 
       shots = await db.watchShotsForScene(sceneId).first;
       expect(shots.first.framing, 'PD');
@@ -243,21 +306,25 @@ Corre.
         ProjectsCompanion.insert(name: 'Order Test'),
       );
 
-      final sceneId = await db.insertScene(ScenesCompanion.insert(
-        projectId: projectId,
-        number: 1,
-        name: 'Escena vieja',
-        locationCanonical: 'INT. VIEJA - DÍA',
-        locationPureName: 'VIEJA',
-        sortOrder: const Value(1),
-      ));
+      final sceneId = await db.insertScene(
+        ScenesCompanion.insert(
+          projectId: projectId,
+          number: 1,
+          name: 'Escena vieja',
+          locationCanonical: 'INT. VIEJA - DÍA',
+          locationPureName: 'VIEJA',
+          sortOrder: const Value(1),
+        ),
+      );
 
-      await db.insertShot(ShotsCompanion.insert(
-        sceneId: sceneId,
-        projectId: projectId,
-        number: 1,
-        sortOrder: const Value(0),
-      ));
+      await db.insertShot(
+        ShotsCompanion.insert(
+          sceneId: sceneId,
+          projectId: projectId,
+          number: 1,
+          sortOrder: const Value(0),
+        ),
+      );
 
       await db.replaceScenesForProject(projectId, [
         ScenesCompanion.insert(

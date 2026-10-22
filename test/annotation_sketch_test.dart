@@ -92,10 +92,7 @@ void main() {
 
     test('un punto no se endereza', () {
       expect(
-        AnnotationShapeRecognizer.recognize(const [
-          Offset(1, 1),
-          Offset(2, 2),
-        ]),
+        AnnotationShapeRecognizer.recognize(const [Offset(1, 1), Offset(2, 2)]),
         isNull,
       );
     });
@@ -302,10 +299,13 @@ void _sheetTests() {
     final doc = await _pumpSheet(tester, SketchSheetPurpose.lightingPlan, (
       sheet,
     ) async {
-      await tester.tap(find.text('Sellos'));
+      await tester.tap(find.byTooltip('Sellos'));
       await tester.pumpAndSettle();
       final at = sheet.center;
-      final gesture = await tester.startGesture(at);
+      final gesture = await tester.startGesture(
+        at,
+        kind: PointerDeviceKind.mouse,
+      );
       await gesture.moveTo(at + const Offset(0, 40));
       await gesture.moveTo(at + const Offset(0, 80));
       await gesture.up();

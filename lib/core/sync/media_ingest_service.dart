@@ -45,13 +45,12 @@ class MediaIngestResult {
 
 /// Punto de entrada unificado: guardar local + encolar Cloudinary.
 class MediaIngestService {
+  // `db` se acepta por compatibilidad con quien lo construye; hoy no se usa.
   MediaIngestService({
     required AppDatabase db,
     required MediaUploadQueue uploadQueue,
-  })  : _db = db,
-        _queue = uploadQueue;
+  }) : _queue = uploadQueue;
 
-  final AppDatabase _db;
   final MediaUploadQueue _queue;
 
   Future<MediaIngestResult> ingestBytes({

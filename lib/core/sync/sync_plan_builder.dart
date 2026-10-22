@@ -3,6 +3,7 @@ import '../cloud/cloud_session.dart';
 import 'content_sync_base_store.dart';
 import 'project_content_bundle.dart';
 import 'project_content_sync_service.dart';
+import 'sync_merge_store.dart';
 import 'sync_plan.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -190,8 +191,8 @@ class SyncPlanBuilder {
       final cloudId = local.cloudId!;
       final localSummary =
           await ProjectContentBundle.summarizeLocal(_db, local.id);
-      final localHash =
-          await ProjectContentBundle.computeLocalHash(_db, local.id);
+      final localBundle = await ProjectContentBundle.export(_db, local.id);
+      final localHash = ProjectContentBundle.hashBundle(localBundle);
       final snap = snapshots[cloudId];
 
       if (snap == null) {
@@ -226,8 +227,64 @@ class SyncPlanBuilder {
 
       if (cloudHash == localHash ||
           ProjectContentBundle.contentMatchesSnapshot(localHash, snap)) {
+        // Iguales: este es el nuevo punto de partida. Guardarlo deja las
+        // huellas en la base (y en SHA-256) aunque no haya nada que subir.
+        final synced = ContentSyncBase(
+          localHash: localHash,
+          cloudHash: cloudHash ?? localHash,
+        );
+        final base = await ContentSyncBaseStore.load(_db, local.id);
+        final baseMoved = base?.localHash != synced.localHash ||
+            base?.cloudHash != synced.cloudHash;
+        if (baseMoved) {
+          await ContentSyncBaseStore.save(_db, local.id, synced);
+        }
+        // También es la base para mezclar si un día cambian los dos lados.
+        if (cloudContent is Map &&
+            (baseMoved || !await ContentBaseBundleStore.has(_db, local.id))) {
+          await ContentBaseBundleStore.save(
+            _db,
+            local.id,
+            local: localBundle,
+            cloud: Map<String, dynamic>.from(cloudContent),
+          );
+        }
+        // Mismo contenido, pero con uid distintos (este equipo bajó el
+        // proyecto antes de que los uid viajaran): sus imágenes no encuentran
+        // su fila. Descargar no cambia nada más y deja los uid de la nube.
+        if (cloudContent is Map &&
+            !ProjectContentBundle.uidsMatch(
+              localBundle,
+              Map<String, dynamic>.from(cloudContent),
+            )) {
+          items.add(
+            SyncPlanItem(
+              action: SyncPlanAction.pullContentCloud,
+              title: '${local.name} — contenido',
+              description:
+                  'Mismo contenido; descargar para recibir las imágenes y '
+                  'archivos de la nube',
+              localProjectId: local.id,
+              cloudId: cloudId,
+              localProject: local,
+              localContentSummary: localSummary,
+              cloudContentSummary: ProjectContentBundle.summarize(
+                Map<String, dynamic>.from(cloudContent),
+              ),
+              cloudContentHash: cloudHash,
+            ),
+          );
+        }
         continue;
       }
+
+      final cloudNow =
+          cloudHash ??
+          (cloudContent is Map
+              ? ProjectContentBundle.hashBundle(
+                  Map<String, dynamic>.from(cloudContent),
+                )
+              : null);
 
       SyncPlanItem contentItem(SyncPlanAction action, String description) =>
           SyncPlanItem(
@@ -239,13 +296,14 @@ class SyncPlanBuilder {
             localProject: local,
             localContentSummary: localSummary,
             cloudContentSummary: cloudSummary,
+            cloudContentHash: cloudNow,
             diffs: _contentDiffs(localSummary, cloudSummary),
           );
 
       // Quién ha cambiado desde la última sincronización se decide por las
       // huellas guardadas entonces, no por horas: una descarga reemplaza el
       // contenido local y no puede depender del reloj.
-      final base = await ContentSyncBaseStore.load(local.id);
+      final base = await ContentSyncBaseStore.load(_db, local.id);
       if (base == null) {
         if (localSummary.isEmpty &&
             !await ProjectContentBundle.hasLocalContent(_db, local.id)) {
@@ -267,15 +325,28 @@ class SyncPlanBuilder {
         continue;
       }
 
-      final cloudNow =
-          cloudHash ??
-          (cloudContent is Map
-              ? ProjectContentBundle.hashBundle(
-                  Map<String, dynamic>.from(cloudContent),
-                )
-              : null);
-      final localChanged = localHash != base.localHash;
-      final cloudChanged = cloudNow != base.cloudHash;
+      // La base puede ser de antes de SHA-256: se compara con su método.
+      final localChanged = !ProjectContentBundle.bundleMatchesHash(
+        localBundle,
+        base.localHash,
+      );
+      // La huella de la nube sirve si está en el mismo formato que la base;
+      // si no (subida ya con SHA-256), se calcula del contenido.
+      final sameFormat =
+          cloudHash != null &&
+          ProjectContentBundle.isLegacyHash(cloudHash) ==
+              ProjectContentBundle.isLegacyHash(base.cloudHash);
+      // Con el contenido de la nube a mano se compara el contenido (vale la
+      // huella con o sin rutas); si no, la huella guardada.
+      final compareContent =
+          cloudContent is Map &&
+          !(sameFormat && ProjectContentBundle.isLegacyHash(base.cloudHash));
+      final cloudChanged = compareContent
+          ? !ProjectContentBundle.bundleMatchesHash(
+              Map<String, dynamic>.from(cloudContent),
+              base.cloudHash,
+            )
+          : cloudNow != base.cloudHash;
 
       if (localChanged && cloudChanged) {
         items.add(

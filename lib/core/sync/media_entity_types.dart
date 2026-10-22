@@ -6,6 +6,29 @@ abstract final class MediaEntityType {
   static const location = 'location';
   static const shootDocument = 'shoot_document';
   static const projectCover = 'project_cover';
+
+  // Archivos de huecos (ver `kMediaSlots`).
+  static const shotStoryboard = 'shot_storyboard';
+  static const shotPlanImage = 'shot_plan_image';
+  /// Ya no se usa: la principal es una de las referencias del plano. Lo
+  /// subido con este tipo se ignora al bajar.
+  static const shotMainReference = 'shot_main_reference';
+  static const lightSketch = 'light_sketch';
+  static const planImage = 'plan_image';
+  static const lightingReference = 'lighting_reference';
+  static const setPlan = 'set_plan';
+  static const bibleEvidence = 'bible_evidence';
+  static const opticsSample = 'optics_sample';
+  static const cameraTest = 'camera_test';
+  static const script = 'script';
+  static const annotatedPdf = 'annotated_pdf';
+  static const setScan = 'set_scan';
+  static const setModel3d = 'set_model3d';
+  static const siteScan = 'site_scan';
+
+  /// Trazos editables de un boceto (`<imagen>.trazos.json`), que viajan con
+  /// su imagen. Clave: `<tipo de la imagen>|<clave de la imagen>`.
+  static const sketchStrokes = 'sketch_strokes';
 }
 
 /// Origen de una imagen ingerida.

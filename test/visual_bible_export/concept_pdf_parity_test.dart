@@ -42,31 +42,30 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('registro de Concepto', () {
-    test('por defecto: ocho puntos, con los actos y sin composición', () {
+    test('por defecto: ocho puntos, luz y sombras antes que el color', () {
       expect(
         BibleStitchModuleRegistry.defaultFieldsFor(
           BibleSectionId.concept,
         ).map((f) => f.key),
         [
           'narrative',
-          'colorPalette',
-          'colorSymbolism',
           'lightPhilosophy',
           'shadowTreatment',
+          'colorPalette',
+          'colorSymbolism',
           'composition',
           'actNotes',
-          'keyFrame',
           'references',
         ],
       );
     });
 
-    test('«Composición por actos» se puede volver a añadir', () {
+    test('Key Frame y «Composición por actos» se pueden volver a añadir', () {
       final missing = BibleStitchModuleRegistry.missingModules(
         BibleSectionId.concept,
         BibleStitchModuleRegistry.defaultFieldsFor(BibleSectionId.concept),
       );
-      expect(missing.map((m) => m.key), ['actComposition']);
+      expect(missing.map((m) => m.key), ['keyFrame', 'actComposition']);
     });
   });
 
@@ -107,6 +106,9 @@ void main() {
         field,
         if (field.key == 'colorSymbolism')
           const BibleSectionField(key: 'field_mio', label: 'Punto propio'),
+        // Punto de biblias anteriores que el usuario conserva.
+        if (field.key == 'actNotes')
+          const BibleSectionField(key: 'keyFrame', label: 'Key Frame'),
       ],
     ];
     await db.saveBibleSectionFields(bible.id, BibleSectionId.concept, fields);
@@ -184,18 +186,17 @@ void main() {
     final text = _extract(bytes);
     final expected = [
       'Naturalismo estilizado',
+      'Luz direccional dura',
+      'Alto (4:1)',
+      'Prácticos visibles',
+      'Negros densos que anclan el cuadro',
       '#112233',
       'NOCHE',
       'Azul profundo',
       'Soledad institucional',
       'Nota intercalada',
-      'Luz direccional dura',
-      'Alto (4:1)',
-      'Prácticos visibles',
-      'Negros densos que anclan el cuadro',
       'Personaje pequeño en el tercio inferior',
       'Asimétrico',
-      'El Descenso',
       'Contrastes agresivos',
       '2.39:1 / 21mm / T2.8',
       'Blade Runner 2049',
@@ -211,6 +212,9 @@ void main() {
       expect(at, greaterThan(cursor), reason: '«$piece» falta o va antes');
       cursor = at;
     }
-    expect(text, isNot(contains('El Orden Frágil')), reason: 'acto vacío');
+    // Ni títulos ni datos de ejemplo: solo lo que se escribió.
+    expect(text, isNot(contains('El Orden Frágil')));
+    expect(text, isNot(contains('El Descenso')));
+    expect(text, isNot(contains('RELLENO')), reason: 'dato sin valor');
   });
 }

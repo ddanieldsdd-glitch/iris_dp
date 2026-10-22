@@ -15,10 +15,16 @@ abstract final class AnnotationPdfRenderer {
     return pw.CustomPaint(
       size: PdfPoint(width, height),
       painter: (canvas, size) {
+        final hidden = {
+          for (final layer in document.effectiveLayers)
+            if (!layer.visible) layer.id,
+        };
         for (final stroke in document.strokes) {
+          if (hidden.contains(document.strokeLayerId(stroke))) continue;
           _drawStroke(canvas, size, stroke);
         }
         for (final stamp in document.stamps) {
+          if (hidden.contains(document.stampLayerId(stamp))) continue;
           _drawStamp(canvas, size, stamp);
         }
         for (final note in document.notes) {
@@ -28,7 +34,11 @@ abstract final class AnnotationPdfRenderer {
     );
   }
 
-  static void _drawNote(PdfGraphics canvas, PdfPoint size, AnnotationNote note) {
+  static void _drawNote(
+    PdfGraphics canvas,
+    PdfPoint size,
+    AnnotationNote note,
+  ) {
     final rect = PdfRect(
       note.x * size.x,
       (1 - note.y - note.height) * size.y,
@@ -38,12 +48,7 @@ abstract final class AnnotationPdfRenderer {
     final base = PdfColor.fromInt(note.colorArgb);
     canvas
       ..setFillColor(base)
-      ..drawRect(
-        rect.left,
-        rect.bottom,
-        rect.width,
-        rect.height,
-      )
+      ..drawRect(rect.left, rect.bottom, rect.width, rect.height)
       ..fillPath();
   }
 

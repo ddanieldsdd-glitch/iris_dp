@@ -1,3 +1,4 @@
+import '../lighting/lighting_card_view.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -15,7 +16,6 @@ import '../../moodboard_reference_meta.dart';
 import '../../services/moodboard_lighting_link_service.dart';
 import '../../visual_bible_model.dart';
 import '../bible_navigation_scope.dart';
-import 'narrative_card_detail.dart';
 
 /// Mosaico de contenedores de comportamiento de luz definidos por el usuario.
 ///
@@ -119,7 +119,7 @@ class LightingBehaviorMosaicBlock extends ConsumerWidget {
                                 container: container,
                                 matched: matched,
                                 palette: palette,
-                                onOpen: () => NarrativeCardDetailPage.open(
+                                onOpen: () => openLightingCard(
                                   context,
                                   projectId: projectId,
                                   bibleId: bibleId,
@@ -198,7 +198,7 @@ class LightingBehaviorMosaicBlock extends ConsumerWidget {
     );
 
     if (!context.mounted) return;
-    await NarrativeCardDetailPage.open(
+    await openLightingCard(
       context,
       projectId: projectId,
       bibleId: bibleId,
@@ -281,7 +281,7 @@ class _MosaicHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'COMPORTAMIENTO DE LA LUZ',
+                'IDEAS DE LUZ',
                 style: AppTypography.mono(palette).copyWith(
                   fontSize: 12,
                   letterSpacing: 1.4,
@@ -684,7 +684,7 @@ class _ContainerEditorSheetState extends State<_ContainerEditorSheet> {
             ),
             const SizedBox(height: 20),
             Text(
-              'TAGS QUE QUIERES QUE APAREZCAN',
+              'ETIQUETAS QUE QUIERES QUE APAREZCAN',
               style: AppTypography.mono(palette).copyWith(
                 fontSize: 11,
                 letterSpacing: 1.2,

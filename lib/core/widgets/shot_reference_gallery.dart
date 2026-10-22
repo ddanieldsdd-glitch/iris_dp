@@ -253,6 +253,7 @@ class _ShotReferenceViewerPageState
   String _sourceLabel(String source) => switch (source) {
         ShotReferenceSource.artemisCapture => 'Artemis',
         ShotReferenceSource.unrealRender => 'Render UE',
+        ShotReferenceSource.document => 'Documento',
         _ => 'Manual',
       };
 
@@ -262,7 +263,6 @@ class _ShotReferenceViewerPageState
   }
 
   Future<void> _setPrimary(ShotReference reference) async {
-    final palette = context.palette;
     final db = ref.read(databaseProvider);
     try {
       final current = await db.getShotById(widget.shot.id) ?? widget.shot;
@@ -356,7 +356,7 @@ class _ShotReferenceViewerPageState
                   AppSpacing.md,
                 ),
                 child: Text(
-                  'Esc ${widget.scene.number} · Plano ${widget.shot.number}',
+                  'Esc ${widget.scene.label} · Plano ${widget.shot.number}',
                   style: AppTypography.titleMedium(palette),
                 ),
               ),
@@ -568,7 +568,7 @@ class _ShotReferenceViewerPageState
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  'Esc ${widget.scene.number} · Plano ${widget.shot.number}',
+                                  'Esc ${widget.scene.label} · Plano ${widget.shot.number}',
                                   style: AppTypography.label(palette).copyWith(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w700,
@@ -917,6 +917,7 @@ class _ReferenceTile extends StatelessWidget {
   String _sourceLabel(String source) => switch (source) {
         ShotReferenceSource.artemisCapture => 'Artemis',
         ShotReferenceSource.unrealRender => 'Render UE',
+        ShotReferenceSource.document => 'Documento',
         _ => 'Manual',
       };
 

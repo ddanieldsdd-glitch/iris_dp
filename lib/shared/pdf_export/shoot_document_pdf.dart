@@ -96,7 +96,7 @@ class ShootDocumentPdfExporter {
     for (final r in blocks) {
       for (final path in {r.imagePath, r.block.imagePath}) {
         if (path == null || cache.containsKey(path)) continue;
-        cache[path] = await PdfSafeImage.loadFromPath(path);
+        cache[path] = await PdfSafeImage.loadFromPathMaxEdge(path);
       }
     }
     return cache;

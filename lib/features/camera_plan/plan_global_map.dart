@@ -10,9 +10,12 @@ import '../../core/theme/app_typography.dart';
 import 'floor_plan_repository.dart';
 import 'light_setup_actions.dart';
 import 'plan_data.dart';
+import 'plan_item_actions.dart';
 import 'plan_shot_card.dart';
+import 'plan_sketch.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
+import 'plan_trash_ui.dart';
 
 /// Mapa global de plantas: cada localización con su entorno, sus sets y los
 /// esquemas de luz de cada set, en miniaturas. Tocar una abre la pantalla de
@@ -62,6 +65,28 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
         );
     if (!mounted) return;
     widget.onOpen(PlanTarget.lightSetup(setup.id, setup.name));
+  }
+
+  Future<void> _newFreeSketch(String kind) async {
+    final created = await createPlanSketch(
+      context,
+      ref.read(databaseProvider),
+      projectId: widget.projectId,
+      sceneId: null,
+      setId: null,
+      siteId: null,
+      kind: kind,
+      label: 'libre',
+    );
+    if (created != null && mounted) await _openSketch(created);
+  }
+
+  Future<void> _openSketch(LightSetup sketch) async {
+    if (sketch.kind == LightSetupKind.sketchFreehand) {
+      await drawFreehandSketch(context, ref.read(databaseProvider), sketch);
+    } else {
+      widget.onOpen(PlanTarget.lightSetup(sketch.id, sketch.name));
+    }
   }
 
   Future<void> _newSet(LocationSite site) async {
@@ -155,7 +180,21 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
                 'Esquemas de luz sin localización ni escenas, '
                 'para bocetar antes de tener guion.',
             children: [
-              _setupLegend(_data.freeSetups, onAdd: () => _newSetup()),
+              _setupLegend(
+                _data.freeSetups,
+                paste: const PlanPasteTarget.free(),
+                onAdd: () => _newSetup(),
+              ),
+              PlanSketchStrip(
+                title: 'BOCETOS SIN ESCENA',
+                sketches: _data.freeSketches,
+                data: _data,
+                onOpen: _openSketch,
+                onNewElements: () =>
+                    _newFreeSketch(LightSetupKind.sketchElements),
+                onNewFreehand: () =>
+                    _newFreeSketch(LightSetupKind.sketchFreehand),
+              ),
             ],
           ),
       ],
@@ -207,6 +246,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
       action: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          PlanPasteButton(target: PlanPasteTarget(siteId: site.id)),
           TextButton.icon(
             icon: const Icon(Icons.add, size: 16),
             label: const Text('Set'),
@@ -226,6 +266,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
             ),
             onTap: () => widget.onOpen(PlanTarget.site(site.id, site.name)),
           ),
+          SiteMenuButton(site: site),
         ],
       ),
       children: [
@@ -233,6 +274,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
           _setupLegend(
             siteSetups,
             label: 'Luz general',
+            paste: PlanPasteTarget(siteId: site.id),
             onAdd: () => _newSetup(siteId: site.id),
           ),
         for (final (i, branch) in branches.indexed)
@@ -251,6 +293,14 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
     final color = _data.colors.setColor(set);
     final scenes = _data.scenesOfSet(set.id);
     final shotCount = _data.shotsOfScenes(scenes).length;
+    final setupCount = _data.setupsOfSet(set.id).length;
+    final actions = SetActions(
+      context,
+      ref.read(databaseProvider),
+      set,
+      sceneCount: scenes.length,
+      setupCount: setupCount,
+    );
 
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.lg),
@@ -262,31 +312,42 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
             runSpacing: AppSpacing.sm,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
+              PlanItemKeys(
+                onCopy: actions.copy,
+                onDuplicate: actions.duplicate,
+                onPaste: actions.paste,
+                onDelete: actions.delete,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    set.locationName,
-                    style: AppTypography.titleMedium(
-                      palette,
-                    ).copyWith(color: color),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    '${scenes.length} esc. · '
-                    '$shotCount plano${shotCount == 1 ? '' : 's'}',
-                    style: AppTypography.caption(palette),
-                  ),
-                ],
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      set.locationName,
+                      style: AppTypography.titleMedium(
+                        palette,
+                      ).copyWith(color: color),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      '${scenes.length} esc. · '
+                      '$shotCount plano${shotCount == 1 ? '' : 's'}',
+                      style: AppTypography.caption(palette),
+                    ),
+                    SetMenuButton(
+                      set: set,
+                      sceneCount: scenes.length,
+                      setupCount: setupCount,
+                    ),
+                  ],
+                ),
               ),
               _MiniPlan(
                 label: 'Set',
@@ -302,6 +363,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
               ),
               _setupLegend(
                 _data.setupsOfSet(set.id),
+                paste: PlanPasteTarget(setId: set.id),
                 onAdd: () => _newSetup(setId: set.id),
               ),
             ],
@@ -330,6 +392,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
   Widget _setupLegend(
     List<LightSetup> setups, {
     String label = 'Luz',
+    required PlanPasteTarget paste,
     required VoidCallback onAdd,
   }) {
     final palette = context.palette;
@@ -353,6 +416,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
           icon: Icon(Icons.add, size: 18, color: palette.accent),
           onPressed: onAdd,
         ),
+        PlanPasteButton(target: paste),
       ],
     );
   }
@@ -376,44 +440,56 @@ class _SetupChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final origin = lightSetupOriginLabel(setup.origin);
-    return Material(
-      color: color.withValues(alpha: 0.16),
-      borderRadius: BorderRadius.circular(8),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(setup.name, style: AppTypography.label(palette)),
-                  Text(
-                    [
-                      lightSetupStatusLabel(setup.status),
-                      if (origin.isNotEmpty) origin,
-                      if (setup.category?.isNotEmpty == true) setup.category!,
-                      '$shotCount plano${shotCount == 1 ? '' : 's'}',
-                    ].join(' · '),
-                    style: AppTypography.caption(palette),
+    final actions = LightSetupActions(
+      context,
+      ProviderScope.containerOf(context).read(databaseProvider),
+      setup,
+      shotCount,
+    );
+    return PlanItemKeys(
+      onCopy: actions.copy,
+      onDuplicate: actions.duplicate,
+      onPaste: actions.pasteBeside,
+      onDelete: actions.delete,
+      child: Material(
+        color: color.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(8),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(3),
                   ),
-                ],
-              ),
-              LightSetupMenuButton(setup: setup, shotCount: shotCount),
-            ],
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(setup.name, style: AppTypography.label(palette)),
+                    Text(
+                      [
+                        lightSetupStatusLabel(setup.status),
+                        if (origin.isNotEmpty) origin,
+                        if (setup.category?.isNotEmpty == true) setup.category!,
+                        '$shotCount plano${shotCount == 1 ? '' : 's'}',
+                      ].join(' · '),
+                      style: AppTypography.caption(palette),
+                    ),
+                  ],
+                ),
+                LightSetupMenuButton(setup: setup, shotCount: shotCount),
+              ],
+            ),
           ),
         ),
       ),

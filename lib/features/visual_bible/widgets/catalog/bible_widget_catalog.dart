@@ -17,8 +17,16 @@ import '../bible_generic_point_views.dart';
 import '../bible_navigation_scope.dart';
 import '../bible_palette_widget.dart';
 import '../bible_point_images.dart';
+import '../bible_image_sheet.dart';
 import '../bible_point_panel.dart';
+import '../bible_equipment_widget.dart';
 import '../bible_references_deck.dart';
+import '../lighting/lighting_metrics_widget.dart';
+import '../../../../shared/visual_bible/lighting_metrics.dart';
+import '../../../../shared/visual_bible/bible_equipment.dart';
+import '../bible_table_widget.dart';
+import '../../../../shared/visual_bible/bible_table.dart';
+import '../../../../shared/visual_bible/bible_text_specs.dart';
 
 /// Lo que un widget del catálogo necesita para pintarse y guardar su valor.
 class BibleWidgetContext {
@@ -207,6 +215,17 @@ abstract final class BibleWidgetCatalog {
       build: _acts,
     ),
     const BibleWidgetEntry(
+      id: 'cards_mosaic',
+      type: BibleSectionFieldType.cards,
+      category: BibleWidgetCategory.image,
+      label: 'Mosaico de imágenes con nota',
+      description:
+          'Imágenes grandes con su título, sus datos cortos y su texto; '
+          'cada una se abre en su ficha.',
+      icon: Icons.auto_awesome_mosaic_outlined,
+      build: _mosaic,
+    ),
+    const BibleWidgetEntry(
       id: 'cards_pillars',
       type: BibleSectionFieldType.cards,
       category: BibleWidgetCategory.structure,
@@ -320,6 +339,68 @@ abstract final class BibleWidgetCatalog {
       description: 'Pares de dato y valor.',
       icon: Icons.tune,
       build: _generic,
+    ),
+    const BibleWidgetEntry(
+      id: 'image_analysis',
+      type: BibleSectionFieldType.specs,
+      category: BibleWidgetCategory.image,
+      label: 'Análisis de una imagen',
+      description:
+          'Una sola imagen estudiada a fondo: qué cuenta, su luz, sus '
+          'comentarios y lo que dibujes encima.',
+      icon: Icons.image_search_outlined,
+      build: _imageAnalysis,
+    ),
+    const BibleWidgetEntry(
+      id: 'light_metrics',
+      type: BibleSectionFieldType.specs,
+      category: BibleWidgetCategory.data,
+      label: 'Luz: color y contraste',
+      description:
+          'Temperatura o colores, tinte, ratio de contraste y qué hace '
+          'falta para conseguirlos.',
+      icon: Icons.wb_incandescent_outlined,
+      screens: {BibleSectionId.lighting},
+      build: _lightMetrics,
+    ),
+    const BibleWidgetEntry(
+      id: 'equipment',
+      type: BibleSectionFieldType.equipment,
+      category: BibleWidgetCategory.data,
+      label: 'Cámaras del proyecto',
+      description:
+          'Cada cámara, tentativa o definitiva, con su alternativa.',
+      icon: Icons.videocam_outlined,
+      screens: {BibleSectionId.camera},
+      build: _equipment,
+    ),
+    const BibleWidgetEntry(
+      id: 'text_specs',
+      type: BibleSectionFieldType.specs,
+      category: BibleWidgetCategory.data,
+      label: 'Texto con datos',
+      description: 'Un desarrollo escrito y, debajo, datos sueltos.',
+      icon: Icons.notes_outlined,
+      build: _textSpecs,
+    ),
+    BibleWidgetEntry(
+      id: 'table',
+      type: BibleSectionFieldType.table,
+      category: BibleWidgetCategory.data,
+      label: 'Tabla',
+      description: 'Columnas con nombre y filas que se añaden.',
+      icon: Icons.table_rows_outlined,
+      initialValue: BibleTableValue.initial(const ['Dato', 'Valor', 'Notas']),
+      build: _table,
+    ),
+    const BibleWidgetEntry(
+      id: 'meters',
+      type: BibleSectionFieldType.meters,
+      category: BibleWidgetCategory.data,
+      label: 'Medidores',
+      description: 'Datos con su valor, una barra de escala y una nota.',
+      icon: Icons.speed_outlined,
+      build: _meters,
     ),
   ];
 
@@ -463,6 +544,83 @@ abstract final class BibleWidgetCatalog {
           onChanged: (value) => ctx.onChanged(value.encode()),
           sharedActs: ctx.sharedActs,
           onSharedActsChanged: ctx.onSharedActsChanged,
+        ),
+      );
+
+  static Widget _textSpecs(BuildContext context, BibleWidgetContext ctx) =>
+      BiblePointPanel(
+        label: ctx.field.label,
+        icon: Icons.notes_outlined,
+        child: BibleTextSpecsWidget(
+          key: ValueKey('text_specs_${ctx.sectionId}_${ctx.field.key}'),
+          value: BibleTextSpecsValue.decode(ctx.value),
+          hint: ctx.field.hint ?? 'Escribe aquí…',
+          onChanged: (value) => ctx.onChanged(value.encode()),
+        ),
+      );
+
+  static Widget _lightMetrics(BuildContext context, BibleWidgetContext ctx) =>
+      BiblePointPanel(
+        label: ctx.field.label,
+        icon: Icons.wb_incandescent_outlined,
+        child: LightingMetricsWidget(
+          value: LightingMetrics.fromJson(ctx.value),
+          onChanged: (value) => ctx.onChanged(value.encode()),
+        ),
+      );
+
+  static Widget _imageAnalysis(BuildContext context, BibleWidgetContext ctx) =>
+      BiblePointPanel(
+        label: ctx.field.label,
+        icon: Icons.image_search_outlined,
+        child: BibleImageAnalysisPoint(
+          projectId: ctx.projectId,
+          bibleId: ctx.bibleId,
+          sectionId: ctx.sectionId,
+          value: ctx.value,
+          onChanged: ctx.onChanged,
+        ),
+      );
+
+  static Widget _mosaic(BuildContext context, BibleWidgetContext ctx) =>
+      _cardsPoint(
+        ctx,
+        icon: Icons.auto_awesome_mosaic_outlined,
+        layout: BibleCardsLayout.mosaic,
+      );
+
+  static Widget _equipment(BuildContext context, BibleWidgetContext ctx) =>
+      BiblePointPanel(
+        label: ctx.field.label,
+        icon: Icons.videocam_outlined,
+        child: BibleCameraEquipmentPoint(
+          key: ValueKey('equipment_${ctx.sectionId}_${ctx.field.key}'),
+          projectId: ctx.projectId,
+          items: BibleEquipmentItem.listFrom(ctx.value),
+          onChanged: (items) =>
+              ctx.onChanged(BibleEquipmentItem.encode(items)),
+        ),
+      );
+
+  static Widget _table(BuildContext context, BibleWidgetContext ctx) =>
+      BiblePointPanel(
+        label: ctx.field.label,
+        icon: Icons.table_rows_outlined,
+        child: BibleTableWidget(
+          key: ValueKey('table_${ctx.sectionId}_${ctx.field.key}'),
+          value: BibleTableValue.decode(ctx.value),
+          onChanged: (value) => ctx.onChanged(value.encode()),
+        ),
+      );
+
+  static Widget _meters(BuildContext context, BibleWidgetContext ctx) =>
+      BiblePointPanel(
+        label: ctx.field.label,
+        icon: Icons.speed_outlined,
+        child: BibleMetersWidget(
+          key: ValueKey('meters_${ctx.sectionId}_${ctx.field.key}'),
+          meters: BibleMeter.listFrom(ctx.value),
+          onChanged: (meters) => ctx.onChanged(BibleMeter.encode(meters)),
         ),
       );
 

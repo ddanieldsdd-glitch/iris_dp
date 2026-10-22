@@ -19,7 +19,6 @@ import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../look_bible/look_bible_model.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
-import 'moodboard_association.dart';
 import '../locations/locations_screen.dart';
 import 'bible_edit_history.dart';
 import 'bible_preset_bundle.dart';
@@ -59,7 +58,6 @@ import 'widgets/sections/optics_section.dart';
 import 'widgets/sections/texture_section.dart';
 import 'widgets/sections/workflow_section.dart';
 import 'widgets/bible_live_customize_panel.dart';
-import '../../core/project/project_shoot_context.dart';
 import 'widgets/sections/bible_settings_section.dart';
 
 class VisualBibleScreen extends ConsumerStatefulWidget {
@@ -383,6 +381,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
               includedSections: config.sections,
               sectionContentJsonById: bundle.sectionContentJsonById,
               sectionOrder: bundle.sectionOrder,
+                        lightingCards: bundle.narrativeCards,
               lightingSketchPngs: await LightingSketchExport.loadPngs(
                 db: ref.read(databaseProvider),
                 projectId: widget.projectId,
@@ -498,11 +497,9 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
   void _openMoodboard({String? sectionId, String? moodboardFilter}) {
     setState(() {
       _activeSection = BibleSectionId.moodboard;
-      _moodboardInitialFilter =
-          moodboardFilter ??
-          (sectionId != null
-              ? MoodboardAssociation.categoryForSection(sectionId)
-              : null);
+      // Solo se filtra cuando se pide un filtro; venir de una sección no
+      // esconde el resto del moodboard.
+      _moodboardInitialFilter = moodboardFilter;
     });
   }
 
@@ -898,29 +895,6 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                       ),
                     ),
                   ),
-                Consumer(
-                  builder: (context, ref, _) {
-                    final shoot = ref.watch(
-                      activeShootLocationProvider(widget.projectId),
-                    );
-                    return shoot.when(
-                      data: (loc) {
-                        final label = loc.set?.locationName ??
-                            loc.site?.name;
-                        if (label == null) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: ActionChip(
-                            label: Text('Set: $label'),
-                            onPressed: () => _openSection(BibleSectionId.location),
-                          ),
-                        );
-                      },
-                      loading: () => const SizedBox.shrink(),
-                      error: (_, __) => const SizedBox.shrink(),
-                    );
-                  },
-                ),
                 if (_saving && !compactAppBar)
                   const Padding(
                     padding: EdgeInsets.all(16),
@@ -953,6 +927,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                         moodboard: bundle.moodboard,
                         sectionContentJsonById: bundle.sectionContentJsonById,
                         sectionOrder: bundle.sectionOrder,
+                        lightingCards: bundle.narrativeCards,
                         lightingSketchPngs: await LightingSketchExport.loadPngs(
                           db: ref.read(databaseProvider),
                           projectId: widget.projectId,

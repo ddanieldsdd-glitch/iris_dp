@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/sync/realtime_hub.dart';
+
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
@@ -24,10 +26,13 @@ import '../../shared/pdf_export/storyboard_pdf.dart';
 import '../shoot_documents/shoot_document_import_actions.dart';
 import '../technical_script/technical_script_screen.dart';
 import 'storyboard_export_options_sheet.dart';
+import '../../core/utils/share_origin.dart';
+import 'shot_sheet_data.dart';
 import 'storyboard_shot_export_service.dart';
+import 'storyboard_viewer.dart';
 import '../../core/widgets/app_snackbar.dart';
-import '../../shared/annotations/annotation_document.dart';
-import '../../shared/annotations/sketch_sheet_screen.dart';
+import '../../shared/rich_text/script_markup.dart';
+import '../../shared/shot_images/shot_image_menu.dart';
 
 enum _StoryboardLayout { linear, grid, list }
 
@@ -68,14 +73,16 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
 
       final shotsByScene = <int, List<Shot>>{};
       for (final scene in scenes) {
-        shotsByScene[scene.id] =
-            await db.watchShotsForScene(scene.id).first;
+        shotsByScene[scene.id] = await db.watchShotsForScene(scene.id).first;
       }
 
       final hasShots = shotsByScene.values.any((s) => s.isNotEmpty);
       if (!hasShots) {
         if (!context.mounted) return;
-        AppSnackBar.show(context, 'Añade planos en el guion técnico antes de exportar.');
+        AppSnackBar.show(
+          context,
+          'Añade planos en el guion técnico antes de exportar.',
+        );
         return;
       }
 
@@ -131,14 +138,18 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
               final project = await db.getProject(widget.projectId);
               if (project == null) return Uint8List(0);
               if (!context.mounted) return Uint8List(0);
-              final choice = await showStoryboardGroupExportOptionsSheet(context);
+              final choice = await showStoryboardGroupExportOptionsSheet(
+                context,
+              );
               if (choice == null) return Uint8List(0);
-              final scenes =
-                  await db.watchScenesForProject(widget.projectId).first;
+              final scenes = await db
+                  .watchScenesForProject(widget.projectId)
+                  .first;
               final shotsByScene = <int, List<Shot>>{};
               for (final scene in scenes) {
-                shotsByScene[scene.id] =
-                    await db.watchShotsForScene(scene.id).first;
+                shotsByScene[scene.id] = await db
+                    .watchShotsForScene(scene.id)
+                    .first;
               }
               return StoryboardPdfExporter.buildBytes(
                 project: project,
@@ -353,7 +364,7 @@ class _StoryboardBody extends ConsumerWidget {
   });
 
   bool _passesFilter(Shot shot) {
-    final path = shot.referenceImagePath;
+    final path = storyboardImageOf(shot);
     final hasImage = path != null && File(path).existsSync();
     return switch (filter) {
       _StoryboardFilter.all => true,
@@ -398,7 +409,11 @@ class _StoryboardBody extends ConsumerWidget {
           builder: (context, shotSnap) {
             final allShots = shotSnap.data ?? [];
             final shots = allShots.where(_passesFilter).toList();
-            if (shots.isEmpty) return const SizedBox.shrink();
+            // Una escena aún sin planos se queda a la vista: desde aquí se
+            // le pone el primero.
+            if (shots.isEmpty && allShots.isNotEmpty) {
+              return const SizedBox.shrink();
+            }
 
             return Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.xl),
@@ -418,10 +433,10 @@ class _StoryboardBody extends ConsumerWidget {
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: Text(
-                          'Esc ${scene.number} · $location',
-                          style: AppTypography.titleMedium(palette).copyWith(
-                            color: sceneColor,
-                          ),
+                          'Esc ${scene.label} · $location',
+                          style: AppTypography.titleMedium(
+                            palette,
+                          ).copyWith(color: sceneColor),
                         ),
                       ),
                       Text(
@@ -441,6 +456,26 @@ class _StoryboardBody extends ConsumerWidget {
                         listLayout: true,
                       ),
                     ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () async {
+                      final id = await createStoryboardShot(
+                        db,
+                        scene,
+                        allShots,
+                      );
+                      final shot = await db.getShotById(id);
+                      if (shot == null || !context.mounted) return;
+                      // Se abre ya en el visor: título, y elegir o dibujar
+                      // su imagen.
+                      await showStoryboardViewer(
+                        context,
+                        projectId: scene.projectId,
+                        shot: shot,
+                      );
+                    },
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Plano nuevo'),
                   ),
                 ],
               ),
@@ -479,7 +514,7 @@ class _StoryboardContinuousGrid extends ConsumerWidget {
   });
 
   bool _passesFilter(Shot shot) {
-    final path = shot.referenceImagePath;
+    final path = storyboardImageOf(shot);
     final hasImage = path != null && File(path).existsSync();
     return switch (filter) {
       _StoryboardFilter.all => true,
@@ -510,10 +545,11 @@ class _StoryboardContinuousGrid extends ConsumerWidget {
         final entries = <_GridShotEntry>[];
 
         for (final scene in scenes) {
-          final shots = allShots
-              .where((s) => s.sceneId == scene.id && _passesFilter(s))
-              .toList()
-            ..sort((a, b) => a.number.compareTo(b.number));
+          final shots =
+              allShots
+                  .where((s) => s.sceneId == scene.id && _passesFilter(s))
+                  .toList()
+                ..sort((a, b) => a.number.compareTo(b.number));
 
           for (var i = 0; i < shots.length; i++) {
             entries.add(
@@ -547,7 +583,8 @@ class _StoryboardContinuousGrid extends ConsumerWidget {
             return ListView.separated(
               padding: const EdgeInsets.all(AppSpacing.lg),
               itemCount: rows.length,
-              separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+              separatorBuilder: (_, __) =>
+                  const SizedBox(height: AppSpacing.md),
               itemBuilder: (context, rowIndex) {
                 final row = rows[rowIndex];
                 final showRowSceneHeader = row.first.isFirstInScene;
@@ -570,7 +607,8 @@ class _StoryboardContinuousGrid extends ConsumerWidget {
                             Expanded(
                               child: Padding(
                                 padding: EdgeInsets.only(
-                                  left: col > 0 &&
+                                  left:
+                                      col > 0 &&
                                           row[col].isFirstInScene &&
                                           !showRowSceneHeader
                                       ? AppSpacing.sm
@@ -585,7 +623,8 @@ class _StoryboardContinuousGrid extends ConsumerWidget {
                                   sceneColor: colors.sceneColor(row[col].scene),
                                   gridLayout: true,
                                   sceneStart: row[col].isFirstInScene,
-                                  sceneHeaderAbove: showRowSceneHeader &&
+                                  sceneHeaderAbove:
+                                      showRowSceneHeader &&
                                       row[col].isFirstInScene,
                                 ),
                               ),
@@ -608,10 +647,7 @@ class _SceneGridBreakHeader extends StatelessWidget {
   final Scene scene;
   final Color color;
 
-  const _SceneGridBreakHeader({
-    required this.scene,
-    required this.color,
-  });
+  const _SceneGridBreakHeader({required this.scene, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -626,9 +662,7 @@ class _SceneGridBreakHeader extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border(
-          left: BorderSide(color: color, width: 4),
-        ),
+        border: Border(left: BorderSide(color: color, width: 4)),
       ),
       child: Row(
         children: [
@@ -640,11 +674,10 @@ class _SceneGridBreakHeader extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              'Esc ${scene.number} · $location',
-              style: AppTypography.label(palette).copyWith(
-                color: color,
-                fontWeight: FontWeight.w700,
-              ),
+              'Esc ${scene.label} · $location',
+              style: AppTypography.label(
+                palette,
+              ).copyWith(color: color, fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -668,7 +701,7 @@ class _StoryboardLinearStrip extends ConsumerWidget {
   });
 
   bool _passesFilter(Shot shot) {
-    final path = shot.referenceImagePath;
+    final path = storyboardImageOf(shot);
     final hasImage = path != null && File(path).existsSync();
     return switch (filter) {
       _StoryboardFilter.all => true,
@@ -693,17 +726,15 @@ class _StoryboardLinearStrip extends ConsumerWidget {
         final children = <Widget>[];
 
         for (final scene in scenes) {
-          final shots = allShots
-              .where((s) => s.sceneId == scene.id && _passesFilter(s))
-              .toList()
-            ..sort((a, b) => a.number.compareTo(b.number));
+          final shots =
+              allShots
+                  .where((s) => s.sceneId == scene.id && _passesFilter(s))
+                  .toList()
+                ..sort((a, b) => a.number.compareTo(b.number));
           if (shots.isEmpty) continue;
 
           children.add(
-            _SceneBreakMarker(
-              scene: scene,
-              color: colors.sceneColor(scene),
-            ),
+            _SceneBreakMarker(scene: scene, color: colors.sceneColor(scene)),
           );
 
           for (final shot in shots) {
@@ -750,7 +781,8 @@ class _StoryboardLinearStrip extends ConsumerWidget {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 itemCount: children.length,
-                separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+                separatorBuilder: (_, __) =>
+                    const SizedBox(width: AppSpacing.md),
                 itemBuilder: (_, i) => children[i],
               ),
             ),
@@ -765,10 +797,7 @@ class _SceneBreakMarker extends StatelessWidget {
   final Scene scene;
   final Color color;
 
-  const _SceneBreakMarker({
-    required this.scene,
-    required this.color,
-  });
+  const _SceneBreakMarker({required this.scene, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -813,7 +842,7 @@ class _SceneBreakMarker extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${scene.number}',
+                  '${scene.label}',
                   style: AppTypography.titleMedium(palette).copyWith(
                     color: color,
                     fontWeight: FontWeight.w800,
@@ -882,117 +911,6 @@ class _StoryboardFrame extends ConsumerWidget {
     }
   }
 
-  static const _sketchTargetType = 'storyboard_sketch';
-
-  /// Abre el folio para dibujar la viñeta. El dibujo se guarda editable y,
-  /// además, como imagen principal del plano (sustituye al boceto anterior).
-  Future<void> _draw(BuildContext context, WidgetRef ref) async {
-    final db = ref.read(databaseProvider);
-    try {
-      final row = await db.getProjectAnnotationDocument(
-        projectId: shot.projectId,
-        targetType: _sketchTargetType,
-        targetId: shot.id.toString(),
-      );
-      if (!context.mounted) return;
-      final result = await SketchSheetScreen.open(
-        context,
-        title: 'Viñeta · Esc ${scene.number} · Plano ${shot.number}',
-        document: AnnotationDocument.decode(row?.documentJson),
-        purpose: SketchSheetPurpose.storyboard,
-        aspectRatio: 16 / 9,
-        exportPng: true,
-      );
-      if (result == null) return;
-
-      final refs = await db.watchReferencesForShot(shot.id).first;
-      for (final reference in refs.where(
-        (r) => r.source == ShotReferenceSource.sketch,
-      )) {
-        await deleteShotReferenceEntry(
-          db: db,
-          shot: await db.getShotById(shot.id) ?? shot,
-          reference: reference,
-        );
-      }
-
-      if (result.document.isEmpty) {
-        await db.deleteProjectAnnotationDocument(
-          projectId: shot.projectId,
-          targetType: _sketchTargetType,
-          targetId: shot.id.toString(),
-        );
-        await db.touchProjectContent(shot.projectId);
-        return;
-      }
-
-      await db.saveProjectAnnotationDocument(
-        projectId: shot.projectId,
-        targetType: _sketchTargetType,
-        targetId: shot.id.toString(),
-        documentJson: result.document.encode(),
-        documentSchemaVersion: result.document.schemaVersion,
-      );
-      final png = result.png;
-      if (png != null) {
-        await importShotReferenceImage(
-          db: db,
-          shot: await db.getShotById(shot.id) ?? shot,
-          sourceBytes: png,
-          fileName: 'vineta_${shot.number}.png',
-          source: ShotReferenceSource.sketch,
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        AppSnackBar.showError(context, userFriendlyError(e));
-      }
-    }
-  }
-
-  Future<void> _openPrimaryViewer(BuildContext context, WidgetRef ref) async {
-    final db = ref.read(databaseProvider);
-    try {
-      final current = await db.getShotById(shot.id) ?? shot;
-      final path = current.referenceImagePath;
-      final hasImage = path != null && File(path).existsSync();
-
-      if (!hasImage) {
-        if (!context.mounted) return;
-        _openFrameSheet(context, ref);
-        return;
-      }
-
-      final refs = await ensureShotReferencesSynced(db: db, shot: current);
-      if (refs.isEmpty) {
-        if (!context.mounted) return;
-        _openFrameSheet(context, ref);
-        return;
-      }
-
-      var initial = refs.first;
-      for (final r in refs) {
-        if (r.imagePath == path) {
-          initial = r;
-          break;
-        }
-      }
-      if (!context.mounted) return;
-
-      await showShotReferenceViewer(
-        context,
-        ref: ref,
-        scene: scene,
-        shot: current,
-        initialReference: initial,
-        onImport: (source) => _import(context, ref, source: source),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      AppSnackBar.showError(context, userFriendlyError(e));
-    }
-  }
-
   void _openFrameSheet(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     showModalBottomSheet<void>(
@@ -1007,10 +925,6 @@ class _StoryboardFrame extends ConsumerWidget {
           Navigator.pop(ctx);
           _import(context, ref, source: source);
         },
-        onDraw: () {
-          Navigator.pop(ctx);
-          _draw(context, ref);
-        },
         onExport: () async {
           Navigator.pop(ctx);
           await _exportFrame(context, ref);
@@ -1021,21 +935,24 @@ class _StoryboardFrame extends ConsumerWidget {
 
   Future<void> _exportFrame(BuildContext context, WidgetRef ref) async {
     final db = ref.read(databaseProvider);
-    final style = await showStoryboardExportOptionsSheet(
+    final choice = await showStoryboardExportOptionsSheet(
       context,
-      singleShot: true,
+      showImageChoice: shotHasBothImages(shot),
     );
-    if (style == null) return;
+    if (choice == null) return;
 
     try {
       final project = await db.getProject(scene.projectId);
       if (project == null) return;
+      if (!context.mounted) return;
       final path = await StoryboardShotExportService.exportSingle(
         project: project,
         scene: scene,
         shot: shot,
-        style: style,
+        style: choice.style,
+        imageSource: choice.imageSource,
         db: db,
+        shareOrigin: shareOrigin(context),
       );
       if (!context.mounted || path == null) return;
       AppSnackBar.show(context, 'Plano exportado en $path');
@@ -1046,9 +963,16 @@ class _StoryboardFrame extends ConsumerWidget {
     }
   }
 
+  /// «Plano 2 · PP de ALI»: el número y el título (su encuadre).
+  String _title() {
+    final framing = scriptMarkupToPlain(shot.framing).trim();
+    return framing.isEmpty
+        ? 'Plano ${shot.number}'
+        : 'Plano ${shot.number} · $framing';
+  }
+
   String _metaLine() {
     return [
-      if (shot.framing?.isNotEmpty == true) shot.framing,
       if (shot.lens?.isNotEmpty == true) shot.lens,
       if (shot.movement?.isNotEmpty == true) shot.movement,
     ].whereType<String>().join(' · ');
@@ -1058,11 +982,10 @@ class _StoryboardFrame extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final db = ref.watch(databaseProvider);
-    final path = shot.referenceImagePath;
+    final path = storyboardImageOf(shot);
     final hasImage = path != null && File(path).existsSync();
     final meta = _metaLine();
-    final showSceneStrip =
-        gridLayout && sceneStart && !sceneHeaderAbove;
+    final showSceneStrip = gridLayout && sceneStart && !sceneHeaderAbove;
     final sceneLocation = locationFromCanonical(scene.locationCanonical);
     final showSceneBadge = gridLayout || linearLayout || hasImage;
 
@@ -1090,8 +1013,11 @@ class _StoryboardFrame extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.add_photo_alternate_outlined,
-                        size: 32, color: palette.textTertiary),
+                    Icon(
+                      Icons.add_photo_alternate_outlined,
+                      size: 32,
+                      color: palette.textTertiary,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       'Sin referencia',
@@ -1100,17 +1026,12 @@ class _StoryboardFrame extends ConsumerWidget {
                   ],
                 ),
               ),
-            Positioned(
-              right: 6,
-              bottom: 6,
-              child: _DrawFrameButton(onTap: () => _draw(context, ref)),
-            ),
             if (showSceneBadge)
               Positioned(
                 left: 8,
                 top: 8,
                 child: _FrameBadge(
-                  label: 'Esc ${scene.number} · ${shot.number}',
+                  label: 'Esc ${scene.label} · ${shot.number}',
                   color: sceneColor,
                 ),
               ),
@@ -1135,10 +1056,7 @@ class _StoryboardFrame extends ConsumerWidget {
                 left: 0,
                 top: 0,
                 bottom: 0,
-                child: Container(
-                  width: 4,
-                  color: sceneColor,
-                ),
+                child: Container(width: 4, color: sceneColor),
               ),
           ],
         ),
@@ -1148,13 +1066,11 @@ class _StoryboardFrame extends ConsumerWidget {
     final interactiveImage = Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {
-          if (hasImage) {
-            _openPrimaryViewer(context, ref);
-          } else {
-            _openFrameSheet(context, ref);
-          }
-        },
+        onTap: () => showStoryboardViewer(
+          context,
+          projectId: scene.projectId,
+          shot: shot,
+        ),
         borderRadius: BorderRadius.circular(8),
         child: imageArea,
       ),
@@ -1175,16 +1091,13 @@ class _StoryboardFrame extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Plano ${shot.number}',
-                      style: AppTypography.titleMedium(palette),
-                    ),
+                    Text(_title(), style: AppTypography.titleMedium(palette)),
                     if (meta.isNotEmpty)
                       Text(meta, style: AppTypography.bodyMedium(palette)),
                     if (shot.action?.isNotEmpty == true) ...[
                       const SizedBox(height: 4),
                       Text(
-                        shot.action!,
+                        scriptMarkupToPlain(shot.action),
                         style: AppTypography.caption(palette),
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
@@ -1214,9 +1127,9 @@ class _StoryboardFrame extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Plano ${shot.number}',
+                    _title(),
                     style: AppTypography.label(palette),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (meta.isNotEmpty)
@@ -1229,10 +1142,10 @@ class _StoryboardFrame extends ConsumerWidget {
                   if (shot.action?.isNotEmpty == true) ...[
                     const SizedBox(height: 2),
                     Text(
-                      shot.action!,
-                      style: AppTypography.caption(palette).copyWith(
-                        color: palette.textSecondary,
-                      ),
+                      scriptMarkupToPlain(shot.action),
+                      style: AppTypography.caption(
+                        palette,
+                      ).copyWith(color: palette.textSecondary),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1263,7 +1176,7 @@ class _StoryboardFrame extends ConsumerWidget {
                 border: Border.all(color: sceneColor.withValues(alpha: 0.4)),
               ),
               child: Text(
-                'Esc ${scene.number} · $sceneLocation',
+                'Esc ${scene.label} · $sceneLocation',
                 style: AppTypography.caption(palette).copyWith(
                   color: sceneColor,
                   fontWeight: FontWeight.w700,
@@ -1282,9 +1195,9 @@ class _StoryboardFrame extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Plano ${shot.number}',
+                  _title(),
                   style: AppTypography.label(palette),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (meta.isNotEmpty)
@@ -1335,7 +1248,6 @@ class _FrameDetailSheet extends ConsumerWidget {
   final Shot shot;
   final Color sceneColor;
   final void Function(String source) onImport;
-  final VoidCallback onDraw;
   final Future<void> Function() onExport;
 
   const _FrameDetailSheet({
@@ -1343,7 +1255,6 @@ class _FrameDetailSheet extends ConsumerWidget {
     required this.shot,
     required this.sceneColor,
     required this.onImport,
-    required this.onDraw,
     required this.onExport,
   });
 
@@ -1363,13 +1274,10 @@ class _FrameDetailSheet extends ConsumerWidget {
           controller: scrollCtrl,
           children: [
             Text(
-              'Esc ${scene.number} · Plano ${shot.number}',
+              'Esc ${scene.label} · Plano ${shot.number}',
               style: AppTypography.titleLarge(palette),
             ),
-            Text(
-              location,
-              style: AppTypography.bodyMedium(palette),
-            ),
+            Text(location, style: AppTypography.bodyMedium(palette)),
             const SizedBox(height: AppSpacing.lg),
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.lg),
@@ -1383,12 +1291,6 @@ class _FrameDetailSheet extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.xl),
             Text('Añadir referencia', style: AppTypography.label(palette)),
-            const SizedBox(height: AppSpacing.sm),
-            AppButton(
-              label: 'Dibujar viñeta',
-              icon: Icons.draw_outlined,
-              onTap: onDraw,
-            ),
             const SizedBox(height: AppSpacing.sm),
             AppButton(
               label: 'Captura Artemis',
@@ -1412,12 +1314,50 @@ class _FrameDetailSheet extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             AppButton(
+              label: shot.storyboardImagePath == null
+                  ? 'Imagen propia para el storyboard'
+                  : 'Cambiar la imagen del storyboard',
+              icon: Icons.photo_library_outlined,
+              variant: AppButtonVariant.secondary,
+              onTap: () async {
+                // El menú se abre sobre la pantalla, no sobre esta hoja que
+                // se cierra.
+                final navigator = Navigator.of(context);
+                final screen = navigator.context;
+                final messenger = ScaffoldMessenger.maybeOf(screen);
+                final live = ref.read(liveEditingProvider);
+                navigator.pop();
+                // Si otro equipo edita este plano, aquí no se cambia su
+                // imagen hasta que termine.
+                final holder = live.holderOf(shot.uid);
+                if (holder != null) {
+                  messenger?.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Lo está editando ${holder.device}. Podrás cambiarlo '
+                        'en cuanto termine.',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+                live.focusShot(shot.uid);
+                await showShotImageMenu(
+                  screen,
+                  shot,
+                  target: ShotImageTarget.storyboard,
+                );
+                live.blurShot(shot.uid);
+              },
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
               label: 'Añadir al documento de rodaje',
               icon: Icons.description_outlined,
               variant: AppButtonVariant.secondary,
               onTap: () async {
                 final db = ref.read(databaseProvider);
-                final path = shot.referenceImagePath;
+                final path = storyboardImageOf(shot);
                 if (path != null) {
                   await ShootDocumentImportActions.addImageBlock(
                     context: context,
@@ -1447,32 +1387,6 @@ class _FrameDetailSheet extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Lápiz pequeño sobre la viñeta: abre el folio de dibujo.
-class _DrawFrameButton extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _DrawFrameButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Dibujar viñeta',
-      child: Material(
-        color: Colors.black.withValues(alpha: 0.55),
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: const Padding(
-            padding: EdgeInsets.all(6),
-            child: Icon(Icons.draw_outlined, size: 16, color: Colors.white),
-          ),
         ),
       ),
     );

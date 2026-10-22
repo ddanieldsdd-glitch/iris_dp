@@ -13,6 +13,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/export_file_saver.dart';
+import '../../core/utils/share_origin.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../luka_export/luka_manifest_service.dart';
 import '../optics_lab/optics_lab_screen.dart';
@@ -182,7 +183,11 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
       final dir = await Directory.systemTemp.createTemp('iris_equipo_');
       final file = File('${dir.path}/equipo_proyecto.xlsx');
       await file.writeAsBytes(bytes);
-      await Share.shareXFiles([XFile(file.path)], text: 'Lista de equipo IRIS');
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Lista de equipo IRIS',
+        sharePositionOrigin: mounted ? shareOrigin(context) : shareOrigin(),
+      );
     } catch (e) {
       if (mounted) {
         AppSnackBar.show(context, 'Error al compartir: $e', isError: true);

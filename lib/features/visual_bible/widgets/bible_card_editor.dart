@@ -10,7 +10,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/visual_bible/bible_cards.dart';
+import 'bible_image_sheet.dart';
 import 'bible_point_images.dart';
+import 'moodboard_images_viewer.dart';
 import 'bible_point_panel.dart';
 import 'bible_references_deck.dart';
 
@@ -41,6 +43,25 @@ class BibleCardEditorCopy {
   /// El acto es del proyecto: fase, título y orden se comparten.
   final bool sharedAct;
 
+  /// Pie del campo de datos cortos sobre el título (p. ej. «CONTRASTE 8:1
+  /// · CAÍDA RÁPIDA»). Nulo: la ficha no lo lleva, salvo que sea un acto.
+  final String? kickerHint;
+
+  /// La ficha admite puntos que la desarrollan, como los actos.
+  final bool points;
+
+  /// Cada imagen es una lámina con lo que cuenta, su luz, sus comentarios y
+  /// su dibujo; los puntos son apartados del desarrollo.
+  final bool sheets;
+
+  /// Cómo se llama cada punto («Punto», «Apartado»).
+  final String pointLabel;
+
+  /// Cada punto es un tema que se analiza con un texto y varias imágenes
+  /// («los cálidos», «el contraste alto»): van a todo el ancho, con sus
+  /// imágenes grandes.
+  final bool topics;
+
   const BibleCardEditorCopy({
     required this.pageTitle,
     this.titleHint = 'Título',
@@ -48,9 +69,37 @@ class BibleCardEditorCopy {
     this.bodyHint = 'Escribe aquí…',
     this.act = false,
     this.sharedAct = false,
+    this.kickerHint,
+    this.points = false,
+    this.sheets = false,
+    this.pointLabel = 'Punto',
+    this.topics = false,
   });
 
   static const card = BibleCardEditorCopy(pageTitle: 'Tarjeta');
+
+  /// Una idea de cómo actúa la cámara: cuándo, cómo y con qué imágenes.
+  static const cameraIdea = BibleCardEditorCopy(
+    pageTitle: 'Cómo actúa la cámara',
+    titleHint: 'La idea: «Cámara que respira con él», «Travelling lento»…',
+    bodyLabel: 'Desarrollo',
+    bodyHint:
+        'Cómo se mueve, a qué distancia y altura, con qué soporte, y qué '
+        'cuenta eso en este momento de la historia…',
+    kickerHint: 'CUÁNDO: SIGUIENDO A ALI · ACTO II · EN EL KEBAB',
+    points: true,
+  );
+
+  /// Tarjeta de un mosaico: imagen, datos cortos, texto y puntos.
+  static const mosaic = BibleCardEditorCopy(
+    pageTitle: 'Imagen con nota',
+    titleHint: 'Qué se ve o qué idea es',
+    bodyLabel: 'Qué contamos',
+    bodyHint: 'La idea de esta tarjeta: qué queremos contar con esta luz…',
+    kickerHint: 'DATOS CORTOS: CONTRASTE 8:1 · CAÍDA RÁPIDA · 3200 K',
+    points: true,
+    topics: true,
+  );
 
   static BibleCardEditorCopy forAct({required bool shared}) =>
       BibleCardEditorCopy(
@@ -68,14 +117,20 @@ class BibleImagePaths extends ConsumerWidget {
   final BibleCardImageSource? source;
   final Widget Function(BuildContext context, Map<int, String> paths) builder;
 
-  const BibleImagePaths({super.key, required this.source, required this.builder});
+  const BibleImagePaths({
+    super.key,
+    required this.source,
+    required this.builder,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final source = this.source;
     if (source == null) return builder(context, const {});
     return StreamBuilder<List<MoodboardImage>>(
-      stream: ref.watch(databaseProvider).watchMoodboardImages(source.projectId),
+      stream: ref
+          .watch(databaseProvider)
+          .watchMoodboardImages(source.projectId),
       builder: (context, snap) => builder(context, {
         for (final image in snap.data ?? const <MoodboardImage>[])
           image.id: image.imagePath,
@@ -109,6 +164,7 @@ Future<void> openBibleCardEditor(
           copy: copy,
           initial: current[at],
           imagePaths: imageSource == null ? imagePaths : paths,
+          source: imageSource,
           position: at,
           count: current.length,
           onChanged: (card) {
@@ -163,6 +219,9 @@ class BibleCardEditor extends StatefulWidget {
   /// Abre el selector de imágenes; sin él, la ficha no lleva imágenes.
   final Future<List<int>?> Function(List<int> selected)? onPickImages;
 
+  /// Proyecto y biblia de las imágenes: para sus comentarios y su dibujo.
+  final BibleCardImageSource? source;
+
   const BibleCardEditor({
     super.key,
     required this.copy,
@@ -174,6 +233,7 @@ class BibleCardEditor extends StatefulWidget {
     this.position = 0,
     this.count = 1,
     this.onPickImages,
+    this.source,
   });
 
   @override
@@ -184,12 +244,19 @@ class _PointControllers {
   final TextEditingController title;
   final TextEditingController body;
 
+  /// Las imágenes de este bloque: las que explican su texto.
+  List<int> imageIds;
+
   _PointControllers(BibleCard point)
     : title = TextEditingController(text: point.title),
-      body = TextEditingController(text: point.body);
+      body = TextEditingController(text: point.body),
+      imageIds = [...point.imageIds];
 
-  BibleCard get value =>
-      BibleCard(title: title.text.trim(), body: body.text.trim());
+  BibleCard get value => BibleCard(
+    title: title.text.trim(),
+    body: body.text.trim(),
+    imageIds: imageIds,
+  );
 
   void dispose() {
     title.dispose();
@@ -204,6 +271,8 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
   late final _title = TextEditingController(text: widget.initial.title);
   late final _body = TextEditingController(text: widget.initial.body);
   late List<int> _imageIds = [...widget.initial.imageIds];
+  late final Map<int, BibleImageNote> _notes = {...widget.initial.imageNotes};
+  bool _showDrawings = true;
   late bool _turn = widget.initial.turn;
   late final List<_PointControllers> _points = [
     for (final point in widget.initial.points) _PointControllers(point),
@@ -220,6 +289,10 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
     imageIds: _imageIds,
     turn: _turn,
     points: [for (final point in _points) point.value],
+    imageNotes: {
+      for (final e in _notes.entries)
+        if (_imageIds.contains(e.key)) e.key: e.value,
+    },
   );
 
   @override
@@ -263,6 +336,86 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
     if (picked == null || !mounted) return;
     setState(() => _imageIds = picked);
     _flush();
+  }
+
+  List<Widget> _pointsBlock(AppPalette palette, TextStyle label) => [
+    for (var i = 0; i < _points.length; i++) _pointPanel(palette, i),
+    Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: _addPoint,
+        icon: Icon(Icons.add, size: 16, color: palette.accent),
+        label: Text(
+          'AÑADIR ${widget.copy.pointLabel.toUpperCase()}',
+          style: label,
+        ),
+      ),
+    ),
+  ];
+
+  /// Cada imagen de la tarjeta como lámina: lo que cuenta, su luz, sus
+  /// comentarios y su dibujo.
+  Widget _sheetsBlock(AppPalette palette, TextStyle label) {
+    final existing = [
+      for (final id in _imageIds)
+        if (widget.imagePaths[id] != null) id,
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text('LÁMINAS · ${existing.length}', style: label)),
+            FilterChip(
+              label: const Text('Ver dibujos'),
+              selected: _showDrawings,
+              onSelected: (v) => setState(() => _showDrawings = v),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            FilledButton.tonalIcon(
+              onPressed: _pickImages,
+              icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+              label: const Text('Imágenes'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (existing.isEmpty)
+          Text(
+            'Añade imágenes: cada una será una lámina con lo que cuenta, su '
+            'luz, sus comentarios y lo que dibujes encima.',
+            style: AppTypography.caption(palette),
+          ),
+        for (final (i, id) in existing.indexed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+            child: BibleImageSheet(
+              key: ValueKey('sheet_$id'),
+              index: i,
+              count: existing.length,
+              imageId: id,
+              path: widget.imagePaths[id]!,
+              note: _notes[id] ?? const BibleImageNote(),
+              isCover: i == 0,
+              showDrawing: _showDrawings,
+              bibleId: widget.source?.bibleId,
+              projectId: widget.source?.projectId,
+              onOpen: () => openMoodboardImages(
+                context,
+                existing,
+                initialId: id,
+                bibleId: widget.source?.bibleId,
+              ),
+              onChanged: (note, {bool now = false}) {
+                _notes[id] = note;
+                now ? _flush() : _touch();
+              },
+              onCover: () => _setCover(id),
+              onRemove: () => _removeImage(id),
+            ),
+          ),
+      ],
+    );
   }
 
   void _setCover(int id) {
@@ -345,9 +498,17 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
         if (cover != null)
           ClipRRect(
             borderRadius: BorderRadius.circular(BiblePointPanel.radius),
-            child: InkWell(
-              onTap: () => showBibleImageViewer(context, path: cover),
-              child: Image.file(File(cover), fit: BoxFit.contain),
+            child: Tooltip(
+              message: 'Ver en grande, comentar y dibujar encima',
+              child: InkWell(
+                onTap: () => openMoodboardImages(
+                  context,
+                  existing,
+                  initialId: existing.first,
+                  bibleId: widget.source?.bibleId,
+                ),
+                child: Image.file(File(cover), fit: BoxFit.contain),
+              ),
             ),
           )
         else
@@ -409,7 +570,8 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'Toca una imagen para ponerla de portada.',
+            'Toca la imagen grande para verla con comentarios y dibujo; '
+            'una miniatura, para ponerla de portada.',
             style: AppTypography.caption(palette),
           ),
         ],
@@ -424,7 +586,7 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: BiblePointPanel(
-        label: 'Punto ${index + 1}',
+        label: '${widget.copy.pointLabel} ${index + 1}',
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -472,9 +634,99 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
               decoration: _bare(palette, 'Desarróllalo aquí…', bodyStyle),
               onChanged: (_) => _touch(),
             ),
+            if (widget.onPickImages != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _pointImages(palette, point),
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  /// Las imágenes de un bloque, junto a su texto: tocar una la abre en
+  /// grande; «+» elige cuáles.
+  Widget _pointImages(AppPalette palette, _PointControllers point) {
+    final ids = [
+      for (final id in point.imageIds)
+        if (widget.imagePaths[id] != null) id,
+    ];
+    Future<void> pick() async {
+      final picked = await widget.onPickImages!(point.imageIds);
+      if (picked == null || !mounted) return;
+      setState(() => point.imageIds = picked);
+      _flush();
+    }
+
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        for (final id in ids)
+          Stack(
+            children: [
+              Tooltip(
+                message: 'Ver en grande, comentar y dibujar encima',
+                child: MoodboardImageThumb(
+                  imageId: id,
+                  path: widget.imagePaths[id]!,
+                  projectId: widget.source?.projectId,
+                  bibleId: widget.source?.bibleId,
+                  width: widget.copy.topics ? 240 : 120,
+                  height: widget.copy.topics ? 135 : 68,
+                  onTap: () => openMoodboardImages(
+                    context,
+                    ids,
+                    initialId: id,
+                    bibleId: widget.source?.bibleId,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 2,
+                right: 2,
+                child: Tooltip(
+                  message: 'Quitar de este bloque',
+                  child: InkWell(
+                    onTap: () {
+                      setState(
+                        () => point.imageIds = [
+                          for (final other in point.imageIds)
+                            if (other != id) other,
+                        ],
+                      );
+                      _flush();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        size: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        TextButton.icon(
+          onPressed: pick,
+          icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+          label: Text(
+            ids.isEmpty
+                ? (widget.copy.topics
+                      ? 'Imágenes de este punto'
+                      : 'Imágenes de este bloque')
+                : 'Cambiar imágenes',
+          ),
+        ),
+      ],
     );
   }
 
@@ -504,14 +756,14 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
               style: AppTypography.caption(palette),
             ),
           ),
-        if (copy.act) ...[
+        if (copy.act || copy.kickerHint != null) ...[
           TextField(
             controller: _phase,
             style: phaseStyle,
             textCapitalization: TextCapitalization.characters,
             decoration: _bare(
               palette,
-              'FASE: PLANTEAMIENTO, NUDO, DESENLACE…',
+              copy.kickerHint ?? 'FASE: PLANTEAMIENTO, NUDO, DESENLACE…',
               phaseStyle,
             ),
             onChanged: (_) => _touch(),
@@ -541,17 +793,11 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
             onChanged: (_) => _touch(),
           ),
         ),
-        if (copy.act) ...[
+        if ((copy.act || copy.points) && !copy.sheets && !copy.topics) ...[
           const SizedBox(height: AppSpacing.md),
-          for (var i = 0; i < _points.length; i++) _pointPanel(palette, i),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: _addPoint,
-              icon: Icon(Icons.add, size: 16, color: palette.accent),
-              label: Text('AÑADIR PUNTO', style: label),
-            ),
-          ),
+          ..._pointsBlock(palette, label),
+        ],
+        if (copy.act) ...[
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             dense: true,
@@ -568,6 +814,42 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
     );
 
     final hasGallery = widget.onPickImages != null;
+    // Láminas: la tarjeta arriba, cada imagen con lo suyo y el desarrollo
+    // por apartados debajo.
+    final sheets = copy.sheets && hasGallery
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              fields,
+              const SizedBox(height: AppSpacing.xl),
+              _sheetsBlock(palette, label),
+              const SizedBox(height: AppSpacing.xl),
+              Text('DESARROLLO', style: label),
+              const SizedBox(height: AppSpacing.sm),
+              ..._pointsBlock(palette, label),
+            ],
+          )
+        : null;
+    // Temas: la tarjeta (imágenes y texto) arriba y, a todo el ancho, cada
+    // punto con su texto y su grupo de imágenes.
+    final topics = copy.topics
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: AppSpacing.xl),
+              Text('PUNTOS QUE ANALIZAMOS', style: label),
+              const SizedBox(height: 4),
+              Text(
+                'Cada punto, un tema («los cálidos», «el contraste alto») con '
+                'su texto y las imágenes que lo explican. Toca una imagen '
+                'para comentarla y dibujar encima.',
+                style: AppTypography.caption(palette),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              ..._pointsBlock(palette, label),
+            ],
+          )
+        : null;
     return Scaffold(
       backgroundColor: palette.background,
       appBar: AppBar(
@@ -607,8 +889,39 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
             padding: const EdgeInsets.all(AppSpacing.xl),
             child: Center(
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: hasGallery ? 1280 : 760),
-                child: wide
+                constraints: BoxConstraints(
+                  maxWidth: sheets != null
+                      ? 1180
+                      : hasGallery
+                      ? 1280
+                      : 760,
+                ),
+                child: sheets != null
+                    ? sheets
+                    : topics != null
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (wide)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(flex: 6, child: _gallery(palette)),
+                                const SizedBox(width: AppSpacing.xl),
+                                Expanded(flex: 5, child: fields),
+                              ],
+                            )
+                          else ...[
+                            if (hasGallery) ...[
+                              _gallery(palette),
+                              const SizedBox(height: AppSpacing.lg),
+                            ],
+                            fields,
+                          ],
+                          topics,
+                        ],
+                      )
+                    : wide
                     ? Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

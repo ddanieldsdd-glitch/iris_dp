@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:supabase/supabase.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Cliente Supabase con respuestas PostgREST simuladas para tests de humo.
 SupabaseClient createSupabaseMockClient({

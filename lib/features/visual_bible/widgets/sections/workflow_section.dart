@@ -1,38 +1,21 @@
-// /Users/danieldiaz/Documents/IRIS DP/iris_dp/lib/features/visual_bible/widgets/sections/workflow_section.dart
-import 'dart:convert';
-import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/database/database_provider.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_spacing.dart';
-import '../../../../core/theme/app_typography.dart';
-import '../../../../core/widgets/app_card.dart';
+import '../../../../shared/visual_bible/workflow_points.dart';
 import '../../bible_section_fields.dart';
 import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
-import '../bible_section_shared_widgets.dart';
+import '../bible_point_panel.dart';
+import '../bible_table_widget.dart';
 import 'section_scaffold.dart';
 
-class _WorkflowStep {
-  final IconData icon;
-  final String name;
-  final String software;
-  final String format;
-  final String support;
-  const _WorkflowStep({required this.icon, required this.name, required this.software, required this.format, required this.support});
-}
-
-const _workflowSteps = [
-  _WorkflowStep(icon: Icons.videocam_outlined, name: 'CÁMARA', software: 'ARRI Alexa / RED', format: 'ARRIRAW / R3D', support: 'DIT'),
-  _WorkflowStep(icon: Icons.backup_outlined, name: 'BACKUP', software: 'YoYotta / Silverstack', format: 'Clone x3', support: 'DIT / Wrangler'),
-  _WorkflowStep(icon: Icons.play_circle_outline, name: 'DAILIES', software: 'DaVinci Resolve', format: 'ProRes 422 HQ', support: 'Colorista'),
-  _WorkflowStep(icon: Icons.palette_outlined, name: 'COLOR', software: 'DaVinci Resolve', format: 'EXR / DCP', support: 'Colorista'),
-  _WorkflowStep(icon: Icons.send_outlined, name: 'ENTREGA', software: 'Aspera / Signiant', format: 'IMF / DCP', support: 'Post'),
-];
-
-class WorkflowSection extends ConsumerStatefulWidget {
+/// Workflow: qué pasa con la imagen desde la cámara hasta la entrega, y
+/// quién la cuida.
+///
+/// Sus puntos se pintan con los widgets del catálogo. Lo que cada uno
+/// guarda está en [WorkflowPoints].
+class WorkflowSection extends ConsumerWidget {
   final VisualBibleData data;
   final int projectId;
   final String? sectionContentJson;
@@ -46,179 +29,127 @@ class WorkflowSection extends ConsumerStatefulWidget {
     required this.onChanged,
   });
 
-  @override
-  ConsumerState<WorkflowSection> createState() => _WorkflowSectionState();
-}
+  static const _sectionId = BibleSectionId.workflow;
 
-class _WorkflowSectionState extends ConsumerState<WorkflowSection> {
-  int _selectedStep = 0;
+  Future<void> _saveValue(WidgetRef ref, String key, String? value) => ref
+      .read(databaseProvider)
+      .saveBibleSectionFieldValue(data.id, _sectionId, key, value);
 
-  Map<String, dynamic> _getCustomData() {
-    if (widget.sectionContentJson == null) return {};
-    try {
-      final decoded = jsonDecode(widget.sectionContentJson!);
-      if (decoded is Map<String, dynamic> && decoded.containsKey('_values')) {
-        final vals = decoded['_values'] as Map<String, dynamic>;
-        if (vals.containsKey('workflowData')) {
-          return jsonDecode(vals['workflowData'] as String);
-        }
-      }
-    } catch (_) {}
-    return {};
-  }
-
-  Future<void> _updateCustomData(Map<String, dynamic> update) async {
-    final current = _getCustomData();
-    final newData = { ...current, ...update };
-    final db = ref.read(databaseProvider);
-    final def = await (db.select(db.bibleSectionDefinitions)
-      ..where((d) => d.bibleId.equals(widget.data.id) & d.id.equals(BibleSectionId.workflow))).getSingleOrNull();
-    if (def != null) {
-      final fields = BibleSectionFieldsConfig.parse(def.contentJson, BibleSectionId.workflow);
-      final values = BibleSectionFieldsConfig.parseValues(def.contentJson);
-      values['workflowData'] = jsonEncode(newData);
-      await db.upsertBibleSectionDefinition(def.copyWith(
-        contentJson: drift.Value(BibleSectionFieldsConfig.encode(fields, values: values)),
-      ));
-    }
-  }
+  static String? _orNull(String text) =>
+      text.trim().isEmpty ? null : text.trim();
 
   @override
-  Widget build(BuildContext context) {
-    final customData = _getCustomData();
-    final ditName = customData['ditName'] as String? ?? '';
-    final wranglerName = customData['wranglerName'] as String? ?? '';
-    final technicalNote = customData['technicalNote'] as String? ?? '';
+  Widget build(BuildContext context, WidgetRef ref) {
+    final values = BibleSectionFieldsConfig.parseValues(sectionContentJson);
+    final labels = {
+      for (final field in BibleSectionFieldsConfig.parse(
+        sectionContentJson,
+        _sectionId,
+      ))
+        field.key: field.label,
+    };
+    String label(String key, String fallback) => labels[key] ?? fallback;
 
-    final step = _workflowSteps[_selectedStep];
+    final stepsValue = WorkflowPoints.stepsValue(values);
+    final teamValue = WorkflowPoints.teamValue(values);
+    final deliveryValue = WorkflowPoints.deliveryValue(
+      values,
+      deliveryColorSpace: data.deliveryColorSpace,
+      resolutionNotes: data.resolutionNotes,
+      workflowPipeline: data.workflowPipeline,
+    );
+
+    // Workflow no tiene columna propia para la intención: va con sus
+    // valores, como cualquier punto de texto.
+    final narrative = BiblePointPanel(
+      label: label('narrative', 'Intención narrativa'),
+      icon: Icons.psychology_outlined,
+      child: BibleTextField(
+        label: '',
+        hint:
+            'Qué le pedimos al flujo de trabajo para proteger la imagen que '
+            'buscamos…',
+        maxLines: 4,
+        initialValue: values['narrative'] ?? '',
+        onChanged: (v) => _saveValue(ref, 'narrative', v.trim()),
+      ),
+    );
+
+    final steps = BiblePointPanel(
+      label: label(WorkflowPoints.steps, 'Del rodaje a la entrega'),
+      icon: Icons.account_tree_outlined,
+      child: BibleTableWidget(
+        key: const ValueKey('workflow_steps'),
+        value: stepsValue,
+        onChanged: (value) =>
+            _saveValue(ref, WorkflowPoints.steps, value.encode()),
+      ),
+    );
+
+    final team = BiblePointPanel(
+      label: label(WorkflowPoints.team, 'Equipo de datos'),
+      icon: Icons.groups_outlined,
+      child: BibleTextSpecsWidget(
+        key: const ValueKey('workflow_team'),
+        value: teamValue,
+        hint:
+            'Quién hace las copias, quién las comprueba y qué no se borra '
+            'sin confirmar…',
+        onChanged: (value) =>
+            _saveValue(ref, WorkflowPoints.team, value.encode()),
+      ),
+    );
+
+    final delivery = BiblePointPanel(
+      label: label(WorkflowPoints.delivery, 'Formatos y entrega'),
+      icon: Icons.send_outlined,
+      child: BibleTextSpecsWidget(
+        key: const ValueKey('workflow_delivery'),
+        value: deliveryValue,
+        // Códec y cadencia son los de Cámara mientras no se escriba otro.
+        placeholders: WorkflowPoints.fromCamera(
+          codec: data.codec,
+          frameRate: data.frameRateNotes,
+        ),
+        hint: 'Qué se entrega, a quién y en qué formato…',
+        onChanged: (value) {
+          _saveValue(ref, WorkflowPoints.delivery, value.encode());
+          data
+            ..workflowPipeline = _orNull(
+              WorkflowPoints.row(value, WorkflowPoints.rowPipeline),
+            )
+            ..resolutionNotes = _orNull(
+              WorkflowPoints.row(value, WorkflowPoints.rowResolution),
+            )
+            ..deliveryColorSpace = _orNull(
+              WorkflowPoints.row(value, WorkflowPoints.rowColorSpace),
+            );
+          onChanged(data);
+        },
+      ),
+    );
 
     return BibleSectionScaffold(
-      sectionId: BibleSectionId.workflow,
-      projectId: widget.projectId,
-      data: widget.data,
-      onChanged: widget.onChanged,
-      sectionContentJson: widget.sectionContentJson,
-      narrativeHint: 'Pipeline y equipo de DIT',
-      sectionNumber: '12',
+      sectionId: _sectionId,
+      projectId: projectId,
+      data: data,
+      onChanged: onChanged,
+      sectionContentJson: sectionContentJson,
+      narrativeHint:
+          'Qué le pedimos al flujo de trabajo para proteger la imagen que '
+          'buscamos…',
+      sectionNumber: null,
       sectionTitle: 'Workflow',
+      duplicateValues: {
+        WorkflowPoints.steps: stepsValue.encode(),
+        WorkflowPoints.team: teamValue.encode(),
+        WorkflowPoints.delivery: deliveryValue.encode(),
+      },
       fieldWidgets: {
-        'workflowSettings': Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Stepper horizontal
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: List.generate(_workflowSteps.length, (i) {
-                  final s = _workflowSteps[i];
-                  final isActive = i == _selectedStep;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedStep = i),
-                    child: Row(
-                      children: [
-                        Column(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: isActive ? context.palette.accent : context.palette.surfaceElevated,
-                              child: Icon(s.icon, color: isActive ? context.palette.background : context.palette.textSecondary),
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(s.name, style: AppTypography.caption(context.palette).copyWith(color: isActive ? context.palette.accent : context.palette.textSecondary)),
-                          ],
-                        ),
-                        if (i < _workflowSteps.length - 1)
-                          Container(
-                            width: 30,
-                            height: 2,
-                            color: context.palette.border,
-                            margin: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 20),
-                          ),
-                      ],
-                    ),
-                  );
-                }),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-
-            // Panel de detalle
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: AppCard(
-                key: ValueKey(_selectedStep),
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(step.name, style: AppTypography.titleMedium(context.palette)),
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(child: BibleTechCard(label: 'Software', value: step.software)),
-                        Expanded(child: BibleTechCard(label: 'Formato', value: step.format)),
-                        Expanded(child: BibleTechCard(label: 'Soporte', value: step.support)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-
-            // Responsabilidades
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('DIT', style: AppTypography.label(context.palette)),
-                        const SizedBox(height: AppSpacing.sm),
-                        BibleTextField(
-                          label: 'Nombre DIT',
-                          hint: 'Nombre...',
-                          initialValue: ditName,
-                          onChanged: (v) => _updateCustomData({'ditName': v}),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.lg),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Data Wrangler', style: AppTypography.label(context.palette)),
-                        const SizedBox(height: AppSpacing.sm),
-                        BibleTextField(
-                          label: 'Nombre Wrangler',
-                          hint: 'Nombre...',
-                          initialValue: wranglerName,
-                          onChanged: (v) => _updateCustomData({'wranglerName': v}),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-
-            // Technical Note
-            BibleTechNoteBox(text: technicalNote, title: 'Nota técnica de Workflow'),
-            const SizedBox(height: AppSpacing.sm),
-            BibleTextField(
-              label: 'Editar nota técnica',
-              maxLines: 3,
-              initialValue: technicalNote,
-              onChanged: (v) => _updateCustomData({'technicalNote': v}),
-            ),
-          ],
-        ),
+        'narrative': narrative,
+        WorkflowPoints.steps: steps,
+        WorkflowPoints.team: team,
+        WorkflowPoints.delivery: delivery,
       },
     );
   }

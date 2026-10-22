@@ -1,4 +1,5 @@
 import '../database/app_database.dart';
+import '../../shared/rich_text/script_markup.dart';
 
 const kShotMovements = [
   'STEADY',
@@ -21,7 +22,7 @@ const kShotAngles = [
 /// Línea técnica compacta bajo el fotograma (estilo Artemis / guion técnico).
 String formatShotTechnicalLine(Shot shot) {
   return [
-    if (shot.framing?.isNotEmpty == true) shot.framing,
+    if (shot.framing?.isNotEmpty == true) scriptMarkupToPlain(shot.framing),
     if (shot.lens?.isNotEmpty == true) shot.lens,
     if (shot.movement?.isNotEmpty == true) shot.movement,
     if (shot.angle?.isNotEmpty == true) shot.angle,

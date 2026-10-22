@@ -14,6 +14,8 @@ class AppSnackBar {
     String message, {
     Duration duration = const Duration(seconds: 4),
     bool isError = false,
+    String? actionLabel,
+    VoidCallback? onAction,
   }) {
     final palette = context.palette;
     final messenger = ScaffoldMessenger.maybeOf(context);
@@ -27,6 +29,16 @@ class AppSnackBar {
           style: AppTypography.snackBar(palette),
         ),
         duration: duration,
+        // Con botón («Ver», «Deshacer») Flutter lo deja fijo hasta pulsarlo;
+        // aquí se va solo a su tiempo.
+        persist: false,
+        action: actionLabel != null && onAction != null
+            ? SnackBarAction(
+                label: actionLabel,
+                textColor: palette.accent,
+                onPressed: onAction,
+              )
+            : null,
         behavior: SnackBarBehavior.floating,
         backgroundColor: palette.surfaceOverlay,
         elevation: 6,

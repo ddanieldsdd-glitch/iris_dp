@@ -149,13 +149,62 @@ void main() {
         f('narrative'),
         f('shadowTreatment'),
         f('actNotes'),
-      ]).replaceFirst('"layoutVersion":3', '"layoutVersion":1');
+      ]).replaceFirst(
+        '"layoutVersion":${BibleSectionFieldsConfig.layoutVersion}',
+        '"layoutVersion":1',
+      );
       expect(
         BibleSectionFieldsConfig.parse(
           old,
           BibleSectionId.concept,
         ).map((x) => x.key),
         ['narrative', 'shadowTreatment', 'composition', 'actNotes'],
+      );
+    });
+
+    test('Cámara antigua: el bloque único se abre en sus puntos nuevos', () {
+      final old = BibleSectionFieldsConfig.encode([
+        f('narrative'),
+        f('cameraBody'),
+        f('philosophy'),
+        f('movements'),
+        f('specsReference'),
+        f('references'),
+      ]).replaceFirst(
+        '"layoutVersion":${BibleSectionFieldsConfig.layoutVersion}',
+        '"layoutVersion":3',
+      );
+      expect(
+        BibleSectionFieldsConfig.parse(
+          old,
+          BibleSectionId.camera,
+        ).map((x) => x.key),
+        [
+          'narrative',
+          'equipment',
+          'cameraBody',
+          'recording',
+          'colorPipeline',
+          'recordingMatrix',
+          // Filosofía y movimientos, fundidos en un solo punto.
+          'cameraBehavior',
+          'specsReference',
+          'accessories',
+          'dataManagement',
+          'references',
+        ],
+      );
+      // Una vez guardada con la versión actual, quitar un punto es quitarlo.
+      final saved = BibleSectionFieldsConfig.encode([
+        f('narrative'),
+        f('cameraBody'),
+      ]);
+      expect(
+        BibleSectionFieldsConfig.parse(
+          saved,
+          BibleSectionId.camera,
+        ).map((x) => x.key),
+        ['narrative', 'cameraBody'],
       );
     });
 
@@ -166,7 +215,10 @@ void main() {
         f('shadowTreatment'),
         f('actNotes'),
       ]);
-      expect(saved, contains('"layoutVersion":3'));
+      expect(
+        saved,
+        contains('"layoutVersion":${BibleSectionFieldsConfig.layoutVersion}'),
+      );
       expect(
         BibleSectionFieldsConfig.parse(
           saved,

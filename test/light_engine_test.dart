@@ -647,8 +647,8 @@ void main() {
       final white = scene([hmi(100, 300, 90), bounce('ultrabounce')]);
       final gold = scene([hmi(100, 300, 90), bounce('gold')]);
       expect(white.luxAt(hidden), greaterThan(0));
-      // El oro devuelve algo menos y bastante más cálido.
-      expect(gold.luxAt(hidden), lessThan(white.luxAt(hidden)));
+      // El oro devuelve la luz bastante más cálida (y, por ser brillante,
+      // con dirección: ver «las leyes de la luz»).
       expect(gold.cctAt(hidden)!, lessThan(white.cctAt(hidden)! - 1000));
       // El rebote no deja pasar la luz.
       expect(white.luxAt(behind), 0);
@@ -1795,6 +1795,218 @@ void main() {
         expect(kLightGroups.where((g) => g.family == family), isNotEmpty);
       }
       expect(kLightGroups.every((g) => g.generics.isNotEmpty), isTrue);
+    });
+  });
+
+  group('las leyes de la luz', () {
+    var id = 0;
+    PlanElement lamp(
+      double x,
+      double y,
+      double rotation, [
+      Map<String, dynamic>? props,
+    ]) => PlanElement(
+      id: --id,
+      type: ElementType.light,
+      position: Offset(x, y),
+      rotation: rotation,
+      lightType: LightType.hmi,
+      props: {'intensity': 100, ...?props},
+    );
+    PlanElement grip(
+      LightType type,
+      double x,
+      double y,
+      double rotation, [
+      Map<String, dynamic>? props,
+    ]) => PlanElement(
+      id: --id,
+      type: ElementType.light,
+      position: Offset(x, y),
+      rotation: rotation,
+      lightType: type,
+      props: {'len': 100, ...?props},
+    );
+    PlanElement wall(double x1, double y1, double x2, double y2) =>
+        PlanSegment.create(start: Offset(x1, y1), end: Offset(x2, y2))
+          ..id = --id;
+    PlanElement window(double x, double y, [Map<String, dynamic>? props]) =>
+        PlanElement(
+          id: --id,
+          type: ElementType.wall,
+          position: Offset(x, y),
+          rotation: 90,
+          label: ArchitectureType.window.dbValue,
+          props: {'width': 80.0, 'open': 90.0, 'double': false, ...?props},
+        );
+    PlanElement hill(double x, double y, double radiusM, double heightM) =>
+        PlanElement(
+          id: --id,
+          type: ElementType.prop,
+          position: Offset(x, y),
+          label: PropType.hill.dbValue,
+          props: {'size': radiusM, 'height': heightM},
+        );
+    LightScene scene(List<PlanElement> elements) =>
+        LightScene.from(elements, metersPerUnit: 0.02, wallBounce: false);
+
+    test('Lambert: una tela mate emite I₀·cos θ, la mitad a 60°', () {
+      const cloth = LightSource(candela: 1000, beamDeg: 120, lambertian: true);
+      expect(cloth.profile(0), 1);
+      expect(cloth.profile(60), closeTo(0.5, 1e-9));
+      expect(cloth.profile(89.9), lessThan(0.01));
+      expect(cloth.profile(90), 0);
+      // En la planta: la luz que sale de un marco de difusión.
+      final s = scene([
+        lamp(100, 300, 90),
+        grip(LightType.diffusionFrame, 300, 300, 90),
+      ]);
+      final soft = s.lights.firstWhere((l) => l.isSecondary);
+      expect(soft.source.lambertian, isTrue);
+      // A la misma distancia de la tela, en su eje y a 60° de él.
+      final onAxis = s.luxOf(soft, const Offset(500, 300));
+      final aside = s.luxOf(soft, const Offset(400, 300 + 173.2));
+      expect(aside / onAxis, closeTo(0.5, 0.01));
+    });
+
+    test('tras difundir, la tela es la fuente: la caída se cuenta desde '
+        'ella', () {
+      final s = scene([
+        lamp(100, 300, 90),
+        grip(LightType.diffusionFrame, 300, 300, 90),
+      ]);
+      final soft = s.lights.firstWhere((l) => l.isSecondary);
+      expect(soft.position, const Offset(300, 300));
+      expect(soft.source.sizeM, closeTo(2, 1e-9));
+      // Lejos de la tela (frente a su tamaño), doble distancia = 2 stops.
+      final near = s.luxOf(soft, const Offset(300 + 500, 300));
+      final far = s.luxOf(soft, const Offset(300 + 1000, 300));
+      expect(stopsBetweenLux(near, far), closeTo(2, 0.1));
+      // Pegado a ella cae más despacio: es una fuente extensa.
+      final close = s.luxOf(soft, const Offset(300 + 25, 300));
+      final twice = s.luxOf(soft, const Offset(300 + 50, 300));
+      expect(stopsBetweenLux(close, twice), lessThan(1));
+    });
+
+    test('un rebote brillante conserva el haz hacia el reflejo; uno mate '
+        'lo reparte', () {
+      // La luz llega desde la izquierda y el rebote está girado 45°: el
+      // reflejo sale hacia abajo.
+      List<PlanElement> setup(String material) => [
+        lamp(100, 300, 90),
+        grip(LightType.bounce, 400, 300, 45, {'material': material}),
+      ];
+      final hard = scene(setup('silver'));
+      final matte = scene(setup('ultrabounce'));
+      SceneLight bounced(LightScene s) =>
+          s.lights.firstWhere((l) => l.isSecondary);
+      final aim = bounced(hard).aim;
+      // Ángulo de incidencia = ángulo de reflexión.
+      expect(aim.dx.abs(), lessThan(0.05));
+      expect(aim.dy.abs(), closeTo(1, 0.01));
+      expect(bounced(hard).source.lambertian, isFalse);
+      expect(bounced(matte).source.lambertian, isTrue);
+      // En la dirección del reflejo, el brillante da más; de lado, menos.
+      final along = bounced(hard).position + aim * 200;
+      final beside = bounced(hard).position + Offset(aim.dy, -aim.dx) * 200;
+      expect(hard.luxAt(along), greaterThan(matte.luxAt(along)));
+      expect(hard.luxAt(beside), lessThan(matte.luxAt(beside) + 1));
+    });
+
+    test('distancia en diagonal: una luz más alta que el punto cae como su '
+        'distancia real', () {
+      final flat = scene([lamp(100, 300, 90)]);
+      final light = flat.lights.single;
+      final level = flat.luxFrom(light, 150, 0, receiverZ: light.z);
+      // 3 m en planta y 4 m más alta: 5 m reales.
+      final above = flat.luxFrom(light, 150, 0, receiverZ: light.z - 4);
+      expect(above / level, closeTo(9 / 25, 0.01));
+    });
+
+    test('línea recta con alturas: la luz que sale por la ventana de '
+        'enfrente choca con un monte alto y pasa sobre uno bajo', () {
+      // Casa de 6 × 6 m con una ventana abierta a cada lado, y la luz
+      // fuera, a la izquierda.
+      List<PlanElement> house() => [
+        wall(300, 150, 600, 150),
+        wall(600, 150, 600, 450),
+        wall(600, 450, 300, 450),
+        wall(300, 450, 300, 150),
+        window(300, 300),
+        window(600, 300),
+        lamp(100, 300, 90),
+      ];
+      const inside = Offset(450, 300);
+      const beyond = Offset(1500, 300);
+      final open = scene(house());
+      expect(open.luxAt(inside), greaterThan(100));
+      expect(open.luxAt(beyond), greaterThan(1));
+      // Un monte de 30 m entre la casa y el punto.
+      final mountain = scene([...house(), hill(1000, 300, 4, 30)]);
+      expect(mountain.luxAt(inside), closeTo(open.luxAt(inside), 1e-6));
+      expect(mountain.luxAt(beyond), 0);
+      // Un montículo de 1 m: la luz viaja a 1,5 m y le pasa por encima.
+      final mound = scene([...house(), hill(1000, 300, 4, 1)]);
+      expect(mound.luxAt(beyond), closeTo(open.luxAt(beyond), 1e-6));
+      // La ladera que mira a la luz está iluminada; la de detrás, no.
+      expect(mountain.luxAt(const Offset(830, 300)), greaterThan(1));
+      expect(mountain.luxAt(const Offset(1170, 300)), 0);
+    });
+
+    test('una ventana alta no deja pasar la luz de un trípode', () {
+      List<PlanElement> setup(Map<String, dynamic> props) => [
+        wall(300, 0, 300, 600),
+        window(300, 300, props),
+        lamp(100, 300, 90),
+      ];
+      const behind = Offset(500, 300);
+      expect(scene(setup({})).luxAt(behind), greaterThan(100));
+      // Con el alféizar a 1,8 m, el rayo (a 1,5 m) da en la pared.
+      expect(scene(setup({'sill': 1.8, 'head': 2.4})).luxAt(behind), 0);
+    });
+
+    test('lo que se coloca sobre una loma está a su cota', () {
+      final s = scene([hill(300, 300, 4, 6), lamp(300, 300, 90)]);
+      expect(s.groundAt(const Offset(300, 300)), closeTo(6, 1e-9));
+      expect(s.groundAt(const Offset(400, 300)), closeTo(3, 1e-9));
+      expect(s.groundAt(const Offset(900, 300)), 0);
+      // La luz, en la cima: a 7,5 m.
+      expect(s.lights.single.z, closeTo(7.5, 1e-9));
+      // Abajo, a 12 m en planta, llega con la distancia en diagonal.
+      final down = s.luxAt(const Offset(900, 300));
+      final level = s.lights.single.source.illuminance(12);
+      expect(down, greaterThan(0));
+      expect(down, lessThan(level));
+    });
+
+    test('penumbra: más ancha cuanto más grande es la fuente', () {
+      // Borde de un negro a 2 m de la fuente; se mide 2 m más allá.
+      double edgeWidth(double sizeM) {
+        final source = SceneLight(
+          source: LightSource(candela: 50000, beamDeg: 120, sizeM: sizeM),
+          position: const Offset(100, 300),
+          aim: const Offset(1, 0),
+          label: 'fuente',
+        );
+        final s = LightScene(
+          lights: [source],
+          blockers: const [LightBlocker(Offset(200, 300), Offset(200, 800))],
+          metersPerUnit: 0.02,
+        );
+        final full = s.sampleAt(const Offset(300, 200)).lux;
+        var first = double.nan;
+        var last = double.nan;
+        for (var y = 250.0; y <= 350; y += 1) {
+          final lux = s.sampleAt(Offset(300, y)).lux;
+          if (first.isNaN && lux < full * 0.9) first = y;
+          if (lux > full * 0.1) last = y;
+        }
+        return (last - first) * 0.02;
+      }
+
+      // ancho = tamaño × (objeto→suelo) / (fuente→objeto) = tamaño × 1.
+      expect(edgeWidth(0.1), lessThan(0.15));
+      expect(edgeWidth(1.5), greaterThan(0.6));
     });
   });
 }

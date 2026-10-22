@@ -11,6 +11,8 @@ import 'cloud_media_service.dart';
 import 'cloudinary_public_id.dart';
 import 'media_entity_keys.dart';
 import 'media_entity_types.dart';
+import 'media_file_stamp.dart';
+import 'media_slots.dart';
 
 /// Progreso global de la cola de subidas.
 class MediaUploadQueueProgress {
@@ -38,16 +40,27 @@ class MediaUploadQueue {
   MediaUploadQueue({
     required AppDatabase db,
     required CloudMediaService cloud,
+    @visibleForTesting bool Function()? isEnabled,
   })  : _db = db,
-        _cloud = cloud;
+        _cloud = cloud,
+        _isEnabled = isEnabled ?? (() => CloudinaryConfig.isConfigured);
 
   final AppDatabase _db;
   final CloudMediaService _cloud;
+  final bool Function() _isEnabled;
 
   static const maxConcurrency = 3;
   static const maxRetries = 5;
 
-  bool _running = false;
+  /// La pasada del worker en curso, si hay una.
+  Future<void>? _run;
+
+  /// Espera antes de reintentar: se dobla en cada fallo.
+  @visibleForTesting
+  static Duration retryDelay = const Duration(seconds: 1);
+
+  /// Cuándo puede reintentarse cada fila que falló (por id).
+  final _notBefore = <int, DateTime>{};
   int _bytesSavedSession = 0;
   final _progressController =
       StreamController<MediaUploadQueueProgress>.broadcast();
@@ -55,35 +68,33 @@ class MediaUploadQueue {
   Stream<MediaUploadQueueProgress> get progressStream =>
       _progressController.stream;
 
-  MediaUploadQueueProgress _currentProgress({bool processing = false}) {
-    // Counts computed synchronously from DB in notifyProgress
-    return MediaUploadQueueProgress(
-      bytesSaved: _bytesSavedSession,
-      isProcessing: processing,
-    );
+  Future<int> _count(String status) async {
+    final count = _db.pendingMediaUploads.id.count();
+    final row = await (_db.selectOnly(_db.pendingMediaUploads)
+          ..addColumns([count])
+          ..where(_db.pendingMediaUploads.status.equals(status)))
+        .getSingle();
+    return row.read(count) ?? 0;
   }
 
   Future<void> notifyProgress({bool processing = false}) async {
-    final pending = await (_db.select(_db.pendingMediaUploads)
-          ..where((t) => t.status.equals('pending')))
-        .get();
-    final done = await (_db.select(_db.pendingMediaUploads)
-          ..where((t) => t.status.equals('done')))
-        .get();
-    final failed = await (_db.select(_db.pendingMediaUploads)
-          ..where((t) => t.status.equals('failed')))
-        .get();
+    if (_progressController.isClosed) return;
+    final pending = await _count('pending') + await _count('processing');
+    final done = await _count('done');
+    final failed = await _count('failed');
     _progressController.add(MediaUploadQueueProgress(
-      pending: pending.length,
-      completed: done.length,
-      failed: failed.length,
-      total: pending.length + done.length + failed.length,
+      pending: pending,
+      completed: done,
+      failed: failed,
+      total: pending + done + failed,
       bytesSaved: _bytesSavedSession,
       isProcessing: processing,
     ));
   }
 
-  Future<void> enqueue({
+  /// Pone una imagen en la cola. Devuelve si quedó en cola: una imagen ya
+  /// subida desde el mismo archivo no se vuelve a subir.
+  Future<bool> enqueue({
     required int projectId,
     String? projectCloudId,
     required String entityType,
@@ -94,19 +105,65 @@ class MediaUploadQueue {
     int priority = 0,
     String? source,
   }) async {
-    if (!CloudinaryConfig.isConfigured) return;
-    if (!File(localPath).existsSync()) return;
+    if (!_isEnabled()) return false;
+    if (!File(localPath).existsSync()) return false;
 
-    final existing = await (_db.select(_db.pendingMediaUploads)
+    // Los trazos de un boceto viajan con su imagen, como archivo aparte.
+    if (entityType != MediaEntityType.sketchStrokes) {
+      final strokes = sketchStrokesPathOf(localPath);
+      if (File(strokes).existsSync()) {
+        await enqueue(
+          projectId: projectId,
+          projectCloudId: projectCloudId,
+          entityType: MediaEntityType.sketchStrokes,
+          entityKey: sketchStrokesKey(entityType, entityKey),
+          localPath: strokes,
+          sortOrder: sortOrder,
+          source: source,
+        );
+      }
+    }
+
+    // Una fila por imagen: se reutiliza aunque fallara antes (y se quitan
+    // los duplicados que dejaban versiones anteriores).
+    final rows = await (_db.select(_db.pendingMediaUploads)
           ..where(
             (t) =>
                 t.projectId.equals(projectId) &
                 t.entityType.equals(entityType) &
                 t.entityKey.equals(entityKey),
-          ))
-        .getSingleOrNull();
+          )
+          ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+        .get();
+    final existing = rows.isEmpty ? null : rows.first;
+    if (rows.length > 1) {
+      await (_db.delete(_db.pendingMediaUploads)
+            ..where((t) => t.id.isIn(rows.skip(1).map((r) => r.id))))
+          .go();
+    }
 
-    if (existing != null && existing.status != 'failed') {
+    // Ya subida desde este mismo archivo y sin cambios: cada sincronización
+    // vuelve a recorrer las imágenes. Si el archivo cambió (un boceto
+    // redibujado encima conserva la ruta), se vuelve a subir.
+    final stamp = mediaFileStamp(localPath);
+    if (existing != null &&
+        existing.status == 'done' &&
+        existing.localPath == localPath) {
+      if (existing.fileStamp == stamp) return false;
+      // Filas de antes de los sellos: el archivo cuenta como cambiado solo si
+      // se modificó después de subirse o bajarse (un boceto redibujado).
+      if (existing.fileStamp == null &&
+          !File(localPath).statSync().modified.isAfter(
+            existing.createdAt.add(const Duration(seconds: 2)),
+          )) {
+        await (_db.update(_db.pendingMediaUploads)
+              ..where((t) => t.id.equals(existing.id)))
+            .write(PendingMediaUploadsCompanion(fileStamp: Value(stamp)));
+        return false;
+      }
+    }
+
+    if (existing != null) {
       await (_db.update(_db.pendingMediaUploads)
             ..where((t) => t.id.equals(existing.id)))
           .write(PendingMediaUploadsCompanion(
@@ -117,7 +174,11 @@ class MediaUploadQueue {
         projectCloudId: Value(projectCloudId),
         source: Value(source),
         status: const Value('pending'),
+        retries: const Value(0),
+        lastError: const Value(null),
+        fileStamp: Value(stamp),
       ));
+      _notBefore.remove(existing.id);
     } else {
       await _db.into(_db.pendingMediaUploads).insert(
             PendingMediaUploadsCompanion.insert(
@@ -130,38 +191,87 @@ class MediaUploadQueue {
               sortOrder: Value(sortOrder),
               priority: Value(priority),
               source: Value(source),
+              fileStamp: Value(stamp),
             ),
           );
     }
 
     await notifyProgress();
     unawaited(startWorker());
+    return true;
   }
 
-  Future<void> startWorker() async {
-    if (_running || !CloudinaryConfig.isConfigured) return;
-    _running = true;
+  /// Quita las filas de proyectos que ya no existen: la nube rechaza sus
+  /// imágenes y reintentarlas no sirve de nada.
+  Future<int> dropOrphans() => _db.customUpdate(
+    'DELETE FROM pending_media_uploads '
+    'WHERE project_id NOT IN (SELECT id FROM projects)',
+    updates: {_db.pendingMediaUploads},
+    updateKind: UpdateKind.delete,
+  );
+
+  /// Vuelve a poner en cola las subidas que fallaron del todo.
+  Future<int> retryFailed() async {
+    await dropOrphans();
+    final count = await (_db.update(_db.pendingMediaUploads)
+          ..where((t) => t.status.equals('failed')))
+        .write(const PendingMediaUploadsCompanion(
+      status: Value('pending'),
+      retries: Value(0),
+      lastError: Value(null),
+    ));
+    await notifyProgress();
+    unawaited(startWorker());
+    return count;
+  }
+
+  /// Arranca el worker, o devuelve la pasada en curso: al completarse, la
+  /// cola está vacía o solo quedan fallidas.
+  Future<void> startWorker() {
+    if (!_isEnabled()) return Future.value();
+    return _run ??= _work().whenComplete(() => _run = null);
+  }
+
+  Future<void> _work() async {
     await notifyProgress(processing: true);
 
     try {
+      // Solo hay un worker: lo que esté «subiendo» al arrancar se cortó (la
+      // app se cerró a medias) y vuelve a la cola.
+      await (_db.update(_db.pendingMediaUploads)
+            ..where((t) => t.status.equals('processing')))
+          .write(const PendingMediaUploadsCompanion(status: Value('pending')));
+      await dropOrphans();
+
       while (true) {
-        final batch = await (_db.select(_db.pendingMediaUploads)
+        final pending = await (_db.select(_db.pendingMediaUploads)
               ..where((t) => t.status.equals('pending'))
               ..orderBy([
                 (t) => OrderingTerm.desc(t.priority),
                 (t) => OrderingTerm.asc(t.sortOrder),
                 (t) => OrderingTerm.asc(t.id),
-              ])
-              ..limit(maxConcurrency))
+              ]))
             .get();
+        if (pending.isEmpty) break;
 
-        if (batch.isEmpty) break;
+        // Las que esperan su reintento no frenan a las demás.
+        final now = DateTime.now();
+        final ready = pending
+            .where((r) => !(_notBefore[r.id]?.isAfter(now) ?? false))
+            .take(maxConcurrency)
+            .toList();
+        if (ready.isEmpty) {
+          final next = pending
+              .map((r) => _notBefore[r.id]!)
+              .reduce((a, b) => a.isBefore(b) ? a : b);
+          await Future<void>.delayed(next.difference(now));
+          continue;
+        }
 
-        await Future.wait(batch.map(_processOne));
+        await Future.wait(ready.map(_processOne));
         await notifyProgress(processing: true);
       }
     } finally {
-      _running = false;
       await notifyProgress();
     }
   }
@@ -197,15 +307,29 @@ class MediaUploadQueue {
             sortOrder: row.sortOrder,
           );
 
-      final result = await _cloud.uploadFile(
-        localPath: row.localPath,
-        publicId: publicId,
-        projectCloudId: cloudId,
-        entityType: row.entityType,
-        entityKey: row.entityKey,
-        sortOrder: row.sortOrder,
-        source: row.source,
-      );
+      final slot = mediaSlotFor(row.entityType);
+      final isFile =
+          slot?.kind == MediaKind.file ||
+          row.entityType == MediaEntityType.sketchStrokes;
+      final result = isFile
+          ? await _cloud.uploadRawFile(
+              localPath: row.localPath,
+              projectCloudId: cloudId,
+              entityType: row.entityType,
+              entityKey: row.entityKey,
+              sortOrder: row.sortOrder,
+              maxBytes: MediaSlot.maxFileBytes,
+              source: row.source,
+            )
+          : await _cloud.uploadFile(
+              localPath: row.localPath,
+              publicId: publicId,
+              projectCloudId: cloudId,
+              entityType: row.entityType,
+              entityKey: row.entityKey,
+              sortOrder: row.sortOrder,
+              source: row.source,
+            );
 
       if (result == null) {
         throw StateError('Upload devolvió null');
@@ -220,6 +344,8 @@ class MediaUploadQueue {
         projectCloudId: Value(cloudId),
         publicId: Value(result.publicId),
         lastError: const Value(null),
+        remoteHash: Value(result.contentHash),
+        fileStamp: Value(mediaFileStamp(row.localPath)),
       ));
     } catch (e, st) {
       debugPrint('MediaUploadQueue error: $e\n$st');
@@ -233,7 +359,9 @@ class MediaUploadQueue {
         lastError: Value(e.toString()),
       ));
       if (status == 'pending') {
-        await Future<void>.delayed(Duration(seconds: 1 << retries.clamp(0, 4)));
+        _notBefore[row.id] = DateTime.now().add(
+          retryDelay * (1 << retries.clamp(0, 4)),
+        );
       }
     }
   }
@@ -257,7 +385,7 @@ class MediaUploadQueue {
 
   /// Escanea un proyecto y encola imágenes locales pendientes.
   Future<int> scanAndEnqueueProject(int projectId) async {
-    if (!CloudinaryConfig.isConfigured) return 0;
+    if (!_isEnabled()) return 0;
 
     final project = await _db.getProject(projectId);
     if (project == null) return 0;
@@ -288,9 +416,21 @@ class MediaUploadQueue {
       if (!File(img.imagePath).existsSync()) continue;
       final group = img.groupId != null ? groupById[img.groupId!] : null;
       final groupKey = img.groupId != null ? groupKeyById[img.groupId!] : null;
-      final entityKey =
-          MediaEntityKeys.moodboard(groupKey: groupKey, sortOrder: img.sortOrder);
-      final publicId = group != null
+      final entityKey = MediaEntityKeys.forImage(
+        img.uid,
+        () => MediaEntityKeys.moodboard(
+          groupKey: groupKey,
+          sortOrder: img.sortOrder,
+        ),
+      );
+      final publicId = img.uid != null
+          ? CloudinaryPublicId.byUid(
+              workspaceId: workspaceId,
+              projectCloudId: cloudId,
+              category: MediaEntityType.moodboard,
+              uid: img.uid!,
+            )
+          : group != null
           ? CloudinaryPublicId.moodboard(
               workspaceId: workspaceId,
               projectCloudId: cloudId,
@@ -306,7 +446,7 @@ class MediaUploadQueue {
               sortOrder: img.sortOrder,
             );
 
-      await enqueue(
+      if (await enqueue(
         projectId: projectId,
         projectCloudId: cloudId,
         entityType: MediaEntityType.moodboard,
@@ -315,8 +455,9 @@ class MediaUploadQueue {
         sortOrder: img.sortOrder,
         publicId: publicId,
         source: MediaIngestSource.sync,
-      );
-      count++;
+      )) {
+        count++;
+      }
     }
 
     // Shot references
@@ -331,7 +472,8 @@ class MediaUploadQueue {
     for (final shot in shots) {
       final scene = sceneById[shot.sceneId];
       if (scene == null) continue;
-      final shotKey = 'scene:${scene.number}:${shot.number}';
+      final shotKey =
+          'scene:${scene.number}${scene.numberSuffix ?? ''}:${shot.number}';
       final refs = await (_db.select(_db.shotReferences)
             ..where((r) => r.shotId.equals(shot.id))
             ..orderBy([(r) => OrderingTerm.asc(r.sortOrder)]))
@@ -339,17 +481,27 @@ class MediaUploadQueue {
 
       for (final ref in refs) {
         if (!File(ref.imagePath).existsSync()) continue;
-        await enqueue(
+        if (await enqueue(
           projectId: projectId,
           projectCloudId: cloudId,
           entityType: MediaEntityType.shotReference,
-          entityKey: MediaEntityKeys.shotReference(
-            shotKey: shotKey,
-            sortOrder: ref.sortOrder,
+          entityKey: MediaEntityKeys.forImage(
+            ref.uid,
+            () => MediaEntityKeys.shotReference(
+              shotKey: shotKey,
+              sortOrder: ref.sortOrder,
+            ),
           ),
           localPath: ref.imagePath,
           sortOrder: ref.sortOrder,
-          publicId: CloudinaryPublicId.shotReference(
+          publicId: ref.uid != null
+              ? CloudinaryPublicId.byUid(
+                  workspaceId: workspaceId,
+                  projectCloudId: cloudId,
+                  category: MediaEntityType.shotReference,
+                  uid: ref.uid!,
+                )
+              : CloudinaryPublicId.shotReference(
             workspaceId: workspaceId,
             projectCloudId: cloudId,
             sceneNumber: scene.number,
@@ -357,8 +509,9 @@ class MediaUploadQueue {
             refSortOrder: ref.sortOrder,
           ),
           source: MediaIngestSource.sync,
-        );
-        count++;
+        )) {
+          count++;
+        }
       }
     }
 
@@ -375,17 +528,27 @@ class MediaUploadQueue {
           .get();
       for (final img in imgs) {
         if (!File(img.imagePath).existsSync()) continue;
-        await enqueue(
+        if (await enqueue(
           projectId: projectId,
           projectCloudId: cloudId,
           entityType: MediaEntityType.site,
-          entityKey: MediaEntityKeys.siteImage(
-            siteKey: siteKey,
-            sortOrder: img.sortOrder,
+          entityKey: MediaEntityKeys.forImage(
+            img.uid,
+            () => MediaEntityKeys.siteImage(
+              siteKey: siteKey,
+              sortOrder: img.sortOrder,
+            ),
           ),
           localPath: img.imagePath,
           sortOrder: img.sortOrder,
-          publicId: CloudinaryPublicId.siteImage(
+          publicId: img.uid != null
+              ? CloudinaryPublicId.byUid(
+                  workspaceId: workspaceId,
+                  projectCloudId: cloudId,
+                  category: MediaEntityType.site,
+                  uid: img.uid!,
+                )
+              : CloudinaryPublicId.siteImage(
             workspaceId: workspaceId,
             projectCloudId: cloudId,
             siteSortOrder: site.sortOrder,
@@ -393,8 +556,9 @@ class MediaUploadQueue {
             imageSortOrder: img.sortOrder,
           ),
           source: MediaIngestSource.sync,
-        );
-        count++;
+        )) {
+          count++;
+        }
       }
     }
 
@@ -411,17 +575,27 @@ class MediaUploadQueue {
           .get();
       for (final img in imgs) {
         if (!File(img.imagePath).existsSync()) continue;
-        await enqueue(
+        if (await enqueue(
           projectId: projectId,
           projectCloudId: cloudId,
           entityType: MediaEntityType.location,
-          entityKey: MediaEntityKeys.locationImage(
-            setKey: setKey,
-            sortOrder: img.sortOrder,
+          entityKey: MediaEntityKeys.forImage(
+            img.uid,
+            () => MediaEntityKeys.locationImage(
+              setKey: setKey,
+              sortOrder: img.sortOrder,
+            ),
           ),
           localPath: img.imagePath,
           sortOrder: img.sortOrder,
-          publicId: CloudinaryPublicId.locationImage(
+          publicId: img.uid != null
+              ? CloudinaryPublicId.byUid(
+                  workspaceId: workspaceId,
+                  projectCloudId: cloudId,
+                  category: MediaEntityType.location,
+                  uid: img.uid!,
+                )
+              : CloudinaryPublicId.locationImage(
             workspaceId: workspaceId,
             projectCloudId: cloudId,
             setSortOrder: set.sortOrder,
@@ -429,15 +603,16 @@ class MediaUploadQueue {
             imageSortOrder: img.sortOrder,
           ),
           source: MediaIngestSource.sync,
-        );
-        count++;
+        )) {
+          count++;
+        }
       }
     }
 
     // Project cover
     if (project.coverImagePath != null &&
         File(project.coverImagePath!).existsSync()) {
-      await enqueue(
+      if (await enqueue(
         projectId: projectId,
         projectCloudId: cloudId,
         entityType: MediaEntityType.projectCover,
@@ -449,13 +624,71 @@ class MediaUploadQueue {
           projectCloudId: cloudId,
         ),
         source: MediaIngestSource.sync,
-      );
-      count++;
+      )) {
+        count++;
+      }
     }
 
     unawaited(startWorker());
+    count += await _enqueueSlots(projectId, cloudId, workspaceId);
     return count;
   }
+
+  /// Pone en cola los archivos de los huecos del proyecto (storyboard,
+  /// bocetos de luz, plantas de set, guion, PDF anotados…, ver [kMediaSlots]).
+  Future<int> _enqueueSlots(
+    int projectId,
+    String cloudId,
+    String workspaceId,
+  ) async {
+    var count = 0;
+    for (final slot in kMediaSlots) {
+      final rows = await _db
+          .customSelect(
+            slot.selectForProject,
+            variables: [Variable.withInt(projectId)],
+          )
+          .get();
+      for (final row in rows) {
+        final uid = row.read<String?>('uid');
+        final raw = row.read<String?>('path');
+        if (uid == null || raw == null || raw.trim().isEmpty) continue;
+        final paths = slot.isList ? decodeSlotPaths(raw) : [raw];
+        for (var i = 0; i < paths.length; i++) {
+          final path = paths[i];
+          final file = File(path);
+          if (!file.existsSync()) continue;
+          // Más que el límite de Storage: no se sube (ni se reintenta).
+          if (slot.kind == MediaKind.file &&
+              file.lengthSync() > MediaSlot.maxFileBytes) {
+            continue;
+          }
+          final key = mediaSlotKey(uid, slot.isList ? i : null);
+          if (await enqueue(
+            projectId: projectId,
+            projectCloudId: cloudId,
+            entityType: slot.entityType,
+            entityKey: key,
+            localPath: path,
+            sortOrder: i,
+            publicId: slot.kind == MediaKind.image
+                ? CloudinaryPublicId.byUid(
+                    workspaceId: workspaceId,
+                    projectCloudId: cloudId,
+                    category: slot.entityType,
+                    uid: slot.isList ? '$uid-$i' : uid,
+                  )
+                : null,
+            source: MediaIngestSource.sync,
+          )) {
+            count++;
+          }
+        }
+      }
+    }
+    return count;
+  }
+
 
   Future<void> scanAllProjects() async {
     final projects = await _db.watchProjects().first;

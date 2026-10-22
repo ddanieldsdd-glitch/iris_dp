@@ -11,7 +11,19 @@ import '../../shared/visual_bible/camera_pilot_resolve.dart';
 import '../../shared/visual_bible/bible_acts.dart';
 import '../../shared/visual_bible/bible_cards.dart';
 import '../../shared/visual_bible/bible_point_extras.dart';
+import '../../shared/visual_bible/bible_text_specs.dart';
+import '../../shared/visual_bible/camera_points.dart';
+import '../../shared/visual_bible/color_points.dart';
+import '../../shared/visual_bible/bible_lighting_data.dart';
 import '../../shared/visual_bible/concept_points.dart';
+import '../../shared/visual_bible/lighting_card_page.dart';
+import '../../shared/visual_bible/lighting_metrics.dart';
+import '../../shared/visual_bible/narrative_card_kind.dart';
+import '../camera_plan/light/modifiers.dart';
+import '../../shared/visual_bible/exposure_points.dart';
+import '../../shared/visual_bible/optics_points.dart';
+import '../../shared/visual_bible/texture_points.dart';
+import '../../shared/visual_bible/workflow_points.dart';
 import '../../shared/visual_bible/direction_points.dart';
 import '../../shared/visual_bible/bible_reference.dart';
 import '../../shared/visual_bible/format_pilot_resolve.dart';
@@ -51,25 +63,29 @@ class VisualBiblePdfService {
     MoodboardExportLayout moodboardLayout = MoodboardExportLayout.defaults,
     bool includeAllMoodboardImages = false,
     List<BibleExportSectionRef> sectionOrder = const [],
+    List<NarrativeCardModel> lightingCards = const [],
     Map<int, Uint8List> lightingSketchPngs = const {},
   }) async {
-    final doc = await buildDocument(
-      sectionOrder: sectionOrder,
-      lightingSketchPngs: lightingSketchPngs,
-      mode: mode,
-      projectName: projectName,
-      director: director,
-      data: data,
-      colorBlocks: colorBlocks,
-      exposureBlocks: exposureBlocks,
-      lightingSetups: lightingSetups,
-      cameraTests: cameraTests,
-      moodboard: moodboard,
-      includedSections: includedSections,
-      sectionContentJsonById: sectionContentJsonById,
-      primaryCameraLabel: primaryCameraLabel,
-      moodboardLayout: moodboardLayout,
-      includeAllMoodboardImages: includeAllMoodboardImages,
+    final doc = await PdfSafeImage.withExportCache(
+      () => buildDocument(
+        sectionOrder: sectionOrder,
+        mode: mode,
+        projectName: projectName,
+        director: director,
+        data: data,
+        colorBlocks: colorBlocks,
+        exposureBlocks: exposureBlocks,
+        lightingSetups: lightingSetups,
+        cameraTests: cameraTests,
+        moodboard: moodboard,
+        includedSections: includedSections,
+        sectionContentJsonById: sectionContentJsonById,
+        primaryCameraLabel: primaryCameraLabel,
+        moodboardLayout: moodboardLayout,
+        includeAllMoodboardImages: includeAllMoodboardImages,
+        lightingCards: lightingCards,
+        lightingSketchPngs: lightingSketchPngs,
+      ),
     );
     return doc.save();
   }
@@ -251,6 +267,7 @@ class VisualBiblePdfService {
     MoodboardExportLayout moodboardLayout = MoodboardExportLayout.defaults,
     bool includeAllMoodboardImages = false,
     List<BibleExportSectionRef> sectionOrder = const [],
+    List<NarrativeCardModel> lightingCards = const [],
 
     /// Boceto a mano de cada setup (por id), ya pasado a PNG.
     Map<int, Uint8List> lightingSketchPngs = const {},
@@ -270,6 +287,9 @@ class VisualBiblePdfService {
     _userPointImages = await _loadUserPointImages(
       sectionContentJsonById,
       moodboard,
+      extra: {
+        for (final card in lightingCards) ..._lightingCardImageIds(card),
+      },
     );
     _sharedActs = BibleSharedActs.resolve(
       data.actVisualNotes,
@@ -440,298 +460,143 @@ class VisualBiblePdfService {
       }
     }
 
-    if (!isTech &&
-        _sectionAllowed(sections, BibleSectionId.colorImage) &&
-        (colorBlocks.isNotEmpty ||
-            _hasCustomContent(
-              BibleSectionId.colorImage,
-              sectionContentJsonById,
-            ))) {
-      addSection(
+    if (!isTech && _sectionAllowed(sections, BibleSectionId.colorImage)) {
+      final colorJson = sectionContentJsonById[BibleSectionId.colorImage];
+      final colorAssets = await _loadSectionAssets(
         BibleSectionId.colorImage,
-        pw.MultiPage(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (context) => [
-            _sectionHeader(
-              'COLOR E IMAGEN',
-              fonts.bold,
-              sectionId: BibleSectionId.colorImage,
-            ),
-            ...colorBlocks.map(
-              (block) => pw.Container(
-                margin: const pw.EdgeInsets.only(bottom: 20),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      block.blockName,
-                      style: pw.TextStyle(font: fonts.bold, fontSize: 15),
-                    ),
-                    if (block.emotionalIntent?.isNotEmpty == true)
-                      pw.Text(
-                        block.emotionalIntent!,
-                        style: const pw.TextStyle(
-                          fontSize: 11,
-                          color: PdfColors.grey700,
-                        ),
-                      ),
-                    pw.SizedBox(height: 10),
-                    pw.Row(
-                      children: [
-                        ...block.dominantColors.map(
-                          (hex) => pw.Container(
-                            width: 56,
-                            height: 56,
-                            margin: const pw.EdgeInsets.only(right: 6),
-                            decoration: pw.BoxDecoration(
-                              color: _hexToPdf(hex),
-                              borderRadius: pw.BorderRadius.circular(6),
-                            ),
-                          ),
-                        ),
-                        if (block.colorTempKelvin != null)
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.only(left: 12),
-                            child: pw.Text(
-                              '${block.colorTempKelvin}K',
-                              style: pw.TextStyle(
-                                font: fonts.bold,
-                                fontSize: 18,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (data.workingLutName != null)
-              _techChip('LUT trabajo', data.workingLutName!, fonts),
-            if (data.creativeLutName != null)
-              _techChip('LUT creativo', data.creativeLutName!, fonts),
-            _customFieldsWidget(
-              BibleSectionId.colorImage,
-              sectionContentJsonById,
-              fonts,
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (!isPitch &&
-        _sectionAllowed(sections, BibleSectionId.lighting) &&
-        (data.lightingPhilosophy?.isNotEmpty == true ||
-            lightingSetups.isNotEmpty ||
-            _hasCustomContent(
-              BibleSectionId.lighting,
-              sectionContentJsonById,
-            ))) {
-      addSection(
-        BibleSectionId.lighting,
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => _sectionPage(
-            title: 'ILUMINACIÓN',
-            sectionId: BibleSectionId.lighting,
-            fontBold: fonts.bold,
-            font: fonts.regular,
-            content: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                if (data.lightingPhilosophy?.isNotEmpty == true)
-                  pw.Text(
-                    data.lightingPhilosophy!,
-                    style: pw.TextStyle(
-                      font: fonts.regular,
-                      fontSize: 12,
-                      lineSpacing: 6,
-                    ),
-                  ),
-                pw.SizedBox(height: 16),
-                pw.Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    _techChip('Calidad', data.lightQuality ?? '—', fonts),
-                    _techChip('Contraste', data.contrastStyle ?? '—', fonts),
-                    _techChip('K:F día', data.keyFillRatioDay ?? '—', fonts),
-                    _techChip(
-                      'K:F noche',
-                      data.keyFillRatioNight ?? '—',
-                      fonts,
-                    ),
-                    if (data.defaultTStop != null)
-                      _techChip('T-stop', data.defaultTStop!, fonts),
-                    if (data.ndNotes != null)
-                      _techChip('ND', data.ndNotes!, fonts),
-                  ],
-                ),
-                if (lightingSetups.isNotEmpty) ...[
-                  pw.SizedBox(height: 16),
-                  pw.Text(
-                    'SETUPS',
-                    style: pw.TextStyle(font: fonts.bold, fontSize: 10),
-                  ),
-                  ...lightingSetups.map(
-                    (s) => pw.Padding(
-                      padding: const pw.EdgeInsets.only(top: 8),
-                      child: pw.Row(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Expanded(
-                            child: pw.Text(
-                              '• ${s.setupName}: ${s.narrativeNote ?? ''}',
-                            ),
-                          ),
-                          if (lightingSketchPngs[s.id] != null) ...[
-                            pw.SizedBox(width: 8),
-                            pw.Container(
-                              width: 150,
-                              decoration: pw.BoxDecoration(
-                                border: pw.Border.all(
-                                  color: PdfColors.grey400,
-                                  width: 0.5,
-                                ),
-                              ),
-                              child: pw.Image(
-                                pw.MemoryImage(lightingSketchPngs[s.id]!),
-                                fit: pw.BoxFit.contain,
-                              ),
-                            ),
-                          ] else if (s.diagramJson != '[]') ...[
-                            pw.SizedBox(width: 8),
-                            _lightingDiagram(s.diagramJson),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-                _customFieldsWidget(
-                  BibleSectionId.lighting,
-                  sectionContentJsonById,
-                  fonts,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (!isPitch &&
-        _sectionAllowed(sections, BibleSectionId.exposure) &&
-        (data.exposureNarrativeIntent?.isNotEmpty == true ||
-            exposureBlocks.isNotEmpty ||
-            data.highlightBehavior != null ||
-            data.shadowBehavior != null ||
-            data.nativeIso != null ||
-            data.recordingFormat != null ||
-            _hasCustomContent(
-              BibleSectionId.exposure,
-              sectionContentJsonById,
-            ) ||
-            MoodboardExportGrouper.imagesForSection(
-              moodboard,
-              BibleSectionId.exposure,
-            ).isNotEmpty)) {
-      final exposureCells = await _loadMoodboardCells(
-        MoodboardExportGrouper.imagesForSection(
-          moodboard,
-          BibleSectionId.exposure,
-        ),
+        colorJson,
+        moodboard,
         boardLayout,
+        fonts,
       );
-      addSection(
-        BibleSectionId.exposure,
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => _sectionPage(
-            title: 'EXPOSICIÓN',
-            sectionId: BibleSectionId.exposure,
-            fontBold: fonts.bold,
-            font: fonts.regular,
-            content: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                if (data.exposureNarrativeIntent?.isNotEmpty == true)
-                  pw.Text(data.exposureNarrativeIntent!),
-                pw.SizedBox(height: 12),
-                pw.Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (data.highlightBehavior != null)
-                      _techChip('Highlights', data.highlightBehavior!, fonts),
-                    if (data.shadowBehavior != null)
-                      _techChip('Sombras', data.shadowBehavior!, fonts),
-                    if (data.nativeIso != null)
-                      _techChip('ISO nativo', '${data.nativeIso}', fonts),
-                    if (data.recordingFormat != null)
-                      _techChip('Formato', data.recordingFormat!, fonts),
-                  ],
-                ),
-                if (exposureBlocks.isNotEmpty) ...[
-                  pw.SizedBox(height: 12),
-                  ...exposureBlocks.map(
-                    (b) =>
-                        pw.Text('${b.blockName}: K:F ${b.keyFillRatio ?? "—"}'),
-                  ),
-                ],
-                _customFieldsWidget(
-                  BibleSectionId.exposure,
-                  sectionContentJsonById,
-                  fonts,
-                ),
-                ..._stillStrip(exposureCells, fonts),
-              ],
-            ),
+      final colorContent = _colorContent(
+        data,
+        colorJson,
+        colorBlocks,
+        kit,
+        colorAssets,
+      );
+      if (colorContent.isNotEmpty) {
+        addSection(
+          BibleSectionId.colorImage,
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader(
+                _renamed[BibleSectionId.colorImage] ?? 'Color e imagen',
+                image: _heroes[BibleSectionId.colorImage],
+                accent: _heroColors[BibleSectionId.colorImage],
+              ),
+              pw.SizedBox(height: 24),
+              ...colorContent,
+            ],
           ),
-        ),
+        );
+      }
+    }
+
+    if (!isPitch && _sectionAllowed(sections, BibleSectionId.lighting)) {
+      final lightingContent = _lightingContent(
+        data,
+        sectionContentJsonById[BibleSectionId.lighting],
+        lightingSetups,
+        lightingCards,
+        kit,
+        fonts,
+        lightingSketchPngs,
       );
+      if (lightingContent.isNotEmpty) {
+        addSection(
+          BibleSectionId.lighting,
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader(
+                _renamed[BibleSectionId.lighting] ?? 'Iluminación',
+                image: _heroes[BibleSectionId.lighting],
+                accent: _heroColors[BibleSectionId.lighting],
+              ),
+              pw.SizedBox(height: 24),
+              ...lightingContent,
+            ],
+          ),
+        );
+      }
+    }
+
+    if (!isPitch && _sectionAllowed(sections, BibleSectionId.exposure)) {
+      final exposureJson = sectionContentJsonById[BibleSectionId.exposure];
+      final exposureAssets = await _loadSectionAssets(
+        BibleSectionId.exposure,
+        exposureJson,
+        moodboard,
+        boardLayout,
+        fonts,
+      );
+      final exposureContent = _exposureContent(
+        data,
+        exposureJson,
+        exposureBlocks,
+        kit,
+        exposureAssets,
+      );
+      if (exposureContent.isNotEmpty) {
+        addSection(
+          BibleSectionId.exposure,
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader(
+                _renamed[BibleSectionId.exposure] ?? 'Exposición',
+                image: _heroes[BibleSectionId.exposure],
+                accent: _heroColors[BibleSectionId.exposure],
+              ),
+              pw.SizedBox(height: 24),
+              ...exposureContent,
+            ],
+          ),
+        );
+      }
     }
 
     if (!isPitch && _sectionAllowed(sections, BibleSectionId.camera)) {
-      final cameraBlob = CameraPilotResolve.parseBlob(
-        BibleSectionExportReader.withoutUserPoints(
-          sectionContentJsonById[BibleSectionId.camera],
-          BibleSectionId.camera,
-        ),
+      final cameraJson = sectionContentJsonById[BibleSectionId.camera];
+      final cameraAssets = await _loadSectionAssets(
+        BibleSectionId.camera,
+        cameraJson,
+        moodboard,
+        boardLayout,
+        fonts,
       );
-      if (CameraPilotResolve.hasExportablePilotContent(
-            data,
-            cameraBlob,
-            primaryCameraLabel: primaryCameraLabel,
-          ) ||
-          _hasUserPoints(BibleSectionId.camera, sectionContentJsonById)) {
+      final cameraContent = _cameraContent(
+        data,
+        cameraJson,
+        kit,
+        cameraAssets,
+        primaryCameraLabel: primaryCameraLabel,
+      );
+      if (cameraContent.isNotEmpty) {
         addSection(
           BibleSectionId.camera,
-          pw.Page(
+          pw.MultiPage(
             theme: theme,
             pageFormat: PdfPageFormat.a4,
-            build: (_) => _sectionPage(
-              title: 'CÁMARA Y SENSOR',
-              sectionId: BibleSectionId.camera,
-              fontBold: fonts.bold,
-              font: fonts.regular,
-              content: _textFieldsContent([
-                ...CameraPilotResolve.fixedSlotsForPdf(
-                  data,
-                  cameraBlob,
-                  primaryCameraLabel: primaryCameraLabel,
-                ),
-                ...CameraPilotResolve.customRowsForPdf(cameraBlob),
-                ..._userPointRows(
-                  BibleSectionId.camera,
-                  sectionContentJsonById,
-                ),
-              ], fonts),
-            ),
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader(
+                _renamed[BibleSectionId.camera] ?? 'Cámara y sensor',
+                image: _heroes[BibleSectionId.camera],
+                accent: _heroColors[BibleSectionId.camera],
+              ),
+              pw.SizedBox(height: 24),
+              ...cameraContent,
+            ],
           ),
         );
       }
@@ -824,96 +689,76 @@ class VisualBiblePdfService {
       }
     }
 
-    if (!isPitch &&
-        _sectionAllowed(sections, BibleSectionId.texture) &&
-        (_hasAny([
-              data.imageTexture,
-              data.grainLevel,
-              data.diffusionNotes,
-              data.textureNarrativeIntent,
-              data.filtrationNotes,
-            ]) ||
-            _hasCustomContent(BibleSectionId.texture, sectionContentJsonById) ||
-            MoodboardExportGrouper.imagesForSection(
-              moodboard,
-              BibleSectionId.texture,
-            ).isNotEmpty)) {
-      final textureCells = await _loadMoodboardCells(
-        MoodboardExportGrouper.imagesForSection(
-          moodboard,
-          BibleSectionId.texture,
-        ),
-        boardLayout,
-      );
-      addSection(
+    if (!isPitch && _sectionAllowed(sections, BibleSectionId.texture)) {
+      final textureJson = sectionContentJsonById[BibleSectionId.texture];
+      final textureAssets = await _loadSectionAssets(
         BibleSectionId.texture,
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => _sectionPage(
-            title: 'TEXTURA',
-            sectionId: BibleSectionId.texture,
-            fontBold: fonts.bold,
-            font: fonts.regular,
-            content: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                _textFieldsContent([
-                  ('Textura de imagen', data.imageTexture),
-                  ('Grano', data.grainLevel),
-                  ('Difusión', data.diffusionNotes),
-                  ('Filtración', data.filtrationNotes),
-                  ('Intención narrativa', data.textureNarrativeIntent),
-                  ..._customFieldRows(
-                    BibleSectionId.texture,
-                    sectionContentJsonById,
-                  ),
-                ], fonts),
-                ..._stillStrip(textureCells, fonts),
-              ],
-            ),
-          ),
-        ),
+        textureJson,
+        moodboard,
+        boardLayout,
+        fonts,
       );
+      final textureContent = _textureContent(
+        data,
+        textureJson,
+        kit,
+        textureAssets,
+      );
+      if (textureContent.isNotEmpty) {
+        addSection(
+          BibleSectionId.texture,
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader(
+                _renamed[BibleSectionId.texture] ?? 'Textura',
+                image: _heroes[BibleSectionId.texture],
+                accent: _heroColors[BibleSectionId.texture],
+              ),
+              pw.SizedBox(height: 24),
+              ...textureContent,
+            ],
+          ),
+        );
+      }
     }
 
-    if (!isPitch &&
-        _sectionAllowed(sections, BibleSectionId.workflow) &&
-        (_hasAny([
-              data.workflowPipeline,
-              data.codec,
-              data.deliveryColorSpace,
-              data.resolutionNotes,
-              data.frameRateNotes,
-            ]) ||
-            _hasCustomContent(
-              BibleSectionId.workflow,
-              sectionContentJsonById,
-            ))) {
-      addSection(
+    if (!isPitch && _sectionAllowed(sections, BibleSectionId.workflow)) {
+      final workflowJson = sectionContentJsonById[BibleSectionId.workflow];
+      final workflowAssets = await _loadSectionAssets(
         BibleSectionId.workflow,
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => _sectionPage(
-            title: 'WORKFLOW',
-            sectionId: BibleSectionId.workflow,
-            fontBold: fonts.bold,
-            font: fonts.regular,
-            content: _textFieldsContent([
-              ('Pipeline', data.workflowPipeline),
-              ('Códec', data.codec),
-              ('Espacio de color de entrega', data.deliveryColorSpace),
-              ('Resolución', data.resolutionNotes),
-              ('Frame rate', data.frameRateNotes),
-              ..._customFieldRows(
-                BibleSectionId.workflow,
-                sectionContentJsonById,
-              ),
-            ], fonts),
-          ),
-        ),
+        workflowJson,
+        moodboard,
+        boardLayout,
+        fonts,
       );
+      final workflowContent = _workflowContent(
+        data,
+        workflowJson,
+        kit,
+        workflowAssets,
+      );
+      if (workflowContent.isNotEmpty) {
+        addSection(
+          BibleSectionId.workflow,
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader(
+                _renamed[BibleSectionId.workflow] ?? 'Workflow',
+                image: _heroes[BibleSectionId.workflow],
+                accent: _heroColors[BibleSectionId.workflow],
+              ),
+              pw.SizedBox(height: 24),
+              ...workflowContent,
+            ],
+          ),
+        );
+      }
     }
 
     if (!isPitch &&
@@ -1053,7 +898,7 @@ class VisualBiblePdfService {
           <String, List<({MoodboardImageModel img, pw.MemoryImage? image})>>{};
       for (final img in moodboard) {
         final assigned = exportSectionsForMoodboardImage(img);
-        final bytes = await PdfSafeImage.loadFromPath(img.imagePath);
+        final bytes = await PdfSafeImage.loadFromPathMaxEdge(img.imagePath);
         final memory = bytes != null ? pw.MemoryImage(bytes) : null;
         final item = (img: img, image: memory);
         if (assigned.isEmpty) {
@@ -1167,36 +1012,35 @@ class VisualBiblePdfService {
       }
     }
 
-    if (!isPitch &&
-        _sectionAllowed(sections, BibleSectionId.optics) &&
-        (BibleSectionExportReader.hasOpticsExportContent(
-              data.opticsConfigJson,
-              narrativeIntent: data.opticsNarrativeIntent,
-              lensPhilosophy: data.lensPhilosophy,
-            ) ||
-            _hasUserPoints(BibleSectionId.optics, sectionContentJsonById))) {
-      final opticsRows = BibleSectionExportReader.rowsFromOpticsConfigJson(
-        data.opticsConfigJson,
-        narrativeIntent: data.opticsNarrativeIntent,
-        lensPhilosophy: data.lensPhilosophy,
-      );
-      addSection(
+    if (!isPitch && _sectionAllowed(sections, BibleSectionId.optics)) {
+      final opticsJson = sectionContentJsonById[BibleSectionId.optics];
+      final opticsAssets = await _loadSectionAssets(
         BibleSectionId.optics,
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => _sectionPage(
-            title: 'ÓPTICA',
-            sectionId: BibleSectionId.optics,
-            fontBold: fonts.bold,
-            font: fonts.regular,
-            content: _textFieldsContent([
-              ...opticsRows.map((row) => (row.label, row.value)),
-              ..._userPointRows(BibleSectionId.optics, sectionContentJsonById),
-            ], fonts),
-          ),
-        ),
+        opticsJson,
+        moodboard,
+        boardLayout,
+        fonts,
       );
+      final opticsContent = _opticsContent(data, opticsJson, kit, opticsAssets);
+      if (opticsContent.isNotEmpty) {
+        addSection(
+          BibleSectionId.optics,
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(BiblePdfTokens.pageMargin),
+            build: (_) => [
+              kit.sectionHeader(
+                _renamed[BibleSectionId.optics] ?? 'Óptica',
+                image: _heroes[BibleSectionId.optics],
+                accent: _heroColors[BibleSectionId.optics],
+              ),
+              pw.SizedBox(height: 24),
+              ...opticsContent,
+            ],
+          ),
+        );
+      }
     }
 
     // Pantallas creadas por el usuario. El selector de secciones del export
@@ -1717,6 +1561,779 @@ class VisualBiblePdfService {
     return out;
   }
 
+  /// Cámara y sensor: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _cameraContent(
+    VisualBibleData data,
+    String? contentJson,
+    BiblePdfKit kit,
+    _SectionAssets assets, {
+    String? primaryCameraLabel,
+  }) {
+    final blob = CameraPilotResolve.parseBlob(
+      BibleSectionExportReader.withoutUserPoints(
+        contentJson,
+        BibleSectionId.camera,
+      ),
+    );
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final equipment = CameraPoints.equipmentItems(
+      values,
+      legacyCameraId: data.primaryCameraId,
+      legacyCameraName: primaryCameraLabel,
+    ).where((item) => !item.isEmpty).toList();
+    final facts = equipment.isEmpty
+        ? const <String, String>{}
+        : equipment.first.facts;
+
+    final out = <pw.Widget>[];
+    void add(pw.Widget? point) {
+      if (point != null) out.add(point);
+    }
+
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.camera,
+    )) {
+      switch (field.key) {
+        case 'narrative':
+          final intent = data.cameraNarrativeIntent?.trim() ?? '';
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+        case CameraPoints.equipment:
+          if (equipment.isNotEmpty) {
+            out.add(kit.equipmentPoint(field.label, equipment));
+          }
+        case CameraPoints.body:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              CameraPoints.withFacts(
+                CameraPoints.bodyValue(values, blob, nativeIso: data.nativeIso),
+                facts,
+              ),
+            ),
+          );
+        case CameraPoints.recording:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              CameraPoints.recordingValue(
+                values,
+                blob,
+                captureResolution: CameraPilotResolve.captureResolution(
+                  blob,
+                  data,
+                ),
+                codec: data.codec ?? data.recordingFormat,
+                colorScience: data.colorScienceNotes,
+                frameRate: data.frameRateNotes,
+              ),
+            ),
+          );
+        case CameraPoints.matrix:
+          final table = CameraPoints.matrixValue(values);
+          if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
+        case CameraPoints.colorPipeline:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              CameraPoints.colorPipelineValue(
+                values,
+                blob,
+                showLut: data.creativeLutName,
+              ),
+            ),
+          );
+        case CameraPoints.accessories:
+          final table = CameraPoints.accessoriesValue(values, blob);
+          if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
+        case CameraPoints.dataFlow:
+          final cards = CameraPoints.dataFlowCards(
+            values,
+            blob,
+            workflowPipeline: data.workflowPipeline,
+          ).where((card) => !card.isEmpty).toList();
+          if (cards.isNotEmpty) out.add(kit.cardsPoint(field.label, cards));
+        case CameraPoints.philosophy:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              CameraPoints.philosophyValue(
+                values,
+                philosophy: data.cameraPhilosophy,
+                movementStyle: data.movementStyle,
+              ),
+            ),
+          );
+        case CameraPoints.behavior:
+          final cards = CameraPoints.behaviorCards(
+            values,
+            philosophy: data.cameraPhilosophy,
+            movementStyle: data.movementStyle,
+            legacyMovements: data.cameraMovements,
+          ).where((card) => !card.isEmpty).toList();
+          if (cards.isNotEmpty) out.add(kit.cardsPoint(field.label, cards));
+        case CameraPoints.movements:
+          final cards = CameraPoints.movementCards(
+            values,
+            data.cameraMovements,
+          ).where((card) => !card.isEmpty).toList();
+          if (cards.isNotEmpty) {
+            out.add(kit.cardsPoint(field.label, cards, columns: true));
+          }
+        case 'references' || 'specsReference':
+          final stills = assets.stills;
+          if (stills != null && field.key == 'references') {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            out.add(stills);
+            out.add(pw.SizedBox(height: 10));
+          }
+        default:
+          add(kit.point(field, values[field.key]));
+      }
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Óptica: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _opticsContent(
+    VisualBibleData data,
+    String? contentJson,
+    BiblePdfKit kit,
+    _SectionAssets assets,
+  ) {
+    final config = OpticsPoints.config(data.opticsConfigJson);
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final out = <pw.Widget>[];
+    void add(pw.Widget? point) {
+      if (point != null) out.add(point);
+    }
+
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.optics,
+    )) {
+      switch (field.key) {
+        case 'narrative':
+          final intent = data.opticsNarrativeIntent?.trim() ?? '';
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+        case OpticsPoints.kit:
+          final items = OpticsPoints.kitItems(
+            values,
+            config,
+            legacyLensId: data.primaryLensId,
+          ).where((item) => !item.isEmpty).toList();
+          if (items.isNotEmpty) {
+            out.add(kit.equipmentPoint(field.label, items, feminine: false));
+          }
+        case OpticsPoints.philosophy:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              OpticsPoints.philosophyValue(
+                values,
+                config,
+                lensPhilosophy: data.lensPhilosophy,
+              ),
+            ),
+          );
+        case OpticsPoints.character:
+          final cards = OpticsPoints.characterCards(values, config)
+              .where((c) => c.body.trim().isNotEmpty || c.imageIds.isNotEmpty)
+              .toList();
+          if (cards.isNotEmpty) {
+            out.add(kit.cardsPoint(field.label, cards, columns: true));
+          }
+        case OpticsPoints.focals:
+          final table = OpticsPoints.focalsValue(
+            values,
+            config,
+            legacyFocals: data.primaryFocalLengths,
+          );
+          if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
+        case OpticsPoints.filtration:
+          final meters = OpticsPoints.filtrationMeters(
+            values,
+            config,
+            filtrationNotes: data.filtrationNotes,
+          ).where((m) => !m.isEmpty || m.note.trim().isNotEmpty).toList();
+          if (meters.isNotEmpty) out.add(kit.metersPoint(field.label, meters));
+        case OpticsPoints.maintenance:
+          final table = OpticsPoints.maintenanceValue(values, config);
+          if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
+        case 'references':
+          final stills = assets.stills;
+          if (stills != null) {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            out.add(stills);
+            out.add(pw.SizedBox(height: 10));
+          }
+        default:
+          add(kit.point(field, values[field.key]));
+      }
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Exposición: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _exposureContent(
+    VisualBibleData data,
+    String? contentJson,
+    List<ExposureBlockModel> exposureBlocks,
+    BiblePdfKit kit,
+    _SectionAssets assets,
+  ) {
+    final blob = ExposurePoints.blob(contentJson);
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final out = <pw.Widget>[];
+    void add(pw.Widget? point) {
+      if (point != null) out.add(point);
+    }
+
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.exposure,
+    )) {
+      switch (field.key) {
+        case 'narrative':
+          final intent = ExposurePoints.narrative(
+            blob,
+            data.exposureNarrativeIntent,
+          );
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+          final tags = ExposurePoints.intentTags(blob);
+          if (tags.isNotEmpty) out.add(kit.tagRow(tags));
+        case ExposurePoints.global:
+          final value = ExposurePoints.globalValue(
+            values,
+            blob,
+            defaultTStop: data.defaultTStop,
+            ndNotes: data.ndNotes,
+            highlightBehavior: data.highlightBehavior,
+            shadowBehavior: data.shadowBehavior,
+          );
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              // El ISO nativo de la cámara, si no se ha escrito otro.
+              value.copyWith(
+                rows: [
+                  for (final (label, text) in value.rows)
+                    (
+                      label,
+                      text.trim().isEmpty &&
+                              label == ExposurePoints.rowIso &&
+                              data.nativeIso != null
+                          ? '${data.nativeIso}'
+                          : text,
+                    ),
+                ],
+              ),
+            ),
+          );
+        case ExposurePoints.chain:
+          final cards = ExposurePoints.chainCards(values, blob)
+              .where((c) => c.body.trim().isNotEmpty || c.imageIds.isNotEmpty)
+              .toList();
+          if (cards.isNotEmpty) {
+            out.add(kit.cardsPoint(field.label, cards, columns: true));
+          }
+        case ExposurePoints.signal:
+          final meters = ExposurePoints.signalMeters(
+            values,
+            blob,
+          ).where((m) => m.value.trim().isNotEmpty).toList();
+          if (meters.isNotEmpty) out.add(kit.metersPoint(field.label, meters));
+        case ExposurePoints.blocks:
+          final table = ExposurePoints.blocksValue(values, [
+            for (final b in exposureBlocks)
+              (
+                name: b.blockName,
+                intent: b.narrativeIntent,
+                keyFill: b.keyFillRatio,
+                highlights: b.highlightStrategy,
+                shadows: b.shadowStrategy,
+              ),
+          ]);
+          if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
+        case ExposurePoints.byLocation:
+          final table = ExposurePoints.byLocationValue(values, blob);
+          if (!table.isEmpty) out.add(kit.tablePoint(field.label, table));
+        case 'references':
+          final stills = assets.stills;
+          if (stills != null) {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            out.add(stills);
+            out.add(pw.SizedBox(height: 10));
+          }
+        default:
+          add(kit.point(field, values[field.key]));
+      }
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Color e imagen: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _colorContent(
+    VisualBibleData data,
+    String? contentJson,
+    List<ColorBlockModel> colorBlocks,
+    BiblePdfKit kit,
+    _SectionAssets assets,
+  ) {
+    final blob = ColorPoints.blob(contentJson);
+    final names = ColorPoints.swatchNames(blob);
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final out = <pw.Widget>[];
+    void add(pw.Widget? point) {
+      if (point != null) out.add(point);
+    }
+
+    List<(String, String)> swatches(List<String> stored) => [
+      for (final c in ColorPoints.swatches(stored, names: names))
+        (c.hex, c.name),
+    ];
+
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.colorImage,
+    )) {
+      switch (field.key) {
+        case 'narrative':
+          final intent = data.colorNarrativeIntent?.trim() ?? '';
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+        case ColorPoints.lut:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              ColorPoints.lutValue(
+                values,
+                blob,
+                workingLut: data.workingLutName,
+                showLut: data.creativeLutName,
+              ),
+            ),
+          );
+        case ColorPoints.baseTemp:
+          final meters = ColorPoints.baseTempMeters(
+            values,
+            blob,
+            firstBlockKelvin: colorBlocks.firstOrNull?.colorTempKelvin,
+          ).where((m) => m.value.trim().isNotEmpty).toList();
+          if (meters.isNotEmpty) out.add(kit.metersPoint(field.label, meters));
+        case ColorPoints.blocks:
+          final filled = [
+            for (final block in colorBlocks)
+              if (block.blockName.trim().isNotEmpty ||
+                  block.dominantColors.isNotEmpty ||
+                  block.accentColors.isNotEmpty ||
+                  block.prohibitedColors.isNotEmpty ||
+                  (block.emotionalIntent ?? '').trim().isNotEmpty)
+                block,
+          ];
+          if (filled.isNotEmpty) {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+          }
+          for (final block in filled) {
+            final title = [
+              block.blockName.trim(),
+              if (block.colorTempKelvin != null) '${block.colorTempKelvin} K',
+            ].where((e) => e.isNotEmpty).join(' · ');
+            final intent = (block.emotionalIntent ?? '').trim();
+            if (title.isNotEmpty || intent.isNotEmpty) {
+              out.add(kit.textPoint(title, intent));
+            }
+            for (final (name, colors) in [
+              ('Dominantes', swatches(block.dominantColors)),
+              ('Acentos', swatches(block.accentColors)),
+              ('Se evitan', swatches(block.prohibitedColors)),
+            ]) {
+              if (colors.isNotEmpty) out.add(kit.swatchRow(name, colors));
+            }
+          }
+        case 'references':
+          final stills = assets.stills;
+          if (stills != null) {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            out.add(stills);
+            out.add(pw.SizedBox(height: 10));
+          }
+        default:
+          add(kit.point(field, values[field.key]));
+      }
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Textura: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _textureContent(
+    VisualBibleData data,
+    String? contentJson,
+    BiblePdfKit kit,
+    _SectionAssets assets,
+  ) {
+    final blob = TexturePoints.blob(contentJson);
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final out = <pw.Widget>[];
+    void add(pw.Widget? point) {
+      if (point != null) out.add(point);
+    }
+
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.texture,
+    )) {
+      switch (field.key) {
+        case 'narrative':
+          final intent = data.textureNarrativeIntent?.trim() ?? '';
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+        case TexturePoints.comparison:
+          add(
+            kit.point(
+              BibleSectionField(
+                key: field.key,
+                label: field.label,
+                type: BibleSectionFieldType.gallery,
+              ),
+              values[field.key],
+            ),
+          );
+        case TexturePoints.grain:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              TexturePoints.grainValue(
+                values,
+                blob,
+                grainLevel: data.grainLevel,
+              ),
+            ),
+          );
+        case TexturePoints.diffusion:
+          final meters = TexturePoints.diffusionMeters(
+            values,
+            blob,
+            diffusionNotes: data.diffusionNotes,
+          ).where((m) => m.label.trim().isNotEmpty).toList();
+          if (meters.isNotEmpty) out.add(kit.metersPoint(field.label, meters));
+        case TexturePoints.noise:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              TexturePoints.noiseValue(
+                values,
+                blob,
+                highlightBehavior: data.highlightBehavior,
+                shadowBehavior: data.shadowBehavior,
+              ),
+            ),
+          );
+        case 'references':
+          final stills = assets.stills;
+          if (stills != null) {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            out.add(stills);
+            out.add(pw.SizedBox(height: 10));
+          }
+        default:
+          add(kit.point(field, values[field.key]));
+      }
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Workflow: los puntos de la sección en el orden del usuario.
+  static List<pw.Widget> _workflowContent(
+    VisualBibleData data,
+    String? contentJson,
+    BiblePdfKit kit,
+    _SectionAssets assets,
+  ) {
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final out = <pw.Widget>[];
+    void add(pw.Widget? point) {
+      if (point != null) out.add(point);
+    }
+
+    for (final field in BibleSectionFieldsConfig.parse(
+      contentJson,
+      BibleSectionId.workflow,
+    )) {
+      switch (field.key) {
+        case 'narrative':
+          final intent = values['narrative']?.trim() ?? '';
+          if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
+        case WorkflowPoints.steps:
+          final table = WorkflowPoints.stepsValue(values);
+          // Una tabla con solo los nombres de los pasos está sin rellenar.
+          if (WorkflowPoints.stepsFilled(table)) {
+            out.add(kit.tablePoint(field.label, table));
+          }
+        case WorkflowPoints.team:
+          add(kit.textSpecsPoint(field.label, WorkflowPoints.teamValue(values)));
+        case WorkflowPoints.delivery:
+          add(
+            kit.textSpecsPoint(
+              field.label,
+              WorkflowPoints.withFacts(
+                WorkflowPoints.deliveryValue(
+                  values,
+                  deliveryColorSpace: data.deliveryColorSpace,
+                  resolutionNotes: data.resolutionNotes,
+                  workflowPipeline: data.workflowPipeline,
+                ),
+                WorkflowPoints.fromCamera(
+                  codec: data.codec,
+                  frameRate: data.frameRateNotes,
+                ),
+              ),
+            ),
+          );
+        case 'references':
+          final stills = assets.stills;
+          if (stills != null) {
+            out.add(kit.label(field.label));
+            out.add(pw.SizedBox(height: 6));
+            out.add(stills);
+            out.add(pw.SizedBox(height: 10));
+          }
+        default:
+          add(kit.point(field, values[field.key]));
+      }
+      out.addAll(
+        kit.extras(
+          values,
+          field.key,
+          legacy: assets.pointImages[field.key] ?? const [],
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Imágenes del moodboard que usa una ficha de Iluminación.
+  static Set<int> _lightingCardImageIds(NarrativeCardModel card) {
+    final page = LightingCardPage.of(
+      kind: card.kind,
+      body: card.body,
+      meta: card.meta,
+    );
+    return {
+      if (card.coverMoodboardImageId != null) card.coverMoodboardImageId!,
+      for (final value in page.values.values)
+        ...BibleSectionExportReader.imageIdsInValue(value),
+    };
+  }
+
+  /// Gelatinas de corrección del motor de luz, para la receta de color.
+  static List<CorrectionGel> _correctionGels() => [
+    for (final m in LightModifier.ofKind(ModifierKind.correction))
+      if (m.miredShift != 0)
+        CorrectionGel(m.name, m.miredShift, m.transmission),
+  ];
+
+  /// Iluminación: visión general, métricas del proyecto y, después, cada
+  /// ficha (ideas de luz, referencias de cine y luz por localización) con
+  /// sus puntos en su orden.
+  static List<pw.Widget> _lightingContent(
+    VisualBibleData data,
+    String? contentJson,
+    List<LightingSetupModel> lightingSetups,
+    List<NarrativeCardModel> cards,
+    BiblePdfKit kit,
+    ({pw.Font regular, pw.Font bold}) fonts,
+    Map<int, Uint8List> sketchPngs,
+  ) {
+    final values = BibleSectionFieldsConfig.parseValues(contentJson);
+    final lighting = BibleLightingData.decode(values['lightingData']);
+    final gels = _correctionGels();
+    final out = <pw.Widget>[];
+
+    final story = (data.lightingPhilosophy ?? '').trim();
+    if (story.isNotEmpty) out.add(kit.textPoint('Tratamiento de luz', story));
+    final global = lighting.containsKey('metrics')
+        ? LightingMetrics.fromJson(lighting['metrics'])
+        : LightingMetrics.fromLegacy(lighting);
+    final globalPoint = kit.lightMetricsPoint(
+      'Luz: color y contraste',
+      global,
+      gels: gels,
+    );
+    if (globalPoint != null) out.add(globalPoint);
+    final feel = (lighting['temperatureNote'] ?? '').toString().trim();
+    if (feel.isNotEmpty) out.add(kit.textPoint('Cómo se siente', feel));
+    final sources = BibleLightingData.fixtureTypeLabels(lighting);
+    if (sources.isNotEmpty) {
+      out.add(kit.label('Fuentes principales'));
+      out.add(pw.SizedBox(height: 6));
+      out.add(kit.tagRow(sources));
+    }
+
+    for (final (kind, heading) in const [
+      (NarrativeCardKind.style, 'Ideas de luz'),
+      (NarrativeCardKind.filmRef, 'Referencias de cine'),
+      (NarrativeCardKind.locationLight, 'Luz por localización'),
+    ]) {
+      final group = <List<pw.Widget>>[];
+      for (final card in cards.where((c) => c.kind == kind)) {
+        final page = LightingCardPage.of(
+          kind: card.kind,
+          body: card.body,
+          meta: card.meta,
+        );
+        final points = <pw.Widget>[];
+        for (final field in page.fields) {
+          final raw = page.values[field.key];
+          final point = field.widget == 'light_metrics'
+              ? kit.lightMetricsPoint(
+                  field.label,
+                  LightingMetrics.fromJson(raw),
+                  gels: gels,
+                )
+              : kit.point(field, raw);
+          if (point != null) points.add(point);
+          points.addAll(kit.extras(page.values, field.key));
+        }
+        // Una ficha sin nada escrito no ocupa sitio en el documento.
+        if (points.isEmpty) continue;
+        group.add([
+          pw.Container(
+            margin: const pw.EdgeInsets.only(top: 6, bottom: 8),
+            padding: const pw.EdgeInsets.only(bottom: 4),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                bottom: pw.BorderSide(color: BiblePdfTokens.rule, width: 0.8),
+              ),
+            ),
+            child: pw.Text(
+              card.title,
+              style: pw.TextStyle(
+                font: fonts.bold,
+                fontSize: 14,
+                color: BiblePdfTokens.ink,
+              ),
+            ),
+          ),
+          ...points,
+        ]);
+      }
+      if (group.isEmpty) continue;
+      out.add(pw.SizedBox(height: 10));
+      out.add(
+        pw.Text(
+          heading.toUpperCase(),
+          style: pw.TextStyle(
+            font: fonts.bold,
+            fontSize: 10,
+            letterSpacing: 1.2,
+            color: BiblePdfTokens.accent,
+          ),
+        ),
+      );
+      for (final cardWidgets in group) {
+        out.addAll(cardWidgets);
+      }
+    }
+
+    // Puntos que el usuario añadió a la pantalla.
+    for (final point in BibleSectionExportReader.userPoints(
+      contentJson,
+      BibleSectionId.lighting,
+    )) {
+      final widget = kit.point(point.field, point.value);
+      if (widget != null) out.add(widget);
+      out.addAll(kit.extras(values, point.field.key));
+    }
+
+    if (lightingSetups.isNotEmpty) {
+      out.add(pw.SizedBox(height: 10));
+      out.add(kit.label('Esquemas de luz'));
+      out.add(pw.SizedBox(height: 4));
+      for (final s in lightingSetups) {
+        out.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 6),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Text(
+                    [
+                      s.setupName,
+                      if ((s.narrativeNote ?? '').trim().isNotEmpty)
+                        s.narrativeNote!.trim(),
+                    ].join(': '),
+                    style: pw.TextStyle(font: fonts.regular, fontSize: 10),
+                  ),
+                ),
+                if (sketchPngs[s.id] != null) ...[
+                  pw.SizedBox(width: 8),
+                  pw.Container(
+                    width: 150,
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(
+                        color: PdfColors.grey400,
+                        width: 0.5,
+                      ),
+                    ),
+                    child: pw.Image(
+                      pw.MemoryImage(sketchPngs[s.id]!),
+                      fit: pw.BoxFit.contain,
+                    ),
+                  ),
+                ] else if (s.diagramJson != '[]') ...[
+                  pw.SizedBox(width: 8),
+                  _lightingDiagram(s.diagramJson),
+                ],
+              ],
+            ),
+          ),
+        );
+      }
+    }
+    return out;
+  }
+
   /// Concepto: los puntos de la sección en el orden del usuario.
   static List<pw.Widget> _conceptContent(
     VisualBibleData data,
@@ -1747,101 +2364,79 @@ class VisualBiblePdfService {
                 : data.visualConcept,
           );
           if (intent.isNotEmpty) out.add(kit.textPoint(field.label, intent));
-        case 'colorPalette':
-          // Paleta propia de Concepto; si no se ha definido, la de los
-          // bloques de Color e imagen.
-          final own = [
-            if (blob['masterPalette'] is List)
-              for (final e in blob['masterPalette'] as List)
-                if (e is Map && text(e['hex']).isNotEmpty)
-                  (text(e['hex']), text(e['name'])),
-          ];
-          final colors = own.isNotEmpty
-              ? own
-              : [
-                  for (final block in colorBlocks)
-                    for (final hex in block.dominantColors.take(3)) (hex, ''),
-                ];
-          if (colors.isNotEmpty) out.add(kit.swatchRow(field.label, colors));
-        case 'colorSymbolism':
-          final symbols = [
-            if (blob['colorSymbols'] is List)
-              for (final e in blob['colorSymbols'] as List)
-                if (e is Map)
-                  (
-                    hex: text(e['hex']),
-                    title: text(e['poeticName']),
-                    text: text(e['narrativeMeaning']),
-                  ),
-          ].where((s) => s.title.isNotEmpty || s.text.isNotEmpty).toList();
-          if (symbols.isNotEmpty) {
-            out.add(kit.swatchList(field.label, symbols));
-          }
-        case 'lightPhilosophy':
-          final philosophy = text(data.lightingPhilosophy);
-          final metrics = {
-            if (data.contrastStyle?.trim().isNotEmpty == true)
-              'contrast': data.contrastStyle!.trim(),
-            ...strings(blob['lightingMetrics']),
-          };
-          final rows = [
-            for (final (key, label) in kConceptLightMetrics)
-              if (metrics[key]?.isNotEmpty == true) (label, metrics[key]!),
-          ];
-          if (philosophy.isNotEmpty) {
-            out.add(kit.textPoint(field.label, philosophy));
-          }
-          if (rows.isNotEmpty) {
-            out.add(
-              kit.specsPoint(philosophy.isEmpty ? field.label : '', rows),
-            );
-          }
-        case 'shadowTreatment':
-          final shadows = text(blob['shadowTreatment']);
+          final tags = ConceptPoints.atmosphereTags(blob);
+          if (tags.isNotEmpty) out.add(kit.tagRow(tags));
+        case ConceptPoints.palette:
+          final point = kit.point(
+            BibleSectionField(
+              key: field.key,
+              label: field.label,
+              type: BibleSectionFieldType.palette,
+              widget: 'palette_master',
+            ),
+            ConceptPoints.paletteValue(values, blob).encode(),
+          );
+          if (point != null) out.add(point);
+        case ConceptPoints.symbolism:
+          final point = kit.point(
+            BibleSectionField(
+              key: field.key,
+              label: field.label,
+              type: BibleSectionFieldType.palette,
+              widget: 'palette_symbolism',
+            ),
+            ConceptPoints.symbolismValue(values, blob).encode(),
+          );
+          if (point != null) out.add(point);
+        case ConceptPoints.light:
+          final point = kit.textSpecsPoint(
+            field.label,
+            ConceptPoints.lightValue(
+              values,
+              blob,
+              philosophy: data.lightingPhilosophy,
+              contrast: data.contrastStyle,
+            ),
+          );
+          if (point != null) out.add(point);
+        case ConceptPoints.shadows:
+          final shadows = ConceptPoints.shadowsText(values, blob);
           if (shadows.isNotEmpty) out.add(kit.textPoint(field.label, shadows));
-        case 'composition':
-          final composition = text(blob['composition']);
-          final metrics = strings(blob['compositionMetrics']);
-          final rows = [
-            for (final (key, label) in kConceptCompositionMetrics)
-              if (metrics[key]?.isNotEmpty == true) (label, metrics[key]!),
-          ];
-          if (composition.isNotEmpty) {
-            out.add(kit.textPoint(field.label, composition));
-          }
-          if (rows.isNotEmpty) {
-            out.add(
-              kit.specsPoint(composition.isEmpty ? field.label : '', rows),
-            );
-          }
-        case 'actNotes':
-          final titles = {...kConceptActTitles, ...strings(blob['actTitles'])};
-          const numerals = ['I', 'II', 'III'];
-          final acts = [
-            for (var n = 1; n <= 3; n++)
-              if (text(blob['act${n}Intent']).isNotEmpty)
-                (
-                  kicker: 'Acto ${numerals[n - 1]}',
-                  title: titles['$n'] ?? '',
-                  text: text(blob['act${n}Intent']),
-                ),
-          ];
-          if (acts.isNotEmpty) out.add(kit.columnsPoint(field.label, acts));
-        case 'actComposition':
-          final composition = strings(blob['actComposition']);
-          const numerals = ['I', 'II', 'III'];
-          final rows = [
-            for (var n = 1; n <= 3; n++)
-              if (composition['$n']?.isNotEmpty == true)
-                ('Acto ${numerals[n - 1]}', composition['$n']!),
-          ];
-          if (rows.isNotEmpty) out.add(kit.specsPoint(field.label, rows));
-        case 'keyFrame':
-          final tech = text(blob['keyFrameTech']);
-          if (tech.isNotEmpty) {
-            final title = text(blob['keyFrameTitle']);
-            out.add(kit.textPoint(title.isEmpty ? field.label : title, tech));
-          }
+        case ConceptPoints.composition:
+          final point = kit.textSpecsPoint(
+            field.label,
+            ConceptPoints.compositionValue(values, blob),
+          );
+          if (point != null) out.add(point);
+        case ConceptPoints.acts:
+          final acts = kit.actsPointOf(
+            field.label,
+            ConceptPoints.actsValue(values, blob),
+          );
+          if (acts != null) out.add(acts);
+        case ConceptPoints.actComposition:
+          final point = kit.textSpecsPoint(
+            field.label,
+            values.containsKey(ConceptPoints.actComposition)
+                ? BibleTextSpecsValue.decode(
+                    values[ConceptPoints.actComposition],
+                  )
+                : BibleTextSpecsValue(
+                    rows: ConceptPoints.actCompositionRows(blob),
+                  ),
+          );
+          if (point != null) out.add(point);
+        case ConceptPoints.keyFrame:
+          final (title, tech) = ConceptPoints.keyFrameOf(blob);
+          final point = kit.textSpecsPoint(
+            field.label,
+            values.containsKey(ConceptPoints.keyFrame)
+                ? BibleTextSpecsValue.decode(values[ConceptPoints.keyFrame])
+                : BibleTextSpecsValue(
+                    text: [title, tech].where((e) => e.isNotEmpty).join('\n'),
+                  ),
+          );
+          if (point != null) out.add(point);
         case 'references':
           final references = assets.references;
           if (references.isNotEmpty || stills != null) {
@@ -1932,11 +2527,13 @@ class VisualBiblePdfService {
   /// paletas y tiras de imágenes) de todas las pantallas.
   static Future<Map<int, pw.MemoryImage>> _loadUserPointImages(
     Map<String, String?> sectionContentJsonById,
-    List<MoodboardImageModel> moodboard,
-  ) async {
+    List<MoodboardImageModel> moodboard, {
+    Set<int> extra = const {},
+  }) async {
     final ids = <int>{
       for (final entry in sectionContentJsonById.entries)
         ...BibleSectionExportReader.userPointImageIds(entry.value, entry.key),
+      ...extra,
     };
     if (ids.isEmpty) return const {};
     final byId = {for (final image in moodboard) image.id: image};

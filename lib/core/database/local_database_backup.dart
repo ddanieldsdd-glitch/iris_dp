@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 
 import '../storage/app_storage_config.dart';
@@ -13,9 +14,15 @@ abstract final class LocalDatabaseBackup {
 
   /// Crea `<base>.<label>-<fecha>` junto a la base de datos y devuelve su
   /// ruta. Devuelve `null` si la base no está en disco (p. ej. en tests).
-  static Future<String?> create(AppDatabase db, {required String label}) async {
+  static Future<String?> create(
+    AppDatabase db, {
+    required String label,
+    @visibleForTesting String? databaseFileOverride,
+  }) async {
     final String databaseFile;
-    if (AppStorageConfig.isConfigured) {
+    if (databaseFileOverride != null) {
+      databaseFile = databaseFileOverride;
+    } else if (AppStorageConfig.isConfigured) {
       databaseFile = AppStorageConfig.current!.databaseFile;
     } else {
       try {
@@ -33,7 +40,12 @@ abstract final class LocalDatabaseBackup {
     final stamp =
         '${now.year}-${two(now.month)}-${two(now.day)}-'
         '${two(now.hour)}${two(now.minute)}${two(now.second)}';
-    final target = '$databaseFile.$label-$stamp';
+    // Dos descargas en el mismo segundo (dos proyectos en una pasada)
+    // generaban el mismo nombre y la segunda fallaba: se numera.
+    var target = '$databaseFile.$label-$stamp';
+    for (var n = 2; File(target).existsSync(); n++) {
+      target = '$databaseFile.$label-$stamp-$n';
+    }
     // VACUUM INTO escribe una copia coherente aunque la base esté en uso.
     await db.customStatement('VACUUM INTO ?', [target]);
     _prune(databaseFile, label);

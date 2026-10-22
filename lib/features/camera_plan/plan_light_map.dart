@@ -84,11 +84,11 @@ class PlanLightMap {
   });
 
   /// Stops por debajo de [keyLux] que todavía se ven.
-  static const double rangeStops = 10;
+  static const double rangeStops = 8;
 
   /// Lo más que tapa la luz al lienzo: por encima, las paredes y los
   /// rótulos (claros) dejarían de leerse.
-  static const double maxAlpha = 0.5;
+  static const double maxAlpha = 0.55;
 
   /// Stops que puede bajar la luz bajo techo, en «Ver todo», respecto a lo
   /// más iluminado de la planta. Sin tope, una lámpara en un cuarto
@@ -101,7 +101,8 @@ class PlanLightMap {
     if (lux <= 0 || keyLux <= 0) return 0;
     final stops = math.log(lux / keyLux) / math.ln2;
     final v = ((stops + rangeStops) / rangeStops).clamp(0.0, 1.0);
-    return math.pow(v, 1.6).toDouble();
+    // Curva contrastada: dos stops de caída se ven.
+    return math.pow(v, 2.0).toDouble();
   }
 
   // Exposición de la cámara.
@@ -152,25 +153,6 @@ class PlanLightMap {
   /// Lo que se da por nada al pintar a la exposición de la cámara.
   static double cutoffForExposure(double keyLux) =>
       keyLux / math.pow(2, underStops + 1);
-
-  /// Color de una cantidad de luz: su tinte con la opacidad de su brillo.
-  /// Con [exposureKeyLux], a la exposición de la cámara; sin él, contra
-  /// [autoKeyLux] («Ver todo»).
-  static Color colorFor(
-    double lux,
-    double cct, {
-    double? exposureKeyLux,
-    double autoKeyLux = 1,
-    double strength = 1,
-  }) => Color(
-    _argb(
-      lux,
-      cct,
-      exposureKeyLux ?? autoKeyLux,
-      exposureKeyLux != null,
-      strength,
-    ),
-  );
 
   double luxAt(int column, int row) => lux[row * (columns + 1) + column];
 
@@ -286,6 +268,17 @@ class PlanLightMap {
         (tint.b * 255).round();
   }
 
+  /// Color con el que se pinta una cantidad de luz de una temperatura,
+  /// medida contra [key]. Con [exposed], [key] son los lux bien expuestos
+  /// de la cámara y lo que sobra se blanquea; sin él, «Ver todo».
+  static Color colorFor(
+    double lux,
+    double cct,
+    double key, {
+    bool exposed = false,
+    double strength = 1,
+  }) => Color(_argb(lux, cct, key, exposed, strength));
+
   /// Color con el que se pinta lo que queda fuera del mapa, al aire libre.
   /// Con [exposureKeyLux], a la exposición de la cámara.
   Color openColor([double? exposureKeyLux]) => Color(
@@ -385,7 +378,8 @@ class PlanLightMapCache extends ChangeNotifier {
   final int coarseBudget;
   final int fineBudget;
 
-  PlanLightMapCache({this.coarseBudget = 60000, this.fineBudget = 900000});
+  PlanLightMapCache({this.coarseBudget = 60000, int? fineBudget})
+    : fineBudget = fineBudget ?? coarseBudget;
 
   int? _key;
   PlanLightMap? _map;
@@ -420,6 +414,8 @@ class PlanLightMapCache extends ChangeNotifier {
     _key = key;
     _map = quick;
     _refine?.cancel();
+    // Solo se afina si se ha pedido más detalle del que ya tiene.
+    if (fineBudget <= coarseBudget) return quick;
     _refine = Timer(const Duration(milliseconds: 280), () {
       if (_disposed || _key != key) return;
       _map = PlanLightMap.compute(
@@ -433,9 +429,23 @@ class PlanLightMapCache extends ChangeNotifier {
     return quick;
   }
 
+  int? _pictureKey;
+  ui.Picture? _picture;
+
+  /// La luz ya dibujada. Mientras no cambie nada que afecte a la luz se
+  /// reutiliza: mover la vista, hacer zoom o seleccionar no la recalcula.
+  ui.Picture picture(int key, ui.Picture Function() record) {
+    final current = _picture;
+    if (current != null && _pictureKey == key) return current;
+    current?.dispose();
+    _pictureKey = key;
+    return _picture = record();
+  }
+
   @override
   void dispose() {
     _disposed = true;
+    _picture?.dispose();
     _refine?.cancel();
     super.dispose();
   }

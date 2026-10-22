@@ -52,7 +52,7 @@ class LightingCardTagFields extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'TAGS DEL CONTENEDOR',
+          'ETIQUETAS DE LA FICHA',
           style: AppTypography.mono(palette).copyWith(
             fontSize: 11,
             letterSpacing: 1.1,

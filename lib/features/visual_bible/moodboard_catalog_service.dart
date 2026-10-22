@@ -20,7 +20,7 @@ enum MoodboardCatalogKey {
   colorMood,
 }
 
-/// Opciones custom del catálogo (SharedPreferences por proyecto).
+/// Opciones propias del catálogo, por proyecto (`Projects.moodboardCatalogJson`).
 class MoodboardProjectCatalog {
   final Map<MoodboardCatalogKey, List<String>> customByKey;
 
@@ -55,9 +55,7 @@ abstract final class MoodboardCatalogService {
         MoodboardCatalogKey.colorMood => kMoodboardColorMoods,
       };
 
-  static Future<MoodboardProjectCatalog> loadForProject(int projectId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_prefsKey(projectId));
+  static MoodboardProjectCatalog _decode(String? raw) {
     if (raw == null || raw.isEmpty) return const MoodboardProjectCatalog();
     try {
       final json = jsonDecode(raw) as Map<String, dynamic>;
@@ -74,7 +72,34 @@ abstract final class MoodboardCatalogService {
     }
   }
 
+  /// El catálogo propio del proyecto. Vive en la base (y viaja en la
+  /// sincronización); antes estaba en las preferencias del equipo y se copia
+  /// la primera vez que se lee.
+  static Future<MoodboardProjectCatalog> loadForProject(
+    AppDatabase db,
+    int projectId,
+  ) async {
+    final project = await db.getProject(projectId);
+    final stored = project?.moodboardCatalogJson;
+    if (stored != null) return _decode(stored);
+
+    final prefs = await SharedPreferences.getInstance();
+    final legacy = prefs.getString(_prefsKey(projectId));
+    if (legacy == null || legacy.isEmpty || project == null) {
+      return const MoodboardProjectCatalog();
+    }
+    await _store(db, projectId, legacy);
+    await prefs.remove(_prefsKey(projectId));
+    return _decode(legacy);
+  }
+
+  static Future<void> _store(AppDatabase db, int projectId, String? json) =>
+      (db.update(db.projects)..where((p) => p.id.equals(projectId))).write(
+        ProjectsCompanion(moodboardCatalogJson: Value(json)),
+      );
+
   static Future<void> addCustomOption({
+    required AppDatabase db,
     required int projectId,
     required MoodboardCatalogKey key,
     required String value,
@@ -82,7 +107,7 @@ abstract final class MoodboardCatalogService {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return;
 
-    final catalog = await loadForProject(projectId);
+    final catalog = await loadForProject(db, projectId);
     final merged = options(key, catalog);
     if (merged.any((o) => o.toLowerCase() == trimmed.toLowerCase())) return;
 
@@ -91,7 +116,6 @@ abstract final class MoodboardCatalogService {
     );
     nextCustom[key] = [...catalog.customFor(key), trimmed];
 
-    final prefs = await SharedPreferences.getInstance();
     final payload = <String, dynamic>{};
     for (final entry in _keyNames.entries) {
       final list = nextCustom[entry.key];
@@ -99,11 +123,7 @@ abstract final class MoodboardCatalogService {
         payload[entry.value] = list;
       }
     }
-    if (payload.isEmpty) {
-      await prefs.remove(_prefsKey(projectId));
-    } else {
-      await prefs.setString(_prefsKey(projectId), jsonEncode(payload));
-    }
+    await _store(db, projectId, payload.isEmpty ? null : jsonEncode(payload));
   }
 
   /// Defaults + custom, sin duplicados (case-insensitive).

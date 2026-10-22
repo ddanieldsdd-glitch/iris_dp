@@ -15,6 +15,7 @@ import 'light_beam.dart';
 import 'light_symbols.dart';
 import 'light/modifiers.dart';
 import 'light/surfaces.dart';
+import 'plan_images.dart';
 import 'plan_gear_list.dart';
 import 'plan_light_map.dart';
 import 'plan_marks.dart';
@@ -65,6 +66,9 @@ class CameraPlanPainter extends CustomPainter {
 
   /// Otros elementos seleccionados a la vez (selección múltiple).
   final Set<PlanElement> alsoSelected;
+
+  /// Marco de selección que se está arrastrando.
+  final Rect? marquee;
 
   /// Tramo que se está dibujando.
   final ({Offset from, Offset to, String kind})? segmentPreview;
@@ -121,6 +125,10 @@ class CameraPlanPainter extends CustomPainter {
   /// en vez de con un haz por fuente. Sin él (miniaturas), los haces.
   final PlanLightMapCache? lightMap;
 
+  /// Imágenes puestas en la planta (cenitales, storyboard, referencias),
+  /// debajo o encima de los elementos.
+  final List<PlanImageDraw> images;
+
   CameraPlanPainter({
     required this.elements,
     required this.palette,
@@ -129,6 +137,7 @@ class CameraPlanPainter extends CustomPainter {
     this.showGrid = true,
     this.zones = const [],
     this.alsoSelected = const {},
+    this.marquee,
     this.segmentPreview,
     this.measure,
     this.zoneHandles,
@@ -150,6 +159,7 @@ class CameraPlanPainter extends CustomPainter {
     this.backgroundRect,
     this.backgroundOpacity = 0.85,
     this.lightMap,
+    this.images = const [],
   }) : super(repaint: lightMap);
 
   @override
@@ -161,6 +171,9 @@ class CameraPlanPainter extends CustomPainter {
     canvas.scale(scale);
 
     _drawBackgroundImage(canvas);
+    for (final image in images) {
+      if (!image.above) _drawPlanImage(canvas, image);
+    }
     if (showGrid) _drawGrid(canvas, size);
     for (final zone in zones) {
       _drawZone(canvas, zone);
@@ -208,24 +221,7 @@ class CameraPlanPainter extends CustomPainter {
       size.height / scale,
     );
     final mapped = !exposureMap && lightMap != null;
-    if (mapped) {
-      // La luz, calculada punto a punto: todas las fuentes sumadas y lo
-      // que las tapa.
-      final key = _exposedKeyLux;
-      lightMap!
-          .resolve(
-            scene,
-            _lightKey(scene),
-            _lightRect(scene),
-            exposureKeyLux: key,
-          )
-          .paint(canvas, view, exposureKeyLux: key);
-      // La mancha de sol de cada ventana, encima y con su filo: el mapa
-      // la tiene, pero con el borde blando de su rejilla.
-      if (ambient?.hasSun ?? false) {
-        PlanSunPainter.paintPatches(canvas, scene, ambient!, strength: 0.45);
-      }
-    }
+    if (mapped) _drawLightLayer(canvas, scene, view, dimmed);
     if (!exposureMap && !mapped && (ambient?.hasSun ?? false)) {
       PlanSunPainter.paint(
         canvas,
@@ -274,15 +270,25 @@ class CameraPlanPainter extends CustomPainter {
       );
     }
 
+    for (final image in images) {
+      if (image.above) _drawPlanImage(canvas, image);
+    }
+    for (final image in images) {
+      if (image.linkTo != null) _drawImageLink(canvas, image);
+    }
+    for (final image in images) {
+      if (image.selected) _drawImageSelection(canvas, image);
+    }
+
     _drawOverlays(canvas);
     canvas.restore();
 
     if (metersPerUnit != null) _drawScaleBar(canvas, size);
     if (exposureMap && exposure != null) _drawExposureLegend(canvas, size);
+    if (ambient?.hasSun ?? false) _drawSunCompass(canvas, size);
     if (!exposureMap && lightView == LightView.camera && lightMap != null) {
       _drawExposureReference(canvas, size);
     }
-    if (ambient?.hasSun ?? false) _drawSunCompass(canvas, size);
     if (gearLabels) _drawGearLegend(canvas, size);
   }
 
@@ -528,6 +534,20 @@ class CameraPlanPainter extends CustomPainter {
 
   /// Tramo en curso, medida y asas de la zona.
   void _drawOverlays(Canvas canvas) {
+    final area = marquee;
+    if (area != null) {
+      canvas.drawRect(
+        area,
+        Paint()..color = _CanvasColors.accent.withValues(alpha: 0.10),
+      );
+      canvas.drawRect(
+        area,
+        Paint()
+          ..color = _CanvasColors.accent
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1 / scale,
+      );
+    }
     final preview = segmentPreview;
     if (preview != null) {
       final ghost = PlanSegment.create(
@@ -643,6 +663,138 @@ class CameraPlanPainter extends CustomPainter {
   }
 
   /// Pared, calle o relieve dibujados punto a punto.
+  /// La luz de la planta. Cada fuente pinta su mancha exacta (su caída
+  /// real, recortada por lo que la tapa y con su penumbra), y todas se
+  /// mezclan en una capa sin pisarse: donde ya hay mucha luz, otra fuente
+  /// añade poco. El brillo se mide contra lo más iluminado de la planta, y
+  /// bajo techo contra lo más iluminado de dentro.
+  void _drawLightLayer(
+    Canvas canvas,
+    LightScene scene,
+    Rect view,
+    Set<PlanElement> dimmed,
+  ) {
+    final lightKey = _lightKey(scene);
+    final picture = lightMap!.picture(
+      Object.hash(lightKey, dimmed.length, inheritedOpacity, _exposedKeyLux),
+      () {
+        final recorder = ui.PictureRecorder();
+        _paintLight(Canvas(recorder), scene, lightKey, dimmed);
+        return recorder.endRecording();
+      },
+    );
+    canvas.saveLayer(view, Paint());
+    canvas.drawPicture(picture);
+    canvas.restore();
+  }
+
+  void _paintLight(
+    Canvas canvas,
+    LightScene scene,
+    int lightKey,
+    Set<PlanElement> dimmed,
+  ) {
+    final map = lightMap!.resolve(scene, lightKey, _lightRect(scene));
+    final env = ambient;
+    // Se dibuja para toda la planta, no solo para lo que se ve ahora.
+    const view = Rect.fromLTRB(-2e5, -2e5, 2e5, 2e5);
+
+    // A la exposición de la cámara: una sola referencia para todo, dentro
+    // y fuera. Una práctica y un 5K, o una sala y la calle, conservan los
+    // stops que los separan.
+    final exposed = _exposedKeyLux;
+    if (exposed != null) {
+      for (final light in scene.lights) {
+        final peak = PlanLightMap.exposedBrightness(
+          light.source.illuminance(math.max(1.0, light.source.sizeM)),
+          exposed,
+        );
+        if (peak < 0.03) continue;
+        _drawBeam(
+          canvas,
+          scene,
+          light,
+          strength: dimmed.contains(light.fixture?.element)
+              ? inheritedOpacity
+              : 1,
+          keyLux: exposed,
+          exposed: true,
+        );
+      }
+      if (env != null && env.day) {
+        PlanSunPainter.paintKeyed(
+          canvas,
+          scene,
+          env,
+          view,
+          key: exposed,
+          indoorKey: exposed,
+          exposed: true,
+        );
+      }
+      return;
+    }
+
+    final key = map.keyLux;
+    final indoorKey = map.indoorKeyLux;
+
+    void beams(double against) {
+      for (final light in scene.lights) {
+        // Lo que ni de cerca llega a verse no se pinta.
+        final peak = PlanLightMap.brightnessFor(
+          light.source.illuminance(math.max(1.0, light.source.sizeM)),
+          against,
+        );
+        if (peak < 0.03) continue;
+        _drawBeam(
+          canvas,
+          scene,
+          light,
+          strength: dimmed.contains(light.fixture?.element)
+              ? inheritedOpacity
+              : 1,
+          keyLux: against,
+        );
+      }
+    }
+
+    final roofed = [
+      for (final room in scene.rooms)
+        if (room.roofed) room,
+    ];
+    if (roofed.isEmpty || indoorKey > key * 0.85) {
+      beams(key);
+    } else {
+      // Fuera, contra lo más iluminado de la planta; bajo techo, contra lo
+      // más iluminado de dentro.
+      canvas.save();
+      canvas.clipPath(PlanSunPainter.outdoors(scene, view));
+      beams(key);
+      canvas.restore();
+      final inside = Path();
+      for (final room in roofed) {
+        inside.addPath(room.room.path, Offset.zero);
+      }
+      canvas.save();
+      canvas.clipPath(inside);
+      beams(indoorKey);
+      canvas.restore();
+    }
+    // El sol y el cielo, al final y quedándose con lo más claro: donde da
+    // el sol, el rebote de una pared ya no añade nada que se vea; a la
+    // sombra, sí.
+    if (env != null && env.day) {
+      PlanSunPainter.paintKeyed(
+        canvas,
+        scene,
+        env,
+        view,
+        key: key,
+        indoorKey: indoorKey,
+      );
+    }
+  }
+
   /// Zona que cubre el mapa de luz: lo que hay en la planta, con margen
   /// para que se vea hasta dónde llega cada luz.
   Rect _lightRect(LightScene scene) {
@@ -784,6 +936,91 @@ class CameraPlanPainter extends CustomPainter {
       Offset.zero & size,
       Paint()..color = _CanvasColors.background,
     );
+  }
+
+  void _drawPlanImage(Canvas canvas, PlanImageDraw draw) {
+    final rect = draw.rect;
+    canvas.save();
+    if (draw.rotation != 0) {
+      canvas.translate(rect.center.dx, rect.center.dy);
+      canvas.rotate(draw.rotation);
+      canvas.translate(-rect.center.dx, -rect.center.dy);
+    }
+    final image = draw.image;
+    if (image == null) {
+      // Aún cargando (o sin archivo en este equipo): su hueco.
+      canvas.drawRect(rect, Paint()..color = const Color(0x33FFFFFF));
+    } else {
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        rect,
+        Paint()
+          ..filterQuality = FilterQuality.medium
+          ..color = Colors.white.withValues(alpha: draw.opacity.clamp(0, 1)),
+      );
+    }
+    if (draw.hasComments) {
+      final at = rect.topRight + Offset(-10 / scale, 10 / scale);
+      canvas.drawCircle(
+        at,
+        7 / scale,
+        Paint()..color = const Color(0xFFFAC775),
+      );
+    }
+    canvas.restore();
+  }
+
+  /// Línea discontinua de la imagen a la cámara del plano que la enseña.
+  void _drawImageLink(Canvas canvas, PlanImageDraw draw) {
+    final from = draw.linkTo!;
+    final rect = draw.rect;
+    // Al borde de la imagen más cercano a la cámara.
+    final to = Offset(
+      from.dx.clamp(rect.left, rect.right),
+      from.dy.clamp(rect.top, rect.bottom),
+    );
+    final paint = Paint()
+      ..color = const Color(0xFFEF9F27)
+      ..strokeWidth = 1.5 / scale;
+    final length = (to - from).distance;
+    if (length <= 0) return;
+    final dir = (to - from) / length;
+    final dash = 8 / scale;
+    for (var d = 0.0; d < length; d += dash * 1.8) {
+      canvas.drawLine(
+        from + dir * d,
+        from + dir * math.min(d + dash, length),
+        paint,
+      );
+    }
+  }
+
+  /// Marco de la imagen elegida, con sus asas en las esquinas.
+  void _drawImageSelection(Canvas canvas, PlanImageDraw draw) {
+    final rect = draw.rect;
+    canvas.save();
+    if (draw.rotation != 0) {
+      canvas.translate(rect.center.dx, rect.center.dy);
+      canvas.rotate(draw.rotation);
+      canvas.translate(-rect.center.dx, -rect.center.dy);
+    }
+    final line = Paint()
+      ..color = const Color(0xFF378ADD)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6 / scale;
+    canvas.drawRect(rect, line);
+    final fill = Paint()..color = Colors.white;
+    for (final corner in [
+      rect.topLeft,
+      rect.topRight,
+      rect.bottomLeft,
+      rect.bottomRight,
+    ]) {
+      canvas.drawCircle(corner, 6 / scale, fill);
+      canvas.drawCircle(corner, 6 / scale, line);
+    }
+    canvas.restore();
   }
 
   void _drawBackgroundImage(Canvas canvas) {
@@ -1445,9 +1682,23 @@ class CameraPlanPainter extends CustomPainter {
     LightScene scene,
     SceneLight light, {
     double strength = 1,
+
+    /// Lux que se pintan con todo el brillo. Con él, la mancha se mide
+    /// contra la planta y se mezcla con las demás sin pisarse; sin él
+    /// (miniaturas), se pinta con el brillo fijo de antes.
+    double? keyLux,
+
+    /// [keyLux] son los lux bien expuestos de la cámara: lo que sobra se
+    /// quema hacia blanco y lo que falta se apaga.
+    bool exposed = false,
   }) {
     final source = light.source;
     if (source.candela <= 0) return;
+    final floorLux = keyLux == null
+        ? _beamFloorLux
+        : exposed
+        ? PlanLightMap.cutoffForExposure(keyLux) * 2
+        : keyLux / math.pow(2, PlanLightMap.rangeStops);
     final mpu = scene.metersPerUnit;
     final drop = light.overheadM;
     final color = LightBeam.colorForCct(source.cct);
@@ -1467,37 +1718,38 @@ class CameraPlanPainter extends CustomPainter {
         ? scene.luxFrom(light, meters / mpu, 0)
         : scene.luxOf(light, pool + side * (meters / mpu));
 
-    // A la exposición de la cámara, el haz llega hasta donde la cámara
-    // deja de ver la luz y se quema donde sobra; en «Ver todo», hasta
-    // [_beamFloorLux] y contra una escala fija.
-    final exposedKey = _exposedKeyLux;
-    final floorLux = exposedKey == null
-        ? _beamFloorLux
-        : PlanLightMap.cutoffForExposure(exposedKey) * 2;
-    Color colorAt(double lux, double amount) {
-      if (exposedKey != null) {
-        return PlanLightMap.colorFor(
-          lux,
-          source.cct,
-          exposureKeyLux: exposedKey,
-          strength: strength * amount,
-        );
+    double alphaFor(double lux) {
+      if (keyLux != null && exposed) {
+        return PlanLightMap.exposedBrightness(lux, keyLux) *
+            PlanLightMap.maxExposedAlpha *
+            strength;
+      }
+      if (keyLux != null) {
+        return PlanLightMap.brightnessFor(lux, keyLux) *
+            PlanLightMap.maxAlpha *
+            strength;
       }
       final stops =
           math.log(math.max(lux, _beamFloorLux) / _beamFloorLux) / math.ln2;
-      return color.withValues(
-        alpha:
-            math.pow((stops / 16).clamp(0.0, 1.0), 1.7).toDouble() *
-            0.5 *
-            strength *
-            amount,
-      );
+      return math.pow((stops / 16).clamp(0.0, 1.0), 1.7).toDouble() *
+          0.5 *
+          strength;
+    }
+
+    // Quemado, el tinte se va a blanco: se ve que sobra, no solo que hay
+    // luz.
+    Color tintFor(double lux) {
+      if (!exposed || keyLux == null) return color;
+      final burn = PlanLightMap.burnFor(lux, keyLux);
+      return burn <= 0
+          ? color
+          : Color.lerp(color, const Color(0xFFFFFFFF), burn * 0.75)!;
     }
 
     // Hasta dónde llega.
     double reachM;
     if (drop == null) {
-      reachM = source.distanceFor(floorLux).clamp(0.0, 60.0);
+      reachM = source.distanceFor(floorLux).clamp(0.0, 80.0);
     } else {
       // El charco de luz bajo el aparato: se busca dónde baja del suelo.
       reachM = 0;
@@ -1509,16 +1761,16 @@ class CameraPlanPainter extends CustomPainter {
     if (reachM < 0.15) return;
     final reach = reachM / mpu;
 
-    const fractions = [0.0, 0.05, 0.12, 0.25, 0.5, 1.0];
+    // Bastantes pasos: la caída con la distancia se tiene que ver.
+    const fractions = [0.0, 0.03, 0.07, 0.12, 0.2, 0.3, 0.45, 0.65, 0.85, 1.0];
     ui.Shader shaderAt(Offset centre, double amount) =>
         ui.Gradient.radial(centre, reach, [
           for (final f in fractions)
-            colorAt(
-              drop == null
-                  ? source.illuminance(math.max(reachM * f, 0.05))
-                  : luxAtFlat(reachM * f),
-              amount,
-            ),
+            if (drop == null
+                    ? source.illuminance(math.max(reachM * f, 0.05))
+                    : luxAtFlat(reachM * f)
+                case final lux)
+              tintFor(lux).withValues(alpha: alphaFor(lux) * amount),
         ], fractions);
 
     // Cuántos puntos de la fuente se muestrean: más cuanto más grande.
@@ -1546,7 +1798,32 @@ class CameraPlanPainter extends CustomPainter {
     // El haz no tiene un borde: se apaga hacia fuera siguiendo su perfil.
     // Se pinta en capas, de la más ancha y tenue a la más estrecha.
     final layers = <(double, double)>[];
-    if (light.frontOnly) {
+    if (keyLux != null &&
+        (light.frontOnly || (drop == null && !source.isOmni))) {
+      // Cuñas de más ancha a más estrecha que, sumadas, siguen el perfil
+      // real de la fuente (el coseno de una tela, la campana de un haz):
+      // sin bandas a la vista.
+      double shape(double offAxisDeg) {
+        final part = source.profile(offAxisDeg);
+        if (part <= 0) return 0;
+        final v = 1 + math.log(part) / math.ln2 / PlanLightMap.rangeStops;
+        return v <= 0 ? 0 : v * v;
+      }
+
+      final widest = light.frontOnly
+          ? 89.0
+          : math.min(170.0, source.beamDeg * 1.4);
+      const count = 16;
+      var previous = 1.0;
+      for (var k = 1; k <= count; k++) {
+        final half = widest * k / count;
+        final here = k == count ? 0.0 : shape(half);
+        if (previous - here > 0.002) {
+          layers.add((half * 2, previous - here));
+        }
+        previous = here;
+      }
+    } else if (light.frontOnly) {
       layers.addAll(
         ambientBounce
             ? const [(178, 0.45), (110, 0.4)]
@@ -1563,6 +1840,23 @@ class CameraPlanPainter extends CustomPainter {
       ]);
     }
 
+    // Las muestras de una misma fuente se suman entre sí; la fuente entera
+    // se mezcla con las demás sin pisarlas.
+    if (keyLux != null) {
+      canvas.saveLayer(
+        Rect.fromCircle(
+          center: pool,
+          radius: reach / math.cos(tilt) + halfSize + blur * 4,
+        ),
+        Paint()
+          ..blendMode = BlendMode.screen
+          ..imageFilter = ui.ImageFilter.blur(
+            sigmaX: blur,
+            sigmaY: blur,
+            tileMode: TileMode.decal,
+          ),
+      );
+    }
     for (var k = 0; k < samples; k++) {
       final t = samples == 1 ? 0.0 : 2 * k / (samples - 1) - 1;
       final origin = light.position + across * (halfSize * t);
@@ -1573,10 +1867,26 @@ class CameraPlanPainter extends CustomPainter {
               reach,
               ignore: light.surface,
               fromAbove: drop != null,
+              z: light.z,
             );
 
+      // Con brillo medido, la zona visible recorta el lienzo una vez por
+      // muestra (rápido) y el borde lo ablanda el desenfoque de la capa.
+      if (keyLux != null && visible != null) {
+        canvas.save();
+        canvas.clipPath(visible);
+      }
       void paintShape(Path shape, double amount, [Offset? glow]) {
         final centre = glow ?? origin;
+        if (keyLux != null) {
+          canvas.drawPath(
+            shape,
+            Paint()
+              ..blendMode = BlendMode.plus
+              ..shader = shaderAt(centre, amount / samples),
+          );
+          return;
+        }
         var path = shape;
         if (visible != null) {
           try {
@@ -1615,6 +1925,7 @@ class CameraPlanPainter extends CustomPainter {
           ..rotateZ(math.atan2(light.aim.dy, light.aim.dx))
           ..scaleByDouble(1 / math.cos(tilt), 1, 1, 1);
         paintShape(oval.transform(stretch.storage), 1, centre);
+        if (keyLux != null && visible != null) canvas.restore();
         continue;
       }
       for (final (degrees, amount) in layers) {
@@ -1633,7 +1944,9 @@ class CameraPlanPainter extends CustomPainter {
           amount,
         );
       }
+      if (keyLux != null && visible != null) canvas.restore();
     }
+    if (keyLux != null) canvas.restore();
   }
 
   /// Sombras del sol: de cada pared y de cada persona, hacia el lado
@@ -2244,11 +2557,13 @@ class CameraPlanPainter extends CustomPainter {
   @override
   bool shouldRepaint(CameraPlanPainter old) =>
       old.elements != elements ||
+      old.images != images ||
       old.inheritedElements != inheritedElements ||
       old.inheritedOpacity != inheritedOpacity ||
       old.showGrid != showGrid ||
       old.zones != zones ||
       old.alsoSelected != alsoSelected ||
+      old.marquee != marquee ||
       old.rotating != rotating ||
       old.selectedRoom != selectedRoom ||
       old.segmentPreview != segmentPreview ||

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,14 +10,20 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/scene_format.dart';
+import '../../core/utils/shot_reference_import.dart';
 import '../../core/widgets/scene_meta_display.dart';
 import 'camera_plan_scene_badge.dart';
 import 'floor_plan_repository.dart';
 import 'light_setup_actions.dart';
 import 'plan_data.dart';
+import 'plan_guide.dart';
+import 'plan_item_actions.dart';
+import 'plan_sketch.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
 import 'shot_route.dart';
+import '../../shared/rich_text/script_markup.dart';
+import '../../shared/shot_images/shot_image_menu.dart';
 
 /// Tablero de una escena: sus planos repartidos por set y por esquema de
 /// luz. Cada plano es una tarjeta que se arrastra a la columna que toque.
@@ -85,6 +93,61 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
         siteId: set == null ? _data.siteIdOfScene(_scene) : null,
       );
 
+  /// Crea un boceto de la escena y lo abre. Con [shot], el boceto queda
+  /// además a la vista en ese plano (en el guion técnico), pero no lleva
+  /// planos: es para pensar la luz.
+  Future<void> _newSketch({Shot? shot, String? kind}) async {
+    final setId = shot == null ? _scene.locationId : _data.setIdOfShot(shot);
+    final created = await createPlanSketch(
+      context,
+      _db,
+      projectId: widget.projectId,
+      sceneId: _scene.id,
+      setId: setId,
+      siteId: _data.siteIdOfScene(_scene),
+      kind: kind,
+      label: shot == null
+          ? 'Esc ${_scene.label}'
+          : 'Esc ${_scene.label} P${shot.number}',
+    );
+    if (created == null || !mounted) return;
+    if (shot != null) {
+      await addShotPlanSketchSetup(db: _db, shot: shot, setupId: created.id);
+      if (!mounted) return;
+    }
+    await _openSketch(created);
+  }
+
+  /// Un boceto con elementos pasa a ser un esquema de verdad del set de la
+  /// escena (una copia: el boceto se queda).
+  Future<void> _sketchToPlan(LightSetup sketch) async {
+    final setId = _scene.locationId;
+    final copy = await FloorPlanRepository(_db).copyLightSetup(
+      sketch,
+      setId: setId,
+      siteId: setId == null ? _data.siteIdOfScene(_scene) : null,
+      name: sketch.name.replaceFirst('Boceto · ', 'Setup · '),
+      kind: LightSetupKind.plan,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          '«${copy.name}» es ya un esquema de luz: arrastra a él los planos '
+          'que se ruedan así.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSketch(LightSetup sketch) async {
+    if (sketch.kind == LightSetupKind.sketchFreehand) {
+      await drawFreehandSketch(context, _db, sketch);
+    } else {
+      widget.onOpen(PlanTarget.lightSetup(sketch.id, sketch.name));
+    }
+  }
+
   Future<void> _makeSequence(Shot shot) async {
     final setId = _data.setIdOfShot(shot);
     await _db.saveShotRoute(
@@ -137,12 +200,12 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
           children: [
             Expanded(
               child: SceneHeaderRow(
-                sceneNumber: _scene.number,
+                sceneNumber: _scene.label,
                 sceneColor: color,
                 title: _scene.name.isNotEmpty
                     ? _scene.name
                     : formatSceneTitle(
-                        number: _scene.number,
+                        number: _scene.label,
                         intExt: _scene.intExt,
                         dayNight: _scene.dayNight,
                         location: location,
@@ -162,13 +225,27 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
                 data: _data,
                 onTap: () => widget.onOpen(PlanTarget.site(site.id, site.name)),
               ),
+            IconButton(
+              tooltip: site == null
+                  ? 'Elegir la localización de la escena'
+                  : 'Cambiar la localización de la escena',
+              icon: Icon(
+                site == null
+                    ? Icons.add_location_alt_outlined
+                    : Icons.edit_location_alt_outlined,
+                color: palette.textSecondary,
+              ),
+              onPressed: () => site == null
+                  ? pickSiteForScene(context, _db, _scene)
+                  : changeSceneSite(context, _db, _scene),
+            ),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           site == null
-              ? 'Esta escena aún no tiene localización. Asígnale una en '
-                    'Localizaciones para repartir sus planos por sets.'
+              ? 'Esta escena aún no tiene localización. Elígela con el botón '
+                    'de arriba para repartir sus planos por sets.'
               : 'Arrastra cada plano al esquema de luz con el que se rueda. '
                     'Con Mayús o Cmd se marcan varios para moverlos juntos.',
           style: AppTypography.caption(
@@ -192,6 +269,17 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
             onSave: (legs) => _saveRoute(shot, legs),
             onNewSetup: (set) => _newSetup(set),
           ),
+        PlanSketchStrip(
+          title: 'BOCETOS DE ESTA ESCENA',
+          sketches: _data.sketchesOfScene(_scene.id),
+          data: _data,
+          onOpen: _openSketch,
+          onNewElements: () =>
+              _newSketch(kind: LightSetupKind.sketchElements),
+          onNewFreehand: () =>
+              _newSketch(kind: LightSetupKind.sketchFreehand),
+          onToPlan: _sketchToPlan,
+        ),
         for (final set in sets) _setSection(palette, set),
         if (addable.isNotEmpty)
           Align(
@@ -231,39 +319,76 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
     final setColor = set == null
         ? palette.textTertiary
         : _data.colors.setColor(set);
+    final actions = set == null
+        ? null
+        : SetActions(
+            context,
+            _db,
+            set,
+            sceneCount: _data.scenesOfSet(set.id).length,
+            setupCount: _data.setupsOfSet(set.id).length,
+          );
+    // Lo que se pega en esta fila: un esquema va a este set.
+    final paste = set == null
+        ? PlanPasteTarget(siteId: _data.siteIdOfScene(_scene))
+        : PlanPasteTarget(setId: set.id);
+    final header = Row(
+      children: [
+        Container(width: 4, height: 18, color: setColor),
+        const SizedBox(width: 8),
+        Text(
+          set == null ? 'SIN SET' : 'SET ${set.locationName.toUpperCase()}',
+          style: AppTypography.label(palette),
+        ),
+        const SizedBox(width: 8),
+        if (set != null && own)
+          Text(
+            'el de la escena',
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.textTertiary),
+          ),
+        const Spacer(),
+        if (set != null) ...[
+          TextButton.icon(
+            onPressed: () => showAssociateShotsDialog(
+              context,
+              ref.read(databaseProvider),
+              set: set,
+              scenes: [_scene],
+            ),
+            icon: const Icon(Icons.playlist_add_check, size: 15),
+            label: const Text('Asociar planos…'),
+          ),
+          TextButton.icon(
+            onPressed: () =>
+                widget.onOpen(PlanTarget.set(set.id, set.locationName)),
+            icon: const Icon(Icons.grid_on_outlined, size: 15),
+            label: const Text('Planta del set'),
+          ),
+          SetMenuButton(
+            set: set,
+            sceneCount: actions!.sceneCount,
+            setupCount: actions.setupCount,
+          ),
+        ],
+      ],
+    );
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(width: 4, height: 18, color: setColor),
-              const SizedBox(width: 8),
-              Text(
-                set == null
-                    ? 'SIN SET'
-                    : 'SET ${set.locationName.toUpperCase()}',
-                style: AppTypography.label(palette),
-              ),
-              const SizedBox(width: 8),
-              if (set != null && own)
-                Text(
-                  'el de la escena',
-                  style: AppTypography.caption(
-                    palette,
-                  ).copyWith(color: palette.textTertiary),
-                ),
-              const Spacer(),
-              if (set != null)
-                TextButton.icon(
-                  onPressed: () =>
-                      widget.onOpen(PlanTarget.set(set.id, set.locationName)),
-                  icon: const Icon(Icons.grid_on_outlined, size: 15),
-                  label: const Text('Planta del set'),
-                ),
-            ],
-          ),
+          if (actions == null)
+            header
+          else
+            PlanItemKeys(
+              onCopy: actions.copy,
+              onDuplicate: actions.duplicate,
+              onPaste: actions.paste,
+              onDelete: actions.delete,
+              child: header,
+            ),
           const SizedBox(height: AppSpacing.sm),
           Wrap(
             spacing: AppSpacing.md,
@@ -273,10 +398,16 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
               _column(palette, set: set, setup: null),
               for (final setup in setups)
                 _column(palette, set: set, setup: setup),
-              _NewSetupColumn(
-                onTap: () => _newSetup(set),
-                onDrop: (shots) async =>
-                    _move(shots, set, await _newSetup(set)),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _NewSetupColumn(
+                    onTap: () => _newSetup(set),
+                    onDrop: (shots) async =>
+                        _move(shots, set, await _newSetup(set)),
+                  ),
+                  PlanPasteButton(target: paste),
+                ],
               ),
             ],
           ),
@@ -294,7 +425,7 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
     final color = setup == null
         ? palette.textTertiary
         : _data.setupColor(setup);
-    return DragTarget<List<Shot>>(
+    final target = DragTarget<List<Shot>>(
       onWillAcceptWithDetails: (d) => d.data.any((s) => !shots.contains(s)),
       onAcceptWithDetails: (d) => _move(d.data, set, setup),
       builder: (context, candidate, _) => Container(
@@ -384,6 +515,7 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
                           ..._data.ownOfShot(shot, tagged: true),
                       ],
                       inherited: _data.inheritedOfSetup(setup),
+                      drawings: _data.drawingsOfSetup(setup),
                       focus: _data.zoneOf(set),
                       emptyIcon: Icons.wb_incandescent_outlined,
                     ),
@@ -407,6 +539,7 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
                     if (!_picked.remove(shot.id)) _picked.add(shot.id);
                   }),
                   onSequence: () => _makeSequence(shot),
+                  onSketch: () => _newSketch(shot: shot),
                 ),
               ),
             if (shots.isEmpty)
@@ -422,6 +555,20 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
           ],
         ),
       ),
+    );
+    if (setup == null) return target;
+    final actions = LightSetupActions(
+      context,
+      _db,
+      setup,
+      _data.shotsOfSetup(setup.id).length,
+    );
+    return PlanItemKeys(
+      onCopy: actions.copy,
+      onDuplicate: actions.duplicate,
+      onPaste: actions.pasteBeside,
+      onDelete: actions.delete,
+      child: target,
     );
   }
 }
@@ -496,8 +643,9 @@ class _NewSetupColumn extends StatelessWidget {
   const _NewSetupColumn({required this.onTap, required this.onDrop});
 
   @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
+  Widget build(BuildContext context) => _target(context.palette);
+
+  Widget _target(AppPalette palette) {
     return DragTarget<List<Shot>>(
       onAcceptWithDetails: (d) => onDrop(d.data),
       builder: (context, candidate, _) => InkWell(
@@ -546,6 +694,9 @@ class _ShotCard extends StatelessWidget {
   final VoidCallback onPick;
   final VoidCallback onSequence;
 
+  /// Dibujar un boceto para este plano.
+  final VoidCallback onSketch;
+
   const _ShotCard({
     required this.shot,
     required this.data,
@@ -554,6 +705,7 @@ class _ShotCard extends StatelessWidget {
     required this.onOpen,
     required this.onPick,
     required this.onSequence,
+    required this.onSketch,
   });
 
   static const double width = 168;
@@ -562,10 +714,21 @@ class _ShotCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final details = [
-      if (shot.framing?.isNotEmpty == true) shot.framing!,
+      if (shot.framing?.isNotEmpty == true) scriptMarkupToPlain(shot.framing),
       if (shot.lens?.isNotEmpty == true) shot.lens!,
       if (shot.movement?.isNotEmpty == true) shot.movement!,
     ].join(' · ');
+    // Sin planta dibujada, el boceto (una imagen) ocupa su sitio.
+    final sketches = planSketchesOf(shot);
+    final entries = planSketchEntriesOf(shot);
+    final drawn = [...data.lightOfShot(shot), ...data.ownOfShot(shot)];
+    final drawings = data.drawingsOfShot(shot);
+    void sketchMenu() => showShotImageMenu(
+      context,
+      shot,
+      target: ShotImageTarget.planSketch,
+      sketches: planSketchDelegate,
+    );
 
     final card = Material(
       color: palette.surfaceElevated,
@@ -591,12 +754,25 @@ class _ShotCard extends StatelessWidget {
             SizedBox(
               width: 64,
               height: 48,
-              child: PlanThumbnail(
-                elements: [...data.lightOfShot(shot), ...data.ownOfShot(shot)],
-                inherited: data.baseOfShot(shot),
-                focus: data.zoneOf(data.set(data.setIdOfShot(shot))),
-                emptyIcon: Icons.videocam_outlined,
-              ),
+              child: drawn.isEmpty && drawings.isEmpty && sketches.isNotEmpty
+                  ? Tooltip(
+                      message: 'Boceto de planta · clic para verlo',
+                      child: GestureDetector(
+                        onTap: sketchMenu,
+                        child: Image.file(
+                          File(sketches.last),
+                          fit: BoxFit.cover,
+                          cacheWidth: 200,
+                        ),
+                      ),
+                    )
+                  : PlanThumbnail(
+                      elements: drawn,
+                      drawings: drawings,
+                      inherited: data.baseOfShot(shot),
+                      focus: data.zoneOf(data.set(data.setIdOfShot(shot))),
+                      emptyIcon: Icons.videocam_outlined,
+                    ),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -627,12 +803,26 @@ class _ShotCard extends StatelessWidget {
                 onSelected: (action) => switch (action) {
                   'open' => onOpen(),
                   'pick' => onPick(),
+                  'sketch' => sketchMenu(),
+                  'draw' => onSketch(),
                   _ => onSequence(),
                 },
                 itemBuilder: (_) => [
                   const PopupMenuItem(
                     value: 'open',
                     child: Text('Abrir planta'),
+                  ),
+                  PopupMenuItem(
+                    value: 'sketch',
+                    child: Text(
+                      entries.isEmpty
+                          ? 'Añadir boceto (imagen)'
+                          : 'Bocetos de planta (${entries.length})',
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'draw',
+                    child: Text('Dibujar un boceto para este plano'),
                   ),
                   PopupMenuItem(
                     value: 'pick',

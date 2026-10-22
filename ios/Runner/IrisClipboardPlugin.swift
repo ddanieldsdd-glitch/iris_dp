@@ -13,6 +13,18 @@ final class IrisClipboardPlugin: NSObject, FlutterPlugin {
   }
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    if call.method == "writeClipboardImage" {
+      guard let args = call.arguments as? [String: Any],
+        let path = args["path"] as? String,
+        let image = UIImage(contentsOfFile: path)
+      else {
+        result(false)
+        return
+      }
+      UIPasteboard.general.image = image
+      result(true)
+      return
+    }
     guard call.method == "readClipboard" else {
       result(FlutterMethodNotImplemented)
       return

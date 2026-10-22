@@ -4,9 +4,11 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../cloud/cloudinary_config.dart';
+import '../cloud/supabase_config.dart';
 import '../utils/media_storage.dart';
 import 'media_optimizer.dart';
 
@@ -84,18 +86,44 @@ class CloudMediaService {
       );
     }
 
-    final uploadResponse = await _uploadToCloudinary(
-      bytes: optimized.bytes,
-      publicId: publicId,
-      extension: optimized.extension,
-    );
-    if (uploadResponse == null) return null;
+    // La misma imagen ya está en la nube con otra clave (p. ej. la de posición
+    // de antes de los uid): se registra con esta sin volver a subirla.
+    final same = existing == null
+        ? await _client
+              .from('media_assets')
+              .select('public_id, delivery_url, bytes_stored')
+              .eq('project_id', projectCloudId)
+              .eq('content_hash', contentHash)
+              .not('public_id', 'is', null)
+              .limit(1)
+              .maybeSingle()
+        : null;
 
-    final storedBytes =
-        (uploadResponse['bytes'] as num?)?.toInt() ?? optimized.optimizedBytes;
-    final returnedPublicId =
-        uploadResponse['public_id'] as String? ?? publicId;
-    final deliveryUrl = CloudinaryConfig.deliveryUrl(returnedPublicId);
+    final String returnedPublicId;
+    final int storedBytes;
+    if (same != null) {
+      returnedPublicId = same['public_id'] as String;
+      storedBytes =
+          (same['bytes_stored'] as num?)?.toInt() ?? optimized.optimizedBytes;
+    } else {
+      // Una versión nueva va con otro nombre: una subida sin firma no puede
+      // sobrescribir la anterior en Cloudinary, y se quedaría la vieja.
+      final uploadResponse = await _uploadToCloudinary(
+        bytes: optimized.bytes,
+        publicId: existing != null
+            ? '$publicId-${contentHash.substring(0, 8)}'
+            : publicId,
+        extension: optimized.extension,
+      );
+      if (uploadResponse == null) return null;
+      storedBytes =
+          (uploadResponse['bytes'] as num?)?.toInt() ??
+          optimized.optimizedBytes;
+      returnedPublicId = uploadResponse['public_id'] as String? ?? publicId;
+    }
+    final deliveryUrl =
+        same?['delivery_url'] as String? ??
+        CloudinaryConfig.deliveryUrl(returnedPublicId);
 
     final row = {
       'project_id': projectCloudId,
@@ -132,6 +160,113 @@ class CloudMediaService {
       bytesOriginal: bytesOriginalOverride ?? optimized.originalBytes,
       bytesStored: storedBytes,
       contentHash: contentHash,
+    );
+  }
+
+  /// Sube un archivo que no es imagen (guion, PDF, escaneo, modelo 3D) tal
+  /// cual a Supabase Storage, en `projects/<proyecto>/<tipo>/<clave>/<nombre>`
+  /// (la ruta que permite la seguridad del bucket), y lo registra en
+  /// `media_assets`. Si ya está con la misma huella, no lo vuelve a subir.
+  /// Devuelve nulo si el archivo pasa de [maxBytes].
+  Future<CloudUploadResult?> uploadRawFile({
+    required String localPath,
+    required String projectCloudId,
+    required String entityType,
+    required String entityKey,
+    required int sortOrder,
+    required int maxBytes,
+    String? source,
+  }) async {
+    final file = File(localPath);
+    if (!file.existsSync()) return null;
+    final size = file.lengthSync();
+    if (size > maxBytes) return null;
+    final bytes = await file.readAsBytes();
+    final contentHash = hashBytes(bytes);
+
+    final existing = await _client
+        .from('media_assets')
+        .select('id, content_hash, storage_path')
+        .eq('project_id', projectCloudId)
+        .eq('entity_type', entityType)
+        .eq('entity_key', entityKey)
+        .maybeSingle();
+    if (existing != null &&
+        existing['content_hash'] == contentHash &&
+        existing['storage_path'] != null) {
+      return CloudUploadResult(
+        publicId: existing['storage_path'] as String,
+        deliveryUrl: '',
+        bytesOriginal: size,
+        bytesStored: size,
+        contentHash: contentHash,
+      );
+    }
+
+    final safeKey = entityKey.replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '_');
+    final name = p.basename(localPath);
+    final storagePath = 'projects/$projectCloudId/$entityType/$safeKey/$name';
+    await _client.storage
+        .from(SupabaseConfig.storageBucket)
+        .uploadBinary(
+          storagePath,
+          bytes,
+          fileOptions: const FileOptions(upsert: true),
+        );
+
+    final row = {
+      'project_id': projectCloudId,
+      'storage_path': storagePath,
+      'provider': 'supabase',
+      'entity_type': entityType,
+      'entity_key': entityKey,
+      'content_hash': contentHash,
+      'sort_order': sortOrder,
+      'bytes_original': size,
+      'bytes_stored': size,
+      'local_path_hint': localPath,
+      'category': entityType,
+      'local_hash': contentHash,
+      'metadata': {'file_name': name, if (source != null) 'source': source},
+    };
+    if (existing != null && existing['id'] != null) {
+      await _client
+          .from('media_assets')
+          .update(row)
+          .eq('id', existing['id'] as String);
+    } else {
+      await _client.from('media_assets').insert(row);
+    }
+    return CloudUploadResult(
+      publicId: storagePath,
+      deliveryUrl: '',
+      bytesOriginal: size,
+      bytesStored: size,
+      contentHash: contentHash,
+    );
+  }
+
+  /// Los bytes de un archivo de Supabase Storage.
+  Future<Uint8List> downloadStorageBytes(String storagePath) => _client.storage
+      .from(SupabaseConfig.storageBucket)
+      .download(storagePath);
+
+  /// Descarga un archivo de Supabase Storage al proyecto.
+  Future<String?> downloadStorageFile({
+    required int localProjectId,
+    required String storagePath,
+    required String subfolder,
+    required String fileName,
+  }) async {
+    final bytes = await _client.storage
+        .from(SupabaseConfig.storageBucket)
+        .download(storagePath);
+    if (bytes.isEmpty) return null;
+    return MediaStorage.writeProjectFileBytes(
+      projectId: localProjectId,
+      subfolder: subfolder,
+      bytes: bytes,
+      fileName: fileName,
     );
   }
 
@@ -186,7 +321,7 @@ class CloudMediaService {
         .from('media_assets')
         .select()
         .eq('project_id', projectCloudId)
-        .eq('provider', 'cloudinary')
+        .inFilter('provider', const ['cloudinary', 'supabase'])
         .order('entity_type')
         .order('sort_order');
     return List<Map<String, dynamic>>.from(rows as List);

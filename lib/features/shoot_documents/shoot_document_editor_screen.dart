@@ -19,6 +19,8 @@ import 'shoot_document_block_tile.dart';
 import 'shoot_document_block_types.dart';
 import 'shoot_document_composer.dart';
 import 'shoot_document_on_set_view.dart';
+import 'shoot_document_script_picker.dart';
+import '../../core/widgets/safe_reorderable_column.dart';
 
 enum _EditorMode { blocks, preview, onSet, settings }
 
@@ -207,11 +209,25 @@ class _ShootDocumentEditorScreenState
                     ],
                   ),
                   floatingActionButton: _mode == _EditorMode.blocks
-                      ? FloatingActionButton.extended(
-                          onPressed: () =>
-                              _addBlock(context, db, blocks.length),
-                          icon: const Icon(Icons.add),
-                          label: const Text('Bloque'),
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FloatingActionButton.extended(
+                              heroTag: 'shoot_doc_add_script',
+                              onPressed: () =>
+                                  _addFromScript(context, db, blocks),
+                              icon: const Icon(Icons.playlist_add),
+                              label: const Text('Escenas y planos'),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            FloatingActionButton.extended(
+                              heroTag: 'shoot_doc_add_block',
+                              onPressed: () =>
+                                  _addBlock(context, db, blocks.length),
+                              icon: const Icon(Icons.add),
+                              label: const Text('Bloque'),
+                            ),
+                          ],
                         )
                       : null,
                 );
@@ -223,24 +239,74 @@ class _ShootDocumentEditorScreenState
     );
   }
 
+  /// Lee escenas y planos del guion técnico cada vez: el documento enseña su
+  /// número y sus datos de ahora, no los de cuando se añadieron.
   Future<void> _ensureLookups(
     AppDatabase db,
     List<ShootDocumentBlock> blocks,
   ) async {
-    for (final b in blocks) {
-      if (b.sceneId != null && !_scenes.containsKey(b.sceneId)) {
-        final s = await (db.select(
-          db.scenes,
-        )..where((sc) => sc.id.equals(b.sceneId!))).getSingleOrNull();
-        if (s != null) _scenes[b.sceneId!] = s;
+    final scenes = await db.watchScenesForProject(widget.projectId).first;
+    final shots = await db.getShotsForProject(widget.projectId);
+    _scenes
+      ..clear()
+      ..addEntries(scenes.map((s) => MapEntry(s.id, s)));
+    _shots
+      ..clear()
+      ..addEntries(shots.map((s) => MapEntry(s.id, s)));
+  }
+
+  /// Añade al final las escenas y planos elegidos del guion técnico. Los
+  /// bloques apuntan al plano; no copian sus datos.
+  Future<void> _addFromScript(
+    BuildContext context,
+    AppDatabase db,
+    List<ShootDocumentBlock> blocks,
+  ) async {
+    final picked = await showShootDocumentScriptPicker(
+      context,
+      db: db,
+      projectId: widget.projectId,
+      alreadyInDocument: {
+        for (final b in blocks)
+          if (b.blockType == ShootBlockType.shot && b.shotId != null) b.shotId!,
+      },
+    );
+    if (picked == null) return;
+    final scenesWithHeader = {
+      for (final b in blocks)
+        if (b.blockType == ShootBlockType.sceneHeader && b.sceneId != null)
+          b.sceneId!,
+    };
+    var order = blocks.isEmpty ? 0 : blocks.last.sortOrder + 1;
+    for (final entry in picked.scenes) {
+      if (!scenesWithHeader.contains(entry.scene.id)) {
+        await db.insertShootDocumentBlock(
+          ShootDocumentBlocksCompanion.insert(
+            documentId: widget.documentId,
+            sortOrder: Value(order++),
+            blockType: ShootBlockType.sceneHeader,
+            sceneId: Value(entry.scene.id),
+          ),
+        );
       }
-      if (b.shotId != null && !_shots.containsKey(b.shotId)) {
-        final sh = await (db.select(
-          db.shots,
-        )..where((s) => s.id.equals(b.shotId!))).getSingleOrNull();
-        if (sh != null) _shots[b.shotId!] = sh;
+      for (final shot in entry.shots) {
+        await db.insertShootDocumentBlock(
+          ShootDocumentBlocksCompanion.insert(
+            documentId: widget.documentId,
+            sortOrder: Value(order++),
+            blockType: ShootBlockType.shot,
+            sceneId: Value(entry.scene.id),
+            shotId: Value(shot.id),
+          ),
+        );
       }
     }
+    if (!context.mounted) return;
+    final n = picked.shotCount;
+    AppSnackBar.show(
+      context,
+      n == 1 ? '1 plano añadido' : '$n planos añadidos',
+    );
   }
 
   Future<void> _exportPdf(
@@ -482,10 +548,12 @@ class _BlocksEditor extends StatelessWidget {
       );
     }
 
-    return ReorderableListView.builder(
+    return SafeReorderableColumn(
       padding: const EdgeInsets.all(AppSpacing.lg),
       itemCount: blocks.length,
-      onReorderItem: (oldIndex, newIndex) {
+      keyOf: (index) => ValueKey(blocks[index].id),
+      dragLabel: (index) => resolved[index].title,
+      onReorder: (oldIndex, newIndex) {
         final ids = blocks.map((b) => b.id).toList();
         final id = ids.removeAt(oldIndex);
         ids.insert(newIndex, id);
@@ -495,7 +563,6 @@ class _BlocksEditor extends StatelessWidget {
         final block = blocks[index];
         final r = resolved[index];
         return ShootDocumentBlockTile(
-          key: ValueKey(block.id),
           resolved: r,
           palette: palette,
           onEdit: () => onEdit(block),

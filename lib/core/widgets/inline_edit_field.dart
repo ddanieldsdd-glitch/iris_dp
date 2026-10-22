@@ -10,10 +10,15 @@ class InlineEditField extends StatefulWidget {
   final int minLines;
   final int? maxLines;
   final TextStyle? style;
+  final TextStyle? hintStyle;
   final TextAlign textAlign;
   final AppPalette palette;
   final ValueChanged<String> onChanged;
   final VoidCallback? onExpand;
+
+  /// Sin fondo ni borde propios: el campo se funde con la celda que lo
+  /// contiene (tabla del guion técnico).
+  final bool flat;
 
   const InlineEditField({
     super.key,
@@ -24,8 +29,10 @@ class InlineEditField extends StatefulWidget {
     this.minLines = 1,
     this.maxLines,
     this.style,
+    this.hintStyle,
     this.textAlign = TextAlign.start,
     this.onExpand,
+    this.flat = false,
   });
 
   @override
@@ -44,7 +51,8 @@ class _InlineEditFieldState extends State<InlineEditField> {
   }
 
   void _onFocusChange() {
-    if (!_focus.hasFocus) {
+    // Perder el foco sin haber cambiado nada no es una edición.
+    if (!_focus.hasFocus && _ctrl.text != (widget.value ?? '')) {
       widget.onChanged(_ctrl.text);
     }
   }
@@ -93,8 +101,9 @@ class _InlineEditFieldState extends State<InlineEditField> {
               onPressed: () => Navigator.pop(ctx, expanded.text),
               child: Text(
                 'Guardar',
-                style: AppTypography.bodyMedium(palette)
-                    .copyWith(color: palette.accent),
+                style: AppTypography.bodyMedium(
+                  palette,
+                ).copyWith(color: palette.accent),
               ),
             ),
           ],
@@ -120,14 +129,22 @@ class _InlineEditFieldState extends State<InlineEditField> {
         textAlign: widget.textAlign,
         keyboardType: TextInputType.multiline,
         textInputAction: TextInputAction.newline,
-        style: widget.style ??
-            AppTypography.bodyMedium(widget.palette)
-                .copyWith(color: widget.palette.textPrimary),
+        style:
+            widget.style ??
+            AppTypography.bodyMedium(
+              widget.palette,
+            ).copyWith(color: widget.palette.textPrimary),
         decoration: InputDecoration(
           hintText: widget.hint,
+          hintStyle: widget.hintStyle,
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+          enabledBorder: widget.flat ? InputBorder.none : null,
+          focusedBorder: widget.flat ? InputBorder.none : null,
+          filled: widget.flat ? false : null,
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 2,
+            horizontal: 2,
+          ),
           isDense: true,
         ),
         onSubmitted: widget.onChanged,
@@ -160,8 +177,9 @@ class InlineDropdownField extends StatelessWidget {
       child: DropdownButton<String>(
         value: options.contains(value) ? value : null,
         hint: Text(hint, style: AppTypography.caption(palette)),
-        style: AppTypography.caption(palette)
-            .copyWith(color: palette.textPrimary),
+        style: AppTypography.caption(
+          palette,
+        ).copyWith(color: palette.textPrimary),
         dropdownColor: palette.surfaceElevated,
         isDense: true,
         isExpanded: true,

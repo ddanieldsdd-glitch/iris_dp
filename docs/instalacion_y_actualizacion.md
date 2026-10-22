@@ -12,6 +12,22 @@ Guía para usuarios: instalar la app, configurarla la primera vez y mantener var
 4. Abre la app. Si macOS la bloquea la primera vez: clic derecho → **Abrir**.
 5. Verás el **tutorial inicial** antes de entrar a tus proyectos.
 
+#### Dónde guarda los datos en Mac
+
+Desde octubre de 2026 la app del DMG **no usa el sandbox de macOS** (como las builds Debug y Profile). IRIS DP no se distribuye por la Mac App Store, y con el sandbox la app no veía los datos que ya existían. Por eso todas las builds de Mac usan las mismas carpetas:
+
+| Qué | Dónde |
+|-----|-------|
+| Configuración de carpetas (`storage_config.json`) | `~/Library/Application Support/com.example.irisDp/iris_dp/` |
+| Base de datos (`iris_dp.db`) | La carpeta de datos técnicos que elegiste (por defecto `…/iris_dp/app_data/`) |
+| Documentos | La carpeta que elegiste en el tutorial (por defecto `~/Documents/iris_dp/documentos`) |
+
+Qué cambia si ya habías instalado un DMG antiguo (con sandbox):
+
+- La versión nueva abre directamente tus datos de `Application Support` y tu carpeta de documentos. No hay que migrar nada.
+- Lo que creó la versión antigua se queda en `~/Library/Containers/com.example.irisDp/` y la app nueva ya no lo usa. Si allí hay proyectos que no están en la nube ni en tu base normal, haz una copia de esa carpeta antes de borrarla.
+- Si al abrir aparecen proyectos viejos o no puedes iniciar sesión, comprueba en **Ajustes** que la carpeta de datos apunta a `Application Support` y no al contenedor.
+
 ### Windows
 
 1. Ejecuta el instalador o descomprime la carpeta `Release` del build.

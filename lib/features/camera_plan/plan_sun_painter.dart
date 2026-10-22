@@ -6,6 +6,7 @@ import 'camera_plan_constants.dart';
 import 'light/ambient.dart';
 import 'light/light_scene.dart';
 import 'light_beam.dart';
+import 'plan_light_map.dart';
 
 /// El sol sobre la planta: el baño de luz al aire libre, las sombras que
 /// dan las cosas según su altura y la mancha que entra por cada hueco de
@@ -172,37 +173,13 @@ class PlanSunPainter {
     return patch;
   }
 
-  static void paint(
-    Canvas canvas,
+  /// Las sombras que da el sol al aire libre: las macizas y las de lo que
+  /// deja pasar parte de la luz (un árbol), cada una con su largo.
+  static (List<(Path, double)>, List<(Path, double)>) shadows(
     LightScene scene,
     PlanAmbient env,
-    Rect view,
   ) {
-    if (!env.hasSun) return;
     final mpu = scene.metersPerUnit;
-    final colour = LightBeam.colorForCct(env.condition.sunCct);
-
-    // Al aire libre: el baño del sol y las sombras.
-    var outdoors = Path()..addRect(view);
-    for (final room in scene.rooms) {
-      if (!room.roofed) continue;
-      try {
-        outdoors = Path.combine(
-          PathOperation.difference,
-          outdoors,
-          room.room.path,
-        );
-      } catch (_) {}
-    }
-    canvas.save();
-    canvas.clipPath(outdoors);
-    canvas.drawRect(
-      view,
-      Paint()
-        ..blendMode = BlendMode.plus
-        ..color = colour.withValues(alpha: 0.13),
-    );
-
     final solid = <(Path, double)>[];
     final dappled = <(Path, double)>[];
     // Un recinto con techo da una sola sombra: la de todo su volumen. Sus
@@ -259,6 +236,142 @@ class PlanSunPainter {
       (blocker.isOpaque ? solid : dappled).add((shadow, length));
     }
 
+    return (solid, dappled);
+  }
+
+  /// La zona al aire libre de lo que se ve: todo menos los recintos con
+  /// techo.
+  static Path outdoors(LightScene scene, Rect view) {
+    var open = Path()..addRect(view);
+    for (final room in scene.rooms) {
+      if (!room.roofed) continue;
+      try {
+        open = Path.combine(PathOperation.difference, open, room.room.path);
+      } catch (_) {}
+    }
+    return open;
+  }
+
+  /// El sol y el cielo dentro de la capa de luz: el brillo de cada cosa se
+  /// mide contra lo más iluminado de la planta ([key]), y se mezcla con
+  /// las demás fuentes sin pisarse. Con [exposed], [key] son los lux bien
+  /// expuestos de la cámara y el sol que sobra se ve quemado.
+  static void paintKeyed(
+    Canvas canvas,
+    LightScene scene,
+    PlanAmbient env,
+    Rect view, {
+    required double key,
+    required double indoorKey,
+    bool exposed = false,
+  }) {
+    final mpu = scene.metersPerUnit;
+    final open = outdoors(scene, view);
+    canvas.save();
+    canvas.clipPath(open);
+    if (env.hasSky && env.day) {
+      // A la sombra queda la luz del cielo.
+      canvas.drawRect(
+        view,
+        Paint()
+          ..blendMode = BlendMode.lighten
+          ..color = PlanLightMap.colorFor(
+            env.skyLux * 0.8,
+            env.skyCct,
+            key,
+            exposed: exposed,
+          ),
+      );
+    }
+    if (env.hasSun) {
+      // El sol baña lo que no tiene nada delante; las sombras se le
+      // quitan, con el borde más blando cuanto más largas.
+      final (solid, dappled) = shadows(scene, env);
+      void sunlit(Color colour, BlendMode blend) {
+        canvas.saveLayer(view, Paint()..blendMode = blend);
+        canvas.drawRect(view, Paint()..color = colour);
+        void erase(List<(Path, double)> list, double amount) {
+          for (final (path, length) in list) {
+            final sigma = (0.05 + length * mpu * 0.012).clamp(0.05, 0.35) / mpu;
+            canvas.drawPath(
+              path,
+              Paint()
+                ..blendMode = BlendMode.dstOut
+                ..color = Color.fromRGBO(0, 0, 0, amount)
+                ..maskFilter = MaskFilter.blur(BlurStyle.normal, sigma),
+            );
+          }
+        }
+
+        // Lo que deja pasar parte de la luz se quita a medias; lo macizo,
+        // del todo.
+        erase(dappled, 1 - LightScene.treeTransmission);
+        erase(solid, 1);
+        canvas.restore();
+      }
+
+      // Donde da el sol, manda el sol: lo que añaden un rebote o un
+      // aparato encima es una fracción de stop y no se ve. A la sombra,
+      // en cambio, se ven enteros.
+      sunlit(const Color(0xFF000000), BlendMode.dstOut);
+      sunlit(
+        PlanLightMap.colorFor(
+          env.condition.sunLux,
+          env.condition.sunCct,
+          key,
+          exposed: exposed,
+        ),
+        BlendMode.srcOver,
+      );
+    }
+    canvas.restore();
+    if (env.hasSun) {
+      paintPatches(
+        canvas,
+        scene,
+        env,
+        tint: PlanLightMap.colorFor(
+          env.condition.sunLux,
+          env.condition.sunCct,
+          indoorKey,
+          exposed: exposed,
+        ),
+      );
+    }
+  }
+
+  static void paint(
+    Canvas canvas,
+    LightScene scene,
+    PlanAmbient env,
+    Rect view,
+  ) {
+    if (!env.hasSun) return;
+    final mpu = scene.metersPerUnit;
+    final colour = LightBeam.colorForCct(env.condition.sunCct);
+
+    // Al aire libre: el baño del sol y las sombras.
+    var outdoors = Path()..addRect(view);
+    for (final room in scene.rooms) {
+      if (!room.roofed) continue;
+      try {
+        outdoors = Path.combine(
+          PathOperation.difference,
+          outdoors,
+          room.room.path,
+        );
+      } catch (_) {}
+    }
+    canvas.save();
+    canvas.clipPath(outdoors);
+    canvas.drawRect(
+      view,
+      Paint()
+        ..blendMode = BlendMode.plus
+        ..color = colour.withValues(alpha: 0.13),
+    );
+
+    final (solid, dappled) = shadows(scene, env);
     void layer(List<(Path, double)> shadows, Color tint) {
       if (shadows.isEmpty) return;
       // En una sola capa, para que donde se pisan no se oscurezcan dos
@@ -290,6 +403,10 @@ class PlanSunPainter {
     LightScene scene,
     PlanAmbient env, {
     double strength = 1,
+
+    /// Con él, la mancha se pinta de este color y se mezcla sin pisar a
+    /// las demás fuentes.
+    Color? tint,
   }) {
     if (!env.hasSun) return;
     final mpu = scene.metersPerUnit;
@@ -301,10 +418,12 @@ class PlanSunPainter {
       void fill(Path path, double keep) => canvas.drawPath(
         path,
         Paint()
-          ..blendMode = BlendMode.plus
-          ..color = colour.withValues(
-            alpha: (0.36 * keep * strength).clamp(0.0, 0.4),
-          )
+          ..blendMode = tint == null ? BlendMode.plus : BlendMode.lighten
+          ..color = tint == null
+              ? colour.withValues(
+                  alpha: (0.36 * keep * strength).clamp(0.0, 0.4),
+                )
+              : tint.withValues(alpha: tint.a * keep)
           ..maskFilter = MaskFilter.blur(BlurStyle.normal, 0.03 / mpu),
       );
       fill(patch, 1);

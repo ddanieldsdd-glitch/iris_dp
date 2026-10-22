@@ -38,6 +38,20 @@ class PlanLayers {
   List<PlanElement> get all => [...environment, ...set, ...light, ...shot];
 }
 
+/// Qué es un esquema de luz (`LightSetups.kind`).
+abstract final class LightSetupKind {
+  /// Esquema de verdad: lo comparten planos del guion técnico.
+  static const plan = 'planta';
+
+  /// Boceto con elementos de la planta, sin planos.
+  static const sketchElements = 'boceto_elementos';
+
+  /// Boceto a mano alzada, en su propio lienzo.
+  static const sketchFreehand = 'boceto_mano';
+
+  static bool isSketch(LightSetup setup) => setup.kind != plan;
+}
+
 /// Resuelve y persiste las capas de planta.
 class FloorPlanRepository {
   final AppDatabase db;
@@ -356,10 +370,15 @@ class FloorPlanRepository {
     int? siteId,
     String status = 'boceto',
     String origin = 'planta',
+    String kind = LightSetupKind.plan,
+    int? sceneId,
   }) async {
     final existing = (await db.getLightSetupsForProject(projectId))
         .where(
-          (s) => s.locationBasePlanId == setId && s.locationSiteId == siteId,
+          (s) =>
+              s.locationBasePlanId == setId &&
+              s.locationSiteId == siteId &&
+              s.kind == kind,
         )
         .toList();
     final id = await db.insertLightSetup(
@@ -371,26 +390,46 @@ class FloorPlanRepository {
         status: Value(status),
         origin: Value(origin),
         sortOrder: Value(existing.length),
+        kind: Value(kind),
+        sceneId: Value(sceneId),
       ),
     );
     return (await db.getLightSetupById(id))!;
   }
 
   /// Copia un esquema para hacer una variante.
-  Future<LightSetup> duplicateLightSetup(LightSetup source) async {
+  Future<LightSetup> duplicateLightSetup(LightSetup source) => copyLightSetup(
+    source,
+    setId: source.locationBasePlanId,
+    siteId: source.locationSiteId,
+  );
+
+  /// Copia un esquema a un set ([setId]), a la luz general de una
+  /// localización ([siteId]) o, sin ninguno, a las plantas libres. Si allí
+  /// ya hay uno con su nombre, la copia se llama «… (copia)».
+  Future<LightSetup> copyLightSetup(
+    LightSetup source, {
+    int? setId,
+    int? siteId,
+    String? name,
+    String? kind,
+  }) async {
     final siblings = (await db.getLightSetupsForProject(source.projectId))
         .where(
-          (s) =>
-              s.locationBasePlanId == source.locationBasePlanId &&
-              s.locationSiteId == source.locationSiteId,
+          (s) => s.locationBasePlanId == setId && s.locationSiteId == siteId,
         )
         .toList();
+    final taken = siblings.map((s) => s.name).toSet();
+    var copyName = name ?? source.name;
+    while (taken.contains(copyName)) {
+      copyName = '$copyName (copia)';
+    }
     final id = await db.insertLightSetup(
       LightSetupsCompanion.insert(
         projectId: source.projectId,
-        locationBasePlanId: Value(source.locationBasePlanId),
-        locationSiteId: Value(source.locationSiteId),
-        name: '${source.name} (copia)',
+        locationBasePlanId: Value(setId),
+        locationSiteId: Value(setId == null ? siteId : null),
+        name: copyName,
         status: Value(source.status),
         origin: const Value('planta'),
         category: Value(source.category),
@@ -398,9 +437,68 @@ class FloorPlanRepository {
         sketchJson: Value(source.sketchJson),
         sketchImagePath: Value(source.sketchImagePath),
         sortOrder: Value(siblings.length),
+        kind: Value(kind ?? source.kind),
+        // Un boceto sigue en su escena; un esquema de verdad no tiene.
+        sceneId: Value(
+          (kind ?? source.kind) == LightSetupKind.plan ? null : source.sceneId,
+        ),
       ),
     );
     return (await db.getLightSetupById(id))!;
+  }
+
+  /// Copia un set con su planta y sus esquemas de luz, en [siteId] (por
+  /// defecto, su misma localización). Las escenas no se mueven: siguen en
+  /// el set de partida.
+  Future<LocationBasePlan> copySet(
+    LocationBasePlan source, {
+    int? siteId,
+    bool keepSite = true,
+  }) async {
+    final target = keepSite ? source.siteId : siteId;
+    final siblings = (await db.getLocationsMapForProject(
+      source.projectId,
+    )).values.where((l) => l.siteId == target).toList();
+    final taken = siblings.map((l) => l.locationName).toSet();
+    var name = source.locationName;
+    while (taken.contains(name)) {
+      name = '$name (copia)';
+    }
+    final id = await db.insertLocation(
+      LocationBasePlansCompanion.insert(
+        projectId: source.projectId,
+        siteId: Value(target),
+        locationName: name,
+        description: Value(source.description),
+        color: Value(source.color),
+        notes: Value(source.notes),
+        floorPlanJson: Value(source.floorPlanJson),
+        // En otra localización, su sitio en el plano maestro no vale.
+        sitePlacementJson: Value(
+          target == source.siteId ? source.sitePlacementJson : null,
+        ),
+        sortOrder: Value(siblings.length),
+      ),
+    );
+    final setups = (await db.getLightSetupsForProject(
+      source.projectId,
+    )).where((s) => s.locationBasePlanId == source.id);
+    for (final setup in setups) {
+      await copyLightSetup(setup, setId: id, name: setup.name);
+    }
+    return (await db.getLocationById(id))!;
+  }
+
+  /// Borra un set con sus esquemas de luz. Sus escenas y planos se quedan
+  /// sin set; los planos que usaban esos esquemas, sin luz.
+  Future<void> deleteSet(LocationBasePlan set) async {
+    final setups = (await db.getLightSetupsForProject(
+      set.projectId,
+    )).where((s) => s.locationBasePlanId == set.id);
+    for (final setup in setups) {
+      await db.deleteLightSetup(setup.id);
+    }
+    await db.deleteLocation(set.id);
   }
 
   /// «Setup A», «Setup B»… El primero libre.
@@ -423,6 +521,8 @@ class FloorPlanRepository {
       siteId = (await db.getLocationById(scene.locationId!))?.siteId;
     }
     return all.where((s) {
+      // Los bocetos no llevan planos.
+      if (s.kind != LightSetupKind.plan) return false;
       if (s.locationBasePlanId != null) {
         return s.locationBasePlanId == scene.locationId;
       }

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../moodboard_association.dart';
 import '../visual_bible_model.dart';
 
 /// Acciones de navegación compartidas dentro de la biblia visual.
@@ -27,10 +26,9 @@ class BibleNavigationScope extends InheritedWidget {
       context.dependOnInheritedWidgetOfExactType<BibleNavigationScope>();
 
   static void openMoodboardForSection(BuildContext context, String sectionId) {
-    final scope = maybeOf(context);
-    if (scope == null) return;
-    final category = MoodboardAssociation.categoryForSection(sectionId);
-    scope.openMoodboard(sectionId: sectionId, moodboardFilter: category);
+    // Con todas las imágenes a la vista: abrirlo filtrado por la sección
+    // escondía casi todo el moodboard.
+    maybeOf(context)?.openMoodboard(sectionId: sectionId);
   }
 
   static void openMoodboardFilter(BuildContext context, String? filter) {

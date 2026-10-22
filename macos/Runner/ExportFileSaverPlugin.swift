@@ -47,6 +47,8 @@ class ExportFileSaverPlugin: NSObject, FlutterPlugin {
       result(nil)
     case "readClipboard":
       readClipboard(result: result)
+    case "writeClipboardImage":
+      writeClipboardImage(call, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -430,6 +432,20 @@ class ExportFileSaverPlugin: NSObject, FlutterPlugin {
 
   private func cancelPending() {
     clearPending()
+  }
+
+  /// Copia al portapapeles la imagen de un archivo.
+  private func writeClipboardImage(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+      let path = args["path"] as? String,
+      let image = NSImage(contentsOfFile: path)
+    else {
+      result(false)
+      return
+    }
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    result(pasteboard.writeObjects([image]))
   }
 
   /// Lee imagen o texto/HTML del portapapeles (Chrome, ShotDeck, Safari…).

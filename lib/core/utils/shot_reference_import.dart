@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:convert';
+import 'dart:math' show max;
 import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show Value;
@@ -14,11 +16,16 @@ abstract final class ShotReferenceSource {
   static const artemisCapture = 'artemis_capture';
   static const unrealRender = 'unreal_render';
 
-  /// Viñeta dibujada a mano en el folio de la app.
-  static const sketch = 'sketch';
+  /// Venía en un guion técnico importado (Word).
+  static const document = 'document';
+
+  /// El dibujo del storyboard del plano, puesto también como referencia.
+  static const storyboard = 'storyboard';
 }
 
 /// Importa una imagen y la vincula al plano (miniatura + registro en [ShotReferences]).
+/// Con [keepPrimary], la imagen se añade a las que ya tenga el plano sin
+/// quitarle el puesto a la principal.
 Future<String> importShotReferenceImage({
   required AppDatabase db,
   required Shot shot,
@@ -26,6 +33,7 @@ Future<String> importShotReferenceImage({
   Uint8List? sourceBytes,
   String? fileName,
   required String source,
+  bool keepPrimary = false,
 }) async {
   final String stored;
   if (sourceBytes != null) {
@@ -45,17 +53,27 @@ Future<String> importShotReferenceImage({
     throw ArgumentError('Se requiere sourcePath o sourceBytes');
   }
 
-  final existing = await db.watchReferencesForShot(shot.id).first;
+  // La principal de antes puede no tener fila propia (datos antiguos).
+  final existing = await ensureShotReferencesSynced(db: db, shot: shot);
   await db.insertShotReference(
     ShotReferencesCompanion.insert(
       shotId: shot.id,
       imagePath: stored,
       source: Value(source),
-      sortOrder: Value(existing.length),
+      sortOrder: Value(
+        existing.isEmpty ? 0 : existing.map((r) => r.sortOrder).reduce(max) + 1,
+      ),
     ),
   );
 
-  await db.updateShot(shot.copyWith(referenceImagePath: Value(stored)));
+  final primary = shot.referenceImagePath;
+  final hasPrimary = primary != null && File(primary).existsSync();
+  if (!keepPrimary || !hasPrimary) {
+    await db.updateShotFields(
+      shot.id,
+      ShotsCompanion(referenceImagePath: Value(stored)),
+    );
+  }
 
   final queue = MediaSyncBridge.uploadQueue;
   if (queue != null) {
@@ -71,6 +89,7 @@ Future<String?> pickAndImportShotReference({
   required Shot shot,
   required String source,
   String? dialogTitle,
+  bool keepPrimary = false,
 }) async {
   final file = await UserFilePicker.pickImage(
     dialogTitle: dialogTitle ?? 'Referencia · Plano ${shot.number}',
@@ -88,6 +107,7 @@ Future<String?> pickAndImportShotReference({
     sourceBytes: bytes,
     fileName: file.name,
     source: source,
+    keepPrimary: keepPrimary,
   );
 }
 
@@ -142,4 +162,221 @@ Future<void> deleteShotReferenceEntry({
           : Value(remaining.first.imagePath),
     ),
   );
+}
+
+/// Imágenes de referencia propias del plano, en su orden: un plano con
+/// varios encuadres lleva una por encuadre. Solo las que existen en disco.
+List<String> referenceImagesOf(Shot shot, List<ShotReference> references) {
+  final primary = shot.referenceImagePath;
+  return [
+    // Una principal antigua, sin fila propia, va la primera.
+    if (primary != null && !references.any((r) => r.imagePath == primary))
+      primary,
+    for (final reference in references) reference.imagePath,
+  ].where((path) => File(path).existsSync()).toList();
+}
+
+/// Imagen que se enseña como referencia del plano: la suya o, si no tiene,
+/// la del storyboard.
+String? referenceImageOf(Shot shot) =>
+    shot.referenceImagePath ?? shot.storyboardImagePath;
+
+/// Imagen que se enseña en el storyboard: la suya o, si no tiene, la de
+/// referencia.
+String? storyboardImageOf(Shot shot) =>
+    shot.storyboardImagePath ?? shot.referenceImagePath;
+
+/// Guarda una imagen propia para el storyboard del plano, distinta de la de
+/// referencia.
+Future<String> importShotStoryboardImage({
+  required AppDatabase db,
+  required Shot shot,
+  String? sourcePath,
+  Uint8List? sourceBytes,
+  String? fileName,
+}) async {
+  final String stored;
+  if (sourceBytes != null) {
+    stored = await MediaStorage.writeShotReferenceBytes(
+      projectId: shot.projectId,
+      shotId: shot.id,
+      bytes: sourceBytes,
+      fileName: fileName ?? 'storyboard.jpg',
+    );
+  } else if (sourcePath != null) {
+    stored = await MediaStorage.copyShotReference(
+      projectId: shot.projectId,
+      shotId: shot.id,
+      sourcePath: sourcePath,
+    );
+  } else {
+    throw ArgumentError('Se requiere sourcePath o sourceBytes');
+  }
+
+  await db.updateShotFields(
+    shot.id,
+    ShotsCompanion(storyboardImagePath: Value(stored)),
+  );
+
+  final queue = MediaSyncBridge.uploadQueue;
+  if (queue != null) {
+    await queue.scanAndEnqueueProject(shot.projectId);
+  }
+  return stored;
+}
+
+/// Bocetos de la planta del plano: imágenes (una foto de la libreta, un
+/// esquema de otra película) que hacen de planta mientras no está dibujada.
+/// Se guardan en `cameraPlanImagePath`: una ruta o una lista en JSON. Solo
+/// los que existen en disco.
+List<String> planSketchesOf(Shot shot) =>
+    _storedPlanSketches(shot).where((path) => File(path).existsSync()).toList();
+
+/// Todo lo que el plano enseña como boceto de planta, en su orden: imágenes
+/// (su ruta) y bocetos dibujados en Plantas de cámara y luz (`setup:<id>`,
+/// ver [planSketchSetupId]).
+List<String> planSketchEntriesOf(Shot shot) => [
+  for (final entry in _storedPlanSketches(shot))
+    if (planSketchSetupId(entry) != null || File(entry).existsSync()) entry,
+];
+
+/// El esquema de luz al que apunta una entrada `setup:<id>`; nulo si la
+/// entrada es una imagen.
+int? planSketchSetupId(String entry) =>
+    entry.startsWith('setup:') ? int.tryParse(entry.substring(6)) : null;
+
+/// Enseña en el plano un boceto dibujado (un esquema de luz en boceto). No
+/// cambia el esquema de luz del plano.
+Future<void> addShotPlanSketchSetup({
+  required AppDatabase db,
+  required Shot shot,
+  required int setupId,
+}) async {
+  final current = await db.getShotById(shot.id) ?? shot;
+  final entry = 'setup:$setupId';
+  final stored = _storedPlanSketches(current);
+  if (stored.contains(entry)) return;
+  await _savePlanSketches(db, shot.id, [...stored, entry]);
+}
+
+List<String> _storedPlanSketches(Shot shot) {
+  final raw = shot.cameraPlanImagePath?.trim();
+  if (raw == null || raw.isEmpty) return [];
+  if (!raw.startsWith('[')) return [raw];
+  try {
+    return [
+      for (final path in jsonDecode(raw) as List)
+        if (path is String && path.isNotEmpty) path,
+    ];
+  } catch (_) {
+    return [];
+  }
+}
+
+Future<void> _savePlanSketches(AppDatabase db, int shotId, List<String> paths) {
+  return db.updateShotFields(
+    shotId,
+    ShotsCompanion(
+      cameraPlanImagePath: Value(paths.isEmpty ? null : jsonEncode(paths)),
+    ),
+  );
+}
+
+/// Añade un boceto de planta al plano, detrás de los que ya tenga.
+Future<String> importShotPlanSketch({
+  required AppDatabase db,
+  required Shot shot,
+  String? sourcePath,
+  Uint8List? sourceBytes,
+  String? fileName,
+}) async {
+  final String stored;
+  if (sourceBytes != null) {
+    stored = await MediaStorage.writeShotReferenceBytes(
+      projectId: shot.projectId,
+      shotId: shot.id,
+      bytes: sourceBytes,
+      fileName: fileName ?? 'planta.jpg',
+    );
+  } else if (sourcePath != null) {
+    stored = await MediaStorage.copyShotReference(
+      projectId: shot.projectId,
+      shotId: shot.id,
+      sourcePath: sourcePath,
+    );
+  } else {
+    throw ArgumentError('Se requiere sourcePath o sourceBytes');
+  }
+
+  final current = await db.getShotById(shot.id) ?? shot;
+  await _savePlanSketches(db, shot.id, [
+    ..._storedPlanSketches(current).where((path) => path != stored),
+    stored,
+  ]);
+
+  final queue = MediaSyncBridge.uploadQueue;
+  if (queue != null) {
+    await queue.scanAndEnqueueProject(shot.projectId);
+  }
+  return stored;
+}
+
+/// Enseña en el plano un boceto de planta que ya está guardado (la planta
+/// de una escena que comparten sus planos), detrás de los que tenga.
+Future<void> addShotPlanSketchPath({
+  required AppDatabase db,
+  required Shot shot,
+  required String path,
+}) async {
+  final current = await db.getShotById(shot.id) ?? shot;
+  final stored = _storedPlanSketches(current);
+  if (stored.contains(path)) return;
+  await _savePlanSketches(db, shot.id, [...stored, path]);
+}
+
+/// Quita un boceto de planta del plano: [path] es su ruta o `setup:<id>`.
+Future<void> removeShotPlanSketch({
+  required AppDatabase db,
+  required Shot shot,
+  required String path,
+}) async {
+  final current = await db.getShotById(shot.id) ?? shot;
+  await _savePlanSketches(db, shot.id, [
+    for (final other in _storedPlanSketches(current))
+      if (other != path) other,
+  ]);
+}
+
+/// Cambia de sitio un boceto de planta ([path]: ruta o `setup:<id>`): pasa
+/// al puesto [to] entre los que se ven ([planSketchEntriesOf]).
+Future<void> reorderShotPlanSketches({
+  required AppDatabase db,
+  required Shot shot,
+  required String path,
+  required int to,
+}) async {
+  final current = await db.getShotById(shot.id) ?? shot;
+  final paths = planSketchEntriesOf(current);
+  if (!paths.remove(path)) return;
+  paths.insert(to.clamp(0, paths.length), path);
+  await _savePlanSketches(db, shot.id, paths);
+}
+
+/// Cambia de sitio una referencia del plano: pasa al puesto [to]. La que
+/// queda primera es la principal.
+Future<void> reorderShotReference({
+  required AppDatabase db,
+  required Shot shot,
+  required ShotReference reference,
+  required int to,
+}) async {
+  final refs = await db.watchReferencesForShot(shot.id).first;
+  final ordered = [...refs]..removeWhere((r) => r.id == reference.id);
+  if (ordered.length == refs.length) return;
+  ordered.insert(to.clamp(0, ordered.length), reference);
+  await db.updateShotFields(
+    shot.id,
+    ShotsCompanion(referenceImagePath: Value(ordered.first.imagePath)),
+  );
+  await db.setShotReferenceOrder([for (final r in ordered) r.id]);
 }

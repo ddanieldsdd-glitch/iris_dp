@@ -1,3 +1,9 @@
+import 'dart:convert';
+
+import '../../../../shared/visual_bible/lighting_metrics.dart';
+import '../../../../shared/visual_bible/bible_equipment.dart';
+import '../../../../shared/visual_bible/bible_table.dart';
+import '../../../../shared/visual_bible/bible_text_specs.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -129,12 +135,22 @@ class BiblePdfKit {
           if (!point.isEmpty)
             pw.Padding(
               padding: const pw.EdgeInsets.only(top: 5),
-              child: _titled(point.title.trim(), point.body.trim()),
+              child: _pointBlock(point),
             ),
         ..._moreImages(act),
       ],
     );
   }
+
+  /// Un bloque de una ficha: su texto y, debajo, las imágenes que lo
+  /// explican.
+  pw.Widget _pointBlock(BibleCard point) => pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      _titled(point.title.trim(), point.body.trim()),
+      ..._moreImages(point, skip: 0),
+    ],
+  );
 
   /// Imágenes de una ficha que no son la portada, en pequeño.
   List<pw.Widget> _moreImages(BibleCard card, {int skip = 1}) {
@@ -180,6 +196,24 @@ class BiblePdfKit {
                   children: [
                     _titled(card.title.trim(), card.body.trim()),
                     ..._moreImages(card, skip: 0),
+                    // Lo que cuenta cada imagen (láminas del mosaico).
+                    for (final (i, id) in card.imageIds.indexed)
+                      if (card.imageNotes[id] case final note?
+                          when !note.isEmpty)
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.only(top: 4),
+                          child: _titled(
+                            'Lámina ${i + 1}'
+                            '${note.title.trim().isEmpty ? '' : ' · ${note.title.trim()}'}',
+                            note.text.trim(),
+                          ),
+                        ),
+                    for (final point in card.points)
+                      if (!point.isEmpty)
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.only(top: 5),
+                          child: _pointBlock(point),
+                        ),
                   ],
                 ),
               ),
@@ -378,10 +412,7 @@ class BiblePdfKit {
                     gradient: pw.LinearGradient(
                       begin: pw.Alignment.topCenter,
                       end: pw.Alignment.bottomCenter,
-                      colors: [
-                        PdfColor(0, 0, 0, 0.1),
-                        PdfColor(0, 0, 0, 0.8),
-                      ],
+                      colors: [PdfColor(0, 0, 0, 0.1), PdfColor(0, 0, 0, 0.8)],
                     ),
                   ),
                 ),
@@ -918,7 +949,392 @@ class BiblePdfKit {
     ),
   );
 
+  /// Luz: color y contraste. La temperatura (o los colores de la escena),
+  /// el tinte, el ratio con sus stops y la corrección que hace falta.
+  pw.Widget? lightMetricsPoint(
+    String label,
+    LightingMetrics metrics, {
+    List<CorrectionGel> gels = const [],
+  }) {
+    if (metrics.isEmpty) return null;
+    String hex(int rgb) =>
+        '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+    final ratio = metrics.ratioOption;
+    final recipe = metrics.usesColors ? null : metrics.recipe(gels);
+    final cct = !metrics.usesColors && metrics.sources.isNotEmpty;
+    String stops(double s) => s == 0
+        ? 'clave'
+        : '${s > 0 ? '+' : ''}${s % 1 == 0 ? s.toInt() : s} st'.replaceAll(
+            '.',
+            ',',
+          );
+    final rows = <(String, String)>[
+      if (cct)
+        for (final s in metrics.sources)
+          (
+            [
+              s.role.label,
+              if (s.name.trim().isNotEmpty) s.name.trim(),
+            ].join(' · '),
+            [
+              'CCT ${s.kelvin} K',
+              if (s.tint.abs() >= 0.5) LightingMetrics(tint: s.tint).tintLabel,
+              stops(s.stops),
+              s.soft ? 'suave' : 'dura',
+            ].join(' · '),
+          )
+      else if (!metrics.usesColors && metrics.kelvin != null)
+        ('Temperatura', 'CCT ${metrics.kelvin} K'),
+      if (!cct &&
+          !metrics.usesColors &&
+          metrics.tint != null &&
+          metrics.tint!.abs() >= 0.5)
+        ('Tinte', metrics.tintLabel),
+      if (!metrics.usesColors &&
+          metrics.tint != null &&
+          metrics.tint!.abs() >= 0.5)
+        ('Tinte', metrics.tintLabel),
+      if (ratio != null)
+        ('Contraste', '${ratio.label} · ${ratio.stopsLabel} · ${ratio.use}'),
+      if (recipe != null && !recipe.needsNothing)
+        (
+          'Corrección desde ${recipe.sourceKelvin} K',
+          [
+            ...recipe.gels.map((g) => g.name),
+            if (recipe.tintGel != null) recipe.tintGel!,
+          ].join(' + '),
+        ),
+      if (metrics.usesColors)
+        for (final c in metrics.colors)
+          (
+            [
+              c.role.label,
+              if (c.name.trim().isNotEmpty) c.name.trim(),
+            ].join(' · '),
+            'HSI · ${c.hsiLabel}   ${c.rgbLabel}',
+          ),
+    ];
+    final swatches = <(String, String)>[
+      if (metrics.usesColors)
+        for (final c in metrics.colors) (hex(c.rgb), c.role.label)
+      else if (cct)
+        for (final s in metrics.sources) (hex(s.rgb), '${s.kelvin} K')
+      else if (metrics.color != null)
+        (hex(metrics.color!), '${metrics.kelvin} K'),
+    ];
+    if (rows.isEmpty && swatches.isEmpty) return null;
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (swatches.isNotEmpty) swatchRow(label, swatches),
+        if (rows.isNotEmpty) specsPoint(swatches.isEmpty ? label : '', rows),
+      ],
+    );
+  }
+
+  /// Equipo: cada pieza con su papel, su estado y su alternativa.
+  pw.Widget equipmentPoint(
+    String label,
+    List<BibleEquipmentItem> items, {
+    bool feminine = true,
+  }) => pw.Padding(
+    padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        this.label(label),
+        pw.SizedBox(height: 4),
+        for (final item in items)
+          pw.Container(
+            margin: const pw.EdgeInsets.only(bottom: 6),
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              color: BiblePdfTokens.panel,
+              borderRadius: pw.BorderRadius.circular(BiblePdfTokens.radius),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Row(
+                  children: [
+                    if (item.role.isNotEmpty) ...[
+                      pw.Text(
+                        item.role,
+                        style: pw.TextStyle(
+                          font: bold,
+                          fontSize: 12,
+                          color: BiblePdfTokens.accent,
+                        ),
+                      ),
+                      pw.SizedBox(width: 8),
+                    ],
+                    pw.Expanded(
+                      child: pw.Text(
+                        item.name,
+                        style: pw.TextStyle(
+                          font: bold,
+                          fontSize: 11,
+                          color: BiblePdfTokens.ink,
+                        ),
+                      ),
+                    ),
+                    pw.Text(
+                      (feminine ? item.status.feminine : item.status.masculine)
+                          .toUpperCase(),
+                      style: pw.TextStyle(
+                        font: bold,
+                        fontSize: 7,
+                        letterSpacing: 0.8,
+                        color: item.status == BibleEquipmentStatus.definitive
+                            ? BiblePdfTokens.accent
+                            : BiblePdfTokens.secondary,
+                      ),
+                    ),
+                  ],
+                ),
+                if (item.facts.isNotEmpty) ...[
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    item.facts.entries
+                        .map((e) => '${e.key}: ${e.value}')
+                        .join('  ·  '),
+                    style: pw.TextStyle(
+                      font: regular,
+                      fontSize: 8,
+                      color: BiblePdfTokens.secondary,
+                    ),
+                  ),
+                ],
+                if (item.note.trim().isNotEmpty) ...[
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    item.note.trim(),
+                    style: pw.TextStyle(
+                      font: regular,
+                      fontSize: 9,
+                      color: BiblePdfTokens.ink,
+                    ),
+                  ),
+                ],
+                if (item.hasAlternative) ...[
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'ALTERNATIVA · ${item.altName}'
+                    '${item.altNote.trim().isEmpty ? '' : ' — ${item.altNote.trim()}'}',
+                    style: pw.TextStyle(
+                      font: regular,
+                      fontSize: 8,
+                      color: BiblePdfTokens.secondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
+
+  /// Texto con datos: el desarrollo y, debajo, los datos con valor.
+  pw.Widget? textSpecsPoint(String label, BibleTextSpecsValue value) {
+    if (value.isEmpty) return null;
+    final text = value.text.trim();
+    final rows = value.filledRows;
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (text.isNotEmpty) textPoint(label, text),
+        if (rows.isNotEmpty) specsPoint(text.isEmpty ? label : '', rows),
+      ],
+    );
+  }
+
+  /// Tabla con su fila de títulos; solo las filas con algo escrito.
+  pw.Widget tablePoint(String label, BibleTableValue table) => pw.Padding(
+    padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        this.label(label),
+        pw.SizedBox(height: 4),
+        pw.Table(
+          border: const pw.TableBorder(
+            horizontalInside: pw.BorderSide(
+              color: BiblePdfTokens.rule,
+              width: 0.5,
+            ),
+            bottom: pw.BorderSide(color: BiblePdfTokens.rule, width: 0.5),
+          ),
+          children: [
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(color: BiblePdfTokens.panel),
+              children: [
+                for (final column in table.columns)
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(4),
+                    child: pw.Text(
+                      column.toUpperCase(),
+                      style: pw.TextStyle(
+                        font: regular,
+                        fontSize: 7,
+                        letterSpacing: 0.6,
+                        color: BiblePdfTokens.secondary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            for (final row in table.filledRows)
+              pw.TableRow(
+                children: [
+                  for (var c = 0; c < row.length; c++)
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text(
+                        row[c],
+                        style: pw.TextStyle(
+                          font: c == 0 ? bold : regular,
+                          fontSize: 9,
+                          color: BiblePdfTokens.ink,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  /// Medidores: dato, valor, barra de escala si la hay y nota.
+  pw.Widget metersPoint(String label, List<BibleMeter> meters) =>
+      pw.Inseparable(
+        child: pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              this.label(label),
+              pw.SizedBox(height: 4),
+              for (final meter in meters)
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 6),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Row(
+                        children: [
+                          pw.Expanded(
+                            child: pw.Text(
+                              meter.label.toUpperCase(),
+                              style: pw.TextStyle(
+                                font: regular,
+                                fontSize: 8,
+                                letterSpacing: 0.6,
+                                color: BiblePdfTokens.secondary,
+                              ),
+                            ),
+                          ),
+                          pw.Text(
+                            meter.value,
+                            style: pw.TextStyle(
+                              font: bold,
+                              fontSize: 10,
+                              color: BiblePdfTokens.ink,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (meter.fraction != null) ...[
+                        pw.SizedBox(height: 2),
+                        pw.Stack(
+                          children: [
+                            pw.Container(height: 2, color: BiblePdfTokens.rule),
+                            pw.Row(
+                              children: [
+                                pw.Expanded(
+                                  flex: (meter.fraction! * 1000).round().clamp(
+                                    1,
+                                    1000,
+                                  ),
+                                  child: pw.Container(
+                                    height: 2,
+                                    color: BiblePdfTokens.accent,
+                                  ),
+                                ),
+                                pw.Spacer(
+                                  flex:
+                                      1000 -
+                                      (meter.fraction! * 1000).round().clamp(
+                                        1,
+                                        999,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (meter.note.trim().isNotEmpty) ...[
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          meter.note.trim(),
+                          style: pw.TextStyle(
+                            font: regular,
+                            fontSize: 8,
+                            color: BiblePdfTokens.secondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+
   /// Pinta un punto según su tipo. `null` si no tiene contenido.
+  /// Análisis de una imagen: la imagen, su título, lo que cuenta y su luz.
+  pw.Widget? _imageAnalysisPoint(String label, String raw) {
+    Map<dynamic, dynamic> map;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      map = decoded;
+    } catch (_) {
+      return null;
+    }
+    final id = (map['image'] as num?)?.toInt();
+    final note = BibleImageNote.fromJson(map);
+    final image = id == null ? null : _loaded([id]).firstOrNull;
+    if (image == null && note.isEmpty) return null;
+    final light = lightMetricsPoint(
+      'Su luz',
+      LightingMetrics.fromJson(note.light),
+    );
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: BiblePdfTokens.gap),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          this.label(label),
+          pw.SizedBox(height: 4),
+          if (image != null)
+            pw.ClipRRect(
+              horizontalRadius: BiblePdfTokens.radius,
+              verticalRadius: BiblePdfTokens.radius,
+              child: pw.Image(image, height: 200, fit: pw.BoxFit.contain),
+            ),
+          pw.SizedBox(height: 5),
+          _titled(note.title.trim(), note.text.trim()),
+          ?light,
+        ],
+      ),
+    );
+  }
+
   pw.Widget? point(BibleSectionField field, String? raw) {
     if (raw == null || raw.trim().isEmpty) return null;
     switch (field.type) {
@@ -928,6 +1344,15 @@ class BiblePdfKit {
         ).where((e) => e.trim().isNotEmpty).toList();
         return items.isEmpty ? null : listPoint(field.label, items);
       case BibleSectionFieldType.specs:
+        if (field.widget == 'light_metrics') {
+          return lightMetricsPoint(field.label, LightingMetrics.fromJson(raw));
+        }
+        if (field.widget == 'image_analysis') {
+          return _imageAnalysisPoint(field.label, raw);
+        }
+        if (field.widget == 'text_specs') {
+          return textSpecsPoint(field.label, BibleTextSpecsValue.decode(raw));
+        }
         final rows = BibleSectionPointValue.decodeSpecs(raw)
             .where((r) => r.$1.trim().isNotEmpty || r.$2.trim().isNotEmpty)
             .toList();
@@ -940,7 +1365,9 @@ class BiblePdfKit {
         return cardsPoint(
           field.label,
           cards,
-          columns: field.widget == 'cards_pillars',
+          // El mosaico sale como tarjetas con su imagen, en columnas.
+          columns:
+              field.widget == 'cards_pillars' || field.widget == 'cards_mosaic',
         );
       case BibleSectionFieldType.acts:
         return actsPointOf(field.label, BibleActsValue.decode(raw));
@@ -979,6 +1406,19 @@ class BiblePdfKit {
               ),
           ],
         );
+      case BibleSectionFieldType.equipment:
+        final items = BibleEquipmentItem.listFrom(
+          raw,
+        ).where((item) => !item.isEmpty).toList();
+        return items.isEmpty ? null : equipmentPoint(field.label, items);
+      case BibleSectionFieldType.table:
+        final table = BibleTableValue.decode(raw);
+        return table.isEmpty ? null : tablePoint(field.label, table);
+      case BibleSectionFieldType.meters:
+        final meters = BibleMeter.listFrom(
+          raw,
+        ).where((m) => !m.isEmpty).toList();
+        return meters.isEmpty ? null : metersPoint(field.label, meters);
       case BibleSectionFieldType.gallery:
         final shots = _loaded([
           for (final id in BibleSectionPointValue.decodeList(raw))
