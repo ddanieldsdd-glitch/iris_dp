@@ -9,6 +9,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/utils/export_file_saver.dart';
 import '../../core/widgets/app_snackbar.dart';
 import 'camera_plan_element_model.dart';
+import 'light/light_scene.dart';
 import 'plan_cad_export.dart';
 import 'plan_elevation.dart';
 
@@ -19,11 +20,13 @@ Future<void> showPlanElevation(
   required List<PlanElement> elements,
   required double metersPerUnit,
   required String name,
+  LightScene? scene,
 }) => Navigator.of(context).push(
   MaterialPageRoute<void>(
     fullscreenDialog: true,
     builder: (_) => PlanElevationScreen(
       elements: elements,
+      scene: scene,
       metersPerUnit: metersPerUnit,
       name: name,
     ),
@@ -37,9 +40,14 @@ class PlanElevationScreen extends StatefulWidget {
   /// Nombre de la planta, para los archivos.
   final String name;
 
+  /// La planta vista por la luz, si ya la tiene quien abre el alzado: de
+  /// ella salen las alturas de las paredes.
+  final LightScene? scene;
+
   const PlanElevationScreen({
     super.key,
     required this.elements,
+    this.scene,
     required this.metersPerUnit,
     required this.name,
   });
@@ -51,10 +59,14 @@ class PlanElevationScreen extends StatefulWidget {
 class _PlanElevationScreenState extends State<PlanElevationScreen> {
   ElevationSide _side = ElevationSide.front;
 
-  PlanElevation get _elevation => PlanElevation.of(
+  /// Una vista por lado, hecha la primera vez que se pide.
+  final _elevations = <ElevationSide, PlanElevation>{};
+
+  PlanElevation get _elevation => _elevations[_side] ??= PlanElevation.of(
     widget.elements,
     metersPerUnit: widget.metersPerUnit,
     side: _side,
+    scene: widget.scene,
   );
 
   String get _base =>
