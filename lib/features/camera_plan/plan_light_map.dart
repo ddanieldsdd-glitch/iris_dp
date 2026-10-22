@@ -158,8 +158,15 @@ class PlanLightMap {
 
   double luxAt(int column, int row) => lux[row * (columns + 1) + column];
 
+  /// Puntos que tiene la rejilla como poco: con menos, lo más iluminado de
+  /// la planta saldría a saltos.
+  static const int minPoints = 200;
+
   /// Calcula el mapa de [rect] con una rejilla tan fina como deje
-  /// [budget]: el número de comprobaciones punto–fuente que se permiten.
+  /// [budget]: el número de comprobaciones rayo–obstáculo que se permiten.
+  /// Cada punto cuesta un rayo por fuente (tres si es ancha y hace
+  /// penumbra), dieciséis por el cielo y uno por el sol, y cada rayo, una
+  /// comprobación por obstáculo.
   ///
   /// Con [exposureKeyLux] (los lux bien expuestos de la cámara) se mira la
   /// luz hasta donde la cámara aún la ve, aunque sea muy poca al lado de la
@@ -173,9 +180,18 @@ class PlanLightMap {
     final env = scene.ambient;
     final sunny = env != null && env.hasSun;
     final skyLit = env != null && env.hasSky && env.day;
-    // El cielo cuesta como dieciséis fuentes: mira alrededor.
-    final perPoint = scene.lights.length + (sunny ? 1 : 0) + (skyLit ? 16 : 0);
-    final points = (budget / math.max(1, perPoint)).clamp(400.0, 30000.0);
+    var rays = (sunny ? 1 : 0) + (skyLit ? 16 : 0);
+    for (final light in scene.lights) {
+      final wide =
+          light.overheadM == null &&
+          light.source.sizeM / scene.metersPerUnit / 2 >= 5;
+      rays += wide ? 3 : 1;
+    }
+    final obstacles = scene.blockers.length + scene.apertures.length + 1;
+    final points = (budget / math.max(1, rays * obstacles)).clamp(
+      minPoints.toDouble(),
+      30000.0,
+    );
     final aspect = rect.width / math.max(1.0, rect.height);
     final rows = math.max(8, math.sqrt(points / aspect).round());
     final columns = math.max(8, (rows * aspect).round());
@@ -483,12 +499,13 @@ abstract final class PlanLightKey {
 /// cuando cambia. Mientras se arrastra algo lo calcula deprisa y a grano
 /// grueso; al parar, lo afina.
 class PlanLightMapCache extends ChangeNotifier {
-  /// Comprobaciones punto–fuente para el mapa rápido y para el fino.
+  /// Comprobaciones rayo–obstáculo para el mapa rápido (mientras se
+  /// arrastra) y para el fino (al parar). Del mapa solo sale contra qué se
+  /// mide el brillo en «Ver todo»: con unos cientos de puntos basta.
   final int coarseBudget;
   final int fineBudget;
 
-  PlanLightMapCache({this.coarseBudget = 60000, int? fineBudget})
-    : fineBudget = fineBudget ?? coarseBudget;
+  PlanLightMapCache({this.coarseBudget = 400000, this.fineBudget = 1600000});
 
   int? _key;
   PlanLightMap? _map;

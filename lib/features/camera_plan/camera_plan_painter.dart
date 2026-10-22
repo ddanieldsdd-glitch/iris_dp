@@ -697,11 +697,23 @@ class CameraPlanPainter extends CustomPainter {
     Set<PlanElement> dimmed,
   ) {
     final lightKey = _lightKey(scene);
+    // «Ver todo»: el brillo se mide contra lo más iluminado de la planta.
+    // Solo hacen falta esos dos números; la rejilla es pequeña.
+    final keys = _exposedKeyLux != null
+        ? null
+        : lightMap!.resolve(scene, lightKey, _lightRect(scene));
     final picture = lightMap!.picture(
-      Object.hash(lightKey, dimmed.length, inheritedOpacity, _exposedKeyLux),
+      Object.hash(
+        lightKey,
+        dimmed.length,
+        inheritedOpacity,
+        _exposedKeyLux,
+        keys?.keyLux,
+        keys?.indoorKeyLux,
+      ),
       () {
         final recorder = ui.PictureRecorder();
-        _paintLight(Canvas(recorder), scene, lightKey, dimmed);
+        _paintLight(Canvas(recorder), scene, dimmed, keys);
         return recorder.endRecording();
       },
     );
@@ -710,13 +722,14 @@ class CameraPlanPainter extends CustomPainter {
     canvas.restore();
   }
 
+  /// Graba la luz de la planta: a la exposición de la cámara o, con [map],
+  /// contra lo más iluminado de la planta («Ver todo»).
   void _paintLight(
     Canvas canvas,
     LightScene scene,
-    int lightKey,
     Set<PlanElement> dimmed,
+    PlanLightMap? map,
   ) {
-    final map = lightMap!.resolve(scene, lightKey, _lightRect(scene));
     final env = ambient;
     // Se dibuja para toda la planta, no solo para lo que se ve ahora.
     const view = Rect.fromLTRB(-2e5, -2e5, 2e5, 2e5);
@@ -757,7 +770,7 @@ class CameraPlanPainter extends CustomPainter {
       return;
     }
 
-    final key = map.keyLux;
+    final key = map!.keyLux;
     final indoorKey = map.indoorKeyLux;
 
     void beams(double against) {
