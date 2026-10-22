@@ -106,6 +106,7 @@ class PlanElement {
     ElementType.wall => switch (props['kind']) {
       'street' => 'Calle',
       'relief' => 'Relieve',
+      'drape' => 'Tela',
       _ => architectureType?.label ?? 'Pared',
     },
   };

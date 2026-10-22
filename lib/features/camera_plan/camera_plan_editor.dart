@@ -76,6 +76,7 @@ import '../../core/settings/app_prefs.dart';
 import '../settings/settings_launcher.dart';
 import 'plan_prefs.dart';
 import 'rig/hall_builder_sheet.dart';
+import 'rig/plan_drape.dart';
 import 'rig/plan_hall.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
@@ -2432,13 +2433,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   String get _segmentKind => switch (_tool) {
     PlanTool.street => PlanSegment.kindStreet,
     PlanTool.relief => PlanSegment.kindRelief,
+    PlanTool.drape => PlanDrape.kind,
     _ => PlanSegment.kindWall,
   };
 
   Future<void> _addSegment(Offset from, Offset to) async {
     if ((to - from).distance < 8) return;
     await _addElement(
-      PlanSegment.create(start: from, end: to, kind: _segmentKind),
+      _tool == PlanTool.drape
+          ? PlanDrape.create(from, to)
+          : PlanSegment.create(start: from, end: to, kind: _segmentKind),
       keepPosition: true,
       select: false,
     );

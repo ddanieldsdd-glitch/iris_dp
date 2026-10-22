@@ -12,6 +12,7 @@ import 'package:iris_dp/features/camera_plan/light_overrides.dart';
 import 'package:iris_dp/features/camera_plan/plan_opening.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 import 'package:iris_dp/features/camera_plan/rig/catenary.dart';
+import 'package:iris_dp/features/camera_plan/rig/drape_controls.dart';
 import 'package:iris_dp/features/camera_plan/rig/hall_builder_sheet.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_drape.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_hall.dart';
@@ -428,5 +429,41 @@ void main() {
     await tester.tap(find.text('Crear la nave'));
     await tester.pumpAndSettle();
     expect(result?.roof, HallRoof.gable);
+  });
+
+  testWidgets('los controles de la tela leen cuerda, tensión y altura libre', (
+    tester,
+  ) async {
+    final drape = PlanDrape.create(
+      Offset.zero,
+      const Offset(300, 0),
+      anchorM: 4.4,
+      sagM: 0.4,
+      lengthM: 1.2,
+    );
+    expect(drape.displayLabel, 'Tela');
+    Future<void> show() => tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark,
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: DrapeControls(
+              element: drape,
+              metersPerUnit: mpu,
+              onPreview: () {},
+              onUpdate: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await show();
+    expect(find.text('6.07 m'), findsOneWidget); // cuerda
+    expect(find.text('2.80 m'), findsOneWidget); // altura libre
+    expect(find.textContaining('tira mucho'), findsNothing);
+
+    PlanDrape.setSag(drape, 0.02);
+    await show();
+    expect(find.textContaining('tira mucho'), findsOneWidget);
   });
 }

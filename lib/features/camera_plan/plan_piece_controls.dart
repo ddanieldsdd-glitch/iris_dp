@@ -12,6 +12,8 @@ import 'light/surfaces.dart';
 import 'plan_marks.dart';
 import 'plan_opening.dart';
 import 'plan_segment.dart';
+import 'rig/drape_controls.dart';
+import 'rig/plan_drape.dart';
 
 /// Propiedades de lo que no es un aparato: puertas, ventanas, paredes,
 /// grip, personas y cámaras. Lo que aquí se cambia afecta a cómo se
@@ -405,6 +407,15 @@ class PlanPieceControls extends StatelessWidget {
               el.props[PlanOpening.headKey] = (v * 20).round() / 20,
         ),
       ]);
+    } else if (PlanDrape.isDrape(el)) {
+      children.add(
+        DrapeControls(
+          element: el,
+          metersPerUnit: metersPerUnit,
+          onPreview: onPreview,
+          onUpdate: onUpdate,
+        ),
+      );
     } else if (PlanSegment.isSegment(el) &&
         PlanSegment.kind(el) == PlanSegment.kindWall) {
       final material = SurfaceMaterial.byId(
