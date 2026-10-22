@@ -48,6 +48,39 @@ void main() {
     expect(ms, lessThan(400));
   });
 
+  test('fundir los rebotes mate da la misma luz y el mismo fotómetro', () {
+    final plan = syntheticPlan();
+    final fused = LightScene.from(plan, metersPerUnit: mpu, ambient: ambient);
+    final apart = LightScene.from(
+      plan,
+      metersPerUnit: mpu,
+      ambient: ambient,
+      fuseBounces: false,
+    );
+    note(
+      'fuentes: ${apart.lights.length} sin fundir → ${fused.lights.length} fundidas',
+    );
+    expect(fused.lights.length, lessThan(apart.lights.length / 2));
+    for (var x = 20.0; x < 1200; x += 97) {
+      for (var y = 20.0; y < 800; y += 83) {
+        final at = Offset(x, y);
+        final a = apart.sampleAt(at);
+        final f = fused.sampleAt(at);
+        expect(f.lux, closeTo(a.lux, a.lux * 1e-9 + 1e-9), reason: '$at');
+        if (a.lux > 0) expect(f.cct, closeTo(a.cct, 1e-6), reason: '$at');
+        // El fotómetro enseña las mismas aportaciones, una a una.
+        String parts(LightScene s) => ([
+          for (final c in s.contributionsAt(at))
+            if (c.lux > 0.02)
+              '${c.light.label} ${c.lux.toStringAsFixed(6)} '
+                  '${c.cct.toStringAsFixed(3)}',
+        ]..sort()).join('\n');
+        expect(parts(fused), parts(apart), reason: '$at');
+        expect(fused.luxAt(at), closeTo(apart.luxAt(at), 1e-6 * a.lux + 1e-9));
+      }
+    }
+  });
+
   test('grabar la capa de luz (exposición de la cámara)', () {
     final plan = syntheticPlan();
     final ms = medianMs(3, () => recordLayer(plan, LightView.camera).dispose());
@@ -134,6 +167,11 @@ void main() {
     report('repintado al mover la vista', ms);
     expect(ms, lessThan(150));
   });
+}
+
+void note(String text) {
+  // ignore: avoid_print
+  print('⏱ $text');
 }
 
 void report(String what, double ms, [String extra = '']) {

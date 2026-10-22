@@ -250,6 +250,11 @@ class SceneLight {
   /// suelo: de ahí sale su rayo.
   final double z;
 
+  /// Si es la suma de varias: lo que devuelve una cara de un paño mate por
+  /// cada fuente que le da. Comparten sitio, eje y forma, y solo cambian la
+  /// intensidad y el color; el fotómetro las enseña por separado.
+  final List<SceneLight> parts;
+
   const SceneLight({
     required this.source,
     required this.position,
@@ -261,9 +266,47 @@ class SceneLight {
     this.tiltDeg = 0,
     this.fixture,
     this.surface,
+    this.parts = const [],
   });
 
   bool get isSecondary => fixture == null;
+
+  /// Una sola fuente con la luz de todas [parts], que tienen que salir del
+  /// mismo sitio con el mismo eje y la misma forma (ver [parts]).
+  ///
+  /// Como los lux de una fuente son proporcionales a sus candelas, las
+  /// candelas se suman y el color se pondera en mireds por candela: lo que
+  /// llega a cualquier punto es lo mismo que sumando las partes.
+  factory SceneLight.fused(List<SceneLight> parts) {
+    final first = parts.first;
+    if (parts.length == 1) return first;
+    var candela = 0.0;
+    var mired = 0.0;
+    var status = first.source.status;
+    for (final part in parts) {
+      candela += part.source.candela;
+      mired += part.source.candela * 1e6 / part.source.cct;
+      // La suma es tan fiable como la menos fiable de sus partes.
+      if (part.source.status.index > status.index) status = part.source.status;
+    }
+    final label = first.label.split(' ← ').first;
+    return SceneLight(
+      source: first.source.copyWith(
+        candela: candela,
+        cct: 1e6 / (mired / candela),
+        status: status,
+      ),
+      position: first.position,
+      aim: first.aim,
+      label: '$label ← ${parts.length} fuentes',
+      z: first.z,
+      frontOnly: first.frontOnly,
+      overheadM: first.overheadM,
+      tiltDeg: first.tiltDeg,
+      surface: first.surface,
+      parts: parts,
+    );
+  }
 }
 
 /// Lo que aporta una fuente a un punto.
@@ -365,11 +408,18 @@ class LightScene {
   static double lengthOf(PlanElement el) =>
       (el.props[lenKey] as num?)?.toDouble() ?? pieceWidth;
 
+  /// La planta vista por la luz.
+  ///
+  /// Con [fuseBounces], lo que devuelve cada cara de un paño mate (paredes y
+  /// rebotes mate) va en una sola fuente: con muchas luces y muchas paredes
+  /// son cientos de fuentes menos y la misma luz. Sin él, una por cada
+  /// fuente que le da (sirve para comprobarlo).
   factory LightScene.from(
     Iterable<PlanElement> elements, {
     required double metersPerUnit,
     bool wallBounce = true,
     PlanAmbient? ambient,
+    bool fuseBounces = true,
   }) {
     final all = elements.toList();
     final rooms = <SceneRoom>[
@@ -488,7 +538,12 @@ class LightScene {
     final direct = stage([...entering, ...soft]);
     return stage([
       ...direct.lights,
-      ...direct._secondarySources(all, wallBounce: bounce, diffusers: false),
+      ...direct._secondarySources(
+        all,
+        wallBounce: bounce,
+        diffusers: false,
+        fuse: fuseBounces,
+      ),
       ...direct._floorSunSources(),
     ]);
   }
@@ -1068,10 +1123,16 @@ class LightScene {
   /// Una superficie mate que recibe un flujo Φ lo reparte por todo su
   /// frente, con intensidad Φ/π en su eje. Φ es la luz que le llega por su
   /// área y por lo que devuelve o deja pasar.
+  ///
+  /// Con [fuse], lo que devuelve cada cara de una superficie mate va en una
+  /// sola fuente ([SceneLight.fused]). Solo se hace con los rebotes, que es
+  /// lo último: las telas alimentan después a las paredes, y ahí sumar antes
+  /// de los umbrales de cada fuente cambiaría algún resto de luz.
   List<SceneLight> _secondarySources(
     List<PlanElement> elements, {
     required bool wallBounce,
     required bool diffusers,
+    bool fuse = false,
   }) {
     final result = <SceneLight>[];
 
@@ -1098,6 +1159,26 @@ class LightScene {
       // la dirección del reflejo.
       final matte = beamDeg >= 90;
       final spread = matte ? math.pi : LightSource.solidAngle(beamDeg);
+      // Lo que sale por cada cara, si se funde: por la de [normalA] y por
+      // la contraria.
+      final faces = fuse && matte ? (<SceneLight>[], <SceneLight>[]) : null;
+      void add(SceneLight light, Offset facing) {
+        if (faces == null) {
+          result.add(light);
+        } else if (facing == normalA) {
+          faces.$1.add(light);
+        } else {
+          faces.$2.add(light);
+        }
+      }
+
+      void flush() {
+        if (faces == null) return;
+        for (final face in [faces.$1, faces.$2]) {
+          if (face.isNotEmpty) result.add(SceneLight.fused(face));
+        }
+      }
+
       Offset reflected(Offset incoming, Offset normal) {
         final dot = incoming.dx * normal.dx + incoming.dy * normal.dy;
         final out = incoming - normal * (2 * dot);
@@ -1118,7 +1199,7 @@ class LightScene {
         final incoming = toLight.distance < 1e-6
             ? facing * -1
             : toLight / -toLight.distance;
-        result.add(
+        add(
           SceneLight(
             source: LightSource(
               candela: candela,
@@ -1141,15 +1222,16 @@ class LightScene {
             surface: own,
             label: '$label ← ${light.label}',
           ),
+          facing,
         );
       }
 
       // El sol también le da.
       final env = ambient;
-      if (env == null || !env.hasSun) return;
+      if (env == null || !env.hasSun) return flush();
       final toward = env.towardSun;
       final dot = toward.dx * normalA.dx + toward.dy * normalA.dy;
-      if (dot.abs() < 0.05) return;
+      if (dot.abs() < 0.05) return flush();
       final facing = dot >= 0 ? normalA : normalA * -1;
       // El sol puede darle solo en parte (la mancha de una ventana cae
       // baja): se mira a varias alturas y a lo largo de la superficie.
@@ -1171,13 +1253,13 @@ class LightScene {
         transmission: lit / (across.length * up.length),
         miredShift: sunMired,
       );
-      if (sun.transmission <= 0) return;
+      if (sun.transmission <= 0) return flush();
       final cosElevation = 1 / math.sqrt(1 + _sunTan * _sunTan);
       final lux =
           env.condition.sunLux * sun.transmission * cosElevation * dot.abs();
       final candela = lux * areaM2 * keep / spread;
-      if (candela < 1) return;
-      result.add(
+      if (candela < 1) return flush();
+      add(
         SceneLight(
           source: LightSource(
             candela: candela,
@@ -1198,7 +1280,9 @@ class LightScene {
           surface: own,
           label: '$label ← Sol',
         ),
+        facing,
       );
+      flush();
     }
 
     if (diffusers) {
@@ -1793,14 +1877,21 @@ class LightScene {
       if (passed.transmission <= 0) continue;
       final lux =
           luxFrom(light, units, offAxis, receiverZ: face) * passed.transmission;
-      if (lux > 0.01) {
-        result.add(
-          LightContribution(
-            light,
-            lux,
-            _shift(light.source.cct, passed.miredShift),
-          ),
-        );
+      // Una fuente fundida se enseña por partes: cada una aporta en
+      // proporción a sus candelas, con su color.
+      for (final part in light.parts.isEmpty ? [light] : light.parts) {
+        final share = identical(part, light)
+            ? lux
+            : lux * part.source.candela / light.source.candela;
+        if (share > 0.01) {
+          result.add(
+            LightContribution(
+              part,
+              share,
+              _shift(part.source.cct, passed.miredShift),
+            ),
+          );
+        }
       }
     }
     result.addAll(_ambientAt(point));
