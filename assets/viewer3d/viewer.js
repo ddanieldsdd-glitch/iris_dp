@@ -113,32 +113,99 @@
 
   window.addEventListener('resize', resize);
 
-  // ── Toques: el cubo cambia la vista; un toque sin arrastrar selecciona ──
+  // ── Toques ───────────────────────────────────────────────────────────────
+  // El cubo cambia la vista. Un toque sin arrastrar selecciona. Arrastrar lo
+  // seleccionado (foco, pilar, motor, persona, cámara) lo mueve por el
+  // suelo; arrastrar el asa naranja de un foco cambia adónde apunta. Al
+  // soltar se avisa a la app, que guarda y vuelve a mandar la escena.
   let down = null;
+  let drag = null;
+  let selectedId = null;
+  let aimHandle = null;
+  const ray = new THREE.Raycaster();
+
+  function rayAt(e) {
+    const { w, h } = size();
+    ray.setFromCamera(new THREE.Vector2((e.clientX / w) * 2 - 1, -(e.clientY / h) * 2 + 1), cam);
+    return ray;
+  }
+
+  function onPlane(e, y) {
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -y);
+    const p = new THREE.Vector3();
+    return rayAt(e).ray.intersectPlane(plane, p) ? p : null;
+  }
+
   renderer.domElement.addEventListener('pointerdown', (e) => {
     const { w } = size();
     const x = e.clientX, y = e.clientY;
     const cx = w - M - CUBE, cy = M;
     if (x >= cx && x <= cx + CUBE && y >= cy && y <= cy + CUBE) {
       e.stopImmediatePropagation();
-      const ray = new THREE.Raycaster();
-      ray.setFromCamera(new THREE.Vector2(((x - cx) / CUBE) * 2 - 1, -((y - cy) / CUBE) * 2 + 1), cubeCam);
-      const hit = ray.intersectObject(cubeMesh)[0];
+      const r = new THREE.Raycaster();
+      r.setFromCamera(new THREE.Vector2(((x - cx) / CUBE) * 2 - 1, -((y - cy) / CUBE) * 2 + 1), cubeCam);
+      const hit = r.intersectObject(cubeMesh)[0];
       if (hit) setView(['right', 'left', 'top', 'top', 'front', 'back'][hit.face.materialIndex]);
       return;
     }
     down = { x, y };
+    // ¿Empieza un arrastre? El asa de puntería, o lo ya seleccionado.
+    if (aimHandle && rayAt(e).intersectObject(aimHandle).length) {
+      const at = onPlane(e, aimHandle.position.y);
+      if (at) drag = { mode: 'aim', target: aimHandle, plane: aimHandle.position.y, last: at };
+    } else if (selectedId) {
+      const hit = rayAt(e).intersectObjects(picks, true).find((i) => idOf(i.object) === selectedId && visible(i.object));
+      const target = hit && picks.find((o) => o.userData.id === selectedId);
+      if (target && target.userData.movable) {
+        const y0 = target.userData.dragY !== undefined ? target.userData.dragY : 0;
+        const at = onPlane(e, y0);
+        if (at) drag = { mode: 'move', target, plane: y0, start: at.clone(), last: at };
+      }
+    }
+    if (drag) {
+      e.stopImmediatePropagation();
+      controls.enabled = false;
+      renderer.domElement.setPointerCapture(e.pointerId);
+    }
   }, true);
 
+  renderer.domElement.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const at = onPlane(e, drag.plane);
+    if (!at) return;
+    const d = at.clone().sub(drag.last);
+    drag.last = at;
+    drag.target.position.add(new THREE.Vector3(d.x, 0, d.z));
+    if (drag.mode === 'aim' && aimHandle.userData.line) {
+      const pos = aimHandle.userData.line.geometry.attributes.position;
+      pos.setXYZ(1, aimHandle.position.x, aimHandle.position.y, aimHandle.position.z);
+      pos.needsUpdate = true;
+    }
+    if (selectedBox) selectedBox.update();
+  });
+
   renderer.domElement.addEventListener('pointerup', (e) => {
+    if (drag) {
+      const d = drag;
+      drag = null;
+      down = null;
+      controls.enabled = true;
+      if (d.mode === 'move') {
+        const dx = d.last.x - d.start.x, dz = d.last.z - d.start.z;
+        if (Math.hypot(dx, dz) > 0.01) post({ type: 'move', id: selectedId, dx, dy: -dz });
+      } else {
+        const p = aimHandle.position;
+        post({ type: 'aim', id: selectedId, x: p.x, y: -p.z, z: p.y });
+      }
+      return;
+    }
     if (!down) return;
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
     down = null;
     if (moved > 5) return;
-    const { w, h } = size();
-    const ray = new THREE.Raycaster();
-    ray.setFromCamera(new THREE.Vector2((e.clientX / w) * 2 - 1, -(e.clientY / h) * 2 + 1), cam);
-    const hit = ray.intersectObjects(picks, true).find((i) => idOf(i.object) && visible(i.object));
+    // Lo pequeño que se mueve (un foco bajo su truss) gana a lo que tapa.
+    const hits = rayAt(e).intersectObjects(picks, true).filter((i) => idOf(i.object) && visible(i.object));
+    const hit = hits.find((i) => movableOf(i.object)) || hits[0];
     const id = hit ? idOf(hit.object) : null;
     highlight(id);
     post({ type: 'select', id });
@@ -149,22 +216,49 @@
     return true;
   }
 
+  function movableOf(o) {
+    for (let p = o; p; p = p.parent) if (p.userData && p.userData.id) return !!p.userData.movable;
+    return false;
+  }
+
   function idOf(o) {
     for (let p = o; p; p = p.parent) if (p.userData && p.userData.id) return p.userData.id;
     return null;
   }
 
   function highlight(id) {
+    selectedId = id;
     if (selectedBox) {
       scene.remove(selectedBox);
       selectedBox.geometry.dispose();
       selectedBox = null;
+    }
+    if (aimHandle) {
+      scene.remove(aimHandle);
+      if (aimHandle.userData.line) {
+        scene.remove(aimHandle.userData.line);
+        aimHandle.userData.line.geometry.dispose();
+      }
+      aimHandle.geometry.dispose();
+      aimHandle = null;
     }
     if (!id) return;
     const target = picks.find((o) => o.userData.id === id);
     if (!target) return;
     selectedBox = new THREE.BoxHelper(target, 0xe8963f);
     scene.add(selectedBox);
+    // Un foco lleva el asa de adónde apunta.
+    if (target.userData.aim) {
+      aimHandle = new THREE.Mesh(new THREE.SphereGeometry(0.18, 18, 12), new THREE.MeshBasicMaterial({ color: 0xe8963f }));
+      aimHandle.position.copy(target.userData.aim);
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([target.position.clone(), target.userData.aim.clone()]),
+        new THREE.LineDashedMaterial({ color: 0xe8963f, dashSize: 0.15, gapSize: 0.1 }),
+      );
+      line.computeLineDistances();
+      aimHandle.userData.line = line;
+      scene.add(aimHandle, line);
+    }
   }
 
   // ── Construcción ─────────────────────────────────────────────────────────
@@ -385,8 +479,10 @@
     scene.remove(root);
     root = new THREE.Group();
     scene.add(root);
+    const keep = selectedId;
     cones = []; roofs = []; picks = [];
     highlight(null);
+    selectedId = keep;
     L = {};
     for (const name of LAYERS) {
       L[name] = new THREE.Group();
@@ -434,7 +530,7 @@
       const geo = p.shape === 'round' ? new THREE.CylinderGeometry(p.sizeM / 2, p.sizeM / 2, h, 16) : new THREE.BoxGeometry(p.sizeM, h, p.sizeM);
       const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xa9b0b6, metalness: 0.3, roughness: 0.6 }));
       m.position.copy(V(p.at[0], p.at[1], z0 + h / 2));
-      m.userData.id = p.id; picks.push(m);
+      m.userData.id = p.id; m.userData.movable = true; m.userData.dragY = z0; picks.push(m);
       L.pillars.add(m);
     }
 
@@ -452,7 +548,7 @@
       if (r.type === 'motor') {
         const m = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.42, 0.26), dark);
         m.position.copy(V(r.at[0], r.at[1], z + s + 0.26));
-        m.userData.id = r.id; picks.push(m);
+        m.userData.id = r.id; m.userData.movable = true; m.userData.dragY = z + s; picks.push(m);
         L.rig.add(m);
         const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(r.at[0], r.at[1], z + s + 0.47), V(r.at[0], r.at[1], z + s + 2)]), chain);
         ln.computeLineDistances();
@@ -488,7 +584,7 @@
       const lens = new THREE.Mesh(new THREE.CircleGeometry(0.13, 18), new THREE.MeshBasicMaterial({ color: f.on ? col : 0x333333 }));
       lens.position.z = 0.205;
       body.add(lens);
-      body.userData.id = f.id; picks.push(body);
+      body.userData.id = f.id; body.userData.movable = true; body.userData.dragY = p.y; body.userData.aim = a.clone(); picks.push(body);
       L.fixtures.add(body);
       if (!f.on) return;
       if (i >= next && lit < maxLights) {
@@ -522,7 +618,7 @@
       hd.position.y = 1.6;
       g.add(b, hd);
       g.position.copy(V(q.at[0], q.at[1], q.z0 || 0));
-      g.userData.id = q.id; picks.push(g);
+      g.userData.id = q.id; g.userData.movable = true; g.userData.dragY = q.z0 || 0; picks.push(g);
       L.people.add(g);
     }
     for (const q of sc.cameras || []) {
@@ -530,7 +626,7 @@
       g.add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.25, 0.35), dark));
       g.position.copy(V(q.at[0], q.at[1], (q.z0 || 0) + 1.5));
       g.lookAt(V(q.at[0] + q.dir[0], q.at[1] + q.dir[1], (q.z0 || 0) + 1.5));
-      g.userData.id = q.id; picks.push(g);
+      g.userData.id = q.id; g.userData.movable = true; g.userData.dragY = q.z0 || 0; picks.push(g);
       L.people.add(g);
     }
 
@@ -539,6 +635,7 @@
     radius = Math.max(sz.x, sz.z, sz.y * 2, 6) * 0.75;
     orthoFrustum();
     if (first) setView('iso', true);
+    if (keep) highlight(keep);
     post({ type: 'loaded', fixtures: fixtures.length, lit });
   }
 

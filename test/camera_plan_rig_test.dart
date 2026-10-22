@@ -540,4 +540,42 @@ void main() {
     }
     expect((scene['people'] as List).single['id'], 'n${elements.length - 1}');
   });
+
+  group('editar desde el 3D', () {
+    test('apuntar una luz colgada da su giro y su inclinación', () {
+      final l = light(Offset.zero)
+        ..props[PlanLight.mountKey] = PlanLight.mountCeiling
+        ..props[PlanLight.heightKey] = 5.0;
+      // 3 m hacia la derecha del lienzo, en el suelo.
+      PlanScene3d.aimAt(l, 3, 0, 0, mpu);
+      expect(l.rotation, closeTo(90, 1e-6));
+      expect(PlanLight.tiltOf(l), closeTo(31, 0.5));
+      // Hacia arriba en la pantalla (y del visor positiva): giro 0.
+      PlanScene3d.aimAt(l, 0, 2, 0, mpu);
+      expect(l.rotation, closeTo(0, 1e-6));
+      // Y vuelve a salir igual en la escena.
+      final f =
+          (PlanScene3d.build([l], metersPerUnit: mpu)['fixtures'] as List)
+                  .single
+              as Map;
+      expect((f['aim'] as List)[1] as double, greaterThan(0));
+    });
+
+    test(
+      'mover desde el 3D: lo suelto se desplaza, un motor sigue en su truss',
+      () {
+        final truss = PlanTruss.create(Offset.zero, const Offset(500, 0));
+        LightOverrides.ensureUids([truss]);
+        final motor = PlanRigPoint.create(RigType.motor, truss, 0, mpu);
+        final p = PlanPillar.create(const Offset(100, 100));
+        final elements = [truss, motor, p];
+        expect(PlanScene3d.moveBy(p, 1, 1, elements, mpu), isTrue);
+        expect(p.position, const Offset(150, 50));
+        // 4 m a lo largo y 2 m de lado: se queda en el truss, a 4 m.
+        expect(PlanScene3d.moveBy(motor, 4, 2, elements, mpu), isTrue);
+        expect(motor.position, const Offset(200, 0));
+        expect(motor.props[PlanRigPoint.alongKey], closeTo(4, 1e-9));
+      },
+    );
+  });
 }

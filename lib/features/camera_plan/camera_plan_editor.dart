@@ -2754,7 +2754,18 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       name: _planName,
       selected: _selected,
       onSelect: _selectFrom3d,
+      onChanged: _changedFrom3d,
     );
+  }
+
+  /// Algo movido, apuntado o retocado en el 3D: se guarda como si se
+  /// hubiera hecho en la planta (con el imán del truss y deshacer).
+  Future<void> _changedFrom3d(PlanElement el) async {
+    if (!mounted) return;
+    final hung = _settleRig([el]);
+    setState(() {});
+    await _persistElement(el);
+    if (hung.isNotEmpty) await _persistMany(hung);
   }
 
   /// Lo tocado en el 3D se selecciona en la planta.
@@ -4820,6 +4831,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   name: _planName,
                                   selected: _selected,
                                   onSelect: _selectFrom3d,
+                                  onChanged: _changedFrom3d,
                                   onExpand: _open3dScreen,
                                   onClose: _toggle3d,
                                 ),
