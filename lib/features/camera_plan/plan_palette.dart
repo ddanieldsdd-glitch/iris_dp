@@ -15,6 +15,9 @@ enum PlanTool {
   wall,
   street,
   relief,
+
+  /// Pared de tela o plástico que cuelga entre dos amarres.
+  drape,
   measure,
 }
 
@@ -24,6 +27,7 @@ extension PlanToolInfo on PlanTool {
     PlanTool.wall => 'Pared',
     PlanTool.street => 'Calle',
     PlanTool.relief => 'Relieve',
+    PlanTool.drape => 'Tela',
     PlanTool.measure => 'Medir',
   };
 
@@ -32,6 +36,7 @@ extension PlanToolInfo on PlanTool {
     PlanTool.wall => Icons.horizontal_rule,
     PlanTool.street => Icons.add_road,
     PlanTool.relief => Icons.terrain_outlined,
+    PlanTool.drape => Icons.curtains_outlined,
     PlanTool.measure => Icons.straighten,
   };
 
@@ -39,7 +44,8 @@ extension PlanToolInfo on PlanTool {
   bool get drawsSegment =>
       this == PlanTool.wall ||
       this == PlanTool.street ||
-      this == PlanTool.relief;
+      this == PlanTool.relief ||
+      this == PlanTool.drape;
 }
 
 /// Paleta fija de la planta: lo que se puede añadir, siempre a la vista.
