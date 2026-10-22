@@ -2696,6 +2696,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// en el iPad, su propia pantalla.
   bool _show3d = false;
 
+  /// Ancho del panel 3D en el Mac; se cambia arrastrando su borde.
+  double _view3dWidth = 640;
+
   String get _planName =>
       _linkedSet?.locationName ?? _linkedSite?.name ?? 'planta';
 
@@ -2704,6 +2707,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       setState(() => _show3d = !_show3d);
       return;
     }
+    _open3dScreen();
+  }
+
+  /// El 3D a pantalla entera, con todas sus opciones.
+  void _open3dScreen() {
     Plan3dScreen.show(
       context,
       elements: _visibleElements,
@@ -4770,23 +4778,42 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 },
                               ),
                             ),
-                            if (_wide && _show3d)
-                              Container(
-                                width: 480,
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    left: BorderSide(color: palette.border),
+                            if (_wide && _show3d) ...[
+                              // El borde se arrastra para ensanchar el 3D.
+                              MouseRegion(
+                                cursor: SystemMouseCursors.resizeColumn,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onHorizontalDragUpdate: (d) => setState(
+                                    () => _view3dWidth =
+                                        (_view3dWidth - d.delta.dx).clamp(
+                                          360.0,
+                                          math.max(
+                                            360.0,
+                                            MediaQuery.sizeOf(context).width *
+                                                0.7,
+                                          ),
+                                        ),
+                                  ),
+                                  child: Container(
+                                    width: 6,
+                                    color: palette.border,
                                   ),
                                 ),
+                              ),
+                              SizedBox(
+                                width: _view3dWidth,
                                 child: Plan3dView(
                                   elements: _visibleElements,
                                   metersPerUnit: _metersPerUnit,
                                   name: _planName,
                                   selected: _selected,
                                   onSelect: _selectFrom3d,
+                                  onExpand: _open3dScreen,
                                   onClose: _toggle3d,
                                 ),
                               ),
+                            ],
                             if (_selected != null)
                               _ElementPanel(
                                 palette: palette,

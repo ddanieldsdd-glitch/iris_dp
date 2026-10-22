@@ -53,6 +53,10 @@
   let anim = null;
   let showCones = true;
   let showRoof = true;
+  // Capas que se pueden ocultar desde la app.
+  const LAYERS = ['walls', 'glass', 'drapes', 'pillars', 'rig', 'fixtures', 'people'];
+  const shown = { walls: true, glass: true, drapes: true, pillars: true, rig: true, fixtures: true, people: true };
+  let L = {};
   let selectedBox = null;
 
   // Cubo de vistas, arriba a la derecha.
@@ -134,11 +138,16 @@
     const { w, h } = size();
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2((e.clientX / w) * 2 - 1, -(e.clientY / h) * 2 + 1), cam);
-    const hit = ray.intersectObjects(picks, true).find((i) => idOf(i.object));
+    const hit = ray.intersectObjects(picks, true).find((i) => idOf(i.object) && visible(i.object));
     const id = hit ? idOf(hit.object) : null;
     highlight(id);
     post({ type: 'select', id });
   });
+
+  function visible(o) {
+    for (let p = o; p; p = p.parent) if (!p.visible) return false;
+    return true;
+  }
 
   function idOf(o) {
     for (let p = o; p; p = p.parent) if (p.userData && p.userData.id) return p.userData.id;
@@ -298,8 +307,8 @@
         }
       }
     }
-    root.add(meshFrom(pos, wallMat, w.id));
-    if (glass.length) root.add(meshFrom(glass, glassMat, null));
+    L.walls.add(meshFrom(pos, wallMat, w.id));
+    if (glass.length) L.glass.add(meshFrom(glass, glassMat, null));
   }
 
   function addDrape(d) {
@@ -334,9 +343,9 @@
     }
     const clear = (d.transmission || 0) > 0.3;
     const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(d.color || '#26262c'), roughness: d.material === 'pvc' ? 0.15 : 0.92, side: THREE.DoubleSide, transparent: clear, opacity: clear ? 0.4 : 1 });
-    root.add(meshFrom(pos, mat, d.id));
+    L.drapes.add(meshFrom(pos, mat, d.id));
     const rope = s.map((q) => V(q.p[0], q.p[1], z0 + q.top + 0.01));
-    root.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(rope), new THREE.LineBasicMaterial({ color: 0x222222 })));
+    L.drapes.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(rope), new THREE.LineBasicMaterial({ color: 0x222222 })));
   }
 
   const steel = new THREE.MeshStandardMaterial({ color: 0xc8ccd0, metalness: 0.7, roughness: 0.35 });
@@ -378,8 +387,12 @@
     scene.add(root);
     cones = []; roofs = []; picks = [];
     highlight(null);
-    msg.hidden = true;
-    msg.style.display = 'none';
+    L = {};
+    for (const name of LAYERS) {
+      L[name] = new THREE.Group();
+      L[name].visible = shown[name];
+      root.add(L[name]);
+    }
 
     root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, 0.38));
     root.add(new THREE.AmbientLight(0xffffff, 0.12));
@@ -394,7 +407,10 @@
     (sc.pillars || []).forEach((p) => grow(p.at[0], p.at[1], p.heightM));
     (sc.people || []).forEach((p) => grow(p.at[0], p.at[1], 1.8));
     (sc.cameras || []).forEach((p) => grow(p.at[0], p.at[1], 1.6));
-    if (box.isEmpty()) box.set(V(-5, -5, 0), V(5, 5, 3));
+    const empty = box.isEmpty();
+    msg.style.display = empty ? 'grid' : 'none';
+    msg.textContent = 'La planta está vacía. Crea una nave con «Nave» en la paleta, o dibuja paredes, truss y luces: aparecerán aquí.';
+    if (empty) box.set(V(-5, -5, 0), V(5, 5, 3));
 
     const c = box.getCenter(new THREE.Vector3());
     const sz = box.getSize(new THREE.Vector3());
@@ -419,13 +435,13 @@
       const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xa9b0b6, metalness: 0.3, roughness: 0.6 }));
       m.position.copy(V(p.at[0], p.at[1], z0 + h / 2));
       m.userData.id = p.id; picks.push(m);
-      root.add(m);
+      L.pillars.add(m);
     }
 
     const trussById = {};
     for (const t of sc.trusses || []) {
       trussById[t.id] = t;
-      root.add(trussOf(t.from, t.to, t.z, t.profile, (t.sizeCm - 1) / 100, false, t.id));
+      L.rig.add(trussOf(t.from, t.to, t.z, t.profile, (t.sizeCm - 1) / 100, false, t.id));
     }
 
     const chain = new THREE.LineDashedMaterial({ color: 0x444444, dashSize: 0.06, gapSize: 0.04 });
@@ -437,21 +453,21 @@
         const m = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.42, 0.26), dark);
         m.position.copy(V(r.at[0], r.at[1], z + s + 0.26));
         m.userData.id = r.id; picks.push(m);
-        root.add(m);
+        L.rig.add(m);
         const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(r.at[0], r.at[1], z + s + 0.47), V(r.at[0], r.at[1], z + s + 2)]), chain);
         ln.computeLineDistances();
-        root.add(ln);
+        L.rig.add(ln);
       } else {
         const z0 = r.z0 || 0;
         const tower = trussOf([r.at[0], r.at[1]], null, z + s + 0.25, 'square', 0.29, true, r.id);
         tower.position.y += z0;
-        root.add(tower);
+        L.rig.add(tower);
         const base = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.05, 0.9), dark);
         base.position.copy(V(r.at[0], r.at[1], z0 + 0.025));
-        root.add(base);
+        L.rig.add(base);
         const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.42), steel);
         sleeve.position.copy(V(r.at[0], r.at[1], z + s / 2));
-        root.add(sleeve);
+        L.rig.add(sleeve);
       }
     }
 
@@ -473,7 +489,7 @@
       lens.position.z = 0.205;
       body.add(lens);
       body.userData.id = f.id; picks.push(body);
-      root.add(body);
+      L.fixtures.add(body);
       if (!f.on) return;
       if (i >= next && lit < maxLights) {
         next += step; lit++;
@@ -507,7 +523,7 @@
       g.add(b, hd);
       g.position.copy(V(q.at[0], q.at[1], q.z0 || 0));
       g.userData.id = q.id; picks.push(g);
-      root.add(g);
+      L.people.add(g);
     }
     for (const q of sc.cameras || []) {
       const g = new THREE.Group();
@@ -515,7 +531,7 @@
       g.position.copy(V(q.at[0], q.at[1], (q.z0 || 0) + 1.5));
       g.lookAt(V(q.at[0] + q.dir[0], q.at[1] + q.dir[1], (q.z0 || 0) + 1.5));
       g.userData.id = q.id; picks.push(g);
-      root.add(g);
+      L.people.add(g);
     }
 
     const first = radius === 20 && center.lengthSq() === 0;
@@ -611,6 +627,16 @@
       if ('roof' in o) { showRoof = !!o.roof; roofs.forEach((r) => (r.visible = showRoof)); }
       if ('ortho' in o) setOrtho(!!o.ortho);
       if (o.bg) scene.background = new THREE.Color(o.bg);
+      if (o.show) {
+        for (const name of LAYERS) {
+          if (name in o.show) {
+            shown[name] = !!o.show[name];
+            if (L[name]) L[name].visible = shown[name];
+          }
+        }
+        // Sin focos no hay conos.
+        if ('fixtures' in o.show) cones.forEach((c) => (c.visible = showCones && shown.fixtures));
+      }
     },
   };
 
