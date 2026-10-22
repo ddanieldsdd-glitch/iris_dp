@@ -8,6 +8,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/export_file_saver.dart';
 import '../../core/widgets/app_snackbar.dart';
+import '../../shared/pdf_export/rig_sheet_pdf.dart';
 import 'camera_plan_element_model.dart';
 import 'light/light_scene.dart';
 import 'plan_cad_export.dart';
@@ -93,6 +94,20 @@ class _PlanElevationScreenState extends State<PlanElevationScreen> {
     }
   }
 
+  /// La hoja A3 de luz y rigging, para imprimir o mandar al rigger.
+  Future<void> _saveSheet() async {
+    try {
+      final bytes = await RigSheetPdf.build(
+        widget.elements,
+        metersPerUnit: widget.metersPerUnit,
+        info: RigSheetInfo(project: _base, date: DateTime.now()),
+      );
+      await _save(bytes, 'hoja A3', 'pdf', 'Hoja A3');
+    } catch (e) {
+      if (mounted) AppSnackBar.showError(context, 'No se pudo hacer la hoja: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -106,6 +121,7 @@ class _PlanElevationScreenState extends State<PlanElevationScreen> {
             tooltip: 'Exportar',
             icon: const Icon(Icons.ios_share),
             onSelected: (choice) => switch (choice) {
+              'pdf-a3' => _saveSheet(),
               'dxf-plan' => _save(
                 utf8.encode(
                   PlanCadExport.planDxf(widget.elements, widget.metersPerUnit),
@@ -132,6 +148,17 @@ class _PlanElevationScreenState extends State<PlanElevationScreen> {
               ),
             },
             itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'pdf-a3',
+                child: ListTile(
+                  dense: true,
+                  title: Text('Hoja A3 en PDF'),
+                  subtitle: Text(
+                    'Planta, alzado y perfil a escala, leyenda con vatios y '
+                    'amperios, rigging y cajetín',
+                  ),
+                ),
+              ),
               const PopupMenuItem(
                 value: 'dxf-plan',
                 child: ListTile(
