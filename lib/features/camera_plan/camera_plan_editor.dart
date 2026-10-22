@@ -75,6 +75,8 @@ import '../../core/widgets/app_snackbar.dart';
 import '../../core/settings/app_prefs.dart';
 import '../settings/settings_launcher.dart';
 import 'plan_prefs.dart';
+import 'rig/hall_builder_sheet.dart';
+import 'rig/plan_hall.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
   final int projectId;
@@ -2680,6 +2682,122 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     await _addElement(el);
   }
 
+  // ── Nave ──────────────────────────────────────────────────────────────────
+
+  /// La nave a la que pertenece un elemento (o él mismo, si es la receta).
+  PlanElement? _hallOf(PlanElement el) {
+    if (PlanHall.isHall(el)) return el;
+    final uid = PlanHall.hallUidOf(el);
+    if (uid == null) return null;
+    for (final e in _elements) {
+      if (PlanHall.isHall(e) && LightOverrides.uidOf(e) == uid) return e;
+    }
+    return null;
+  }
+
+  /// Constructor de nave. Con algo de una nave seleccionado, la edita; con
+  /// paredes seleccionadas que cierran un recinto, la nave sale de ellas;
+  /// si no, una nueva en el centro de la vista.
+  Future<void> _openHallBuilder() async {
+    final mpu = _metersPerUnit;
+    final hall = _selected == null ? null : _hallOf(_selected!);
+    if (hall != null) {
+      final recipe = await HallBuilderSheet.show(
+        context,
+        initial: PlanHall.recipeOf(hall),
+        editing: true,
+        freeOutline: true,
+      );
+      if (recipe == null || !mounted) return;
+      hall.props[PlanHall.recipeKey] = recipe.toJson();
+      await _regenerateHall(hall);
+      return;
+    }
+    final walls = _selection.where(PlanSegment.isSegment).toList();
+    final traced = walls.length >= 3 ? PlanHall.fromWalls(walls, mpu) : null;
+    final recipe = await HallBuilderSheet.show(
+      context,
+      initial: traced?.$2,
+      freeOutline: traced != null,
+    );
+    if (recipe == null || !mounted) return;
+    var lo = const Offset(double.infinity, double.infinity);
+    var hi = const Offset(-double.infinity, -double.infinity);
+    for (final p in recipe.outline) {
+      lo = Offset(math.min(lo.dx, p.dx), math.min(lo.dy, p.dy));
+      hi = Offset(math.max(hi.dx, p.dx), math.max(hi.dy, p.dy));
+    }
+    final origin =
+        traced?.$1 ?? _snapToGrid(_viewCenter - (lo + hi) / 2 / mpu);
+    final layer = await _layerForNew(ElementType.wall);
+    if (!mounted) return;
+    final added = recipe.place(origin, mpu);
+    await _replaceElements([
+      for (final e in _elements)
+        if (traced == null || !walls.contains(e)) e,
+      ...added,
+    ], layer: layer);
+    if (mounted) _select(added.first);
+  }
+
+  /// Rehace lo que genera la nave tras cambiar su receta o moverla.
+  Future<void> _regenerateHall(PlanElement hall) async {
+    final next = [..._elements];
+    PlanHall.regenerate(next, hall, _metersPerUnit);
+    await _replaceElements(next, layer: hall.layer);
+  }
+
+  /// Cambia de golpe lo que hay en la planta: borra lo que falta, da de
+  /// alta lo nuevo en `layer` y guarda en un solo paso de deshacer.
+  Future<void> _replaceElements(
+    List<PlanElement> next, {
+    required PlanLayer layer,
+  }) async {
+    final keep = next.toSet();
+    final before = _elements.toSet();
+    final removed = [
+      for (final e in _elements)
+        if (!keep.contains(e)) e,
+    ];
+    final added = [
+      for (final e in next)
+        if (!before.contains(e)) e,
+    ];
+    final db = ref.read(databaseProvider);
+    // Lo colgado de un truss puede haberse movido con él.
+    final layers = <PlanLayer>{layer, PlanLayer.light};
+    for (final el in removed) {
+      if (el.layer == PlanLayer.shot) {
+        if (el.id > 0) await db.deleteCameraPlanElement(el.id);
+      } else {
+        layers.add(el.layer);
+      }
+    }
+    for (final el in added) {
+      el.layer = layer;
+      if (layer != PlanLayer.shot) el.id = --_tempId;
+    }
+    if (!mounted) return;
+    _hiddenLayers.remove(layer);
+    setState(() {
+      _elements
+        ..clear()
+        ..addAll(next);
+      if (_selected != null && !keep.contains(_selected)) _selected = null;
+      _multi.removeWhere((e) => !keep.contains(e));
+    });
+    if (layer == PlanLayer.shot) {
+      for (final el in added) {
+        await _persistElement(el, commit: false);
+      }
+    }
+    for (final l in layers) {
+      if (l != PlanLayer.shot) await _saveLayer(l);
+    }
+    await db.touchProjectContent(widget.projectId);
+    _commitHistory();
+  }
+
   Future<void> _deleteSelected() async {
     if (_selectedImage case final image?) {
       await _deleteImage(image);
@@ -3396,8 +3514,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         }
       });
       await _persistMany(group);
+      // Mover la nave (su asa) la rehace en su sitio.
+      if (group.length == 1 && PlanHall.isHall(dragged)) {
+        await _regenerateHall(dragged);
+      }
     } else {
-      await _persistElement(_selected!);
+      final el = _selected!;
+      await _persistElement(el);
+      // Una pared de la nave estirada o curvada a mano mueve su perímetro.
+      final hall = _hallOf(el);
+      if (wasHandle &&
+          hall != null &&
+          PlanHall.syncFromWall(hall, el, _metersPerUnit)) {
+        await _regenerateHall(hall);
+      }
     }
   }
 
@@ -3659,6 +3789,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         onAddArchitecture: (type) {
           Navigator.pop(ctx);
           _addArchitecture(type);
+        },
+        onAddHall: () {
+          Navigator.pop(ctx);
+          _openHallBuilder();
         },
       ),
     );
@@ -4121,6 +4255,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     onQuickAddLight: _quickAddLight,
                     catalogLights: _gear.catalogLights,
                     onAddArchitecture: _addArchitecture,
+                    onAddHall: _openHallBuilder,
                     wallsToEnvironment:
                         _linkedSet != null && _linkedSite != null
                         ? _wallsToEnvironment
@@ -4846,6 +4981,7 @@ class _AddElementSheet extends StatefulWidget {
   final ValueChanged<LightType> onAddLight;
   final ValueChanged<PropType> onAddProp;
   final ValueChanged<ArchitectureType> onAddArchitecture;
+  final VoidCallback onAddHall;
 
   /// Dónde van paredes y props: al entorno o al set. `null` si no hay
   /// elección (solo existe una de las dos capas).
@@ -4861,6 +4997,7 @@ class _AddElementSheet extends StatefulWidget {
     required this.onAddLight,
     required this.onAddProp,
     required this.onAddArchitecture,
+    required this.onAddHall,
   });
 
   @override
@@ -4963,6 +5100,7 @@ class _AddElementSheetState extends State<_AddElementSheet>
                   _ArchitectureTab(
                     palette: palette,
                     onAdd: widget.onAddArchitecture,
+                    onHall: widget.onAddHall,
                   ),
                 ],
               ),
@@ -5146,8 +5284,13 @@ class _PropTab extends StatelessWidget {
 class _ArchitectureTab extends StatelessWidget {
   final AppPalette palette;
   final ValueChanged<ArchitectureType> onAdd;
+  final VoidCallback onHall;
 
-  const _ArchitectureTab({required this.palette, required this.onAdd});
+  const _ArchitectureTab({
+    required this.palette,
+    required this.onAdd,
+    required this.onHall,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -5159,9 +5302,22 @@ class _ArchitectureTab extends StatelessWidget {
         crossAxisSpacing: 10,
         childAspectRatio: 0.9,
       ),
-      itemCount: ArchitectureType.values.length,
+      // La nave, la primera; luego las piezas sueltas.
+      itemCount: ArchitectureType.values.length + 1,
       itemBuilder: (context, i) {
-        final type = ArchitectureType.values[i];
+        if (i == 0) {
+          return _GridTile(
+            palette: palette,
+            label: 'Nave',
+            onTap: onHall,
+            child: Icon(
+              Icons.warehouse_outlined,
+              color: palette.textPrimary,
+              size: 28,
+            ),
+          );
+        }
+        final type = ArchitectureType.values[i - 1];
         return _GridTile(
           palette: palette,
           label: type.label,

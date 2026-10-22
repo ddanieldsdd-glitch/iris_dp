@@ -1,5 +1,8 @@
-import 'package:flutter/material.dart' show Offset;
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import 'package:iris_dp/core/theme/app_theme.dart';
 
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
@@ -9,6 +12,7 @@ import 'package:iris_dp/features/camera_plan/light_overrides.dart';
 import 'package:iris_dp/features/camera_plan/plan_opening.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 import 'package:iris_dp/features/camera_plan/rig/catenary.dart';
+import 'package:iris_dp/features/camera_plan/rig/hall_builder_sheet.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_drape.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_hall.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_rig.dart';
@@ -24,6 +28,8 @@ PlanElement light(Offset at) => PlanElement(
 );
 
 void main() {
+  setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
+
   group('catenaria', () {
     test('baja la flecha en el centro y nada en los amarres', () {
       final c = Catenary.fromSag(6, 0.4);
@@ -334,5 +340,93 @@ void main() {
       // y al revés que el lienzo.
       expect(pos[1], closeTo(-l.position.dy * mpu, 1e-3));
     });
+  });
+
+  group('perímetro editable', () {
+    test('estirar una pared de la nave mueve su lado y las esquinas', () {
+      final hall = PlanHall.create(
+        Offset.zero,
+        HallRecipe.rectangle(width: 10, depth: 6),
+      );
+      final elements = <PlanElement>[hall, ...PlanHall.build(hall, mpu)];
+      // El lateral derecho: de (10, 6) a (10, 0).
+      final side = elements.firstWhere((e) => PlanHall.edgeIndexOf(e) == 1);
+      PlanSegment.setEnd(side, const Offset(12 / mpu, 0));
+      side.props['curve'] = 1 / mpu;
+      expect(PlanHall.syncFromWall(hall, side, mpu), isTrue);
+      final r = PlanHall.recipeOf(hall)!;
+      expect(r.outline[2], const Offset(12, 0));
+      expect(r.edge(1).bulgeM, closeTo(1, 1e-9));
+      PlanHall.regenerate(elements, hall, mpu);
+      // El fondo arranca ahora en la esquina movida.
+      final back = elements.firstWhere((e) => PlanHall.edgeIndexOf(e) == 2);
+      expect(PlanSegment.start(back), const Offset(12 / mpu, 0));
+    });
+
+    test('las paredes que cierran un recinto dan una receta', () {
+      final walls = [
+        PlanSegment.create(start: Offset.zero, end: const Offset(500, 0)),
+        // Dibujada al revés.
+        PlanSegment.create(
+          start: const Offset(500, 300),
+          end: const Offset(500, 0),
+        ),
+        PlanSegment.create(
+          start: const Offset(500, 300),
+          end: const Offset(0, 300),
+        ),
+        PlanSegment.create(start: const Offset(0, 300), end: Offset.zero),
+      ];
+      final traced = PlanHall.fromWalls(walls, mpu)!;
+      expect(traced.$1, Offset.zero);
+      expect(traced.$2.outline, [
+        Offset.zero,
+        const Offset(10, 0),
+        const Offset(10, 6),
+        const Offset(0, 6),
+      ]);
+      expect(PlanHall.fromWalls(walls.take(3).toList(), mpu), isNull);
+    });
+
+    test('partir un lado y quitar una esquina', () {
+      final r = HallRecipe.rectangle(width: 10, depth: 6);
+      final split = r.splitEdge(0);
+      expect(split.outline.length, 5);
+      expect(split.outline[1], const Offset(5, 6));
+      expect(split.edges.length, 5);
+      expect(split.removeVertex(1).outline, r.outline);
+    });
+  });
+
+  testWidgets('la hoja del constructor devuelve la receta', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    HallRecipe? result;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark,
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async =>
+                result = await HallBuilderSheet.show(context),
+            child: const Text('abrir'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('abrir'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nave nueva'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Dos aguas'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Dos aguas'));
+    await tester.pump();
+    await tester.tap(find.text('Crear la nave'));
+    await tester.pumpAndSettle();
+    expect(result?.roof, HallRoof.gable);
   });
 }
