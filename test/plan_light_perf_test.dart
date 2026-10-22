@@ -81,6 +81,48 @@ void main() {
     }
   });
 
+  test('el barrido por extremos ve lo mismo que los rayos de siempre', () {
+    final scene = LightScene.from(
+      syntheticPlan(),
+      metersPerUnit: mpu,
+      ambient: ambient,
+    );
+    var points = 0;
+    var differ = 0;
+    for (final light in scene.lights.take(60)) {
+      const reach = 900.0;
+      final args = (
+        ignore: light.surface,
+        fromAbove: light.overheadM != null,
+        z: light.z,
+      );
+      final sweep = scene.visibleArea(
+        light.position,
+        reach,
+        ignore: args.ignore,
+        fromAbove: args.fromAbove,
+        z: args.z,
+      );
+      final rays = scene.visibleAreaByRays(
+        light.position,
+        reach,
+        ignore: args.ignore,
+        fromAbove: args.fromAbove,
+        z: args.z,
+      );
+      for (var x = -400.0; x < 1600; x += 37) {
+        for (var y = -400.0; y < 1200; y += 41) {
+          final at = Offset(x, y);
+          points++;
+          if (sweep.contains(at) != rays.contains(at)) differ++;
+        }
+      }
+    }
+    note('barrido frente a rayos: $differ de $points puntos distintos');
+    // Solo pueden diferir puntos pegados al borde de una sombra curva.
+    expect(differ / points, lessThan(0.002));
+  });
+
   test('grabar la capa de luz (exposición de la cámara)', () {
     final ms = recordingMs(syntheticPlan(), LightView.camera);
     report('capa de luz, cámara', ms, '(grabar)');

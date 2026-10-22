@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui';
 
 import '../camera_plan_constants.dart';
@@ -353,6 +354,23 @@ class LightScene {
     for (final b in blockers)
       if (b.domeRadius != null) b,
   ];
+
+  /// Los topes (salvo las lomas) y los huecos, repartidos en casillas: un
+  /// rayo solo mira lo que hay en las casillas que cruza. Los topes van con
+  /// su índice en [blockers]; los huecos, a continuación.
+  late final _ObstacleGrid _grid = _ObstacleGrid([
+    for (final b in blockers)
+      if (b.domeRadius != null)
+        null
+      else if (b.isCircle)
+        Rect.fromCircle(
+          center: b.a,
+          radius: b.radius * math.max(1.0, b.stretch),
+        )
+      else
+        Rect.fromPoints(b.a, b.b),
+    for (final gap in apertures) Rect.fromPoints(gap.a, gap.b),
+  ]);
 
   /// Cota del suelo en un punto, en metros: la de la loma más alta que
   /// tenga debajo.
@@ -1459,39 +1477,45 @@ class LightScene {
 
     // Los huecos: por debajo del alféizar y por encima del dintel hay
     // pared. Lo que lleve el hueco (cristal, tela, hojas) va como tope.
-    for (final gap in apertures) {
-      final hit = _segmentHit(from, dir, gap.a, gap.b);
-      if (hit == null || hit < 0.5 || hit >= length - 0.5) continue;
-      final z = zAt(hit) - gap.groundM;
-      if (z < gap.sillM || (z > gap.headM && z < _wallTopAt(gap.centre))) {
-        return none;
-      }
-    }
-
+    // Las lomas, aparte: no van en la rejilla.
     var transmission = 1.0;
     var mired = 0.0;
-    for (final blocker in blockers) {
-      if (identical(blocker, ignore)) continue;
-      if (blocker.domeRadius != null) {
-        if (_domeBlocks(from, dir, blocker, zAt, length)) return none;
-        continue;
+    var blocked = false;
+    final count = blockers.length;
+    _grid.walk(from, dir, length, (_) => !blocked, (i) {
+      if (i >= count) {
+        final gap = apertures[i - count];
+        final hit = _segmentHit(from, dir, gap.a, gap.b);
+        if (hit == null || hit < 0.5 || hit >= length - 0.5) return;
+        final z = zAt(hit) - gap.groundM;
+        if (z < gap.sillM || (z > gap.headM && z < _wallTopAt(gap.centre))) {
+          blocked = true;
+        }
+        return;
       }
+      final blocker = blockers[i];
+      if (identical(blocker, ignore)) return;
       // Quien está dentro del cuerpo de una persona no queda a su sombra.
       if (receiver != null &&
           blocker.isCircle &&
           blocker.heightM <= 2 &&
           (receiver - blocker.a).distance <= blocker.radius) {
-        continue;
+        return;
       }
       final hit = _rayHit(from, dir, blocker);
       // Un tope a ras del punto medido no cuenta: el punto está «en» la
       // pared, no detrás.
-      if (hit == null || hit < 0.5 || hit >= length - 0.5) continue;
+      if (hit == null || hit < 0.5 || hit >= length - 0.5) return;
       final z = zAt(hit);
-      if (z >= blocker.top || z < blocker.bottom) continue;
+      if (z >= blocker.top || z < blocker.bottom) return;
       transmission *= blocker.transmission;
       mired += blocker.miredShift;
-      if (transmission <= 0) return none;
+      if (transmission <= 0) blocked = true;
+    });
+    if (blocked) return none;
+    for (final hill in hills) {
+      if (identical(hill, ignore)) continue;
+      if (_domeBlocks(from, dir, hill, zAt, length)) return none;
     }
     return (transmission: transmission, miredShift: mired);
   }
@@ -1577,39 +1601,229 @@ class LightScene {
     LightBlocker? ignore,
     bool fromAbove = false,
     double? z,
+  }) => _reach(
+    origin,
+    dir,
+    max,
+    height: z ?? _faceAt(origin),
+    ignore: ignore,
+    fromAbove: fromAbove,
+  ).t;
+
+  /// [reachAlong], y además con qué choca: su índice en la rejilla (ver
+  /// [_grid]), [_hitDome] si es una loma o [_noHit] si con nada.
+  ({double t, int item}) _reach(
+    Offset origin,
+    Offset dir,
+    double max, {
+    required double height,
+    LightBlocker? ignore,
+    bool fromAbove = false,
   }) {
-    final height = z ?? _faceAt(origin);
     var best = max;
+    var item = _noHit;
+    final count = blockers.length;
+    _grid.walk(origin, dir, max, (enter) => enter <= best, (i) {
+      double? hit;
+      if (i < count) {
+        final blocker = blockers[i];
+        if (!blocker.isOpaque || identical(blocker, ignore)) return;
+        if (fromAbove && blocker.isCircle && blocker.heightM <= 2) return;
+        if (!fromAbove && (height >= blocker.top || height < blocker.bottom)) {
+          return;
+        }
+        hit = _rayHit(origin, dir, blocker);
+      } else {
+        // Un hueco más alto o más bajo que la fuente es pared para ella.
+        if (fromAbove) return;
+        final gap = apertures[i - count];
+        final rel = height - gap.groundM;
+        if (rel >= gap.sillM && rel <= gap.headM) return;
+        hit = _segmentHit(origin, dir, gap.a, gap.b);
+      }
+      if (hit != null && hit < best) {
+        best = hit;
+        item = i;
+      }
+    });
+    for (final hill in hills) {
+      if (!hill.isOpaque || identical(hill, ignore)) continue;
+      final t = _domeReach(origin, dir, best, height, hill);
+      if (t < best) {
+        best = t;
+        item = _hitDome;
+      }
+    }
+    return (t: best, item: item);
+  }
+
+  static const _noHit = -1;
+  static const _hitDome = -2;
+
+  /// Zona que alcanza una luz desde [origin] hasta [reach], recortada por
+  /// lo que la tapa: lo que queda a su sombra no entra. [rays] es cuántos
+  /// rayos se tiran alrededor, además de los de las esquinas (menos, en
+  /// borrador).
+  ///
+  /// Se barre por ángulos: solo se tiran rayos hacia los extremos de lo que
+  /// tapa (tres por esquina, para que el corte de la sombra salga limpio),
+  /// las tangentes de los cuerpos y los cruces con el borde del alcance.
+  /// Entre dos rayos que dan en la misma pared, el contorno es esa pared;
+  /// entre dos que no dan en nada, el arco del alcance. Solo donde cambia
+  /// lo que se ve (un cuerpo, dos paredes que se cruzan) se tiran más.
+  Path visibleArea(
+    Offset origin,
+    double reach, {
+    LightBlocker? ignore,
+    bool fromAbove = false,
+    double? z,
+    int rays = 240,
+  }) {
+    for (final hill in hills) {
+      if (identical(hill, ignore)) continue;
+      final wide = hill.domeRadius! * math.max(1.0, hill.stretch);
+      if ((hill.a - origin).distance < reach + wide) {
+        return visibleAreaByRays(
+          origin,
+          reach,
+          ignore: ignore,
+          fromAbove: fromAbove,
+          z: z,
+          rays: rays,
+        );
+      }
+    }
+    final height = z ?? _faceAt(origin);
+    const twoPi = 2 * math.pi;
+    final step = twoPi / rays;
+    final events = <double>[];
+    void corner(Offset p) {
+      final d = p - origin;
+      if (d.distance > reach + 1 || d.distance < 1e-6) return;
+      final angle = math.atan2(d.dy, d.dx);
+      for (final delta in const [-0.0007, 0.0, 0.0007]) {
+        events.add((angle + delta) % twoPi);
+      }
+    }
+
+    // Donde un tramo cruza el borde del alcance, el contorno pasa de arco
+    // a pared.
+    void crossings(Offset a, Offset b) {
+      final s = b - a;
+      final f = a - origin;
+      final qa = s.dx * s.dx + s.dy * s.dy;
+      if (qa < 1e-12) return;
+      final qb = 2 * (f.dx * s.dx + f.dy * s.dy);
+      final qc = f.dx * f.dx + f.dy * f.dy - reach * reach;
+      final disc = qb * qb - 4 * qa * qc;
+      if (disc <= 0) return;
+      final root = math.sqrt(disc);
+      for (final u in [(-qb - root) / (2 * qa), (-qb + root) / (2 * qa)]) {
+        if (u <= 0 || u >= 1) continue;
+        final d = f + s * u;
+        final angle = math.atan2(d.dy, d.dx);
+        for (final delta in const [-0.0007, 0.0007]) {
+          events.add((angle + delta) % twoPi);
+        }
+      }
+    }
+
+    void segment(Offset a, Offset b) {
+      corner(a);
+      corner(b);
+      crossings(a, b);
+    }
+
     for (final blocker in blockers) {
       if (!blocker.isOpaque || identical(blocker, ignore)) continue;
-      if (blocker.domeRadius != null) {
-        best = math.min(best, _domeReach(origin, dir, best, height, blocker));
-        continue;
-      }
+      if (blocker.domeRadius != null) continue;
       if (fromAbove && blocker.isCircle && blocker.heightM <= 2) continue;
       if (!fromAbove && (height >= blocker.top || height < blocker.bottom)) {
         continue;
       }
-      final hit = _rayHit(origin, dir, blocker);
-      if (hit != null && hit < best) best = hit;
+      if (!blocker.isCircle) {
+        segment(blocker.a, blocker.b);
+        continue;
+      }
+      // Las dos tangentes al círculo, y unos cuantos por dentro para que la
+      // sombra siga el contorno.
+      final d = blocker.a - origin;
+      final distance = d.distance;
+      final wide = blocker.radius * math.max(1.0, blocker.stretch);
+      if (distance <= wide || distance > reach + wide) continue;
+      final centre = math.atan2(d.dy, d.dx);
+      final half = math.asin(wide / distance);
+      for (final edge in [centre - half, centre + half]) {
+        for (final delta in const [-0.001, 0.001]) {
+          events.add((edge + delta) % twoPi);
+        }
+      }
+      for (var i = 1; i < 6; i++) {
+        events.add((centre - half + 2 * half * i / 6) % twoPi);
+      }
     }
     if (!fromAbove) {
       // Un hueco más alto o más bajo que la fuente es pared para ella.
       for (final gap in apertures) {
         final rel = height - gap.groundM;
         if (rel >= gap.sillM && rel <= gap.headM) continue;
-        final hit = _segmentHit(origin, dir, gap.a, gap.b);
-        if (hit != null && hit < best) best = hit;
+        segment(gap.a, gap.b);
       }
     }
-    return best;
+    if (events.isEmpty) events.add(0);
+    events.sort();
+
+    final count = blockers.length;
+    ({double t, int item}) cast(double angle) => _reach(
+      origin,
+      Offset(math.cos(angle), math.sin(angle)),
+      reach,
+      height: height,
+      ignore: ignore,
+      fromAbove: fromAbove,
+    );
+    final hits = [for (final angle in events) cast(angle)];
+
+    final path = Path();
+    var first = true;
+    void to(double angle, double t) {
+      final x = origin.dx + math.cos(angle) * t;
+      final y = origin.dy + math.sin(angle) * t;
+      if (first) {
+        path.moveTo(x, y);
+        first = false;
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      final from = events[i];
+      final hit = hits[i];
+      to(from, hit.t);
+      final last = i == events.length - 1;
+      final until = last ? events.first + twoPi : events[i + 1];
+      final next = last ? hits.first : hits[i + 1];
+      final open = hit.item == _noHit && next.item == _noHit;
+      // La misma pared (o el mismo hueco) a los dos lados: es el contorno.
+      final wall =
+          hit.item >= 0 &&
+          hit.item == next.item &&
+          (hit.item >= count || !blockers[hit.item].isCircle);
+      if (wall) continue;
+      // Los rayos de la rejilla que caen dentro, como los de siempre.
+      for (var k = (from / step).floor() + 1; k * step < until; k++) {
+        final angle = k * step;
+        to(angle, open ? reach : cast(angle).t);
+      }
+    }
+    return path..close();
   }
 
-  /// Zona que alcanza una luz desde [origin] hasta [reach], recortada por
-  /// lo que la tapa: lo que queda a su sombra no entra. [rays] es cuántos
-  /// rayos se tiran alrededor, además de los de las esquinas (menos, en
-  /// borrador).
-  Path visibleArea(
+  /// [visibleArea] a la antigua: un rayo cada pocos grados y tres en cada
+  /// esquina. Se usa cuando hay lomas, cuya sombra no es una recta, y sirve
+  /// de referencia para comprobar el barrido.
+  Path visibleAreaByRays(
     Offset origin,
     double reach, {
     LightBlocker? ignore,
@@ -2174,5 +2388,137 @@ class LightScene {
       mired += part.lux * 1e6 / part.cct;
     }
     return lux <= 0 ? null : 1e6 / (mired / lux);
+  }
+}
+
+/// Rejilla de casillas cuadradas sobre los obstáculos de la planta. Cada
+/// casilla sabe qué obstáculos la tocan; un rayo recorre solo las casillas
+/// que cruza, en orden (Amanatides y Woo, «A Fast Voxel Traversal
+/// Algorithm», 1987).
+class _ObstacleGrid {
+  late final Rect _bounds;
+  late final double _cell;
+  late final int _cols;
+  late final int _rows;
+  late final List<List<int>> _cells;
+
+  /// Marca de la última pasada en la que se miró cada obstáculo: así uno
+  /// que ocupa varias casillas se mira una sola vez.
+  final Int32List _seen;
+  int _pass = 0;
+
+  /// [boxes] son las cajas de los obstáculos, por índice; `null` = no va en
+  /// la rejilla.
+  _ObstacleGrid(List<Rect?> boxes) : _seen = Int32List(boxes.length) {
+    Rect? all;
+    var count = 0;
+    for (final box in boxes) {
+      if (box == null) continue;
+      all = all?.expandToInclude(box) ?? box;
+      count++;
+    }
+    _bounds = (all ?? Rect.zero).inflate(2);
+    // Casillas de modo que haya unas dos por obstáculo, y no más de 64 por
+    // lado.
+    final side = math.max(_bounds.width, _bounds.height);
+    _cell = math.max(
+      math.max(side / 64, 8.0),
+      math.sqrt(_bounds.width * _bounds.height / math.max(1, count * 2)),
+    );
+    _cols = math.max(1, (_bounds.width / _cell).ceil());
+    _rows = math.max(1, (_bounds.height / _cell).ceil());
+    _cells = List.generate(_cols * _rows, (_) => <int>[]);
+    for (var i = 0; i < boxes.length; i++) {
+      // Un poco más grande: un rayo que roza el borde no se lo salta.
+      final box = boxes[i]?.inflate(1);
+      if (box == null) continue;
+      final c0 = _col(box.left), c1 = _col(box.right);
+      final r0 = _row(box.top), r1 = _row(box.bottom);
+      for (var r = r0; r <= r1; r++) {
+        for (var c = c0; c <= c1; c++) {
+          _cells[r * _cols + c].add(i);
+        }
+      }
+    }
+  }
+
+  int _col(double x) =>
+      ((x - _bounds.left) / _cell).floor().clamp(0, _cols - 1);
+  int _row(double y) => ((y - _bounds.top) / _cell).floor().clamp(0, _rows - 1);
+
+  /// Recorre las casillas que cruza el rayo de [origin] hacia [dir] (de
+  /// largo uno) hasta [length], y llama a [visit] con cada obstáculo que
+  /// encuentra, una vez. Antes de cada casilla pregunta a [goOn], con la
+  /// distancia a la que entra en ella, si sigue.
+  void walk(
+    Offset origin,
+    Offset dir,
+    double length,
+    bool Function(double enter) goOn,
+    void Function(int item) visit,
+  ) {
+    // Dónde entra y sale el rayo de la rejilla.
+    var t0 = 0.0;
+    var t1 = length;
+    for (final (o, d, lo, hi) in [
+      (origin.dx, dir.dx, _bounds.left, _bounds.right),
+      (origin.dy, dir.dy, _bounds.top, _bounds.bottom),
+    ]) {
+      if (d.abs() < 1e-12) {
+        if (o < lo || o > hi) return;
+        continue;
+      }
+      var a = (lo - o) / d;
+      var b = (hi - o) / d;
+      if (a > b) (a, b) = (b, a);
+      t0 = math.max(t0, a);
+      t1 = math.min(t1, b);
+    }
+    if (t0 > t1) return;
+    final start = origin + dir * t0;
+    var col = _col(start.dx);
+    var row = _row(start.dy);
+    final stepX = dir.dx > 0 ? 1 : -1;
+    final stepY = dir.dy > 0 ? 1 : -1;
+    double next(double o, double d, double lo, int index, int step) {
+      if (d.abs() < 1e-12) return double.infinity;
+      final edge = lo + (step > 0 ? index + 1 : index) * _cell;
+      return (edge - o) / d;
+    }
+
+    var nextX = next(origin.dx, dir.dx, _bounds.left, col, stepX);
+    var nextY = next(origin.dy, dir.dy, _bounds.top, row, stepY);
+    final deltaX = dir.dx.abs() < 1e-12
+        ? double.infinity
+        : _cell / dir.dx.abs();
+    final deltaY = dir.dy.abs() < 1e-12
+        ? double.infinity
+        : _cell / dir.dy.abs();
+    if (_pass == 0x7fffffff) {
+      _seen.fillRange(0, _seen.length, 0);
+      _pass = 0;
+    }
+    final pass = ++_pass;
+    var enter = t0;
+    while (true) {
+      if (!goOn(enter)) return;
+      for (final item in _cells[row * _cols + col]) {
+        if (_seen[item] == pass) continue;
+        _seen[item] = pass;
+        visit(item);
+      }
+      if (nextX < nextY) {
+        col += stepX;
+        enter = nextX;
+        nextX += deltaX;
+      } else {
+        row += stepY;
+        enter = nextY;
+        nextY += deltaY;
+      }
+      if (enter > t1 || col < 0 || col >= _cols || row < 0 || row >= _rows) {
+        return;
+      }
+    }
   }
 }
