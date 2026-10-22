@@ -23,6 +23,7 @@ import 'package:iris_dp/features/camera_plan/rig/plan_rig.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_scene3d.dart';
 import 'package:iris_dp/features/camera_plan/rig/rig_controls.dart';
 import 'package:iris_dp/features/camera_plan/rig/rig_report.dart';
+import 'package:iris_dp/shared/pdf_export/rig_sheet_pdf.dart';
 
 const mpu = 0.02; // 2 cm por unidad: 50 unidades por metro.
 
@@ -738,5 +739,27 @@ void main() {
       PlanCadExport.elevationDxf(elev),
       contains(PlanCadExport.layerRigging),
     );
+  });
+
+  test('la hoja A3 sale y elige escalas que caben', () async {
+    expect(RigSheetPdf.scaleFor(24, 12, 266, 148), 100);
+    expect(RigSheetPdf.scaleFor(60, 30, 266, 148), 250);
+    final hall = PlanHall.create(
+      Offset.zero,
+      HallRecipe.rectangle(width: 24, depth: 12),
+    );
+    final elements = <PlanElement>[hall, ...PlanHall.build(hall, mpu)];
+    final l = light(
+      PlanTruss.pointAt(elements.firstWhere(PlanTruss.isTruss), .5),
+    );
+    TrussMagnet.snap(l, elements, mpu);
+    elements.add(l);
+    final bytes = await RigSheetPdf.build(
+      elements,
+      metersPerUnit: mpu,
+      info: RigSheetInfo(project: 'Caseta', date: DateTime(2026, 10, 22)),
+    );
+    expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+    expect(bytes.length, greaterThan(20000));
   });
 }
