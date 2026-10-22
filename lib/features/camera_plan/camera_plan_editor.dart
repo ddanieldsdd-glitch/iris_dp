@@ -80,6 +80,7 @@ import 'rig/hall_builder_sheet.dart';
 import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
 import 'rig/plan_3d_view.dart';
+import 'rig/rig_report.dart';
 import 'rig/plan_hall.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
@@ -2594,6 +2595,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _elements.where(
       (e) => e.layer == PlanLayer.light || e.layer == PlanLayer.shot,
     ),
+    rigging: RigReport.rigging(_visibleElements, _metersPerUnit),
   );
 
   /// Tocar una línea de la lista de material selecciona en la planta lo

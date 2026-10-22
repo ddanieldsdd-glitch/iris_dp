@@ -154,6 +154,10 @@ class HallRecipe {
   final double interiorPillarsM;
 
   final bool grid;
+
+  /// Rejilla cruzada: travesaños también cada `gridSpacingM`, no solo en
+  /// los extremos.
+  final bool gridCross;
   final double gridSpacingM;
   final double gridLowM;
   final double gridMarginM;
@@ -176,6 +180,7 @@ class HallRecipe {
     this.pillarSizeM = 0.15,
     this.interiorPillarsM = 0,
     this.grid = true,
+    this.gridCross = false,
     this.gridSpacingM = 3.25,
     this.gridLowM = 4,
     this.gridMarginM = 1.2,
@@ -246,6 +251,7 @@ class HallRecipe {
     double? pillarSizeM,
     double? interiorPillarsM,
     bool? grid,
+    bool? gridCross,
     double? gridSpacingM,
     double? gridLowM,
     double? gridMarginM,
@@ -265,6 +271,7 @@ class HallRecipe {
     pillarSizeM: pillarSizeM ?? this.pillarSizeM,
     interiorPillarsM: interiorPillarsM ?? this.interiorPillarsM,
     grid: grid ?? this.grid,
+    gridCross: gridCross ?? this.gridCross,
     gridSpacingM: gridSpacingM ?? this.gridSpacingM,
     gridLowM: gridLowM ?? this.gridLowM,
     gridMarginM: gridMarginM ?? this.gridMarginM,
@@ -318,6 +325,7 @@ class HallRecipe {
     'pillarSizeM': pillarSizeM,
     'interiorPillarsM': interiorPillarsM,
     'grid': grid,
+    if (gridCross) 'gridCross': true,
     'gridSpacingM': gridSpacingM,
     'gridLowM': gridLowM,
     'gridMarginM': gridMarginM,
@@ -354,6 +362,7 @@ class HallRecipe {
       pillarSizeM: n('pillarSizeM', 0.2),
       interiorPillarsM: n('interiorPillarsM', 0),
       grid: raw['grid'] as bool? ?? true,
+      gridCross: raw['gridCross'] as bool? ?? false,
       gridSpacingM: n('gridSpacingM', 3.25),
       gridLowM: n('gridLowM', 4),
       gridMarginM: n('gridMarginM', 1.2),
@@ -446,6 +455,82 @@ class HallRecipe {
     }
     return inside;
   }
+}
+
+/// Naves de partida para el constructor.
+class HallTemplates {
+  HallTemplates._();
+
+  static final all = <(String, String, HallRecipe)>[
+    (
+      'Caseta de feria',
+      '3 módulos de 4 m, lona y bambalinas',
+      HallRecipe.rectangle(
+        width: 12,
+        depth: 10,
+        eaveM: 4,
+        riseM: 1.5,
+        pillarSpacingM: 4,
+        gridSpacingM: 2.5,
+        gridLowM: 3.4,
+      ),
+    ),
+    (
+      'Carpa 10 × 20',
+      'Lona, frente abierto',
+      HallRecipe.rectangle(
+        width: 20,
+        depth: 10,
+        front: HallEdgeKind.open,
+        eaveM: 3.5,
+        riseM: 2.2,
+        pillarSpacingM: 5,
+        gridSpacingM: 3,
+        gridLowM: 3,
+      ),
+    ),
+    (
+      'Plató',
+      '30 × 20, parrilla a 6,5 m con motores',
+      HallRecipe.rectangle(
+        width: 30,
+        depth: 20,
+        front: HallEdgeKind.wall,
+        roof: HallRoof.flat,
+        eaveM: 8,
+        pillarSpacingM: 10,
+        gridSpacingM: 3,
+        gridLowM: 6.5,
+      ).copyWith(gridCross: true),
+    ),
+    (
+      'Nave industrial',
+      'Dos aguas, pilares dentro y ventanales',
+      () {
+        final base = HallRecipe.rectangle(
+          width: 40,
+          depth: 20,
+          front: HallEdgeKind.wall,
+          roof: HallRoof.gable,
+          eaveM: 7,
+          riseM: 2.5,
+          pillarSpacingM: 8,
+          gridSpacingM: 4,
+          gridLowM: 5.5,
+        );
+        return base.copyWith(
+          interiorPillarsM: 8,
+          pillarSizeM: 0.4,
+          edges: [
+            const HallEdge(kind: HallEdgeKind.glass, sillM: 1.2),
+            base.edges[1],
+            base.edges[2],
+            base.edges[3],
+          ],
+        );
+      }(),
+    ),
+  ];
 }
 
 /// Convierte una receta en elementos de la planta y los rehace cuando la
@@ -883,7 +968,10 @@ class PlanHall {
     final cross = <(Offset, Offset)>[];
     if (main.length >= 2) {
       final vFirst = minV + m, vLast = maxV - m;
-      for (final u in [lo, hi]) {
+      final n = r.gridCross
+          ? math.max(1, ((hi - lo) / r.gridSpacingM).round())
+          : 1;
+      for (final u in [for (var k = 0; k <= n; k++) lo + (hi - lo) * k / n]) {
         for (final (v0, v1) in _crossings(local, u, horizontal: false)) {
           final a = math.max(v0, vFirst), b = math.min(v1, vLast);
           if (b - a < 1) continue;

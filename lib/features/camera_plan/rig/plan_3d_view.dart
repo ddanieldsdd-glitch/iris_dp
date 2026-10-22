@@ -16,6 +16,7 @@ import '../camera_plan_element_model.dart';
 import '../light/plan_light.dart';
 import '../plan_piece_controls.dart';
 import 'plan_scene3d.dart';
+import 'rig_report.dart';
 
 /// Capas del 3D que se pueden ocultar, con su nombre en el visor.
 const _layers = <(String, String)>[
@@ -370,6 +371,19 @@ class _Plan3dViewState extends State<Plan3dView> {
           ],
           onSelected: _toggle,
         ),
+        if (RigReport.warnings(widget.elements, widget.metersPerUnit)
+            case final list when list.isNotEmpty)
+          IconButton(
+            tooltip: [for (final w in list) w.text].join('\n'),
+            icon: Icon(
+              Icons.warning_amber,
+              size: 18,
+              color: list.any((w) => w.serious)
+                  ? palette.error
+                  : palette.warning,
+            ),
+            onPressed: widget.onExpand,
+          ),
         if (widget.onExpand != null)
           IconButton(
             tooltip: 'Abrir el 3D a pantalla entera',
@@ -511,6 +525,7 @@ class _Plan3dViewState extends State<Plan3dView> {
           toggle(label, _show[key]!, () => _toggle(key)),
         header('En la escena'),
         ..._summary(palette),
+        ..._warnings(palette),
         header('Selección'),
         Text(
           _selected == null
@@ -551,6 +566,40 @@ class _Plan3dViewState extends State<Plan3dView> {
         ),
       ],
     );
+  }
+
+  /// Avisos de rigging; tocar uno selecciona lo que lo provoca.
+  List<Widget> _warnings(AppPalette palette) {
+    final list = RigReport.warnings(widget.elements, widget.metersPerUnit);
+    if (list.isEmpty) return const [];
+    return [
+      const SizedBox(height: AppSpacing.sm),
+      for (final w in list)
+        InkWell(
+          onTap: () {
+            setState(() => _selected = w.element);
+            _pushSelection();
+            widget.onSelect?.call(w.element);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  w.serious ? Icons.error_outline : Icons.warning_amber,
+                  size: 16,
+                  color: w.serious ? palette.error : palette.warning,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text(w.text, style: AppTypography.caption(palette)),
+                ),
+              ],
+            ),
+          ),
+        ),
+    ];
   }
 
   List<Widget> _summary(AppPalette palette) {
