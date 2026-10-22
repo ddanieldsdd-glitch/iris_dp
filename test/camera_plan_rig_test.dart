@@ -19,6 +19,7 @@ import 'package:iris_dp/features/camera_plan/rig/plan_hall.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_rig.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_scene3d.dart';
 import 'package:iris_dp/features/camera_plan/rig/rig_controls.dart';
+import 'package:iris_dp/features/camera_plan/rig/rig_report.dart';
 
 const mpu = 0.02; // 2 cm por unidad: 50 unidades por metro.
 
@@ -577,5 +578,81 @@ void main() {
         expect(motor.props[PlanRigPoint.alongKey], closeTo(4, 1e-9));
       },
     );
+  });
+
+  group('rigging', () {
+    test('las plantillas salen y la rejilla cruzada pone más travesaños', () {
+      for (final (_, _, recipe) in HallTemplates.all) {
+        final built = PlanHall.build(PlanHall.create(Offset.zero, recipe), mpu);
+        expect(built.where(PlanTruss.isTruss), isNotEmpty);
+      }
+      final plain = HallRecipe.rectangle(width: 24, depth: 12);
+      int cross(HallRecipe r) => PlanHall.build(
+        PlanHall.create(Offset.zero, r),
+        mpu,
+      ).where((e) => (LightOverrides.uidOf(e) ?? '').contains('-x')).length;
+      expect(cross(plain), 2);
+      expect(cross(plain.copyWith(gridCross: true)), greaterThan(4));
+    });
+
+    test('lista de rigging: tramos, esquinas, torres, garras y telas', () {
+      final hall = PlanHall.create(
+        Offset.zero,
+        HallRecipe.rectangle(width: 12, depth: 8),
+      );
+      final elements = <PlanElement>[hall, ...PlanHall.build(hall, mpu)];
+      final l = light(
+        PlanTruss.pointAt(elements.firstWhere(PlanTruss.isTruss), 0.5),
+      );
+      TrussMagnet.snap(l, elements, mpu);
+      elements.add(l);
+      final lines = {
+        for (final g in RigReport.rigging(elements, mpu)) g.label: g.count,
+      };
+      expect(
+        lines.keys.any((k) => k.startsWith('Truss cuadrado 30 ·')),
+        isTrue,
+      );
+      expect(lines['Esquina de 2 vías'], 4);
+      expect(lines['Torre de ground support'], greaterThan(0));
+      expect(lines['Garra y cable de seguridad'], 1);
+      expect(lines.keys.any((k) => k.startsWith('m² de')), isTrue);
+    });
+
+    test('avisos: sobrecarga, truss contra la cubierta y truss suelto', () {
+      final hall = PlanHall.create(
+        Offset.zero,
+        HallRecipe.rectangle(width: 12, depth: 8, roof: HallRoof.flat),
+      );
+      final elements = <PlanElement>[hall, ...PlanHall.build(hall, mpu)];
+      expect(
+        RigReport.warnings(elements, mpu).where((w) => w.serious),
+        isEmpty,
+      );
+      final truss = elements.firstWhere(PlanTruss.isTruss);
+      truss.props[PlanTruss.lowKey] = 4.4; // alero a 4,5 m
+      final motor = elements.firstWhere(
+        (e) =>
+            PlanRigPoint.isRigPoint(e) &&
+            e.props[PlanRigPoint.trussKey] == LightOverrides.uidOf(truss),
+      );
+      motor.props[PlanRigPoint.wllKey] = 10.0;
+      final loose = PlanTruss.create(
+        const Offset(5000, 5000),
+        const Offset(5300, 5000),
+      );
+      elements.add(loose);
+      final texts = RigReport.warnings(elements, mpu).map((w) => w.text);
+      expect(texts.any((t) => t.contains('pasa de su carga')), isTrue);
+      expect(texts.any((t) => t.contains('toca la cubierta')), isTrue);
+      expect(texts.any((t) => t.contains('sin motores ni torres')), isTrue);
+      final scene = PlanScene3d.build(elements, metersPerUnit: mpu);
+      expect(
+        (scene['rigging'] as List).cast<Map>().every(
+          (r) => r['loadKg'] != null,
+        ),
+        isTrue,
+      );
+    });
   });
 }

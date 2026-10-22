@@ -130,6 +130,9 @@ class GearList {
   /// Difusiones, redes y gelatinas puestas en los aparatos.
   final List<GearLine> filters;
 
+  /// Truss, esquinas, motores, torres, garras y telas.
+  final List<GearLine> rigging;
+
   /// Potencia de las luces encendidas, en vatios.
   final double watts;
 
@@ -139,13 +142,22 @@ class GearList {
     this.lights = const [],
     this.grip = const [],
     this.cameras = const [],
+    this.rigging = const [],
   });
 
   bool get isEmpty =>
-      lights.isEmpty && grip.isEmpty && cameras.isEmpty && filters.isEmpty;
+      lights.isEmpty &&
+      grip.isEmpty &&
+      cameras.isEmpty &&
+      filters.isEmpty &&
+      rigging.isEmpty;
 
-  /// Agrupa los elementos iguales y los cuenta.
-  factory GearList.from(Iterable<PlanElement> elements) {
+  /// Agrupa los elementos iguales y los cuenta. El rigging llega ya
+  /// contado (necesita la escala de la planta).
+  factory GearList.from(
+    Iterable<PlanElement> elements, {
+    List<GearLine> rigging = const [],
+  }) {
     final lights = <String, int>{};
     final grip = <String, int>{};
     final cameras = <String, int>{};
@@ -202,6 +214,7 @@ class GearList {
       grip: lines(grip),
       cameras: lines(cameras),
       filters: lines(filters),
+      rigging: rigging,
       watts: watts,
     );
   }
@@ -239,6 +252,7 @@ class GearList {
     section('GRIP', grip);
     section('DIFUSIÓN Y GELATINAS', filters);
     section('CÁMARA', cameras);
+    section('RIGGING', rigging);
     if (watts > 0) {
       buffer.writeln('CORRIENTE');
       for (final line in powerLines()) {
@@ -325,6 +339,7 @@ class PlanGearListPanel extends StatelessWidget {
                       section('GRIP', gear.grip),
                       section('DIFUSIÓN Y GELATINAS', gear.filters),
                       section('CÁMARA', gear.cameras),
+                      section('RIGGING', gear.rigging),
                       if (gear.watts > 0)
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
