@@ -63,6 +63,9 @@ class PlanPalette extends StatelessWidget {
 
   /// Todo el catálogo de Equipo.
   final List<Light> catalogLights;
+
+  /// Dar de alta una luz que no está; recibe lo que se buscaba.
+  final ValueChanged<String>? onQuickAddLight;
   final ValueChanged<ArchitectureType> onAddArchitecture;
 
   /// Dónde van paredes y props. `null` si no hay elección.
@@ -83,6 +86,7 @@ class PlanPalette extends StatelessWidget {
     this.projectLights = const [],
     this.onAddCatalogLight,
     this.catalogLights = const [],
+    this.onQuickAddLight,
     required this.onAddArchitecture,
     this.wallsToEnvironment,
     this.onWallsToEnvironment,
@@ -178,6 +182,7 @@ class PlanPalette extends StatelessWidget {
             catalogLights: catalogLights,
             onAddLight: onAddLight,
             onAddCatalogLight: onAddCatalogLight,
+            onQuickAdd: onQuickAddLight,
           ),
           for (final (title, types) in const [
             ('GRIP · CORTA', [LightType.flag, LightType.cutter]),
@@ -302,6 +307,7 @@ class PlanLightBrowser extends StatefulWidget {
   final List<Light> catalogLights;
   final ValueChanged<LightType> onAddLight;
   final ValueChanged<Light>? onAddCatalogLight;
+  final ValueChanged<String>? onQuickAdd;
 
   const PlanLightBrowser({
     super.key,
@@ -309,6 +315,7 @@ class PlanLightBrowser extends StatefulWidget {
     required this.catalogLights,
     required this.onAddLight,
     this.onAddCatalogLight,
+    this.onQuickAdd,
   });
 
   @override
@@ -399,6 +406,25 @@ class _PlanLightBrowserState extends State<PlanLightBrowser> {
       ),
     );
 
+    final quickAdd = widget.onQuickAdd == null
+        ? null
+        : Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: SizedBox(
+              height: 34,
+              child: _PaletteButton(
+                icon: const Icon(Icons.add_circle_outline, size: 15),
+                label: q.isEmpty
+                    ? 'Nueva luz…'
+                    : 'Dar de alta «${_query.trim()}»',
+                tooltip:
+                    'Una luz que no está en el catálogo: formato, marca, '
+                    'modelo, color y vatios',
+                onTap: () => widget.onQuickAdd!(_query.trim()),
+              ),
+            ),
+          );
+
     if (q.isNotEmpty) {
       final found = [
         ...project.where((l) => _nameOf(l).toLowerCase().contains(q)),
@@ -423,6 +449,7 @@ class _PlanLightBrowserState extends State<PlanLightBrowser> {
                 palette,
               ).copyWith(color: palette.textTertiary),
             ),
+          ?quickAdd,
         ],
       );
     }
@@ -468,7 +495,7 @@ class _PlanLightBrowserState extends State<PlanLightBrowser> {
       ),
     );
 
-    final children = <Widget>[search];
+    final children = <Widget>[search, ?quickAdd];
     for (final family in LightFamily.values) {
       final groups = kLightGroups.where((g) => g.family == family).toList();
       bool inFamily(Light l) =>

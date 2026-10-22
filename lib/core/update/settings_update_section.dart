@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../cloud/cloud_providers.dart';
-import '../storage/app_storage_config.dart';
-import '../storage/legacy_storage_discovery.dart';
-import '../storage/storage_relocation_dialog.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
@@ -29,22 +26,6 @@ class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
     await ref.read(appUpdateProvider.notifier).check(force: true);
   }
 
-  Future<void> _scanLegacyStorage() async {
-    final proposal = await LegacyStorageDiscovery.findRelocationProposal();
-    if (!mounted) return;
-
-    if (proposal == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No hay datos en otras ubicaciones que mover.'),
-        ),
-      );
-      return;
-    }
-
-    await runStorageRelocationFlow(context, proposal);
-  }
-
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -57,8 +38,6 @@ class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Actualizaciones', style: AppTypography.titleMedium(palette)),
-        const SizedBox(height: AppSpacing.sm),
         if (installedLabel != null)
           Text(
             'Versión en ejecución: $installedLabel',
@@ -107,24 +86,6 @@ class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
             const SizedBox(height: AppSpacing.md),
             _buildCheckResult(context, palette, update),
           ],
-        ],
-        if (AppStorageConfig.isConfigured) ...[
-          const SizedBox(height: AppSpacing.lg),
-          Text('Datos del proyecto', style: AppTypography.titleMedium(palette)),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Carpeta actual: ${AppStorageConfig.current!.documentsPath}',
-            style: AppTypography.caption(
-              palette,
-            ).copyWith(fontFamily: 'monospace'),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppButton(
-            label: 'Buscar datos en otras ubicaciones',
-            icon: Icons.folder_shared_outlined,
-            variant: AppButtonVariant.secondary,
-            onTap: _scanLegacyStorage,
-          ),
         ],
       ],
     );

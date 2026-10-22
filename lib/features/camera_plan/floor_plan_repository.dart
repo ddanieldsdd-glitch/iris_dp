@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'shot_route.dart';
 import 'package:drift/drift.dart' show Value;
 
@@ -8,6 +10,7 @@ import 'floor_plan_json.dart';
 import 'floor_plan_scope.dart';
 import 'light/ambient.dart';
 import 'light_overrides.dart';
+import 'plan_prefs.dart';
 
 /// Capas de una planta, de abajo arriba. Cada nivel ve las anteriores por
 /// referencia: nada se copia.
@@ -392,9 +395,20 @@ class FloorPlanRepository {
         sortOrder: Value(existing.length),
         kind: Value(kind),
         sceneId: Value(sceneId),
+        planJson: Value(_newSetupPlanJson(projectId)),
       ),
     );
     return (await db.getLightSetupById(id))!;
+  }
+
+  /// Documento inicial de un esquema nuevo: solo el ambiente de Ajustes, si
+  /// difiere del de fábrica (si no, se deja vacío como hasta ahora).
+  static String? _newSetupPlanJson(int projectId) {
+    final ambient = PlanPrefs.newSetupAmbient(projectId).toJson();
+    if (jsonEncode(ambient) == jsonEncode(const PlanAmbient().toJson())) {
+      return null;
+    }
+    return FloorPlanJson.encodeDocument(FloorPlanDocument(ambient: ambient));
   }
 
   /// Copia un esquema para hacer una variante.

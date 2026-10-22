@@ -22,9 +22,11 @@ import '../../core/utils/clipboard_image_reader.dart';
 import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/scene_color.dart';
 import '../../shared/annotations/annotation_canvas.dart';
+import '../../shared/equipment/light_optics.dart';
 import '../../shared/annotations/annotation_document.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
 import 'camera_plan_grouping.dart';
+import '../equipment/widgets/light_quick_add_sheet.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
@@ -36,6 +38,7 @@ import 'light_beam.dart';
 import 'plan_data.dart' show kLightSetupColors;
 import 'plan_cast.dart';
 import 'plan_gear_list.dart';
+import 'plan_elevation_screen.dart';
 import 'plan_guide.dart';
 import 'plan_image_widgets.dart';
 import 'plan_images.dart';
@@ -48,6 +51,7 @@ import 'plan_room_panel.dart';
 import 'plan_trash_ui.dart';
 import 'light/ambient.dart';
 import 'light/exposure.dart';
+import 'light/plan_light.dart';
 import 'light_overrides.dart';
 import 'light_setup_actions.dart' show askPlanName;
 import 'plan_ambient_sheet.dart';
@@ -68,6 +72,9 @@ import 'plan_element_compat_panel.dart';
 import '../luka_export/luka_light_mapping.dart';
 import 'light_grid_tile.dart';
 import '../../core/widgets/app_snackbar.dart';
+import '../../core/settings/app_prefs.dart';
+import '../settings/settings_launcher.dart';
+import 'plan_prefs.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
   final int projectId;
@@ -247,9 +254,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Asa del tramo seleccionado que se arrastra: 0 inicio, 1 final, 2 curva.
   int? _segmentHandle;
 
+  /// Ajustes de la planta tal como estaban al aplicarlos por última vez.
+  late PlanPrefValues _planPrefs = PlanPrefs.read(widget.projectId);
+
   /// Imán: lo que se mueve o se dibuja se ajusta a la rejilla y a los
   /// extremos de otros tramos.
-  bool _snap = true;
+  late bool _snap = _planPrefs.snap;
 
   /// Selección múltiple (con Mayús); incluye a `_selected`.
   final Set<PlanElement> _multi = {};
@@ -285,17 +295,23 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// qué plano lleva cada una.
   List<PlanElement> _otherCameras = const [];
   final Map<PlanElement, PlanTarget> _otherCameraShot = {};
-  bool _showOtherCameras = true;
+  late bool _showOtherCameras = _planPrefs.otherCameras;
 
   /// Cómo es en el esquema cada luz que este plano tiene ajustada, por su
   /// identificador.
   final Map<String, PlanElement> _setupOriginals = {};
 
   /// Mapa de exposición en falso color, en lugar de los haces.
-  bool _exposureMap = false;
+  late bool _exposureMap = _planPrefs.exposureMap;
+
+  /// La luz a la exposición de la cámara o, en «Ver todo», autoexpuesta.
+  LightView _lightView = LightView.camera;
+
+  /// Rótulos de equipo y leyenda, como en una hoja de luces.
+  bool _gearLabels = false;
 
   /// Lecturas de diafragma bajo cada actor.
-  bool _showReadings = true;
+  late bool _showReadings = _planPrefs.readings;
 
   /// La cámara con la que se lee la luz: la del plano abierto o, si no hay,
   /// la primera que haya en la planta.
@@ -316,22 +332,22 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     double pick(String key, double? fromShot, double fallback) =>
         (camera?.props[key] as num?)?.toDouble() ?? fromShot ?? fallback;
     return ExposureSettings(
-      iso: pick(CameraExposure.isoKey, null, 800),
+      iso: pick(CameraExposure.isoKey, null, _planPrefs.iso),
       shutterDeg: pick(
         CameraExposure.shutterKey,
         CameraExposure.parseStop(shot?.shutterAngle),
-        180,
+        _planPrefs.shutterDeg,
       ),
-      fps: pick(CameraExposure.fpsKey, shot?.fps?.toDouble(), 24),
-      ndStops: pick(CameraExposure.ndKey, null, 0),
+      fps: pick(CameraExposure.fpsKey, shot?.fps?.toDouble(), _planPrefs.fps),
+      ndStops: pick(CameraExposure.ndKey, null, _planPrefs.ndStops),
     );
   }
 
-  /// Diafragma de trabajo: el de la cámara, el del plano o T2.8.
+  /// Diafragma de trabajo: el de la cámara, el del plano o el de Ajustes.
   double get _targetStop =>
       (_meterCamera?.props[CameraExposure.stopKey] as num?)?.toDouble() ??
       CameraExposure.parseStop(_shot?.fStop) ??
-      CameraExposure.defaultStop;
+      _planPrefs.tStop;
 
   /// Lectura de fotómetro donde está un elemento.
   MeterReading _readingFor(PlanElement el) => MeterReading.at(
@@ -421,7 +437,27 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     super.initState();
     _repo = FloorPlanRepository(ref.read(databaseProvider));
     _imageCache.addListener(_onImageLoaded);
+    AppPrefs.instance.addListener(_onPrefsChanged);
     _load();
+  }
+
+  /// Un cambio en Ajustes se ve al momento: solo se toca lo que cambió, para
+  /// no deshacer lo que se haya activado a mano en la barra.
+  void _onPrefsChanged() {
+    final next = PlanPrefs.read(widget.projectId);
+    final prev = _planPrefs;
+    if (!mounted || next == prev) return;
+    setState(() {
+      if (next.snap != prev.snap) _snap = next.snap;
+      if (next.otherCameras != prev.otherCameras) {
+        _showOtherCameras = next.otherCameras;
+      }
+      if (next.exposureMap != prev.exposureMap) {
+        _exposureMap = next.exposureMap;
+      }
+      if (next.readings != prev.readings) _showReadings = next.readings;
+      _planPrefs = next;
+    });
   }
 
   void _onImageLoaded() {
@@ -430,6 +466,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   @override
   void dispose() {
+    AppPrefs.instance.removeListener(_onPrefsChanged);
     final live = _live;
     final key = _liveKey;
     // Fuera del desmontaje: avisar mientras se quita el árbol no se puede.
@@ -1214,6 +1251,25 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Añade a la planta un aparato del catálogo de Equipo, con sus datos.
   Future<void> _addCatalogLight(Light light) =>
       _addElement(PlanEquipment.lightFromCatalog(light));
+
+  /// Da de alta una luz que no está en el catálogo, la mete en el proyecto
+  /// y la pone en la planta.
+  Future<void> _quickAddLight(String query) async {
+    final light = await showLightQuickAdd(
+      context,
+      initialModel: query,
+      confirmLabel: 'Añadir a la planta',
+    );
+    if (light == null || !mounted) return;
+    final db = ref.read(databaseProvider);
+    await ProjectGearEdits.set(db, widget.projectId, 'light', [
+      light.id,
+    ], inProject: true);
+    final gear = await ProjectGear.load(db, widget.projectId);
+    if (!mounted) return;
+    setState(() => _gear = gear);
+    await _addCatalogLight(light);
+  }
 
   /// Sol, cielo y rebote de paredes: se guardan con el esquema de luz.
   Future<void> _editAmbient() async {
@@ -3928,6 +3984,60 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             ),
             onPressed: () => setState(() => _snap = !_snap),
           ),
+          PopupMenuButton<LightView>(
+            tooltip: 'Luz: ${_lightView.label.toLowerCase()}',
+            icon: Icon(
+              _lightView == LightView.camera
+                  ? Icons.camera_outlined
+                  : Icons.visibility_outlined,
+              color: palette.textSecondary,
+            ),
+            initialValue: _lightView,
+            onSelected: (view) => setState(() => _lightView = view),
+            itemBuilder: (_) => [
+              for (final view in LightView.values)
+                CheckedPopupMenuItem<LightView>(
+                  value: view,
+                  checked: view == _lightView,
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(view.label),
+                    subtitle: Text(switch (view) {
+                      LightView.camera =>
+                        'Como la ve la cámara a ${formatStop(_targetStop)}: '
+                            'lo que sobra se quema y lo que falta se apaga',
+                      LightView.all =>
+                        'Lo más iluminado al máximo, para ver hasta dónde '
+                            'llega cada luz',
+                    }),
+                  ),
+                ),
+            ],
+          ),
+          IconButton(
+            tooltip: 'Alzado y perfil · exportar DXF y MVR',
+            icon: Icon(
+              Icons.view_in_ar_outlined,
+              color: palette.textSecondary,
+            ),
+            onPressed: () => showPlanElevation(
+              context,
+              elements: _visibleElements,
+              metersPerUnit: _metersPerUnit,
+              name: _linkedSet?.locationName ?? _linkedSite?.name ?? 'planta',
+            ),
+          ),
+          IconButton(
+            tooltip: _gearLabels
+                ? 'Quitar rótulos de equipo'
+                : 'Rótulos de equipo: unidad, vatios, lúmenes y leyenda',
+            icon: Icon(
+              Icons.sell_outlined,
+              color: _gearLabels ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: () => setState(() => _gearLabels = !_gearLabels),
+          ),
           IconButton(
             tooltip: _exposureMap
                 ? 'Volver a los haces de luz'
@@ -3957,6 +4067,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             tooltip: 'Atajos',
             icon: Icon(Icons.keyboard_outlined, color: palette.textSecondary),
             onPressed: _showShortcuts,
+          ),
+          ScreenSettingsButton(
+            sectionId: SettingsSectionIds.cameraPlan,
+            projectId: widget.projectId,
           ),
           IconButton(
             tooltip: 'Encajar todo (⌘0)',
@@ -4004,6 +4118,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     onAddMeter: _addMeter,
                     projectLights: _gear.lights,
                     onAddCatalogLight: _addCatalogLight,
+                    onQuickAddLight: _quickAddLight,
                     catalogLights: _gear.catalogLights,
                     onAddArchitecture: _addArchitecture,
                     wallsToEnvironment:
@@ -4361,6 +4476,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                             _showReadings,
                                                         exposureMap:
                                                             _exposureMap,
+                                                        lightView: _lightView,
+                                                        gearLabels:
+                                                            _gearLabels,
                                                         selectedElement:
                                                             _selected,
                                                         selectedPathIndex:
@@ -5210,6 +5328,73 @@ class _ElementPanelState extends State<_ElementPanel> {
     );
   }
 
+  /// Foco de un aparato que enfoca: del spot al flood de su ficha. Al
+  /// abrir, el mismo flujo se reparte en más ángulo y el eje baja.
+  Widget _focusControl(LightOptics optics, double spread) {
+    final palette = widget.palette;
+    final spot = optics.spotDeg!, flood = optics.floodDeg!;
+    final current = spread.clamp(spot, flood).toDouble();
+    String deg(double v) =>
+        '${v == v.roundToDouble() ? v.round() : v.toStringAsFixed(1)}°';
+    void set(double v) {
+      widget.element.props[LightBeam.spreadKey] = v;
+      widget.onUpdate();
+    }
+
+    final light = PlanLight.of(widget.element);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text('Foco', style: AppTypography.caption(palette)),
+            ),
+            Text(deg(current), style: AppTypography.caption(palette)),
+          ],
+        ),
+        Slider(
+          value: current,
+          min: spot,
+          max: flood,
+          onChanged: (v) {
+            widget.element.props[LightBeam.spreadKey] = v.roundToDouble();
+            widget.onPreview();
+          },
+          onChangeEnd: (_) => widget.onUpdate(),
+        ),
+        Row(
+          children: [
+            TextButton(
+              onPressed: () => set(spot),
+              child: Text('Spot ${deg(spot)}'),
+            ),
+            const Spacer(),
+            if (light != null)
+              Text(
+                '${formatLux(light.source.illuminance(3))} a 3 m',
+                style: AppTypography.caption(
+                  palette,
+                ).copyWith(color: palette.textTertiary),
+              ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => set(flood),
+              child: Text('Flood ${deg(flood)}'),
+            ),
+          ],
+        ),
+        if (optics.estimated)
+          Text(
+            'Rango típico de su formato: la ficha no trae el suyo.',
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.textTertiary, fontSize: 10),
+          ),
+      ],
+    );
+  }
+
   void _commitLens(String v) {
     widget.element.lens = v;
     widget.onUpdate();
@@ -5505,14 +5690,18 @@ class _ElementPanelState extends State<_ElementPanel> {
                           10000,
                           step: 100,
                         ),
-                        _beamSlider(
-                          'Apertura del haz',
-                          '${beam.spread.round()}°',
-                          LightBeam.spreadKey,
-                          beam.spread,
-                          5,
-                          360,
-                        ),
+                        if (PlanLight.opticsOf(element) case final optics
+                            when optics.focusable)
+                          _focusControl(optics, beam.spread)
+                        else
+                          _beamSlider(
+                            'Apertura del haz',
+                            '${beam.spread.round()}°',
+                            LightBeam.spreadKey,
+                            beam.spread,
+                            5,
+                            360,
+                          ),
                         PlanLightControls(
                           element: element,
                           exposure: widget.exposure,

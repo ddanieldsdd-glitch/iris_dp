@@ -27,6 +27,9 @@ import 'optics_calculator.dart';
 import 'optics_lab_samples.dart';
 import 'sensor_coverage_painter.dart';
 import 'sensor_mode_utils.dart';
+import 'optics_prefs.dart';
+import '../../core/settings/app_prefs.dart';
+import '../settings/settings_launcher.dart';
 
 /// Laboratorio óptico interactivo estilo ARRI FLT.
 class OpticsLabScreen extends ConsumerStatefulWidget {
@@ -73,7 +76,11 @@ class OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
   double _lensSqueeze = 1.0;
   String? _referenceImagePath;
   ReferenceBackground _referenceBackground = const ReferenceBackground.white();
-  List<FrameLineConfig> _frameLines = FrameLineConfig.defaults();
+  late OpticsPrefValues _opticsPrefs = OpticsPrefs.read(widget.projectId);
+  late List<FrameLineConfig> _frameLines = OpticsPrefs.apply(
+    FrameLineConfig.defaults(),
+    _opticsPrefs,
+  );
   FltSettingsTab _fltSettingsTab = FltSettingsTab.frameLineA;
   LensIlluminationGuideConfig _lensGuide = const LensIlluminationGuideConfig();
   FrameLeaderConfig _frameLeader = const FrameLeaderConfig();
@@ -94,6 +101,23 @@ class OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
       _referenceBackground = ReferenceBackground.image(_referenceImagePath);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadDefaults());
+    AppPrefs.instance.addListener(_onPrefsChanged);
+  }
+
+  @override
+  void dispose() {
+    AppPrefs.instance.removeListener(_onPrefsChanged);
+    super.dispose();
+  }
+
+  /// Un cambio en Ajustes se ve al momento en las líneas de encuadre.
+  void _onPrefsChanged() {
+    final next = OpticsPrefs.read(widget.projectId);
+    if (!mounted || next == _opticsPrefs) return;
+    setState(() {
+      _frameLines = OpticsPrefs.apply(_frameLines, next, _opticsPrefs);
+      _opticsPrefs = next;
+    });
   }
 
   Future<void> reload() => _loadDefaults();
@@ -503,6 +527,10 @@ class OpticsLabScreenState extends ConsumerState<OpticsLabScreen> {
               onPressed: _saveToBible,
               child: const Text('Guardar en Biblia'),
             ),
+          ScreenSettingsButton(
+            sectionId: SettingsSectionIds.optics,
+            projectId: widget.projectId,
+          ),
         ],
       ),
       body: body,

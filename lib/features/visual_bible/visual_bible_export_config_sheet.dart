@@ -6,6 +6,7 @@ import '../../core/theme/app_typography.dart';
 import 'moodboard_export_layout.dart';
 import 'visual_bible_export_config.dart';
 import 'visual_bible_model.dart';
+import 'bible_prefs.dart';
 
 /// Abre la pantalla de configuración de export PDF de la Biblia.
 Future<VisualBibleExportConfig?> showVisualBibleExportConfigSheet(
@@ -54,7 +55,7 @@ class _VisualBibleExportConfigSheetState
   @override
   void initState() {
     super.initState();
-    _config = VisualBibleExportConfig.defaults();
+    _config = BiblePrefs.initialExportConfig(widget.projectId);
     if (widget.preferredDestination != null) {
       _config = _config.copyWith(destination: widget.preferredDestination);
     }

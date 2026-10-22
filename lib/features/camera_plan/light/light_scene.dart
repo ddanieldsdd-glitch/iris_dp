@@ -1871,7 +1871,10 @@ class LightScene {
     return false;
   }
 
-  /// Hasta dónde sube la pared en un punto de ella.
+  /// Hasta dónde sube la pared en un punto de ella: el techo más alto de
+  /// los recintos que toca o, si no, la altura de pared de siempre.
+  double wallTopAt(Offset onWall) => _wallTopAt(onWall);
+
   double _wallTopAt(Offset onWall) {
     var top = wallHeightM;
     for (final room in rooms) {

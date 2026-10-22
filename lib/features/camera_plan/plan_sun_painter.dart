@@ -254,7 +254,8 @@ class PlanSunPainter {
 
   /// El sol y el cielo dentro de la capa de luz: el brillo de cada cosa se
   /// mide contra lo más iluminado de la planta ([key]), y se mezcla con
-  /// las demás fuentes sin pisarse.
+  /// las demás fuentes sin pisarse. Con [exposed], [key] son los lux bien
+  /// expuestos de la cámara y el sol que sobra se ve quemado.
   static void paintKeyed(
     Canvas canvas,
     LightScene scene,
@@ -262,6 +263,7 @@ class PlanSunPainter {
     Rect view, {
     required double key,
     required double indoorKey,
+    bool exposed = false,
   }) {
     final mpu = scene.metersPerUnit;
     final open = outdoors(scene, view);
@@ -273,7 +275,12 @@ class PlanSunPainter {
         view,
         Paint()
           ..blendMode = BlendMode.lighten
-          ..color = PlanLightMap.colorFor(env.skyLux * 0.8, env.skyCct, key),
+          ..color = PlanLightMap.colorFor(
+            env.skyLux * 0.8,
+            env.skyCct,
+            key,
+            exposed: exposed,
+          ),
       );
     }
     if (env.hasSun) {
@@ -308,7 +315,12 @@ class PlanSunPainter {
       // en cambio, se ven enteros.
       sunlit(const Color(0xFF000000), BlendMode.dstOut);
       sunlit(
-        PlanLightMap.colorFor(env.condition.sunLux, env.condition.sunCct, key),
+        PlanLightMap.colorFor(
+          env.condition.sunLux,
+          env.condition.sunCct,
+          key,
+          exposed: exposed,
+        ),
         BlendMode.srcOver,
       );
     }
@@ -322,6 +334,7 @@ class PlanSunPainter {
           env.condition.sunLux,
           env.condition.sunCct,
           indoorKey,
+          exposed: exposed,
         ),
       );
     }

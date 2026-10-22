@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import '../../core/database/app_database.dart';
+import '../../shared/equipment/light_kind.dart';
+import '../../shared/equipment/light_quick_add.dart';
 import '../optics_lab/sensor_mode_utils.dart';
 
 /// Entrada de ficha técnica agrupada para pantallas de equipo.
@@ -66,9 +68,13 @@ String lensListSubtitle(Lense l) {
   return parts.join(' · ');
 }
 
+/// «Fresnel LED», «Panel», «HMI abierta»: el tipo del catálogo, legible.
+String lightKindLabel(Light l) => LightKind.parse(l.lightType).label;
+
 String lightListSubtitle(Light l) {
   final parts = <String>[
-    l.lightType,
+    lightKindLabel(l),
+    if (LightQuickAdd.isPending(l)) 'pendiente de configurar',
     '${l.powerW} W',
     '${l.colorTempMin}–${l.colorTempMax} K',
     if (l.cri != null) 'CRI ${l.cri}',
@@ -199,7 +205,16 @@ List<EquipmentSpecSection> lightSpecSections(Light l) {
       title: 'Identificación',
       rows: [
         if (l.series != null) EquipmentSpecRow('Serie', l.series!),
-        EquipmentSpecRow('Tipo', l.lightType),
+        EquipmentSpecRow('Tipo', lightKindLabel(l)),
+        EquipmentSpecRow(
+          'Tecnología',
+          LightKind.parse(l.lightType).technology.label,
+        ),
+        if (LightQuickAdd.isPending(l))
+          EquipmentSpecRow(
+            'Falta',
+            LightQuickAdd.missing(l).join(', '),
+          ),
         if (l.vintage) const EquipmentSpecRow('Clasificación', 'Vintage'),
         if (l.isCustom) const EquipmentSpecRow('Origen', 'Equipo custom'),
       ],

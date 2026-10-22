@@ -1,5 +1,6 @@
 import '../../core/database/app_database.dart';
 import 'camera_plan_constants.dart';
+import 'light_family.dart';
 import 'camera_plan_element_model.dart';
 import 'plan_element_external_mapping.dart';
 
@@ -430,36 +431,28 @@ class PlanElementCompat {
       }
     }
     if (element.lightType == null || catalog.isEmpty) return null;
-    final preferred = _catalogTypesForLightType(element.lightType!);
-    for (final t in preferred) {
-      for (final light in catalog) {
-        if (light.lightType.toLowerCase() == t) return light;
+    // Un aparato del catálogo del mismo grupo que el símbolo de la planta.
+    final type = element.lightType!;
+    for (final light in catalog) {
+      if (lightGroupForCatalogType(light.lightType).symbol == type) {
+        return light;
+      }
+    }
+    final family = _familyFor(type);
+    if (family == null) return null;
+    for (final light in catalog) {
+      if (lightGroupForCatalogType(light.lightType).family == family) {
+        return light;
       }
     }
     return null;
   }
 
-  static List<String> _catalogTypesForLightType(LightType type) {
-    return switch (type) {
-      LightType.fresnelSmall ||
-      LightType.fresnelMedium ||
-      LightType.fresnelLarge ||
-      LightType.hmi ||
-      LightType.openFace =>
-        ['fresnel', 'hmi'],
-      LightType.led ||
-      LightType.led1x1 ||
-      LightType.lightPanel ||
-      LightType.flo4Tubes ||
-      LightType.flo2Tubes ||
-      LightType.floSingle =>
-        ['led_panel', 'led', 'led_tube'],
-      LightType.softbox ||
-      LightType.chimera ||
-      LightType.octagon =>
-        ['led', 'led_panel'],
-      _ => ['led_panel', 'fresnel', 'led'],
-    };
+  static LightFamily? _familyFor(LightType type) {
+    for (final group in kLightGroups) {
+      if (group.generics.any((g) => g.$1 == type)) return group.family;
+    }
+    return null;
   }
 
   static double _intensityFromCatalog(Light? light, LightType? type) {

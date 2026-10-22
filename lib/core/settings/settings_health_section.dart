@@ -66,8 +66,6 @@ class _SettingsHealthSectionState extends ConsumerState<SettingsHealthSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Estado del sistema', style: AppTypography.titleMedium(palette)),
-        const SizedBox(height: AppSpacing.sm),
         if (_loading)
           const LinearProgressIndicator()
         else ...[

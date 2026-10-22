@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import '../../../shared/equipment/light_kind.dart';
+
 /// De dónde sale la intensidad de una fuente. Mismo criterio que los
 /// estados de dato del master de material: lo que no está medido se dice.
 enum PhotometryStatus {
@@ -40,16 +42,10 @@ extension LightTechInfo on LightTech {
     LightTech.fluorescent => 'Fluorescente',
   };
 
-  /// Tecnología según el tipo de luz del catálogo («fresnel», «led_panel»…).
-  static LightTech fromCatalogType(String? type) {
-    final t = (type ?? '').toLowerCase();
-    if (t.contains('hmi')) return LightTech.hmi;
-    if (t.contains('led') || t.contains('balloon')) return LightTech.led;
-    if (t.contains('flo') || t.contains('kino') || t.contains('tube')) {
-      return LightTech.fluorescent;
-    }
-    return LightTech.tungsten;
-  }
+  /// Tecnología según el tipo de luz del catálogo («led_fresnel»,
+  /// «tungsten_fresnel» o, de antes, «LED Panel»…).
+  static LightTech fromCatalogType(String? type) =>
+      LightTech.values.byName(LightKind.parse(type).technology.code);
 }
 
 /// Una fuente de luz para el cálculo: cuánto emite, hacia dónde y cómo de

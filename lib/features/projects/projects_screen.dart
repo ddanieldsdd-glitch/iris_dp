@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/sync/project_cloud_actions.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
-import '../../core/settings/settings_sheet.dart';
+import '../settings/settings_launcher.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/app_spacing.dart';
@@ -12,17 +12,11 @@ import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
 import 'create_project_sheet.dart';
 import '../auth/auth_screen.dart';
-import '../migration/cloud_migration_wizard.dart';
-import '../onboarding/app_tutorial_store.dart';
-import '../onboarding/auth_required_banner.dart';
-import '../onboarding/initial_tutorial_flow.dart';
-import '../onboarding/install_update_guide_screen.dart';
 import 'project_form_sheet.dart';
 import 'project_card_actions.dart';
 import 'project_card_stats.dart';
 import 'project_poster_card.dart';
 import '../project_hub/project_hub_screen.dart';
-import '../shoot_documents/shoot_template_editor_screen.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../core/widgets/sync/sync_conflict_resolution_sheet.dart';
 import '../../core/widgets/sync/sync_flow_coordinator.dart';
@@ -100,77 +94,7 @@ class ProjectsScreen extends ConsumerWidget {
                       Icons.settings_outlined,
                       color: palette.textSecondary,
                     ),
-                    onPressed: () => SettingsSheet.show(
-                      context,
-                      onLoginAction: () => openAuthScreen(context),
-                      onMigrationAction: () async {
-                        final done = await showDialog<bool>(
-                          context: context,
-                          builder: (_) => Dialog(
-                            child: Padding(
-                              padding: const EdgeInsets.all(AppSpacing.lg),
-                              child: CloudMigrationWizard(
-                                onComplete: () => Navigator.pop(context, true),
-                                onSkip: () => Navigator.pop(context, false),
-                              ),
-                            ),
-                          ),
-                        );
-
-                        if (done == true && context.mounted) {
-                          AppSnackBar.show(
-                            context,
-                            'Proyectos locales subidos a la nube.',
-                          );
-                        }
-                      },
-                      onReplayTutorial: () async {
-                        Navigator.pop(context);
-                        await AppTutorialStore.resetAll();
-
-                        if (!context.mounted) return;
-
-                        await Navigator.of(context).push<void>(
-                          MaterialPageRoute(
-                            builder: (_) => InitialTutorialFlow(
-                              replayFromStart: true,
-                              homeContentBuilder: (_) => const Column(
-                                children: [
-                                  AuthRequiredBanner(),
-                                  Expanded(child: ProjectsScreen()),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                      onInstallGuide: () {
-                        Navigator.pop(context);
-                        Navigator.of(context).push<void>(
-                          MaterialPageRoute(
-                            builder: (_) => const InstallUpdateGuideScreen(),
-                          ),
-                        );
-                      },
-                      onCreateShootTemplate: () async =>
-                          await Navigator.push<bool>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const ShootTemplateEditorScreen(),
-                            ),
-                          ) ??
-                          false,
-                      onEditShootTemplate: (templateId) async =>
-                          await Navigator.push<bool>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ShootTemplateEditorScreen(
-                                templateId: templateId,
-                              ),
-                            ),
-                          ) ??
-                          false,
-                    ),
+                    onPressed: () => openSettingsCenter(context),
                   ),
                   const SyncStatusIndicator(),
                   AccountMenuButton(

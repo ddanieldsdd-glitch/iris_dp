@@ -16,6 +16,7 @@ import '../../core/templates/user_template_service.dart';
 import 'shoot_template_editor_screen.dart';
 import 'package:drift/drift.dart' show Value;
 import 'shoot_day_screen.dart';
+import '../settings/settings_launcher.dart';
 
 /// Hub de documentos para el rodaje — referencia principal en set.
 class ShootDocumentsScreen extends ConsumerStatefulWidget {
@@ -52,6 +53,10 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
           style: AppTypography.titleMedium(palette),
         ),
         actions: [
+          ScreenSettingsButton(
+            sectionId: SettingsSectionIds.shootDocuments,
+            projectId: widget.projectId,
+          ),
           TextButton.icon(
             onPressed: () => _createShootDay(context),
             icon: Icon(Icons.event_note, color: palette.accent, size: 18),
