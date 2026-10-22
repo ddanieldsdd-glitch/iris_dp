@@ -74,22 +74,22 @@ class PlanScene3d {
     final people = <Map<String, dynamic>>[];
     final cameras = <Map<String, dynamic>>[];
 
-    for (final el in elements) {
+    for (final (i, el) in elements.indexed) {
       final level = PlanLevel.of(el);
-      final uid = LightOverrides.uidOf(el);
+      final uid = idOf(el, i);
       if (PlanDrape.isDrape(el)) {
-        drapes.add(_drape(el, mpu, level, xy));
+        drapes.add(_drape(el, uid, mpu, level, xy));
         continue;
       }
       if (PlanSegment.isSegment(el)) {
         if (PlanSegment.kind(el) != PlanSegment.kindWall) continue;
-        walls.add(_wall(el, openings, mpu, level, xy, roofAt));
+        walls.add(_wall(el, uid, openings, mpu, level, xy, roofAt));
         continue;
       }
       switch (RigTypeCodec.of(el)) {
         case RigType.pillar:
           pillars.add({
-            'id': ?uid,
+            'id': uid,
             'at': xy(el.position),
             'z0': level,
             'shape': PlanPillar.isRound(el) ? 'round' : 'square',
@@ -101,7 +101,7 @@ class PlanScene3d {
           });
         case RigType.truss:
           trusses.add({
-            'id': ?uid,
+            'id': uid,
             'from': xy(PlanTruss.start(el)),
             'to': xy(PlanTruss.end(el)),
             'z': _r(level + PlanTruss.lowM(el)),
@@ -112,7 +112,7 @@ class PlanScene3d {
           });
         case RigType.motor || RigType.groundSupport:
           rigging.add({
-            'id': ?uid,
+            'id': uid,
             'type': RigTypeCodec.of(el)!.name,
             'at': xy(el.position),
             'z0': level,
@@ -124,11 +124,11 @@ class PlanScene3d {
       }
       switch (el.type) {
         case ElementType.light:
-          final f = _fixture(el, mpu, level, xy);
+          final f = _fixture(el, uid, mpu, level, xy);
           if (f != null) fixtures.add(f);
         case ElementType.actor:
           people.add({
-            'id': ?uid,
+            'id': uid,
             'name': el.label ?? 'Actor',
             'at': xy(el.position),
             'z0': level,
@@ -136,7 +136,7 @@ class PlanScene3d {
         case ElementType.camera:
           final rad = el.rotation * math.pi / 180;
           cameras.add({
-            'id': ?uid,
+            'id': uid,
             'name': el.cameraLabel,
             'at': xy(el.position),
             'z0': level,
@@ -157,6 +157,11 @@ class PlanScene3d {
       ..['cameras'] = cameras;
     return out;
   }
+
+  /// Identificador de un elemento en la escena: su `uid` o, si no tiene,
+  /// su posición en la lista. Con él el visor dice qué se ha tocado.
+  static String idOf(PlanElement el, int index) =>
+      LightOverrides.uidOf(el) ?? 'n$index';
 
   static double _r(double v) => (v * 1000).roundToDouble() / 1000;
 
@@ -212,6 +217,7 @@ class PlanScene3d {
 
   static Map<String, dynamic> _wall(
     PlanElement el,
+    String id,
     List<PlanElement> openings,
     double mpu,
     double level,
@@ -267,7 +273,7 @@ class PlanScene3d {
     }
     holes.sort((a, b) => (a['from'] as double).compareTo(b['from'] as double));
     return {
-      'id': ?LightOverrides.uidOf(el),
+      'id': id,
       'points': [for (final p in pts) xy(p)],
       'z0': level,
       'tops': tops,
@@ -277,6 +283,7 @@ class PlanScene3d {
 
   static Map<String, dynamic> _drape(
     PlanElement el,
+    String id,
     double mpu,
     double level,
     List<double> Function(Offset) xy,
@@ -286,7 +293,7 @@ class PlanScene3d {
     final mat = PlanDrape.material(el);
     final color = PlanDrape.color(el);
     return {
-      'id': ?LightOverrides.uidOf(el),
+      'id': id,
       'z0': level,
       'material': mat.id,
       'color':
@@ -308,6 +315,7 @@ class PlanScene3d {
 
   static Map<String, dynamic>? _fixture(
     PlanElement el,
+    String id,
     double mpu,
     double level,
     List<double> Function(Offset) xy,
@@ -337,7 +345,7 @@ class PlanScene3d {
     final p = xy(el.position);
     final light = PlanLight.of(el);
     return {
-      'id': ?LightOverrides.uidOf(el),
+      'id': id,
       'name': el.label?.isNotEmpty == true ? el.label : type.label,
       'type': type.dbValue,
       'pos': [p[0], p[1], _r(z)],

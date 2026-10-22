@@ -510,4 +510,34 @@ void main() {
     PlanTruss.setLengthM(truss, 6, mpu);
     expect(PlanTruss.end(truss), const Offset(300, 0));
   });
+
+  test('cada pieza de la escena 3D vuelve a su elemento', () {
+    final hall = PlanHall.create(
+      Offset.zero,
+      HallRecipe.rectangle(width: 10, depth: 6),
+    );
+    final elements = <PlanElement>[
+      hall,
+      ...PlanHall.build(hall, mpu),
+      // Sin uid: se le da uno por su posición en la lista.
+      PlanElement(id: 0, type: ElementType.actor, position: Offset.zero),
+    ];
+    final scene = PlanScene3d.build(elements, metersPerUnit: mpu);
+    final ids = <String>{
+      for (final (i, el) in elements.indexed) PlanScene3d.idOf(el, i),
+    };
+    for (final key in [
+      'walls',
+      'drapes',
+      'pillars',
+      'trusses',
+      'rigging',
+      'people',
+    ]) {
+      for (final item in (scene[key] as List).cast<Map>()) {
+        expect(ids, contains(item['id']), reason: key);
+      }
+    }
+    expect((scene['people'] as List).single['id'], 'n${elements.length - 1}');
+  });
 }

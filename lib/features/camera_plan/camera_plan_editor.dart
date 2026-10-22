@@ -79,6 +79,7 @@ import 'plan_prefs.dart';
 import 'rig/hall_builder_sheet.dart';
 import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
+import 'rig/plan_3d_view.dart';
 import 'rig/plan_hall.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
@@ -2724,6 +2725,51 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     await _addElement(el);
   }
 
+  // ── 3D ────────────────────────────────────────────────────────────────────
+
+  /// El 3D: en el Mac, un panel junto a la planta que se abre y se cierra;
+  /// en el iPad, su propia pantalla.
+  bool _show3d = false;
+
+  /// Ancho del panel 3D en el Mac; se cambia arrastrando su borde.
+  double _view3dWidth = 640;
+
+  String get _planName =>
+      _linkedSet?.locationName ?? _linkedSite?.name ?? 'planta';
+
+  void _toggle3d() {
+    if (_wide) {
+      setState(() => _show3d = !_show3d);
+      return;
+    }
+    _open3dScreen();
+  }
+
+  /// El 3D a pantalla entera, con todas sus opciones.
+  void _open3dScreen() {
+    Plan3dScreen.show(
+      context,
+      elements: _visibleElements,
+      metersPerUnit: _metersPerUnit,
+      name: _planName,
+      selected: _selected,
+      onSelect: _selectFrom3d,
+    );
+  }
+
+  /// Lo tocado en el 3D se selecciona en la planta.
+  void _selectFrom3d(PlanElement? el) {
+    if (!mounted) return;
+    if (el == null) {
+      setState(() {
+        _selected = null;
+        _multi.clear();
+      });
+    } else {
+      _select(el);
+    }
+  }
+
   // ── Truss ─────────────────────────────────────────────────────────────────
 
   /// Tras mover o cambiar algo: las luces que caen junto a un truss se
@@ -4236,6 +4282,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             ],
           ),
           IconButton(
+            tooltip: _wide
+                ? (_show3d ? 'Cerrar el 3D' : '3D junto a la planta')
+                : '3D',
+            icon: Icon(
+              Icons.threed_rotation,
+              color: _show3d ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: _toggle3d,
+          ),
+          IconButton(
             tooltip: 'Alzado y perfil · exportar DXF y MVR',
             icon: Icon(
               Icons.view_in_ar_outlined,
@@ -4733,6 +4789,42 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 },
                               ),
                             ),
+                            if (_wide && _show3d) ...[
+                              // El borde se arrastra para ensanchar el 3D.
+                              MouseRegion(
+                                cursor: SystemMouseCursors.resizeColumn,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onHorizontalDragUpdate: (d) => setState(
+                                    () => _view3dWidth =
+                                        (_view3dWidth - d.delta.dx).clamp(
+                                          360.0,
+                                          math.max(
+                                            360.0,
+                                            MediaQuery.sizeOf(context).width *
+                                                0.7,
+                                          ),
+                                        ),
+                                  ),
+                                  child: Container(
+                                    width: 6,
+                                    color: palette.border,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: _view3dWidth,
+                                child: Plan3dView(
+                                  elements: _visibleElements,
+                                  metersPerUnit: _metersPerUnit,
+                                  name: _planName,
+                                  selected: _selected,
+                                  onSelect: _selectFrom3d,
+                                  onExpand: _open3dScreen,
+                                  onClose: _toggle3d,
+                                ),
+                              ),
+                            ],
                             if (_selected != null)
                               _ElementPanel(
                                 palette: palette,
