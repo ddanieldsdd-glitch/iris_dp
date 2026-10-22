@@ -2757,6 +2757,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       selected: _selected,
       onSelect: _selectFrom3d,
       onChanged: _changedFrom3d,
+      ambient: _lightSetup == null ? null : _ambient,
     );
   }
 
@@ -4849,6 +4850,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   name: _planName,
                                   selected: _selected,
                                   onSelect: _selectFrom3d,
+                                  ambient: _lightSetup == null
+                                      ? null
+                                      : _ambient,
                                   onChanged: _changedFrom3d,
                                   onExpand: _open3dScreen,
                                   onClose: _toggle3d,

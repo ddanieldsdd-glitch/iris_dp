@@ -30,6 +30,8 @@
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.autoClear = false;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   document.body.prepend(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -57,6 +59,20 @@
   const LAYERS = ['walls', 'glass', 'drapes', 'pillars', 'rig', 'fixtures', 'people'];
   const shown = { walls: true, glass: true, drapes: true, pillars: true, rig: true, fixtures: true, people: true };
   let L = {};
+  let lastScene = null;
+  let floorLight = null;
+  let measuring = false;
+  let measurePts = [];
+  let measureGroup = null;
+
+  // Marco de la cámara: lo que entra en el plano.
+  const frame = document.createElement('div');
+  frame.style.cssText = 'position:absolute;border:2px solid rgba(232,150,63,.9);box-shadow:0 0 0 9999px rgba(0,0,0,.45);pointer-events:none;display:none';
+  const frameLabel = document.createElement('div');
+  frameLabel.style.cssText = 'position:absolute;left:6px;top:4px;color:#e8963f;font:600 12px -apple-system,system-ui,sans-serif';
+  frame.appendChild(frameLabel);
+  document.body.appendChild(frame);
+  let camView = null;
   let selectedBox = null;
 
   // Cubo de vistas, arriba a la derecha.
@@ -111,7 +127,7 @@
     camO.updateProjectionMatrix();
   }
 
-  window.addEventListener('resize', resize);
+  window.addEventListener('resize', () => { resize(); placeFrame(); });
 
   // ── Toques ───────────────────────────────────────────────────────────────
   // El cubo cambia la vista. Un toque sin arrastrar selecciona. Arrastrar lo
@@ -203,6 +219,10 @@
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
     down = null;
     if (moved > 5) return;
+    if (measuring) {
+      measureAt(e);
+      return;
+    }
     // Lo pequeño que se mueve (un foco bajo su truss) gana a lo que tapa.
     const hits = rayAt(e).intersectObjects(picks, true).filter((i) => idOf(i.object) && visible(i.object));
     const hit = hits.find((i) => movableOf(i.object)) || hits[0];
@@ -490,7 +510,8 @@
       root.add(L[name]);
     }
 
-    root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, 0.38));
+    lastScene = sc;
+    root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, sc.sun ? 0.6 : 0.38));
     root.add(new THREE.AmbientLight(0xffffff, 0.12));
 
     // Lo que ocupa la escena, para el suelo y la cámara.
@@ -633,6 +654,28 @@
       L.people.add(g);
     }
 
+    // El sol, con sombras de lo que tapa.
+    if (sc.sun) {
+      const d = sc.sun.dir;
+      const sun = new THREE.DirectionalLight(cctColor(sc.sun.cct || 5400), 1.5);
+      const reach = Math.max(sz.x, sz.z, 10) * 1.2;
+      sun.position.copy(c).add(V(d[0], d[1], d[2]).multiplyScalar(reach * 2));
+      sun.target.position.copy(c);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      const sc2 = sun.shadow.camera;
+      sc2.left = -reach; sc2.right = reach; sc2.top = reach; sc2.bottom = -reach;
+      sc2.near = 0.5; sc2.far = reach * 5;
+      sun.shadow.bias = -0.0005;
+      root.add(sun, sun.target);
+      root.traverse((o) => {
+        if (!o.isMesh || (o.material && o.material.blending === THREE.AdditiveBlending)) return;
+        o.castShadow = true;
+        o.receiveShadow = true;
+      });
+      floor.castShadow = false;
+    }
+
     const first = radius === 20 && center.lengthSq() === 0;
     center = c;
     radius = Math.max(sz.x, sz.z, sz.y * 2, 6) * 0.75;
@@ -643,6 +686,11 @@
   }
 
   function setView(v, instant) {
+    if (typeof v === 'string' && v.startsWith('cam:')) {
+      viewFromCamera(v.slice(4));
+      return;
+    }
+    leaveCamera();
     const R = radius * 1.25, c = center;
     let to;
     if (v === 'top') to = new THREE.Vector3(c.x, c.y + R * 1.3, c.z + 0.001);
@@ -669,6 +717,107 @@
       controls.target.lerpVectors(fromT, c, e);
       if (k >= 1) anim = null;
     };
+  }
+
+  // ── Por la cámara ─────────────────────────────────────────────────────
+  function viewFromCamera(id) {
+    const q = lastScene && (lastScene.cameras || []).find((k) => k.id === id);
+    if (!q) return;
+    setOrtho(false);
+    const aspect = 16 / 9;
+    const hfov = (q.hfovDeg || 40) * Math.PI / 180;
+    camView = { aspect, label: q.name + (q.lens ? ' · ' + q.lens : '') };
+    // El campo vertical que da ese horizontal en 16:9, ajustado a la
+    // ventana para que el marco quepa entero.
+    const { w, h } = size();
+    const vfovFrame = 2 * Math.atan(Math.tan(hfov / 2) / aspect);
+    const boxH = Math.min(h * 0.9, (w * 0.9) / aspect);
+    camP.fov = 2 * Math.atan(Math.tan(vfovFrame / 2) * h / boxH) * 180 / Math.PI;
+    camP.updateProjectionMatrix();
+    const z = (q.z0 || 0) + (q.z || 1.5);
+    const pos = V(q.at[0], q.at[1], z);
+    cam.position.copy(pos);
+    controls.target.copy(V(q.at[0] + q.dir[0] * 5, q.at[1] + q.dir[1] * 5, z));
+    controls.update();
+    anim = null;
+    placeFrame();
+    post({ type: 'view', view: 'cam:' + id });
+  }
+
+  function placeFrame() {
+    if (!camView) { frame.style.display = 'none'; return; }
+    const { w, h } = size();
+    const boxH = Math.min(h * 0.9, (w * 0.9) / camView.aspect);
+    const boxW = boxH * camView.aspect;
+    frame.style.display = 'block';
+    frame.style.left = (w - boxW) / 2 + 'px';
+    frame.style.top = (h - boxH) / 2 + 'px';
+    frame.style.width = boxW + 'px';
+    frame.style.height = boxH + 'px';
+    frameLabel.textContent = camView.label;
+  }
+
+  function leaveCamera() {
+    if (!camView) return;
+    camView = null;
+    camP.fov = 45;
+    camP.updateProjectionMatrix();
+    placeFrame();
+  }
+
+  // ── Medir ─────────────────────────────────────────────────────────────
+  function clearMeasure() {
+    measurePts = [];
+    if (measureGroup) {
+      scene.remove(measureGroup);
+      dispose(measureGroup);
+      measureGroup = null;
+    }
+  }
+
+  function measureAt(e) {
+    const r = rayAt(e);
+    const hit = r.intersectObjects(root.children, true).find((i) => i.object.isMesh && visible(i.object) && i.object.material && i.object.material.blending !== THREE.AdditiveBlending);
+    const p = hit ? hit.point.clone() : onPlane(e, 0);
+    if (!p) return;
+    if (measurePts.length >= 2) clearMeasure();
+    measurePts.push(p);
+    if (!measureGroup) { measureGroup = new THREE.Group(); scene.add(measureGroup); }
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 8), new THREE.MeshBasicMaterial({ color: 0xe8963f }));
+    dot.position.copy(p);
+    measureGroup.add(dot);
+    if (measurePts.length === 2) {
+      const [a, b] = measurePts;
+      measureGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color: 0xe8963f })));
+      const d = a.distanceTo(b);
+      const dz = b.y - a.y;
+      const dxy = Math.hypot(b.x - a.x, b.z - a.z);
+      post({ type: 'measure', d, dz, dxy });
+    }
+  }
+
+  // ── Luz en el suelo ───────────────────────────────────────────────────
+  function setFloorLight(f) {
+    if (floorLight) {
+      scene.remove(floorLight);
+      dispose(floorLight);
+      floorLight = null;
+    }
+    if (!f) return;
+    const img = new Image();
+    img.onload = () => {
+      const tx = new THREE.Texture(img);
+      tx.needsUpdate = true;
+      tx.encoding = THREE.sRGBEncoding;
+      const w = f.x1 - f.x0, h = f.yTop - f.yBottom;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tx, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      m.rotation.x = -Math.PI / 2;
+      m.position.copy(V((f.x0 + f.x1) / 2, (f.yTop + f.yBottom) / 2, 0.02));
+      if (floorLight) { scene.remove(floorLight); dispose(floorLight); }
+      floorLight = m;
+      scene.add(m);
+    };
+    img.src = 'data:image/png;base64,' + f.png;
   }
 
   function setOrtho(on) {
@@ -721,12 +870,17 @@
     load,
     view: (v) => setView(v),
     select: (id) => highlight(id),
+    floor: (f) => setFloorLight(f),
     exportGlb,
     set: (o) => {
       if ('cones' in o) { showCones = !!o.cones; cones.forEach((c) => (c.visible = showCones)); }
       if ('roof' in o) { showRoof = !!o.roof; roofs.forEach((r) => (r.visible = showRoof)); }
       if ('ortho' in o) setOrtho(!!o.ortho);
       if (o.bg) scene.background = new THREE.Color(o.bg);
+      if ('measure' in o) {
+        measuring = !!o.measure;
+        if (!measuring) clearMeasure();
+      }
       if (o.show) {
         for (const name of LAYERS) {
           if (name in o.show) {
