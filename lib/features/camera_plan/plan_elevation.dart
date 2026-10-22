@@ -10,6 +10,9 @@ import 'light_beam.dart';
 import 'plan_opening.dart';
 import 'plan_segment.dart';
 import 'plan_terrain_painter.dart';
+import 'light_overrides.dart';
+import 'rig/plan_drape.dart';
+import 'rig/plan_rig.dart';
 
 /// Desde dónde se mira la planta para levantarla en altura.
 enum ElevationSide {
@@ -32,7 +35,23 @@ extension ElevationSideLabel on ElevationSide {
   };
 }
 
-enum ElevationKind { wall, opening, light, actor, camera, prop }
+enum ElevationKind {
+  wall,
+  opening,
+  light,
+  actor,
+  camera,
+  prop,
+
+  /// Pared de tela: su borde de arriba en catenaria y su bajo.
+  drape,
+
+  /// Truss: a lo largo, una banda con diagonales; de punta, su sección.
+  truss,
+
+  /// Motor (encima del truss) o torre de ground support (desde el suelo).
+  rigPoint,
+}
 
 /// Una pieza de la planta vista de lado: dónde cae a lo ancho, a qué
 /// altura y a qué distancia del que mira.
@@ -61,6 +80,10 @@ class ElevationItem {
   final double reachM;
   final double cct;
 
+  /// Tela: el borde de arriba y el bajo a lo ancho, punto a punto
+  /// (`across`, `top`, `bottom`).
+  final List<(double, double, double)> profile;
+
   const ElevationItem({
     required this.kind,
     required this.element,
@@ -74,6 +97,7 @@ class ElevationItem {
     this.beamDeg = 0,
     this.reachM = 0,
     this.cct = 5600,
+    this.profile = const [],
   });
 
   double get centre => (from + to) / 2;
@@ -141,12 +165,101 @@ class PlanElevation {
     final items = <ElevationItem>[];
     ({double across, double depth}) at(Offset p) => project(p, mpu, side);
 
+    final trusses = {
+      for (final t in elements.where(PlanTruss.isTruss))
+        if (LightOverrides.uidOf(t) != null) LightOverrides.uidOf(t)!: t,
+    };
     for (final el in elements) {
+      if (PlanDrape.isDrape(el)) {
+        final c = PlanDrape.catenary(el, mpu);
+        final profile = [
+          for (var k = 0; k <= 24; k++)
+            (
+              at(PlanSegment.pointAt(el, k / 24)).across,
+              PlanDrape.topAt(el, k / 24, c),
+              PlanDrape.bottomAt(el, k / 24, c),
+            ),
+        ];
+        final mid = at(PlanSegment.pointAt(el, 0.5));
+        items.add(
+          ElevationItem(
+            kind: ElevationKind.drape,
+            element: el,
+            from: profile.map((p) => p.$1).reduce(math.min),
+            to: profile.map((p) => p.$1).reduce(math.max) + 0.02,
+            bottom: profile.map((p) => p.$3).reduce(math.min),
+            top: profile.map((p) => p.$2).reduce(math.max),
+            depth: mid.depth,
+            label: 'libre ${PlanDrape.clearanceM(el, c).toStringAsFixed(2)} m',
+            profile: profile,
+          ),
+        );
+        continue;
+      }
+      switch (RigTypeCodec.of(el)) {
+        case RigType.truss:
+          final a = at(PlanTruss.start(el)), b = at(PlanTruss.end(el));
+          final half = PlanTruss.outerM(PlanTruss.sizeCm(el)) / 2;
+          final low = PlanLevel.of(el) + PlanTruss.lowM(el);
+          items.add(
+            ElevationItem(
+              kind: ElevationKind.truss,
+              element: el,
+              from: math.min(a.across, b.across) - half,
+              to: math.max(a.across, b.across) + half,
+              bottom: low,
+              top: low + PlanTruss.depthM(el),
+              depth: (a.depth + b.depth) / 2,
+            ),
+          );
+          continue;
+        case RigType.motor || RigType.groundSupport:
+          final truss = trusses[el.props[PlanRigPoint.trussKey]];
+          final top = truss == null
+              ? 3.0
+              : PlanLevel.of(truss) +
+                    PlanTruss.lowM(truss) +
+                    PlanTruss.depthM(truss);
+          final p = at(el.position);
+          final motor = RigTypeCodec.of(el) == RigType.motor;
+          items.add(
+            ElevationItem(
+              kind: ElevationKind.rigPoint,
+              element: el,
+              from: p.across - (motor ? 0.14 : 0.15),
+              to: p.across + (motor ? 0.14 : 0.15),
+              bottom: motor ? top : PlanLevel.of(el),
+              top: motor ? top + 0.42 : top,
+              depth: p.depth,
+            ),
+          );
+          continue;
+        case RigType.pillar:
+          final p = at(el.position);
+          final half = PlanPillar.sizeM(el) / 2;
+          items.add(
+            ElevationItem(
+              kind: ElevationKind.prop,
+              element: el,
+              from: p.across - half,
+              to: p.across + half,
+              bottom: PlanLevel.of(el),
+              top: PlanLevel.of(el) + PlanPillar.heightM(el),
+              depth: p.depth,
+            ),
+          );
+          continue;
+        case RigType.hall || RigType.scan:
+          continue;
+        case null:
+          break;
+      }
       if (PlanSegment.isSegment(el)) {
         if (PlanSegment.kind(el) != PlanSegment.kindWall) continue;
         final a = at(el.position), b = at(PlanSegment.end(el));
         final top =
             (el.props[LightScene.heightKey] as num?)?.toDouble() ??
+            (el.props[PlanPillar.heightKey] as num?)?.toDouble() ??
             scene.wallTopAt(
               Offset.lerp(el.position, PlanSegment.end(el), 0.5)!,
             );
@@ -466,6 +579,67 @@ class PlanElevationPainter extends CustomPainter {
               ..style = PaintingStyle.stroke
               ..strokeWidth = 0.8,
           );
+        case ElevationKind.drape:
+          final cloth = Path();
+          for (final (i, (x, top, _)) in item.profile.indexed) {
+            final p = to(x, top);
+            i == 0 ? cloth.moveTo(p.dx, p.dy) : cloth.lineTo(p.dx, p.dy);
+          }
+          for (final (x, _, bottom) in item.profile.reversed) {
+            final p = to(x, bottom);
+            cloth.lineTo(p.dx, p.dy);
+          }
+          cloth.close();
+          canvas
+            ..drawPath(
+              cloth,
+              Paint()
+                ..color = PlanDrape.color(
+                  item.element,
+                ).withValues(alpha: 0.55 * alpha),
+            )
+            ..drawPath(
+              cloth,
+              Paint()
+                ..color = color
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 0.8,
+            );
+          _text(canvas, item.label, rect.bottomLeft + const Offset(2, 2),
+              accent, 10);
+        case ElevationKind.truss:
+          final stroke = Paint()
+            ..color = color
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1;
+          canvas.drawRect(rect, stroke);
+          if (rect.width > rect.height * 2) {
+            // A lo largo: diagonales.
+            final n = math.max(1, (rect.width / rect.height).round());
+            for (var k = 0; k < n; k++) {
+              final x0 = rect.left + rect.width * k / n;
+              final x1 = rect.left + rect.width * (k + 1) / n;
+              canvas.drawLine(
+                Offset(x0, k.isEven ? rect.bottom : rect.top),
+                Offset(x1, k.isEven ? rect.top : rect.bottom),
+                stroke..strokeWidth = 0.6,
+              );
+            }
+          } else {
+            canvas
+              ..drawLine(rect.topLeft, rect.bottomRight, stroke)
+              ..drawLine(rect.topRight, rect.bottomLeft, stroke);
+          }
+        case ElevationKind.rigPoint:
+          canvas
+            ..drawRect(rect, Paint()..color = background)
+            ..drawRect(
+              rect,
+              Paint()
+                ..color = color
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 1,
+            );
       }
     }
     _text(

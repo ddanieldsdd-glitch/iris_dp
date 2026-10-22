@@ -23,6 +23,9 @@ import 'plan_opening.dart';
 import 'plan_sun_painter.dart';
 import 'plan_terrain_painter.dart';
 import 'plan_segment.dart';
+import 'rig/plan_drape.dart';
+import 'rig/plan_rig.dart';
+import 'rig/rig_painter.dart';
 
 /// Colores del lienzo: fondo oscuro, como en un plató a oscuras, para que
 /// los haces de luz se lean.
@@ -575,10 +578,13 @@ class CameraPlanPainter extends CustomPainter {
   static List<PlanElement> _paintOrder(List<PlanElement> elements) {
     bool isWall(PlanElement e) =>
         PlanSegment.isSegment(e) && PlanSegment.kind(e) == PlanSegment.kindWall;
+    bool isRig(PlanElement e) => RigTypeCodec.of(e) != null;
     return [
       ...elements.where((e) => PlanSegment.isSegment(e) && !isWall(e)),
       ...elements.where(isWall),
-      ...elements.where((e) => !PlanSegment.isSegment(e)),
+      // Truss, pilares y motores, debajo de las luces que cuelgan de ellos.
+      ...elements.where((e) => !PlanSegment.isSegment(e) && isRig(e)),
+      ...elements.where((e) => !PlanSegment.isSegment(e) && !isRig(e)),
     ];
   }
 
@@ -1205,6 +1211,58 @@ class CameraPlanPainter extends CustomPainter {
     _drawLengthLabel(canvas, PlanSegment.midpoint(el), PlanSegment.length(el));
   }
 
+  /// Truss, motor, torre, pilar, nave o tela, y su selección: la tela con
+  /// las asas de un tramo, el truss con las de sus extremos.
+  void _drawRig(
+    Canvas canvas,
+    PlanElement el, {
+    required bool selected,
+    required bool ringed,
+  }) {
+    final mpu = metersPerUnit ?? defaultMetersPerUnit;
+    RigPainter.paint(
+      canvas,
+      el,
+      mpu,
+      color: _CanvasColors.ink,
+      selected: selected || ringed,
+    );
+    if (!selected && !ringed) return;
+    if (PlanDrape.isDrape(el)) {
+      if (selected) _drawSegment(canvas, el, selected: true, body: false);
+      return;
+    }
+    if (PlanTruss.isTruss(el)) {
+      if (!selected) return;
+      for (final at in [PlanTruss.start(el), PlanTruss.end(el)]) {
+        canvas
+          ..drawCircle(at, 6 / scale, Paint()..color = _CanvasColors.accent)
+          ..drawCircle(
+            at,
+            6 / scale,
+            Paint()
+              ..color = Colors.white
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.5 / scale,
+          );
+      }
+      _drawLengthLabel(
+        canvas,
+        PlanTruss.pointAt(el, 0.5),
+        PlanTruss.length(el),
+      );
+      return;
+    }
+    canvas.drawCircle(
+      el.position,
+      24,
+      Paint()
+        ..color = _CanvasColors.accent.withValues(alpha: selected ? 0.9 : 0.6)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2 / scale,
+    );
+  }
+
   void _drawCanvasBackground(Canvas canvas, Size size) {
     canvas.drawRect(
       Offset.zero & size,
@@ -1537,6 +1595,11 @@ class CameraPlanPainter extends CustomPainter {
     /// cuerpo ya se pintó con el suelo.
     bool body = true,
   }) {
+    // Estructuras y telas: con su símbolo de rigging.
+    if (PlanDrape.isDrape(el) || RigTypeCodec.of(el) != null) {
+      _drawRig(canvas, el, selected: selected, ringed: ringed);
+      return;
+    }
     if (PlanSegment.isSegment(el)) {
       _drawSegment(canvas, el, selected: selected || ringed, body: body);
       return;

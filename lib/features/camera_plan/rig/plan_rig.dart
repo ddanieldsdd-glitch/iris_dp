@@ -208,6 +208,13 @@ class PlanTruss {
     el.props['dy'] = end.dy - el.position.dy;
   }
 
+  /// Mueve el inicio dejando el final donde estaba.
+  static void setStart(PlanElement el, Offset start) {
+    final fixedEnd = end(el);
+    el.position = start;
+    setEnd(el, fixedEnd);
+  }
+
   static Offset pointAt(PlanElement el, double t) =>
       Offset.lerp(start(el), end(el), t)!;
 

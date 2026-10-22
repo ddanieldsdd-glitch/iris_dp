@@ -28,7 +28,7 @@ class RigPainter {
     bool selected = false,
   }) {
     if (PlanDrape.isDrape(el)) {
-      drawDrape(canvas, el, metersPerUnit, selected: selected);
+      drawDrape(canvas, el, metersPerUnit, selected: selected, ink: color);
       return true;
     }
     switch (RigTypeCodec.of(el)) {
@@ -41,7 +41,7 @@ class RigPainter {
       case RigType.pillar:
         drawPillar(canvas, el, metersPerUnit, color: color);
       case RigType.hall:
-        drawHall(canvas, el, metersPerUnit, selected: selected);
+        drawHall(canvas, el, metersPerUnit, selected: selected, ink: color);
       case RigType.scan:
         return false;
       case null:
@@ -132,7 +132,7 @@ class RigPainter {
   }) {
     final r = math.max(0.2 / mpu, 6.0);
     canvas
-      ..drawCircle(at, r, Paint()..color = Colors.white)
+      ..drawCircle(at, r, Paint()..color = _fillFor(color))
       ..drawCircle(
         at,
         r,
@@ -182,7 +182,7 @@ class RigPainter {
       height: tower * 2,
     );
     canvas
-      ..drawRect(box, Paint()..color = Colors.white)
+      ..drawRect(box, Paint()..color = _fillFor(color))
       ..drawRect(box, stroke..strokeWidth = 1.3)
       ..drawLine(box.topLeft, box.bottomRight, stroke)
       ..drawLine(box.topRight, box.bottomLeft, stroke);
@@ -213,6 +213,7 @@ class RigPainter {
     PlanElement el,
     double mpu, {
     bool selected = false,
+    Color ink = RigPainter.ink,
   }) {
     final length = PlanSegment.length(el);
     if (length < 1) return;
@@ -242,13 +243,13 @@ class RigPainter {
           ..strokeCap = StrokeCap.round,
       );
     }
-    // Las telas claras se perfilan para que se vean sobre el papel.
-    if (color.computeLuminance() > 0.6) {
+    // Una tela del color del fondo se perfila para que se vea.
+    if ((color.computeLuminance() - ink.computeLuminance()).abs() > 0.5) {
       canvas.drawPath(
         path,
         Paint()
-          ..color = ink.withValues(alpha: 0.5)
-          ..strokeWidth = 3.2
+          ..color = ink.withValues(alpha: 0.6)
+          ..strokeWidth = 3.4
           ..style = PaintingStyle.stroke,
       );
     }
@@ -279,6 +280,7 @@ class RigPainter {
     PlanElement hall,
     double mpu, {
     bool selected = false,
+    Color ink = RigPainter.ink,
   }) {
     final recipe = PlanHall.recipeOf(hall);
     if (recipe == null) return;
@@ -321,6 +323,11 @@ class RigPainter {
       Paint()..color = rigColor.withValues(alpha: selected ? 1 : 0.6),
     );
   }
+
+  /// Relleno de un símbolo: claro sobre papel, oscuro sobre la planta
+  /// oscura, para que su trazo siempre se lea.
+  static Color _fillFor(Color ink) =>
+      ink.computeLuminance() > 0.5 ? const Color(0xFF1A1A20) : Colors.white;
 
   static void _dashed(
     Canvas canvas,

@@ -2988,10 +2988,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Asa del tramo seleccionado bajo el cursor: 0 inicio, 1 final, 2 curva.
   int? _segmentHandleAt(Offset canvasPos) {
     final el = _selected;
+    final reach = 12 / _scale;
+    // Un truss se estira por sus extremos.
+    if (el != null && PlanTruss.isTruss(el) && _multi.isEmpty) {
+      if ((PlanTruss.start(el) - canvasPos).distance < reach) return 0;
+      if ((PlanTruss.end(el) - canvasPos).distance < reach) return 1;
+      return null;
+    }
     if (el == null || !PlanSegment.isSegment(el) || _multi.isNotEmpty) {
       return null;
     }
-    final reach = 12 / _scale;
     if ((PlanSegment.start(el) - canvasPos).distance < reach) return 0;
     if ((PlanSegment.end(el) - canvasPos).distance < reach) return 1;
     if ((PlanSegment.midpoint(el) - canvasPos).distance < reach) return 2;
@@ -3253,6 +3259,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (selected != null && handle != null) {
       _dragDirty = true;
       setState(() {
+        final point = _snapSegmentPoint(canvasPos, except: selected);
+        if (PlanTruss.isTruss(selected)) {
+          handle == 0
+              ? PlanTruss.setStart(selected, point)
+              : PlanTruss.setEnd(selected, point);
+          return;
+        }
         switch (handle) {
           case 0:
             PlanSegment.setStart(
@@ -3663,7 +3676,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       }
     } else {
       final el = _selected!;
+      // Lo colgado de un truss estirado lo sigue.
+      final hung = _settleRig([el]);
       await _persistElement(el);
+      if (hung.isNotEmpty) await _persistMany(hung);
       // Una pared de la nave estirada o curvada a mano mueve su perímetro.
       final hall = _hallOf(el);
       if (wasHandle &&
