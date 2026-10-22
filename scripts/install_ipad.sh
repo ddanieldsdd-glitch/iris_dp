@@ -127,7 +127,7 @@ ipad_reachable() {
 
 # ── Qué instalar ────────────────────────────────────────────────────────────
 if [[ ! -d "$REPO/.git" ]]; then
-  log "Preparo un clon propio del repo en $REPO…"
+  log "Preparo un clon propio del repo en ${REPO}…"
   git clone -q "https://github.com/$GITHUB_REPO.git" "$REPO" >>"$LOG" 2>&1 || {
     log "No pude clonar el repo (¿sin red?)."
     exit 1
