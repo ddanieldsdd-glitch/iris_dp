@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   app_links
   connectivity_plus
   desktop_drop
+  flutter_inappwebview_windows
   pdf_render_maintained
   share_plus
   sqlite3_flutter_libs

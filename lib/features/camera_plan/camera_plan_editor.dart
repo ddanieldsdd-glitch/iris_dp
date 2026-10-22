@@ -78,6 +78,7 @@ import 'plan_prefs.dart';
 import 'rig/hall_builder_sheet.dart';
 import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
+import 'rig/plan_3d_view.dart';
 import 'rig/plan_hall.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
@@ -2689,6 +2690,43 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     await _addElement(el);
   }
 
+  // ── 3D ────────────────────────────────────────────────────────────────────
+
+  /// El 3D: en el Mac, un panel junto a la planta que se abre y se cierra;
+  /// en el iPad, su propia pantalla.
+  bool _show3d = false;
+
+  String get _planName =>
+      _linkedSet?.locationName ?? _linkedSite?.name ?? 'planta';
+
+  void _toggle3d() {
+    if (_wide) {
+      setState(() => _show3d = !_show3d);
+      return;
+    }
+    Plan3dScreen.show(
+      context,
+      elements: _visibleElements,
+      metersPerUnit: _metersPerUnit,
+      name: _planName,
+      selected: _selected,
+      onSelect: _selectFrom3d,
+    );
+  }
+
+  /// Lo tocado en el 3D se selecciona en la planta.
+  void _selectFrom3d(PlanElement? el) {
+    if (!mounted) return;
+    if (el == null) {
+      setState(() {
+        _selected = null;
+        _multi.clear();
+      });
+    } else {
+      _select(el);
+    }
+  }
+
   // ── Truss ─────────────────────────────────────────────────────────────────
 
   /// Tras mover o cambiar algo: las luces que caen junto a un truss se
@@ -4199,6 +4237,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             ],
           ),
           IconButton(
+            tooltip: _wide
+                ? (_show3d ? 'Cerrar el 3D' : '3D junto a la planta')
+                : '3D',
+            icon: Icon(
+              Icons.threed_rotation,
+              color: _show3d ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: _toggle3d,
+          ),
+          IconButton(
             tooltip: 'Alzado y perfil · exportar DXF y MVR',
             icon: Icon(
               Icons.view_in_ar_outlined,
@@ -4722,6 +4770,23 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 },
                               ),
                             ),
+                            if (_wide && _show3d)
+                              Container(
+                                width: 480,
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    left: BorderSide(color: palette.border),
+                                  ),
+                                ),
+                                child: Plan3dView(
+                                  elements: _visibleElements,
+                                  metersPerUnit: _metersPerUnit,
+                                  name: _planName,
+                                  selected: _selected,
+                                  onSelect: _selectFrom3d,
+                                  onClose: _toggle3d,
+                                ),
+                              ),
                             if (_selected != null)
                               _ElementPanel(
                                 palette: palette,
