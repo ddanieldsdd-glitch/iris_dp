@@ -5,7 +5,6 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_button.dart';
-import 'sidestore_install_store.dart';
 
 /// Guía rápida para instalar/actualizar con SideStore.
 class SideStoreGuideSheet extends StatelessWidget {
@@ -31,7 +30,6 @@ class SideStoreGuideSheet extends StatelessWidget {
     final uri = Uri.tryParse(url);
     if (uri == null) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
-    await SideStoreInstallStore.markInstalledNow();
   }
 
   @override

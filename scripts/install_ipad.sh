@@ -9,14 +9,18 @@
 #   install_ipad.sh --ref <rama>    instala esa rama o commit (sin mirar el CI)
 #   install_ipad.sh --auto          lo que ejecuta la tarea programada
 #
-# Compila en su propia carpeta (../iris_dp_ipad) para no tocar las carpetas en
-# las que se trabaja.
+# Trabaja con su propio clon del repo, fuera de ~/Documents: macOS no deja
+# que la tarea programada lea esa carpeta («Operation not permitted»), y así
+# tampoco toca las carpetas en las que se trabaja.
 set -euo pipefail
 
 BUNDLE_ID="com.ddanieldsdd.irisdp"
-REPO="${IRIS_REPO:-$HOME/Documents/IRIS DP/iris_dp}"
-BUILD_DIR="${IRIS_BUILD_DIR:-$(dirname "$REPO")/iris_dp_ipad}"
+GITHUB_REPO="ddanieldsdd-glitch/iris_dp"
 STATE_DIR="$HOME/Library/Application Support/IRIS-DP-installer"
+REPO="${IRIS_REPO:-$STATE_DIR/repo}"
+BUILD_DIR="${IRIS_BUILD_DIR:-$STATE_DIR/iris_dp_ipad}"
+# Claves de la nube para compilar: copia guardada por setup_ipad_install.sh.
+ENV_FILE="${IRIS_ENV_FILE:-$STATE_DIR/.env}"
 STATE="$STATE_DIR/state.json"
 TEAM_FILE="$STATE_DIR/team_id"
 LOG_DIR="$HOME/Library/Logs/IRIS-DP"
@@ -42,6 +46,17 @@ notify() {
   osascript -e "display notification \"$2\" with title \"IRIS DP · iPad\" subtitle \"$1\"" \
     >/dev/null 2>&1 || true
 }
+# Si algo falla sin aviso propio, que quede en el registro y, una vez al día,
+# en una notificación: antes fallaba en silencio cada hora.
+on_error() {
+  local code=$? line=$1
+  log "Error inesperado (línea $line, código $code)."
+  if [[ "$(state_get error_warned_on)" != "$(date +%F)" ]]; then
+    notify "La instalación automática ha fallado" "Mira $LOG"
+    state_set "error_warned_on=$(date +%F)"
+  fi
+  exit "$code"
+}
 # Ejecuta con límite de tiempo (macOS no trae `timeout`).
 with_timeout() { local s="$1"; shift; perl -e 'alarm shift; exec @ARGV' "$s" "$@"; }
 
@@ -59,6 +74,7 @@ until mkdir "$LOCK" 2>/dev/null; do
   sleep 10
 done
 trap 'rm -rf "$LOCK"' EXIT
+trap 'on_error $LINENO' ERR
 
 state_get() {
   [[ -f "$STATE" ]] || return 0
@@ -110,15 +126,31 @@ ipad_reachable() {
 }
 
 # ── Qué instalar ────────────────────────────────────────────────────────────
-git -C "$REPO" fetch -q origin 2>/dev/null || log "Sin red para git fetch; uso lo que hay."
+if [[ ! -d "$REPO/.git" ]]; then
+  log "Preparo un clon propio del repo en $REPO…"
+  git clone -q "https://github.com/$GITHUB_REPO.git" "$REPO" >>"$LOG" 2>&1 || {
+    log "No pude clonar el repo (¿sin red?)."
+    exit 1
+  }
+fi
+if ! FETCH_ERR="$(git -C "$REPO" fetch -q --prune origin 2>&1)"; then
+  if [[ "$FETCH_ERR" == *"not permitted"* ]]; then
+    log "macOS no deja leer $REPO: $FETCH_ERR"
+    notify "Sin permiso para leer el repo" "Mira $LOG"
+    exit 1
+  fi
+  log "Sin red para git fetch; uso lo que hay."
+fi
 
 green_main_sha() {
-  (cd "$REPO" && gh run list --branch main --workflow CI --status success \
-    --limit 1 --json headSha -q '.[0].headSha') 2>/dev/null || true
+  gh run list -R "$GITHUB_REPO" --branch main --workflow CI --status success \
+    --limit 1 --json headSha -q '.[0].headSha' 2>/dev/null || true
 }
 
 if [[ -n "$REF" ]]; then
-  SHA="$(git -C "$REPO" rev-parse --verify "$REF^{commit}")"
+  # Una rama de GitHub vale aunque no exista en el clon como rama local.
+  SHA="$(git -C "$REPO" rev-parse --verify -q "$REF^{commit}" \
+    || git -C "$REPO" rev-parse --verify "origin/$REF^{commit}")"
   LABEL="$REF"
 else
   SHA="$(green_main_sha)"
@@ -146,7 +178,8 @@ if [[ $AUTO == 1 ]]; then
   INSTALLED_SHA="$(state_get installed_sha)"
   if [[ "$INSTALLED_REF" != "main" ]] \
       && ! git -C "$REPO" merge-base --is-ancestor "$INSTALLED_SHA" "$SHA" 2>/dev/null; then
-    NEW_BRANCH_SHA="$(git -C "$REPO" rev-parse --verify -q "$INSTALLED_REF^{commit}" || true)"
+    NEW_BRANCH_SHA="$(git -C "$REPO" rev-parse --verify -q "origin/$INSTALLED_REF^{commit}" \
+      || git -C "$REPO" rev-parse --verify -q "$INSTALLED_REF^{commit}" || true)"
     SHA="${NEW_BRANCH_SHA:-$INSTALLED_SHA}"
     LABEL="$INSTALLED_REF"
   fi
@@ -170,7 +203,11 @@ fi
 
 DEVICE="$(find_ipad)"
 if [[ -z "$DEVICE" ]] || ! ipad_reachable "$DEVICE"; then
-  log "iPad no accesible; se reintentará."
+  if [[ -z "$DEVICE" ]]; then
+    log "No veo el iPad emparejado; se reintentará."
+  else
+    log "El iPad no responde (¿dormido, bloqueado o en otra Wi‑Fi?); se reintentará."
+  fi
   if [[ $AUTO == 1 && -n "$EXPIRES" ]]; then
     LEFT="$(days_left "$EXPIRES")"
     TODAY="$(date +%F)"
@@ -202,7 +239,8 @@ if [[ ! -d "$BUILD_DIR/.git" && ! -f "$BUILD_DIR/.git" ]]; then
 fi
 git -C "$BUILD_DIR" checkout -q --detach --force "$SHA"
 git -C "$BUILD_DIR" clean -qfd -e build -e .dart_tool -e ios/Pods
-cp "$REPO/.env" "$BUILD_DIR/.env" 2>/dev/null || log "Aviso: sin .env, la app saldrá sin nube."
+cp "$ENV_FILE" "$BUILD_DIR/.env" 2>/dev/null \
+  || log "Aviso: sin $ENV_FILE, la app saldrá sin nube. Ejecuta scripts/setup_ipad_install.sh."
 
 # El proyecto trae la firma apagada para que el CI compile sin firma. Aquí,
 # solo en esta carpeta, se enciende con el equipo personal.

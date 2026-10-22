@@ -55,6 +55,15 @@ echo "✓ Equipo de firma: $TEAM"
 cp "$ROOT/scripts/install_ipad.sh" "$STATE_DIR/install_ipad.sh"
 chmod +x "$STATE_DIR/install_ipad.sh"
 echo "✓ Instalador en $STATE_DIR"
+# La tarea programada no puede leer ~/Documents: las claves de la nube se
+# guardan junto al instalador, que además compila desde su propio clon.
+if [[ -f "$ROOT/.env" ]]; then
+  cp "$ROOT/.env" "$STATE_DIR/.env"
+  chmod 600 "$STATE_DIR/.env"
+  echo "✓ Claves de la nube copiadas"
+else
+  echo "Aviso: no hay .env en $ROOT; la app del iPad saldrá sin nube."
+fi
 
 # ── 3. Tarea programada (cada hora y al iniciar sesión) ─────────────────────
 FLUTTER_BIN="$(dirname "$(command -v flutter)")"

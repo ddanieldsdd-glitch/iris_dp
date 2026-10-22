@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -28,6 +29,10 @@ class _SideStoreReminderBannerState extends State<SideStoreReminderBanner> {
 
   Future<void> _load() async {
     if (!Platform.isIOS) return;
+    final info = await PackageInfo.fromPlatform();
+    await SideStoreInstallStore.noteRunningBuild(
+      '${info.version}+${info.buildNumber}',
+    );
     final show = await SideStoreInstallStore.shouldShowRefreshReminder();
     if (mounted) setState(() => _visible = show);
   }
