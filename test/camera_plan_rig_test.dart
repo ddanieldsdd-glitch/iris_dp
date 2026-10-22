@@ -7,8 +7,11 @@ import 'package:iris_dp/core/theme/app_theme.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_json.dart';
+import 'package:iris_dp/features/camera_plan/light/light_scene.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
 import 'package:iris_dp/features/camera_plan/light_overrides.dart';
+import 'package:iris_dp/features/camera_plan/plan_cad_export.dart';
+import 'package:iris_dp/features/camera_plan/plan_elevation.dart';
 import 'package:iris_dp/features/camera_plan/plan_opening.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 import 'package:iris_dp/features/camera_plan/rig/catenary.dart';
@@ -654,5 +657,86 @@ void main() {
         isTrue,
       );
     });
+  });
+
+  group('la luz con pilares y telas', () {
+    PlanElement hmi() => PlanElement(
+      id: -1,
+      type: ElementType.light,
+      position: const Offset(100, 300),
+      rotation: 90,
+      lightType: LightType.hmi,
+      props: {'intensity': 100},
+    );
+    LightScene scene(List<PlanElement> elements) =>
+        LightScene.from(elements, metersPerUnit: mpu);
+    const behind = Offset(700, 300);
+
+    test('un pilar tapa la luz, redondo o cuadrado', () {
+      final open = scene([hmi()]).luxAt(behind);
+      expect(open, greaterThan(100));
+      for (final shape in [PlanPillar.round, PlanPillar.square]) {
+        final pillar = PlanPillar.create(
+          const Offset(400, 300),
+          shape: shape,
+          sizeM: 1,
+          heightM: 5,
+        );
+        expect(scene([hmi(), pillar]).luxAt(behind), lessThan(open * 0.05));
+      }
+    });
+
+    test('el molletón tapa, el tul deja pasar parte', () {
+      final open = scene([hmi()]).luxAt(behind);
+      PlanElement drape(String material) => PlanDrape.create(
+        const Offset(400, 0),
+        const Offset(400, 600),
+        anchorM: 5,
+        sagM: 0.2,
+        lengthM: 6,
+        material: material,
+      );
+      final black = scene([hmi(), drape('molleton')]).luxAt(behind);
+      final tulle = scene([hmi(), drape('tul')]).luxAt(behind);
+      expect(black, lessThan(open * 0.05));
+      expect(tulle, greaterThan(open * 0.3));
+      expect(tulle, lessThan(open));
+    });
+  });
+
+  test('alzado y DXF: telas con su curva, truss, torres y pilares', () {
+    final hall = PlanHall.create(
+      Offset.zero,
+      HallRecipe.rectangle(width: 12, depth: 8).copyWith(interiorPillarsM: 4),
+    );
+    final elements = <PlanElement>[hall, ...PlanHall.build(hall, mpu)];
+    final elev = PlanElevation.of(
+      elements,
+      metersPerUnit: mpu,
+      side: ElevationSide.front,
+    );
+    final drapes = elev.items.where((i) => i.kind == ElevationKind.drape);
+    expect(drapes, isNotEmpty);
+    final profile = drapes.first.profile;
+    // La bambalina baja en el centro.
+    expect(profile[12].$2, lessThan(profile.first.$2));
+    expect(elev.items.where((i) => i.kind == ElevationKind.truss), isNotEmpty);
+    expect(
+      elev.items.where((i) => i.kind == ElevationKind.rigPoint),
+      isNotEmpty,
+    );
+    expect(
+      elev.items
+          .where((i) => PlanPillar.isPillar(i.element))
+          .every((i) => i.top > 4),
+      isTrue,
+    );
+    final plan = PlanCadExport.planDxf(elements, mpu);
+    expect(plan, contains(PlanCadExport.layerTruss));
+    expect(plan, contains(PlanCadExport.layerDrapes));
+    expect(
+      PlanCadExport.elevationDxf(elev),
+      contains(PlanCadExport.layerRigging),
+    );
   });
 }

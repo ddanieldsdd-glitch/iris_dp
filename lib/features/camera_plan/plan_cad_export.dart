@@ -16,6 +16,8 @@ import 'plan_gear_list.dart';
 import 'plan_opening.dart';
 import 'plan_segment.dart';
 import 'plan_terrain_painter.dart';
+import 'rig/plan_drape.dart';
+import 'rig/plan_rig.dart';
 
 /// Escribe un DXF R12 en ASCII: el formato que abre cualquier programa de
 /// CAD (AutoCAD, Vectorworks, LibreCAD, Rhino). En metros, con capas por
@@ -120,6 +122,9 @@ class PlanCadExport {
   static const layerPeople = 'ACTORES';
   static const layerProps = 'ATREZZO';
   static const layerText = 'TEXTO';
+  static const layerTruss = 'TRUSS';
+  static const layerRigging = 'RIGGING';
+  static const layerDrapes = 'TELAS';
 
   /// La planta en DXF, en metros, con el norte hacia arriba.
   static String planDxf(List<PlanElement> elements, double metersPerUnit) {
@@ -132,6 +137,9 @@ class PlanCadExport {
       layerPeople,
       layerProps,
       layerText,
+      layerTruss,
+      layerRigging,
+      layerDrapes,
     });
     // El lienzo crece hacia abajo; el CAD, hacia arriba.
     Offset m(Offset p) => Offset(p.dx * metersPerUnit, -p.dy * metersPerUnit);
@@ -139,6 +147,56 @@ class PlanCadExport {
     final units = lightUnitNumbers(elements);
 
     for (final el in elements) {
+      if (PlanDrape.isDrape(el)) {
+        final steps = PlanSegment.curve(el) == 0 ? 1 : 12;
+        dxf.polyline(layerDrapes, [
+          for (var k = 0; k <= steps; k++)
+            m(PlanSegment.pointAt(el, k / steps)),
+        ]);
+        continue;
+      }
+      switch (RigTypeCodec.of(el)) {
+        case RigType.truss:
+          final a = m(PlanTruss.start(el)), b = m(PlanTruss.end(el));
+          final d = b - a;
+          final n = d.distance == 0
+              ? Offset.zero
+              : Offset(-d.dy, d.dx) / d.distance *
+                    (PlanTruss.outerM(PlanTruss.sizeCm(el)) / 2);
+          dxf.polyline(layerTruss, [a + n, b + n, b - n, a - n], closed: true);
+          continue;
+        case RigType.motor:
+          dxf.circle(layerRigging, m(el.position), 0.2);
+          dxf.text(layerText, m(el.position) + const Offset(0.25, 0.1), 'M');
+          continue;
+        case RigType.groundSupport:
+          final c = m(el.position);
+          dxf.polyline(layerRigging, [
+            c + const Offset(-0.2, -0.2),
+            c + const Offset(0.2, -0.2),
+            c + const Offset(0.2, 0.2),
+            c + const Offset(-0.2, 0.2),
+          ], closed: true);
+          continue;
+        case RigType.pillar:
+          final r = PlanPillar.sizeM(el) / 2;
+          final c = m(el.position);
+          if (PlanPillar.isRound(el)) {
+            dxf.circle(layerWalls, c, r);
+          } else {
+            dxf.polyline(layerWalls, [
+              c + Offset(-r, -r),
+              c + Offset(r, -r),
+              c + Offset(r, r),
+              c + Offset(-r, r),
+            ], closed: true);
+          }
+          continue;
+        case RigType.hall || RigType.scan:
+          continue;
+        case null:
+          break;
+      }
       if (PlanSegment.isSegment(el)) {
         final layer = PlanSegment.kind(el) == PlanSegment.kindWall
             ? layerWalls
@@ -230,6 +288,9 @@ class PlanCadExport {
       layerPeople,
       layerProps,
       layerText,
+      layerTruss,
+      layerRigging,
+      layerDrapes,
     });
     dxf.line(
       layerWalls,
@@ -298,6 +359,16 @@ class PlanCadExport {
           dxf.text(layerText, Offset(item.to + 0.1, item.top), item.label);
         case ElevationKind.prop:
           dxf.polyline(layerProps, box(), closed: true);
+        case ElevationKind.truss:
+          dxf.polyline(layerTruss, box(), closed: true);
+        case ElevationKind.rigPoint:
+          dxf.polyline(layerRigging, box(), closed: true);
+        case ElevationKind.drape:
+          dxf.polyline(layerDrapes, [
+            for (final (x, top, _) in item.profile) Offset(x, top),
+            for (final (x, _, bottom) in item.profile.reversed)
+              Offset(x, bottom),
+          ], closed: true);
       }
     }
     return dxf.build();
