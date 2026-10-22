@@ -33,7 +33,7 @@ void main() {
   test('todas las fichas se leen, con identidad única y estado', () {
     expect(cameras.length, greaterThanOrEqualTo(72));
     expect(lenses.length, greaterThanOrEqualTo(430));
-    expect(lights.length, greaterThanOrEqualTo(100));
+    expect(lights.length, greaterThanOrEqualTo(95));
     for (final ids in [
       cameras.map((c) => c.externalId),
       lenses.map((l) => l.externalId),

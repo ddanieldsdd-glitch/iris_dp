@@ -18,5 +18,12 @@
   "zeiss_super_speed_mk3_35",
   "zeiss_super_speed_mk3_50",
   "zeiss_super_speed_mk3_85"
- ]
+ ],
+ "lights": {
+  "arri_s60_c_skypanel": "arri_skypanel_s60",
+  "arri_skypanel_s60-c": "arri_skypanel_s60",
+  "nanlite_pavotube": "nanlite_pavotube_ii_30x",
+  "aputure_ls1200d": "aputure_ls_1200d_pro",
+  "creamsource_doppio_plus": "creamsource_doppio"
+ }
 }

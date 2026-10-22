@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import '../../../shared/equipment/light_optics.dart';
+
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light_beam.dart';
@@ -66,6 +68,48 @@ class PlanLight {
 
   /// «manufacturer» si el dato medido viene del catálogo y no del set.
   static const photometrySourceKey = 'photometrySource';
+
+  /// Haz con el que se tomó el dato medido. Si luego se abre o se cierra el
+  /// aparato, el mismo flujo se reparte en otro ángulo y el eje sube o baja
+  /// con él.
+  static const measuredBeamKey = 'measuredBeam';
+
+  /// Tamaño de la superficie que emite, en metros, si no es el de su tipo.
+  static const sizeKey = 'sizeM';
+
+  /// Rango de foco del aparato: haz más cerrado y más abierto, en grados.
+  static const spotKey = 'spotDeg';
+  static const floodKey = 'floodDeg';
+
+  /// `true` si el rango sale del formato y no de la ficha.
+  static const focusEstimatedKey = 'focusEstimated';
+
+  /// Fotometría del fabricante en varios haces: `[[haz, lux, metros], …]`.
+  static const curveKey = 'photometryCurve';
+
+  /// La óptica guardada en la planta para esta luz.
+  static LightOptics opticsOf(PlanElement el) {
+    double? read(String key) => (el.props[key] as num?)?.toDouble();
+    return LightOptics(
+      spotDeg: read(spotKey),
+      floodDeg: read(floodKey),
+      points: [
+        for (final p in (el.props[curveKey] as List? ?? const []))
+          ?LightPhotometryPoint.fromList(p),
+      ],
+      estimated: el.props[focusEstimatedKey] == true,
+    );
+  }
+
+  /// Lúmenes que da el aparato a plena potencia y sin nada delante. Con
+  /// fotometría, los que salen de ella; si no, los de vatios y tecnología.
+  double get lumens {
+    if (bare.status == PhotometryStatus.estimated) {
+      return watts * tech.lumensPerWatt * LightSource.opticalEfficiency;
+    }
+    final omega = LightSource.solidAngle(bare.beamDeg);
+    return bare.isOmni ? bare.candela * omega : bare.candela * omega * 0.75 / 0.6;
+  }
 
   /// Stops que quitan los modificadores y la regulación juntos.
   double get stopsLost {
@@ -142,17 +186,29 @@ class PlanLight {
     );
     final measuredLux = read(measuredLuxKey);
     final measuredMeters = read(measuredMetersKey);
+    final measuredBeam = read(measuredBeamKey);
+    final sizeM = read(sizeKey) ?? d.sizeM;
 
-    final bare =
-        measuredLux != null &&
+    final fromSet = el.props[photometrySourceKey] !=
+        PhotometryStatus.manufacturer.name;
+    final curve = opticsOf(el).candelaAt(beam.spread);
+    final bare = curve != null && !(fromSet && measuredLux != null)
+        ? LightSource(
+            candela: curve,
+            beamDeg: beam.spread,
+            sizeM: sizeM,
+            cct: beam.cct,
+            status: PhotometryStatus.manufacturer,
+          )
+        : measuredLux != null &&
             measuredLux > 0 &&
             measuredMeters != null &&
             measuredMeters > 0
         ? LightSource.measured(
-            lux: measuredLux,
+            lux: measuredLux * _beamScale(measuredBeam, beam.spread),
             meters: measuredMeters,
             beamDeg: beam.spread,
-            sizeM: d.sizeM,
+            sizeM: sizeM,
             cct: beam.cct,
             status:
                 el.props[photometrySourceKey] ==
@@ -164,7 +220,7 @@ class PlanLight {
             watts: watts,
             tech: tech,
             beamDeg: beam.spread,
-            sizeM: d.sizeM,
+            sizeM: sizeM,
             cct: beam.cct,
           );
 
@@ -185,6 +241,15 @@ class PlanLight {
       watts: watts,
       tech: tech,
     );
+  }
+
+  /// Cuánto cambia el eje de un dato medido con [measuredDeg] de haz al
+  /// llevarlo a [beamDeg]: el flujo es el mismo, repartido en otro cono.
+  static double _beamScale(double? measuredDeg, double beamDeg) {
+    if (measuredDeg == null || measuredDeg <= 0 || beamDeg <= 0) return 1;
+    if ((measuredDeg - beamDeg).abs() < 0.5) return 1;
+    return LightSource.solidAngle(measuredDeg) /
+        LightSource.solidAngle(beamDeg);
   }
 
   /// Pone los modificadores delante de la fuente y la regula.

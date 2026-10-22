@@ -46,7 +46,7 @@ FLUJO = ROOT / "docs/catalog/fuentes/flujo_sxt_superspeed_v2_0.xlsx"
 BASE = ROOT / "tools/catalog_base"
 OUT = ROOT / "assets/catalog"
 REPORT = ROOT / "docs/catalog/INFORME_CATALOGO.md"
-CATALOG_VERSION = 9
+CATALOG_VERSION = 10
 
 MODE_COLUMNS = [
     "camera_external_id", "marca", "modelo", "modo_sensor", "res_x", "res_y",
@@ -836,11 +836,82 @@ def build_lenses(lista, master, sources, matrix, report, flujo, flujo_src):
 
 # ── luces ───────────────────────────────────────────────────────────────────
 
+# Vocabulario cerrado del tipo de luz: «<tecnología>_<formato>». Lo lee
+# `lib/shared/equipment/light_kind.dart`.
+LIGHT_FORMATS = ("fresnel", "panel", "flex", "tube", "cob", "balloon", "practical", "open", "profile")
+LIGHT_TECHS = ("led", "hmi", "tungsten", "fluorescent")
+
+# Columnas de la hoja Luces que mandan sobre la revisión cuando vienen
+# rellenas. Las cuatro últimas aún no existen en la lista v1.8.
+LIGHT_EXCEL_COLUMNS = ("formato", "tecnologia", "haz_grados", "fotometria_lux",
+                       "fotometria_distancia_m", "fotometria_condicion",
+                       "haz_spot_grados", "haz_flood_grados",
+                       "fotometria_spot_lux", "fotometria_flood_lux")
+
+FORMAT_WORDS = {
+    "fresnel": "fresnel", "panel": "panel", "panel flexible": "flex", "flexible": "flex", "flex": "flex",
+    "tubo": "tube", "tube": "tube", "cob": "cob", "puntual": "cob", "globo": "balloon", "balloon": "balloon",
+    "practica": "practical", "practical": "practical", "par": "open", "abierta": "open", "open": "open",
+    "recorte": "profile", "profile": "profile",
+}
+TECH_WORDS = {"led": "led", "hmi": "hmi", "tungsteno": "tungsten", "tungsten": "tungsten",
+              "fluorescente": "fluorescent", "fluorescent": "fluorescent"}
+
+
+def light_kind(raw, model=""):
+    """(tecnología, formato) de un tipo escrito como venga: «led_panel»,
+    «LED Panel», «LED point-source», «fresnel», «hmi»…"""
+    t = re.sub(r"[_\-]+", " ", (raw or "").lower()).strip()
+    words = set(t.split())
+    for tech in LIGHT_TECHS:
+        for fmt in LIGHT_FORMATS:
+            if t == f"{tech} {fmt}":
+                return tech, fmt
+    tech = "hmi" if "hmi" in words else "led" if "led" in words else \
+        "fluorescent" if words & {"fluorescent", "kino", "flo"} else None
+    if "balloon" in words or "globo" in words:
+        fmt = "balloon"
+    elif "practical" in words or "practica" in words:
+        fmt = "practical"
+    elif "flexible" in words or "flex" in words:
+        fmt = "flex"
+    elif "tube" in words or "pixel" in words or "bar" in words:
+        fmt = "tube"
+    elif "panel" in words:
+        fmt = "panel"
+    elif "fresnel" in words:
+        fmt = "fresnel"
+    elif words & {"par", "open"}:
+        fmt = "open"
+    elif words & {"profile", "ellipsoidal"}:
+        fmt = "profile"
+    elif tech == "hmi":
+        fmt = "fresnel"
+    elif tech == "led":
+        fmt = "cob"
+    else:
+        fmt = "fresnel"
+    if tech is None:
+        tech = "fluorescent" if fmt == "tube" else "led" if fmt in ("panel", "flex", "balloon") else "tungsten"
+    return tech, fmt
+
+
+def excel_word(value, words):
+    key = norm(value)
+    for word, code in words.items():
+        if norm(word) == key:
+            return code
+    return None
+
+
 def build_lights(lista, matrix, report):
     lights = {l["externalId"]: dict(l) for l in load_base("lights.json")}
+    revision = load_base("lights_revision.json")
+    fichas, duplicates = revision["fichas"], revision["duplicados"]
     for light in lights.values():
         light["dataStatus"] = "PENDIENTE"
     added = 0
+    excel = {}
     for row in lista.records("Luces"):
         lid = text(row.get("external_id"))
         if not lid or truthy(row.get("es_custom")):
@@ -871,8 +942,95 @@ def build_lights(lista, matrix, report):
         for key in ("dataStatus", "confidence", "verifiedFields", "sourceLabel", "sourceUrl", "verifiedAt"):
             light.pop(key, None)
         light.update(provenance(row, matrix))
+        excel[lid] = row
+
+    # Revisión: tipo cerrado, correcciones, haz y fotometría con fuente.
+    to_fix = []
+    for lid, light in lights.items():
+        row = excel.get(lid, {})
+        fix = fichas.get(lid, {})
+        tech, fmt = light_kind(light.get("lightType"), light.get("model", ""))
+        listed = (tech, fmt)
+        fmt = excel_word(row.get("formato"), FORMAT_WORDS) or fix.get("format") or fmt
+        tech = excel_word(row.get("tecnologia"), TECH_WORDS) or fix.get("technology") or tech
+        if row and (tech, fmt) != listed and not text(row.get("formato")):
+            to_fix.append(f"`{lid}`: tipo_luz «{light.get('lightType')}» → formato «{fmt}», tecnologia «{tech}»")
+        light["lightType"] = f"{tech}_{fmt}"
+        for key in ("brand", "powerW", "beamAngleDeg", "lukaCompatible", "lukaFixtureId"):
+            if key in fix:
+                if key == "powerW" and row and integer(row.get("potencia_w")) not in (None, fix[key]):
+                    to_fix.append(f"`{lid}`: potencia_w {integer(row.get('potencia_w'))} → {fix[key]}")
+                if fix[key] is None:
+                    light.pop(key, None)
+                else:
+                    light[key] = fix[key]
+        if "dataStatus" in fix:
+            light["dataStatus"] = fix["dataStatus"]
+            light["sourceLabel"] = fix.get("note")
+        beam = number(row.get("haz_grados"))
+        if beam is not None:
+            light["beamAngleDeg"] = beam
+        photo = fix.get("photometry")
+        lux, dist = number(row.get("fotometria_lux")), number(row.get("fotometria_distancia_m"))
+        if lux is not None and dist is not None:
+            light["photometryLux"], light["photometryDistanceM"] = lux, dist
+        elif photo:
+            light["photometryLux"], light["photometryDistanceM"] = photo["lux"], photo["distanceM"]
+            if light.get("dataStatus") in (None, "PENDIENTE"):
+                light.update(clean({
+                    "dataStatus": photo["status"],
+                    "verifiedFields": ["haz_grados", "fotometria_lux", "fotometria_distancia_m"],
+                    "sourceLabel": f"{photo['sourceLabel']} — {photo['condition']}",
+                    "sourceUrl": photo.get("sourceUrl"),
+                    "verifiedAt": photo.get("verifiedAt"),
+                }))
+        if not light.get("lukaFixtureId"):
+            light["lukaCompatible"] = False
+
+        # Óptica: rango de foco y fotometría en varios haces. El Excel manda.
+        optics = {k: v for k, v in (fix.get("optics") or {}).items() if k != "source"}
+        spot, flood = number(row.get("haz_spot_grados")), number(row.get("haz_flood_grados"))
+        if spot is not None:
+            optics["spotDeg"] = spot
+        if flood is not None:
+            optics["floodDeg"] = flood
+        dist = number(row.get("fotometria_distancia_m"))
+        excel_points = [
+            {"beamDeg": beam_deg, "lux": lux_v, "distanceM": dist}
+            for beam_deg, lux_v in ((spot, number(row.get("fotometria_spot_lux"))),
+                                    (flood, number(row.get("fotometria_flood_lux"))))
+            if beam_deg is not None and lux_v is not None and dist is not None
+        ]
+        if excel_points:
+            optics["points"] = excel_points
+        if not optics.get("points") and "photometryLux" in light and "beamAngleDeg" in light:
+            optics["points"] = [{"beamDeg": light["beamAngleDeg"], "lux": light["photometryLux"],
+                                 "distanceM": light["photometryDistanceM"]}]
+        if optics:
+            light["optics"] = optics
+
+    # Duplicados: la ficha que queda se completa con lo que traía la otra.
+    for old, new in duplicates.items():
+        gone = lights.pop(old, None)
+        if gone is None:
+            report.append(f"- Duplicado ya no está en la lista: `{old}`")
+            continue
+        for key, value in gone.items():
+            lights[new].setdefault(key, value)
+        if old in excel:
+            to_fix.append(f"`{old}`: duplicado de `{new}`; quitar la fila")
+    build_lights.retired = dict(duplicates)
+
     out = [clean(l) for l in lights.values()]
-    report.insert(3, f"- Luces: {len(out)} ({added} nuevas de la lista).")
+    with_photo = sum(1 for l in out if "photometryLux" in l)
+    with_beam = sum(1 for l in out if "beamAngleDeg" in l)
+    report.insert(3, (
+        f"- Luces: {len(out)} ({added} nuevas de la lista, {len(duplicates)} duplicados retirados). "
+        f"Con haz: {with_beam}; con fotometría: {with_photo}."
+    ))
+    if to_fix:
+        report.append("- Luces que la revisión corrige y conviene corregir también en el Excel:")
+        report.extend(f"  - {line}" for line in to_fix)
     return out
 
 
@@ -910,7 +1068,7 @@ def main() -> int:
     write_json(OUT / "lenses.json", lenses)
     write_json(OUT / "lights.json", lights)
     write_json(OUT / "recording.json", recording)
-    write_json(OUT / "retired.json", {"lenses": build_lenses.retired})
+    write_json(OUT / "retired.json", {"lenses": build_lenses.retired, "lights": build_lights.retired})
     write_json(OUT / "manifest.json", {
         "version": CATALOG_VERSION,
         "camerasUrl": "cameras.json",

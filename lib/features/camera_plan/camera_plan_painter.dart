@@ -16,6 +16,7 @@ import 'light_symbols.dart';
 import 'light/modifiers.dart';
 import 'light/surfaces.dart';
 import 'plan_images.dart';
+import 'plan_gear_list.dart';
 import 'plan_light_map.dart';
 import 'plan_marks.dart';
 import 'plan_opening.dart';
@@ -94,6 +95,14 @@ class CameraPlanPainter extends CustomPainter {
   /// Mapa de exposición en falso color, en lugar de los haces.
   final bool exposureMap;
 
+  /// Contra qué se pinta el brillo de la luz: la exposición de la cámara
+  /// ([exposure] y [targetStop]) o lo más iluminado de la planta.
+  final LightView lightView;
+
+  /// Rótulos de equipo en cada aparato (unidad, vatios, lúmenes, haz) y
+  /// la leyenda con el total, como en una hoja de luces.
+  final bool gearLabels;
+
   /// Metros por unidad del lienzo; con él se rotulan longitudes y se pinta
   /// la barra de escala. `null` = sin rótulos de medida.
   final double? metersPerUnit;
@@ -138,6 +147,8 @@ class CameraPlanPainter extends CustomPainter {
     this.ambient,
     this.showReadings = false,
     this.exposureMap = false,
+    this.lightView = LightView.camera,
+    this.gearLabels = false,
     this.selectedElement,
     this.selectedRoom,
     this.rotating = false,
@@ -176,6 +187,9 @@ class CameraPlanPainter extends CustomPainter {
       ambient: ambient,
     );
     _scene = scene;
+    _units = gearLabels
+        ? lightUnitNumbers([...inheritedElements, ...elements])
+        : const {};
     final dimmed = {...inheritedElements};
     _drawRooms(canvas, scene);
 
@@ -272,6 +286,78 @@ class CameraPlanPainter extends CustomPainter {
     if (metersPerUnit != null) _drawScaleBar(canvas, size);
     if (exposureMap && exposure != null) _drawExposureLegend(canvas, size);
     if (ambient?.hasSun ?? false) _drawSunCompass(canvas, size);
+    if (!exposureMap && lightView == LightView.camera && lightMap != null) {
+      _drawExposureReference(canvas, size);
+    }
+    if (gearLabels) _drawGearLegend(canvas, size);
+  }
+
+  Map<PlanElement, int> _units = const {};
+
+  /// Arriba a la izquierda, la leyenda de equipo: cada modelo con su
+  /// cantidad, potencia, luz y unidades, y el total encendido.
+  void _drawGearLegend(Canvas canvas, Size size) {
+    final legend = LightLegend.of([...inheritedElements, ...elements]);
+    if (legend.isEmpty) return;
+    const pad = 10.0;
+    final lines = <(String, TextStyle)>[
+      (
+        'Equipo de luz',
+        const TextStyle(
+          color: _CanvasColors.ink,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      for (final row in legend.rows)
+        (
+          '${row.count}× ${row.name} · ${formatWatts(row.watts)} · '
+              '${formatLumens(row.lumens)}   ${row.unitsLabel}',
+          const TextStyle(color: _CanvasColors.inkSecondary, fontSize: 10),
+        ),
+      (
+        legend.totalLabel,
+        const TextStyle(
+          color: _CanvasColors.ink,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ];
+    final painters = [
+      for (final (text, style) in lines)
+        TextPainter(
+          text: TextSpan(text: text, style: style),
+          textDirection: TextDirection.ltr,
+          maxLines: 1,
+          ellipsis: '…',
+        )..layout(maxWidth: math.min(340, size.width - 48)),
+    ];
+    final width = painters.fold(0.0, (w, p) => math.max(w, p.width));
+    final height = painters.fold(0.0, (h, p) => h + p.height + 3);
+    const origin = Offset(16, 16);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(origin.dx, origin.dy, width + pad * 2, height + pad * 2),
+        const Radius.circular(8),
+      ),
+      Paint()..color = _CanvasColors.background.withValues(alpha: 0.88),
+    );
+    var y = origin.dy + pad;
+    for (final (i, tp) in painters.indexed) {
+      if (i == painters.length - 1) {
+        canvas.drawLine(
+          Offset(origin.dx + pad, y),
+          Offset(origin.dx + pad + width, y),
+          Paint()
+            ..color = _CanvasColors.inkTertiary
+            ..strokeWidth = 0.5,
+        );
+        y += 3;
+      }
+      tp.paint(canvas, Offset(origin.dx + pad, y));
+      y += tp.height + 3;
+    }
   }
 
   /// Arriba a la derecha, de dónde viene el sol.
@@ -354,6 +440,41 @@ class CameraPlanPainter extends CustomPainter {
         canvas.drawRect(rect, paint);
       }
     }
+  }
+
+  /// Ajustes con los que se pinta la luz cuando no hay cámara que diga
+  /// otros: ISO 800, 180° a 24 fps y T2.8.
+  static const fallbackExposure = ExposureSettings();
+
+  /// Lux que salen bien expuestos y a media luz, o `null` en «Ver todo».
+  double? get _exposedKeyLux => lightView == LightView.camera
+      ? (exposure ?? fallbackExposure).luxFor(targetStop)
+      : null;
+
+  /// Abajo, junto a la escala: a qué exposición se está pintando la luz.
+  void _drawExposureReference(Canvas canvas, Size size) {
+    final e = exposure ?? fallbackExposure;
+    String n(double v) =>
+        v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+    final nd = e.ndStops > 0 ? ' · ND ${n(e.ndStops)}' : '';
+    final tp = TextPainter(
+      text: TextSpan(
+        text:
+            'Luz a ${formatStop(targetStop)} · ISO ${n(e.iso)} · '
+            '${n(e.shutterDeg)}° a ${n(e.fps)} fps$nd',
+        style: const TextStyle(color: _CanvasColors.inkTertiary, fontSize: 10),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final at = Offset(16, size.height - 50);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(at.dx - 6, at.dy - 3, tp.width + 12, tp.height + 6),
+        const Radius.circular(6),
+      ),
+      Paint()..color = _CanvasColors.background.withValues(alpha: 0.8),
+    );
+    tp.paint(canvas, at);
   }
 
   void _drawExposureLegend(Canvas canvas, Size size) {
@@ -555,7 +676,7 @@ class CameraPlanPainter extends CustomPainter {
   ) {
     final lightKey = _lightKey(scene);
     final picture = lightMap!.picture(
-      Object.hash(lightKey, dimmed.length, inheritedOpacity),
+      Object.hash(lightKey, dimmed.length, inheritedOpacity, _exposedKeyLux),
       () {
         final recorder = ui.PictureRecorder();
         _paintLight(Canvas(recorder), scene, lightKey, dimmed);
@@ -574,11 +695,48 @@ class CameraPlanPainter extends CustomPainter {
     Set<PlanElement> dimmed,
   ) {
     final map = lightMap!.resolve(scene, lightKey, _lightRect(scene));
-    final key = map.keyLux;
-    final indoorKey = map.indoorKeyLux;
     final env = ambient;
     // Se dibuja para toda la planta, no solo para lo que se ve ahora.
     const view = Rect.fromLTRB(-2e5, -2e5, 2e5, 2e5);
+
+    // A la exposición de la cámara: una sola referencia para todo, dentro
+    // y fuera. Una práctica y un 5K, o una sala y la calle, conservan los
+    // stops que los separan.
+    final exposed = _exposedKeyLux;
+    if (exposed != null) {
+      for (final light in scene.lights) {
+        final peak = PlanLightMap.exposedBrightness(
+          light.source.illuminance(math.max(1.0, light.source.sizeM)),
+          exposed,
+        );
+        if (peak < 0.03) continue;
+        _drawBeam(
+          canvas,
+          scene,
+          light,
+          strength: dimmed.contains(light.fixture?.element)
+              ? inheritedOpacity
+              : 1,
+          keyLux: exposed,
+          exposed: true,
+        );
+      }
+      if (env != null && env.day) {
+        PlanSunPainter.paintKeyed(
+          canvas,
+          scene,
+          env,
+          view,
+          key: exposed,
+          indoorKey: exposed,
+          exposed: true,
+        );
+      }
+      return;
+    }
+
+    final key = map.keyLux;
+    final indoorKey = map.indoorKeyLux;
 
     void beams(double against) {
       for (final light in scene.lights) {
@@ -791,10 +949,7 @@ class CameraPlanPainter extends CustomPainter {
     final image = draw.image;
     if (image == null) {
       // Aún cargando (o sin archivo en este equipo): su hueco.
-      canvas.drawRect(
-        rect,
-        Paint()..color = const Color(0x33FFFFFF),
-      );
+      canvas.drawRect(rect, Paint()..color = const Color(0x33FFFFFF));
     } else {
       canvas.drawImageRect(
         image,
@@ -1268,6 +1423,29 @@ class CameraPlanPainter extends CustomPainter {
     final filters = light == null
         ? ''
         : light.modifiers.map((m) => m.name).join(' + ');
+    final unit = _units[el];
+    if (gearLabels && unit != null && beam != null && light != null) {
+      _drawLabelBelow(
+        canvas,
+        [
+          'U$unit · $base',
+          '${formatWatts(light.watts)} · ${formatLumens(light.lumens)}',
+          if (beam.off)
+            'apagada'
+          else
+            '${(light.source.cct / 50).round() * 50}K · '
+                '${beam.spread >= 359 ? 'omni' : '${beam.spread.round()}°'} · '
+                '${beam.intensity.round()}%',
+          if (filters.isNotEmpty) filters,
+          if (PlanLight.isOverhead(el))
+            'techo · ${PlanLight.heightOf(el).toStringAsFixed(1)} m',
+        ].join('\n'),
+        _CanvasColors.inkSecondary,
+        yOffset: 20,
+        maxWidth: 130,
+      );
+      return;
+    }
     final name = beam == null || light == null
         ? base
         : beam.off
@@ -1509,11 +1687,17 @@ class CameraPlanPainter extends CustomPainter {
     /// contra la planta y se mezcla con las demás sin pisarse; sin él
     /// (miniaturas), se pinta con el brillo fijo de antes.
     double? keyLux,
+
+    /// [keyLux] son los lux bien expuestos de la cámara: lo que sobra se
+    /// quema hacia blanco y lo que falta se apaga.
+    bool exposed = false,
   }) {
     final source = light.source;
     if (source.candela <= 0) return;
     final floorLux = keyLux == null
         ? _beamFloorLux
+        : exposed
+        ? PlanLightMap.cutoffForExposure(keyLux) * 2
         : keyLux / math.pow(2, PlanLightMap.rangeStops);
     final mpu = scene.metersPerUnit;
     final drop = light.overheadM;
@@ -1535,6 +1719,11 @@ class CameraPlanPainter extends CustomPainter {
         : scene.luxOf(light, pool + side * (meters / mpu));
 
     double alphaFor(double lux) {
+      if (keyLux != null && exposed) {
+        return PlanLightMap.exposedBrightness(lux, keyLux) *
+            PlanLightMap.maxExposedAlpha *
+            strength;
+      }
       if (keyLux != null) {
         return PlanLightMap.brightnessFor(lux, keyLux) *
             PlanLightMap.maxAlpha *
@@ -1545,6 +1734,16 @@ class CameraPlanPainter extends CustomPainter {
       return math.pow((stops / 16).clamp(0.0, 1.0), 1.7).toDouble() *
           0.5 *
           strength;
+    }
+
+    // Quemado, el tinte se va a blanco: se ve que sobra, no solo que hay
+    // luz.
+    Color tintFor(double lux) {
+      if (!exposed || keyLux == null) return color;
+      final burn = PlanLightMap.burnFor(lux, keyLux);
+      return burn <= 0
+          ? color
+          : Color.lerp(color, const Color(0xFFFFFFFF), burn * 0.75)!;
     }
 
     // Hasta dónde llega.
@@ -1567,15 +1766,11 @@ class CameraPlanPainter extends CustomPainter {
     ui.Shader shaderAt(Offset centre, double amount) =>
         ui.Gradient.radial(centre, reach, [
           for (final f in fractions)
-            color.withValues(
-              alpha:
-                  alphaFor(
-                    drop == null
-                        ? source.illuminance(math.max(reachM * f, 0.05))
-                        : luxAtFlat(reachM * f),
-                  ) *
-                  amount,
-            ),
+            if (drop == null
+                    ? source.illuminance(math.max(reachM * f, 0.05))
+                    : luxAtFlat(reachM * f)
+                case final lux)
+              tintFor(lux).withValues(alpha: alphaFor(lux) * amount),
         ], fractions);
 
     // Cuántos puntos de la fuente se muestrean: más cuanto más grande.
@@ -2380,6 +2575,8 @@ class CameraPlanPainter extends CustomPainter {
       old.ambient != ambient ||
       old.showReadings != showReadings ||
       old.exposureMap != exposureMap ||
+      old.lightView != lightView ||
+      old.gearLabels != gearLabels ||
       old.selectedElement?.id != selectedElement?.id ||
       old.selectedPathIndex != selectedPathIndex ||
       old.scale != scale ||

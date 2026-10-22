@@ -26,6 +26,36 @@ Reglas del master que aplica el generador:
 - Un modo de sensor sin gate no entra en el catálogo.
 - Toda ficha lleva estado y fuente. Lo que la lista marca como verificado contra una fuente pero no ha pasado su auditoría queda como SECUNDARIO.
 
+### Luces (L13, 2026-10-21)
+
+El tipo de luz es un vocabulario cerrado, «tecnología_formato» (`led_fresnel`, `tungsten_fresnel`, `hmi_open`…). Lo lee `lib/shared/equipment/light_kind.dart`.
+
+- **Formato** (cómo emite): `fresnel`, `panel`, `flex` (panel flexible), `tube` (tubo), `cob` (COB/puntual), `balloon` (globo), `practical` (práctica), `open` (PAR/abierta), `profile` (recorte). Cada formato trae su haz, su tamaño y si emite en todas direcciones; es lo que usa la planta cuando la ficha no dice otra cosa.
+- **Tecnología** (cuánta luz por vatio): `led`, `hmi`, `tungsten`, `fluorescent`.
+
+Entre la lista v1.8 y la salida hay una capa de revisión, `tools/catalog_base/lights_revision.json`: corrige tipos y potencias mal puestos en la lista (L7-C, L5-C y LED 20K eran «fresnel» y se calculaban como tungsteno; el LED 20K figuraba con 20 000 W), arregla LUKA, marca duplicados y añade haz y fotometría con su fuente. Lo que la revisión corrige sale en el informe como «corregir en el Excel». Los duplicados van a `assets/catalog/retired.json` (`lights`), y al importar, la app pasa el equipo de los proyectos y las luces de las plantas a la ficha que se queda antes de borrar la otra.
+
+**Columnas que añadir a la hoja «Luces» de la lista** (el generador ya las lee y, rellenas, mandan sobre la revisión):
+
+| Columna | Qué lleva | Ejemplo |
+|---|---|---|
+| `formato` | Uno del vocabulario de arriba, en español o en código | `fresnel` |
+| `tecnologia` | Ya existe. Uno de: LED, HMI, tungsteno, fluorescente | `LED` |
+| `haz_grados` | Ángulo de haz (mitad de intensidad) con el que está tomada la fotometría | `58` |
+| `fotometria_lux` | Lux en el eje, a plena potencia | `1100` |
+| `fotometria_distancia_m` | Distancia de esa medida | `10` |
+| `fotometria_condicion` | Accesorio y ajuste (lo pide la regla COND-0003 del master) | `flood, lámpara 1800 W` |
+| `haz_spot_grados` | Haz más cerrado, si el aparato enfoca | `15` |
+| `haz_flood_grados` | Haz más abierto | `58` |
+| `fotometria_spot_lux` | Lux en el eje en spot, a `fotometria_distancia_m` | `11250` |
+| `fotometria_flood_lux` | Lux en el eje en flood, a la misma distancia | `1100` |
+
+Spot y flood salen en `lights.json` como `optics` (rango y puntos de fotometría). No pasan por la base: la planta los lee del asset por `externalId` (`lib/shared/equipment/light_optics.dart`). Un aparato sin rango en la ficha que por formato enfoca (fresnel, abierta, recorte) toma el típico de su formato, marcado como estimado.
+
+La fuente y el estado de la fotometría van en las columnas de verificación de siempre (`fuente_verificacion`, `url_verificacion`, `estado_verificacion`, `campos_verificados`).
+
+**Alta rápida de una luz que no está**: en la app se elige formato, marca y modelo, color (fija, bicolor o RGB) y vatios. Se guarda como luz propia con `externalId` = `marca_modelo` en minúsculas y la fuente «Alta rápida en IRIS · pendiente de configurar». Para completarla, se añade al Excel una fila con ese mismo `external_id`: al regenerar e importar el catálogo, la ficha del Excel la completa y la luz pasa a ser oficial.
+
 Además de cámaras, ópticas y luces, genera `assets/catalog/recording.json`: medios y formatos de grabación por cámara, con tasa de datos y minutos por medio.
 
 El resultado y las incidencias de cada generación quedan en [`INFORME_CATALOGO.md`](INFORME_CATALOGO.md).

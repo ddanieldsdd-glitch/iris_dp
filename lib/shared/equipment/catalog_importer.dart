@@ -5,6 +5,8 @@ import 'package:flutter/services.dart' show rootBundle;
 
 import '../../../core/database/app_database.dart';
 import 'catalog_data.dart';
+import 'catalog_light_retirement.dart';
+import 'light_quick_add.dart';
 import 'catalog_models.dart';
 
 String? _encodeJsonList(List<String> items) =>
@@ -86,6 +88,12 @@ Future<void> importEmbeddedCatalog(
       await retireCatalogLenses(db, [
         for (final id in retired['lenses'] as List) id.toString(),
       ]);
+    }
+    if (retired is Map && retired['lights'] is Map) {
+      await retireCatalogLights(db, {
+        for (final e in (retired['lights'] as Map).entries)
+          e.key.toString(): e.value.toString(),
+      });
     }
   } catch (_) {}
 
@@ -345,16 +353,25 @@ Future<({int upserted, int skippedCustom})> upsertCatalogLights(
 }) async {
   var upserted = 0;
   var skippedCustom = 0;
-  // Con [merge], un campo ausente en la entrada no pisa el que ya existe.
-  T? pick<T>(T? incoming, T? current) => merge ? incoming ?? current : incoming;
   for (final e in entries) {
+    var keep = merge;
+    // Con [merge], un campo ausente en la entrada no pisa el que ya existe.
+    T? pick<T>(T? incoming, T? current) =>
+        keep ? incoming ?? current : incoming;
     final existing = await db.getLightByExternalId(e.externalId);
     if (existing != null) {
-      if (existing.isCustom) {
+      // Una luz dada de alta a mano queda pendiente de configurar hasta que
+      // el catálogo trae su ficha: entonces la ficha la completa y pasa a
+      // ser oficial. Lo que el catálogo no diga se conserva.
+      final adopt = LightQuickAdd.isPending(existing);
+      if (existing.isCustom && !adopt) {
         skippedCustom++;
         continue;
       }
+      if (adopt) keep = true;
       await db.updateLight(existing.copyWith(
+        isCustom: false,
+        notes: adopt ? const Value(null) : Value(existing.notes),
         brand: e.brand,
         model: e.model,
         lightType: e.lightType,

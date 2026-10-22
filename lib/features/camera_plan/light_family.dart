@@ -1,3 +1,4 @@
+import '../../shared/equipment/light_kind.dart';
 import 'camera_plan_constants.dart';
 
 /// Familias de luz por tecnología, para ordenar la paleta.
@@ -80,37 +81,27 @@ const kLightGroups = <LightGroup>[
 LightGroup lightGroupById(String id) =>
     kLightGroups.firstWhere((g) => g.id == id);
 
-/// Grupo de un aparato del catálogo, según cómo venga escrito su tipo
-/// («led_panel», «LED Panel», «LED point-source»…).
+/// Grupo de un aparato del catálogo, por su formato y su tecnología
+/// (`led_fresnel`, `hmi_open`… o, de antes, «LED Panel», «LED point-source»).
 LightGroup lightGroupForCatalogType(String? type) {
-  final t = (type ?? '').toLowerCase().replaceAll(RegExp('[_-]'), ' ');
-  final String id;
-  if (t.contains('hmi')) {
-    id = 'hmi';
-  } else if (t.contains('balloon') || t.contains('globo')) {
-    id = 'balloon';
-  } else if (t.contains('practical')) {
-    id = 'practical';
-  } else if (t.contains('led')) {
-    id = t.contains('pixel')
-        ? 'led-pixel'
-        : t.contains('tube')
-        ? 'led-tube'
-        : t.contains('flex')
-        ? 'led-flex'
-        : t.contains('panel')
-        ? 'led-panel'
-        : t.contains('fresnel')
-        ? 'led-fresnel'
-        : 'led-point';
-  } else if (t.contains('tube') || t.contains('flo') || t.contains('kino')) {
-    id = 'fluorescent';
-  } else if (t.contains('par') || t.contains('open')) {
-    id = 'tungsten-open';
-  } else if (t.contains('ellipsoidal') || t.contains('profile')) {
-    id = 'tungsten-stage';
-  } else {
-    id = 'tungsten-fresnel';
+  final kind = LightKind.parse(type);
+  final id = switch ((kind.technology, kind.format)) {
+    (_, LightFormat.balloon) => 'balloon',
+    (_, LightFormat.practical) => 'practical',
+    (LightTechnology.hmi, _) => 'hmi',
+    (LightTechnology.led, LightFormat.panel) => 'led-panel',
+    (LightTechnology.led, LightFormat.flex) => 'led-flex',
+    (LightTechnology.led, LightFormat.tube) => 'led-tube',
+    (LightTechnology.led, LightFormat.fresnel) => 'led-fresnel',
+    (LightTechnology.led, _) => 'led-point',
+    (LightTechnology.fluorescent, _) => 'fluorescent',
+    (_, LightFormat.open) => 'tungsten-open',
+    (_, LightFormat.profile) => 'tungsten-stage',
+    _ => 'tungsten-fresnel',
+  };
+  // Las barras de píxeles de antes conservan su grupo.
+  if (id == 'led-tube' && (type ?? '').toLowerCase().contains('pixel')) {
+    return lightGroupById('led-pixel');
   }
   return lightGroupById(id);
 }

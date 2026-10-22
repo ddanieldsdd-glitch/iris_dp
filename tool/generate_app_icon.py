@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Genera el icono de IRIS (diafragma grabado sobre negro cálido) en todos los tamaños.
+"""Genera el icono de IRIS (objetivo visto de frente sobre negro cálido) en todos los tamaños.
 
 Uso: python3 tool/generate_app_icon.py
 Solo necesita Pillow. Escribe en assets/branding, ios, macos y web.
@@ -15,8 +15,10 @@ SS = 4  # supermuestreo
 BG_EDGE = (17, 16, 14)
 BG_CENTER = (31, 29, 26)
 INK = (233, 225, 210)  # crema de grabado
-INDEX = (214, 128, 52)  # marca índice ámbar
-BLADES = 9
+BLUE_REFLEX = (96, 140, 190)  # reflejo del tratamiento de la lente
+PUPIL = (24, 23, 21)  # láminas: metal oscuro
+HOLE = (6, 6, 5)  # abertura del diafragma
+BLADES = 7
 
 
 def _radial_background(size):
@@ -40,47 +42,22 @@ def _line(draw, a, b, w, fill):
         draw.ellipse([p[0] - r, p[1] - r, p[0] + r, p[1] + r], fill=fill)
 
 
-def _mark(size):
-    """Capa del grabado (RGBA) a tamaño `size`, sin fondo."""
-    S = size * SS
-    layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+def _ring(draw, cx, cy, r, w, fill):
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=fill, width=round(w))
+
+
+def _diaphragm(layer, S, cx, cy, blade_r, open_r, lw, fill):
+    """Diafragma de frente: cada lado del polígono central se prolonga hasta el
+    círculo de las láminas. La abertura es un hueco negro."""
     d = ImageDraw.Draw(layer)
-    cx = cy = S / 2
-    ink = INK + (255,)
-    ink_soft = INK + (95,)
-
-    # Anillo exterior.
-    ring_r = S * 0.335
-    ring_w = round(S * 0.0068)
-    d.ellipse([cx - ring_r, cy - ring_r, cx + ring_r, cy + ring_r], outline=ink, width=ring_w)
-
-    # Escala de diafragma: marcas finas fuera del anillo.
-    ticks = 36
-    for i in range(ticks):
-        a = -math.pi / 2 + 2 * math.pi * i / ticks
-        if i == 0:
-            continue
-        r0 = S * 0.358
-        r1 = S * (0.378 if i % 3 == 0 else 0.369)
-        _line(
-            d,
-            (cx + r0 * math.cos(a), cy + r0 * math.sin(a)),
-            (cx + r1 * math.cos(a), cy + r1 * math.sin(a)),
-            max(1, round(S * 0.0032)),
-            ink_soft,
-        )
-
-    # Láminas del diafragma: cada lado del polígono central se prolonga hasta el
-    # círculo de las láminas, como en un diafragma real visto de frente.
-    blade_r = ring_r
-    open_r = S * 0.1
     rot = -math.pi / 2 + math.pi / BLADES
     verts = [
         (cx + open_r * math.cos(rot + 2 * math.pi * i / BLADES),
          cy + open_r * math.sin(rot + 2 * math.pi * i / BLADES))
         for i in range(BLADES)
     ]
-    lw = round(S * 0.0058)
+    d.polygon(verts, fill=HOLE + (255,))
+
     for i in range(BLADES):
         ax, ay = verts[i]
         bx, by = verts[(i + 1) % BLADES]
@@ -92,12 +69,37 @@ def _mark(size):
         bq = px * dx + py * dy
         cq = px * px + py * py - blade_r * blade_r
         t = -bq + math.sqrt(bq * bq - cq)
-        _line(d, (ax, ay), (ax + dx * t, ay + dy * t), lw, ink)
+        _line(d, (ax, ay), (ax + dx * t, ay + dy * t), lw, fill)
 
-    # Marca índice en lo alto, como en el barril de un objetivo.
-    ir = S * 0.0115
-    iy = cy - S * 0.373
-    d.ellipse([cx - ir, iy - ir, cx + ir, iy + ir], fill=INDEX + (255,))
+
+def _mark(size):
+    """Capa del grabado (RGBA) a tamaño `size`, sin fondo: el objetivo de frente."""
+    S = size * SS
+    layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    cx = cy = S / 2
+
+    # Barril exterior y elementos de cristal, cada vez más tenues hacia dentro.
+    _ring(d, cx, cy, S * 0.34, S * 0.0068, INK + (255,))
+    _ring(d, cx, cy, S * 0.285, S * 0.0040, INK + (150,))
+    _ring(d, cx, cy, S * 0.205, S * 0.0040, INK + (95,))
+
+    # Reflejo azul del tratamiento: un arco suave arriba a la izquierda.
+    arc = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    r = S * 0.245
+    ImageDraw.Draw(arc).arc(
+        [cx - r, cy - r, cx + r, cy + r], start=200, end=262,
+        fill=BLUE_REFLEX + (230,), width=round(S * 0.014),
+    )
+    layer.alpha_composite(arc.filter(ImageFilter.GaussianBlur(S * 0.003)))
+
+    # Centro: un diafragma pequeñito dentro de la pupila.
+    pr = S * 0.072
+    pupil = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    ImageDraw.Draw(pupil).ellipse([cx - pr, cy - pr, cx + pr, cy + pr], fill=PUPIL + (255,))
+    layer.alpha_composite(pupil)
+    _diaphragm(layer, S, cx, cy, pr, S * 0.026, round(S * 0.0036), INK + (225,))
+    _ring(ImageDraw.Draw(layer), cx, cy, pr, S * 0.0040, INK + (210,))
 
     return layer.resize((size, size), Image.LANCZOS)
 
