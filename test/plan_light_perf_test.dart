@@ -135,6 +135,30 @@ void main() {
     expect(ms, lessThan(2500));
   });
 
+  test('la clave de «Ver todo»: unos cientos de puntos', () {
+    final scene = LightScene.from(
+      syntheticPlan(),
+      metersPerUnit: mpu,
+      ambient: ambient,
+    );
+    const rect = Rect.fromLTWH(-350, -350, 1900, 1500);
+    final cache = PlanLightMapCache();
+    addTearDown(cache.dispose);
+    for (final (name, budget) in [
+      ('gruesa', cache.coarseBudget),
+      ('fina', cache.fineBudget),
+    ]) {
+      late PlanLightMap map;
+      final ms = medianMs(
+        3,
+        () => map = PlanLightMap.compute(scene, rect, budget: budget),
+      );
+      final points = (map.columns + 1) * (map.rows + 1);
+      report('clave de «Ver todo», $name', ms, '($points puntos)');
+      expect(points, lessThan(3000));
+    }
+  });
+
   testWidgets('rasterizar la planta (exposición de la cámara)', (tester) async {
     final plan = syntheticPlan();
     await tester.runAsync(() async {

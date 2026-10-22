@@ -163,10 +163,10 @@ class PlanLightMap {
   static const int minPoints = 200;
 
   /// Calcula el mapa de [rect] con una rejilla tan fina como deje
-  /// [budget]: el número de comprobaciones rayo–obstáculo que se permiten.
-  /// Cada punto cuesta un rayo por fuente (tres si es ancha y hace
-  /// penumbra), dieciséis por el cielo y uno por el sol, y cada rayo, una
-  /// comprobación por obstáculo.
+  /// [budget]: el número de rayos que se permiten. Cada punto cuesta un
+  /// rayo por fuente (tres si es ancha y hace penumbra), dieciséis por el
+  /// cielo y uno por el sol. Lo que cuesta cada rayo apenas depende de
+  /// cuántos obstáculos haya: solo mira los de las casillas que cruza.
   ///
   /// Con [exposureKeyLux] (los lux bien expuestos de la cámara) se mira la
   /// luz hasta donde la cámara aún la ve, aunque sea muy poca al lado de la
@@ -187,8 +187,7 @@ class PlanLightMap {
           light.source.sizeM / scene.metersPerUnit / 2 >= 5;
       rays += wide ? 3 : 1;
     }
-    final obstacles = scene.blockers.length + scene.apertures.length + 1;
-    final points = (budget / math.max(1, rays * obstacles)).clamp(
+    final points = (budget / math.max(1, rays)).clamp(
       minPoints.toDouble(),
       30000.0,
     );
@@ -601,13 +600,13 @@ abstract final class PlanLightKey {
 /// cuando cambia. Mientras se arrastra algo lo calcula deprisa y a grano
 /// grueso; al parar, lo afina.
 class PlanLightMapCache extends ChangeNotifier {
-  /// Comprobaciones rayo–obstáculo para el mapa rápido (mientras se
-  /// arrastra) y para el fino (al parar). Del mapa solo sale contra qué se
-  /// mide el brillo en «Ver todo»: con unos cientos de puntos basta.
+  /// Rayos para el mapa rápido (mientras se arrastra) y para el fino (al
+  /// parar). Del mapa solo sale contra qué se mide el brillo en «Ver
+  /// todo»: con unos cientos de puntos basta.
   final int coarseBudget;
   final int fineBudget;
 
-  PlanLightMapCache({this.coarseBudget = 400000, this.fineBudget = 1600000});
+  PlanLightMapCache({this.coarseBudget = 60000, this.fineBudget = 240000});
 
   int? _key;
   PlanLightMap? _map;
