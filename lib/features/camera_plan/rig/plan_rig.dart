@@ -213,6 +213,26 @@ class PlanTruss {
 
   static double length(PlanElement el) => (end(el) - start(el)).distance;
 
+  /// Distancia del lienzo de un punto al eje del truss.
+  static double distanceTo(PlanElement el, Offset p) {
+    final a = start(el), ab = end(el) - a;
+    final len2 = ab.dx * ab.dx + ab.dy * ab.dy;
+    if (len2 == 0) return (p - a).distance;
+    final t = (((p.dx - a.dx) * ab.dx + (p.dy - a.dy) * ab.dy) / len2).clamp(
+      0.0,
+      1.0,
+    );
+    return (p - (a + ab * t)).distance;
+  }
+
+  /// Pone el largo del truss en metros sin cambiar su inicio ni su
+  /// dirección.
+  static void setLengthM(PlanElement el, double meters, double metersPerUnit) {
+    final d = end(el) - start(el);
+    final dir = d.distance == 0 ? const Offset(1, 0) : d / d.distance;
+    setEnd(el, start(el) + dir * (meters / metersPerUnit));
+  }
+
   /// Tramos en metros: los guardados o, si no hay, los de catálogo que
   /// cubren el largo de mayor a menor. `rest` es lo que queda sin cubrir.
   static ({List<double> pieces, double rest}) pieces(
@@ -280,6 +300,79 @@ class PlanRigPoint {
         alongKey: t * PlanTruss.length(truss) * metersPerUnit,
       },
     );
+  }
+}
+
+/// Carga de cada punto de cuelgue, en kg: el peso del truss por tramos
+/// entre puntos y el de cada luz colgada, repartido por palanca entre los
+/// dos puntos que la rodean. Orientativo: la carga real la da el rigger.
+class RigLoads {
+  RigLoads._();
+
+  /// Peso de una luz colgada, si la ficha no lo dice.
+  static const weightKey = 'weightKg';
+  static const double defaultLightKg = 10;
+
+  /// `uid` del punto → kg.
+  static Map<String, double> of(
+    List<PlanElement> elements,
+    double metersPerUnit,
+  ) {
+    final loads = <String, double>{};
+    for (final truss in elements.where(PlanTruss.isTruss)) {
+      final uid = LightOverrides.uidOf(truss);
+      if (uid == null) continue;
+      final lengthM = PlanTruss.length(truss) * metersPerUnit;
+      final points = [
+        for (final el in elements)
+          if (PlanRigPoint.isRigPoint(el) &&
+              el.props[PlanRigPoint.trussKey] == uid &&
+              LightOverrides.uidOf(el) != null)
+            (
+              LightOverrides.uidOf(el)!,
+              (el.props[PlanRigPoint.alongKey] as num?)?.toDouble() ?? 0,
+            ),
+      ]..sort((a, b) => a.$2.compareTo(b.$2));
+      if (points.isEmpty) continue;
+      for (final p in points) {
+        loads.putIfAbsent(p.$1, () => 0);
+      }
+      final kgm = PlanTruss.kgPerMeter(
+        PlanTruss.profile(truss),
+        PlanTruss.sizeCm(truss),
+      );
+      void spread(double along, double kg) {
+        if (points.length == 1) {
+          loads[points.first.$1] = loads[points.first.$1]! + kg;
+          return;
+        }
+        var j = 0;
+        while (j < points.length - 2 && along > points[j + 1].$2) {
+          j++;
+        }
+        final a = points[j], b = points[j + 1];
+        final span = b.$2 - a.$2;
+        final s = span <= 0 ? 0.5 : ((along - a.$2) / span).clamp(0.0, 1.0);
+        loads[a.$1] = loads[a.$1]! + kg * (1 - s);
+        loads[b.$1] = loads[b.$1]! + kg * s;
+      }
+
+      // El truss, por trozos de 0,5 m.
+      final pieces = math.max(1, (lengthM / 0.5).ceil());
+      for (var k = 0; k < pieces; k++) {
+        spread((k + 0.5) * lengthM / pieces, kgm * lengthM / pieces);
+      }
+      for (final light in elements) {
+        if (light.type != ElementType.light) continue;
+        final rig = TrussMagnet.rigOf(light);
+        if (rig == null || rig[PlanRigPoint.trussKey] != uid) continue;
+        spread(
+          (rig[PlanRigPoint.alongKey] as num?)?.toDouble() ?? 0,
+          (light.props[weightKey] as num?)?.toDouble() ?? defaultLightKg,
+        );
+      }
+    }
+    return loads;
   }
 }
 

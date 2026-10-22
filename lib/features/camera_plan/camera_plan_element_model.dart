@@ -7,6 +7,7 @@ import '../../core/database/app_database.dart';
 import '../../core/utils/scene_color.dart';
 import 'camera_plan_constants.dart';
 import 'plan_element_external_mapping.dart';
+import 'rig/plan_rig.dart';
 
 /// Capa a la que pertenece un elemento de planta.
 enum PlanLayer {
@@ -102,7 +103,8 @@ class PlanElement {
     ElementType.camera => cameraLabel,
     ElementType.actor => label ?? 'Actor',
     ElementType.light => lightType?.label ?? 'Luz',
-    ElementType.prop => propType?.label ?? 'Prop',
+    ElementType.prop =>
+      RigTypeCodec.of(this)?.label ?? propType?.label ?? 'Prop',
     ElementType.wall => switch (props['kind']) {
       'street' => 'Calle',
       'relief' => 'Relieve',

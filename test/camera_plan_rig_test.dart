@@ -18,6 +18,7 @@ import 'package:iris_dp/features/camera_plan/rig/plan_drape.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_hall.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_rig.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_scene3d.dart';
+import 'package:iris_dp/features/camera_plan/rig/rig_controls.dart';
 
 const mpu = 0.02; // 2 cm por unidad: 50 unidades por metro.
 
@@ -465,5 +466,48 @@ void main() {
     PlanDrape.setSag(drape, 0.02);
     await show();
     expect(find.textContaining('tira mucho'), findsOneWidget);
+  });
+
+  test('la carga de cada punto: truss por tramos y luces por palanca', () {
+    // 12 m de truss cuadrado 30 (5 kg/m) sobre dos motores en los extremos.
+    final truss = PlanTruss.create(Offset.zero, const Offset(600, 0));
+    LightOverrides.ensureUids([truss]);
+    final m1 = PlanRigPoint.create(RigType.motor, truss, 0, mpu);
+    final m2 = PlanRigPoint.create(RigType.motor, truss, 1, mpu);
+    LightOverrides.ensureUids([m1, m2]);
+    final l = light(const Offset(150, 0))..props[RigLoads.weightKey] = 16;
+    final elements = [truss, m1, m2, l];
+    TrussMagnet.snap(l, elements, mpu);
+    final loads = RigLoads.of(elements, mpu);
+    // 60 kg de truss a medias; la luz a 3 m de 12: 3/4 al primero.
+    expect(loads[LightOverrides.uidOf(m1)], closeTo(30 + 12, 1e-6));
+    expect(loads[LightOverrides.uidOf(m2)], closeTo(30 + 4, 1e-6));
+    expect(truss.displayLabel, 'Truss');
+  });
+
+  testWidgets('el inspector del truss cambia altura y largo', (tester) async {
+    final truss = PlanTruss.create(Offset.zero, const Offset(500, 0));
+    var updates = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark,
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: RigControls(
+              element: truss,
+              metersPerUnit: mpu,
+              onPreview: () {},
+              onUpdate: () => updates++,
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Tramos: 4 + 4 + 2'), findsOneWidget);
+    await tester.tap(find.text('Triangular'));
+    expect(PlanTruss.profile(truss), TrussProfile.triangle);
+    expect(updates, 1);
+    PlanTruss.setLengthM(truss, 6, mpu);
+    expect(PlanTruss.end(truss), const Offset(300, 0));
   });
 }
