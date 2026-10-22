@@ -6,6 +6,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+import 'camera_plan_constants.dart';
+import 'camera_plan_element_model.dart';
 import 'light/ambient.dart';
 import 'light/light_scene.dart';
 import 'light_beam.dart';
@@ -156,8 +158,15 @@ class PlanLightMap {
 
   double luxAt(int column, int row) => lux[row * (columns + 1) + column];
 
+  /// Puntos que tiene la rejilla como poco: con menos, lo más iluminado de
+  /// la planta saldría a saltos.
+  static const int minPoints = 200;
+
   /// Calcula el mapa de [rect] con una rejilla tan fina como deje
-  /// [budget]: el número de comprobaciones punto–fuente que se permiten.
+  /// [budget]: el número de rayos que se permiten. Cada punto cuesta un
+  /// rayo por fuente (tres si es ancha y hace penumbra), dieciséis por el
+  /// cielo y uno por el sol. Lo que cuesta cada rayo apenas depende de
+  /// cuántos obstáculos haya: solo mira los de las casillas que cruza.
   ///
   /// Con [exposureKeyLux] (los lux bien expuestos de la cámara) se mira la
   /// luz hasta donde la cámara aún la ve, aunque sea muy poca al lado de la
@@ -171,9 +180,17 @@ class PlanLightMap {
     final env = scene.ambient;
     final sunny = env != null && env.hasSun;
     final skyLit = env != null && env.hasSky && env.day;
-    // El cielo cuesta como dieciséis fuentes: mira alrededor.
-    final perPoint = scene.lights.length + (sunny ? 1 : 0) + (skyLit ? 16 : 0);
-    final points = (budget / math.max(1, perPoint)).clamp(400.0, 30000.0);
+    var rays = (sunny ? 1 : 0) + (skyLit ? 16 : 0);
+    for (final light in scene.lights) {
+      final wide =
+          light.overheadM == null &&
+          light.source.sizeM / scene.metersPerUnit / 2 >= 5;
+      rays += wide ? 3 : 1;
+    }
+    final points = (budget / math.max(1, rays)).clamp(
+      minPoints.toDouble(),
+      30000.0,
+    );
     final aspect = rect.width / math.max(1.0, rect.height);
     final rows = math.max(8, math.sqrt(points / aspect).round());
     final columns = math.max(8, (rows * aspect).round());
@@ -370,83 +387,583 @@ class PlanLightMap {
   }
 }
 
+/// La luz de la planta grabada en sus coordenadas, antes de pasarla a
+/// imagen.
+class PlanLightRecording {
+  final ui.Picture picture;
+
+  /// Hasta dónde llega lo que se ha pintado: haces, sombras y manchas.
+  final Rect bounds;
+
+  /// Lo que importa ver con detalle: la planta y algo de margen. Lo que
+  /// queda más allá (un haz que sale por una ventana, el rebote del sol en
+  /// una fachada) es luz que cae despacio y se rasteriza con grano grueso.
+  final Rect focus;
+
+  /// Color de lo que queda fuera de [bounds], al aire libre: el sol o el
+  /// cielo sin nada delante. `null` = nada.
+  final Color? open;
+
+  const PlanLightRecording({
+    required this.picture,
+    required this.bounds,
+    required this.focus,
+    this.open,
+  });
+}
+
+/// Un trozo de la luz rasterizado: la imagen y lo que cubre.
+class PlanLightTile {
+  final ui.Image image;
+
+  /// Lo que cubre la imagen, en unidades del lienzo.
+  final Rect rect;
+
+  const PlanLightTile(this.image, this.rect);
+
+  /// [rect] medio píxel hacia dentro: así el borde no se funde con el vacío
+  /// de fuera de la imagen.
+  Rect get inner => rect.deflate(rect.width / image.width / 2);
+
+  void paint(Canvas canvas) => canvas.drawImageRect(
+    image,
+    Rect.fromLTRB(0.5, 0.5, image.width - 0.5, image.height - 0.5),
+    inner,
+    Paint()..filterQuality = FilterQuality.medium,
+  );
+}
+
+/// La luz de la planta como imagen, lista para pintarse con la vista: con
+/// detalle en la planta ([fine]) y, si llega más allá, con grano grueso
+/// alrededor ([far]).
+class PlanLightLayer {
+  final PlanLightTile fine;
+  final PlanLightTile? far;
+
+  /// Grano con el que se pidió [fine].
+  final double unitsPerPixel;
+
+  /// Color de fuera de todo (ver [PlanLightRecording.open]).
+  final Color? open;
+
+  const PlanLightLayer({
+    required this.fine,
+    required this.unitsPerPixel,
+    this.far,
+    this.open,
+  });
+
+  void dispose() {
+    fine.image.dispose();
+    far?.image.dispose();
+  }
+
+  /// La pinta en su sitio. Lo de fuera, al aire libre, va liso.
+  void paint(Canvas canvas, Rect view) {
+    final outer = far?.inner ?? fine.inner;
+    final fill = open;
+    if (fill != null && fill.a > 0) {
+      canvas.save();
+      canvas.clipPath(
+        Path()
+          ..fillType = PathFillType.evenOdd
+          ..addRect(view.inflate(2))
+          ..addRect(outer),
+      );
+      canvas.drawRect(view.inflate(2), Paint()..color = fill);
+      canvas.restore();
+    }
+    final around = far;
+    if (around != null) {
+      canvas.save();
+      canvas.clipPath(
+        Path()
+          ..fillType = PathFillType.evenOdd
+          ..addRect(around.inner)
+          ..addRect(fine.inner),
+      );
+      around.paint(canvas);
+      canvas.restore();
+    }
+    fine.paint(canvas);
+  }
+}
+
+/// Huellas de una planta: cambian cuando cambia lo que miden. Los elementos
+/// se modifican en su sitio (al arrastrar, al tocar un ajuste), así que no
+/// basta con comparar las listas: hay que mirar lo que llevan dentro.
+abstract final class PlanLightKey {
+  /// Propiedades que no cambian la luz: los ajustes de la cámara (la
+  /// exposición va aparte), su óptica y su rótulo, y el identificador.
+  static const _unlit = {
+    'uid',
+    'iso',
+    'shutterDeg',
+    'fps',
+    'nd',
+    'tStop',
+    'sensorWidthMm',
+    'lensName',
+    'cameraName',
+    'shotTag',
+    'pathRot',
+    'name',
+  };
+
+  /// Un valor de las propiedades, con listas y mapas mirados por dentro.
+  static int _deep(Object? value) => switch (value) {
+    final List<Object?> list => Object.hashAll(list.map(_deep)),
+    final Map<Object?, Object?> map => Object.hashAllUnordered([
+      for (final e in map.entries) Object.hash(e.key, _deep(e.value)),
+    ]),
+    _ => value.hashCode,
+  };
+
+  static int _props(
+    Map<String, dynamic> props, {
+    Set<String> skip = const {},
+  }) => Object.hashAllUnordered([
+    for (final e in props.entries)
+      if (!skip.contains(e.key)) Object.hash(e.key, _deep(e.value)),
+  ]);
+
+  /// Lo que afecta a la luz: dónde está cada cosa, hacia dónde mira, qué es
+  /// y cómo está ajustada. No cuentan los nombres, el recorrido de la
+  /// cámara ni sus ajustes de exposición.
+  static int light(
+    Iterable<PlanElement> elements, {
+    required double metersPerUnit,
+    PlanAmbient? ambient,
+  }) => Object.hash(
+    metersPerUnit,
+    ambient,
+    Object.hashAll([
+      for (final el in elements)
+        Object.hash(
+          el.type,
+          el.position,
+          el.rotation,
+          el.lightType,
+          // El rótulo dice qué es una pieza de arquitectura o de atrezo.
+          el.type == ElementType.wall || el.type == ElementType.prop
+              ? el.label
+              : null,
+          _props(el.props, skip: _unlit),
+        ),
+    ]),
+  );
+
+  /// La luz y además los nombres de lo que emite: salen en el fotómetro.
+  static int scene(
+    Iterable<PlanElement> elements, {
+    required double metersPerUnit,
+    PlanAmbient? ambient,
+  }) => Object.hash(
+    light(elements, metersPerUnit: metersPerUnit, ambient: ambient),
+    Object.hashAll([
+      for (final el in elements)
+        if (el.type == ElementType.light) el.props['name'],
+    ]),
+  );
+
+  /// Todo lo que se dibuja de cada elemento, y qué está seleccionado.
+  static int drawing(
+    Iterable<PlanElement> elements, [
+    Iterable<PlanElement> selected = const [],
+  ]) => Object.hash(
+    Object.hashAll([
+      for (final el in elements)
+        Object.hash(
+          el.id,
+          el.type,
+          el.position,
+          el.rotation,
+          el.label,
+          el.lens,
+          el.stabilization,
+          el.cameraNumber,
+          el.cameraLetter,
+          el.lightType,
+          el.lukaCompatible,
+          el.actorColor,
+          Object.hashAll(el.pathPoints),
+          _props(el.props),
+          el.layer,
+          el.shotOverride,
+        ),
+    ]),
+    Object.hashAllUnordered([for (final el in selected) el.id]),
+  );
+}
+
 /// Guarda el mapa de luz de la planta que se está viendo y lo rehace
 /// cuando cambia. Mientras se arrastra algo lo calcula deprisa y a grano
 /// grueso; al parar, lo afina.
 class PlanLightMapCache extends ChangeNotifier {
-  /// Comprobaciones punto–fuente para el mapa rápido y para el fino.
+  /// Rayos para el mapa rápido (mientras se arrastra) y para el fino (al
+  /// parar). Del mapa solo sale contra qué se mide el brillo en «Ver
+  /// todo»: con unos cientos de puntos basta.
   final int coarseBudget;
   final int fineBudget;
 
-  PlanLightMapCache({this.coarseBudget = 60000, int? fineBudget})
-    : fineBudget = fineBudget ?? coarseBudget;
+  PlanLightMapCache({this.coarseBudget = 60000, this.fineBudget = 240000});
 
   int? _key;
   PlanLightMap? _map;
-  Timer? _refine;
   bool _disposed = false;
+
+  /// Las últimas plantas vistas por la luz, de la más antigua a la más
+  /// reciente. Hay más de una porque el lienzo cuenta las cámaras de los
+  /// otros planos y el fotómetro no.
+  final _scenes = <int, LightScene>{};
+  static const _keptScenes = 4;
+
+  /// La planta vista por la luz. Se construye una vez por cada estado de la
+  /// planta y la comparten el lienzo, el fotómetro, los recintos y el
+  /// alzado.
+  ///
+  /// En borrador ([draft]) va sin rebotes de pared: es lo que más fuentes
+  /// añade y lo que menos cambia lo que se ve mientras se arrastra.
+  LightScene scene(
+    List<PlanElement> elements, {
+    required double metersPerUnit,
+    PlanAmbient? ambient,
+    bool draft = false,
+  }) {
+    final key = Object.hash(
+      PlanLightKey.scene(
+        elements,
+        metersPerUnit: metersPerUnit,
+        ambient: ambient,
+      ),
+      draft,
+    );
+    final kept = _scenes.remove(key);
+    if (kept != null) return _scenes[key] = kept;
+    final built = LightScene.from(
+      elements,
+      metersPerUnit: metersPerUnit,
+      ambient: ambient,
+      wallBounce: !draft,
+    );
+    _scenes[key] = built;
+    while (_scenes.length > _keptScenes) {
+      _scenes.remove(_scenes.keys.first);
+    }
+    return built;
+  }
 
   /// El mapa de una planta. [key] cambia cuando cambia algo que afecta a
   /// la luz. Con [exposureKeyLux] el mapa mira la luz hasta donde la ve la
   /// cámara: si se abre el diafragma y hace falta ver menos luz, se rehace.
+  /// En borrador ([draft]) se calcula con el presupuesto grueso.
   PlanLightMap resolve(
     LightScene scene,
     int key,
     Rect rect, {
     double? exposureKeyLux,
+    bool draft = false,
   }) {
     final current = _map;
     final needed = exposureKeyLux == null
         ? double.infinity
         : PlanLightMap.cutoffForExposure(exposureKeyLux);
-    if (current != null && _key == key && current.cutoff <= needed * 1.001) {
+    final wanted = Object.hash(key, draft);
+    if (current != null && _key == wanted && current.cutoff <= needed * 1.001) {
       return current;
     }
     // Se mira algo más abajo de lo que hace falta: así un cambio pequeño de
     // ISO o de diafragma no obliga a rehacerlo.
     final reach = exposureKeyLux == null ? null : exposureKeyLux / 2;
-    final quick = PlanLightMap.compute(
+    _key = wanted;
+    return _map = PlanLightMap.compute(
       scene,
       rect,
-      budget: coarseBudget,
+      budget: draft ? coarseBudget : fineBudget,
       exposureKeyLux: reach,
     );
-    _key = key;
-    _map = quick;
-    _refine?.cancel();
-    // Solo se afina si se ha pedido más detalle del que ya tiene.
-    if (fineBudget <= coarseBudget) return quick;
-    _refine = Timer(const Duration(milliseconds: 280), () {
-      if (_disposed || _key != key) return;
-      _map = PlanLightMap.compute(
-        scene,
-        rect,
-        budget: fineBudget,
-        exposureKeyLux: reach,
-      );
-      notifyListeners();
-    });
-    return quick;
   }
 
-  int? _pictureKey;
-  ui.Picture? _picture;
+  /// Tras cuánto tiempo sin cambios se afina la luz.
+  static const settleDelay = Duration(milliseconds: 280);
 
-  /// La luz ya dibujada. Mientras no cambie nada que afecte a la luz se
-  /// reutiliza: mover la vista, hacer zoom o seleccionar no la recalcula.
-  ui.Picture picture(int key, ui.Picture Function() record) {
-    final current = _picture;
-    if (current != null && _pictureKey == key) return current;
+  int? _seenKey;
+
+  /// Corre desde el último cambio de la luz: mientras corre, otro cambio
+  /// es parte de una serie.
+  Timer? _quiet;
+  bool _drafting = false;
+  int? _settledKey;
+  Timer? _settle;
+
+  /// Si la luz de [key] se pinta en borrador: con menos detalle y sin
+  /// rebotes de pared, para que arrastrar vaya fluido.
+  ///
+  /// Va en borrador mientras se arrastra algo ([interacting]) o mientras
+  /// la luz cambia sin parar (un deslizador). A los [settleDelay] sin
+  /// cambios se afina sola: avisa a quien escucha y el lienzo se repinta.
+  bool draft(int key, {bool interacting = false}) {
+    if (key == _settledKey) return false;
+    if (key == _seenKey) {
+      if (!_drafting) return false;
+      if (interacting) return true;
+      // Se soltó antes de que saltara el temporizador: se afina ya.
+      _settle?.cancel();
+      _settledKey = key;
+      return _drafting = false;
+    }
+    final continuous = _quiet?.isActive ?? false;
+    _seenKey = key;
+    _quiet?.cancel();
+    _quiet = Timer(settleDelay, () {});
+    _settle?.cancel();
+    _drafting = interacting || continuous;
+    if (!_drafting) {
+      _settledKey = key;
+      return false;
+    }
+    _settle = Timer(settleDelay, () {
+      if (_disposed || _seenKey != key) return;
+      _settledKey = key;
+      _drafting = false;
+      notifyListeners();
+    });
+    return true;
+  }
+
+  int? _cellsKey;
+  Map<int, double> _cells = {};
+
+  /// Lux de las celdas del mapa de exposición en falso color, por columna
+  /// y fila, para la luz de [key] y celdas de [cell] unidades. Se van
+  /// llenando según se ven; si cambia la luz o el tamaño, empiezan de cero.
+  Map<int, double> exposureCells(int key, double cell) {
+    final wanted = Object.hash(key, cell);
+    if (_cellsKey != wanted) {
+      _cellsKey = wanted;
+      _cells = {};
+    }
+    return _cells;
+  }
+
+  int? _layerKey;
+  PlanLightRecording? _recording;
+
+  int? _draftKey;
+  ui.Picture? _draftPicture;
+
+  /// Lo que ve cada muestra de cada fuente, por lo que tapa la luz, dónde
+  /// está la muestra y hasta dónde llega. Mover un aparato solo recalcula lo
+  /// suyo: las paredes no se han movido y sus rebotes ven lo mismo.
+  final _visible = <int, ({Path path, int pass, bool draft})>{};
+  var _finePass = 0;
+  var _draftPass = 0;
+  bool _recordingDraft = false;
+
+  /// Cuánto se redondea hacia arriba el alcance de una fuente al guardar
+  /// lo que ve: un rebote que recibe algo más o menos luz no lo recalcula.
+  static const double _reachStep = 1.25;
+
+  /// [LightScene.visibleArea], guardado.
+  ///
+  /// Se calcula hasta un alcance algo mayor que [reach]: dentro del círculo
+  /// de [reach] es la misma zona, y lo que se pinta con ella como recorte
+  /// (los haces, de ese radio) no pasa de ahí. Una fuente colgada pinta un
+  /// óvalo que puede salirse, así que va con su alcance justo.
+  Path visibleArea(
+    LightScene scene,
+    Offset origin,
+    double reach, {
+    LightBlocker? ignore,
+    bool fromAbove = false,
+    double? z,
+    int rays = 240,
+  }) {
+    final far = fromAbove
+        ? reach
+        : math
+              .pow(_reachStep, (math.log(reach) / math.log(_reachStep)).ceil())
+              .toDouble();
+    final key = Object.hash(
+      scene.obstacleKey,
+      origin,
+      ignore == null ? -1 : scene.blockers.indexOf(ignore),
+      fromAbove,
+      z,
+      far,
+      rays,
+    );
+    final pass = _recordingDraft ? _draftPass : _finePass;
+    final kept = _visible[key];
+    final path =
+        kept?.path ??
+        scene.visibleArea(
+          origin,
+          far,
+          ignore: ignore,
+          fromAbove: fromAbove,
+          z: z,
+          rays: rays,
+        );
+    _visible[key] = (path: path, pass: pass, draft: _recordingDraft);
+    return path;
+  }
+
+  /// Cada haz grabado, por cómo es la fuente, lo que la tapa y contra qué se
+  /// mide su brillo.
+  final _beams =
+      <int, ({ui.Picture picture, Rect? bounds, int pass, bool draft})>{};
+
+  /// El haz de una fuente, grabado aparte. Mientras la fuente siga igual
+  /// (mismo sitio, misma luz, mismos obstáculos) se reutiliza: al mover un
+  /// aparato solo se graban de nuevo el suyo y los rebotes a los que llega.
+  ({ui.Picture picture, Rect? bounds}) beam(
+    int key,
+    ({ui.Picture picture, Rect? bounds}) Function() record,
+  ) {
+    final pass = _recordingDraft ? _draftPass : _finePass;
+    final kept = _beams[key];
+    final beam = kept == null
+        ? record()
+        : (picture: kept.picture, bounds: kept.bounds);
+    _beams[key] = (
+      picture: beam.picture,
+      bounds: beam.bounds,
+      pass: pass,
+      draft: _recordingDraft,
+    );
+    return beam;
+  }
+
+  /// Graba con [record] y luego olvida lo visto y los haces que no se usaron
+  /// ni en esta grabación ni en la anterior del mismo tipo (borrador o
+  /// afinada).
+  T _recordWith<T>(bool draft, T Function() record) {
+    _recordingDraft = draft;
+    final pass = draft ? ++_draftPass : ++_finePass;
+    final watch = Stopwatch()..start();
+    final result = record();
+    lastRecording = watch.elapsed;
+    _visible.removeWhere((_, v) => v.draft == draft && v.pass < pass - 1);
+    _beams.removeWhere((_, b) {
+      final stale = b.draft == draft && b.pass < pass - 1;
+      if (stale) b.picture.dispose();
+      return stale;
+    });
+    return result;
+  }
+
+  /// La luz en borrador, grabada y sin pasar a imagen: cambia en cada
+  /// fotograma mientras se arrastra, y rasterizarla aparte costaría más.
+  ui.Picture draftPicture(int key, ui.Picture Function() record) {
+    final current = _draftPicture;
+    if (current != null && _draftKey == key) return current;
     current?.dispose();
-    _pictureKey = key;
-    return _picture = record();
+    _draftKey = key;
+    final picture = _recordWith(true, record);
+    _draftPicture = picture;
+    return picture;
+  }
+
+  /// Lo que tardó en grabarse la última luz: lo que paga el hilo de la
+  /// interfaz. El rasterizado va después, en el de la GPU.
+  @visibleForTesting
+  Duration? lastRecording;
+  PlanLightLayer? _layer;
+
+  /// Lado más largo y píxeles que puede tener la imagen de la luz.
+  static const int maxLayerSide = 4096;
+  static const int maxLayerPixels = 12 << 20;
+
+  /// Grano de lo que queda lejos de la planta, en metros por píxel, y lado
+  /// más largo de su imagen.
+  static const double farGrainM = 0.25;
+  static const int maxFarSide = 1024;
+
+  /// La luz ya dibujada, en una imagen. Mientras no cambie nada que afecte
+  /// a la luz ([key]) se reutiliza: mover la vista, hacer zoom o
+  /// seleccionar no la recalcula ni la vuelve a desenfocar. Si el zoom pide
+  /// otro grano ([unitsPerPixel]), se rasteriza de nuevo lo ya grabado.
+  PlanLightLayer layer(
+    int key, {
+    required double unitsPerPixel,
+    required double metersPerUnit,
+    required PlanLightRecording Function() record,
+  }) {
+    if (_layerKey != key || _recording == null) {
+      _recording?.picture.dispose();
+      _layer?.dispose();
+      _layer = null;
+      _layerKey = key;
+      _recording = _recordWith(false, record);
+    }
+    final current = _layer;
+    if (current != null && current.unitsPerPixel == unitsPerPixel) {
+      return current;
+    }
+    current?.dispose();
+    final recording = _recording!;
+    final bounds = recording.bounds;
+    final focus = bounds.intersect(recording.focus);
+    final fine = _rasterize(
+      recording.picture,
+      focus.isEmpty ? bounds : focus,
+      unitsPerPixel,
+    );
+    final far = focus.isEmpty || _covers(focus, bounds)
+        ? null
+        : _rasterize(
+            recording.picture,
+            bounds,
+            math.max(
+              farGrainM / metersPerUnit,
+              math.max(bounds.width, bounds.height) / maxFarSide,
+            ),
+          );
+    return _layer = PlanLightLayer(
+      fine: fine,
+      far: far,
+      unitsPerPixel: unitsPerPixel,
+      open: recording.open,
+    );
+  }
+
+  static bool _covers(Rect outer, Rect inner) =>
+      outer.left <= inner.left &&
+      outer.top <= inner.top &&
+      outer.right >= inner.right &&
+      outer.bottom >= inner.bottom;
+
+  /// [picture] en una imagen de [area], con [grain] unidades por píxel (o
+  /// más, si saliera demasiado grande).
+  static PlanLightTile _rasterize(ui.Picture picture, Rect area, double grain) {
+    var upp = math.max(grain, math.max(area.width, area.height) / maxLayerSide);
+    upp = math.max(upp, math.sqrt(area.width * area.height / maxLayerPixels));
+    final width = math.max(1, (area.width / upp).ceil());
+    final height = math.max(1, (area.height / upp).ceil());
+    final rect = Rect.fromLTWH(area.left, area.top, width * upp, height * upp);
+    final recorder = ui.PictureRecorder();
+    Canvas(recorder)
+      ..scale(1 / upp)
+      ..translate(-rect.left, -rect.top)
+      ..drawPicture(picture);
+    final framed = recorder.endRecording();
+    final image = framed.toImageSync(width, height);
+    framed.dispose();
+    return PlanLightTile(image, rect);
   }
 
   @override
   void dispose() {
     _disposed = true;
-    _picture?.dispose();
-    _refine?.cancel();
+    _recording?.picture.dispose();
+    _layer?.dispose();
+    _draftPicture?.dispose();
+    for (final b in _beams.values) {
+      b.picture.dispose();
+    }
+    _settle?.cancel();
+    _quiet?.cancel();
     super.dispose();
   }
 }

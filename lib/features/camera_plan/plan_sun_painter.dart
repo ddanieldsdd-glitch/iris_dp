@@ -256,7 +256,10 @@ class PlanSunPainter {
   /// mide contra lo más iluminado de la planta ([key]), y se mezcla con
   /// las demás fuentes sin pisarse. Con [exposed], [key] son los lux bien
   /// expuestos de la cámara y el sol que sobra se ve quemado.
-  static void paintKeyed(
+  ///
+  /// Devuelve hasta dónde llegan las sombras que pinta: más allá, al aire
+  /// libre, el sol (o el cielo) es un color liso.
+  static Rect? paintKeyed(
     Canvas canvas,
     LightScene scene,
     PlanAmbient env,
@@ -267,6 +270,7 @@ class PlanSunPainter {
   }) {
     final mpu = scene.metersPerUnit;
     final open = outdoors(scene, view);
+    Rect? reach;
     canvas.save();
     canvas.clipPath(open);
     if (env.hasSky && env.day) {
@@ -287,6 +291,10 @@ class PlanSunPainter {
       // El sol baña lo que no tiene nada delante; las sombras se le
       // quitan, con el borde más blando cuanto más largas.
       final (solid, dappled) = shadows(scene, env);
+      for (final (path, _) in [...solid, ...dappled]) {
+        final box = path.getBounds();
+        reach = reach?.expandToInclude(box) ?? box;
+      }
       void sunlit(Color colour, BlendMode blend) {
         canvas.saveLayer(view, Paint()..blendMode = blend);
         canvas.drawRect(view, Paint()..color = colour);
@@ -338,6 +346,7 @@ class PlanSunPainter {
         ),
       );
     }
+    return reach;
   }
 
   static void paint(
