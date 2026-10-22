@@ -43,7 +43,7 @@ class RigPainter {
       case RigType.hall:
         drawHall(canvas, el, metersPerUnit, selected: selected, ink: color);
       case RigType.scan:
-        return false;
+        drawScan(canvas, el.position, metersPerUnit, color: color);
       case null:
         return false;
     }
@@ -186,6 +186,24 @@ class RigPainter {
       ..drawRect(box, stroke..strokeWidth = 1.3)
       ..drawLine(box.topLeft, box.bottomRight, stroke)
       ..drawLine(box.topRight, box.bottomLeft, stroke);
+  }
+
+  /// Un escaneo: su origen, para cogerlo y moverlo en la planta.
+  static void drawScan(
+    Canvas canvas,
+    Offset at,
+    double mpu, {
+    Color color = ink,
+  }) {
+    final r = math.max(0.5 / mpu, 10.0);
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.7)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    canvas
+      ..drawCircle(at, r, paint)
+      ..drawLine(at - Offset(r * 0.6, 0), at + Offset(r * 0.6, 0), paint)
+      ..drawLine(at - Offset(0, r * 0.6), at + Offset(0, r * 0.6), paint);
   }
 
   static void drawPillar(

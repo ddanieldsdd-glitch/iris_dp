@@ -2757,6 +2757,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       selected: _selected,
       onSelect: _selectFrom3d,
       onChanged: _changedFrom3d,
+      onAdd: (el) => _addElement(el, keepPosition: true, select: false),
       ambient: _lightSetup == null ? null : _ambient,
     );
   }

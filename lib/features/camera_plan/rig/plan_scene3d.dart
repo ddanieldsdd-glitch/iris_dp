@@ -78,6 +78,7 @@ class PlanScene3d {
     final rigging = <Map<String, dynamic>>[];
     final fixtures = <Map<String, dynamic>>[];
     final people = <Map<String, dynamic>>[];
+    final scans = <Map<String, dynamic>>[];
     final cameras = <Map<String, dynamic>>[];
 
     for (final (i, el) in elements.indexed) {
@@ -127,7 +128,19 @@ class PlanScene3d {
             if (loads[LightOverrides.uidOf(el)] case final load?)
               'loadKg': _r(load),
           });
-        case RigType.hall || RigType.scan || null:
+        case RigType.scan:
+          if (PlanScan.file(el) case final file?) {
+            scans.add({
+              'id': uid,
+              'file': file,
+              'format': PlanScan.format(el),
+              'at': xy(el.position),
+              'z0': _r(level + PlanScan.offsetZ(el)),
+              'yawDeg': el.rotation,
+              'scale': PlanScan.scale(el),
+            });
+          }
+        case RigType.hall || null:
           break;
       }
       switch (el.type) {
@@ -174,7 +187,8 @@ class PlanScene3d {
       ..['rigging'] = rigging
       ..['fixtures'] = fixtures
       ..['people'] = people
-      ..['cameras'] = cameras;
+      ..['cameras'] = cameras
+      ..['scans'] = scans;
     return out;
   }
 

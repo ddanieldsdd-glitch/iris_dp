@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -796,6 +800,44 @@ void main() {
       expect(floor['x1'] as double, greaterThan(floor['x0'] as double));
       expect(floor['yTop'] as double, greaterThan(floor['yBottom'] as double));
       expect(LightFloor.compute(const [], metersPerUnit: mpu), isNull);
+    });
+  });
+
+  group('escaneos y MVR', () {
+    test('un escaneo va a la escena y se calibra con una medida', () {
+      final scan = PlanScan.create(
+        const Offset(100, 100),
+        file: 'abc.glb',
+        format: 'glb',
+      )..rotation = 30;
+      PlanScan.calibrate(scan, 1.8, 0.9); // medía el doble
+      expect(PlanScan.scale(scan), closeTo(0.5, 1e-9));
+      final s =
+          (PlanScene3d.build([scan], metersPerUnit: mpu)['scans'] as List)
+                  .single
+              as Map;
+      expect(s['file'], 'abc.glb');
+      expect(s['scale'], 0.5);
+      expect(s['yawDeg'], 30);
+      expect(scan.displayLabel, 'Escaneo');
+    });
+
+    test('el MVR lleva la estructura en glTF si se le da', () {
+      final hall = PlanHall.create(
+        Offset.zero,
+        HallRecipe.rectangle(width: 10, depth: 6),
+      );
+      final elements = [hall, ...PlanHall.build(hall, mpu)];
+      final glb = Uint8List.fromList(List.filled(64, 7));
+      final mvr = ZipDecoder().decodeBytes(
+        PlanCadExport.planMvr(elements, mpu, environmentGlb: glb),
+      );
+      expect(mvr.findFile('iris_estructura.glb'), isNotNull);
+      final xml = utf8.decode(
+        mvr.findFile('GeneralSceneDescription.xml')!.content as List<int>,
+      );
+      expect(xml, contains('SceneObject'));
+      expect(xml, contains('Geometry3D'));
     });
   });
 }

@@ -11,13 +11,17 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/export_file_saver.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
 import '../light/plan_light.dart';
+import '../plan_cad_export.dart';
 import '../plan_piece_controls.dart';
 import 'light_floor.dart';
+import 'plan_rig.dart';
 import 'plan_scene3d.dart';
+import 'scan_store.dart';
 import 'rig_report.dart';
 
 /// Capas del 3D que se pueden ocultar, con su nombre en el visor.
@@ -48,6 +52,10 @@ class Plan3dView extends StatefulWidget {
   /// Sol y cielo del esquema de luz, para el sol del 3D y la luz del suelo.
   final PlanAmbient? ambient;
 
+  /// Algo nuevo creado desde el 3D (un escaneo importado): la planta lo da
+  /// de alta.
+  final Future<void> Function(PlanElement)? onAdd;
+
   /// Algo cambiado desde el 3D (movido, apuntado, retocado en el lateral):
   /// la planta lo guarda. Sin él, el 3D solo se mira.
   final Future<void> Function(PlanElement)? onChanged;
@@ -70,6 +78,7 @@ class Plan3dView extends StatefulWidget {
     this.onSelect,
     this.ambient,
     this.onChanged,
+    this.onAdd,
     this.full = false,
     this.onExpand,
     this.onClose,
@@ -103,6 +112,16 @@ class _Plan3dViewState extends State<Plan3dView> {
   bool _measuring = false;
   String? _measure;
 
+  /// Última medida, en metros: sirve para calibrar un escaneo.
+  double? _measuredM;
+  final _realLength = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _realLength.addListener(() => setState(() {}));
+  }
+
   @override
   void didUpdateWidget(Plan3dView old) {
     super.didUpdateWidget(old);
@@ -116,6 +135,7 @@ class _Plan3dViewState extends State<Plan3dView> {
   @override
   void dispose() {
     _debounce?.cancel();
+    _realLength.dispose();
     super.dispose();
   }
 
@@ -214,11 +234,21 @@ class _Plan3dViewState extends State<Plan3dView> {
         String m(Object? v) =>
             '${((v as num?) ?? 0).toStringAsFixed(2).replaceAll('.', ',')} m';
         if (mounted) {
-          setState(
-            () => _measure =
+          setState(() {
+            _measuredM = (message['d'] as num?)?.toDouble();
+            _measure =
                 '${m(message['d'])} · en planta ${m(message['dxy'])} · '
-                'desnivel ${m(message['dz'])}',
-          );
+                'desnivel ${m(message['dz'])}';
+          });
+        }
+      case 'scanData':
+        // El visor pide los bytes de un escaneo: se le devuelven en base64.
+        return ScanStore.bytesOf(
+          message['file'] as String,
+        ).then((bytes) => bytes == null ? null : base64Encode(bytes));
+      case 'scanError':
+        if (mounted) {
+          setState(() => _status = 'Escaneo: ${message['message']}');
         }
       case 'move' || 'aim':
         _applyFrom3d(message);
@@ -280,6 +310,179 @@ class _Plan3dViewState extends State<Plan3dView> {
     if (el == null || save == null) return;
     await save(el);
     if (mounted) _preview();
+  }
+
+  /// Importa un escaneo (Polycam, Luma AI…): se copia a la carpeta de la
+  /// app y se coloca en el centro de lo que hay.
+  Future<void> _importScan() async {
+    final add = widget.onAdd;
+    if (add == null) return;
+    final picked = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Importar un escaneo',
+      type: FileType.custom,
+      allowedExtensions: PlanScan.formats,
+    );
+    final path = picked?.files.single.path;
+    if (path == null) return;
+    final file = await ScanStore.import(path);
+    var centre = Offset.zero;
+    if (widget.elements.isNotEmpty) {
+      for (final el in widget.elements) {
+        centre += el.position;
+      }
+      centre /= widget.elements.length.toDouble();
+    }
+    final scan = PlanScan.create(
+      centre,
+      file: file,
+      format: file.split('.').last,
+      name: path.split(Platform.pathSeparator).last,
+    );
+    await add(scan);
+    if (!mounted) return;
+    setState(() => _selected = scan);
+    _schedule();
+  }
+
+  List<Widget> _scanSection(AppPalette palette) {
+    final el = _selected;
+    final caption = AppTypography.caption(
+      palette,
+    ).copyWith(color: palette.textTertiary);
+    if (el == null || !PlanScan.isScan(el)) {
+      return [
+        if (widget.onAdd != null)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.view_in_ar, size: 16),
+            label: const Text('Importar escaneo (GLB, OBJ, PLY)'),
+            onPressed: _importScan,
+          ),
+        Text(
+          'De Polycam o Luma AI. Luego tócalo para colocarlo, girarlo y '
+          'ponerlo a escala.',
+          style: caption,
+        ),
+      ];
+    }
+    Widget slider(
+      String label,
+      String value,
+      double current,
+      double min,
+      double max,
+      ValueChanged<double> set,
+    ) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text(label, style: AppTypography.caption(palette))),
+            Text(value, style: AppTypography.mono(palette)),
+          ],
+        ),
+        Slider(
+          value: current.clamp(min, max),
+          min: min,
+          max: max,
+          onChanged: (v) {
+            set(v);
+            _preview();
+          },
+          onChangeEnd: (_) => _update(),
+        ),
+      ],
+    );
+    final real = double.tryParse(_realLength.text.replaceAll(',', '.'));
+    return [
+      Text(
+        el.props[PlanScan.nameKey] as String? ?? 'Escaneo',
+        style: AppTypography.bodyMedium(palette),
+      ),
+      slider(
+        'Giro',
+        '${el.rotation.round()}°',
+        el.rotation,
+        0,
+        359,
+        (v) => el.rotation = v.roundToDouble(),
+      ),
+      slider(
+        'Subir o bajar (su suelo al de la planta)',
+        '${PlanScan.offsetZ(el).toStringAsFixed(2)} m',
+        PlanScan.offsetZ(el),
+        -5,
+        5,
+        (v) => el.props[PlanScan.offsetKey] = (v * 100).round() / 100,
+      ),
+      slider(
+        'Escala',
+        PlanScan.scale(el).toStringAsFixed(3),
+        PlanScan.scale(el),
+        0.01,
+        10,
+        (v) => el.props[PlanScan.scaleKey] = v,
+      ),
+      Text(
+        'A escala con una medida: activa «Medir», toca los dos extremos de '
+        'algo que conozcas (una puerta, una baldosa) y escribe lo que mide.',
+        style: caption,
+      ),
+      Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _realLength,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                isDense: true,
+                labelText: 'Mide de verdad (m)',
+                helperText: _measuredM == null
+                    ? 'Aún no hay medida'
+                    : 'En el escaneo: ${_measuredM!.toStringAsFixed(2)} m',
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          FilledButton(
+            onPressed: _measuredM == null || real == null || real <= 0
+                ? null
+                : () {
+                    PlanScan.calibrate(el, _measuredM!, real);
+                    _measuredM = null;
+                    _realLength.clear();
+                    _update();
+                  },
+            child: const Text('Calibrar'),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  /// MVR con las luces y, dentro, la nave y su estructura en glTF.
+  Future<void> _exportMvr() async {
+    final web = _web;
+    if (web == null || !_ready) return;
+    final result = await web.callAsyncJavaScript(
+      functionBody: 'return await iris.exportGlb({structure: true});',
+    );
+    final b64 = result?.value;
+    final glb = b64 is String && b64.isNotEmpty ? base64Decode(b64) : null;
+    final base = (widget.name ?? 'planta').replaceAll(RegExp(r'[^\w\- ]'), '');
+    final bytes = PlanCadExport.planMvr(
+      widget.elements,
+      widget.metersPerUnit,
+      layerName: base,
+      environmentGlb: glb,
+    );
+    await ExportFileSaver.saveBytes(
+      bytes: bytes,
+      dialogTitle: 'Guardar el MVR',
+      fileName: '$base luces',
+      extension: 'mvr',
+    );
   }
 
   /// Guarda lo que se ve en un glTF binario, para Unreal o cualquier
@@ -669,11 +872,19 @@ class _Plan3dViewState extends State<Plan3dView> {
               onUpdate: _update,
             ),
         ],
+        header('Escaneos'),
+        ..._scanSection(palette),
         header('Exportar'),
         OutlinedButton.icon(
           icon: const Icon(Icons.ios_share, size: 16),
           label: const Text('glTF (.glb) para Unreal'),
           onPressed: _exportGlb,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.lightbulb_outline, size: 16),
+          label: const Text('MVR con la nave y la estructura'),
+          onPressed: _exportMvr,
         ),
       ],
     );
@@ -924,6 +1135,7 @@ class Plan3dScreen extends StatefulWidget {
   final PlanElement? selected;
   final ValueChanged<PlanElement?>? onSelect;
   final Future<void> Function(PlanElement)? onChanged;
+  final Future<void> Function(PlanElement)? onAdd;
   final PlanAmbient? ambient;
 
   const Plan3dScreen({
@@ -934,6 +1146,7 @@ class Plan3dScreen extends StatefulWidget {
     this.selected,
     this.onSelect,
     this.onChanged,
+    this.onAdd,
     this.ambient,
   });
 
@@ -945,6 +1158,7 @@ class Plan3dScreen extends StatefulWidget {
     PlanElement? selected,
     ValueChanged<PlanElement?>? onSelect,
     Future<void> Function(PlanElement)? onChanged,
+    Future<void> Function(PlanElement)? onAdd,
     PlanAmbient? ambient,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -955,6 +1169,7 @@ class Plan3dScreen extends StatefulWidget {
         selected: selected,
         onSelect: onSelect,
         onChanged: onChanged,
+        onAdd: onAdd,
         ambient: ambient,
       ),
     ),
@@ -977,6 +1192,12 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       metersPerUnit: widget.metersPerUnit,
       name: widget.name,
       ambient: widget.ambient,
+      onAdd: widget.onAdd == null
+          ? null
+          : (el) async {
+              await widget.onAdd!(el);
+              if (mounted) setState(() {});
+            },
       selected: _selected,
       onSelect: (el) {
         setState(() => _selected = el);
