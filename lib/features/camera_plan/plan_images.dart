@@ -336,4 +336,28 @@ class PlanImageDraw {
     this.hasComments = false,
     this.linkTo,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      other is PlanImageDraw &&
+      identical(other.image, image) &&
+      other.rect == rect &&
+      other.rotation == rotation &&
+      other.opacity == opacity &&
+      other.above == above &&
+      other.selected == selected &&
+      other.hasComments == hasComments &&
+      other.linkTo == linkTo;
+
+  @override
+  int get hashCode => Object.hash(
+    image,
+    rect,
+    rotation,
+    opacity,
+    above,
+    selected,
+    hasComments,
+    linkTo,
+  );
 }
