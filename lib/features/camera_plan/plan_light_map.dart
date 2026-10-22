@@ -6,6 +6,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+import 'camera_plan_constants.dart';
+import 'camera_plan_element_model.dart';
 import 'light/ambient.dart';
 import 'light/light_scene.dart';
 import 'light_beam.dart';
@@ -370,6 +372,113 @@ class PlanLightMap {
   }
 }
 
+/// Huellas de una planta: cambian cuando cambia lo que miden. Los elementos
+/// se modifican en su sitio (al arrastrar, al tocar un ajuste), así que no
+/// basta con comparar las listas: hay que mirar lo que llevan dentro.
+abstract final class PlanLightKey {
+  /// Propiedades que no cambian la luz: los ajustes de la cámara (la
+  /// exposición va aparte), su óptica y su rótulo, y el identificador.
+  static const _unlit = {
+    'uid',
+    'iso',
+    'shutterDeg',
+    'fps',
+    'nd',
+    'tStop',
+    'sensorWidthMm',
+    'lensName',
+    'cameraName',
+    'shotTag',
+    'pathRot',
+    'name',
+  };
+
+  /// Un valor de las propiedades, con listas y mapas mirados por dentro.
+  static int _deep(Object? value) => switch (value) {
+    final List<Object?> list => Object.hashAll(list.map(_deep)),
+    final Map<Object?, Object?> map => Object.hashAllUnordered([
+      for (final e in map.entries) Object.hash(e.key, _deep(e.value)),
+    ]),
+    _ => value.hashCode,
+  };
+
+  static int _props(
+    Map<String, dynamic> props, {
+    Set<String> skip = const {},
+  }) => Object.hashAllUnordered([
+    for (final e in props.entries)
+      if (!skip.contains(e.key)) Object.hash(e.key, _deep(e.value)),
+  ]);
+
+  /// Lo que afecta a la luz: dónde está cada cosa, hacia dónde mira, qué es
+  /// y cómo está ajustada. No cuentan los nombres, el recorrido de la
+  /// cámara ni sus ajustes de exposición.
+  static int light(
+    Iterable<PlanElement> elements, {
+    required double metersPerUnit,
+    PlanAmbient? ambient,
+  }) => Object.hash(
+    metersPerUnit,
+    ambient,
+    Object.hashAll([
+      for (final el in elements)
+        Object.hash(
+          el.type,
+          el.position,
+          el.rotation,
+          el.lightType,
+          // El rótulo dice qué es una pieza de arquitectura o de atrezo.
+          el.type == ElementType.wall || el.type == ElementType.prop
+              ? el.label
+              : null,
+          _props(el.props, skip: _unlit),
+        ),
+    ]),
+  );
+
+  /// La luz y además los nombres de lo que emite: salen en el fotómetro.
+  static int scene(
+    Iterable<PlanElement> elements, {
+    required double metersPerUnit,
+    PlanAmbient? ambient,
+  }) => Object.hash(
+    light(elements, metersPerUnit: metersPerUnit, ambient: ambient),
+    Object.hashAll([
+      for (final el in elements)
+        if (el.type == ElementType.light) el.props['name'],
+    ]),
+  );
+
+  /// Todo lo que se dibuja de cada elemento, y qué está seleccionado.
+  static int drawing(
+    Iterable<PlanElement> elements, [
+    Iterable<PlanElement> selected = const [],
+  ]) => Object.hash(
+    Object.hashAll([
+      for (final el in elements)
+        Object.hash(
+          el.id,
+          el.type,
+          el.position,
+          el.rotation,
+          el.label,
+          el.lens,
+          el.stabilization,
+          el.cameraNumber,
+          el.cameraLetter,
+          el.lightType,
+          el.lukaCompatible,
+          el.actorColor,
+          Object.hashAll(el.pathPoints),
+          _props(el.props),
+          el.layer,
+          el.shotOverride,
+        ),
+    ]),
+    Object.hashAllUnordered([for (final el in selected) el.id]),
+  );
+}
+
 /// Guarda el mapa de luz de la planta que se está viendo y lo rehace
 /// cuando cambia. Mientras se arrastra algo lo calcula deprisa y a grano
 /// grueso; al parar, lo afina.
@@ -385,6 +494,39 @@ class PlanLightMapCache extends ChangeNotifier {
   PlanLightMap? _map;
   Timer? _refine;
   bool _disposed = false;
+
+  /// Las últimas plantas vistas por la luz, de la más antigua a la más
+  /// reciente. Hay más de una porque el lienzo cuenta las cámaras de los
+  /// otros planos y el fotómetro no.
+  final _scenes = <int, LightScene>{};
+  static const _keptScenes = 4;
+
+  /// La planta vista por la luz. Se construye una vez por cada estado de la
+  /// planta y la comparten el lienzo, el fotómetro, los recintos y el
+  /// alzado.
+  LightScene scene(
+    List<PlanElement> elements, {
+    required double metersPerUnit,
+    PlanAmbient? ambient,
+  }) {
+    final key = PlanLightKey.scene(
+      elements,
+      metersPerUnit: metersPerUnit,
+      ambient: ambient,
+    );
+    final kept = _scenes.remove(key);
+    if (kept != null) return _scenes[key] = kept;
+    final built = LightScene.from(
+      elements,
+      metersPerUnit: metersPerUnit,
+      ambient: ambient,
+    );
+    _scenes[key] = built;
+    while (_scenes.length > _keptScenes) {
+      _scenes.remove(_scenes.keys.first);
+    }
+    return built;
+  }
 
   /// El mapa de una planta. [key] cambia cuando cambia algo que afecta a
   /// la luz. Con [exposureKeyLux] el mapa mira la luz hasta donde la ve la

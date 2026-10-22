@@ -51,6 +51,17 @@ class PlanZone {
     required this.label,
     this.active = false,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      other is PlanZone &&
+      other.rect == rect &&
+      other.color == color &&
+      other.label == label &&
+      other.active == active;
+
+  @override
+  int get hashCode => Object.hash(rect, color, label, active);
 }
 
 class CameraPlanPainter extends CustomPainter {
@@ -160,7 +171,18 @@ class CameraPlanPainter extends CustomPainter {
     this.backgroundOpacity = 0.85,
     this.lightMap,
     this.images = const [],
-  }) : super(repaint: lightMap);
+  }) : _contents = PlanLightKey.drawing([
+         ...inheritedElements,
+         ...elements,
+       ], alsoSelected),
+       super(repaint: lightMap);
+
+  /// Huella de lo que se dibuja, tomada al montar el pintor: los elementos
+  /// se cambian en su sitio y las listas siguen siendo las mismas.
+  final int _contents;
+
+  /// Todo lo que entra en la luz: las capas de fondo y las de la planta.
+  List<PlanElement> get _lit => [...inheritedElements, ...elements];
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -181,11 +203,11 @@ class CameraPlanPainter extends CustomPainter {
 
     // La planta vista por la luz: aparatos, rebotes, telas y paredes de
     // todas las capas, con lo que las tapa.
-    final scene = LightScene.from(
-      [...inheritedElements, ...elements],
-      metersPerUnit: metersPerUnit ?? defaultMetersPerUnit,
-      ambient: ambient,
-    );
+    final lit = _lit;
+    final mpu = metersPerUnit ?? defaultMetersPerUnit;
+    final scene =
+        lightMap?.scene(lit, metersPerUnit: mpu, ambient: ambient) ??
+        LightScene.from(lit, metersPerUnit: mpu, ambient: ambient);
     _scene = scene;
     _units = gearLabels
         ? lightUnitNumbers([...inheritedElements, ...elements])
@@ -820,30 +842,11 @@ class CameraPlanPainter extends CustomPainter {
   }
 
   /// Cambia cuando cambia algo que afecta a la luz.
-  int _lightKey(LightScene scene) {
-    int ofProps(Map<String, dynamic> props) => Object.hashAllUnordered([
-      for (final e in props.entries)
-        Object.hash(
-          e.key,
-          e.value is List ? Object.hashAll(e.value as List) : e.value,
-        ),
-    ]);
-    return Object.hash(
-      scene.metersPerUnit,
-      ambient,
-      Object.hashAll([
-        for (final el in [...inheritedElements, ...elements])
-          Object.hash(
-            el.type,
-            el.position,
-            el.rotation,
-            el.lightType,
-            el.label,
-            ofProps(el.props),
-          ),
-      ]),
-    );
-  }
+  int _lightKey(LightScene scene) => PlanLightKey.light(
+    _lit,
+    metersPerUnit: scene.metersPerUnit,
+    ambient: ambient,
+  );
 
   /// Calle, talud o colina: el suelo.
   void _drawTerrain(Canvas canvas, PlanElement el) {
@@ -2556,6 +2559,7 @@ class CameraPlanPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(CameraPlanPainter old) =>
+      old._contents != _contents ||
       old.elements != elements ||
       old.images != images ||
       old.inheritedElements != inheritedElements ||

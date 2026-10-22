@@ -9,6 +9,7 @@ import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_painter.dart';
 import 'package:iris_dp/features/camera_plan/light/ambient.dart';
+import 'package:iris_dp/features/camera_plan/light/exposure.dart';
 import 'package:iris_dp/features/camera_plan/light/light_scene.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
 import 'package:iris_dp/features/camera_plan/plan_light_map.dart';
@@ -80,6 +81,39 @@ void main() {
       report('rasterizar la planta', times[1]);
       expect(times[1], lessThan(3000));
     });
+  });
+
+  test('sin cambios no se repinta; al mover algo en su sitio, sí', () {
+    final plan = syntheticPlan();
+    final cache = PlanLightMapCache();
+    addTearDown(cache.dispose);
+    CameraPlanPainter painter() => CameraPlanPainter(
+      elements: plan,
+      palette: AppPalette.dark,
+      metersPerUnit: mpu,
+      ambient: ambient,
+      exposure: const ExposureSettings(iso: 800),
+      lightMap: cache,
+    );
+    final before = painter();
+    expect(painter().shouldRepaint(before), isFalse);
+    // El editor mueve los elementos sin cambiar de lista.
+    plan.firstWhere((e) => e.type == ElementType.light).position +=
+        const Offset(5, 0);
+    expect(painter().shouldRepaint(before), isTrue);
+  });
+
+  test('la escena se construye una vez por estado de la planta', () {
+    final plan = syntheticPlan();
+    final cache = PlanLightMapCache();
+    addTearDown(cache.dispose);
+    LightScene scene() =>
+        cache.scene(plan, metersPerUnit: mpu, ambient: ambient);
+    final first = scene();
+    expect(scene(), same(first));
+    // Un nombre no cambia la luz pero sale en el fotómetro.
+    plan.firstWhere((e) => e.type == ElementType.light).props['name'] = 'Key';
+    expect(scene(), isNot(same(first)));
   });
 
   test('mover la vista no recalcula la luz', () {

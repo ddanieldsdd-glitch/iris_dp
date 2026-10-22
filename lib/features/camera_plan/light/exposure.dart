@@ -49,6 +49,19 @@ class ExposureSettings {
     fps: fps ?? this.fps,
     ndStops: ndStops ?? this.ndStops,
   );
+
+  // Con igualdad por valor, el lienzo no se repinta cada vez que el editor
+  // vuelve a montar los mismos ajustes.
+  @override
+  bool operator ==(Object other) =>
+      other is ExposureSettings &&
+      other.iso == iso &&
+      other.shutterDeg == shutterDeg &&
+      other.fps == fps &&
+      other.ndStops == ndStops;
+
+  @override
+  int get hashCode => Object.hash(iso, shutterDeg, fps, ndStops);
 }
 
 /// Diafragmas en tercios de stop.
