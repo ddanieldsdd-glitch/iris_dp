@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:drift/drift.dart' show Value, OrderingTerm;
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -356,11 +357,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// Lectura de fotómetro donde está un elemento.
   MeterReading _readingFor(PlanElement el) => MeterReading.at(
-    LightScene.from(
-      _visibleElements,
-      metersPerUnit: _metersPerUnit,
-      ambient: _lightSetup == null ? null : _ambient,
-    ),
+    _lightScene,
     el.position,
     camera: _meterCamera,
     exposure: _exposure,
@@ -1397,7 +1394,45 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     return null;
   }
 
-  List<PlanImageDraw> get _imageDraws => [
+  /// Las imágenes como se pintan. Mientras no cambian se devuelve la misma
+  /// lista: así el lienzo no se repinta (ni recalcula la luz) por ellas.
+  List<PlanImageDraw> get _imageDraws {
+    final next = _buildImageDraws();
+    if (listEquals(next, _shownImageDraws)) return _shownImageDraws;
+    return _shownImageDraws = next;
+  }
+
+  List<PlanImageDraw> _shownImageDraws = const [];
+
+  /// Las zonas de los sets como se pintan, con la que se ajusta o dibuja
+  /// en su sitio. La misma lista mientras no cambien.
+  List<PlanZone> get _zoneDraws {
+    final next = [
+      for (final zone in _zones)
+        if (zone.active && _zoneEditRect != null)
+          PlanZone(
+            rect: _zoneEditRect!,
+            color: zone.color,
+            label: zone.label,
+            active: true,
+          )
+        else
+          zone,
+      if (_zoneDraft != null)
+        PlanZone(
+          rect: _zoneDraft!,
+          color: _sceneColor,
+          label: _linkedSet?.locationName ?? '',
+          active: true,
+        ),
+    ];
+    if (listEquals(next, _shownZones)) return _shownZones;
+    return _shownZones = next;
+  }
+
+  List<PlanZone> _shownZones = const [];
+
+  List<PlanImageDraw> _buildImageDraws() => [
     for (final image in _images)
       PlanImageDraw(
         image: _imageCache[image.path],
@@ -3704,7 +3739,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     setState(() => _selectedRoom = room == null ? null : canvasPos);
   }
 
-  LightScene get _lightScene => LightScene.from(
+  /// La planta vista por la luz. Se guarda mientras no cambie nada que la
+  /// afecte: el fotómetro y los recintos la piden en cada montaje.
+  LightScene get _lightScene => _lightMap.scene(
     _visibleElements,
     metersPerUnit: _metersPerUnit,
     ambient: _lightSetup == null ? null : _ambient,
@@ -4263,6 +4300,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             onPressed: () => showPlanElevation(
               context,
               elements: _visibleElements,
+              scene: _lightScene,
               metersPerUnit: _metersPerUnit,
               name: _linkedSet?.locationName ?? _linkedSite?.name ?? 'planta',
             ),
@@ -4656,40 +4694,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                             _lightSetup == null
                                                             ? null
                                                             : _ambient,
-                                                        zones: [
-                                                          for (final zone
-                                                              in _zones)
-                                                            if (zone.active &&
-                                                                _zoneEditRect !=
-                                                                    null)
-                                                              PlanZone(
-                                                                rect:
-                                                                    _zoneEditRect!,
-                                                                color:
-                                                                    zone.color,
-                                                                label:
-                                                                    zone.label,
-                                                                active: true,
-                                                              )
-                                                            else
-                                                              zone,
-                                                          if (_zoneDraft !=
-                                                              null)
-                                                            PlanZone(
-                                                              rect: _zoneDraft!,
-                                                              color:
-                                                                  _sceneColor,
-                                                              label:
-                                                                  _linkedSet
-                                                                      ?.locationName ??
-                                                                  '',
-                                                              active: true,
-                                                            ),
-                                                        ],
+                                                        zones: _zoneDraws,
                                                         alsoSelected: _multi,
                                                         rotating: _isRotating,
                                                         marquee: _marquee,
                                                         lightMap: _lightMap,
+                                                        interacting:
+                                                            _dragDirty,
                                                         selectedRoom:
                                                             _selectedRoom,
                                                         segmentPreview:
