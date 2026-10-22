@@ -611,7 +611,6 @@ class PlanLightMapCache extends ChangeNotifier {
 
   int? _key;
   PlanLightMap? _map;
-  Timer? _refine;
   bool _disposed = false;
 
   /// Las últimas plantas vistas por la luz, de la más antigua a la más
@@ -623,15 +622,22 @@ class PlanLightMapCache extends ChangeNotifier {
   /// La planta vista por la luz. Se construye una vez por cada estado de la
   /// planta y la comparten el lienzo, el fotómetro, los recintos y el
   /// alzado.
+  ///
+  /// En borrador ([draft]) va sin rebotes de pared: es lo que más fuentes
+  /// añade y lo que menos cambia lo que se ve mientras se arrastra.
   LightScene scene(
     List<PlanElement> elements, {
     required double metersPerUnit,
     PlanAmbient? ambient,
+    bool draft = false,
   }) {
-    final key = PlanLightKey.scene(
-      elements,
-      metersPerUnit: metersPerUnit,
-      ambient: ambient,
+    final key = Object.hash(
+      PlanLightKey.scene(
+        elements,
+        metersPerUnit: metersPerUnit,
+        ambient: ambient,
+      ),
+      draft,
     );
     final kept = _scenes.remove(key);
     if (kept != null) return _scenes[key] = kept;
@@ -639,6 +645,7 @@ class PlanLightMapCache extends ChangeNotifier {
       elements,
       metersPerUnit: metersPerUnit,
       ambient: ambient,
+      wallBounce: !draft,
     );
     _scenes[key] = built;
     while (_scenes.length > _keptScenes) {
@@ -650,48 +657,99 @@ class PlanLightMapCache extends ChangeNotifier {
   /// El mapa de una planta. [key] cambia cuando cambia algo que afecta a
   /// la luz. Con [exposureKeyLux] el mapa mira la luz hasta donde la ve la
   /// cámara: si se abre el diafragma y hace falta ver menos luz, se rehace.
+  /// En borrador ([draft]) se calcula con el presupuesto grueso.
   PlanLightMap resolve(
     LightScene scene,
     int key,
     Rect rect, {
     double? exposureKeyLux,
+    bool draft = false,
   }) {
     final current = _map;
     final needed = exposureKeyLux == null
         ? double.infinity
         : PlanLightMap.cutoffForExposure(exposureKeyLux);
-    if (current != null && _key == key && current.cutoff <= needed * 1.001) {
+    final wanted = Object.hash(key, draft);
+    if (current != null && _key == wanted && current.cutoff <= needed * 1.001) {
       return current;
     }
     // Se mira algo más abajo de lo que hace falta: así un cambio pequeño de
     // ISO o de diafragma no obliga a rehacerlo.
     final reach = exposureKeyLux == null ? null : exposureKeyLux / 2;
-    final quick = PlanLightMap.compute(
+    _key = wanted;
+    return _map = PlanLightMap.compute(
       scene,
       rect,
-      budget: coarseBudget,
+      budget: draft ? coarseBudget : fineBudget,
       exposureKeyLux: reach,
     );
-    _key = key;
-    _map = quick;
-    _refine?.cancel();
-    // Solo se afina si se ha pedido más detalle del que ya tiene.
-    if (fineBudget <= coarseBudget) return quick;
-    _refine = Timer(const Duration(milliseconds: 280), () {
-      if (_disposed || _key != key) return;
-      _map = PlanLightMap.compute(
-        scene,
-        rect,
-        budget: fineBudget,
-        exposureKeyLux: reach,
-      );
+  }
+
+  /// Tras cuánto tiempo sin cambios se afina la luz.
+  static const settleDelay = Duration(milliseconds: 280);
+
+  int? _seenKey;
+
+  /// Corre desde el último cambio de la luz: mientras corre, otro cambio
+  /// es parte de una serie.
+  Timer? _quiet;
+  bool _drafting = false;
+  int? _settledKey;
+  Timer? _settle;
+
+  /// Si la luz de [key] se pinta en borrador: con menos detalle y sin
+  /// rebotes de pared, para que arrastrar vaya fluido.
+  ///
+  /// Va en borrador mientras se arrastra algo ([interacting]) o mientras
+  /// la luz cambia sin parar (un deslizador). A los [settleDelay] sin
+  /// cambios se afina sola: avisa a quien escucha y el lienzo se repinta.
+  bool draft(int key, {bool interacting = false}) {
+    if (key == _settledKey) return false;
+    if (key == _seenKey) {
+      if (!_drafting) return false;
+      if (interacting) return true;
+      // Se soltó antes de que saltara el temporizador: se afina ya.
+      _settle?.cancel();
+      _settledKey = key;
+      return _drafting = false;
+    }
+    final continuous = _quiet?.isActive ?? false;
+    _seenKey = key;
+    _quiet?.cancel();
+    _quiet = Timer(settleDelay, () {});
+    _settle?.cancel();
+    _drafting = interacting || continuous;
+    if (!_drafting) {
+      _settledKey = key;
+      return false;
+    }
+    _settle = Timer(settleDelay, () {
+      if (_disposed || _seenKey != key) return;
+      _settledKey = key;
+      _drafting = false;
       notifyListeners();
     });
-    return quick;
+    return true;
   }
 
   int? _layerKey;
   PlanLightRecording? _recording;
+
+  int? _draftKey;
+  ui.Picture? _draftPicture;
+
+  /// La luz en borrador, grabada y sin pasar a imagen: cambia en cada
+  /// fotograma mientras se arrastra, y rasterizarla aparte costaría más.
+  ui.Picture draftPicture(int key, ui.Picture Function() record) {
+    final current = _draftPicture;
+    if (current != null && _draftKey == key) return current;
+    current?.dispose();
+    _draftKey = key;
+    final watch = Stopwatch()..start();
+    final picture = record();
+    lastRecording = watch.elapsed;
+    return _draftPicture = picture;
+  }
 
   /// Lo que tardó en grabarse la última luz: lo que paga el hilo de la
   /// interfaz. El rasterizado va después, en el de la GPU.
@@ -788,7 +846,9 @@ class PlanLightMapCache extends ChangeNotifier {
     _disposed = true;
     _recording?.picture.dispose();
     _layer?.dispose();
-    _refine?.cancel();
+    _draftPicture?.dispose();
+    _settle?.cancel();
+    _quiet?.cancel();
     super.dispose();
   }
 }

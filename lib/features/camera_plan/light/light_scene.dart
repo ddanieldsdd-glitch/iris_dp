@@ -1606,19 +1606,22 @@ class LightScene {
   }
 
   /// Zona que alcanza una luz desde [origin] hasta [reach], recortada por
-  /// lo que la tapa: lo que queda a su sombra no entra.
+  /// lo que la tapa: lo que queda a su sombra no entra. [rays] es cuántos
+  /// rayos se tiran alrededor, además de los de las esquinas (menos, en
+  /// borrador).
   Path visibleArea(
     Offset origin,
     double reach, {
     LightBlocker? ignore,
     bool fromAbove = false,
     double? z,
+    int rays = 240,
   }) {
     // Un rayo cada grado y medio, más uno a cada lado de cada esquina para
     // que el corte de la sombra salga limpio. Todos los ángulos van de 0 a
     // 2π: mezclados con negativos, el contorno se cruza y deja de recortar.
     const twoPi = 2 * math.pi;
-    final angles = <double>[for (var i = 0; i < 240; i++) i * twoPi / 240];
+    final angles = <double>[for (var i = 0; i < rays; i++) i * twoPi / rays];
     void addCorner(Offset corner) {
       final d = corner - origin;
       if (d.distance > reach + 1 || d.distance < 1e-6) return;

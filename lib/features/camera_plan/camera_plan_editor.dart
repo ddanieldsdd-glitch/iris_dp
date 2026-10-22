@@ -4459,6 +4459,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                         rotating: _isRotating,
                                                         marquee: _marquee,
                                                         lightMap: _lightMap,
+                                                        interacting:
+                                                            _dragDirty,
                                                         selectedRoom:
                                                             _selectedRoom,
                                                         segmentPreview:

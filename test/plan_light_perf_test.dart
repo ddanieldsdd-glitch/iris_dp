@@ -98,13 +98,18 @@ void main() {
     await tester.runAsync(() async {
       /// Graba y rasteriza la planta entera; con [cache], la luz ya puede
       /// estar hecha.
-      Future<double> once({PlanLightMapCache? cache, double dx = 0}) async {
+      Future<double> once({
+        PlanLightMapCache? cache,
+        double dx = 0,
+        bool interacting = false,
+      }) async {
         final watch = Stopwatch()..start();
         final picture = recordLayer(
           plan,
           LightView.camera,
           cache: cache,
           offset: Offset(40 + dx, 40),
+          interacting: interacting,
         );
         final image = await picture.toImage(1400, 900);
         await image.toByteData();
@@ -124,9 +129,21 @@ void main() {
       final warm = [
         for (var i = 1; i <= 3; i++) await once(cache: cache, dx: i * 17.0),
       ]..sort();
-      cache.dispose();
       report('rasterizar la planta al mover la vista', warm[1]);
       expect(warm[1], lessThan(400));
+
+      final light = plan.firstWhere((e) => e.type == ElementType.light);
+      final dragging = <double>[];
+      for (var i = 0; i < 4; i++) {
+        light.position += const Offset(7, 3);
+        dragging.add(await once(cache: cache, interacting: true));
+      }
+      dragging
+        ..removeAt(0)
+        ..sort();
+      cache.dispose();
+      report('rasterizar un fotograma arrastrando una luz', dragging[1]);
+      expect(dragging[1], lessThan(1500));
     });
   });
 
@@ -161,6 +178,54 @@ void main() {
     // Un nombre no cambia la luz pero sale en el fotómetro.
     plan.firstWhere((e) => e.type == ElementType.light).props['name'] = 'Key';
     expect(scene(), isNot(same(first)));
+  });
+
+  testWidgets('al arrastrar, borrador; a los 280 ms sin cambios, se afina', (
+    tester,
+  ) async {
+    final cache = PlanLightMapCache();
+    var notified = 0;
+    cache.addListener(() => notified++);
+    // Un cambio suelto se pinta afinado.
+    expect(cache.draft(1), isFalse);
+    // Arrastrando, borrador, también al repintar sin cambios.
+    expect(cache.draft(2, interacting: true), isTrue);
+    expect(cache.draft(2, interacting: true), isTrue);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(notified, 1);
+    expect(cache.draft(2, interacting: true), isFalse);
+    // Cambios seguidos sin arrastrar (un deslizador): borrador.
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(cache.draft(3), isFalse);
+    expect(cache.draft(4), isTrue);
+    // Al soltar antes de tiempo, se afina en el acto.
+    expect(cache.draft(4), isFalse);
+    cache.dispose();
+  });
+
+  test('arrastrar una luz: escena y luz en borrador por fotograma', () {
+    final plan = syntheticPlan();
+    final light = plan.firstWhere((e) => e.type == ElementType.light);
+    final cache = PlanLightMapCache();
+    addTearDown(cache.dispose);
+    recordLayer(plan, LightView.camera, cache: cache).dispose();
+    final frames = <double>[];
+    for (var i = 0; i < 6; i++) {
+      light.position += const Offset(7, 3);
+      final watch = Stopwatch()..start();
+      recordLayer(
+        plan,
+        LightView.camera,
+        cache: cache,
+        interacting: true,
+      ).dispose();
+      frames.add(watch.elapsedMicroseconds / 1000);
+    }
+    frames
+      ..removeAt(0)
+      ..sort();
+    report('fotograma arrastrando una luz', frames[frames.length ~/ 2]);
+    expect(frames[frames.length ~/ 2], lessThan(400));
   });
 
   test('mover la vista no recalcula la luz', () {
@@ -228,6 +293,7 @@ ui.Picture recordLayer(
   LightView view, {
   PlanLightMapCache? cache,
   Offset offset = const Offset(40, 40),
+  bool interacting = false,
 }) {
   final own = cache == null;
   final map = cache ?? PlanLightMapCache();
@@ -240,6 +306,7 @@ ui.Picture recordLayer(
     lightMap: map,
     scale: 0.6,
     offset: offset,
+    interacting: interacting,
   );
   final recorder = ui.PictureRecorder();
   painter.paint(Canvas(recorder), const Size(1400, 900));
