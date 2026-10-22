@@ -769,6 +769,121 @@ class CameraPlanPainter extends CustomPainter {
     layer.paint(canvas, view);
   }
 
+  /// Brillo por debajo del cual una fuente no necesita capa propia: entre
+  /// luces tan bajas, sumar y mezclar «sin pisarse» dan casi lo mismo.
+  static const double weakPeak = 0.25;
+
+  /// Los haces de todas las fuentes, medidos contra [keyLux].
+  ///
+  /// Los aparatos y lo que no es pared, cada uno en su capa con su
+  /// desenfoque. Los rebotes de pared y las fuentes débiles van en una capa
+  /// común por cada desenfoque (todos los paños de un tamaño comparten el
+  /// mismo): cada rebote fuerte se mezcla en ella sin pisarse, en su capa
+  /// sin desenfoque, y los débiles se suman. Así se desenfoca una vez por
+  /// grupo y no una por paño. Devuelve hasta dónde llegan.
+  Rect? _drawBeams(
+    Canvas canvas,
+    LightScene scene,
+    Set<PlanElement> dimmed, {
+    required double keyLux,
+    bool exposed = false,
+    bool draft = false,
+  }) {
+    Rect? bounds;
+    void take(Rect? box) {
+      if (box != null) bounds = bounds?.expandToInclude(box) ?? box;
+    }
+
+    final weak = <double, List<SceneLight>>{};
+    for (final light in scene.lights) {
+      final atOneMetre = light.source.illuminance(
+        math.max(1.0, light.source.sizeM),
+      );
+      final peak = exposed
+          ? PlanLightMap.exposedBrightness(atOneMetre, keyLux)
+          : PlanLightMap.brightnessFor(atOneMetre, keyLux);
+      // Lo que ni de cerca llega a verse no se pinta.
+      if (peak < 0.03) continue;
+      if (peak < weakPeak || _isWallBounce(light)) {
+        (weak[_beamBlurM(light.source.sizeM)] ??= []).add(light);
+        continue;
+      }
+      take(
+        _cachedBeam(
+          canvas,
+          scene,
+          light,
+          strength: _strengthOf(light, dimmed),
+          keyLux: keyLux,
+          exposed: exposed,
+          draft: draft,
+        ),
+      );
+    }
+    for (final MapEntry(key: blurM, value: lights) in weak.entries) {
+      final recorder = ui.PictureRecorder();
+      final group = Canvas(recorder);
+      Rect? extent;
+      for (final light in lights) {
+        final box = _cachedBeam(
+          group,
+          scene,
+          light,
+          strength: _strengthOf(light, dimmed),
+          keyLux: keyLux,
+          exposed: exposed,
+          draft: draft,
+          grouped: true,
+          screened: !_isWeak(light, keyLux, exposed),
+        );
+        if (box != null) extent = extent?.expandToInclude(box) ?? box;
+      }
+      final picture = recorder.endRecording();
+      if (extent != null) {
+        final blur = blurM / scene.metersPerUnit;
+        canvas.saveLayer(
+          extent,
+          Paint()
+            ..blendMode = BlendMode.screen
+            ..imageFilter = draft
+                ? null
+                : ui.ImageFilter.blur(
+                    sigmaX: blur,
+                    sigmaY: blur,
+                    tileMode: TileMode.decal,
+                  ),
+        );
+        canvas.drawPicture(picture);
+        canvas.restore();
+        take(extent);
+      }
+      picture.dispose();
+    }
+    return bounds;
+  }
+
+  static bool _isWallBounce(SceneLight light) =>
+      light.isSecondary && light.surface?.element?.type == ElementType.wall;
+
+  static bool _isWeak(SceneLight light, double keyLux, bool exposed) {
+    final atOneMetre = light.source.illuminance(
+      math.max(1.0, light.source.sizeM),
+    );
+    return (exposed
+            ? PlanLightMap.exposedBrightness(atOneMetre, keyLux)
+            : PlanLightMap.brightnessFor(atOneMetre, keyLux)) <
+        weakPeak;
+  }
+
+  double _strengthOf(SceneLight light, Set<PlanElement> dimmed) =>
+      dimmed.contains(light.fixture?.element) ? inheritedOpacity : 1;
+
+  /// Desenfoque del haz de una fuente de [sizeM] metros, en metros: funde
+  /// los pasos entre muestras y quita el filo geométrico del borde. Va en
+  /// pasos de 5 cm, para que las fuentes débiles parecidas compartan capa.
+  static double _beamBlurM(double sizeM) =>
+      ((0.05 + sizeM * 0.12) / 0.05).round() * 0.05;
+
   /// [_drawBeam] grabado aparte y guardado (ver
   /// [PlanLightMapCache.beam]): si la fuente no ha cambiado, no se vuelve a
   /// grabar.
@@ -780,6 +895,8 @@ class CameraPlanPainter extends CustomPainter {
     double? keyLux,
     bool exposed = false,
     bool draft = false,
+    bool grouped = false,
+    bool screened = false,
   }) {
     final source = light.source;
     final key = Object.hash(
@@ -806,7 +923,7 @@ class CameraPlanPainter extends CustomPainter {
       strength,
       keyLux,
       exposed,
-      draft,
+      Object.hash(draft, grouped, screened),
     );
     final beam = lightMap!.beam(key, () {
       final recorder = ui.PictureRecorder();
@@ -818,6 +935,8 @@ class CameraPlanPainter extends CustomPainter {
         keyLux: keyLux,
         exposed: exposed,
         draft: draft,
+        grouped: grouped,
+        screened: screened,
       );
       return (picture: recorder.endRecording(), bounds: bounds);
     });
@@ -885,26 +1004,16 @@ class CameraPlanPainter extends CustomPainter {
     // stops que los separan.
     final exposed = _exposedKeyLux;
     if (exposed != null) {
-      for (final light in scene.lights) {
-        final peak = PlanLightMap.exposedBrightness(
-          light.source.illuminance(math.max(1.0, light.source.sizeM)),
-          exposed,
-        );
-        if (peak < 0.03) continue;
-        take(
-          _cachedBeam(
-            canvas,
-            scene,
-            light,
-            strength: dimmed.contains(light.fixture?.element)
-                ? inheritedOpacity
-                : 1,
-            keyLux: exposed,
-            exposed: true,
-            draft: draft,
-          ),
-        );
-      }
+      take(
+        _drawBeams(
+          canvas,
+          scene,
+          dimmed,
+          keyLux: exposed,
+          exposed: true,
+          draft: draft,
+        ),
+      );
       if (env != null && env.day) {
         take(
           PlanSunPainter.paintKeyed(
@@ -924,28 +1033,8 @@ class CameraPlanPainter extends CustomPainter {
     final key = map!.keyLux;
     final indoorKey = map.indoorKeyLux;
 
-    void beams(double against) {
-      for (final light in scene.lights) {
-        // Lo que ni de cerca llega a verse no se pinta.
-        final peak = PlanLightMap.brightnessFor(
-          light.source.illuminance(math.max(1.0, light.source.sizeM)),
-          against,
-        );
-        if (peak < 0.03) continue;
-        take(
-          _cachedBeam(
-            canvas,
-            scene,
-            light,
-            strength: dimmed.contains(light.fixture?.element)
-                ? inheritedOpacity
-                : 1,
-            keyLux: against,
-            draft: draft,
-          ),
-        );
-      }
-    }
+    void beams(double against) =>
+        take(_drawBeams(canvas, scene, dimmed, keyLux: against, draft: draft));
 
     final roofed = [
       for (final room in scene.rooms)
@@ -1868,6 +1957,12 @@ class CameraPlanPainter extends CustomPainter {
     /// Borrador: una sola muestra, un cuarto de los rayos y sin desenfoque
     /// propio (lo pone la capa entera).
     bool draft = false,
+
+    /// Va con otras en una capa común (ver [_drawBeams]), que pone el
+    /// desenfoque. Con [screened] abre su capa, sin desenfoque, para
+    /// mezclarse en ella sin pisar a las demás; sin él, se suma.
+    bool grouped = false,
+    bool screened = false,
   }) {
     final source = light.source;
     if (source.candela <= 0) return null;
@@ -2064,12 +2159,13 @@ class CameraPlanPainter extends CustomPainter {
 
     // Las muestras de una misma fuente se suman entre sí; la fuente entera
     // se mezcla con las demás sin pisarlas.
-    if (keyLux != null) {
+    final ownLayer = keyLux != null && (!grouped || screened);
+    if (ownLayer) {
       canvas.saveLayer(
         extent,
         Paint()
           ..blendMode = BlendMode.screen
-          ..imageFilter = draft
+          ..imageFilter = draft || grouped
               ? null
               : ui.ImageFilter.blur(
                   sigmaX: blur,
@@ -2158,7 +2254,7 @@ class CameraPlanPainter extends CustomPainter {
       }
       if (keyLux != null && visible != null) canvas.restore();
     }
-    if (keyLux != null) canvas.restore();
+    if (ownLayer) canvas.restore();
     return extent;
   }
 
