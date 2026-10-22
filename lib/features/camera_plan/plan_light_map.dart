@@ -732,6 +732,21 @@ class PlanLightMapCache extends ChangeNotifier {
     return true;
   }
 
+  int? _cellsKey;
+  Map<int, double> _cells = {};
+
+  /// Lux de las celdas del mapa de exposición en falso color, por columna
+  /// y fila, para la luz de [key] y celdas de [cell] unidades. Se van
+  /// llenando según se ven; si cambia la luz o el tamaño, empiezan de cero.
+  Map<int, double> exposureCells(int key, double cell) {
+    final wanted = Object.hash(key, cell);
+    if (_cellsKey != wanted) {
+      _cellsKey = wanted;
+      _cells = {};
+    }
+    return _cells;
+  }
+
   int? _layerKey;
   PlanLightRecording? _recording;
 

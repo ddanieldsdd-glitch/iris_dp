@@ -293,6 +293,35 @@ void main() {
     expect(times[times.length ~/ 2], lessThan(1000));
   });
 
+  test('mapa de exposición: se calcula una vez y se guarda', () {
+    final plan = syntheticPlan();
+    final cache = PlanLightMapCache();
+    addTearDown(cache.dispose);
+    double paint(double dx) {
+      final watch = Stopwatch()..start();
+      final recorder = ui.PictureRecorder();
+      CameraPlanPainter(
+        elements: plan,
+        palette: AppPalette.dark,
+        metersPerUnit: mpu,
+        ambient: ambient,
+        exposure: const ExposureSettings(),
+        exposureMap: true,
+        lightMap: cache,
+        scale: 0.6,
+        offset: Offset(40 + dx, 40),
+      ).paint(Canvas(recorder), const Size(1400, 900));
+      recorder.endRecording().dispose();
+      return watch.elapsedMicroseconds / 1000;
+    }
+
+    final first = paint(0);
+    final again = medianMs(5, () => paint(13));
+    report('mapa de exposición, primera vez', first);
+    report('mapa de exposición, al mover la vista', again);
+    expect(again, lessThan(first));
+  });
+
   test('mover la vista no recalcula la luz', () {
     final plan = syntheticPlan();
     final cache = PlanLightMapCache();

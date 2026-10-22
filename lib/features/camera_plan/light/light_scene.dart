@@ -2089,6 +2089,9 @@ class LightScene {
     return (lux: total, cct: total <= 0 ? 0 : 1e6 / (mired / total));
   }
 
+  /// Lux por debajo de los que una fuente no cuenta en el fotómetro.
+  static const double minContribution = 0.01;
+
   /// Lo que aporta cada fuente a un punto de la planta, de más a menos.
   List<LightContribution> contributionsAt(Offset point) {
     final result = <LightContribution>[];
@@ -2109,6 +2112,10 @@ class LightScene {
           : _offAxis(light, dir);
       if (light.frontOnly && offAxis >= 89) continue;
       final face = _faceAt(point);
+      // Lo que ni sin nada delante llega al mínimo que se enseña no se
+      // comprueba: lo que tape solo puede quitar.
+      final raw = luxFrom(light, units, offAxis, receiverZ: face);
+      if (raw <= minContribution) continue;
       final passed = _throughput(
         light.position,
         point,
@@ -2117,15 +2124,14 @@ class LightScene {
         zTo: face,
       );
       if (passed.transmission <= 0) continue;
-      final lux =
-          luxFrom(light, units, offAxis, receiverZ: face) * passed.transmission;
+      final lux = raw * passed.transmission;
       // Una fuente fundida se enseña por partes: cada una aporta en
       // proporción a sus candelas, con su color.
       for (final part in light.parts.isEmpty ? [light] : light.parts) {
         final share = identical(part, light)
             ? lux
             : lux * part.source.candela / light.source.candela;
-        if (share > 0.01) {
+        if (share > minContribution) {
           result.add(
             LightContribution(
               part,

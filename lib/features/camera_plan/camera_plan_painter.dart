@@ -247,7 +247,7 @@ class CameraPlanPainter extends CustomPainter {
     }
 
     if (exposureMap && exposure != null) {
-      _drawExposureMap(canvas, size, scene);
+      _drawExposureMap(canvas, size, scene, lightKey);
     }
     final view = Rect.fromLTWH(
       -offset.dx / scale,
@@ -453,24 +453,37 @@ class CameraPlanPainter extends CustomPainter {
 
   /// Mapa de exposición: cada celda, del color de los stops que le sobran
   /// o le faltan respecto al diafragma de trabajo.
-  void _drawExposureMap(Canvas canvas, Size size, LightScene scene) {
+  ///
+  /// Las celdas van fijas sobre la planta y miden unos 26 puntos de
+  /// pantalla, en potencias de dos: así sus lux se guardan por clave de luz
+  /// (ver [PlanLightMapCache.exposureCells]) y mover la vista, hacer zoom
+  /// dentro del mismo tamaño o cambiar la exposición no las recalcula.
+  void _drawExposureMap(
+    Canvas canvas,
+    Size size,
+    LightScene scene,
+    int lightKey,
+  ) {
     final settings = exposure!;
-    const cellPx = 26.0;
-    final cell = cellPx / scale;
-    final left = -offset.dx / scale;
-    final top = -offset.dy / scale;
-    final cols = (size.width / cellPx).ceil();
-    final rows = (size.height / cellPx).ceil();
+    final cell = math
+        .pow(2, (math.log(26 / scale) / math.ln2).round())
+        .toDouble();
+    final view = Rect.fromLTWH(
+      -offset.dx / scale,
+      -offset.dy / scale,
+      size.width / scale,
+      size.height / scale,
+    );
+    final cells = lightMap?.exposureCells(lightKey, cell) ?? <int, double>{};
     final paint = Paint();
-    for (var row = 0; row < rows; row++) {
-      for (var col = 0; col < cols; col++) {
-        final rect = Rect.fromLTWH(
-          left + col * cell,
-          top + row * cell,
-          cell,
-          cell,
-        );
-        final lux = scene.luxAt(rect.center);
+    for (var row = (view.top / cell).floor(); row * cell < view.bottom; row++) {
+      for (
+        var col = (view.left / cell).floor();
+        col * cell < view.right;
+        col++
+      ) {
+        final rect = Rect.fromLTWH(col * cell, row * cell, cell, cell);
+        final lux = cells[Object.hash(col, row)] ??= scene.luxAt(rect.center);
         if (lux < 0.5) continue;
         final stops = stopsBetweenApertures(settings.stopFor(lux), targetStop);
         paint.color = exposureColor(stops).withValues(alpha: 0.55);
