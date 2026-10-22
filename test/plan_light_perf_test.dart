@@ -82,25 +82,30 @@ void main() {
   });
 
   test('grabar la capa de luz (exposición de la cámara)', () {
-    final plan = syntheticPlan();
-    final ms = medianMs(3, () => recordLayer(plan, LightView.camera).dispose());
-    report('capa de luz, cámara', ms);
+    final ms = recordingMs(syntheticPlan(), LightView.camera);
+    report('capa de luz, cámara', ms, '(grabar)');
     expect(ms, lessThan(1500));
   });
 
   test('grabar la capa de luz («Ver todo»)', () {
-    final plan = syntheticPlan();
-    final ms = medianMs(3, () => recordLayer(plan, LightView.all).dispose());
-    report('capa de luz, ver todo', ms);
+    final ms = recordingMs(syntheticPlan(), LightView.all);
+    report('capa de luz, ver todo', ms, '(grabar)');
     expect(ms, lessThan(2500));
   });
 
   testWidgets('rasterizar la planta (exposición de la cámara)', (tester) async {
     final plan = syntheticPlan();
     await tester.runAsync(() async {
-      Future<double> once() async {
-        final picture = recordLayer(plan, LightView.camera);
+      /// Graba y rasteriza la planta entera; con [cache], la luz ya puede
+      /// estar hecha.
+      Future<double> once({PlanLightMapCache? cache, double dx = 0}) async {
         final watch = Stopwatch()..start();
+        final picture = recordLayer(
+          plan,
+          LightView.camera,
+          cache: cache,
+          offset: Offset(40 + dx, 40),
+        );
         final image = await picture.toImage(1400, 900);
         await image.toByteData();
         final ms = watch.elapsedMicroseconds / 1000;
@@ -110,9 +115,18 @@ void main() {
       }
 
       await once();
-      final times = [for (var i = 0; i < 3; i++) await once()]..sort();
-      report('rasterizar la planta', times[1]);
-      expect(times[1], lessThan(3000));
+      final cold = [for (var i = 0; i < 3; i++) await once()]..sort();
+      report('rasterizar la planta, luz nueva', cold[1]);
+      expect(cold[1], lessThan(3000));
+
+      final cache = PlanLightMapCache();
+      await once(cache: cache);
+      final warm = [
+        for (var i = 1; i <= 3; i++) await once(cache: cache, dx: i * 17.0),
+      ]..sort();
+      cache.dispose();
+      report('rasterizar la planta al mover la vista', warm[1]);
+      expect(warm[1], lessThan(400));
     });
   });
 
@@ -188,6 +202,23 @@ double medianMs(int runs, void Function() body) {
     times.add(watch.elapsedMicroseconds / 1000);
   }
   times.sort();
+  return times[times.length ~/ 2];
+}
+
+/// Mediana de lo que tarda en grabarse la luz de la planta desde cero: lo
+/// que paga el hilo de la interfaz. Sin el rasterizado, que en la app va
+/// en el hilo de la GPU (en los tests es síncrono y en la CPU).
+double recordingMs(List<PlanElement> plan, LightView view) {
+  final times = <double>[];
+  for (var i = 0; i < 4; i++) {
+    final cache = PlanLightMapCache();
+    recordLayer(plan, view, cache: cache).dispose();
+    times.add(cache.lastRecording!.inMicroseconds / 1000);
+    cache.dispose();
+  }
+  times
+    ..removeAt(0) // Calienta el JIT.
+    ..sort();
   return times[times.length ~/ 2];
 }
 

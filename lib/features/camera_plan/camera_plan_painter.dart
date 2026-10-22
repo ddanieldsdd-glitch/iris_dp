@@ -702,7 +702,7 @@ class CameraPlanPainter extends CustomPainter {
     final keys = _exposedKeyLux != null
         ? null
         : lightMap!.resolve(scene, lightKey, _lightRect(scene));
-    final picture = lightMap!.picture(
+    final layer = lightMap!.layer(
       Object.hash(
         lightKey,
         dimmed.length,
@@ -711,20 +711,40 @@ class CameraPlanPainter extends CustomPainter {
         keys?.keyLux,
         keys?.indoorKeyLux,
       ),
-      () {
+      unitsPerPixel: _layerGrain(scene.metersPerUnit),
+      metersPerUnit: scene.metersPerUnit,
+      record: () {
         final recorder = ui.PictureRecorder();
-        _paintLight(Canvas(recorder), scene, dimmed, keys);
-        return recorder.endRecording();
+        final painted = _paintLight(Canvas(recorder), scene, dimmed, keys);
+        return PlanLightRecording(
+          picture: recorder.endRecording(),
+          bounds: painted.bounds,
+          focus: _planBounds().inflate(8 / scene.metersPerUnit),
+          open: painted.open,
+        );
       },
     );
-    canvas.saveLayer(view, Paint());
-    canvas.drawPicture(picture);
-    canvas.restore();
+    layer.paint(canvas, view);
+  }
+
+  /// Grano de la imagen de la luz, en unidades del lienzo por píxel: de 2
+  /// a 4 cm, según el zoom. Solo cambia al cruzar un umbral.
+  double _layerGrain(double mpu) {
+    final cm = mpu * 100 / scale;
+    final grain = cm <= 2
+        ? 2
+        : cm <= 3
+        ? 3
+        : 4;
+    return grain / 100 / mpu;
   }
 
   /// Graba la luz de la planta: a la exposición de la cámara o, con [map],
   /// contra lo más iluminado de la planta («Ver todo»).
-  void _paintLight(
+  ///
+  /// Devuelve hasta dónde llega lo pintado y, si es de día, el color del
+  /// aire libre sin nada delante: lo que hay más allá.
+  ({Rect bounds, Color? open}) _paintLight(
     Canvas canvas,
     LightScene scene,
     Set<PlanElement> dimmed,
@@ -733,6 +753,29 @@ class CameraPlanPainter extends CustomPainter {
     final env = ambient;
     // Se dibuja para toda la planta, no solo para lo que se ve ahora.
     const view = Rect.fromLTRB(-2e5, -2e5, 2e5, 2e5);
+    var bounds = _planBounds().inflate(1 / scene.metersPerUnit);
+    void take(Rect? box) {
+      if (box != null) bounds = bounds.expandToInclude(box);
+    }
+
+    // Al aire libre y sin nada delante, de día: el sol o, sin él, el cielo.
+    Color? openFor(double against, bool exposed) => env == null || !env.day
+        ? null
+        : env.hasSun
+        ? PlanLightMap.colorFor(
+            env.condition.sunLux,
+            env.condition.sunCct,
+            against,
+            exposed: exposed,
+          )
+        : env.hasSky
+        ? PlanLightMap.colorFor(
+            env.skyLux * 0.8,
+            env.skyCct,
+            against,
+            exposed: exposed,
+          )
+        : null;
 
     // A la exposición de la cámara: una sola referencia para todo, dentro
     // y fuera. Una práctica y un 5K, o una sala y la calle, conservan los
@@ -745,29 +788,33 @@ class CameraPlanPainter extends CustomPainter {
           exposed,
         );
         if (peak < 0.03) continue;
-        _drawBeam(
-          canvas,
-          scene,
-          light,
-          strength: dimmed.contains(light.fixture?.element)
-              ? inheritedOpacity
-              : 1,
-          keyLux: exposed,
-          exposed: true,
+        take(
+          _drawBeam(
+            canvas,
+            scene,
+            light,
+            strength: dimmed.contains(light.fixture?.element)
+                ? inheritedOpacity
+                : 1,
+            keyLux: exposed,
+            exposed: true,
+          ),
         );
       }
       if (env != null && env.day) {
-        PlanSunPainter.paintKeyed(
-          canvas,
-          scene,
-          env,
-          view,
-          key: exposed,
-          indoorKey: exposed,
-          exposed: true,
+        take(
+          PlanSunPainter.paintKeyed(
+            canvas,
+            scene,
+            env,
+            view,
+            key: exposed,
+            indoorKey: exposed,
+            exposed: true,
+          ),
         );
       }
-      return;
+      return (bounds: bounds, open: openFor(exposed, true));
     }
 
     final key = map!.keyLux;
@@ -781,14 +828,16 @@ class CameraPlanPainter extends CustomPainter {
           against,
         );
         if (peak < 0.03) continue;
-        _drawBeam(
-          canvas,
-          scene,
-          light,
-          strength: dimmed.contains(light.fixture?.element)
-              ? inheritedOpacity
-              : 1,
-          keyLux: against,
+        take(
+          _drawBeam(
+            canvas,
+            scene,
+            light,
+            strength: dimmed.contains(light.fixture?.element)
+                ? inheritedOpacity
+                : 1,
+            keyLux: against,
+          ),
         );
       }
     }
@@ -819,32 +868,41 @@ class CameraPlanPainter extends CustomPainter {
     // el sol, el rebote de una pared ya no añade nada que se vea; a la
     // sombra, sí.
     if (env != null && env.day) {
-      PlanSunPainter.paintKeyed(
-        canvas,
-        scene,
-        env,
-        view,
-        key: key,
-        indoorKey: indoorKey,
+      take(
+        PlanSunPainter.paintKeyed(
+          canvas,
+          scene,
+          env,
+          view,
+          key: key,
+          indoorKey: indoorKey,
+        ),
       );
     }
+    return (bounds: bounds, open: openFor(key, false));
   }
 
-  /// Zona que cubre el mapa de luz: lo que hay en la planta, con margen
-  /// para que se vea hasta dónde llega cada luz.
-  Rect _lightRect(LightScene scene) {
+  /// Lo que ocupa la planta: la posición de cada elemento y el final de
+  /// cada tramo.
+  Rect _planBounds() {
     Rect? bounds;
     void take(Offset p) {
       final at = Rect.fromCircle(center: p, radius: 1);
       bounds = bounds?.expandToInclude(at) ?? at;
     }
 
-    for (final el in [...inheritedElements, ...elements]) {
+    for (final el in _lit) {
       take(el.position);
       if (PlanSegment.isSegment(el)) take(PlanSegment.end(el));
     }
+    return bounds ?? Rect.zero;
+  }
+
+  /// Zona que cubre el mapa de luz: lo que hay en la planta, con margen
+  /// para que se vea hasta dónde llega cada luz.
+  Rect _lightRect(LightScene scene) {
     final mpu = scene.metersPerUnit;
-    final box = (bounds ?? Rect.zero).inflate(7 / mpu);
+    final box = _planBounds().inflate(7 / mpu);
     // Hasta 90 m de lado: más allá el grano sería demasiado grueso.
     final limit = 90 / mpu;
     return Rect.fromCenter(
@@ -1693,7 +1751,8 @@ class CameraPlanPainter extends CustomPainter {
   /// las sombras salen con penumbra: nítidas con un fresnel desnudo, anchas
   /// y blandas con una tela de dos metros, y más abiertas cuanto más lejos
   /// del objeto que las hace.
-  void _drawBeam(
+  /// Devuelve hasta dónde llega lo pintado (con brillo medido), o `null`.
+  Rect? _drawBeam(
     Canvas canvas,
     LightScene scene,
     SceneLight light, {
@@ -1709,7 +1768,7 @@ class CameraPlanPainter extends CustomPainter {
     bool exposed = false,
   }) {
     final source = light.source;
-    if (source.candela <= 0) return;
+    if (source.candela <= 0) return null;
     final floorLux = keyLux == null
         ? _beamFloorLux
         : exposed
@@ -1774,7 +1833,7 @@ class CameraPlanPainter extends CustomPainter {
         reachM = r;
       }
     }
-    if (reachM < 0.15) return;
+    if (reachM < 0.15) return null;
     final reach = reachM / mpu;
 
     // Bastantes pasos: la caída con la distancia se tiene que ver.
@@ -1856,14 +1915,46 @@ class CameraPlanPainter extends CustomPainter {
       ]);
     }
 
+    // Lo que ve cada muestra: lo que queda a la sombra no se pinta.
+    final origins = [
+      for (var k = 0; k < samples; k++)
+        light.position +
+            across *
+                (halfSize * (samples == 1 ? 0.0 : 2 * k / (samples - 1) - 1)),
+    ];
+    final visibles = [
+      for (final origin in origins)
+        scene.blockers.isEmpty
+            ? null
+            : scene.visibleArea(
+                origin,
+                reach,
+                ignore: light.surface,
+                fromAbove: drop != null,
+                z: light.z,
+              ),
+    ];
+
+    // Hasta dónde llega: el círculo de su alcance, recortado por lo que ve
+    // (una luz dentro de una sala no pasa de sus paredes).
+    var extent = Rect.fromCircle(
+      center: pool,
+      radius: reach / math.cos(tilt) + halfSize + blur * 4,
+    );
+    if (visibles.every((v) => v != null)) {
+      var seen = visibles.first!.getBounds();
+      for (final v in visibles.skip(1)) {
+        seen = seen.expandToInclude(v!.getBounds());
+      }
+      extent = extent.intersect(seen.inflate(blur * 4));
+      if (extent.isEmpty) return null;
+    }
+
     // Las muestras de una misma fuente se suman entre sí; la fuente entera
     // se mezcla con las demás sin pisarlas.
     if (keyLux != null) {
       canvas.saveLayer(
-        Rect.fromCircle(
-          center: pool,
-          radius: reach / math.cos(tilt) + halfSize + blur * 4,
-        ),
+        extent,
         Paint()
           ..blendMode = BlendMode.screen
           ..imageFilter = ui.ImageFilter.blur(
@@ -1874,17 +1965,8 @@ class CameraPlanPainter extends CustomPainter {
       );
     }
     for (var k = 0; k < samples; k++) {
-      final t = samples == 1 ? 0.0 : 2 * k / (samples - 1) - 1;
-      final origin = light.position + across * (halfSize * t);
-      final visible = scene.blockers.isEmpty
-          ? null
-          : scene.visibleArea(
-              origin,
-              reach,
-              ignore: light.surface,
-              fromAbove: drop != null,
-              z: light.z,
-            );
+      final origin = origins[k];
+      final visible = visibles[k];
 
       // Con brillo medido, la zona visible recorta el lienzo una vez por
       // muestra (rápido) y el borde lo ablanda el desenfoque de la capa.
@@ -1963,6 +2045,7 @@ class CameraPlanPainter extends CustomPainter {
       if (keyLux != null && visible != null) canvas.restore();
     }
     if (keyLux != null) canvas.restore();
+    return extent;
   }
 
   /// Sombras del sol: de cada pared y de cada persona, hacia el lado

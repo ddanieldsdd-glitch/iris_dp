@@ -388,6 +388,108 @@ class PlanLightMap {
   }
 }
 
+/// La luz de la planta grabada en sus coordenadas, antes de pasarla a
+/// imagen.
+class PlanLightRecording {
+  final ui.Picture picture;
+
+  /// Hasta dónde llega lo que se ha pintado: haces, sombras y manchas.
+  final Rect bounds;
+
+  /// Lo que importa ver con detalle: la planta y algo de margen. Lo que
+  /// queda más allá (un haz que sale por una ventana, el rebote del sol en
+  /// una fachada) es luz que cae despacio y se rasteriza con grano grueso.
+  final Rect focus;
+
+  /// Color de lo que queda fuera de [bounds], al aire libre: el sol o el
+  /// cielo sin nada delante. `null` = nada.
+  final Color? open;
+
+  const PlanLightRecording({
+    required this.picture,
+    required this.bounds,
+    required this.focus,
+    this.open,
+  });
+}
+
+/// Un trozo de la luz rasterizado: la imagen y lo que cubre.
+class PlanLightTile {
+  final ui.Image image;
+
+  /// Lo que cubre la imagen, en unidades del lienzo.
+  final Rect rect;
+
+  const PlanLightTile(this.image, this.rect);
+
+  /// [rect] medio píxel hacia dentro: así el borde no se funde con el vacío
+  /// de fuera de la imagen.
+  Rect get inner => rect.deflate(rect.width / image.width / 2);
+
+  void paint(Canvas canvas) => canvas.drawImageRect(
+    image,
+    Rect.fromLTRB(0.5, 0.5, image.width - 0.5, image.height - 0.5),
+    inner,
+    Paint()..filterQuality = FilterQuality.medium,
+  );
+}
+
+/// La luz de la planta como imagen, lista para pintarse con la vista: con
+/// detalle en la planta ([fine]) y, si llega más allá, con grano grueso
+/// alrededor ([far]).
+class PlanLightLayer {
+  final PlanLightTile fine;
+  final PlanLightTile? far;
+
+  /// Grano con el que se pidió [fine].
+  final double unitsPerPixel;
+
+  /// Color de fuera de todo (ver [PlanLightRecording.open]).
+  final Color? open;
+
+  const PlanLightLayer({
+    required this.fine,
+    required this.unitsPerPixel,
+    this.far,
+    this.open,
+  });
+
+  void dispose() {
+    fine.image.dispose();
+    far?.image.dispose();
+  }
+
+  /// La pinta en su sitio. Lo de fuera, al aire libre, va liso.
+  void paint(Canvas canvas, Rect view) {
+    final outer = far?.inner ?? fine.inner;
+    final fill = open;
+    if (fill != null && fill.a > 0) {
+      canvas.save();
+      canvas.clipPath(
+        Path()
+          ..fillType = PathFillType.evenOdd
+          ..addRect(view.inflate(2))
+          ..addRect(outer),
+      );
+      canvas.drawRect(view.inflate(2), Paint()..color = fill);
+      canvas.restore();
+    }
+    final around = far;
+    if (around != null) {
+      canvas.save();
+      canvas.clipPath(
+        Path()
+          ..fillType = PathFillType.evenOdd
+          ..addRect(around.inner)
+          ..addRect(fine.inner),
+      );
+      around.paint(canvas);
+      canvas.restore();
+    }
+    fine.paint(canvas);
+  }
+}
+
 /// Huellas de una planta: cambian cuando cambia lo que miden. Los elementos
 /// se modifican en su sitio (al arrastrar, al tocar un ajuste), así que no
 /// basta con comparar las listas: hay que mirar lo que llevan dentro.
@@ -588,23 +690,104 @@ class PlanLightMapCache extends ChangeNotifier {
     return quick;
   }
 
-  int? _pictureKey;
-  ui.Picture? _picture;
+  int? _layerKey;
+  PlanLightRecording? _recording;
 
-  /// La luz ya dibujada. Mientras no cambie nada que afecte a la luz se
-  /// reutiliza: mover la vista, hacer zoom o seleccionar no la recalcula.
-  ui.Picture picture(int key, ui.Picture Function() record) {
-    final current = _picture;
-    if (current != null && _pictureKey == key) return current;
+  /// Lo que tardó en grabarse la última luz: lo que paga el hilo de la
+  /// interfaz. El rasterizado va después, en el de la GPU.
+  @visibleForTesting
+  Duration? lastRecording;
+  PlanLightLayer? _layer;
+
+  /// Lado más largo y píxeles que puede tener la imagen de la luz.
+  static const int maxLayerSide = 4096;
+  static const int maxLayerPixels = 12 << 20;
+
+  /// Grano de lo que queda lejos de la planta, en metros por píxel, y lado
+  /// más largo de su imagen.
+  static const double farGrainM = 0.25;
+  static const int maxFarSide = 1024;
+
+  /// La luz ya dibujada, en una imagen. Mientras no cambie nada que afecte
+  /// a la luz ([key]) se reutiliza: mover la vista, hacer zoom o
+  /// seleccionar no la recalcula ni la vuelve a desenfocar. Si el zoom pide
+  /// otro grano ([unitsPerPixel]), se rasteriza de nuevo lo ya grabado.
+  PlanLightLayer layer(
+    int key, {
+    required double unitsPerPixel,
+    required double metersPerUnit,
+    required PlanLightRecording Function() record,
+  }) {
+    if (_layerKey != key || _recording == null) {
+      _recording?.picture.dispose();
+      _layer?.dispose();
+      _layer = null;
+      _layerKey = key;
+      final watch = Stopwatch()..start();
+      _recording = record();
+      lastRecording = watch.elapsed;
+    }
+    final current = _layer;
+    if (current != null && current.unitsPerPixel == unitsPerPixel) {
+      return current;
+    }
     current?.dispose();
-    _pictureKey = key;
-    return _picture = record();
+    final recording = _recording!;
+    final bounds = recording.bounds;
+    final focus = bounds.intersect(recording.focus);
+    final fine = _rasterize(
+      recording.picture,
+      focus.isEmpty ? bounds : focus,
+      unitsPerPixel,
+    );
+    final far = focus.isEmpty || _covers(focus, bounds)
+        ? null
+        : _rasterize(
+            recording.picture,
+            bounds,
+            math.max(
+              farGrainM / metersPerUnit,
+              math.max(bounds.width, bounds.height) / maxFarSide,
+            ),
+          );
+    return _layer = PlanLightLayer(
+      fine: fine,
+      far: far,
+      unitsPerPixel: unitsPerPixel,
+      open: recording.open,
+    );
+  }
+
+  static bool _covers(Rect outer, Rect inner) =>
+      outer.left <= inner.left &&
+      outer.top <= inner.top &&
+      outer.right >= inner.right &&
+      outer.bottom >= inner.bottom;
+
+  /// [picture] en una imagen de [area], con [grain] unidades por píxel (o
+  /// más, si saliera demasiado grande).
+  static PlanLightTile _rasterize(ui.Picture picture, Rect area, double grain) {
+    var upp = math.max(grain, math.max(area.width, area.height) / maxLayerSide);
+    upp = math.max(upp, math.sqrt(area.width * area.height / maxLayerPixels));
+    final width = math.max(1, (area.width / upp).ceil());
+    final height = math.max(1, (area.height / upp).ceil());
+    final rect = Rect.fromLTWH(area.left, area.top, width * upp, height * upp);
+    final recorder = ui.PictureRecorder();
+    Canvas(recorder)
+      ..scale(1 / upp)
+      ..translate(-rect.left, -rect.top)
+      ..drawPicture(picture);
+    final framed = recorder.endRecording();
+    final image = framed.toImageSync(width, height);
+    framed.dispose();
+    return PlanLightTile(image, rect);
   }
 
   @override
   void dispose() {
     _disposed = true;
-    _picture?.dispose();
+    _recording?.picture.dispose();
+    _layer?.dispose();
     _refine?.cancel();
     super.dispose();
   }
