@@ -105,6 +105,20 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 **F6.1.5 Atrezzo de la planta** · todos
 - **Qué:** mesa, silla, sofá, cama, vehículo, árbol (copa que filtra la luz), roca, rectángulo genérico con su tamaño y su altura (`LightScene.propSizeM` y `propHeightM`).
 
+**F6.1.5b Atrezzo con medidas y forma** · todos
+- **Qué:** todo el atrezzo se edita como una pieza de verdad:
+  - forma: rectangular, cuadrada, redonda u ovalada;
+  - ancho, fondo y alto en centímetros;
+  - giro.
+- **Por tipo:**
+  - mesa: alto de la tabla (75 cm de comedor, 45 de centro, 110 de barra);
+  - silla y taburete: alto del asiento y del respaldo;
+  - sofá: plazas (1 a 4), con o sin chaise;
+  - cama: individual, de matrimonio o *king*.
+- **Asas:** en la planta se estira desde las asas de sus lados, como un truss. En el 3D se ve a sus medidas.
+- **Guardado:** las medidas van en `props` (`widthM`, `depthM`, `heightM`, `shape`). Si faltan se usan las de hoy, y una versión anterior de IRIS dibuja la pieza como siempre.
+- **Hecho cuando:** una mesa redonda de 120 cm o una rectangular de 180 × 90 se dibujan a escala en la planta, el 3D, el alzado y la hoja A3.
+
 **F6.1.6 Soportes de luz** · todos
 - **Qué:** tipos nuevos de soporte en la luz (`props['stand']`), cada uno con altura mínima y máxima, huella y peso de lastre:
   - C-stand;
@@ -128,6 +142,16 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 
 **F6.1.9 Personas** · todos
 - **Qué:** maniquí con su postura (de pie, sentado o tumbado, `PlanMarks.poseKey`), su altura, el color de su personaje (`actorColor`) y hacia dónde mira. Sus marcas numeradas en el suelo.
+
+**F6.1.9b Sentarse en sillas, sofás y camas** · todos
+- **Qué:** al soltar a un actor (o una de sus marcas) sobre una silla, un taburete, un sofá o una cama, se engancha como las luces al truss:
+  - toma la postura «sentado» (o «tumbado» en la cama) a la altura de ese asiento;
+  - mira hacia donde mira el mueble;
+  - en un sofá ocupa la plaza libre más cercana.
+- **Al mover el mueble,** la persona se mueve con él. Al apartarla, vuelve a estar de pie.
+- **La altura de los ojos** sale del asiento, y la usan el fotómetro, el eje de mirada y la cámara.
+- **Guardado:** `props['seat'] = {uid del mueble, plaza}`, como el `rig` de las luces.
+- **Hecho cuando:** dos personajes sentados a una mesa salen sentados en planta, 3D, alzado y fotómetro, y siguen la mesa al moverla.
 
 **F6.1.10 Cámaras de la planta** · todos
 - **Qué:** cuerpo de cámara con su altura, su eje, el cono de su encuadre y sus marcas con recorrido (`PlanMarks`, `pathPoints`).
@@ -343,6 +367,24 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 **F6.8.3 Pilotar la cámara** · Mac, iPad
 - **Qué:** la vista se convierte en la cámara del plano. Lo que se navega se guarda en su posición, altura, giro, inclinación y alabeo, respetando el soporte (sobre la vía, al alcance de la grúa).
 
+**F6.8.3b Operar a la altura de verdad** · Mac, iPad
+- **Qué:** al pilotar, la cámara se queda a la altura de cómo se opera. Estas alturas son de partida y se ajustan con un deslizador fino que también se guarda:
+
+  | Postura | Altura del objetivo |
+  |---|---|
+  | Al hombro | unos 1,55 m, según la altura del operador del proyecto |
+  | De pie en trípode | 1,50–1,70 m |
+  | De rodillas | unos 0,95 m |
+  | Sentado o en carro | unos 1,10 m |
+  | Hi-hat en el suelo | unos 0,25 m |
+  | Low mode de gimbal | unos 0,50 m |
+  | Grúa o Technocrane | libre, dentro de su alcance |
+
+- **Al moverte,** con WASD o los joysticks, la altura no cambia. Q y E solo funcionan en grúa, dron o «libre».
+- **Lo que se guarda:** la postura elegida va en la cámara (`props['operate']`) junto con la altura. Cambia el soporte de la lista de material (hi-hat, trípode, Easyrig) y el icono de la cámara en la planta.
+- **Movimiento:** al hombro y en mano llevan el temblor de F6.5.4, que se puede quitar.
+- **Hecho cuando:** elegir «De rodillas» deja el objetivo a 0,95 m mientras te mueves por el set, y la altura queda guardada en el plano.
+
 **F6.8.4 El iPad como cámara virtual** · iPad
 - **Qué:** con el giroscopio y la cámara del iPad (seguimiento de movimiento), el iPad se mueve por el set como un visor, igual que la app VCam de Unreal. Se graba el movimiento (F6.7.3).
 
@@ -450,8 +492,8 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 ## Orden propuesto y dependencias
 
 1. **F6.0** completa: 0.1, 0.3 y 0.4 primero.
-2. **F6.1:** paridad, empezando por 1.6 (soportes), 1.7 (grip), 1.1 (terreno) y 1.2 (materiales).
-3. **F6.4** (cámara) y **F6.8** (navegación y pilotar). Es lo que sustituye a Cine Tracer para componer.
+2. **F6.1:** paridad, empezando por 1.5b (atrezzo con medidas), 1.9b (sentarse), 1.6 (soportes), 1.7 (grip), 1.1 (terreno) y 1.2 (materiales).
+3. **F6.4** (cámara) y **F6.8** (navegación y pilotar, con 8.3b: operar a la altura de verdad). Es lo que sustituye a Cine Tracer para componer.
 4. **F6.10.1–10.2:** capturas al storyboard.
 5. **F6.3:** luz fiel, mesa de luces y fotómetro.
 6. **F6.6** (actores) y **F6.7** (secuenciador).
