@@ -131,9 +131,13 @@ class PlanElevation {
     List<PlanElement> elements, {
     required double metersPerUnit,
     required ElevationSide side,
+
+    /// La planta vista por la luz, si ya está hecha. Si no, se hace sin
+    /// rebotes: aquí solo hacen falta los recintos y sus techos.
+    LightScene? scene,
   }) {
     final mpu = metersPerUnit;
-    final scene = LightScene.from(elements, metersPerUnit: mpu);
+    scene ??= LightScene.from(elements, metersPerUnit: mpu, wallBounce: false);
     final items = <ElevationItem>[];
     ({double across, double depth}) at(Offset p) => project(p, mpu, side);
 
