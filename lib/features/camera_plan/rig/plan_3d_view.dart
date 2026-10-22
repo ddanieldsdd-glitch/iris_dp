@@ -11,7 +11,10 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
+import '../light/plan_light.dart';
+import '../plan_piece_controls.dart';
 import 'plan_scene3d.dart';
 
 /// Capas del 3D que se pueden ocultar, con su nombre en el visor.
@@ -39,6 +42,10 @@ class Plan3dView extends StatefulWidget {
   final PlanElement? selected;
   final ValueChanged<PlanElement?>? onSelect;
 
+  /// Algo cambiado desde el 3D (movido, apuntado, retocado en el lateral):
+  /// la planta lo guarda. Sin él, el 3D solo se mira.
+  final Future<void> Function(PlanElement)? onChanged;
+
   /// Pantalla entera, con el lateral de opciones.
   final bool full;
 
@@ -55,6 +62,7 @@ class Plan3dView extends StatefulWidget {
     this.name,
     this.selected,
     this.onSelect,
+    this.onChanged,
     this.full = false,
     this.onExpand,
     this.onClose,
@@ -166,6 +174,8 @@ class _Plan3dViewState extends State<Plan3dView> {
         }
         if (mounted) setState(() => _selected = hit);
         widget.onSelect?.call(hit);
+      case 'move' || 'aim':
+        _applyFrom3d(message);
       case 'view':
         if (mounted) setState(() => _view = message['view'] as String);
       case 'loaded':
@@ -179,6 +189,51 @@ class _Plan3dViewState extends State<Plan3dView> {
         }
     }
     return null;
+  }
+
+  PlanElement? _byId(Object? id) {
+    for (final (i, el) in widget.elements.indexed) {
+      if (PlanScene3d.idOf(el, i) == id) return el;
+    }
+    return null;
+  }
+
+  /// Lo arrastrado en el 3D pasa a la planta: se mueve o se apunta el
+  /// elemento y la planta lo guarda (y, si es una luz, la cuelga del truss
+  /// que tenga cerca).
+  Future<void> _applyFrom3d(Map message) async {
+    final save = widget.onChanged;
+    final el = _byId(message['id']);
+    if (save == null || el == null) return;
+    double n(String k) => (message[k] as num?)?.toDouble() ?? 0;
+    final mpu = widget.metersPerUnit;
+    if (message['type'] == 'move') {
+      if (!PlanScene3d.moveBy(el, n('dx'), n('dy'), widget.elements, mpu)) {
+        return;
+      }
+    } else if (el.type == ElementType.light) {
+      PlanScene3d.aimAt(el, n('x'), n('y'), n('z'), mpu);
+    } else {
+      return;
+    }
+    await save(el);
+    if (!mounted) return;
+    setState(() => _selected = el);
+    _schedule();
+  }
+
+  /// Retoque desde el lateral: repinta mientras se arrastra y guarda al
+  /// soltar.
+  void _preview() {
+    setState(() {});
+    _schedule();
+  }
+
+  Future<void> _update() async {
+    final el = _selected, save = widget.onChanged;
+    if (el == null || save == null) return;
+    await save(el);
+    if (mounted) _preview();
   }
 
   /// Guarda lo que se ve en un glTF binario, para Unreal o cualquier
@@ -463,6 +518,31 @@ class _Plan3dViewState extends State<Plan3dView> {
               : _selected!.displayLabel,
           style: AppTypography.bodyMedium(palette),
         ),
+        if (_selected != null && widget.onChanged != null) ...[
+          Text(
+            _selected!.type == ElementType.light
+                ? 'Arrástralo para moverlo; el asa naranja cambia adónde '
+                      'apunta. Cerca de un truss se cuelga de él.'
+                : 'Arrástralo para moverlo por el suelo.',
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.textTertiary),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (_selected!.type == ElementType.light)
+            _LightControls(
+              element: _selected!,
+              onPreview: _preview,
+              onUpdate: _update,
+            )
+          else if (PlanPieceControls.appliesTo(_selected!))
+            PlanPieceControls(
+              element: _selected!,
+              metersPerUnit: widget.metersPerUnit,
+              onPreview: _preview,
+              onUpdate: _update,
+            ),
+        ],
         header('Exportar'),
         OutlinedButton.icon(
           icon: const Icon(Icons.ios_share, size: 16),
@@ -523,6 +603,114 @@ class _Plan3dViewState extends State<Plan3dView> {
   }
 }
 
+/// Lo justo de una luz para retocarla en el 3D: si cuelga, a qué altura,
+/// hacia dónde mira y cuánto se inclina.
+class _LightControls extends StatelessWidget {
+  final PlanElement element;
+  final VoidCallback onPreview;
+  final VoidCallback onUpdate;
+
+  const _LightControls({
+    required this.element,
+    required this.onPreview,
+    required this.onUpdate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final el = element;
+    final overhead = PlanLight.isOverhead(el);
+    final onTruss = el.props['rig'] != null;
+
+    Widget slider(
+      String label,
+      String value, {
+      required double current,
+      required double min,
+      required double max,
+      required ValueChanged<double> onChanged,
+    }) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text(label, style: AppTypography.caption(palette))),
+            Text(value, style: AppTypography.mono(palette)),
+          ],
+        ),
+        Slider(
+          value: current.clamp(min, max),
+          min: min,
+          max: max,
+          onChanged: (v) {
+            onChanged(v);
+            onPreview();
+          },
+          onChangeEnd: (_) => onUpdate(),
+        ),
+      ],
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<bool>(
+          showSelectedIcon: false,
+          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+          segments: const [
+            ButtonSegment(value: false, label: Text('Trípode')),
+            ButtonSegment(value: true, label: Text('Colgada')),
+          ],
+          selected: {overhead},
+          onSelectionChanged: (v) {
+            if (v.first) {
+              el.props[PlanLight.mountKey] = PlanLight.mountCeiling;
+            } else {
+              el.props
+                ..remove(PlanLight.mountKey)
+                ..remove('rig');
+            }
+            onUpdate();
+          },
+        ),
+        if (!onTruss)
+          slider(
+            'Altura',
+            '${PlanLight.heightOf(el).toStringAsFixed(2)} m',
+            current: PlanLight.heightOf(el),
+            min: 0.3,
+            max: 15,
+            onChanged: (v) =>
+                el.props[PlanLight.heightKey] = (v * 20).round() / 20,
+          )
+        else
+          Text(
+            'Cuelga del truss a ${PlanLight.heightOf(el).toStringAsFixed(2)} m.',
+            style: AppTypography.caption(palette),
+          ),
+        slider(
+          'Hacia dónde mira',
+          '${el.rotation.round()}°',
+          current: el.rotation,
+          min: 0,
+          max: 359,
+          onChanged: (v) => el.rotation = v.roundToDouble(),
+        ),
+        if (overhead)
+          slider(
+            'Inclinación desde la vertical',
+            '${PlanLight.tiltOf(el).round()}°',
+            current: PlanLight.tiltOf(el),
+            min: 0,
+            max: 80,
+            onChanged: (v) => el.props[PlanLight.tiltKey] = v.roundToDouble(),
+          ),
+      ],
+    );
+  }
+}
+
 class _ViewTile extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -567,13 +755,15 @@ class _ViewTile extends StatelessWidget {
 }
 
 /// El 3D a pantalla entera, con todas las opciones a la vista. En el iPad
-/// es la pantalla del 3D; en el Mac se abre desde el panel.
-class Plan3dScreen extends StatelessWidget {
+/// es la pantalla del 3D; en el Mac se abre desde el panel. Lo que se
+/// mueve o se retoca aquí se guarda en la planta.
+class Plan3dScreen extends StatefulWidget {
   final List<PlanElement> elements;
   final double metersPerUnit;
   final String? name;
   final PlanElement? selected;
   final ValueChanged<PlanElement?>? onSelect;
+  final Future<void> Function(PlanElement)? onChanged;
 
   const Plan3dScreen({
     super.key,
@@ -582,6 +772,7 @@ class Plan3dScreen extends StatelessWidget {
     this.name,
     this.selected,
     this.onSelect,
+    this.onChanged,
   });
 
   static Future<void> show(
@@ -591,6 +782,7 @@ class Plan3dScreen extends StatelessWidget {
     String? name,
     PlanElement? selected,
     ValueChanged<PlanElement?>? onSelect,
+    Future<void> Function(PlanElement)? onChanged,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -599,19 +791,39 @@ class Plan3dScreen extends StatelessWidget {
         name: name,
         selected: selected,
         onSelect: onSelect,
+        onChanged: onChanged,
       ),
     ),
   );
 
   @override
+  State<Plan3dScreen> createState() => _Plan3dScreenState();
+}
+
+class _Plan3dScreenState extends State<Plan3dScreen> {
+  late PlanElement? _selected = widget.selected;
+
+  @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(name == null ? '3D' : '3D · $name')),
+    appBar: AppBar(
+      title: Text(widget.name == null ? '3D' : '3D · ${widget.name}'),
+    ),
     body: Plan3dView(
-      elements: elements,
-      metersPerUnit: metersPerUnit,
-      name: name,
-      selected: selected,
-      onSelect: onSelect,
+      elements: widget.elements,
+      metersPerUnit: widget.metersPerUnit,
+      name: widget.name,
+      selected: _selected,
+      onSelect: (el) {
+        setState(() => _selected = el);
+        widget.onSelect?.call(el);
+      },
+      onChanged: widget.onChanged == null
+          ? null
+          : (el) async {
+              await widget.onChanged!(el);
+              // La escena se rehace con lo guardado.
+              if (mounted) setState(() {});
+            },
       full: true,
     ),
   );
