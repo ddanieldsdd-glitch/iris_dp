@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:pdf_render_maintained/pdf_render_maintained.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -75,9 +75,10 @@ class _BibleExportPdfPreviewScreenState
           ),
         ],
       ),
-      body: PdfViewer.openData(
+      body: PdfViewer.data(
         widget.bytes,
-        params: const PdfViewerParams(padding: AppSpacing.md, minScale: 1),
+        sourceName: 'biblia.pdf',
+        params: const PdfViewerParams(margin: AppSpacing.md),
       ),
     );
   }

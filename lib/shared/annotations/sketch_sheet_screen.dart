@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
-import 'package:pdf_render_maintained/pdf_render_maintained.dart';
+import 'package:pdfrx/pdfrx.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -470,9 +470,10 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
 
   /// Primera página de un PDF como PNG (para usarla de papel).
   static Future<Uint8List?> _pdfFirstPage(String path) async {
+    await pdfrxFlutterInitialize();
     final doc = await PdfDocument.openFile(path);
     try {
-      final page = await doc.getPage(1);
+      final page = doc.pages.first;
       final scale = 2048 / math.max(page.width, page.height);
       final w = (page.width * scale).round();
       final h = (page.height * scale).round();
@@ -481,8 +482,10 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
         height: h,
         fullWidth: w.toDouble(),
         fullHeight: h.toDouble(),
+        backgroundColor: 0xFFFFFFFF,
       );
-      final image = await rendered.createImageDetached();
+      if (rendered == null) return null;
+      final image = await rendered.createImage();
       rendered.dispose();
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       image.dispose();

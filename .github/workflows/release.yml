@@ -69,14 +69,11 @@ jobs:
         with:
           channel: stable
           cache: true
+      # El 3D (flutter_inappwebview) baja WebView2 con NuGet al compilar.
+      - uses: nuget/setup-nuget@v2
       - name: Dependencies
         # El código de Drift está en el repositorio; regenerarlo se colgaba.
         run: flutter pub get
-      - name: Patch pdf_render_maintained (bug CMake target name)
-        shell: bash
-        run: |
-          chmod +x scripts/patch_pdf_render_windows.sh
-          ./scripts/patch_pdf_render_windows.sh
       - name: Build Windows
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

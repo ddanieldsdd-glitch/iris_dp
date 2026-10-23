@@ -62,7 +62,7 @@ abstract final class ClipboardImageReader {
   /// copia su ruta, que [read] también sabe pegar. Devuelve si se ha copiado.
   static Future<bool> copyImageFile(String path) async {
     if (!File(path).existsSync()) return false;
-    if (!kIsWeb && (Platform.isMacOS || Platform.isIOS)) {
+    if (!kIsWeb && (Platform.isMacOS || Platform.isIOS || Platform.isWindows)) {
       try {
         final done = await _macChannel.invokeMethod<Object?>(
           'writeClipboardImage',
