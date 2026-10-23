@@ -44,6 +44,10 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
   - **Path tracing progresivo** al capturar fotogramas de storyboard: iluminación global, sombras blandas, reflejos y niebla, refinados en unos segundos (F6.10.1b).
 - **Lo que quedaría para un renderizador nativo** (fuera de esta fase, F6.17): MetalFX, el reescalado de Apple y lo más parecido a DLSS, y el trazado de rayos por hardware de los chips M3 o posteriores.
 - **Dónde sí se usan RTX y DLSS:** en Unreal, en un PC con NVIDIA. Por eso la exportación tiene que ser al 100 % (F6.16). IRIS prepara la escena y Unreal la renderiza con Lumen, ray tracing por hardware y DLSS.
+- **Con el PC de NVIDIA de Daniel:** el bloque F6.19 lo aprovecha de tres formas:
+  1. IRIS para Windows, con más potencia;
+  2. IRIS conectado en vivo a Unreal en el PC, viendo dentro de IRIS (también en el iPad) la imagen renderizada con RTX y DLSS;
+  3. a largo plazo, un render RTX propio, solo si las otras dos no bastan.
 
 ## Qué emulamos de cada programa
 
@@ -748,7 +752,7 @@ Lo creado en IRIS Stage tiene en Unreal el mismo aspecto, la misma luz, la misma
 - Trazado de rayos por hardware (M3 o posterior) y MetalFX.
 
 **F6.17.2 IRIS para Windows con RTX**
-- La app ya tiene carpeta `windows/`. Haría falta un renderizador nativo, porque el WebView no da acceso a DLSS.
+- Pasa al bloque F6.19, que lo aborda por pasos: primero la app en Windows (F6.19.1), luego la conexión en vivo con Unreal (F6.19.3–19.5) y, solo si hace falta, un render nativo (F6.19.7).
 
 **F6.17.3 Render remoto**
 - Render en la nube o en el PC de Unreal lanzado desde IRIS (F6.16.9).
@@ -788,6 +792,49 @@ Lo creado en IRIS Stage tiene en Unreal el mismo aspecto, la misma luz, la misma
 
 ---
 
+## F6.19 · Trabajar con el PC de NVIDIA (RTX y DLSS)
+
+Daniel tiene también un PC con tarjeta NVIDIA. El objetivo es que la calidad RTX y DLSS llegue a IRIS sin escribir un motor de render propio: el PC hace de **estación de render**, y IRIS (Mac, iPad o el propio PC) sigue siendo donde se trabaja.
+
+**F6.19.1 IRIS para Windows** · PC
+- **Qué:** compilar y publicar IRIS en Windows (ya existe `windows/runner`). El WebView de Windows es WebView2 (Chromium), con WebGPU sobre la tarjeta NVIDIA, y `flutter_inappwebview` ya lo soporta.
+- **Lo que gana:** el perfil de calidad «ultra», más luces reales, sombras más finas y el path tracing de las capturas (F6.10.1b) mucho más rápido.
+- **Lo que no gana:** DLSS y los núcleos RT, porque el navegador no los expone.
+- **Hay que comprobar:** que todas las dependencias de IRIS compilan en Windows (base de datos, PDF, selector de archivos, actualizaciones) y cómo se instala y se actualiza ahí.
+- **Hecho cuando:** IRIS abre en el PC un proyecto sincronizado y IRIS Stage funciona con la caseta de prueba.
+
+**F6.19.2 El mismo proyecto en Mac, iPad y PC** · todos
+- **Qué:** la sincronización con la nube que ya existe lleva también lo nuevo del 3D: recetas, escaneos (F6.12.5), packs usados (cada máquina los descarga) y capturas.
+- **Hecho cuando:** un cambio hecho en el iPad aparece en el PC, y al revés.
+
+**F6.19.3 IRIS Live Link con Unreal** · Mac, iPad y PC (Unreal en el PC)
+- **Qué:** una conexión en vivo entre IRIS y Unreal, abierto en el PC con el plugin de F6.16.2. Cada cambio en la planta o en IRIS Stage (mover una luz, regularla, cambiar la niebla, mover la cámara, cambiar de plano) se aplica en Unreal al momento.
+- **Cómo:** la Remote Control API de Unreal (WebSocket) y los mismos cambios incrementales que usa el visor (`iris.patch`, F6.0.5), traducidos por el plugin.
+- **Red:** solo red local, con un código de emparejamiento que muestra el PC. Nada pasa por internet.
+- **Hecho cuando:** mover un foco en el iPad lo mueve en Unreal en menos de medio segundo.
+
+**F6.19.4 Ver el render RTX dentro de IRIS** · Mac, iPad y PC
+- **Qué:** una ventana «Render RTX» en IRIS Stage y en el panel 3D que enseña la imagen de la cámara del plano renderizada en el PC con Lumen, ray tracing por hardware y DLSS.
+- **Cómo:** Pixel Streaming de Unreal (vídeo por WebRTC), que el WebView de IRIS reproduce.
+- **Uso:** se compone y se ilumina en IRIS, y se mira el resultado con calidad de motor en el iPad, en el set.
+- **Hecho cuando:** en el iPad se ve el plano renderizado en el PC a 30 fps con DLSS, y los cambios hechos en IRIS se reflejan.
+
+**F6.19.5 Capturas RTX al storyboard** · Mac, iPad y PC
+- **Qué:** desde IRIS, «Capturar con RTX» pide al PC un fotograma del plano, con la Movie Render Queue o el path tracer de Unreal, y lo guarda en el plano como cualquier captura (F6.10.1, F6.16.9).
+- **Cola:** se pueden mandar todos los planos de una escena y recibirlos mientras se trabaja en otra cosa.
+
+**F6.19.6 Estación de render compartida** · PC
+- **Qué:** el PC se registra como estación de render del proyecto. Cualquier dispositivo de Daniel en la misma red la encuentra, ve si está libre y le manda trabajo.
+- **Para después:** acceso remoto fuera de la red local, por un túnel seguro.
+
+**F6.19.7 Render RTX propio en IRIS para Windows (solo estudio)** · PC
+- **Qué:** si Live Link y Pixel Streaming no bastan, un renderizador nativo dentro de IRIS para Windows: Vulkan con ray tracing y DLSS mediante el SDK Streamline de NVIDIA, como plugin de Flutter que comparte la textura con la interfaz.
+- **Coste:** muy alto (un motor propio que mantener). Se decide solo con datos de F6.19.3–19.5 en uso real.
+
+**Recomendación:** F6.19.3 a F6.19.5 dan la calidad RTX y DLSS en IRIS, también en el iPad, aprovechando Unreal en lugar de reescribirlo. F6.19.1 suma un IRIS más potente en el PC. F6.19.7 queda como último recurso.
+
+---
+
 ## Orden propuesto y dependencias
 
 1. **F6.0** (con 0.1b WebGPU), **F6.13.1–13.2** (IRIS Stage como contenedor) y **F6.16.1** (paquete versionado desde el principio, para que cada pieza nueva nazca exportable).
@@ -796,7 +843,8 @@ Lo creado en IRIS Stage tiene en Unreal el mismo aspecto, la misma luz, la misma
 4. **F6.15** (packs) y **F6.14** (mundos: edificios, vías, terreno, agua, vegetación y plantillas).
 5. **F6.3** (luz fiel, materiales PBR), **F6.9** (niebla y humo) y **F6.10.1b** (captura de calidad).
 6. **F6.6** y **F6.7** (actores y secuenciador) y **F6.5** (soportes de cámara).
-7. **F6.16.2–16.12** (plugin de Unreal e ida y vuelta), **F6.11** (resto de formatos), **F6.12** (escaneos) y **F6.18.3–18.4** (corriente y logística).
+7. **F6.16.2–16.12** (plugin de Unreal e ida y vuelta), **F6.19.3–19.5** (Live Link, render RTX en IRIS y capturas RTX), **F6.11** (resto de formatos), **F6.12** (escaneos) y **F6.18.3–18.4** (corriente y logística).
+7b. **F6.19.1–19.2** (IRIS para Windows y sincronización con el PC) en paralelo a cualquier fase, cuando convenga probar en el PC.
 8. **F6.17** solo como estudio.
 
 Dependencias principales:
@@ -812,6 +860,8 @@ Dependencias principales:
 | F6.14 | F6.15.1 (packs) y F6.0.3 (contrato v2) |
 | F6.16.2–16.12 | F6.16.1 (paquete) |
 | F6.18.1 | F6.2.8 (receta con parrilla) |
+| F6.19.3 | F6.16.2 (plugin) y F6.0.5 (cambios incrementales) |
+| F6.19.4–19.5 | F6.19.3 |
 | F6.8.4 | F6.8.3 |
 
 ## Verificación común a todos los puntos
