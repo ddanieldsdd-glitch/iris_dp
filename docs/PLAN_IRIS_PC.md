@@ -156,6 +156,9 @@ Hay 17 archivos con `Platform.isMacOS` o `Platform.isIOS`. Se revisan uno por un
 
 ## PC.6 · Lo que gana el PC después (enlaza con el plan 3D)
 
+**Estado:** se deja para cuando se construya el motor 3D más exigente (F6.0 en adelante). Ahí se ajusta este bloque: qué pide ese motor al PC (WebGPU, perfiles, path tracing) y cómo se conecta con Unreal. Hasta entonces el PC usa el mismo 3D que el Mac.
+
+
 - **F6.19.1:** perfil de calidad «ultra» y capturas con trazado de rayos más rápidas, con WebGPU sobre NVIDIA.
 - **F6.19.3–19.5:** IRIS conectado en vivo a Unreal en el mismo PC, con la imagen RTX y DLSS dentro de IRIS y capturas RTX al storyboard.
 
@@ -170,7 +173,7 @@ Hay 17 archivos con `Platform.isMacOS` o `Platform.isIOS`. Se revisan uno por un
 5. **PC.3:** datos y sincronización.
 6. **PC.5:** lista de comprobación en el PC.
 7. **PC.4:** instalador y actualizaciones.
-8. **PC.6:** con el plan 3D.
+8. **PC.6:** se hace y se corrige al construir el motor 3D más exigente (F6).
 
 ## Cómo se trabaja
 
