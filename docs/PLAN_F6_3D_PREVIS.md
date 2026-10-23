@@ -19,7 +19,7 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 1. **Un solo modelo.** La planta v2 (`PlanElement` + `props`, `floor_plan_json.dart`) es la única verdad. El 3D, las hojas y las exportaciones salen de `PlanScene3d` (`lib/features/camera_plan/rig/plan_scene3d.dart`). Nada se guarda solo en el 3D.
 2. **Paridad total.** Todo tipo que exista en la planta tiene versión 3D, y todo lo que se cambia en 3D vuelve a la planta (`moveBy`, `aimAt` y siguientes). Una prueba lo vigila (F6.0.4).
 3. **Compatibilidad hacia atrás.** Lo nuevo viaja como `props` o como `label` nuevos. Una versión anterior de IRIS lo conserva al guardar.
-4. **Sin red.** El visor y sus bibliotecas van empaquetados en `assets/viewer3d/`.
+4. **Sin red.** El visor y sus bibliotecas van empaquetados en `assets/viewer3d/`. La única excepción son los packs de la biblioteca (F6.15): se descargan una vez y luego funcionan sin red.
 5. **Por dispositivo.**
 
    | Dispositivo | Qué se hace |
@@ -31,6 +31,19 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
    Cada punto dice en qué dispositivos va.
 6. **La luz del 3D es la de IRIS.** Lo que da el fotómetro en la planta lo da el 3D en el mismo punto (F6.3.1).
 7. **Cada fase termina en la app de prueba del Mac.** El iPad solo cuando Daniel lo pida.
+8. **Todo nace exportable a Unreal.** Cada punto que crea algo nuevo en la escena incluye su correspondencia en Unreal en el mismo PR (contrato del paquete y plugin, F6.16), o enlaza el punto F6.16 que la cubre. Así la compatibilidad no se queda para el final.
+9. **Dos puertas al 3D.** El panel 3D de la planta de cámara y luz es el atajo para mirar y retocar. La herramienta completa es **IRIS Stage** (F6.13), la pantalla que hoy se llama «Unreal / Luka bridge».
+
+## Límites honestos: RTX y DLSS
+
+- **RTX y DLSS son de NVIDIA.** Solo existen en Windows (y en parte en Linux) con tarjetas NVIDIA, a través de DirectX o Vulkan. Ni el Mac ni el iPad tienen GPU NVIDIA, así que en IRIS para Mac e iPad no son posibles.
+- **«DLSS 6»:** no consta que exista. La última versión conocida al escribir esto es DLSS 4.
+- **Un navegador no los expone.** El 3D de IRIS va en un WebView (WebGL o WebGPU). Aunque corriera en un PC con RTX, la API web no da acceso a DLSS ni a los núcleos RT.
+- **Lo que sí usa IRIS en Mac e iPad:**
+  - **WebGPU** sobre la GPU de Apple (Metal): más luces, mejores sombras y posproceso (F6.0.1b).
+  - **Path tracing progresivo** al capturar fotogramas de storyboard: iluminación global, sombras blandas, reflejos y niebla, refinados en unos segundos (F6.10.1b).
+- **Lo que quedaría para un renderizador nativo** (fuera de esta fase, F6.17): MetalFX, el reescalado de Apple y lo más parecido a DLSS, y el trazado de rayos por hardware de los chips M3 o posteriores.
+- **Dónde sí se usan RTX y DLSS:** en Unreal, en un PC con NVIDIA. Por eso la exportación tiene que ser al 100 % (F6.16). IRIS prepara la escena y Unreal la renderiza con Lumen, ray tracing por hardware y DLSS.
 
 ## Qué emulamos de cada programa
 
@@ -52,6 +65,14 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 | Render y salida | Movie Render Queue | Capturas, storyboard | F6.10 |
 | DMX, MVR y GDTF | Plugin DMX | — | F6.11.4 |
 | Escaneos | Splats, Reality Capture | — | F6.12 |
+| Edificios, vías, ciudad | Modeling, PCG | Set Builder | F6.14.1–14.3 |
+| Terreno | Landscape | Terreno | F6.14.4 |
+| Agua (lago, río, mar) | Water System | — | F6.14.5 |
+| Vegetación | Foliage, PCG | Árboles | F6.14.6 |
+| Humo y niebla | Height Fog, Local Fog Volume, Niagara | Humo | F6.9 |
+| Biblioteca de contenido | Fab, Megascans | Contenido incluido | F6.15 |
+| Fixtures con fotometría y DMX | ARRI Luka | — | F6.3, F6.16.12 |
+| Ida y vuelta con el motor | Plugin propio, Interchange | — | F6.16 |
 
 ---
 
@@ -61,6 +82,11 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 - **Qué:** pasar de three.js r147 (UMD) a una versión actual escrita como módulos y empaquetada con esbuild en un único `viewer.js`. El código del visor pasa a módulos (`scene/`, `build/`, `tools/`, `bridge/`) en `tools/viewer3d_src/`, y un script genera `assets/viewer3d/viewer.js`.
 - **Por qué:** luces físicas, posproceso (profundidad de campo, bloom, LUT), splats con Spark y mejor rendimiento.
 - **Hecho cuando:** el visor actual funciona igual con la versión nueva y el archivo empaquetado ocupa menos de 2 MB.
+
+**F6.0.1b WebGPU primero** · Mac, iPad
+- **Qué:** el visor moderno usa WebGPU donde exista (Mac e iPad con el sistema actual) y WebGL 2 si no.
+- **Por qué:** más luces reales, sombras de calidad y posproceso sobre la GPU de Apple.
+- **Hecho cuando:** el visor dice qué motor usa y la caseta de prueba va igual de bien o mejor que con WebGL.
 
 **F6.0.2 Perfiles de calidad** · todos
 - **Qué:** `iris.set({quality: 'high'|'medium'|'low'})`, que Dart elige por plataforma y por el ajuste del usuario. Cada perfil fija cuántas luces reales, la resolución de sombras, el posproceso y el ratio de píxeles.
@@ -216,6 +242,22 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 **F6.2.7 Plantillas de set** · todos
 - **Qué:** igual que las plantillas de nave: salón, cocina, bar, oficina, habitación de hotel, coche por dentro (para planos en coche), calle con aceras, plató con ciclorama.
 
+
+**F6.2.8 Estructura de la nave por separado** · todos
+- **Qué:** en la receta de la nave, la estructura de la caseta (pórticos, pilares, cubierta) y la rejilla de truss son opciones independientes:
+  - sin rejilla (hoy ya se puede apagar con `grid`);
+  - rejilla interior bajo la cubierta (lo de hoy);
+  - **rejilla por encima de la cubierta**, sobre su propia estructura (torres de ground support o pórticos exteriores);
+  - las dos.
+- **Hecho cuando:** una caseta solo con su estructura, y otra con la rejilla por encima del techo, se ven bien en planta, 3D, alzado y hoja A3, y la lista de rigging cuenta lo que toca.
+
+**F6.2.9 Huecos en la cubierta** · todos
+- **Qué:** abrir huecos en la lona o el techo, rectangulares o a lo largo de la cumbrera, para iluminar el interior desde los truss de arriba.
+- **Efectos:** el hueco corta la cubierta en 3D, deja pasar la luz en el cálculo y sale en la hoja A3.
+
+**F6.2.10 Cómo iluminar la nave: decisión abierta** · todos
+- **Qué:** desde dentro, desde arriba por los huecos o a través de la lona. Las tres opciones conviven en la receta para compararlas con el fotómetro y en capturas. Se decide más adelante.
+
 ---
 
 ## F6.3 · Luz 3D fiel a IRIS (lo que hacen las luces de Unreal, pero con la fotometría de IRIS)
@@ -253,6 +295,11 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 
 **F6.3.10 Unidad y canal DMX** · Mac
 - **Qué:** unidad, universo y canal por aparato, para MVR y la consola (F6.11.4).
+
+---
+
+**F6.3.11 Materiales PBR** · todos
+- **Qué:** todos los materiales con color, rugosidad, metal, normal y oclusión (de los packs, F6.15). La reflectancia que usa el motor de luz de IRIS se calcula a partir de ellos, para que el cálculo y la imagen coincidan.
 
 ---
 
@@ -398,8 +445,27 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 
 ## F6.9 · Atmósfera y aspecto
 
-**F6.9.1 Humo y niebla** · Mac, iPad
-- **Qué:** humo de máquina en el set (densidad por zona) que hace visibles los haces como luz volumétrica, y niebla exterior.
+**F6.9.1 Niebla de ambiente** · todos (volumétrica en Mac e iPad)
+- **Qué:** niebla global por densidad, altura (niebla baja en un valle o sobre un río) y color.
+- **Luz volumétrica:** los haces y el sol se ven a través de ella.
+- **Cálculo:** quita contraste y alcance en el cálculo de luz como dato orientativo.
+- **Unreal:** ExponentialHeightFog con niebla volumétrica (F6.16.5).
+
+**F6.9.1b Fuentes de humo** · todos (partículas con volumen en Mac e iPad)
+- **Qué:** emisores colocados en la planta, con caudal, color, dirección del viento y altura:
+  - máquina de humo, hazer y fogger;
+  - chimenea;
+  - locomotora de vapor, con el humo pegado a su chimenea;
+  - hoguera, vapor de alcantarilla, tubo de escape.
+- **En 3D:** partículas con volumen. **En la planta:** su símbolo y la mancha por donde se reparte con el viento.
+- **Unreal:** sistemas Niagara del plugin con sus parámetros (F6.16.5).
+
+**F6.9.1c Volúmenes locales de niebla** · todos
+- **Qué:** cajas o esferas de niebla densa en una zona del set (una habitación ahumada, un túnel).
+- **Unreal:** Local Fog Volume.
+
+**F6.9.1d Viento** · todos
+- **Qué:** dirección y fuerza en la escena. Mueve el humo, las telas (que ya cuelgan en catenaria), la vegetación y el agua.
 
 **F6.9.2 Aspecto del proyecto** · todos
 - **Qué:** la LUT o el aspecto de la biblia visual (`look_bible`) aplicada al visor, con un botón para verlo con y sin LUT.
@@ -417,6 +483,16 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 **F6.10.1 Captura del encuadre** · todos
 - **Qué:** captura a la resolución del formato del plano, con o sin líneas, guardada como fotograma del plano por la misma vía que los renders de Unreal (`unreal_render_import.dart`, nombre `iris_dp_s{escena}_p{plano}.png`).
 - **Hecho cuando:** la captura aparece en el storyboard y en la hoja de plano sin pasos manuales.
+
+**F6.10.1b Captura de calidad (path tracing)** · Mac, iPad
+- **Qué:** al capturar un fotograma, IRIS lo calcula con trazado de rayos progresivo:
+  - iluminación global;
+  - sombras blandas reales;
+  - reflejos;
+  - niebla con luz volumétrica;
+  - profundidad de campo de la óptica.
+- **Por dispositivo:** en el Mac en segundos; en el iPad en más tiempo y a menos resolución.
+- **Hecho cuando:** la imagen se refina en pantalla y se guarda en el plano a la resolución de su formato, con calidad para usarse como referencia de storyboard.
 
 **F6.10.2 Fotogramas clave del movimiento** · todos
 - **Qué:** un fotograma por marca, o cada N segundos, para el storyboard de un plano con movimiento.
@@ -444,14 +520,10 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 - **Hecho cuando:** Blender y Unreal abren el archivo con las cámaras y las luces en su sitio.
 
 **F6.11.2 Unreal y ARRI Luka** · Mac
-- **Qué:** un paquete con:
-  - el glb;
-  - el JSON de escena (`IrisDpExportService` ampliado: luces con fixture Luka, cámaras con su perfil, marcas y tiempos del secuenciador);
-  - un script de Python de editor de Unreal, guardado en la app como texto y escrito junto al paquete, que importa el glb, pone cada fixture de Luka en su nodo (`luka_light_mapping.dart`), crea las CineCameraActor con su filmback y su óptica, y crea un Level Sequence con las claves de F6.7.
-- **Hecho cuando:** un proyecto de Unreal vacío queda montado con un clic en el script.
+- **Qué:** pasa al bloque F6.16 (Unreal al 100 %): paquete `.irisstage`, plugin de Unreal y pruebas de ida y vuelta.
 
 **F6.11.3 De Unreal a IRIS** · Mac
-- **Qué:** importar los renders (ya existe) y también las cámaras cambiadas en Unreal (JSON que escribe el mismo script). Vuelven a la planta como posición, altura, giro y focal.
+- **Qué:** pasa a F6.16.9 (renders de vuelta) y F6.16.10 (cambios de vuelta).
 
 **F6.11.4 MVR y GDTF** · Mac
 - **Qué:** fixtures con su GDTF del catálogo cuando lo haya, unidad y DMX (F6.3.10), truss como `Truss`, motores y torres como `Support`, la nave como `SceneObject` (ya hecho). Importar un MVR de una consola o de Vectorworks a la planta.
@@ -489,17 +561,243 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 
 ---
 
+## F6.13 · IRIS Stage (la herramienta 3D completa)
+
+**F6.13.1 Renombrar y reconvertir la pantalla** · todos
+- **Qué:** la pantalla «Unreal / Luka bridge» (`luka_export/luka_bridge_screen.dart`) pasa a llamarse **IRIS Stage** en menús, títulos y rutas.
+- **Qué es:** deja de ser solo un exportador. Es el espacio 3D del proyecto, con todas las localizaciones, sets, escenas y planos, y con el constructor de mundos (F6.14), luz, cámara, secuenciador y salida.
+- **Exportar:** la exportación a Unreal y Luka queda como un apartado dentro (F6.16).
+- **Se reaprovecha:** `iris_dp_export_service.dart`, `luka_export_preview.dart`, `luka_compatibility_service.dart` y `luka_fixture_picker.dart`.
+- **Hecho cuando:** en la app no queda «Unreal / Luka bridge» y IRIS Stage abre el set del proyecto en 3D.
+
+**F6.13.2 El 3D de la planta como atajo** · todos
+- **Qué:** el panel 3D de la planta de cámara y luz (`rig/plan_3d_view.dart`) se queda como vista rápida: mirar, mover, apuntar y ver por la cámara.
+- **Salto:** un botón «Abrir en IRIS Stage» lleva a la misma escena con todas las herramientas.
+
+**F6.13.3 Del proyecto a Stage y vuelta** · todos
+- **Qué:** desde una escena o un plano (`scenes`, `shots`) se abre IRIS Stage en su set y con su cámara. Desde Stage se vuelve al plano con la captura hecha (F6.10.1).
+
+**F6.13.4 Por dispositivo** · —
+- **Mac:** IRIS Stage completo.
+- **iPad:** abrir, mirar, pilotar con el giroscopio, retoques ligeros y capturas.
+- **Móvil:** ver y recorrer.
+
+---
+
+## F6.14 · Constructor de mundos (cualquier interior o exterior)
+
+Toda pieza tiene su forma 2D en la planta y su 3D, y entra en la prueba de paridad (F6.0.4). Ejemplo guía: una estación de tren de los años 50, primero el mapa 2D y luego el 3D, con su edificio, vías, tren, andenes, árboles y plantas.
+
+**F6.14.1 Edificios por planta y alturas** · Mac, iPad
+- **Qué:** se dibuja la huella (como el perímetro de la nave) y se fijan:
+  - las plantas y la altura entre ellas;
+  - la cubierta: plana, a dos aguas, mansarda o marquesina;
+  - el estilo de fachada: ladrillo, piedra, revoco, hierro y cristal;
+  - los huecos por fachada y la cornisa.
+- **Por dentro:** se puede entrar, tiene suelos por planta (`PlanLevel`) y admite distribución interior con paredes.
+- **Base:** se apoya en `HallRecipe` (`rig/plan_hall.dart`), que pasa a ser «Receta de construcción».
+- **Unreal:** malla por Interchange con materiales PBR (F6.16.3).
+
+**F6.14.2 Vías de tren** · Mac, iPad
+- **Qué:** la vía se dibuja como una curva, con:
+  - ancho ibérico o internacional;
+  - traviesas y balasto;
+  - cambios de agujas;
+  - andenes con su altura y bordillo;
+  - catenaria opcional.
+- **Material móvil:** locomotoras y vagones (vapor de los años 50, diésel, eléctrico, mercancías) se colocan en la vía y se deslizan por ella, como un motor en su truss.
+- **Unreal:** spline de vía y mallas del tren (F6.16.3, F6.16.6).
+
+**F6.14.3 Calles y ciudad** · todos
+- **Qué:** calle con aceras, bordillo, pasos de cebra, alcorques y adoquín o asfalto según época. Farolas de época (F6.3.6), bancos, quioscos, vallas y señales.
+
+**F6.14.4 Terreno esculpible** · Mac, iPad
+- **Qué:** un relieve por rejilla de alturas, con pinceles para subir, bajar, alisar y aplanar, y curvas de nivel en la planta.
+- **Lo de hoy:** colinas, montañas y taludes pasan a este relieve. Lo que hay encima se apoya en él (`groundM`).
+- **Materiales pintados:** hierba, tierra, roca, arena, nieve y barro.
+- **Unreal:** Landscape desde el mapa de altura, con capas de material (F6.16.6).
+
+**F6.14.5 Agua** · todos (reflejos en Mac e iPad)
+- **Lago:** un polígono con su nivel.
+- **Río:** una curva con ancho, caudal y dirección.
+- **Mar:** línea de costa con playa (pendiente de arena), oleaje y espuma en la orilla.
+- **En 2D** se dibujan como en un mapa. **En 3D** el agua refleja el cielo y las luces y tiene profundidad y transparencia.
+- **Unreal:** Water Body Lake, River y Ocean del plugin Water (F6.16.6).
+
+**F6.14.6 Vegetación** · todos
+- **Qué:** árboles y plantas por especie (pino, encina, olivo, chopo, palmera, setos, hierba alta, cañas, flores), uno a uno o esparcidos con pincel por densidad.
+- **En la planta:** su símbolo y su copa. **Con la luz:** las copas filtran la luz como el árbol de hoy (`treeTransmission`).
+- **Unreal:** instancias de Foliage o PCG (F6.16.6).
+
+**F6.14.7 Cielo y entorno** · todos
+- **Qué:** cielo físico con sol y luna (F6.3.5), nubes por cantidad y fondos HDRI de los packs para iluminación y reflejos.
+- **Unreal:** SkyAtmosphere, SkyLight y la posición del sol (F6.16.4).
+
+**F6.14.8 Plantillas de mundo** · todos
+- **Qué:** estación de tren de los años 50, calle de pueblo, playa con paseo, lago de montaña, bosque, río con puente, nave industrial y plató.
+- **Cómo:** cada plantilla es una receta editable, no una escena cerrada.
+
+**F6.14.9 Época** · todos
+- **Qué:** un ajuste de época en la escena (años 20, 50, 70, actual) que elige el aspecto de farolas, vehículos, señales y materiales de los packs.
+
+---
+
+## F6.15 · Biblioteca y packs
+
+**F6.15.1 Gestor de packs** · todos
+- **Qué:** packs descargables que, una vez bajados, funcionan sin red:
+  - Naturaleza;
+  - Ciudad;
+  - Años 50;
+  - Ferrocarril;
+  - Plató y cine (grip, soportes, cámaras);
+  - Cielos HDRI;
+  - Materiales PBR.
+- **Cómo:** se guardan en la carpeta de la app, como los escaneos (`rig/scan_store.dart`). Cada pack muestra tamaño, versión y licencia, y se puede borrar.
+- **Lo básico va dentro de la app:** formas y materiales generados por código.
+
+**F6.15.2 Fuentes libres** · —
+- **Qué:** Poly Haven y ambientCG (CC0) para texturas PBR, HDRI y modelos; Kenney y similares (CC0) para piezas sencillas.
+- **Licencia:** cada asset guarda su licencia y su origen en el manifiesto del pack. La hoja de créditos se genera sola.
+
+**F6.15.3 Importar lo propio** · Mac, iPad
+- **Qué:** modelos glTF, OBJ o USDZ y texturas propias a la biblioteca del proyecto, con miniatura y medidas.
+- **De vuelta:** lo que venga de Unreal o de Sketchfab se reconoce por nombre al volver (F6.16.10).
+
+**F6.15.4 Equivalencias con Unreal** · Mac
+- **Qué:** cada asset de pack lleva su equivalente en Unreal (un asset de Fab o Megascans, o contenido de muestra). Al exportar se elige entre el modelo de IRIS y el de Unreal.
+
+---
+
+## F6.16 · Unreal al 100 %
+
+Lo creado en IRIS Stage tiene en Unreal el mismo aspecto, la misma luz, la misma niebla, la misma cámara y los mismos planos. Se consigue con un **paquete de proyecto IRIS** y un **plugin de Unreal** que lo interpreta.
+
+**F6.16.1 Paquete de proyecto IRIS (`.irisstage`)** · Mac
+- **Qué:** un zip con:
+  - el glTF de cada set;
+  - las texturas PBR;
+  - los mapas de altura del terreno (PNG de 16 bits);
+  - las curvas de agua y vegetación;
+  - los perfiles IES de los aparatos;
+  - un manifiesto JSON versionado con lo que glTF no cubre: cámaras de cine, secuencias, niebla, humo, DMX, Luka y packs usados.
+- **Base:** amplía `IrisDpExportService` y el manifiesto Luka (`luka_manifest_models.dart`).
+- **Hecho cuando:** el manifiesto tiene su esquema escrito en `docs/` y una prueba lo valida.
+
+**F6.16.2 Plugin «IRIS Stage for Unreal»** · Mac
+- **Qué:** plugin de Unreal 5 en Python con Editor Utility Widgets. Va dentro de la app como recurso y se escribe junto al paquete con instrucciones de instalación. Lee el paquete y monta el nivel.
+- **Hecho cuando:** un proyecto de Unreal vacío queda montado en un paso con los sets, las luces, la niebla, las cámaras y los planos.
+
+**F6.16.3 Geometría y materiales** · Mac
+- **Qué:** las mallas entran por Interchange (glTF) y los materiales PBR pasan a instancias de material. Si el pack tiene equivalente en Fab o Megascans (F6.15.4), el plugin lo puede sustituir.
+
+**F6.16.4 Luz** · Mac
+- **Qué:** cada aparato pasa a la luz de Unreal que corresponde:
+  - Spot, Rect o Point;
+  - intensidad en candela o lux, con las mismas unidades que IRIS (F6.3.1);
+  - temperatura de color, perfil IES, tamaño de la fuente y difusión;
+  - canales de luz.
+- **Con Luka:** si el aparato tiene fixture de Luka (`luka_light_mapping.dart`), se usa el de Luka con su unidad DMX.
+- **Sol y cielo:** DirectionalLight, SkyAtmosphere y SkyLight con la posición del sol (fecha, hora y coordenadas).
+
+**F6.16.5 Niebla y humo** · Mac
+- **Qué:**
+  - niebla de ambiente a ExponentialHeightFog con niebla volumétrica;
+  - volúmenes locales a Local Fog Volume;
+  - fuentes de humo a sistemas Niagara del plugin (máquina de humo, chimenea, vapor de locomotora), con sus parámetros de caudal y viento.
+
+**F6.16.6 Terreno, agua y vegetación** · Mac
+- **Qué:**
+  - relieve a Landscape desde el mapa de altura, con capas de material pintadas;
+  - lagos, ríos y mar a Water Body Lake, River y Ocean;
+  - vegetación a instancias de Foliage o PCG.
+
+**F6.16.7 Cámaras y planos** · Mac
+- **Qué:**
+  - cada cámara pasa a una CineCameraActor con filmback (sensor del modo de grabación), óptica, enfoque, apertura y exposición;
+  - cada plano pasa a un Level Sequence con sus claves de cámara, actores y luz (F6.7);
+  - la escena pasa a una secuencia maestra con los cortes;
+  - las líneas de encuadre pasan a un overlay.
+
+**F6.16.8 Actores** · Mac
+- **Qué:** el maniquí de Unreal (Manny o Quinn) con la postura y el recorrido de cada personaje.
+
+**F6.16.9 Renders de vuelta** · Mac
+- **Qué:** el plugin lanza la Movie Render Queue con los ajustes del plano (resolución del formato, DLSS si hay RTX) y nombra los fotogramas como espera IRIS (`iris_dp_s{escena}_p{plano}.png`, `unreal_render_import.dart`). IRIS los importa al storyboard.
+
+**F6.16.10 Cambios de vuelta a IRIS** · Mac
+- **Qué:** el plugin exporta un JSON de diferencias (cámaras movidas, luces cambiadas, piezas añadidas) que IRIS aplica a la planta, con una lista para aceptar o rechazar cada cambio.
+
+**F6.16.11 Pruebas de ida y vuelta** · Mac
+- **Qué:** una escena de referencia (estación de los 50 con niebla, sol de tarde y un plano con dolly) se exporta y se monta en Unreal. Se comparan:
+  - las posiciones (±1 cm);
+  - la cámara (focal, sensor, enfoque);
+  - la intensidad de luz (±1/3 de stop con un fotómetro virtual a los dos lados);
+  - la niebla.
+- **Registro:** una lista de comprobación en `docs/` recoge el resultado de cada versión.
+
+**F6.16.12 Sustituir a ARRI Luka** · Mac, iPad
+- **Qué:** lo que hoy se hace en Unreal con Luka (fixtures con fotometría, DMX y control desde consola) se hace en IRIS Stage, con el catálogo de fixtures, la mesa de luces (F6.3.7) y el DMX (F6.3.10).
+- **Luka:** queda como destino compatible. Si un aparato tiene fixture de Luka, el paquete lo lleva.
+
+---
+
+## F6.17 · Opciones futuras de render (solo estudio, fuera de esta fase)
+
+**F6.17.1 Renderizador nativo en Metal para el Mac**
+- Trazado de rayos por hardware (M3 o posterior) y MetalFX.
+
+**F6.17.2 IRIS para Windows con RTX**
+- La app ya tiene carpeta `windows/`. Haría falta un renderizador nativo, porque el WebView no da acceso a DLSS.
+
+**F6.17.3 Render remoto**
+- Render en la nube o en el PC de Unreal lanzado desde IRIS (F6.16.9).
+
+**F6.17.4 Viabilidad**
+- Estudio de las tres opciones (coste, plataformas, mantenimiento) antes de decidir nada.
+
+---
+
+## F6.18 · Platós
+
+**F6.18.1 Localización de tipo plató** · todos
+- **Qué:** en `locations`, el tipo «plató» con su ficha:
+  - medidas útiles y altura libre;
+  - parrilla: sí o no, su altura, su retícula, carga por punto, motorizada o fija;
+  - ciclorama: sí o no, y sus lados;
+  - puertas de carga y su tamaño;
+  - suelo pintable o no;
+  - insonorización y climatización.
+- **Al crear la planta** de una localización plató, IRIS la reconoce y monta la base sola con la receta de construcción: techo plano, parrilla como rejilla de truss y ciclorama.
+- **Hecho cuando:** crear la planta de un plató con parrilla a 7 m deja la parrilla, el ciclorama y las tomas colocados.
+
+**F6.18.2 Tomas de corriente** · todos
+- **Qué:** un tipo nuevo de elemento, «toma de corriente», con:
+  - conector: Schuko 16 A, CEE 16 A y 32 A mono o tri, CEE 63 A y 125 A, Powerlock;
+  - fases y amperios;
+  - situación en pared, en la parrilla o en una caja de suelo.
+- **Plantilla:** la del plató las coloca según su ficha.
+
+**F6.18.3 Reparto de corriente** · Mac, iPad
+- **Qué:** cada luz se conecta a una toma o a un generador, con su tirada de cable y su caja de distribución.
+- **Avisos:** IRIS suma por toma y por fase y avisa de sobrecarga y desequilibrio. Lleva `GearList.powerLines()` a cada circuito.
+- **Salida:** lista de cable y material eléctrico, y una hoja de corriente en PDF.
+
+**F6.18.4 Zonas de logística** · todos
+- **Qué:** vestuarios, maquillaje, zona de cámara, catering y parking de camiones como zonas marcadas en la planta del plató.
+
+---
+
 ## Orden propuesto y dependencias
 
-1. **F6.0** completa: 0.1, 0.3 y 0.4 primero.
-2. **F6.1:** paridad, empezando por 1.5b (atrezzo con medidas), 1.9b (sentarse), 1.6 (soportes), 1.7 (grip), 1.1 (terreno) y 1.2 (materiales).
-3. **F6.4** (cámara) y **F6.8** (navegación y pilotar, con 8.3b: operar a la altura de verdad). Es lo que sustituye a Cine Tracer para componer.
-4. **F6.10.1–10.2:** capturas al storyboard.
-5. **F6.3:** luz fiel, mesa de luces y fotómetro.
-6. **F6.6** (actores) y **F6.7** (secuenciador).
-7. **F6.5:** soportes de cámara y movimientos.
-8. **F6.2** (constructor) y **F6.9** (atmósfera).
-9. **F6.11** (interoperabilidad) y **F6.12** (escaneos).
+1. **F6.0** (con 0.1b WebGPU), **F6.13.1–13.2** (IRIS Stage como contenedor) y **F6.16.1** (paquete versionado desde el principio, para que cada pieza nueva nazca exportable).
+2. **F6.1:** paridad (1.5b, 1.9b, 1.6, 1.7, 1.1, 1.2), **F6.2.8–2.10** (caseta) y **F6.18.1–18.2** (plató y tomas).
+3. **F6.4** y **F6.8** (cámara y pilotar, con 8.3b) y **F6.10.1–10.2** (capturas). Es lo que sustituye a Cine Tracer para componer.
+4. **F6.15** (packs) y **F6.14** (mundos: edificios, vías, terreno, agua, vegetación y plantillas).
+5. **F6.3** (luz fiel, materiales PBR), **F6.9** (niebla y humo) y **F6.10.1b** (captura de calidad).
+6. **F6.6** y **F6.7** (actores y secuenciador) y **F6.5** (soportes de cámara).
+7. **F6.16.2–16.12** (plugin de Unreal e ida y vuelta), **F6.11** (resto de formatos), **F6.12** (escaneos) y **F6.18.3–18.4** (corriente y logística).
+8. **F6.17** solo como estudio.
 
 Dependencias principales:
 
@@ -509,7 +807,11 @@ Dependencias principales:
 | F6.4.5 | F6.0.1 (posproceso) |
 | F6.12.1 | F6.0.1 |
 | F6.7 | F6.6.4 y F6.4.4 |
-| F6.11.2 | F6.7 (claves) y F6.4 (cámaras) |
+| F6.16.7 | F6.7 (claves) y F6.4 (cámaras) |
+| F6.10.1b | F6.0.1b (WebGPU) y F6.3.11 (materiales PBR) |
+| F6.14 | F6.15.1 (packs) y F6.0.3 (contrato v2) |
+| F6.16.2–16.12 | F6.16.1 (paquete) |
+| F6.18.1 | F6.2.8 (receta con parrilla) |
 | F6.8.4 | F6.8.3 |
 
 ## Verificación común a todos los puntos
