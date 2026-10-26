@@ -30,10 +30,18 @@ Qué cambia si ya habías instalado un DMG antiguo (con sandbox):
 
 ### Windows
 
-1. Ejecuta el instalador o descomprime la carpeta `Release` del build.
-2. Inicia `iris_dp.exe`.
-3. Confirma en Windows Defender si lo pide.
-4. Sigue el tutorial de configuración.
+1. Descarga `IRIS-DP-Windows-Setup.exe` del último release de GitHub (o del artefacto de un PR, para probar una rama).
+2. Ábrelo. Como el instalador no está firmado, Windows SmartScreen avisa: **Más información → Ejecutar de todos modos**.
+3. Se instala para tu usuario, sin pedir administrador, en `%LOCALAPPDATA%\Programs\IRIS DP`, con acceso directo en el escritorio y en el menú Inicio.
+4. Abre IRIS, inicia sesión en la nube y espera a que bajen los proyectos.
+
+Requisitos: Windows 10 u 11 de 64 bits y **Microsoft Edge WebView2** (viene con Windows 11; en Windows 10 se instala desde Microsoft si falta). Lo usa el 3D.
+
+Dónde guarda IRIS sus datos en Windows:
+- base y ajustes: `%APPDATA%\IRIS DP\IRIS\iris_dp\app_data`;
+- documentos del proyecto (imágenes, guiones, PDF): `Documentos\iris_dp\documentos`.
+
+Las dos rutas se pueden cambiar en **Ajustes → Almacenamiento**.
 
 ### iPad
 
