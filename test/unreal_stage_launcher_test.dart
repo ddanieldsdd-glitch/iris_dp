@@ -46,13 +46,47 @@ void main() {
         ..createSync(recursive: true);
       File('${bin.path}/UnrealEditor.exe').writeAsStringSync('');
     }
-    final found = UnrealStageLauncher.findEngine(root: root.path)!;
+    const none = 'no-existe.dat';
+    final found = UnrealStageLauncher.findEngine(
+      root: root.path,
+      launcherFile: none,
+    )!;
     expect(found.version, '5.6');
     expect(found.editor, endsWith('UnrealEditor.exe'));
 
     Directory('${root.path}/UE_5.6').deleteSync(recursive: true);
-    expect(UnrealStageLauncher.findEngine(root: root.path)!.version, '5.5');
+    expect(
+      UnrealStageLauncher.findEngine(root: root.path, launcherFile: none)!
+          .version,
+      '5.5',
+    );
     Directory('${root.path}/UE_5.5').deleteSync(recursive: true);
-    expect(UnrealStageLauncher.findEngine(root: root.path), isNull);
+    expect(
+      UnrealStageLauncher.findEngine(root: root.path, launcherFile: none),
+      isNull,
+    );
+  });
+
+  test('también lo encuentra en otro disco, por la lista del launcher', () async {
+    final other = await Directory.systemTemp.createTemp('disco_d_');
+    addTearDown(() => other.delete(recursive: true));
+    final ue = '${other.path}${Platform.pathSeparator}UE_5.7';
+    final bin = Directory('$ue/Engine/Binaries/Win64')
+      ..createSync(recursive: true);
+    File('${bin.path}/UnrealEditor.exe').writeAsStringSync('');
+    final list = File('${other.path}/LauncherInstalled.dat')
+      ..writeAsStringSync(
+        jsonEncode({
+          'InstallationList': [
+            {'InstallLocation': ue, 'AppName': 'UE_5.7'},
+            {'InstallLocation': '${other.path}/Fortnite', 'AppName': 'Fortnite'},
+          ],
+        }),
+      );
+    final found = UnrealStageLauncher.findEngine(
+      root: '${other.path}/nada',
+      launcherFile: list.path,
+    )!;
+    expect(found.version, '5.7');
   });
 }

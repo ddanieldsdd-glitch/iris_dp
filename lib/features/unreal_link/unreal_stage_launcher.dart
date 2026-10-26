@@ -67,17 +67,39 @@ class UnrealStageLauncher extends ChangeNotifier {
       phase != UnrealLaunchPhase.done &&
       phase != UnrealLaunchPhase.error;
 
-  /// Unreal 5.5 o posterior instalado con el Epic Games Launcher; el más
+  /// Lista de lo que ha instalado el Epic Games Launcher, en cualquier disco.
+  static const launcherList =
+      r'C:\ProgramData\Epic\UnrealEngineLauncher\LauncherInstalled.dat';
+
+  /// Carpetas `UE_x.y` candidatas: las de la lista del launcher y las de la
+  /// carpeta por defecto.
+  static List<String> _candidates(String root, String launcherFile) {
+    final out = <String>{};
+    try {
+      final json = jsonDecode(File(launcherFile).readAsStringSync()) as Map;
+      for (final item in (json['InstallationList'] as List? ?? const [])) {
+        final location = (item as Map)['InstallLocation'] as String?;
+        if (location != null) out.add(location);
+      }
+    } catch (_) {}
+    final dir = Directory(root);
+    if (dir.existsSync()) {
+      out.addAll(dir.listSync().whereType<Directory>().map((d) => d.path));
+    }
+    return out.toList();
+  }
+
+  /// Unreal 5.5 o posterior (Pixel Streaming 2 empieza en la 5.5); el más
   /// nuevo si hay varios.
   static UnrealEngineInstall? findEngine({
     String root = r'C:\Program Files\Epic Games',
+    String launcherFile = launcherList,
   }) {
-    final dir = Directory(root);
-    if (!dir.existsSync()) return null;
     UnrealEngineInstall? best;
     (int, int)? bestVersion;
-    for (final entry in dir.listSync().whereType<Directory>()) {
-      final m = RegExp(r'UE_(\d+)\.(\d+)$').firstMatch(entry.path);
+    for (final path in _candidates(root, launcherFile)) {
+      final entry = Directory(path);
+      final m = RegExp(r'UE_(\d+)\.(\d+)[\\/]?$').firstMatch(entry.path);
       if (m == null) continue;
       final v = (int.parse(m.group(1)!), int.parse(m.group(2)!));
       if (v.$1 < 5 || (v.$1 == 5 && v.$2 < 5)) continue;
