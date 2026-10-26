@@ -105,6 +105,8 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
       case AppLifecycleState.paused ||
             AppLifecycleState.hidden ||
             AppLifecycleState.detached:
+        debugPrint('[sync ${_now()}] app en segundo plano ($state): '
+            'se para la sincronización automática');
         _foreground = false;
         // Lo que se editaba queda libre para los demás equipos.
         ref.read(liveEditingProvider).releaseAll();
@@ -199,6 +201,9 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
   }
 
   Future<void> _run({required bool full}) async {
+    debugPrint('[sync ${_now()}] pasada ${full ? 'completa' : 'ligera'}'
+        '${_canSync ? '' : ' · NO SE PUEDE: sin sesión, sin red o nube apagada'}'
+        '${_foreground ? '' : ' · app en segundo plano'}');
     if (!_canSync) return;
     // Cada pasada comprueba también que se sigue en el canal en vivo.
     if (!(ref.read(realtimeHubProvider)?.isLive ?? true)) {
