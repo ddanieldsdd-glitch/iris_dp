@@ -361,9 +361,33 @@ class _Bar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const style = TextStyle(color: Colors.white, fontSize: 12.5);
+    final count = total == 0 ? '—' : '$done/$total';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
+      child: LayoutBuilder(
+        builder: (context, box) =>
+            box.maxWidth < 84 + 44 + 40 ? _compact(style, count) : _full(style, count),
+      ),
+    );
+  }
+
+  /// Tarjeta pequeña: sin sitio para la barra, solo etiqueta y cifra.
+  Widget _compact(TextStyle style, String count) => Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: style,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(count, style: style),
+        ],
+      );
+
+  Widget _full(TextStyle style, String count) => Row(
         children: [
           SizedBox(width: 84, child: Text(label, style: style)),
           Expanded(
@@ -379,16 +403,10 @@ class _Bar extends StatelessWidget {
           ),
           SizedBox(
             width: 44,
-            child: Text(
-              total == 0 ? '—' : '$done/$total',
-              textAlign: TextAlign.right,
-              style: style,
-            ),
+            child: Text(count, textAlign: TextAlign.right, style: style),
           ),
         ],
-      ),
-    );
-  }
+      );
 }
 
 /// Una cifra: icono, etiqueta y número.

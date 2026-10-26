@@ -38,13 +38,38 @@ abstract final class ErrorLog {
     final previous = FlutterError.onError;
     FlutterError.onError = (details) {
       previous?.call(details);
-      record(details.exception, details.stack, context: details.context);
+      record(
+        details.exception,
+        details.stack,
+        context: details.context,
+        culprit: _culprit(details),
+      );
     };
     PlatformDispatcher.instance.onError = (error, stack) {
       debugPrint('Error no capturado: $error\n$stack');
       record(error, stack);
       return true;
     };
+  }
+
+  static final _culpritSeen = <String>{};
+
+  /// Dónde está el widget que causó el error (p. ej. un desbordamiento),
+  /// solo la primera vez que sale cada mensaje: se repite en cada fotograma.
+  static String? _culprit(FlutterErrorDetails details) {
+    if (!_culpritSeen.add('${details.exception}')) return null;
+    final lines = <String>[];
+    for (final node in details.informationCollector?.call() ??
+        const <DiagnosticsNode>[]) {
+      for (final line in node.toStringDeep().split('\n')) {
+        if (line.contains('error-causing widget') ||
+            line.contains('file:///') ||
+            line.contains('package:iris_dp/')) {
+          lines.add(line.trim());
+        }
+      }
+    }
+    return lines.isEmpty ? null : lines.take(6).join('\n');
   }
 
   /// Guarda aparte un contenido que no se puede leer antes de que se escriba
@@ -72,6 +97,7 @@ abstract final class ErrorLog {
     Object error,
     StackTrace? stack, {
     Object? context,
+    String? culprit,
   }) {
     return _pending = _pending.then((_) async {
       try {
@@ -82,6 +108,7 @@ abstract final class ErrorLog {
         final entry = StringBuffer()
           ..writeln('— ${DateTime.now().toIso8601String()}')
           ..writeln(context == null ? '$error' : '$context: $error');
+        if (culprit != null) entry.writeln(culprit);
         if (stack != null) entry.writeln(stack);
         await f.writeAsString('$entry\n', mode: FileMode.append, flush: true);
       } catch (_) {}
