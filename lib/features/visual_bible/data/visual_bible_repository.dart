@@ -48,6 +48,12 @@ class VisualBibleRepository {
       );
       bible = (await _dao.getForProject(projectId)) ?? bible;
     }
+    // Por ahora no se pregunta cómo empezar (plantilla, desde cero o
+    // explorar): toda biblia nueva lleva la estructura estándar de IRIS.
+    if (!bible.structureInitialized && bible.engineVersion != 'v2') {
+      await initializeStandard(bible.id);
+      bible = (await _dao.getForProject(projectId)) ?? bible;
+    }
     final project = await _dao.getProject(projectId);
     return (
       data: VisualBibleData.fromRow(bible),
@@ -55,6 +61,13 @@ class VisualBibleRepository {
       created: !hadBible,
       needsOnboarding: !bible.structureInitialized,
     );
+  }
+
+  /// Estructura estándar de IRIS (todas las pantallas built-in). Si la
+  /// biblia ya tiene pantallas, solo la marca como iniciada.
+  Future<void> initializeStandard(int bibleId) async {
+    await _dao.database.ensureBibleSectionLayout(bibleId);
+    await _dao.database.initializeEmptyBible(bibleId);
   }
 
   Future<void> initializeEmpty(int bibleId) =>

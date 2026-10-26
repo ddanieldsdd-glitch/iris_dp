@@ -162,15 +162,22 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
     };
   }
 
-  Future<void> _startEmptyBible() async {
+  bool _startingStandard = false;
+
+  Future<void> _startStandardBible() async {
     final data = _data;
-    if (data == null || data.id <= 0) return;
-    await ref.read(visualBibleRepositoryProvider).initializeEmpty(data.id);
-    if (!mounted) return;
-    setState(() {
-      data.structureInitialized = true;
-      _needsOnboarding = false;
-    });
+    if (_startingStandard || data == null || data.id <= 0) return;
+    _startingStandard = true;
+    try {
+      await ref.read(visualBibleRepositoryProvider).initializeStandard(data.id);
+      if (!mounted) return;
+      setState(() {
+        data.structureInitialized = true;
+        _needsOnboarding = false;
+      });
+    } finally {
+      _startingStandard = false;
+    }
   }
 
   Future<void> _reloadBible() async {
@@ -1060,18 +1067,14 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                       final showOnboarding =
                           _needsOnboarding ||
                           (bibleSnap.data?.structureInitialized == false);
+                      // Sin elegir plantilla: se monta la biblia estándar
+                      // (BibleStartScreen queda para cuando vuelvan las
+                      // plantillas).
                       if (showOnboarding) {
-                        return BibleStartScreen(
-                          onStartEmpty: _startEmptyBible,
-                          onBrowseTemplates: () => _openTemplateLibrary(
-                            bibleId: _data!.id,
-                            examplesMode: false,
-                          ),
-                          onExploreExamples: () => _openTemplateLibrary(
-                            bibleId: _data!.id,
-                            examplesMode: true,
-                          ),
+                        WidgetsBinding.instance.addPostFrameCallback(
+                          (_) => _startStandardBible(),
                         );
+                        return const Center(child: CircularProgressIndicator());
                       }
 
                       final bibleId = _data!.id > 0
