@@ -21,6 +21,8 @@ import '../plan_piece_controls.dart';
 import 'light_floor.dart';
 import 'plan_rig.dart';
 import 'plan_scene3d.dart';
+import '../../unreal_link/unreal_link.dart';
+import '../../unreal_link/unreal_link_button.dart';
 import 'scan_store.dart';
 import 'rig_report.dart';
 
@@ -120,6 +122,7 @@ class _Plan3dViewState extends State<Plan3dView> {
   void initState() {
     super.initState();
     _realLength.addListener(() => setState(() {}));
+    _schedule();
   }
 
   @override
@@ -147,14 +150,17 @@ class _Plan3dViewState extends State<Plan3dView> {
   }
 
   Future<void> _push() async {
-    final web = _web;
-    if (!_ready || web == null || !mounted) return;
+    if (!mounted) return;
     final scene = PlanScene3d.build(
       widget.elements,
       metersPerUnit: widget.metersPerUnit,
       name: widget.name,
       ambient: widget.ambient,
     );
+    // Unreal recibe la misma escena, esté o no listo el visor.
+    UnrealLink.instance.offer(scene);
+    final web = _web;
+    if (!_ready || web == null) return;
     final json = jsonEncode(scene);
     if (json == _sent) return;
     _sent = json;
@@ -586,6 +592,7 @@ class _Plan3dViewState extends State<Plan3dView> {
             child: _viewButtons(compact: true),
           ),
         ),
+        UnrealLinkButton(link: UnrealLink.instance),
         PopupMenuButton<String>(
           tooltip: 'Qué se ve',
           icon: Icon(
@@ -885,6 +892,19 @@ class _Plan3dViewState extends State<Plan3dView> {
           icon: const Icon(Icons.lightbulb_outline, size: 16),
           label: const Text('MVR con la nave y la estructura'),
           onPressed: _exportMvr,
+        ),
+        header('Unreal en vivo'),
+        ListenableBuilder(
+          listenable: UnrealLink.instance,
+          builder: (context, _) => OutlinedButton.icon(
+            icon: const Icon(Icons.cast_connected_outlined, size: 16),
+            label: Text(
+              UnrealLink.instance.isOn
+                  ? 'Conectado con Unreal'
+                  : 'Conectar con Unreal',
+            ),
+            onPressed: () => showUnrealLinkDialog(context, UnrealLink.instance),
+          ),
         ),
       ],
     );

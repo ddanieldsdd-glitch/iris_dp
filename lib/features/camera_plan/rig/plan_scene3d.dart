@@ -475,6 +475,16 @@ class PlanScene3d {
       'cct': beam?.cct ?? 3200,
       'watts': ?light?.watts,
       'on': beam != null && !beam.off,
+      // Lo que llega a la escena, con regulación, difusiones y gelatinas:
+      // candelas en el eje, haz, color y tamaño de lo que emite. Es lo que
+      // usan el motor de luz de IRIS y Unreal (IRIS Stage Link).
+      if (light != null)
+        'source': {
+          'cd': _r(light.source.candela),
+          'beamDeg': _r(light.source.beamDeg),
+          'cct': _r(light.source.cct),
+          'sizeM': _r(light.source.sizeM),
+        },
       if (TrussMagnet.trussUidOf(el) != null)
         'truss': TrussMagnet.trussUidOf(el),
     };
