@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -105,13 +107,18 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
       case AppLifecycleState.paused ||
             AppLifecycleState.hidden ||
             AppLifecycleState.detached:
-        debugPrint('[sync ${_now()}] app en segundo plano ($state): '
-            'se para la sincronización automática');
         _foreground = false;
         // Lo que se editaba queda libre para los demás equipos.
         ref.read(liveEditingProvider).releaseAll();
-        _ticker?.cancel();
-        _ticker = null;
+        // En el ordenador, minimizar no para nada: lo que suben los demás
+        // tiene que estar al volver, y lo de aquí no puede quedarse sin
+        // subir. Solo el iPad y el móvil se paran (batería y datos).
+        if (_isMobile) {
+          debugPrint('[sync ${_now()}] app en segundo plano ($state): '
+              'se para la sincronización automática');
+          _ticker?.cancel();
+          _ticker = null;
+        }
         // Lo editado no espera a la próxima vez que se abra la app.
         _editDebounce?.cancel();
         _pushEdits();
@@ -141,7 +148,15 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
       debugPrint('[medios ${_now()}] contenido subido, aviso: $projectCloudId');
       return hub.announceSnapshot(projectCloudId, hash);
     };
-    MediaUploadQueue.onProjectUploaded = hub.announceMedia;
+    MediaUploadQueue.onProjectUploaded = (projectCloudId) {
+      unawaited(hub.announceMedia(projectCloudId));
+      // Una imagen nueva (p. ej. pegada en el moodboard) no pasa por la cola
+      // de contenido: su fila sube ya, sin esperar a la pasada de cada
+      // minuto, para que los demás sepan dónde va.
+      _liveDebounce?.cancel();
+      _liveDebounce =
+          Timer(AutoSyncScheduler.liveDelay, () => _run(full: false));
+    };
     if (!identical(hub, _liveHub)) {
       await _liveNotices?.cancel();
       await _mediaNotices?.cancel();
@@ -163,6 +178,10 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
   }
 
   static String _now() => DateTime.now().toIso8601String().substring(11, 23);
+
+  static bool get _isMobile =>
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.android;
 
   Future<void> _onLiveNotice(SnapshotNotice notice) async {
     debugPrint('[medios ${_now()}] aviso recibido: contenido de '
