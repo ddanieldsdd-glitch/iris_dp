@@ -12,7 +12,10 @@ import 'unreal_stage_payload.dart';
 /// Unreal y lo que IRIS había mandado. Solo lleva lo que ha cambiado.
 class UnrealEdit {
   final String id;
-  final bool camera;
+
+  /// 'lights', 'cameras' o 'props'.
+  final String kind;
+  bool get camera => kind == 'cameras';
 
   /// Lo que IRIS mandó de esta pieza (unidades de Unreal).
   final Map sent;
@@ -31,7 +34,7 @@ class UnrealEdit {
 
   UnrealEdit({
     required this.id,
-    required this.camera,
+    required this.kind,
     required this.sent,
     this.loc,
     this.rot,
@@ -66,22 +69,24 @@ class UnrealReturn {
   /// que mandó IRIS ([applied], de [UnrealStagePayload.build]).
   static List<UnrealEdit> detect(Map<String, dynamic> applied, Map actors) {
     final edits = <UnrealEdit>[];
-    for (final kind in const ['lights', 'cameras']) {
+    for (final kind in UnrealStagePayload.kinds) {
       for (final sent in (applied[kind] as List? ?? const []).cast<Map>()) {
         final now = actors['${sent['id']}'];
         if (now is! Map) continue;
         final loc = _nums(now['loc']), rot = _nums(now['rot']);
         final sLoc = _nums(sent['loc']), sRot = _nums(sent['rot']);
+        // El atrezzo solo se mueve y gira en planta.
+        final flat = kind == 'props';
         final moved =
             loc.length == 3 &&
             sLoc.length == 3 &&
-            [for (var i = 0; i < 3; i++) (loc[i] - sLoc[i]).abs()].any(
-              (d) => d > locCm,
-            );
+            [
+              for (var i = 0; i < (flat ? 2 : 3); i++) (loc[i] - sLoc[i]).abs(),
+            ].any((d) => d > locCm);
         final turned =
             rot.length >= 2 &&
             sRot.length >= 2 &&
-            (_angle(rot[0], sRot[0]) > rotDeg ||
+            ((!flat && _angle(rot[0], sRot[0]) > rotDeg) ||
                 _angle(rot[1], sRot[1]) > rotDeg);
         double? cd, cct;
         if (kind == 'lights') {
@@ -101,7 +106,7 @@ class UnrealReturn {
         edits.add(
           UnrealEdit(
             id: '${sent['id']}',
-            camera: kind == 'cameras',
+            kind: kind,
             sent: sent,
             loc: moved ? loc : null,
             rot: turned ? rot : null,
@@ -129,7 +134,9 @@ class UnrealReturn {
       if (dx.abs() > 0.005 || dy.abs() > 0.005) {
         changed |= PlanScene3d.moveBy(el, dx, dy, elements, metersPerUnit);
       }
-      if ((now[2] - sLoc[2]).abs() > locCm) {
+      // En el atrezzo «height» es su alto, no a qué altura está: subir una
+      // pieza en Unreal no cambia nada en la planta.
+      if (edit.kind != 'props' && (now[2] - sLoc[2]).abs() > locCm) {
         final height = now[2] / 100 - PlanLevel.of(el);
         el.props[PlanLight.heightKey] = (height * 100).roundToDouble() / 100;
         changed = true;
@@ -137,7 +144,8 @@ class UnrealReturn {
     }
     if (edit.rot case final rot?) {
       final d = UnrealStagePayload.dirOf(rot);
-      if (edit.camera) {
+      if (edit.kind != 'lights') {
+        // Cámara o pieza: hacia dónde mira en planta.
         final deg = math.atan2(d.x, d.y) * 180 / math.pi;
         el.rotation = ((deg % 360 + 360) % 360 * 2).roundToDouble() / 2;
       } else {

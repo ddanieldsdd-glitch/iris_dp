@@ -188,9 +188,13 @@ class UnrealLink extends ChangeNotifier {
     Map patched(Map item) {
       final e = byId['${item['id']}'];
       if (e == null) return item;
+      // El atrezzo no cambia de cota desde Unreal: se queda la mandada.
+      final loc = e.kind == 'props' && e.loc != null
+          ? [e.loc![0], e.loc![1], (item['loc'] as List)[2]]
+          : e.loc;
       return {
         ...item,
-        'loc': ?e.loc,
+        'loc': ?loc,
         'rot': ?e.rot,
         if (e.cd != null) ...{'cd': e.cd, 'on': e.cd! > 0.5},
         'cct': ?e.cct,
@@ -199,7 +203,7 @@ class UnrealLink extends ChangeNotifier {
 
     return {
       ...applied,
-      for (final kind in const ['lights', 'cameras'])
+      for (final kind in UnrealStagePayload.kinds)
         kind: [
           for (final item in (applied[kind] as List? ?? const []).cast<Map>())
             patched(item),
@@ -207,10 +211,53 @@ class UnrealLink extends ChangeNotifier {
     };
   }
 
-  /// La escena 3D de la planta ha cambiado.
-  void offer(Map<String, dynamic> scene3d) {
-    _pending = UnrealStagePayload.build(scene3d);
+  /// La escena 3D de la planta ha cambiado. [world] es el set (o la
+  /// localización) al que pertenece: su mundo en Unreal.
+  void offer(Map<String, dynamic> scene3d, {UnrealWorld? world}) {
+    _pending = UnrealStagePayload.build(scene3d, world: world);
     if (isOn) _pump();
+  }
+
+  /// Nivel de Unreal donde está ahora la escena (`/Game/IRIS/…`).
+  String? worldPath;
+
+  /// Foto en alta por la cámara [cameraId] (con Lumen y el trazado de rayos
+  /// de la tarjeta): el PNG cuando Unreal la ha terminado.
+  Future<Uint8List> capture(
+    String cameraId, {
+    int width = 1920,
+    int height = 1080,
+  }) async {
+    // Unreal renderiza la foto dentro de esta llamada: puede tardar.
+    final started = await call('Capture', {
+      'request': jsonEncode({
+        'camera': cameraId,
+        'width': width,
+        'height': height,
+      }),
+    }, const Duration(minutes: 2));
+    final token = started['token'] as String;
+    final deadline = DateTime.now().add(const Duration(minutes: 2));
+    while (DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      final r = await call('CaptureResult', {'token': token});
+      if (r['ready'] == true && r['png'] is String) {
+        return base64Decode(r['png'] as String);
+      }
+    }
+    throw UnrealLinkException('Unreal no ha terminado la captura en 2 minutos.');
+  }
+
+  /// Mallas del proyecto de Unreal (Fab, Megascans o propias) que contienen
+  /// [query] en el nombre o la carpeta.
+  Future<List<UnrealAsset>> findAssets(String query) async {
+    final r = await call('FindAssets', {
+      'query': query,
+    }, const Duration(seconds: 60));
+    return [
+      for (final a in (r['assets'] as List? ?? const []).cast<Map>())
+        UnrealAsset.fromJson(a),
+    ];
   }
 
   Future<void> _pump() async {
@@ -224,7 +271,13 @@ class UnrealLink extends ChangeNotifier {
         if (patch == null) continue;
         final watch = Stopwatch()..start();
         _revision++;
-        await call('ApplyScene', {'payload': jsonEncode(patch)});
+        // Entera puede abrir o crear el mundo del set: tarda más.
+        final r = await call(
+          'ApplyScene',
+          {'payload': jsonEncode(patch)},
+          patch['full'] == true ? const Duration(seconds: 120) : null,
+        );
+        worldPath = r['world'] as String? ?? worldPath;
         lastRoundTrip = watch.elapsed;
         sent++;
         _applied = now;
@@ -244,6 +297,7 @@ class UnrealLink extends ChangeNotifier {
   Future<Map<String, dynamic>> call(
     String function, [
     Map<String, Object?>? parameters,
+    Duration? timeout,
   ]) async {
     final body = {
       'objectPath': objectPath,
@@ -262,7 +316,7 @@ class UnrealLink extends ChangeNotifier {
           },
           body: utf8.encode(jsonEncode(body)),
         )
-        .timeout(_timeout);
+        .timeout(timeout ?? _timeout);
     final text = utf8.decode(response.bodyBytes);
     if (response.statusCode != 200) {
       throw UnrealLinkException(_serverError(text) ?? 'HTTP ${response.statusCode}');
@@ -307,6 +361,36 @@ class UnrealLink extends ChangeNotifier {
     error = message;
     notifyListeners();
   }
+}
+
+/// Una malla del proyecto de Unreal que puede hacer de una pieza de IRIS.
+class UnrealAsset {
+  /// Ruta del objeto: `/Game/Fab/Sofa/SM_Sofa.SM_Sofa`.
+  final String path;
+  final String name;
+  final String folder;
+
+  /// Ancho, fondo y alto en centímetros.
+  final List<double> sizeCm;
+
+  const UnrealAsset({
+    required this.path,
+    required this.name,
+    required this.folder,
+    required this.sizeCm,
+  });
+
+  factory UnrealAsset.fromJson(Map m) => UnrealAsset(
+    path: m['path'] as String,
+    name: m['name'] as String? ?? '',
+    folder: m['folder'] as String? ?? '',
+    sizeCm: [
+      for (final v in (m['sizeCm'] as List? ?? const [0, 0, 0]))
+        (v as num).toDouble(),
+    ],
+  );
+
+  String get sizeLabel => '${sizeCm.map((v) => v.round()).join(' × ')} cm';
 }
 
 class UnrealLinkException implements Exception {

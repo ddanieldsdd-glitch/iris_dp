@@ -7,6 +7,11 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'unreal_link.dart';
 
+/// Guarda una captura de Unreal (PNG) hecha por la cámara [cameraId] en el
+/// storyboard del plano. Devuelve lo que se dice al terminar.
+typedef UnrealCaptureSink =
+    Future<String> Function(Uint8List png, String cameraId);
+
 /// «Render RTX» (F6.19.4): lo que ve el visor del editor de Unreal, con
 /// Lumen y el trazado de rayos de la tarjeta, por Pixel Streaming.
 ///
@@ -18,21 +23,27 @@ class UnrealRenderScreen extends StatefulWidget {
   final List<(String, String)> cameras;
   final UnrealLink link;
 
+  /// Sin él (planta de set o de localización) no se captura.
+  final UnrealCaptureSink? onCapture;
+
   const UnrealRenderScreen({
     super.key,
     required this.cameras,
     required this.link,
+    this.onCapture,
   });
 
   static Future<void> open(
     BuildContext context, {
     required List<(String, String)> cameras,
     UnrealLink? link,
+    UnrealCaptureSink? onCapture,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => UnrealRenderScreen(
         cameras: cameras,
         link: link ?? UnrealLink.instance,
+        onCapture: onCapture,
       ),
     ),
   );
@@ -46,6 +57,31 @@ class _UnrealRenderScreenState extends State<UnrealRenderScreen> {
   String? _camera;
   String? _error;
   bool _loading = true;
+  bool _capturing = false;
+
+  late final String? _camera0 = widget.cameras.length == 1
+      ? widget.cameras.single.$1
+      : null;
+
+  /// Captura en alta por la cámara elegida y la guarda en el plano.
+  Future<void> _capture() async {
+    final sink = widget.onCapture, id = _camera ?? _camera0;
+    if (sink == null || id == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _capturing = true;
+      _error = null;
+    });
+    try {
+      final png = await widget.link.capture(id);
+      final done = await sink(png, id);
+      messenger.showSnackBar(SnackBar(content: Text(done)));
+    } catch (e) {
+      if (mounted) setState(() => _error = UnrealLink.describe(e));
+    } finally {
+      if (mounted) setState(() => _capturing = false);
+    }
+  }
 
   Future<void> _viewThrough(String id) async {
     setState(() {
@@ -123,6 +159,23 @@ class _UnrealRenderScreenState extends State<UnrealRenderScreen> {
                     DropdownMenuItem(value: id, child: Text(name)),
                 ],
                 onChanged: (id) => id == null ? null : _viewThrough(id),
+              ),
+            ),
+          if (widget.onCapture != null && link.isOn)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.sm),
+              child: FilledButton.icon(
+                icon: _capturing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.photo_camera_outlined, size: 18),
+                label: Text(_capturing ? 'Capturando…' : 'Capturar con RTX'),
+                onPressed: _capturing || (_camera ?? _camera0) == null
+                    ? null
+                    : _capture,
               ),
             ),
           IconButton(

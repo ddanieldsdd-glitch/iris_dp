@@ -5,7 +5,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:drift/drift.dart' show Value, OrderingTerm;
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show Uint8List, listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -80,6 +80,8 @@ import 'rig/hall_builder_sheet.dart';
 import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
 import 'rig/plan_3d_view.dart';
+import '../../core/utils/shot_reference_import.dart';
+import '../unreal_link/unreal_stage_payload.dart';
 import 'rig/rig_report.dart';
 import 'rig/plan_hall.dart';
 import '../../core/utils/platform_keys.dart';
@@ -2760,7 +2762,51 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       onChanged: _changedFrom3d,
       onAdd: (el) => _addElement(el, keepPosition: true, select: false),
       ambient: _lightSetup == null ? null : _ambient,
+      unrealWorld: _unrealWorld,
+      onUnrealCapture: widget.shotId == null ? null : _saveUnrealCapture,
     );
+  }
+
+  /// El mundo de Unreal de esta planta: el de su set (lo comparten todas
+  /// las escenas y planos que se ruedan en él) o el de la localización.
+  UnrealWorld? get _unrealWorld {
+    if (_linkedSet case final set?) {
+      return UnrealWorld(
+        key: 'set${set.id}',
+        name: set.locationName,
+        site: _linkedSite?.name,
+      );
+    }
+    if (_linkedSite case final site?) {
+      return UnrealWorld(key: 'site${site.id}', name: site.name, site: site.name);
+    }
+    return null;
+  }
+
+  /// Una captura RTX de Unreal va al storyboard de este plano, como los
+  /// renders que se importan a mano.
+  Future<String> _saveUnrealCapture(Uint8List png, String cameraId) async {
+    final shotId = widget.shotId;
+    if (shotId == null) throw StateError('Esta planta no es de un plano.');
+    final db = ref.read(databaseProvider);
+    final shot = await db.getShotById(shotId);
+    if (shot == null) throw StateError('No se encuentra el plano.');
+    final file = File(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}'
+      'iris_dp_s${shot.sceneId}_p${shot.number}_unreal.png',
+    );
+    await file.writeAsBytes(png);
+    try {
+      await importShotReferenceImage(
+        db: db,
+        shot: shot,
+        sourcePath: file.path,
+        source: ShotReferenceSource.unrealRender,
+      );
+    } finally {
+      if (await file.exists()) await file.delete();
+    }
+    return 'Captura RTX guardada en el storyboard del plano ${shot.number}.';
   }
 
   /// Algo movido, apuntado o retocado en el 3D: se guarda como si se
@@ -4861,6 +4907,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   onChanged: _changedFrom3d,
                                   onExpand: _open3dScreen,
                                   onClose: _toggle3d,
+                                  unrealWorld: _unrealWorld,
+                                  onUnrealCapture: widget.shotId == null
+                                      ? null
+                                      : _saveUnrealCapture,
                                 ),
                               ),
                             ],

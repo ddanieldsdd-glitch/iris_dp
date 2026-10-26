@@ -114,6 +114,63 @@ void main() {
     });
   });
 
+  group('UnrealStagePayload · atrezzo y mundos', () {
+    test('una pieza: bloque con sus medidas o su asset', () {
+      final p = UnrealStagePayload.prop({
+        'id': 'P',
+        'name': 'Mesa',
+        'type': 'table',
+        'at': [1, 1],
+        'z0': 0,
+        'yawDeg': 90,
+        'sizeM': 1.2,
+        'heightM': 0.75,
+      })!;
+      expect(p['sizeCm'], [120, 120, 75]);
+      expect(p['rot'], [0, 0, 0]); // 90° en planta = hacia +x
+      expect(p.containsKey('asset'), isFalse);
+      final q = UnrealStagePayload.prop({
+        'id': 'P',
+        'at': [0, 0],
+        'unrealAsset': '/Game/Fab/Sofa.Sofa',
+      })!;
+      expect(q['asset'], '/Game/Fab/Sofa.Sofa');
+    });
+
+    test('la planta manda su atrezzo con cuerpo, no las colinas', () {
+      final scene = PlanScene3d.build([
+        PlanElement(
+          id: 1,
+          type: ElementType.prop,
+          position: Offset.zero,
+          label: PropType.sofa.dbValue,
+          props: {'uid': 'S'},
+        ),
+        PlanElement(
+          id: 2,
+          type: ElementType.prop,
+          position: Offset.zero,
+          label: PropType.hill.dbValue,
+          props: {'uid': 'H'},
+        ),
+      ], metersPerUnit: 0.01);
+      expect([for (final p in scene['props']) p['id']], ['S']);
+    });
+
+    test('otro set es otro mundo: se manda entero', () {
+      const a = UnrealWorld(key: 'set1', name: 'Cocina', site: 'Casa');
+      const b = UnrealWorld(key: 'set2', name: 'Salón', site: 'Casa');
+      final scene = {
+        'fixtures': [_fixture()],
+      };
+      final first = UnrealStagePayload.build(scene, world: a);
+      expect(first['world'], {'key': 'set1', 'name': 'Cocina', 'site': 'Casa'});
+      expect(UnrealStagePayload.diff(first, first), isNull);
+      final other = UnrealStagePayload.build(scene, world: b);
+      expect(UnrealStagePayload.diff(first, other)!['full'], true);
+    });
+  });
+
   group('UnrealReturn', () {
     const mpu = 0.01;
     PlanElement light() => PlanElement(
@@ -185,7 +242,7 @@ void main() {
     });
 
     test('un cambio lo aplica solo el primero que lo pide', () {
-      final e = UnrealEdit(id: 'x', camera: false, sent: const {});
+      final e = UnrealEdit(id: 'x', kind: 'lights', sent: const {});
       expect(e.claim(), isTrue);
       expect(e.claim(), isFalse);
     });

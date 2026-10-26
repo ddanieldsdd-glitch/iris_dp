@@ -855,7 +855,23 @@ Daniel tiene también un PC con tarjeta NVIDIA. El objetivo es que la calidad RT
 3. **Ventana «Render RTX»** (F6.19.4): Pixel Streaming dentro del WebView de IRIS.
    - **Estado:** hecho (`plan/f6-3d-pc`). Pixel Streaming 2 emite el visor del editor (`Abrir con IRIS Stage.bat`), e IRIS lo muestra sin la interfaz del reproductor. Las cámaras de la planta pasan a Unreal como CineCameraActor, y «Ver por la cámara» pone el visor en una de ellas. Probado con Unreal 5.5 en el PC.
 4. **«Capturar con RTX»** (F6.19.5 y F6.16.9): los fotogramas van al storyboard con el nombre `iris_dp_s{escena}_p{plano}.png` (`unreal_render_import.dart`).
+   - **Estado:** hecho (`plan/f6-3d-pc`). `Capture()` hace una foto en alta (1920 × 1080) por la cámara elegida, y IRIS la guarda en el storyboard del plano por `importShotReferenceImage`, como un render de Unreal. Probado con Unreal 5.5: unos 17 s la primera vez y menos de 2 s las siguientes.
+   - **Para después:** la cola de todos los planos de una escena y la Movie Render Queue o el path tracer para la calidad final.
 5. **Assets gratuitos de Fab y Megascans** (F6.15.4): **por licencia, solo se usan dentro de Unreal.** No se copian al visor de IRIS: se ven por Pixel Streaming, y en la planta y el visor queda un sustituto con las mismas medidas.
+   - **Estado:** hecho (`plan/f6-3d-pc`).
+     - El atrezzo con cuerpo pasa a Unreal: mesa, silla, sofá, cama, árbol, roca, vehículo y pieza genérica.
+     - Desde el 3D de IRIS se busca una malla del proyecto de Unreal (`FindAssets`) y se asigna a la pieza (`props['unrealAsset']`), que toma sus medidas.
+     - Sin asset, va un bloque con las medidas.
+     - Mover o girar la pieza en Unreal vuelve a la planta.
+
+**F6.19.9 Un mundo por set** · Mac, iPad y PC (Unreal en el PC)
+- **Qué:** cada set de rodaje es un nivel propio de Unreal (`/Game/IRIS/<localización>/<set>_set<id>`), y el plano maestro de una localización otro. Las escenas y los planos de un set comparten su nivel; lo propio de cada plano se aplica al abrir su planta.
+- **Cómo:** al cambiar de set en IRIS, Unreal guarda el nivel de IRIS abierto y abre o crea el del nuevo set. Un nivel ajeno con cambios sin guardar no se cierra: IRIS avisa.
+- **Por qué así:**
+  - Con un mundo por escena, cada escena del mismo set lo duplicaría y un cambio de decorado no llegaría a las demás.
+  - Con un mundo único, las luces de sets distintos se mezclarían.
+- **Más adelante:** unir en un nivel con World Partition o niveles en streaming los sets de una misma localización (una casa con cocina y salón), y la secuencia de cada escena dentro de su nivel (F6.16.7).
+- **Estado:** hecho (`plan/f6-3d-pc`). Probado con Unreal 5.5: crea, guarda y vuelve a abrir el nivel de cada set.
 
 **Ya existe:** `lib/features/luka_export/` (`iris_dp_export_service`, `luka_light_mapping`, `unreal_coords`, `unreal_render_import`, `luka_bridge_screen`) y `tools/unreal/iris_dp_import.py`, que importa en un solo sentido.
 

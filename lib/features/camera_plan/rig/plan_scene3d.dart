@@ -4,6 +4,7 @@ import 'dart:ui';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
+import '../light/light_scene.dart';
 import '../light/plan_light.dart';
 import '../light_beam.dart';
 import '../light_overrides.dart';
@@ -80,6 +81,7 @@ class PlanScene3d {
     final people = <Map<String, dynamic>>[];
     final scans = <Map<String, dynamic>>[];
     final cameras = <Map<String, dynamic>>[];
+    final props = <Map<String, dynamic>>[];
 
     for (final (i, el) in elements.indexed) {
       final level = PlanLevel.of(el);
@@ -147,6 +149,19 @@ class PlanScene3d {
         case ElementType.light:
           final f = _fixture(el, uid, mpu, level, xy);
           if (f != null) fixtures.add(f);
+        case ElementType.prop when furniture.contains(el.propType):
+          props.add({
+            'id': uid,
+            'name': el.propType!.label,
+            'type': el.propType!.name,
+            'at': xy(el.position),
+            'z0': level,
+            'yawDeg': el.rotation,
+            'sizeM': _r(LightScene.propSizeM(el)),
+            'heightM': _r(LightScene.propHeightM(el)),
+            if (el.props[unrealAssetKey] case final String asset)
+              'unrealAsset': asset,
+          });
         case ElementType.actor:
           people.add({
             'id': uid,
@@ -185,9 +200,27 @@ class PlanScene3d {
       ..['fixtures'] = fixtures
       ..['people'] = people
       ..['cameras'] = cameras
-      ..['scans'] = scans;
+      ..['scans'] = scans
+      ..['props'] = props;
     return out;
   }
+
+  /// El atrezzo que tiene cuerpo (lo demás de [PropType] son colinas,
+  /// fotómetros o piezas de pared).
+  static const furniture = {
+    PropType.table,
+    PropType.chair,
+    PropType.rectangle,
+    PropType.sofa,
+    PropType.bed,
+    PropType.tree,
+    PropType.rock,
+    PropType.vehicle,
+  };
+
+  /// Asset de Unreal (Fab, Megascans o propio) que hace de esta pieza en
+  /// Unreal; en IRIS queda un sustituto con sus medidas.
+  static const unrealAssetKey = 'unrealAsset';
 
   /// Identificador de un elemento en la escena: su `uid` o, si no tiene,
   /// su posición en la lista. Con él el visor dice qué se ha tocado.

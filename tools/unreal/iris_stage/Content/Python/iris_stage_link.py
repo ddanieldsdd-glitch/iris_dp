@@ -15,19 +15,31 @@ aplica.
 Cada pieza de IRIS es un actor con la etiqueta `iris:<id>` dentro de la
 carpeta «IRIS» del World Outliner. Lo que no lleva esa etiqueta no se toca.
 
+Cada set de rodaje de IRIS es un mundo (nivel) propio en
+`/Game/IRIS/<localización>/<set>`: al llegar otro, se guarda el anterior y
+se abre (o se crea) el suyo.
+
 Funciones:
   Ping()             → {"ok": true, "version": …}
-  ApplyScene(json)   → {"ok": true, "lights": n, "ms": …}
+  ApplyScene(json)   → {"ok": true, "lights": n, "ms": …, "world": ruta}
   Snapshot()         → {"ok": true, "actors": {id: {loc, rot, intensity, cct}}}
   ViewThrough(id)    → el visor del editor (y Pixel Streaming) por esa cámara
+  Capture(json)      → {"ok": true, "token": …}: foto en alta por una cámara
+  CaptureResult(tok) → {"ok": true, "ready": bool, "png": base64}
+  FindAssets(texto)  → {"ok": true, "assets": [{path, name, sizeCm}]}
 
 La ruta del objeto para Remote Control es
 `/Game/Python/iris_stage_link_PY.Default__IrisStageLink` (el módulo tiene
 que estar en Content/Python del proyecto).
 """
 
+import base64
 import json
+import os
+import re
 import time
+import unicodedata
+import uuid
 
 import unreal
 
@@ -37,6 +49,20 @@ TAG_PREFIX = "iris:"
 SUN_ID = "_sun"
 SKY_ID = "_sky"
 ATMOSPHERE_ID = "_atmosphere"
+FLOOR_ID = "_floor"
+WORLD_ROOT = "/Game/IRIS"
+CUBE = "/Engine/BasicShapes/Cube.Cube"
+PLANE = "/Engine/BasicShapes/Plane.Plane"
+
+# Lo que no se borra al mandar IRIS la escena entera.
+_FIXED = {SUN_ID, SKY_ID, ATMOSPHERE_ID, FLOOR_ID}
+
+# Bloques de atrezzo sin asset: su malla tiene el centro en medio y la
+# pieza de IRIS en la base; id → cm que se sube.
+_lift = {}
+
+# Capturas en marcha: token → (ruta, último tamaño visto).
+_captures = {}
 
 _CLASSES = {
     "spot": unreal.SpotLight,
@@ -168,6 +194,145 @@ def _apply_camera(cam):
     _set(comp, "current_focal_length", float(cam.get("focalMm", 35)))
 
 
+def _apply_prop(p):
+    uid = str(p["id"])
+    label = "IRIS_%s" % (p.get("name") or uid)
+    size = [float(v) for v in p.get("sizeCm", [50, 50, 80])]
+    loc = _vec(p["loc"])
+    mesh = None
+    if p.get("asset"):
+        mesh = unreal.EditorAssetLibrary.load_asset(p["asset"])
+        if not isinstance(mesh, unreal.StaticMesh):
+            unreal.log_warning("[IRIS Stage] %s no es una malla: va un bloque." % p["asset"])
+            mesh = None
+    lift = 0.0
+    if mesh is None:
+        # Bloque con las medidas de la pieza, apoyado en el suelo.
+        mesh = unreal.EditorAssetLibrary.load_asset(CUBE)
+        lift = size[2] / 2
+        loc = unreal.Vector(loc.x, loc.y, loc.z + lift)
+    actor = _ensure(uid, unreal.StaticMeshActor, label, loc, _rot(p["rot"]))
+    _lift[uid] = lift
+    comp = actor.static_mesh_component
+    if comp.static_mesh != mesh:
+        comp.set_static_mesh(mesh)
+    scale = (unreal.Vector(size[0] / 100, size[1] / 100, size[2] / 100)
+             if lift else unreal.Vector(1, 1, 1))
+    now = actor.get_actor_scale3d()
+    if max(abs(now.x - scale.x), abs(now.y - scale.y), abs(now.z - scale.z)) > 0.001:
+        actor.set_actor_scale3d(scale)
+
+
+def _slug(text):
+    # «Salón» → «Salon»: los nombres de Unreal solo admiten ASCII.
+    plain = unicodedata.normalize("NFKD", str(text or "")).encode("ascii", "ignore").decode()
+    return re.sub(r"[^A-Za-z0-9_]+", "_", plain).strip("_") or "IRIS"
+
+
+def _world_path(world):
+    folder = _slug(world.get("site") or "Sets")
+    return "%s/%s/%s_%s" % (WORLD_ROOT, folder, _slug(world.get("name")), _slug(world.get("key")))
+
+
+def _current_world():
+    world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    return world.get_outermost().get_name() if world else ""
+
+
+def _ensure_world(world):
+    """Abre el mundo de ese set (o lo crea). Devuelve su ruta."""
+    target = _world_path(world)
+    current = _current_world()
+    if current == target:
+        return target
+    levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+    if current.startswith(WORLD_ROOT + "/"):
+        levels.save_current_level()
+    else:
+        dirty = [p.get_name() for p in unreal.EditorLoadingAndSavingUtils.get_dirty_map_packages()]
+        if dirty and not current.startswith("/Temp/"):
+            raise RuntimeError(
+                "El nivel abierto en Unreal (%s) tiene cambios sin guardar. "
+                "Guárdalo y vuelve a conectar: IRIS abrirá el mundo del set." % current)
+    if unreal.EditorAssetLibrary.does_asset_exist(target):
+        if not levels.load_level(target):
+            raise RuntimeError("No se ha podido abrir %s." % target)
+        _rescan()
+    else:
+        if not levels.new_level(target):
+            raise RuntimeError("No se ha podido crear %s." % target)
+        _rescan()
+        floor = _spawn(FLOOR_ID, unreal.StaticMeshActor, "IRIS_Suelo",
+                       unreal.Vector(0, 0, 0), unreal.Rotator())
+        floor.static_mesh_component.set_static_mesh(unreal.EditorAssetLibrary.load_asset(PLANE))
+        floor.set_actor_scale3d(unreal.Vector(100, 100, 1))
+        levels.save_current_level()
+        unreal.log("[IRIS Stage] Mundo nuevo: %s" % target)
+    return target
+
+
+def _capture(data):
+    actor = _find(str(data["camera"]))
+    if actor is None:
+        raise ValueError("No hay en Unreal una cámara de IRIS con id %s." % data["camera"])
+    folder = os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()),
+                          "IRIS", "Capturas")
+    os.makedirs(folder, exist_ok=True)
+    token = uuid.uuid4().hex[:12]
+    path = os.path.join(folder, "%s.png" % token)
+    unreal.AutomationLibrary.take_high_res_screenshot(
+        int(data.get("width", 1920)), int(data.get("height", 1080)), path, camera=actor)
+    _captures[token] = [path, -1]
+    return token
+
+
+def _capture_result(token):
+    entry = _captures.get(token)
+    if entry is None:
+        raise ValueError("Captura desconocida.")
+    path, last = entry
+    size = os.path.getsize(path) if os.path.exists(path) else -1
+    entry[1] = size
+    # Lista cuando el archivo existe y no ha crecido desde la última vez.
+    if size <= 0 or size != last:
+        return None
+    with open(path, "rb") as f:
+        data = base64.b64encode(f.read()).decode("ascii")
+    _captures.pop(token, None)
+    return data
+
+
+def _find_assets(query, limit=40):
+    registry = unreal.AssetRegistryHelpers.get_asset_registry()
+    flt = unreal.ARFilter(
+        class_paths=[unreal.TopLevelAssetPath("/Script/Engine", "StaticMesh")],
+        package_paths=["/Game"], recursive_paths=True)
+    words = [w for w in str(query or "").lower().split() if w]
+    out = []
+    for data in registry.get_assets(flt):
+        package = str(data.package_name)
+        if package.startswith(WORLD_ROOT + "/"):
+            continue
+        name = str(data.asset_name)
+        hay = (package + " " + name).lower()
+        if any(w not in hay for w in words):
+            continue
+        mesh = unreal.EditorAssetLibrary.load_asset(package)
+        if not isinstance(mesh, unreal.StaticMesh):
+            continue
+        box = mesh.get_bounding_box()
+        out.append({
+            "path": "%s.%s" % (package, name),
+            "name": name,
+            "folder": package.rsplit("/", 1)[0],
+            "sizeCm": [_round(box.max.x - box.min.x), _round(box.max.y - box.min.y),
+                       _round(box.max.z - box.min.z)],
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _view_through(uid):
     actor = _find(str(uid))
     if actor is None:
@@ -221,17 +386,21 @@ def _remove(ids):
 def _apply(data):
     lights = data.get("lights", [])
     cameras = data.get("cameras", [])
+    props = data.get("props", [])
+    if data.get("world"):
+        _ensure_world(data["world"])
     if data.get("full"):
         # Escena entera: lo de IRIS que ya no está, fuera.
         _rescan()
-        keep = ({str(l["id"]) for l in lights} | {str(c["id"]) for c in cameras}
-                | {SUN_ID, SKY_ID, ATMOSPHERE_ID})
+        keep = ({str(x["id"]) for x in lights + cameras + props} | _FIXED)
         _remove([uid for uid in list(_actors) if uid not in keep])
     _remove(data.get("remove", []))
     for light in lights:
         _apply_light(light)
     for cam in cameras:
         _apply_camera(cam)
+    for p in props:
+        _apply_prop(p)
     if "sun" in data:
         _apply_sun(data["sun"])
     if "sky" in data:
@@ -252,7 +421,7 @@ def _snapshot():
         loc = actor.get_actor_location()
         rot = actor.get_actor_rotation()
         item = {
-            "loc": [_round(loc.x), _round(loc.y), _round(loc.z)],
+            "loc": [_round(loc.x), _round(loc.y), _round(loc.z - _lift.get(uid, 0.0))],
             "rot": [_round(rot.pitch, 2), _round(rot.yaw, 2), _round(rot.roll, 2)],
             "path": actor.get_path_name(),
         }
@@ -284,7 +453,8 @@ class IrisStageLink(unreal.BlueprintFunctionLibrary):
                                    "error": "IRIS es más nuevo que el plugin: actualízalo."})
             n = _apply(data)
             ms = (time.perf_counter() - t0) * 1000
-            return json.dumps({"ok": True, "lights": n, "ms": round(ms, 1)})
+            return json.dumps({"ok": True, "lights": n, "ms": round(ms, 1),
+                               "world": _current_world()})
         except Exception as exc:
             unreal.log_error("[IRIS Stage] %s" % exc)
             return json.dumps({"ok": False, "error": str(exc)})
@@ -295,6 +465,31 @@ class IrisStageLink(unreal.BlueprintFunctionLibrary):
         try:
             _view_through(id)
             return json.dumps({"ok": True})
+        except Exception as exc:
+            return json.dumps({"ok": False, "error": str(exc)})
+
+    @unreal.ufunction(static=True, params=[str], ret=str,
+                      meta=dict(Category="IRIS Stage"))
+    def Capture(request):
+        try:
+            return json.dumps({"ok": True, "token": _capture(json.loads(request))})
+        except Exception as exc:
+            return json.dumps({"ok": False, "error": str(exc)})
+
+    @unreal.ufunction(static=True, params=[str], ret=str,
+                      meta=dict(Category="IRIS Stage"))
+    def CaptureResult(token):
+        try:
+            png = _capture_result(token)
+            return json.dumps({"ok": True, "ready": png is not None, "png": png})
+        except Exception as exc:
+            return json.dumps({"ok": False, "error": str(exc)})
+
+    @unreal.ufunction(static=True, params=[str], ret=str,
+                      meta=dict(Category="IRIS Stage"))
+    def FindAssets(query):
+        try:
+            return json.dumps({"ok": True, "assets": _find_assets(query)})
         except Exception as exc:
             return json.dumps({"ok": False, "error": str(exc)})
 

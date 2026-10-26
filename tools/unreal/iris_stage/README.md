@@ -1,10 +1,26 @@
 # IRIS Stage para Unreal
 
-Con esto IRIS y Unreal trabajan juntos en vivo (pasos 1 a 3 de F6.19, en `docs/PLAN_F6_3D_PREVIS.md`):
+Con esto IRIS y Unreal trabajan juntos en vivo (F6.19, en `docs/PLAN_F6_3D_PREVIS.md`):
 
-1. **De IRIS a Unreal:** lo que cambias en la planta (luces, cámaras, sol y cielo) se aplica al momento en Unreal.
+1. **De IRIS a Unreal:** lo que cambias en la planta (luces, cámaras, atrezzo, sol y cielo) se aplica al momento en Unreal.
 2. **De Unreal a IRIS:** lo que mueves, giras, regulas o cambias de color en Unreal vuelve a la planta y se guarda.
 3. **Render RTX:** la imagen de Unreal, con Lumen y el trazado de rayos de la tarjeta, se ve dentro de IRIS por Pixel Streaming, también por la cámara de un plano.
+4. **Capturar con RTX:** una foto en alta por la cámara del plano va a su storyboard.
+5. **Assets de Fab y Megascans:** una pieza de atrezzo de IRIS se ve en Unreal con un modelo del proyecto de Unreal; en IRIS queda la pieza con sus medidas.
+6. **Un mundo por set:** cada set de rodaje es un nivel propio de Unreal.
+
+## Mundos: cómo se reparte el proyecto
+
+| IRIS | Unreal |
+|---|---|
+| Proyecto | Un proyecto de Unreal |
+| Set de rodaje | Un nivel: `/Game/IRIS/<localización>/<set>_set<id>` |
+| Plano maestro de una localización | Un nivel en la misma carpeta: `<localización>_site<id>` |
+| Escena y plano | Comparten el nivel de su set. Lo propio de cada plano (luces del plano, cámara) se aplica al abrir su planta en IRIS |
+
+Al abrir en IRIS la planta de otro set, Unreal guarda el nivel de IRIS que tenía abierto y abre el del set nuevo. Si no existe, lo crea con un suelo. Lo que añadas a mano en ese nivel (decorado, assets, Megascans) se queda en él para todas las escenas de ese set.
+
+Si el nivel abierto en Unreal no es de IRIS y tiene cambios sin guardar, IRIS no lo cierra: avisa para que lo guardes. Un nivel sin título (*Untitled*) sí se cierra sin guardar.
 
 ## Instalar (una vez por proyecto de Unreal)
 
@@ -36,6 +52,14 @@ Con esto IRIS y Unreal trabajan juntos en vivo (pasos 1 a 3 de F6.19, en `docs/P
    - los cambios de la planta llegan a Unreal en unos milisegundos;
    - IRIS mira cada medio segundo si en Unreal se ha tocado alguna pieza suya y se trae el cambio.
 5. Para ver Unreal dentro de IRIS, pulsa **Render RTX** (el icono de la tele). En «Ver por la cámara…» elige una cámara de la planta, y el visor de Unreal pasa a mirar por ella con su focal y su sensor. El reproductor está en el puerto 80; si en Unreal usas otro, cámbialo con el icono de red de esa pantalla.
+6. En la planta de un plano, **Capturar con RTX** saca una foto de 1920 × 1080 por la cámara elegida y la guarda en el storyboard de ese plano, como un render de Unreal. La primera tarda unos segundos más.
+7. Para el atrezzo, abre el 3D a pantalla entera, selecciona la pieza (mesa, sofá, coche…) y pulsa **Elegir asset de Unreal…**. Aparecen las mallas del proyecto de Unreal: lo que hayas añadido de Fab o Megascans, o lo tuyo. Al elegir una, la pieza de IRIS toma sus medidas (huella y alto).
+
+## Assets de Fab y Megascans
+
+- **Licencia:** los assets de Fab y Megascans con licencia de Unreal solo se pueden usar dentro de Unreal. Por eso IRIS no los copia: guarda la ruta del asset (`/Game/Fab/…`), y en la planta y el visor de IRIS queda la pieza con sus medidas.
+- **Añadirlos:** desde Fab, en el propio Unreal (Window → Fab), o con Bridge para Megascans. Quedan en `/Game/Fab` o `/Game/Megascans`, y la búsqueda de IRIS los encuentra por nombre o carpeta.
+- **Sin asset**, la pieza va a Unreal como un bloque con sus medidas, para encuadrar y medir la luz.
 
 Las piezas de IRIS van en la carpeta «IRIS» del World Outliner, con la etiqueta `iris:<id>`. IRIS no toca nada más del nivel. Si borras una en Unreal, en IRIS no se borra: vuelve a aparecer en el siguiente cambio.
 
@@ -49,6 +73,7 @@ Las piezas de IRIS van en la carpeta «IRIS» del World Outliner, con la etiquet
 | Intensidad | Candelas en el eje, con regulación, difusiones y gelatinas aplicadas. Son los mismos números que el fotómetro de IRIS |
 | Color | Temperatura en kelvin |
 | Cámara de la planta | CineCameraActor a la altura del objetivo, con la focal y el sensor del plano |
+| Atrezzo (mesa, silla, sofá, cama, árbol, roca, vehículo, pieza) | Su asset de Unreal o un bloque con sus medidas |
 | Sol del esquema | DirectionalLight en lux, con SkyAtmosphere y SkyLight |
 
 ## Qué vuelve de Unreal
@@ -58,6 +83,7 @@ Las piezas de IRIS van en la carpeta «IRIS» del World Outliner, con la etiquet
 | Mover un foco o una cámara | Su posición y su altura |
 | Girar un foco | Hacia dónde apunta: giro e inclinación si cuelga |
 | Girar una cámara | Hacia dónde mira |
+| Mover o girar una pieza de atrezzo | Su posición y su giro |
 | Intensidad de un foco | Su regulación (de 1 a 100 %). A 0, apagado |
 | Temperatura de un foco | Su color. Las gelatinas siguen delante |
 

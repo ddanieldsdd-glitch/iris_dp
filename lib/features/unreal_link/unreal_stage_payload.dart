@@ -1,6 +1,32 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+/// El mundo (nivel de Unreal) de una planta: uno por set de rodaje, y otro
+/// para el plano maestro de cada localización. Las escenas y los planos que
+/// se ruedan en un set comparten su mundo.
+class UnrealWorld {
+  /// Estable aunque se renombre: `set12`, `site3`.
+  final String key;
+  final String name;
+
+  /// Localización a la que pertenece: su carpeta en Unreal.
+  final String? site;
+
+  const UnrealWorld({required this.key, required this.name, this.site});
+
+  Map<String, dynamic> toJson() => {'key': key, 'name': name, 'site': ?site};
+
+  @override
+  bool operator ==(Object other) =>
+      other is UnrealWorld &&
+      other.key == key &&
+      other.name == name &&
+      other.site == site;
+
+  @override
+  int get hashCode => Object.hash(key, name, site);
+}
+
 /// De la escena 3D de IRIS (`iris.scene3d`, [PlanScene3d]) a lo que aplica
 /// IRIS Stage Link en Unreal (`tools/unreal/iris_stage`).
 ///
@@ -114,6 +140,24 @@ class UnrealStagePayload {
     };
   }
 
+  /// Una pieza de atrezzo: su asset de Unreal si lo tiene o, si no, un
+  /// bloque con sus medidas. Gira como en planta.
+  static Map<String, dynamic>? prop(Map p) {
+    final at = p['at'] as List?;
+    if (at == null) return null;
+    final rad = ((p['yawDeg'] ?? 0) as num) * math.pi / 180;
+    final size = _r(((p['sizeM'] ?? 0.5) as num) * 100);
+    return {
+      'id': p['id'],
+      'name': p['name'],
+      'type': p['type'],
+      'loc': loc([at[0], at[1], p['z0'] ?? 0]),
+      'rot': rotToward(math.sin(rad), math.cos(rad), 0),
+      'sizeCm': [size, size, _r(((p['heightM'] ?? 0.8) as num) * 100)],
+      'asset': ?p['unrealAsset'],
+    };
+  }
+
   /// El sol: la escena da hacia dónde está; la luz va al revés.
   static Map<String, dynamic>? sun(Map? s) {
     final d = s?['dir'] as List?;
@@ -129,11 +173,22 @@ class UnrealStagePayload {
     };
   }
 
-  /// La escena entera para Unreal.
-  static Map<String, dynamic> build(Map<String, dynamic> scene) {
+  /// Las listas de piezas que se comparan una a una.
+  static const kinds = ['lights', 'cameras', 'props'];
+
+  /// La escena entera para Unreal, en el mundo (nivel) [world].
+  static Map<String, dynamic> build(
+    Map<String, dynamic> scene, {
+    UnrealWorld? world,
+  }) {
     final sunNow = sun(scene['sun'] as Map?);
     return {
       'v': version,
+      'world': ?world?.toJson(),
+      'props': [
+        for (final p in (scene['props'] as List? ?? const []).cast<Map>())
+          ?prop(p),
+      ],
       'lights': [
         for (final f in (scene['fixtures'] as List? ?? const []).cast<Map>())
           ?light(f),
@@ -155,10 +210,14 @@ class UnrealStagePayload {
     Map<String, dynamic>? before,
     Map<String, dynamic> now,
   ) {
-    if (before == null) return {...now, 'full': true};
+    // Otro mundo (otro set): se manda entero y Unreal cambia de nivel.
+    if (before == null ||
+        jsonEncode(before['world']) != jsonEncode(now['world'])) {
+      return {...now, 'full': true};
+    }
     final out = <String, dynamic>{'v': version};
     final remove = <String>[];
-    for (final kind in const ['lights', 'cameras']) {
+    for (final kind in kinds) {
       Map<String, String> byId(Map<String, dynamic> p) => {
         for (final l in (p[kind] as List? ?? const []).cast<Map>())
           '${l['id']}': jsonEncode(l),
@@ -176,8 +235,7 @@ class UnrealStagePayload {
     final sunChanged =
         jsonEncode(before['sun']) != jsonEncode(now['sun']) ||
         jsonEncode(before['sky']) != jsonEncode(now['sky']);
-    if ((out['lights'] as List).isEmpty &&
-        (out['cameras'] as List).isEmpty &&
+    if (kinds.every((k) => (out[k] as List).isEmpty) &&
         remove.isEmpty &&
         !sunChanged) {
       return null;

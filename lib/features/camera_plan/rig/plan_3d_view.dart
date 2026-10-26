@@ -23,8 +23,10 @@ import 'plan_rig.dart';
 import 'plan_scene3d.dart';
 import '../../unreal_link/unreal_link.dart';
 import '../../unreal_link/unreal_link_button.dart';
+import '../../unreal_link/unreal_asset_tile.dart';
 import '../../unreal_link/unreal_render_view.dart';
 import '../../unreal_link/unreal_return.dart';
+import '../../unreal_link/unreal_stage_payload.dart';
 import 'scan_store.dart';
 import 'rig_report.dart';
 
@@ -73,6 +75,13 @@ class Plan3dView extends StatefulWidget {
   /// Panel: cerrar.
   final VoidCallback? onClose;
 
+  /// El mundo de Unreal de esta planta (su set o su localización).
+  final UnrealWorld? unrealWorld;
+
+  /// Guarda una captura RTX de Unreal en el storyboard del plano; sin él
+  /// (planta de set o de localización) no se captura.
+  final UnrealCaptureSink? onUnrealCapture;
+
   const Plan3dView({
     super.key,
     required this.elements,
@@ -86,6 +95,8 @@ class Plan3dView extends StatefulWidget {
     this.full = false,
     this.onExpand,
     this.onClose,
+    this.unrealWorld,
+    this.onUnrealCapture,
   });
 
   static const asset = 'assets/viewer3d/index.html';
@@ -165,7 +176,7 @@ class _Plan3dViewState extends State<Plan3dView> {
       ambient: widget.ambient,
     );
     // Unreal recibe la misma escena, esté o no listo el visor.
-    UnrealLink.instance.offer(scene);
+    UnrealLink.instance.offer(scene, world: widget.unrealWorld);
     final web = _web;
     if (!_ready || web == null) return;
     final json = jsonEncode(scene);
@@ -914,6 +925,13 @@ class _Plan3dViewState extends State<Plan3dView> {
               onPreview: _preview,
               onUpdate: _update,
             ),
+          if (_selected!.type == ElementType.prop &&
+              PlanScene3d.furniture.contains(_selected!.propType))
+            UnrealAssetTile(
+              element: _selected!,
+              link: UnrealLink.instance,
+              onChanged: _update,
+            ),
         ],
         header('Escaneos'),
         ..._scanSection(palette),
@@ -962,6 +980,7 @@ class _Plan3dViewState extends State<Plan3dView> {
   void _openRender() => UnrealRenderScreen.open(
     context,
     cameras: [for (final (id, name, _) in _cameras) (id, name)],
+    onCapture: widget.onUnrealCapture,
   );
 
   /// Avisos de rigging; tocar uno selecciona lo que lo provoca.
@@ -1211,6 +1230,8 @@ class Plan3dScreen extends StatefulWidget {
   final Future<void> Function(PlanElement)? onChanged;
   final Future<void> Function(PlanElement)? onAdd;
   final PlanAmbient? ambient;
+  final UnrealWorld? unrealWorld;
+  final UnrealCaptureSink? onUnrealCapture;
 
   const Plan3dScreen({
     super.key,
@@ -1222,6 +1243,8 @@ class Plan3dScreen extends StatefulWidget {
     this.onChanged,
     this.onAdd,
     this.ambient,
+    this.unrealWorld,
+    this.onUnrealCapture,
   });
 
   static Future<void> show(
@@ -1234,6 +1257,8 @@ class Plan3dScreen extends StatefulWidget {
     Future<void> Function(PlanElement)? onChanged,
     Future<void> Function(PlanElement)? onAdd,
     PlanAmbient? ambient,
+    UnrealWorld? unrealWorld,
+    UnrealCaptureSink? onUnrealCapture,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -1245,6 +1270,8 @@ class Plan3dScreen extends StatefulWidget {
         onChanged: onChanged,
         onAdd: onAdd,
         ambient: ambient,
+        unrealWorld: unrealWorld,
+        onUnrealCapture: onUnrealCapture,
       ),
     ),
   );
@@ -1285,6 +1312,8 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
               if (mounted) setState(() {});
             },
       full: true,
+      unrealWorld: widget.unrealWorld,
+      onUnrealCapture: widget.onUnrealCapture,
     ),
   );
 }

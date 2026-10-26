@@ -1,6 +1,6 @@
 # Prueba de IRIS Stage con Unreal (PR #50)
 
-Lista para probar en el PC lo nuevo del 3D con Unreal: los pasos 1 a 3 de F6.19. Usa una planta de prueba, no una de un rodaje real: los cambios que vienen de Unreal se guardan en la planta.
+Lista para probar en el PC lo nuevo del 3D con Unreal: los pasos 1 a 5 de F6.19 y un mundo por set. Usa una planta de prueba, no una de un rodaje real: los cambios que vienen de Unreal se guardan en la planta.
 
 ## Antes de empezar
 
@@ -60,7 +60,33 @@ Lista para probar en el PC lo nuevo del 3D con Unreal: los pasos 1 a 3 de F6.19.
 - [ ] Botón de volver a cargar y cambio de puerto.
 - [ ] Calidad: Lumen con sombras y rebotes. Si se ve plano, revisar `DefaultEngine.ini`.
 
-## 5. Desde otro equipo (cuando se pueda)
+## 5. Capturar con RTX
+
+- [ ] En la planta de un plano, en Render RTX, aparece **Capturar con RTX**. En la planta de un set o de una localización no aparece.
+- [ ] Elegir la cámara y capturar: dice «Captura RTX guardada en el storyboard del plano N».
+- [ ] La imagen está en el storyboard y en la hoja de ese plano, marcada como render de Unreal.
+- [ ] Con varias cámaras, sin elegir ninguna, el botón está apagado.
+- [ ] La primera captura tarda más, unos 20 s; las siguientes, unos segundos.
+
+## 6. Assets de Fab y Megascans
+
+- [ ] Añadir en Unreal algo de Fab o Megascans (un sofá, una silla).
+- [ ] En IRIS, 3D a pantalla entera, seleccionar un sofá de la planta → **Elegir asset de Unreal…** → buscar «sofa» → aparece con sus medidas.
+- [ ] Elegirlo: en Unreal el bloque pasa a ser el sofá de Fab, y en la planta de IRIS la pieza toma sus medidas.
+- [ ] **Sin asset (bloque)** lo devuelve al bloque.
+- [ ] Mover y girar el sofá en Unreal: se mueve y gira en la planta.
+- [ ] Sin conexión, el botón lo explica.
+
+## 7. Un mundo por set
+
+- [ ] Abrir la planta del set A: en Unreal se abre (o se crea) `/Game/IRIS/<localización>/<set A>_set<id>`, con un suelo.
+- [ ] Abrir la planta de un plano del set A: es el mismo nivel.
+- [ ] Abrir la planta del set B: Unreal guarda el A y abre o crea el B. Las luces del A no están en el B.
+- [ ] Volver al set A: está como se dejó, también lo añadido a mano en Unreal (decorado de Megascans).
+- [ ] Un set con tildes o eñes en el nombre: la ruta las quita (Salón → Salon).
+- [ ] Con un nivel tuyo abierto y sin guardar en Unreal, conectar: IRIS avisa de que lo guardes y no lo cierra.
+
+## 8. Desde otro equipo (cuando se pueda)
 
 - [ ] En el Mac, en la misma red: conectar con la IP del PC. Mover un foco y ver la imagen RTX.
 - [ ] En el iPad: lo mismo. La primera vez pide permiso de red local.
