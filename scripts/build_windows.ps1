@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 # Compila IRIS para Windows y, si está Inno Setup 6, su instalador.
 # Necesita Flutter 3.44.8, Visual Studio 2022 (escritorio con C++) y NuGet.
 $ErrorActionPreference = "Stop"

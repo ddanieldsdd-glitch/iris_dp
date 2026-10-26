@@ -4,7 +4,7 @@ Se marca en cada versión que se pruebe en el PC: fecha, versión o rama, y ✅,
 
 **Antes de empezar:**
 - Usa un proyecto de prueba, o uno que ya esté en la nube con copia en el Mac. La descarga de la nube tiene un fallo conocido que pierde metadatos (nota de memoria «La descarga de la nube pierde datos»).
-- Instala con `IRIS-DP-Windows-Setup.exe`, del release o del artefacto del PR.
+- Instala con `IRIS-DP-Windows-Setup.exe`, del release o del artefacto del PR. Para probar una rama compilándola en el PC, ver [DESARROLLO_EN_WINDOWS.md](DESARROLLO_EN_WINDOWS.md).
 
 | Fecha | Versión o rama | Equipo (Windows, GPU) | Quién |
 |---|---|---|---|
