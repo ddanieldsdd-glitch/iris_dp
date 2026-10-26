@@ -254,6 +254,9 @@ class MediaUploadQueue {
       final uploaded = <String>{};
       var lastAnnounce = DateTime.now();
       void announce() {
+        if (uploaded.isNotEmpty) {
+          debugPrint('[medios ${_now()}] aviso a los demás: $uploaded');
+        }
         final notify = onProjectUploaded;
         if (notify != null) uploaded.forEach(notify);
         uploaded.clear();
@@ -302,6 +305,8 @@ class MediaUploadQueue {
     }
   }
 
+  static String _now() => DateTime.now().toIso8601String().substring(11, 23);
+
   /// Sube una fila. Devuelve el `cloudId` de su proyecto si se subió.
   Future<String?> _processOne(PendingMediaUpload row) async {
     await (_db.update(_db.pendingMediaUploads)
@@ -334,6 +339,7 @@ class MediaUploadQueue {
             sortOrder: row.sortOrder,
           );
 
+      debugPrint('[medios ${_now()}] subiendo ${row.entityType} ${row.entityKey}');
       final slot = mediaSlotFor(row.entityType);
       final isFile =
           slot?.kind == MediaKind.file ||
@@ -374,6 +380,7 @@ class MediaUploadQueue {
         remoteHash: Value(result.contentHash),
         fileStamp: Value(mediaFileStamp(row.localPath)),
       ));
+      debugPrint('[medios ${_now()}] subida ${row.entityType} ${row.entityKey}');
       return cloudId;
     } catch (e, st) {
       debugPrint('MediaUploadQueue error: $e\n$st');

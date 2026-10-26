@@ -135,7 +135,10 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
       debugPrint('Canal en vivo: $e');
       return;
     }
-    ProjectContentSyncService.onUploaded = hub.announceSnapshot;
+    ProjectContentSyncService.onUploaded = (projectCloudId, hash) {
+      debugPrint('[medios ${_now()}] contenido subido, aviso: $projectCloudId');
+      return hub.announceSnapshot(projectCloudId, hash);
+    };
     MediaUploadQueue.onProjectUploaded = hub.announceMedia;
     if (!identical(hub, _liveHub)) {
       await _liveNotices?.cancel();
@@ -151,12 +154,17 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
   /// Otro equipo subió imágenes: se bajan ya, sin esperar a la pasada de
   /// cada minuto.
   void _onMediaNotice(String projectCloudId) {
+    debugPrint('[medios ${_now()}] aviso recibido: imágenes de $projectCloudId');
     ref.read(syncEngineProvider).followMedia(projectCloudId);
     _liveDebounce?.cancel();
     _liveDebounce = Timer(AutoSyncScheduler.liveDelay, () => _run(full: false));
   }
 
+  static String _now() => DateTime.now().toIso8601String().substring(11, 23);
+
   Future<void> _onLiveNotice(SnapshotNotice notice) async {
+    debugPrint('[medios ${_now()}] aviso recibido: contenido de '
+        '${notice.projectCloudId} (${notice.device})');
     if (!await liveNoticeIsNew(ref.read(databaseProvider), notice)) return;
     // Un segundo de margen: si llegan varios seguidos, una sola pasada.
     _liveDebounce?.cancel();
