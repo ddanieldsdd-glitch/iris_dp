@@ -23,6 +23,7 @@ import '../../moodboard_helpers.dart';
 import '../../visual_bible_model.dart';
 import '../bible_moodboard_image_target.dart';
 import 'section_scaffold.dart';
+import '../../../../core/utils/platform_keys.dart';
 
 /// Aspect Ratio — layout Stitch (logic HUD + frame preview + intent).
 class FormatSection extends ConsumerWidget {
@@ -1184,7 +1185,7 @@ class _FramePreview extends ConsumerWidget {
                   projectId: projectId,
                   sectionId: BibleSectionId.format,
                   bibleId: bibleId,
-                  hint: 'Clic aquí → ⌘V para pegar frame preview',
+                  hint: 'Clic aquí → ${modKey}V para pegar frame preview',
                   child: AspectRatio(
                     aspectRatio: ar,
                     child: StreamBuilder<List<MoodboardImage>>(

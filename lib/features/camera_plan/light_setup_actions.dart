@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'plan_item_actions.dart';
 import 'plan_target.dart';
+import '../../core/utils/platform_keys.dart';
 
 const kLightSetupStatuses = ['boceto', 'en_desarrollo', 'definitivo'];
 
@@ -87,18 +88,18 @@ class LightSetupMenuButton extends ConsumerWidget {
                 ),
               ),
           const PopupMenuDivider(),
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'copy',
-            child: PlanMenuRow('Copiar', '⌘C'),
+            child: PlanMenuRow('Copiar', '${modKey}C'),
           ),
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'duplicate',
-            child: PlanMenuRow('Duplicar', '⌘D'),
+            child: PlanMenuRow('Duplicar', '${modKey}D'),
           ),
           if (clip?.kind == PlanClipKind.setup)
             PopupMenuItem(
               value: 'paste',
-              child: PlanMenuRow('Pegar «${clip!.name}» al lado', '⌘V'),
+              child: PlanMenuRow('Pegar «${clip!.name}» al lado', '${modKey}V'),
             ),
           const PopupMenuItem(value: 'clear', child: Text('Vaciar planta…')),
           const PopupMenuItem(

@@ -13,6 +13,9 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # La misma versión que en el Mac: con una más nueva pdfrx 2.4.5 no
+          # compila, y así lo que funciona aquí funciona en GitHub.
+          flutter-version: 3.44.8
           cache: true
       - name: Dependencies
         # El código de Drift está en el repositorio; regenerarlo se colgaba.
@@ -68,6 +71,9 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # La misma versión que en el Mac: con una más nueva pdfrx 2.4.5 no
+          # compila, y así lo que funciona aquí funciona en GitHub.
+          flutter-version: 3.44.8
           cache: true
       # El 3D (flutter_inappwebview) baja WebView2 con NuGet al compilar.
       - uses: nuget/setup-nuget@v2
@@ -91,6 +97,16 @@ jobs:
           name: iris-dp-windows
           path: build/windows/x64/runner/Release/
         if: success()
+      # Instalador para la primera instalación (el zip sirve para actualizar).
+      - name: Build installer
+        run: |
+          choco install innosetup -y --no-progress
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+\s]+)').Matches[0].Groups[1].Value
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" windows\installer\iris_dp.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iris-dp-windows-setup
+          path: build/installer/IRIS-DP-Windows-Setup.exe
 
   publish:
     needs: [build-macos, build-windows]
@@ -110,6 +126,12 @@ jobs:
         with:
           name: iris-dp-windows
           path: artifacts/windows
+        continue-on-error: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: iris-dp-windows-setup
+          path: artifacts/windows-setup
         continue-on-error: true
 
       - uses: actions/download-artifact@v4
@@ -136,6 +158,7 @@ jobs:
           files: |
             artifacts/macos/IRIS-DP.dmg
             IRIS-DP-Windows.zip
+            artifacts/windows-setup/IRIS-DP-Windows-Setup.exe
             artifacts/ios/IRIS-DP.ipa
 
       - name: Register release in Supabase

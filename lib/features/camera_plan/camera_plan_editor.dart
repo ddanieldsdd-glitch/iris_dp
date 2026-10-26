@@ -82,6 +82,7 @@ import 'rig/plan_rig.dart';
 import 'rig/plan_3d_view.dart';
 import 'rig/rig_report.dart';
 import 'rig/plan_hall.dart';
+import '../../core/utils/platform_keys.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
   final int projectId;
@@ -3474,25 +3475,25 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         PopupMenuItem(
           value: 'copy',
           enabled: has,
-          child: const Text('Copiar   ⌘C'),
+          child: Text('Copiar   ${modKey}C'),
         ),
         PopupMenuItem(
           value: 'cut',
           enabled: has,
-          child: const Text('Cortar   ⌘X'),
+          child: Text('Cortar   ${modKey}X'),
         ),
         PopupMenuItem(
           value: 'paste',
           enabled: _clipboard != null,
-          child: const Text('Pegar aquí   ⌘V'),
+          child: Text('Pegar aquí   ${modKey}V'),
         ),
         PopupMenuItem(
           value: 'duplicate',
           enabled: has,
-          child: const Text('Duplicar   ⌘D'),
+          child: Text('Duplicar   ${modKey}D'),
         ),
         const PopupMenuDivider(),
-        const PopupMenuItem(value: 'all', child: Text('Seleccionar todo   ⌘A')),
+        PopupMenuItem(value: 'all', child: Text('Seleccionar todo   ${modKey}A')),
         PopupMenuItem(
           value: 'delete',
           enabled: has,
@@ -3519,17 +3520,17 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   void _showShortcuts() {
-    const rows = [
+    final rows = [
       (
         'Mover la vista',
         'Dos dedos en el trackpad · Espacio + arrastrar · botón central',
       ),
-      ('Zoom', 'Pellizco · rueda del ratón · ⌘ + dos dedos · ⌘= y ⌘−'),
-      ('Encajar todo', '⌘0'),
-      ('Seleccionar varios', 'Arrastrar en vacío · Mayús + clic · ⌘A'),
-      ('Deshacer / rehacer', '⌘Z / ⇧⌘Z'),
-      ('Copiar / cortar / pegar', '⌘C / ⌘X / ⌘V (pega bajo el cursor)'),
-      ('Duplicar', '⌘D'),
+      ('Zoom', 'Pellizco · rueda del ratón · $modKey + dos dedos · $modKey= y $modKey−'),
+      ('Encajar todo', '${modKey}0'),
+      ('Seleccionar varios', 'Arrastrar en vacío · Mayús + clic · ${modKey}A'),
+      ('Deshacer / rehacer', '${modKey}Z / ⇧${modKey}Z'),
+      ('Copiar / cortar / pegar', '${modKey}C / ${modKey}X / ${modKey}V (pega bajo el cursor)'),
+      ('Duplicar', '${modKey}D'),
       ('Eliminar', '⌫'),
       ('Mover 1 cm / 10 cm', 'Flechas / ⇧ + flechas'),
       ('Girar 15°', 'R / ⇧R (al arrastrar el asa, ⇧ va de 15 en 15)'),
@@ -4243,9 +4244,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             ),
             onSelected: _onAddImage,
             itemBuilder: (_) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'paste',
-                child: PlanMenuRow('Pegar imagen', '⌘V'),
+                child: PlanMenuRow('Pegar imagen', '${modKey}V'),
               ),
               const PopupMenuItem(
                 value: 'moodboard',
@@ -4381,7 +4382,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             projectId: widget.projectId,
           ),
           IconButton(
-            tooltip: 'Encajar todo (⌘0)',
+            tooltip: 'Encajar todo (${modKey}0)',
             icon: Icon(Icons.fit_screen_outlined, color: palette.textSecondary),
             onPressed: _fitAll,
           ),
@@ -4655,8 +4656,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                       _pinchScale = 1,
                                                   onPointerPanZoomUpdate: (e) {
                                                     if (HardwareKeyboard
-                                                        .instance
-                                                        .isMetaPressed) {
+                                                            .instance
+                                                            .isMetaPressed ||
+                                                        HardwareKeyboard
+                                                            .instance
+                                                            .isControlPressed) {
                                                       _zoomAt(
                                                         e.localPosition,
                                                         math.exp(

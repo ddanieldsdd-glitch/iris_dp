@@ -25,6 +25,7 @@ import 'moodboard_batch_assign_sheet.dart';
 import 'moodboard_lightbox.dart';
 import 'moodboard_sources_sidebar.dart';
 import 'moodboard_stitch_shell.dart';
+import '../../../core/utils/platform_keys.dart';
 
 class MoodboardSection extends ConsumerStatefulWidget {
   final int projectId;
@@ -1006,7 +1007,7 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
       ClipboardImageReadStatus.invalidUrl =>
         'La URL del portapapeles no parece ser una imagen.',
       ClipboardImageReadStatus.noImage =>
-        'Copia la imagen en ShotDeck (clic derecho → Copiar imagen) y pulsa ⌘V aquí.',
+        'Copia la imagen en ShotDeck (clic derecho → Copiar imagen) y pulsa ${modKey}V aquí.',
       ClipboardImageReadStatus.pluginUnavailable =>
         'Reinicia la app (flutter run) para activar el pegado de imágenes.',
     };

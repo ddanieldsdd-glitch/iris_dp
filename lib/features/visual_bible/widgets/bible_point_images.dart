@@ -13,6 +13,7 @@ import '../../../core/utils/clipboard_image_reader.dart';
 import '../bible_paste_helpers.dart';
 import '../moodboard_helpers.dart';
 import 'bible_point_panel.dart';
+import '../../../core/utils/platform_keys.dart';
 
 /// Lee `pointImages[key]` del blob de una sección: ids de imágenes del
 /// moodboard que acompañan a un punto.
@@ -345,7 +346,7 @@ class _MoodboardImagePickerState extends ConsumerState<_MoodboardImagePicker> {
               child: Text(
                 _notice ??
                     'Elige del moodboard, importa un archivo o pega una '
-                        'imagen con ⌘V.',
+                        'imagen con ${modKey}V.',
                 style: AppTypography.caption(
                   palette,
                 ).copyWith(color: _notice == null ? null : palette.error),
@@ -387,7 +388,7 @@ class _MoodboardImagePickerState extends ConsumerState<_MoodboardImagePicker> {
           return Center(
             child: Text(
               'El moodboard del proyecto está vacío.\n'
-              'Importa un archivo o pega una imagen con ⌘V.',
+              'Importa un archivo o pega una imagen con ${modKey}V.',
               textAlign: TextAlign.center,
               style: AppTypography.bodyMedium(palette),
             ),

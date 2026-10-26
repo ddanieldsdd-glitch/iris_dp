@@ -24,6 +24,7 @@ import 'live_drawing_link.dart';
 import 'sheet/brush_studio.dart';
 import 'sheet/sheet_guides.dart';
 import 'sheet/sheet_panels.dart';
+import '../../core/utils/platform_keys.dart';
 
 /// Para qué es el folio: cambia el estilo, las capas y las guías de inicio.
 enum SketchSheetPurpose {
@@ -1445,13 +1446,13 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
           ),
           const SizedBox(height: 6),
           IconButton(
-            tooltip: 'Deshacer (⌘Z)',
+            tooltip: 'Deshacer (${modKey}Z)',
             color: Colors.white70,
             onPressed: _controller.canUndo ? _controller.undo : null,
             icon: const Icon(Icons.undo, size: 20),
           ),
           IconButton(
-            tooltip: 'Rehacer (⇧⌘Z)',
+            tooltip: 'Rehacer (⇧${modKey}Z)',
             color: Colors.white70,
             onPressed: _controller.canRedo ? _controller.redo : null,
             icon: const Icon(Icons.redo, size: 20),

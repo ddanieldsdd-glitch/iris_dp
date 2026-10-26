@@ -9,6 +9,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../visual_bible_model.dart';
 import 'moodboard_drag.dart';
+import '../../../core/utils/platform_keys.dart';
 
 /// Tira horizontal de imágenes del moodboard filtradas por sección o set.
 class MoodboardStrip extends ConsumerWidget {
@@ -79,7 +80,7 @@ class MoodboardStrip extends ConsumerWidget {
         final images = snap.data ?? [];
         if (images.isEmpty) {
           return Text(
-            'Sin referencias aún. Pega aquí con ⌘V o asigna imágenes en el moodboard.',
+            'Sin referencias aún. Pega aquí con ${modKey}V o asigna imágenes en el moodboard.',
             style: AppTypography.caption(palette).copyWith(
               color: palette.textTertiary,
             ),

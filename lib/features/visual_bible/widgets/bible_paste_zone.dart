@@ -8,11 +8,13 @@ import '../../../core/utils/clipboard_image_reader.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../bible_paste_helpers.dart';
 import 'moodboard_drag.dart';
+import '../../../core/utils/platform_keys.dart';
 
 /// Zona activable con clic: arrastra refs del moodboard o ⌘V para pegar.
 class BibleTargetZone extends StatefulWidget {
   final String hint;
-  final String activeHint;
+  /// Con el foco; si falta, el de pegar con la tecla de este sistema.
+  final String? activeHint;
   final double minHeight;
   final Widget? child;
   final Future<void> Function(ClipboardImagePayload payload) onPaste;
@@ -22,7 +24,7 @@ class BibleTargetZone extends StatefulWidget {
     super.key,
     required this.hint,
     required this.onPaste,
-    this.activeHint = 'Pulsa ⌘V para pegar aquí',
+    this.activeHint,
     this.minHeight = 56,
     this.child,
     this.onMoodboardDropped,
@@ -70,7 +72,7 @@ class _BibleTargetZoneState extends State<BibleTargetZone> {
         ClipboardImageReadStatus.invalidUrl =>
           'La URL del portapapeles no parece ser una imagen.',
         ClipboardImageReadStatus.noImage =>
-          'Copia una imagen (ShotDeck → Copiar imagen) y pulsa ⌘V.',
+          'Copia una imagen (ShotDeck → Copiar imagen) y pulsa ${modKey}V.',
         ClipboardImageReadStatus.pluginUnavailable =>
           'Reinicia la app para activar el pegado de imágenes.',
         ClipboardImageReadStatus.success => '',
@@ -111,7 +113,9 @@ class _BibleTargetZoneState extends State<BibleTargetZone> {
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
-                  focused ? widget.activeHint : widget.hint,
+                  focused
+                      ? widget.activeHint ?? 'Pulsa ${modKey}V para pegar aquí'
+                      : widget.hint,
                   style: AppTypography.caption(palette).copyWith(
                     color: focused ? palette.accent : palette.textSecondary,
                   ),

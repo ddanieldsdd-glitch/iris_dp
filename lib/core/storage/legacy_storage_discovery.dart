@@ -81,7 +81,9 @@ abstract final class LegacyStorageDiscovery {
 
     final support = await getApplicationSupportDirectory();
     final docs = await getApplicationDocumentsDirectory();
-    final home = Platform.environment['HOME'];
+    // En Windows la carpeta del usuario está en USERPROFILE.
+    final home =
+        Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
 
     await addCandidate(
       label: 'Documentos de la app (legacy)',

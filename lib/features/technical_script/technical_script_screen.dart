@@ -45,6 +45,7 @@ import 'technical_script_settings.dart';
 import '../../core/utils/shot_technical_options.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../core/widgets/scene_meta_display.dart';
+import '../../core/utils/platform_keys.dart';
 
 // Re-export para compatibilidad con imports existentes.
 const kMovements = kShotMovements;
@@ -534,14 +535,14 @@ class _FormatBar extends ConsumerWidget {
           child: Row(
             children: [
               iconButton(
-                tooltip: 'Deshacer (⌘Z)',
+                tooltip: 'Deshacer (${modKey}Z)',
                 icon: Icons.undo,
                 onTap: history.canUndo
                     ? () => _stepHistory(context, ref, redo: false)
                     : null,
               ),
               iconButton(
-                tooltip: 'Rehacer (⇧⌘Z)',
+                tooltip: 'Rehacer (⇧${modKey}Z)',
                 icon: Icons.redo,
                 onTap: history.canRedo
                     ? () => _stepHistory(context, ref, redo: true)
@@ -635,21 +636,21 @@ class _FormatBar extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     iconButton(
-                      tooltip: 'Negrita (⌘B)',
+                      tooltip: 'Negrita (${modKey}B)',
                       icon: Icons.format_bold,
                       onTap: editor == null
                           ? null
                           : () => applyScriptMark(editor, ScriptMark.bold),
                     ),
                     iconButton(
-                      tooltip: 'Cursiva (⌘I)',
+                      tooltip: 'Cursiva (${modKey}I)',
                       icon: Icons.format_italic,
                       onTap: editor == null
                           ? null
                           : () => applyScriptMark(editor, ScriptMark.italic),
                     ),
                     iconButton(
-                      tooltip: 'Subrayado (⌘U)',
+                      tooltip: 'Subrayado (${modKey}U)',
                       icon: Icons.format_underlined,
                       onTap: editor == null
                           ? null

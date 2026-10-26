@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../core/utils/media_storage.dart';
 import '../bible_paste_helpers.dart';
 import 'bible_paste_zone.dart';
+import '../../../core/utils/platform_keys.dart';
 
 /// Añade imágenes de referencia a bloques de color/exposición/iluminación.
 Future<void> pickBlockReferenceImage({
@@ -58,7 +59,7 @@ Widget blockReferenceImagesRow({
         ),
       if (paths.isNotEmpty) const SizedBox(height: 8),
       BibleTargetZone(
-        hint: 'Clic aquí → ⌘V para pegar referencia visual',
+        hint: 'Clic aquí → ${modKey}V para pegar referencia visual',
         minHeight: 48,
         onPaste: (payload) async {
           final stored = await BiblePasteHelpers.savePayloadToProject(

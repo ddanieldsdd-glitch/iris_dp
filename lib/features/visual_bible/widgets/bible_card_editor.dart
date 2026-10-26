@@ -15,6 +15,7 @@ import 'bible_point_images.dart';
 import 'moodboard_images_viewer.dart';
 import 'bible_point_panel.dart';
 import 'bible_references_deck.dart';
+import '../../../core/utils/platform_keys.dart';
 
 /// De dónde salen las imágenes de una ficha: el moodboard del proyecto.
 class BibleCardImageSource {
@@ -533,7 +534,7 @@ class _BibleCardEditorState extends State<BibleCardEditor> {
                   Text('AÑADIR IMÁGENES', style: label),
                   const SizedBox(height: 4),
                   Text(
-                    'Del moodboard, de un archivo o pegadas con ⌘V.',
+                    'Del moodboard, de un archivo o pegadas con ${modKey}V.',
                     style: AppTypography.caption(palette),
                   ),
                 ],

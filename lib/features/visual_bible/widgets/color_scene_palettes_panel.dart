@@ -19,6 +19,7 @@ import '../../../core/widgets/app_snackbar.dart';
 import '../services/color_extraction_service.dart';
 import '../visual_bible_model.dart';
 import 'color_palette_strip.dart';
+import '../../../core/utils/platform_keys.dart';
 
 /// Bloques de colorimetría por escena / localización con refs de imagen.
 class ColorScenePalettesPanel extends ConsumerWidget {
@@ -264,7 +265,7 @@ class _ColorimetryBlockCardState extends ConsumerState<_ColorimetryBlockCard> {
       if (!mounted) return;
       AppSnackBar.show(
         context,
-        'Copia una imagen y pulsa ⌘V aquí para extraer la paleta.',
+        'Copia una imagen y pulsa ${modKey}V aquí para extraer la paleta.',
         isError: true,
       );
       return;
@@ -476,7 +477,7 @@ class _ColorimetryBlockCardState extends ConsumerState<_ColorimetryBlockCard> {
                               color: palette.textTertiary),
                           const SizedBox(height: 8),
                           Text(
-                            'Pega (⌘V) o elige una imagen para leer su colorimetría',
+                            'Pega (${modKey}V) o elige una imagen para leer su colorimetría',
                             textAlign: TextAlign.center,
                             style: AppTypography.caption(palette).copyWith(
                                   color: palette.textSecondary,

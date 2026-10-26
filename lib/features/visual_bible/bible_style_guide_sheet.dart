@@ -14,6 +14,7 @@ import 'moodboard_association.dart';
 import 'moodboard_batch_actions.dart';
 import 'visual_bible_model.dart';
 import 'widgets/bible_navigation_scope.dart';
+import '../../core/utils/platform_keys.dart';
 
 /// Destinos donde se pueden usar referencias del moodboard del proyecto.
 enum ProjectReferenceTarget {
@@ -125,7 +126,7 @@ class BibleStyleGuideSheet extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
                   child: Text(
                     'Aún no hay imágenes. Añade referencias en el moodboard '
-                    '(⌘V para pegar).',
+                    '(${modKey}V para pegar).',
                     style: AppTypography.caption(palette),
                     textAlign: TextAlign.center,
                   ),

@@ -21,6 +21,7 @@ import '../../visual_bible_model.dart';
 import '../bible_form_widgets.dart';
 import '../bible_screen_hero.dart';
 import '../camera_test_comparator.dart';
+import '../../../../core/utils/platform_keys.dart';
 
 class CameraTestsSection extends ConsumerStatefulWidget {
   final int bibleId;
@@ -80,7 +81,7 @@ class _CameraTestsSectionState extends ConsumerState<CameraTestsSection> {
           projectId: widget.projectId,
           sectionId: BibleSectionId.cameraTests,
           bibleId: widget.bibleId,
-          hint: 'Clic aquí → ⌘V para pegar frame de prueba',
+          hint: 'Clic aquí → ${modKey}V para pegar frame de prueba',
           child: AspectRatio(
             aspectRatio: 16 / 9,
             child: ColoredBox(

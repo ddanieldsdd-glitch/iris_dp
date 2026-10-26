@@ -743,7 +743,9 @@ class _ShotCard extends StatelessWidget {
       child: InkWell(
         onTap: () {
           final keys = HardwareKeyboard.instance;
-          if (keys.isShiftPressed || keys.isMetaPressed) {
+          if (keys.isShiftPressed ||
+              keys.isMetaPressed ||
+              keys.isControlPressed) {
             onPick();
           } else {
             onOpen();

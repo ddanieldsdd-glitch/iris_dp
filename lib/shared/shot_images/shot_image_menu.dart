@@ -23,6 +23,7 @@ import '../annotations/annotation_document.dart';
 import '../annotations/sketch_pad.dart';
 import '../history/edit_history.dart';
 import '../history/shot_edits.dart';
+import '../../core/utils/platform_keys.dart';
 
 const _imageExtensions = {
   '.jpg',
@@ -191,7 +192,7 @@ class _ShotImagePasteTargetState extends ConsumerState<ShotImagePasteTarget> {
         SnackBar(
           content: Text(
             done
-                ? 'Imagen copiada. Pégala con ⌘V sobre otra casilla.'
+                ? 'Imagen copiada. Pégala con ${modKey}V sobre otra casilla.'
                 : 'Esta casilla no tiene imagen que copiar.',
           ),
         ),
@@ -223,7 +224,7 @@ class _ShotImagePasteTargetState extends ConsumerState<ShotImagePasteTarget> {
           },
           child: Tooltip(
             message:
-                '⌘V pega aquí la imagen copiada · ⌘C la copia · clic para '
+                '${modKey}V pega aquí la imagen copiada · ${modKey}C la copia · clic para '
                 'más opciones',
             waitDuration: const Duration(milliseconds: 700),
             child: DecoratedBox(
@@ -595,7 +596,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
     if (!mounted) return;
     setState(() {
       _notice = done ? null : 'No se ha podido copiar la imagen.';
-      _info = done ? 'Imagen copiada. Pégala con ⌘V sobre otra casilla.' : null;
+      _info = done ? 'Imagen copiada. Pégala con ${modKey}V sobre otra casilla.' : null;
     });
   }
 
@@ -972,7 +973,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'o pégala con ⌘V',
+                          'o pégala con ${modKey}V',
                           style: AppTypography.caption(palette),
                         ),
                       ],
@@ -988,12 +989,12 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                         child: Text(
                           switch (widget.target) {
                             ShotImageTarget.storyboard =>
-                              'Arrastra otra imagen aquí o pégala con ⌘V '
+                              'Arrastra otra imagen aquí o pégala con ${modKey}V '
                                   'para cambiarla',
                             ShotImageTarget.planSketch =>
-                              'Arrastra o pega con ⌘V más bocetos',
+                              'Arrastra o pega con ${modKey}V más bocetos',
                             ShotImageTarget.reference =>
-                              'Arrastra o pega con ⌘V más imágenes: una '
+                              'Arrastra o pega con ${modKey}V más imágenes: una '
                                   'por encuadre',
                           },
                           textAlign: TextAlign.center,

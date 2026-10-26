@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -113,5 +114,12 @@ class OpenBibleCommandPaletteIntent extends Intent {
   const OpenBibleCommandPaletteIntent();
 }
 
+/// ⌘K en el Mac y el iPad, Ctrl+K en Windows y Linux.
 SingleActivator get bibleCommandPaletteActivator =>
-    const SingleActivator(LogicalKeyboardKey.keyK, meta: true);
+    switch (defaultTargetPlatform) {
+      TargetPlatform.macOS || TargetPlatform.iOS => const SingleActivator(
+        LogicalKeyboardKey.keyK,
+        meta: true,
+      ),
+      _ => const SingleActivator(LogicalKeyboardKey.keyK, control: true),
+    };
