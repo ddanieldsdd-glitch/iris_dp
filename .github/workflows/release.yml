@@ -63,9 +63,10 @@ jobs:
           name: iris-dp-ios-ipa
           path: build/ios/ipa/IRIS-DP.ipa
 
+  # Si falla, el release sale en rojo, pero el Mac se publica igual (publish
+  # solo exige el Mac); el release queda sin los archivos de Windows.
   build-windows:
     runs-on: windows-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
