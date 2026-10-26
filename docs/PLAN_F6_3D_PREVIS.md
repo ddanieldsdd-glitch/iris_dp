@@ -27,6 +27,7 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
    | Mac | Todo: editar, pilotar, calidad alta, capturas, exportaciones |
    | iPad | Ver, mover y apuntar, pilotar con el giroscopio o joysticks en pantalla, calidad media |
    | Móvil | Ver y recorrer el set, calidad ligera |
+   | PC (Windows, NVIDIA) | Todo lo del Mac, calidad más alta y estación de render con Unreal (F6.19) |
 
    Cada punto dice en qué dispositivos va.
 6. **La luz del 3D es la de IRIS.** Lo que da el fotómetro en la planta lo da el 3D en el mismo punto (F6.3.1).
@@ -831,7 +832,28 @@ Daniel tiene también un PC con tarjeta NVIDIA. El objetivo es que la calidad RT
 - **Qué:** si Live Link y Pixel Streaming no bastan, un renderizador nativo dentro de IRIS para Windows: Vulkan con ray tracing y DLSS mediante el SDK Streamline de NVIDIA, como plugin de Flutter que comparte la textura con la interfaz.
 - **Coste:** muy alto (un motor propio que mantener). Se decide solo con datos de F6.19.3–19.5 en uso real.
 
+**F6.19.8 Rendimiento con NVIDIA** · PC
+- **Qué:** medir fotogramas por segundo del visor de IRIS y de Pixel Streaming, la latencia de Live Link y el tiempo de una captura RTX en el PC. Sale de PC.5.2.
+
 **Recomendación:** F6.19.3 a F6.19.5 dan la calidad RTX y DLSS en IRIS, también en el iPad, aprovechando Unreal en lugar de reescribirlo. F6.19.1 suma un IRIS más potente en el PC. F6.19.7 queda como último recurso.
+
+### F6.19 · Estado y orden de trabajo (2026-10-26)
+
+**F6.19.1 IRIS para Windows:** compila e instala (PR #49). Lo pendiente del PC que no es 3D se aplaza (ver `PLAN_IRIS_PC.md`).
+
+**El PC de Daniel:**
+- RTX 3060 Ti.
+- Unreal 5.5 en `C:\Program Files\Epic Games\UE_5.5`, con los plugins RemoteControl, RemoteControlWebInterface, PixelStreaming y PixelStreaming2, y LiveLinkCamera. También RealityCapture.
+- DLSS no viene con el motor: es un plugin aparte de NVIDIA.
+
+**Orden acordado con Daniel** (un PR por paso):
+1. **Plugin de Unreal y puente en vivo IRIS → Unreal** (F6.16.2 y F6.19.3): luces (posición, intensidad y temperatura), sol y niebla, en menos de 0,5 s. Por la Remote Control API (puertos 30010 y 30020), solo en red local.
+2. **Vuelta Unreal → IRIS** (F6.16.10): IRIS consulta Remote Control cada pocos instantes, así que no hace falta un servidor en el iPad.
+3. **Ventana «Render RTX»** (F6.19.4): Pixel Streaming dentro del WebView de IRIS.
+4. **«Capturar con RTX»** (F6.19.5 y F6.16.9): los fotogramas van al storyboard con el nombre `iris_dp_s{escena}_p{plano}.png` (`unreal_render_import.dart`).
+5. **Assets gratuitos de Fab y Megascans** (F6.15.4): **por licencia, solo se usan dentro de Unreal.** No se copian al visor de IRIS: se ven por Pixel Streaming, y en la planta y el visor queda un sustituto con las mismas medidas.
+
+**Ya existe:** `lib/features/luka_export/` (`iris_dp_export_service`, `luka_light_mapping`, `unreal_coords`, `unreal_render_import`, `luka_bridge_screen`) y `tools/unreal/iris_dp_import.py`, que importa en un solo sentido.
 
 ---
 

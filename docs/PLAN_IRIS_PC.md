@@ -2,6 +2,47 @@
 
 Plan vivo con puntos numerados (`PC.x.y`), como el plan F6. Estado de cada punto: **pendiente**, **en curso**, **hecho (PR)**, **descartado**.
 
+## Estado (2026-10-26)
+
+Lo de compilar e instalar está en la PR #49 (`plan/pc-windows`). El resto **se aplaza**: ahora el trabajo del PC es el 3D de alta calidad (bloque F6.19 del plan 3D, `PLAN_F6_3D_PREVIS.md`).
+
+| Punto | Estado |
+|---|---|
+| PC.0.1–0.2 Preparar el PC | hecho (#49: `setup_windows_dev.ps1`, `DESARROLLO_EN_WINDOWS.md`) |
+| PC.1.1 PNG del plugin nativo | hecho (#49) |
+| PC.1.2 PDF en Windows | hecho (#49, `pdfrx`) |
+| PC.1.3 WebView2 para el 3D | hecho (#49) |
+| PC.1.4 Windows en cada PR | hecho (#49) |
+| PC.1.5 Instalador de prueba | hecho (#49, artefacto del CI) |
+| PC.2.1 Portapapeles y guardar | portapapeles hecho (#49); guardar archivos **aplazado** |
+| PC.2.2 Atajos con Ctrl | hecho (#49) |
+| PC.2.3 Funciones solo de iPad | **aplazado** |
+| PC.2.4 Nombre del equipo | **aplazado** (`device_label.dart` ya distingue Windows; falta comprobarlo) |
+| PC.2.5 Rutas absolutas del Mac | **aplazado** |
+| PC.2.6 Arrastrar y abrir con IRIS | **aplazado** |
+| PC.2.7 Aspecto de Windows | icono y ventana hechos (#49); barra de título, menú y escalado **aplazados** |
+| PC.3.1 Dónde vive la base | **aplazado** |
+| PC.3.2 Primer arranque y sincronización | **aplazado** |
+| PC.3.3 Medios pesados | **aplazado** (sigue a F6.12.5 y F6.15) |
+| PC.4.1 Instalador | hecho (#49, Inno Setup) |
+| PC.4.2 Firma | **aplazado** (decisión abierta: sin firma o certificado OV/EV) |
+| PC.4.3 Actualizaciones automáticas | **aplazado** (hoy el actualizador de Windows espera un zip, no el instalador) |
+| PC.4.4 Documentación | hecho (#49) |
+| PC.5.1 Lista de comprobación | escrita (#49, `PRUEBA_WINDOWS.md`); falta recorrerla |
+| PC.5.2 Rendimiento con NVIDIA | pasa a F6.19.8 |
+| PC.6 Lo que gana el PC | pasa a F6.19 (en curso) |
+
+### Para más adelante: lo que falta por definir
+
+1. **Guardar archivos (PC.2.1):** si `export_file_saver.dart` usa el canal nativo de Windows o el selector de archivos.
+2. **Funciones solo de iPad (PC.2.3):** ocultarlas o explicarlas en el PC (LiDAR, SideStore, guía del iPad).
+3. **Rutas (PC.2.5):** qué datos guardan rutas del Mac y si pasan a medios sincronizados o a rutas relativas.
+4. **Abrir con IRIS (PC.2.6):** qué tipos de archivo se registran en el Explorador.
+5. **Aspecto (PC.2.7):** barra de título propia o la de Windows; dónde va el menú.
+6. **Base local (PC.3.1)** y **primer arranque (PC.3.2):** depende de arreglar antes «La descarga de la nube pierde datos».
+7. **Firma (PC.4.2):** sin firma para uso propio, o certificado si se reparte.
+8. **Actualizar sola (PC.4.3):** descargar el instalador o el zip, y cómo se reabre IRIS.
+
 ## Para qué
 
 Daniel tiene un PC con tarjeta NVIDIA y quiere usar IRIS también ahí: con sus mismos proyectos, sincronizados con el Mac y el iPad, y después como estación de render con Unreal (F6.19 del plan 3D).
@@ -156,7 +197,7 @@ Hay 17 archivos con `Platform.isMacOS` o `Platform.isIOS`. Se revisan uno por un
 
 ## PC.6 · Lo que gana el PC después (enlaza con el plan 3D)
 
-**Estado:** se deja para cuando se construya el motor 3D más exigente (F6.0 en adelante). Ahí se ajusta este bloque: qué pide ese motor al PC (WebGPU, perfiles, path tracing) y cómo se conecta con Unreal. Hasta entonces el PC usa el mismo 3D que el Mac.
+**Estado:** en curso. Se trabaja en el bloque F6.19 del plan 3D (`PLAN_F6_3D_PREVIS.md`): el PC con NVIDIA es la máquina de referencia del 3D de alta calidad.
 
 
 - **F6.19.1:** perfil de calidad «ultra» y capturas con trazado de rayos más rápidas, con WebGPU sobre NVIDIA.
