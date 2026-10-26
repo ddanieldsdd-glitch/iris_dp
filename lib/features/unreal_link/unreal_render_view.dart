@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'unreal_link.dart';
+import 'unreal_tutorial_screen.dart';
 
 /// Guarda una captura de Unreal (PNG) hecha por la cámara [cameraId] en el
 /// storyboard del plano. Devuelve lo que se dice al terminar.
@@ -227,11 +228,22 @@ class _UnrealRenderScreenState extends State<UnrealRenderScreen> {
                 borderRadius: BorderRadius.circular(8),
                 child: Padding(
                   padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Text(
-                    _error!,
-                    style: AppTypography.bodyMedium(
-                      palette,
-                    ).copyWith(color: palette.error),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: AppTypography.bodyMedium(
+                            palette,
+                          ).copyWith(color: palette.error),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            UnrealTutorialScreen.open(context, link: link),
+                        child: const Text('Ver tutorial'),
+                      ),
+                    ],
                   ),
                 ),
               ),

@@ -4,6 +4,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'unreal_link.dart';
+import 'unreal_tutorial_screen.dart';
 
 /// Botón de la barra del 3D: dice si IRIS está conectado con Unreal y abre
 /// el diálogo para conectar.
@@ -147,6 +148,14 @@ class _UnrealLinkDialogState extends State<_UnrealLinkDialog> {
             ),
           ),
           actions: [
+            TextButton.icon(
+              icon: const Icon(Icons.school_outlined, size: 18),
+              label: const Text('Tutorial: cómo prepararlo'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                UnrealTutorialScreen.open(context, link: link);
+              },
+            ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Cerrar'),

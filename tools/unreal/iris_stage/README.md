@@ -24,6 +24,16 @@ Si el nivel abierto en Unreal no es de IRIS y tiene cambios sin guardar, IRIS no
 
 ## Instalar (una vez por proyecto de Unreal)
 
+**Lo más fácil: desde IRIS.** En **Ajustes → IRIS con Unreal** (o «Tutorial: cómo prepararlo» en el diálogo de Unreal del 3D) hay un tutorial paso a paso. En su paso «Preparar el proyecto» eliges el `.uproject` e IRIS hace los pasos de abajo:
+- activa los plugins;
+- copia el script y añade la configuración RTX;
+- crea junto al proyecto el lanzador «Abrir <proyecto> con IRIS Stage».
+
+No borra nada y guarda una copia `.antes-de-iris` de cada archivo que cambia. Después, el tutorial prueba la conexión y Pixel Streaming.
+
+A mano, si lo prefieres:
+
+
 1. En Unreal 5.5, **Edit → Plugins**, activa:
    - Python Editor Script Plugin;
    - Remote Control API;

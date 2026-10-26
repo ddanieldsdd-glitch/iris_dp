@@ -4,6 +4,25 @@ Lista para probar en el PC lo nuevo del 3D con Unreal: los pasos 1 a 5 de F6.19 
 
 ## Antes de empezar
 
+### Con el tutorial de la app (recomendado)
+
+- [ ] **Ajustes → IRIS con Unreal** abre el tutorial (7 pasos). También desde el diálogo de Unreal del 3D («Tutorial: cómo prepararlo») y desde Render RTX cuando no responde.
+- [ ] Paso «Preparar el proyecto»: elegir el `.uproject` (con Unreal cerrado). Salen en verde:
+  - plugins activados;
+  - IRIS Stage Link copiado;
+  - `init_unreal.py`;
+  - Lumen con trazado de rayos;
+  - lanzador creado.
+- [ ] Repetirlo con el mismo proyecto: todo sale como «ya estaba», sin duplicar nada.
+- [ ] Junto al proyecto hay «Abrir <proyecto> con IRIS Stage.bat» y copias `.antes-de-iris`.
+- [ ] Paso «Abrir Unreal»: **Abrir Unreal ahora** abre el proyecto. La primera vez tarda (sombreadores).
+- [ ] Paso «Conectar»: **Probar conexión** dice «Conectado con Unreal 5.5». El tutorial enseña la IP de este equipo para el Mac o el iPad.
+- [ ] Paso «Render RTX»: **Probar Pixel Streaming** dice que responde.
+- [ ] Pasos «Cómo se trabaja» y «Si algo falla»: se entienden sin haber leído esta lista.
+
+### A mano (si no se usa el tutorial)
+
+
 - [ ] Cerrar cualquier otro IRIS de desarrollo: comparten la base de datos.
 - [ ] Proyecto de Unreal preparado según `tools/unreal/iris_stage/README.md`: plugins, `Content/Python` y `Config/DefaultEngine.ini`.
 - [ ] Abrir el proyecto con `Abrir con IRIS Stage.bat`. El Output Log dice `[IRIS Stage] Link v1 listo`.
