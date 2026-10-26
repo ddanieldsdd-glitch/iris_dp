@@ -159,6 +159,10 @@ class MediaHydrateService {
     final deliveryUrl = asset['delivery_url'] as String?;
     final publicId = asset['public_id'] as String?;
     if (deliveryUrl == null || publicId == null) return false;
+    // Imagen de una fila que aquí no existe (borrada, o fusionada como
+    // duplicada): bajarla no la coloca en ningún sitio y se repetiría en
+    // cada pasada.
+    if (!await _targetExists(projectId, entityType, entityKey)) return false;
 
     final localPath = await _resolveLocalPath(
       projectId: projectId,
@@ -343,6 +347,29 @@ class MediaHydrateService {
       MediaEntityType.projectCover => 'cover',
       _ => 'cloud_cache',
     };
+  }
+
+  /// Si existe aquí la fila a la que va el medio. Los tipos que no se pueden
+  /// comprobar cuentan como que sí.
+  Future<bool> _targetExists(
+    int projectId,
+    String entityType,
+    String entityKey,
+  ) async {
+    if (MediaEntityKeys.uidOf(entityKey) case final uid?) {
+      if (!_uidTables.containsKey(entityType)) return true;
+      return await _rowByUid(projectId, entityType, uid) != null;
+    }
+    if (entityType == MediaEntityType.moodboard ||
+        entityType == MediaEntityType.shotReference) {
+      return await _lookupExistingPath(
+            projectId: projectId,
+            entityType: entityType,
+            entityKey: entityKey,
+          ) !=
+          null;
+    }
+    return true;
   }
 
   Future<String?> _resolveLocalPath({
