@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:path/path.dart' as p;
 
 import '../database/app_database.dart';
@@ -39,6 +40,8 @@ class MediaHydrateService {
       }
       try {
         if (await _hydrateAsset(projectId, projectCloudId, asset)) {
+          debugPrint('[medios ${DateTime.now().toIso8601String().substring(11, 23)}] '
+              'bajada ${asset['entity_type']} ${asset['entity_key']}');
           downloaded++;
           onProgress?.call(downloaded, checked + 1, assets.length);
         }
