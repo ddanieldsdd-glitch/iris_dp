@@ -10,6 +10,11 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $Root
 
+# El Flutter fijado de setup_windows_dev.ps1 va primero, aunque haya otro en el
+# PATH (una consola abierta antes del setup o una instalación antigua).
+$pinned = Join-Path (Split-Path -Parent $Root) "flutter\bin"
+if (Test-Path (Join-Path $pinned "flutter.bat")) { $env:Path = "$pinned;$env:Path" }
+
 if (-not (Test-Path ".env")) {
   throw "Falta .env. Copia .env.example a .env y rellena SUPABASE_URL y SUPABASE_ANON_KEY."
 }

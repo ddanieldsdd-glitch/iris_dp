@@ -38,6 +38,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   var _mode = AuthMode.signIn;
   var _isDirector = false;
   var _loading = false;
+  var _showPassword = false;
 
   @override
   void dispose() {
@@ -334,14 +335,26 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   const SizedBox(height: AppSpacing.md),
                   TextField(
                     controller: _passwordCtrl,
-                    obscureText: true,
+                    obscureText: !_showPassword,
                     textInputAction: TextInputAction.done,
                     autofillHints: const [AutofillHints.password],
                     onSubmitted: (_) => _loading ? null : _submit(),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Contraseña',
                       hintText: 'Mínimo 6 caracteres',
-                      prefixIcon: Icon(Icons.lock_outline),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        tooltip: _showPassword
+                            ? 'Ocultar contraseña'
+                            : 'Mostrar contraseña',
+                        icon: Icon(
+                          _showPassword
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                        onPressed: () =>
+                            setState(() => _showPassword = !_showPassword),
+                      ),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xl),

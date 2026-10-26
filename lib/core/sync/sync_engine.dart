@@ -219,6 +219,11 @@ class SyncEngine {
     } catch (_) {}
   }
 
+  /// Otro equipo avisó de que subió imágenes de [projectCloudId]: la pasada
+  /// ligera mira sus medios durante un rato, aunque el contenido no cambie.
+  void followMedia(String projectCloudId) =>
+      _recentPulls[projectCloudId] = DateTime.now();
+
   /// Sync al arrancar (y al reconectar o cambiar de versión).
   Future<SyncResult> syncOnStartup() => syncSilently();
 
@@ -556,10 +561,23 @@ class SyncEngine {
         // Primero bajar y después poner en cola: lo recién bajado queda
         // anotado como subido y no vuelve a la nube. Un proyecto que falle
         // no deja sin medios a los demás.
+        final progress = _ref.read(mediaDownloadProgressProvider.notifier);
         try {
-          mediaDownloaded += await hydrate.hydrateProject(p.id, p.cloudId!);
+          mediaDownloaded += await hydrate.hydrateProject(
+            p.id,
+            p.cloudId!,
+            onProgress: (downloaded, checked, total) => progress.state =
+                MediaDownloadProgress(
+              projectName: p.name,
+              downloaded: downloaded,
+              checked: checked,
+              total: total,
+            ),
+          );
         } catch (e, st) {
           await ErrorLog.record(e, st, context: 'Bajar medios ${p.name}');
+        } finally {
+          progress.state = null;
         }
         try {
           mediaUploaded += await uploadQueue.scanAndEnqueueProject(p.id);
@@ -705,6 +723,27 @@ class MergeNotice {
 }
 
 final mergeNoticeProvider = StateProvider<MergeNotice?>((ref) => null);
+
+/// Imágenes que se están bajando ahora de un proyecto (null: ninguna).
+class MediaDownloadProgress {
+  final String projectName;
+  final int downloaded;
+  final int checked;
+  final int total;
+
+  const MediaDownloadProgress({
+    required this.projectName,
+    required this.downloaded,
+    required this.checked,
+    required this.total,
+  });
+
+  String get message => 'Bajando imágenes de $projectName · '
+      '$downloaded nuevas ($checked de $total revisadas)';
+}
+
+final mediaDownloadProgressProvider =
+    StateProvider<MediaDownloadProgress?>((ref) => null);
 
 /// La última subida a la nube que se ha visto (ver [CloudEdit]).
 final lastCloudEditProvider = StateProvider<CloudEdit?>((ref) => null);

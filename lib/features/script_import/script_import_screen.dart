@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
@@ -93,8 +94,29 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadWorkspace());
   }
 
+  /// El PDF del guion aún no está en este equipo (lo baja la sincronización
+  /// después del contenido): se mira cada pocos segundos y se carga al llegar.
+  Timer? _waitScript;
+
+  void _waitForScriptFile() {
+    _waitScript?.cancel();
+    _waitScript = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (!mounted || _loadedScript != null) {
+        _waitScript?.cancel();
+        return;
+      }
+      final project =
+          await ref.read(databaseProvider).getProject(widget.projectId);
+      final path = project?.scriptFilePath;
+      if (path == null || !File(path).existsSync()) return;
+      _waitScript?.cancel();
+      if (mounted) await _loadWorkspace();
+    });
+  }
+
   @override
   void dispose() {
+    _waitScript?.cancel();
     _previewController.dispose();
     _sceneSearch.dispose();
     super.dispose();
@@ -147,11 +169,16 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
           _syncPendingColorsFromScenes();
         });
       } else if (_projectHasSyncedScenes) {
+        _waitForScriptFile();
         setState(() {
-          _status =
-              'Hay escenas en el guion técnico pero falta el archivo del guion. '
-              'Selecciona el PDF o Word de referencia.';
+          _status = project?.cloudId != null
+              ? 'Descargando el guion de la nube… Aparecerá aquí en cuanto llegue. '
+                  'Si no llega, selecciona el PDF o Word de referencia.'
+              : 'Hay escenas en el guion técnico pero falta el archivo del guion. '
+                  'Selecciona el PDF o Word de referencia.';
         });
+      } else if (project?.cloudId != null) {
+        _waitForScriptFile();
       }
     } catch (e) {
       setState(() => _status = userFriendlyError(e));

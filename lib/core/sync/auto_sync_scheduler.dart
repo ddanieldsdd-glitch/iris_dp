@@ -14,6 +14,7 @@ import '../widgets/app_snackbar.dart';
 import '../widgets/sync/sync_conflict_history_sheet.dart';
 import 'content_sync_base_store.dart';
 import 'editing_guard.dart';
+import 'media_upload_queue.dart';
 import 'project_content_sync_service.dart';
 import 'realtime_hub.dart';
 import 'sync_engine.dart';
@@ -78,8 +79,10 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
     WidgetsBinding.instance.removeObserver(this);
     EditingGuard.active.removeListener(_onEditingChanged);
     _liveNotices?.cancel();
+    _mediaNotices?.cancel();
     _liveDebounce?.cancel();
     ProjectContentSyncService.onUploaded = null;
+    MediaUploadQueue.onProjectUploaded = null;
     _ticker?.cancel();
     _editDebounce?.cancel();
     _queueWatch?.cancel();
@@ -133,11 +136,24 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
       return;
     }
     ProjectContentSyncService.onUploaded = hub.announceSnapshot;
+    MediaUploadQueue.onProjectUploaded = hub.announceMedia;
     if (!identical(hub, _liveHub)) {
       await _liveNotices?.cancel();
+      await _mediaNotices?.cancel();
       _liveHub = hub;
       _liveNotices = hub.snapshotNotices.listen(_onLiveNotice);
+      _mediaNotices = hub.mediaNotices.listen(_onMediaNotice);
     }
+  }
+
+  StreamSubscription<String>? _mediaNotices;
+
+  /// Otro equipo subió imágenes: se bajan ya, sin esperar a la pasada de
+  /// cada minuto.
+  void _onMediaNotice(String projectCloudId) {
+    ref.read(syncEngineProvider).followMedia(projectCloudId);
+    _liveDebounce?.cancel();
+    _liveDebounce = Timer(AutoSyncScheduler.liveDelay, () => _run(full: false));
   }
 
   Future<void> _onLiveNotice(SnapshotNotice notice) async {

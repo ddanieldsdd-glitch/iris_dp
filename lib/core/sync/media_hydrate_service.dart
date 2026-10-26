@@ -20,9 +20,16 @@ class MediaHydrateService {
 
   MediaHydrateService(this._db, this._cloud);
 
-  Future<int> hydrateProject(int projectId, String projectCloudId) async {
+  /// [onProgress] recibe cuántas ha bajado, cuántas ha mirado y el total,
+  /// tras cada imagen (para enseñar que se están bajando).
+  Future<int> hydrateProject(
+    int projectId,
+    String projectCloudId, {
+    void Function(int downloaded, int checked, int total)? onProgress,
+  }) async {
     final assets = await _cloud.fetchProjectAssets(projectCloudId);
     var downloaded = 0;
+    var checked = 0;
 
     final strokes = <Map<String, dynamic>>[];
     for (final asset in assets) {
@@ -33,6 +40,7 @@ class MediaHydrateService {
       try {
         if (await _hydrateAsset(projectId, projectCloudId, asset)) {
           downloaded++;
+          onProgress?.call(downloaded, checked + 1, assets.length);
         }
       } catch (e, st) {
         // Un archivo que falle no deja sin bajar el resto.
@@ -42,6 +50,7 @@ class MediaHydrateService {
           context: 'Bajar ${asset['entity_type']} ${asset['entity_key']}',
         );
       }
+      checked++;
     }
 
     // Los trazos, después: van junto a la ruta actual de su imagen, que puede

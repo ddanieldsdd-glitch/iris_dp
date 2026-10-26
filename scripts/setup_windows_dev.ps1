@@ -64,9 +64,11 @@ flutter config --enable-windows-desktop | Out-Null
 
 # 3. Modo de desarrollador: Flutter lo necesita para los plugins (enlaces
 # simbólicos). Solo se puede activar a mano.
-$dev = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" `
+# Ojo: PowerShell no distingue mayúsculas en las variables; $devMode no puede
+# llamarse $dev o pisaría $Dev.
+$devMode = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" `
   -Name AllowDevelopmentWithoutDevLicense -ErrorAction SilentlyContinue
-if (-not $dev -or $dev.AllowDevelopmentWithoutDevLicense -ne 1) {
+if (-not $devMode -or $devMode.AllowDevelopmentWithoutDevLicense -ne 1) {
   Write-Host "⚠ Activa «Modo de desarrollador» en la ventana que se abre y vuelve aquí."
   Start-Process "ms-settings:developers"
   Read-Host "Pulsa Intro cuando esté activado"
