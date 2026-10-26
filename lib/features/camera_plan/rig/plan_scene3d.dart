@@ -156,6 +156,8 @@ class PlanScene3d {
           });
         case ElementType.camera:
           final rad = el.rotation * math.pi / 180;
+          final sensorMm =
+              (el.props['sensorWidthMm'] as num?)?.toDouble() ?? 24.89;
           cameras.add({
             'id': uid,
             'name': el.cameraLabel,
@@ -166,14 +168,9 @@ class PlanScene3d {
             'z': _r((el.props[PlanLight.heightKey] as num?)?.toDouble() ?? 1.5),
             'dir': [_r(math.sin(rad)), _r(math.cos(rad))],
             'hfovDeg': _r(
-              cameraFovDegrees(
-                    el.lens,
-                    sensorWidthMm:
-                        (el.props['sensorWidthMm'] as num?)?.toDouble() ??
-                        24.89,
-                  ) ??
-                  40,
+              cameraFovDegrees(el.lens, sensorWidthMm: sensorMm) ?? 40,
             ),
+            'sensorMm': sensorMm,
           });
         default:
           break;

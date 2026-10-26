@@ -23,6 +23,8 @@ import 'plan_rig.dart';
 import 'plan_scene3d.dart';
 import '../../unreal_link/unreal_link.dart';
 import '../../unreal_link/unreal_link_button.dart';
+import '../../unreal_link/unreal_render_view.dart';
+import '../../unreal_link/unreal_return.dart';
 import 'scan_store.dart';
 import 'rig_report.dart';
 
@@ -118,10 +120,14 @@ class _Plan3dViewState extends State<Plan3dView> {
   double? _measuredM;
   final _realLength = TextEditingController();
 
+  /// Cambios que llegan de Unreal (IRIS Stage Link).
+  StreamSubscription<List<UnrealEdit>>? _fromUnreal;
+
   @override
   void initState() {
     super.initState();
     _realLength.addListener(() => setState(() {}));
+    _fromUnreal = UnrealLink.instance.edits.listen(_applyFromUnreal);
     _schedule();
   }
 
@@ -137,6 +143,7 @@ class _Plan3dViewState extends State<Plan3dView> {
 
   @override
   void dispose() {
+    _fromUnreal?.cancel();
     _debounce?.cancel();
     _realLength.dispose();
     super.dispose();
@@ -302,6 +309,21 @@ class _Plan3dViewState extends State<Plan3dView> {
     if (!mounted) return;
     setState(() => _selected = el);
     _schedule();
+  }
+
+  /// Lo que se ha movido, regulado o recoloreado en Unreal vuelve a la
+  /// planta y se guarda, como si se hubiera hecho en este 3D.
+  Future<void> _applyFromUnreal(List<UnrealEdit> edits) async {
+    final save = widget.onChanged;
+    if (save == null || !mounted) return;
+    for (final edit in edits) {
+      final el = _byId(edit.id);
+      if (el == null || !edit.claim()) continue;
+      if (UnrealReturn.apply(el, edit, widget.elements, widget.metersPerUnit)) {
+        await save(el);
+      }
+    }
+    if (mounted) _preview();
   }
 
   /// Retoque desde el lateral: repinta mientras se arrastra y guarda al
@@ -593,6 +615,20 @@ class _Plan3dViewState extends State<Plan3dView> {
           ),
         ),
         UnrealLinkButton(link: UnrealLink.instance),
+        ListenableBuilder(
+          listenable: UnrealLink.instance,
+          builder: (context, _) => UnrealLink.instance.isOn
+              ? IconButton(
+                  tooltip: 'Render RTX: ver Unreal aquí',
+                  icon: Icon(
+                    Icons.live_tv_outlined,
+                    size: 18,
+                    color: palette.textSecondary,
+                  ),
+                  onPressed: _openRender,
+                )
+              : const SizedBox.shrink(),
+        ),
         PopupMenuButton<String>(
           tooltip: 'Qué se ve',
           icon: Icon(
@@ -906,9 +942,27 @@ class _Plan3dViewState extends State<Plan3dView> {
             onPressed: () => showUnrealLinkDialog(context, UnrealLink.instance),
           ),
         ),
+        const SizedBox(height: AppSpacing.xs),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.live_tv_outlined, size: 16),
+          label: const Text('Render RTX: ver Unreal aquí'),
+          onPressed: _openRender,
+        ),
+        Text(
+          'Lo que muevas, regules o cambies de color en Unreal vuelve a la '
+          'planta.',
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textTertiary),
+        ),
       ],
     );
   }
+
+  void _openRender() => UnrealRenderScreen.open(
+    context,
+    cameras: [for (final (id, name, _) in _cameras) (id, name)],
+  );
 
   /// Avisos de rigging; tocar uno selecciona lo que lo provoca.
   List<Widget> _warnings(AppPalette palette) {

@@ -1,9 +1,15 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
+import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
+import 'package:iris_dp/features/camera_plan/light_beam.dart';
+import 'package:iris_dp/features/camera_plan/rig/plan_scene3d.dart';
 import 'package:iris_dp/features/unreal_link/unreal_link.dart';
+import 'package:iris_dp/features/unreal_link/unreal_return.dart';
 import 'package:iris_dp/features/unreal_link/unreal_stage_payload.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -81,6 +87,110 @@ void main() {
     });
   });
 
+  group('UnrealStagePayload · cámaras', () {
+    test('la focal sale del campo y el sensor', () {
+      final c = UnrealStagePayload.camera({
+        'id': 'C1',
+        'name': 'A',
+        'at': [1, 2],
+        'z0': 0,
+        'z': 1.5,
+        'dir': [0, 1],
+        'hfovDeg': 2 * math.atan(24.89 / 2 / 35) * 180 / math.pi,
+        'sensorMm': 24.89,
+      })!;
+      expect(c['focalMm'], closeTo(35, 0.1));
+      expect(c['loc'], [100, -200, 150]);
+      expect(c['rot'], [0, -90, 0]);
+    });
+
+    test('dirOf deshace rotToward', () {
+      final rot = UnrealStagePayload.rotToward(0.3, -0.5, -0.6);
+      final d = UnrealStagePayload.dirOf(rot);
+      final n = math.sqrt(0.3 * 0.3 + 0.5 * 0.5 + 0.6 * 0.6);
+      expect(d.x, closeTo(0.3 / n, 0.01));
+      expect(d.y, closeTo(-0.5 / n, 0.01));
+      expect(d.z, closeTo(-0.6 / n, 0.01));
+    });
+  });
+
+  group('UnrealReturn', () {
+    const mpu = 0.01;
+    PlanElement light() => PlanElement(
+      id: 1,
+      type: ElementType.light,
+      position: const Offset(300, -200),
+      lightType: LightType.fresnelMedium,
+      props: {
+        'uid': 'L',
+        'intensity': 80,
+        'mount': 'ceiling',
+        'height': 3.5,
+        'tilt': 30,
+      },
+    );
+    PlanElement camera() => PlanElement(
+      id: 2,
+      type: ElementType.camera,
+      position: const Offset(-400, 0),
+      lens: '35mm',
+      props: {'uid': 'C'},
+    );
+    Map<String, dynamic> sent(List<PlanElement> els) =>
+        UnrealStagePayload.build(PlanScene3d.build(els, metersPerUnit: mpu));
+
+    test('lo que no ha cambiado en Unreal no es un cambio', () {
+      final els = [light(), camera()];
+      final applied = sent(els);
+      final actors = {
+        for (final kind in ['lights', 'cameras'])
+          for (final m in (applied[kind] as List).cast<Map>())
+            m['id']: {
+              'loc': m['loc'],
+              'rot': m['rot'],
+              if (kind == 'lights') ...{'intensity': m['cd'], 'cct': m['cct']},
+            },
+      };
+      expect(UnrealReturn.detect(applied, actors), isEmpty);
+    });
+
+    test('mover, regular y girar en Unreal vuelve a la planta', () {
+      final l = light(), c = camera();
+      final els = [l, c];
+      final applied = sent(els);
+      final sl = (applied['lights'] as List).single as Map;
+      final sc = (applied['cameras'] as List).single as Map;
+      final edits = UnrealReturn.detect(applied, {
+        'L': {
+          'loc': [sl['loc'][0] + 100, sl['loc'][1], sl['loc'][2]],
+          'rot': sl['rot'],
+          'intensity': (sl['cd'] as num) / 8,
+          'cct': (sl['cct'] as num) + 400,
+        },
+        'C': {
+          'loc': [sc['loc'][0], sc['loc'][1], 180.0],
+          'rot': [0.0, 45.0, 0.0],
+        },
+      });
+      expect(edits, hasLength(2));
+      for (final e in edits) {
+        final el = e.id == 'L' ? l : c;
+        expect(UnrealReturn.apply(el, e, els, mpu), isTrue);
+      }
+      expect(l.position.dx, closeTo(400, 0.01));
+      expect(LightBeam.of(l)!.intensity, 10);
+      expect(LightBeam.of(l)!.cct, 3600);
+      expect(c.props['height'], 1.8);
+      expect(c.rotation, 135);
+    });
+
+    test('un cambio lo aplica solo el primero que lo pide', () {
+      final e = UnrealEdit(id: 'x', camera: false, sent: const {});
+      expect(e.claim(), isTrue);
+      expect(e.claim(), isFalse);
+    });
+  });
+
   group('UnrealLink', () {
     setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -124,6 +234,7 @@ void main() {
       final patch = jsonDecode(calls.last['parameters']['payload'] as String);
       expect(patch.containsKey('full'), isFalse);
       expect(patch['lights'].single['on'], false);
+      link.disconnect();
     });
 
     test('sin el plugin en Unreal explica qué falta', () async {

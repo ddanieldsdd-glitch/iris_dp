@@ -850,7 +850,10 @@ Daniel tiene también un PC con tarjeta NVIDIA. El objetivo es que la calidad RT
 1. **Plugin de Unreal y puente en vivo IRIS → Unreal** (F6.16.2 y F6.19.3): luces (posición, intensidad y temperatura), sol y niebla, en menos de 0,5 s. Por la Remote Control API (puertos 30010 y 30020), solo en red local.
    - **Estado:** hecho, salvo la niebla (`plan/f6-3d-pc`). Está en `tools/unreal/iris_stage` y `lib/features/unreal_link/`. Probado con Unreal 5.5 en el PC: unos 40 ms la escena entera y unos 10 ms cada cambio. La niebla espera a F6.9.1, porque la planta aún no la tiene.
 2. **Vuelta Unreal → IRIS** (F6.16.10): IRIS consulta Remote Control cada pocos instantes, así que no hace falta un servidor en el iPad.
+   - **Estado:** hecho (`plan/f6-3d-pc`). IRIS consulta `Snapshot()` cada 0,5 s. Lo que se mueve, gira, regula o cambia de color en Unreal (focos y cámaras) vuelve a la planta y se guarda. Probado con Unreal 5.5: no rebota.
+   - **Diferencias con la ficha original:** se aplica directamente, sin la lista para aceptar o rechazar, que queda para el paquete `.irisstage`. Borrar en Unreal no borra en IRIS. El sol de Unreal no vuelve todavía.
 3. **Ventana «Render RTX»** (F6.19.4): Pixel Streaming dentro del WebView de IRIS.
+   - **Estado:** hecho (`plan/f6-3d-pc`). Pixel Streaming 2 emite el visor del editor (`Abrir con IRIS Stage.bat`), e IRIS lo muestra sin la interfaz del reproductor. Las cámaras de la planta pasan a Unreal como CineCameraActor, y «Ver por la cámara» pone el visor en una de ellas. Probado con Unreal 5.5 en el PC.
 4. **«Capturar con RTX»** (F6.19.5 y F6.16.9): los fotogramas van al storyboard con el nombre `iris_dp_s{escena}_p{plano}.png` (`unreal_render_import.dart`).
 5. **Assets gratuitos de Fab y Megascans** (F6.15.4): **por licencia, solo se usan dentro de Unreal.** No se copian al visor de IRIS: se ven por Pixel Streaming, y en la planta y el visor queda un sustituto con las mismas medidas.
 

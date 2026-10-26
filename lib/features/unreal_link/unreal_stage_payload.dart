@@ -79,6 +79,41 @@ class UnrealStagePayload {
     };
   }
 
+  /// La dirección (ejes de la escena) del +X de un rotador de Unreal: lo
+  /// contrario de [rotToward].
+  static ({double x, double y, double z}) dirOf(List rot) {
+    final p = (rot[0] as num) * math.pi / 180;
+    final yw = (rot[1] as num) * math.pi / 180;
+    return (
+      x: math.cos(p) * math.cos(yw),
+      y: -math.cos(p) * math.sin(yw),
+      z: math.sin(p),
+    );
+  }
+
+  /// Una cámara de la planta como CineCamera: a la altura del objetivo,
+  /// mirando en horizontal hacia donde mira en planta, con la focal que da
+  /// su campo en su sensor.
+  static Map<String, dynamic>? camera(Map c) {
+    final at = c['at'] as List?, dir = c['dir'] as List?;
+    if (at == null || dir == null) return null;
+    final z = ((c['z0'] ?? 0) as num) + ((c['z'] ?? 1.5) as num);
+    final sensor = ((c['sensorMm'] ?? 24.89) as num).toDouble();
+    final hfov = ((c['hfovDeg'] ?? 40) as num).toDouble() * math.pi / 180;
+    return {
+      'id': c['id'],
+      'name': c['name'],
+      'loc': loc([at[0], at[1], z]),
+      'rot': rotToward(
+        (dir[0] as num).toDouble(),
+        (dir[1] as num).toDouble(),
+        0,
+      ),
+      'focalMm': _r(sensor / (2 * math.tan(hfov / 2))),
+      'sensorMm': _r(sensor),
+    };
+  }
+
   /// El sol: la escena da hacia dónde está; la luz va al revés.
   static Map<String, dynamic>? sun(Map? s) {
     final d = s?['dir'] as List?;
@@ -103,6 +138,10 @@ class UnrealStagePayload {
         for (final f in (scene['fixtures'] as List? ?? const []).cast<Map>())
           ?light(f),
       ],
+      'cameras': [
+        for (final c in (scene['cameras'] as List? ?? const []).cast<Map>())
+          ?camera(c),
+      ],
       'sun': sunNow,
       // De día, cielo físico (SkyAtmosphere y SkyLight) con el sol.
       'sky': sunNow == null ? null : {'scale': 1.0},
@@ -117,26 +156,34 @@ class UnrealStagePayload {
     Map<String, dynamic> now,
   ) {
     if (before == null) return {...now, 'full': true};
-    Map<String, String> byId(Map<String, dynamic> p) => {
-      for (final l in (p['lights'] as List).cast<Map>())
-        '${l['id']}': jsonEncode(l),
-    };
-    final old = byId(before), cur = byId(now);
-    final upsert = [
-      for (final l in (now['lights'] as List).cast<Map>())
-        if (old['${l['id']}'] != cur['${l['id']}']) l,
-    ];
-    final remove = [
-      for (final id in old.keys)
-        if (!cur.containsKey(id)) id,
-    ];
+    final out = <String, dynamic>{'v': version};
+    final remove = <String>[];
+    for (final kind in const ['lights', 'cameras']) {
+      Map<String, String> byId(Map<String, dynamic> p) => {
+        for (final l in (p[kind] as List? ?? const []).cast<Map>())
+          '${l['id']}': jsonEncode(l),
+      };
+      final old = byId(before), cur = byId(now);
+      out[kind] = [
+        for (final l in (now[kind] as List? ?? const []).cast<Map>())
+          if (old['${l['id']}'] != cur['${l['id']}']) l,
+      ];
+      remove.addAll([
+        for (final id in old.keys)
+          if (!cur.containsKey(id)) id,
+      ]);
+    }
     final sunChanged =
         jsonEncode(before['sun']) != jsonEncode(now['sun']) ||
         jsonEncode(before['sky']) != jsonEncode(now['sky']);
-    if (upsert.isEmpty && remove.isEmpty && !sunChanged) return null;
+    if ((out['lights'] as List).isEmpty &&
+        (out['cameras'] as List).isEmpty &&
+        remove.isEmpty &&
+        !sunChanged) {
+      return null;
+    }
     return {
-      'v': version,
-      'lights': upsert,
+      ...out,
       if (remove.isNotEmpty) 'remove': remove,
       if (sunChanged) ...{'sun': now['sun'], 'sky': now['sky']},
     };

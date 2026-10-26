@@ -19,6 +19,7 @@ Funciones:
   Ping()             → {"ok": true, "version": …}
   ApplyScene(json)   → {"ok": true, "lights": n, "ms": …}
   Snapshot()         → {"ok": true, "actors": {id: {loc, rot, intensity, cct}}}
+  ViewThrough(id)    → el visor del editor (y Pixel Streaming) por esa cámara
 
 La ruta del objeto para Remote Control es
 `/Game/Python/iris_stage_link_PY.Default__IrisStageLink` (el módulo tiene
@@ -151,6 +152,29 @@ def _apply_light(light):
         _set(comp, "source_radius", size / 2)
 
 
+def _apply_camera(cam):
+    uid = str(cam["id"])
+    label = "IRIS_Cam_%s" % (cam.get("name") or uid)
+    actor = _ensure(uid, unreal.CineCameraActor, label, _vec(cam["loc"]), _rot(cam["rot"]))
+    comp = actor.get_cine_camera_component()
+    if comp is None:
+        return
+    sensor = float(cam.get("sensorMm", 24.89))
+    filmback = comp.get_editor_property("filmback")
+    if abs(filmback.sensor_width - sensor) > 0.01:
+        filmback.sensor_width = sensor
+        filmback.sensor_height = sensor * 9 / 16
+        comp.set_editor_property("filmback", filmback)
+    _set(comp, "current_focal_length", float(cam.get("focalMm", 35)))
+
+
+def _view_through(uid):
+    actor = _find(str(uid))
+    if actor is None:
+        raise ValueError("No hay en Unreal una cámara de IRIS con id %s." % uid)
+    unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).pilot_level_actor(actor)
+
+
 def _apply_sun(sun):
     actor = _find(SUN_ID)
     if sun is None:
@@ -196,14 +220,18 @@ def _remove(ids):
 
 def _apply(data):
     lights = data.get("lights", [])
+    cameras = data.get("cameras", [])
     if data.get("full"):
         # Escena entera: lo de IRIS que ya no está, fuera.
         _rescan()
-        keep = {str(l["id"]) for l in lights} | {SUN_ID, SKY_ID, ATMOSPHERE_ID}
+        keep = ({str(l["id"]) for l in lights} | {str(c["id"]) for c in cameras}
+                | {SUN_ID, SKY_ID, ATMOSPHERE_ID})
         _remove([uid for uid in list(_actors) if uid not in keep])
     _remove(data.get("remove", []))
     for light in lights:
         _apply_light(light)
+    for cam in cameras:
+        _apply_camera(cam)
     if "sun" in data:
         _apply_sun(data["sun"])
     if "sky" in data:
@@ -226,6 +254,7 @@ def _snapshot():
         item = {
             "loc": [_round(loc.x), _round(loc.y), _round(loc.z)],
             "rot": [_round(rot.pitch, 2), _round(rot.yaw, 2), _round(rot.roll, 2)],
+            "path": actor.get_path_name(),
         }
         comp = actor.get_component_by_class(unreal.LightComponent)
         if comp is not None:
@@ -258,6 +287,15 @@ class IrisStageLink(unreal.BlueprintFunctionLibrary):
             return json.dumps({"ok": True, "lights": n, "ms": round(ms, 1)})
         except Exception as exc:
             unreal.log_error("[IRIS Stage] %s" % exc)
+            return json.dumps({"ok": False, "error": str(exc)})
+
+    @unreal.ufunction(static=True, params=[str], ret=str,
+                      meta=dict(Category="IRIS Stage"))
+    def ViewThrough(id):
+        try:
+            _view_through(id)
+            return json.dumps({"ok": True})
+        except Exception as exc:
             return json.dumps({"ok": False, "error": str(exc)})
 
     @unreal.ufunction(static=True, ret=str, meta=dict(Category="IRIS Stage"))
