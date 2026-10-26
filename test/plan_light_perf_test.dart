@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -21,6 +22,11 @@ import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 /// Los tiempos salen por consola; los umbrales son holgados (el test corre
 /// en modo depuración y en máquinas distintas) y solo saltan si algo se
 /// vuelve a ir de las manos.
+///
+/// En GitHub Actions (`CI=true`) la máquina es más lenta y variable: los
+/// tiempos se miden con el doble de margen.
+final ciSlack = Platform.environment['CI'] == 'true' ? 2 : 1;
+
 void main() {
   const mpu = 0.02;
   const ambient = PlanAmbient(day: true, sunAzimuth: 200, sunElevation: 35);
@@ -45,7 +51,7 @@ void main() {
     final ms = medianMs(5, build);
     final scene = build();
     report('LightScene.from', ms, '${scene.lights.length} fuentes');
-    expect(ms, lessThan(400));
+    expect(ms, lessThan(400 * ciSlack));
   });
 
   test('fundir los rebotes mate da la misma luz y el mismo fotómetro', () {
@@ -126,13 +132,13 @@ void main() {
   test('grabar la capa de luz (exposición de la cámara)', () {
     final ms = recordingMs(syntheticPlan(), LightView.camera);
     report('capa de luz, cámara', ms, '(grabar)');
-    expect(ms, lessThan(1500));
+    expect(ms, lessThan(1500 * ciSlack));
   });
 
   test('grabar la capa de luz («Ver todo»)', () {
     final ms = recordingMs(syntheticPlan(), LightView.all);
     report('capa de luz, ver todo', ms, '(grabar)');
-    expect(ms, lessThan(2500));
+    expect(ms, lessThan(2500 * ciSlack));
   });
 
   test('la clave de «Ver todo»: unos cientos de puntos', () {
@@ -188,7 +194,9 @@ void main() {
       await once();
       final cold = [for (var i = 0; i < 3; i++) await once()]..sort();
       report('rasterizar la planta, luz nueva', cold[1]);
-      expect(cold[1], lessThan(3000));
+      // 3 s se quedaba justo: 3,1 s en GitHub y 3,8 s en el PC con IRIS
+      // abierto. Un empeoramiento real se va muy por encima.
+      expect(cold[1], lessThan(4500 * ciSlack));
 
       final cache = PlanLightMapCache();
       await once(cache: cache);
@@ -196,7 +204,7 @@ void main() {
         for (var i = 1; i <= 3; i++) await once(cache: cache, dx: i * 17.0),
       ]..sort();
       report('rasterizar la planta al mover la vista', warm[1]);
-      expect(warm[1], lessThan(400));
+      expect(warm[1], lessThan(400 * ciSlack));
 
       final light = plan.firstWhere((e) => e.type == ElementType.light);
       final dragging = <double>[];
@@ -209,7 +217,7 @@ void main() {
         ..sort();
       cache.dispose();
       report('rasterizar un fotograma arrastrando una luz', dragging[1]);
-      expect(dragging[1], lessThan(1500));
+      expect(dragging[1], lessThan(1500 * ciSlack));
     });
   });
 
@@ -291,7 +299,7 @@ void main() {
       ..removeAt(0)
       ..sort();
     report('fotograma arrastrando una luz', frames[frames.length ~/ 2]);
-    expect(frames[frames.length ~/ 2], lessThan(400));
+    expect(frames[frames.length ~/ 2], lessThan(400 * ciSlack));
   });
 
   test('mover una luz y soltarla: se recalcula solo lo suyo', () async {
@@ -314,7 +322,7 @@ void main() {
       ..removeAt(0)
       ..sort();
     report('grabar la luz tras mover un aparato', times[times.length ~/ 2]);
-    expect(times[times.length ~/ 2], lessThan(1000));
+    expect(times[times.length ~/ 2], lessThan(1000 * ciSlack));
   });
 
   test('mapa de exposición: se calcula una vez y se guarda', () {
@@ -362,7 +370,7 @@ void main() {
       ).dispose();
     });
     report('repintado al mover la vista', ms);
-    expect(ms, lessThan(150));
+    expect(ms, lessThan(150 * ciSlack));
   });
 }
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -267,6 +268,14 @@ class SyncEngine {
 
     final db = _ref.read(databaseProvider);
     final plan = await SyncPlanBuilder(db, client).build(workspaceId);
+    if (plan.items.isEmpty) {
+      debugPrint('[sync] nada que subir ni bajar');
+    }
+    for (final item in plan.items) {
+      debugPrint('[sync ${DateTime.now().toIso8601String().substring(11, 19)}] '
+          '${item.action.name} · ${item.title}'
+          '${item.appliesSilently ? '' : ' · PENDIENTE DE REVISAR'}');
+    }
 
     // Mientras se escribe aquí se sube lo guardado, pero no se baja ni se
     // mezcla nada: rehace filas y cortaría lo que se escribe. Se hace al
