@@ -12,8 +12,10 @@ Set-Location $Root
 
 # El Flutter fijado de setup_windows_dev.ps1 va primero, aunque haya otro en el
 # PATH (una consola abierta antes del setup o una instalación antigua).
-$pinned = Join-Path (Split-Path -Parent $Root) "flutter\bin"
-if (Test-Path (Join-Path $pinned "flutter.bat")) { $env:Path = "$pinned;$env:Path" }
+# Junto al repositorio (C:\dev\flutter) o, desde un worktree, en C:\dev.
+foreach ($pinned in @((Join-Path (Split-Path -Parent $Root) "flutter\bin"), "C:\dev\flutter\bin")) {
+  if (Test-Path (Join-Path $pinned "flutter.bat")) { $env:Path = "$pinned;$env:Path"; break }
+}
 
 if (-not (Test-Path ".env")) {
   throw "Falta .env. Copia .env.example a .env y rellena SUPABASE_URL y SUPABASE_ANON_KEY."
