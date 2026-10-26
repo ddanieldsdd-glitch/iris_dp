@@ -24,7 +24,9 @@ Si el nivel abierto en Unreal no es de IRIS y tiene cambios sin guardar, IRIS no
 
 ## Instalar (una vez por proyecto de Unreal)
 
-**Lo más fácil: desde IRIS.** En **Ajustes → IRIS con Unreal** (o «Tutorial: cómo prepararlo» en el diálogo de Unreal del 3D) hay un tutorial paso a paso. En su paso «Preparar el proyecto» eliges el `.uproject` e IRIS hace los pasos de abajo:
+**Lo más fácil de todo:** en IRIS, abre el proyecto → **IRIS Stage** → **Abrir en Unreal**. IRIS crea el proyecto de Unreal de ese proyecto (en Documentos\Unreal Projects), lo prepara, abre Unreal y se conecta. No hay que hacer nada en Unreal.
+
+**También desde el tutorial.** En **Ajustes → IRIS con Unreal** (o «Tutorial: cómo prepararlo» en el diálogo de Unreal del 3D) hay un tutorial paso a paso. En su paso «Preparar el proyecto» eliges el `.uproject` e IRIS hace los pasos de abajo:
 - activa los plugins;
 - copia el script y añade la configuración RTX;
 - crea junto al proyecto el lanzador «Abrir <proyecto> con IRIS Stage».

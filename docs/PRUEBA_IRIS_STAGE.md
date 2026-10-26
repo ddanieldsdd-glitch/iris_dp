@@ -4,7 +4,18 @@ Lista para probar en el PC lo nuevo del 3D con Unreal: los pasos 1 a 5 de F6.19 
 
 ## Antes de empezar
 
-### Con el tutorial de la app (recomendado)
+### Con un botón (recomendado)
+
+- [ ] El menú del proyecto dice **IRIS Stage** (antes «Unreal / LUKA Bridge»).
+- [ ] IRIS Stage → **Abrir en Unreal**, con Unreal cerrado. Va diciendo lo que hace (preparando, abriendo, conectando) y acaba en «Conectado con Unreal 5.5».
+- [ ] Se ha creado `Documentos\Unreal Projects\IRIS<Proyecto>\IRIS<Proyecto>.uproject`.
+- [ ] Debajo del botón pone ese proyecto; la segunda vez abre el mismo, no crea otro.
+- [ ] Con Unreal ya abierto, **Abrir en Unreal** solo conecta.
+- [ ] **Usar otro proyecto de Unreal…** prepara y abre uno tuyo.
+- [ ] En el 3D de la planta, el diálogo de Unreal tiene el mismo botón **Abrir en Unreal**.
+- [ ] Otro proyecto de IRIS → su propio proyecto de Unreal.
+
+### Con el tutorial de la app
 
 - [ ] **Ajustes → IRIS con Unreal** abre el tutorial (7 pasos). También desde el diálogo de Unreal del 3D («Tutorial: cómo prepararlo») y desde Render RTX cuando no responde.
 - [ ] Paso «Preparar el proyecto»: elegir el `.uproject` (con Unreal cerrado). Salen en verde:

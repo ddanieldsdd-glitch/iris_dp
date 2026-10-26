@@ -440,7 +440,8 @@ class IrisStageLink(unreal.BlueprintFunctionLibrary):
     @unreal.ufunction(static=True, ret=str, meta=dict(Category="IRIS Stage"))
     def Ping():
         return json.dumps({"ok": True, "version": VERSION,
-                           "engine": unreal.SystemLibrary.get_engine_version()})
+                           "engine": unreal.SystemLibrary.get_engine_version(),
+                           "project": unreal.Paths.get_project_file_path()})
 
     @unreal.ufunction(static=True, params=[str], ret=str,
                       meta=dict(Category="IRIS Stage"))

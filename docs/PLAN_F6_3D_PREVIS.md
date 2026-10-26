@@ -574,6 +574,10 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 - **Exportar:** la exportación a Unreal y Luka queda como un apartado dentro (F6.16).
 - **Se reaprovecha:** `iris_dp_export_service.dart`, `luka_export_preview.dart`, `luka_compatibility_service.dart` y `luka_fixture_picker.dart`.
 - **Hecho cuando:** en la app no queda «Unreal / Luka bridge» y IRIS Stage abre el set del proyecto en 3D.
+- **Estado:** hecho (`plan/f6-3d-pc`).
+  - La pantalla se llama IRIS Stage (`lib/features/iris_stage/iris_stage_screen.dart`); el identificador interno del destino sigue siendo `lukaBridge` para no romper lo guardado.
+  - Arriba, «Unreal en vivo» con un botón, **Abrir en Unreal**, que busca Unreal 5.5 o posterior, crea el proyecto de Unreal del proyecto de IRIS en Documentos\Unreal Projects si no existe, lo prepara, abre Unreal con Pixel Streaming y se conecta.
+  - El mismo botón está en el diálogo de Unreal del 3D de la planta. La exportación de archivos para Unreal y LUKA queda debajo.
 
 **F6.13.2 El 3D de la planta como atajo** · todos
 - **Qué:** el panel 3D de la planta de cámara y luz (`rig/plan_3d_view.dart`) se queda como vista rápida: mirar, mover, apuntar y ver por la cámara.

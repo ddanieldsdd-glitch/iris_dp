@@ -82,6 +82,9 @@ class Plan3dView extends StatefulWidget {
   /// (planta de set o de localización) no se captura.
   final UnrealCaptureSink? onUnrealCapture;
 
+  /// «Abrir en Unreal» del proyecto de esta planta.
+  final Future<void> Function()? onOpenUnreal;
+
   const Plan3dView({
     super.key,
     required this.elements,
@@ -97,6 +100,7 @@ class Plan3dView extends StatefulWidget {
     this.onClose,
     this.unrealWorld,
     this.onUnrealCapture,
+    this.onOpenUnreal,
   });
 
   static const asset = 'assets/viewer3d/index.html';
@@ -625,7 +629,10 @@ class _Plan3dViewState extends State<Plan3dView> {
             child: _viewButtons(compact: true),
           ),
         ),
-        UnrealLinkButton(link: UnrealLink.instance),
+        UnrealLinkButton(
+          link: UnrealLink.instance,
+          onOpenUnreal: widget.onOpenUnreal,
+        ),
         ListenableBuilder(
           listenable: UnrealLink.instance,
           builder: (context, _) => UnrealLink.instance.isOn
@@ -957,7 +964,11 @@ class _Plan3dViewState extends State<Plan3dView> {
                   ? 'Conectado con Unreal'
                   : 'Conectar con Unreal',
             ),
-            onPressed: () => showUnrealLinkDialog(context, UnrealLink.instance),
+            onPressed: () => showUnrealLinkDialog(
+              context,
+              UnrealLink.instance,
+              onOpenUnreal: widget.onOpenUnreal,
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.xs),
@@ -1232,6 +1243,7 @@ class Plan3dScreen extends StatefulWidget {
   final PlanAmbient? ambient;
   final UnrealWorld? unrealWorld;
   final UnrealCaptureSink? onUnrealCapture;
+  final Future<void> Function()? onOpenUnreal;
 
   const Plan3dScreen({
     super.key,
@@ -1245,6 +1257,7 @@ class Plan3dScreen extends StatefulWidget {
     this.ambient,
     this.unrealWorld,
     this.onUnrealCapture,
+    this.onOpenUnreal,
   });
 
   static Future<void> show(
@@ -1259,6 +1272,7 @@ class Plan3dScreen extends StatefulWidget {
     PlanAmbient? ambient,
     UnrealWorld? unrealWorld,
     UnrealCaptureSink? onUnrealCapture,
+    Future<void> Function()? onOpenUnreal,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -1272,6 +1286,7 @@ class Plan3dScreen extends StatefulWidget {
         ambient: ambient,
         unrealWorld: unrealWorld,
         onUnrealCapture: onUnrealCapture,
+        onOpenUnreal: onOpenUnreal,
       ),
     ),
   );
@@ -1314,6 +1329,7 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       full: true,
       unrealWorld: widget.unrealWorld,
       onUnrealCapture: widget.onUnrealCapture,
+      onOpenUnreal: widget.onOpenUnreal,
     ),
   );
 }

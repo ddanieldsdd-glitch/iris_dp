@@ -47,6 +47,9 @@ class UnrealLink extends ChangeNotifier {
   UnrealLinkState state = UnrealLinkState.off;
   String? error;
   String? engine;
+
+  /// El .uproject que tiene abierto Unreal.
+  String? project;
   String host = '127.0.0.1';
   int port = 30010;
 
@@ -122,6 +125,7 @@ class UnrealLink extends ChangeNotifier {
     try {
       final pong = await call('Ping');
       engine = pong['engine'] as String?;
+      project = pong['project'] as String?;
       _applied = null;
       _set(UnrealLinkState.on);
       _poll?.cancel();

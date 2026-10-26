@@ -4,7 +4,7 @@ import '../../core/database/app_database.dart';
 import '../camera_plan/camera_plan_screen.dart';
 import '../equipment/equipment_screen.dart';
 import '../locations/locations_screen.dart';
-import '../luka_export/luka_bridge_screen.dart';
+import '../iris_stage/iris_stage_screen.dart';
 import '../script_import/script_import_screen.dart';
 import '../shoot_documents/shoot_documents_screen.dart';
 import '../storyboard/storyboard_screen.dart';
@@ -38,7 +38,7 @@ abstract final class ProjectHubRouter {
           EquipmentScreen(projectId: project.id),
         ProjectHubDestinationId.storyboard =>
           StoryboardScreen(projectId: project.id),
-        ProjectHubDestinationId.lukaBridge => LukaBridgeScreen(
+        ProjectHubDestinationId.lukaBridge => IrisStageScreen(
             projectId: project.id,
             projectName: project.name,
           ),

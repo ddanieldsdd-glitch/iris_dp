@@ -81,6 +81,7 @@ import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
 import 'rig/plan_3d_view.dart';
 import '../../core/utils/shot_reference_import.dart';
+import '../unreal_link/unreal_stage_launcher.dart';
 import '../unreal_link/unreal_stage_payload.dart';
 import 'rig/rig_report.dart';
 import 'rig/plan_hall.dart';
@@ -2764,6 +2765,19 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       ambient: _lightSetup == null ? null : _ambient,
       unrealWorld: _unrealWorld,
       onUnrealCapture: widget.shotId == null ? null : _saveUnrealCapture,
+      onOpenUnreal: _openInUnreal,
+    );
+  }
+
+  /// «Abrir en Unreal» del proyecto de esta planta: lo crea, lo prepara,
+  /// abre Unreal y conecta.
+  Future<void> _openInUnreal() async {
+    final project = await ref.read(databaseProvider).getProject(
+      widget.projectId,
+    );
+    await UnrealStageLauncher.instance.open(
+      projectId: widget.projectId,
+      projectName: project?.name ?? 'Proyecto ${widget.projectId}',
     );
   }
 
@@ -4911,6 +4925,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   onUnrealCapture: widget.shotId == null
                                       ? null
                                       : _saveUnrealCapture,
+                                  onOpenUnreal: _openInUnreal,
                                 ),
                               ),
                             ],
