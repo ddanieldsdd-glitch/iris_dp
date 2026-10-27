@@ -3,6 +3,7 @@ import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_json.dart';
 import 'package:iris_dp/features/camera_plan/light_overrides.dart';
+import 'package:iris_dp/features/camera_plan/plan_gear_list.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_scene3d.dart';
 
 PlanElement _light({Map<String, dynamic>? props}) => PlanElement(
@@ -119,6 +120,34 @@ void main() {
         label: 'ADIL',
       );
       expect(actor.displayLabel, 'ADIL');
+    });
+
+    test('renombrar una luz no cambia su modelo, la leyenda ni la lista', () {
+      PlanElement sky() => _light(props: {'name': 'ARRI SkyPanel S60'});
+      final lights = [sky(), sky(), sky(), sky()];
+      LightOverrides.ensureUids(lights);
+      final before = LightLegend.of(lights);
+      final gearBefore = GearList.from(lights).lights.map((l) => '$l');
+
+      lights.first.customName = 'Principal';
+
+      expect(lights.first.model, 'ARRI SkyPanel S60');
+      expect(lights.first.props['name'], 'ARRI SkyPanel S60');
+      expect(lights.first.displayLabel, 'Principal');
+      expect(lights.first.fullLabel, 'Principal · ARRI SkyPanel S60');
+      expect(lights[1].displayLabel, 'ARRI SkyPanel S60');
+      final after = LightLegend.of(lights);
+      expect(
+        [for (final r in after.rows) '${r.name} ×${r.count}'],
+        [for (final r in before.rows) '${r.name} ×${r.count}'],
+      );
+      expect(after.rows.single.name, 'ARRI SkyPanel S60');
+      expect(after.rows.single.count, 4);
+      expect(GearList.from(lights).lights.map((l) => '$l'), gearBefore);
+      expect(
+        PlanScene3d.build(lights, metersPerUnit: 0.01)['fixtures'][0]['name'],
+        'Principal · ARRI SkyPanel S60',
+      );
     });
 
     test('el 3D y Unreal reciben el nombre', () {

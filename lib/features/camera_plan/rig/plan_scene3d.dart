@@ -503,9 +503,8 @@ class PlanScene3d {
     final light = PlanLight.of(el);
     return {
       'id': id,
-      'name':
-          el.customName ??
-          (el.label?.isNotEmpty == true ? el.label : type.label),
+      // «Principal · ARRI SkyPanel S60», o lo que tenga.
+      'name': el.fullLabel,
       'type': type.dbValue,
       'pos': [p[0], p[1], _r(z)],
       'aim': [_r(p[0] + dx * t), _r(p[1] + dy * t), _r(z + dz * t)],

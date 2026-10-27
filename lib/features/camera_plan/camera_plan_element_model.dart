@@ -99,10 +99,22 @@ class PlanElement {
     }
   }
 
-  /// Nombre libre del elemento (`props['name']`), para cualquier tipo salvo
-  /// los actores, que usan [label]. Lo usan la planta, el 3D, Unreal y las
-  /// listas.
-  static const nameKey = 'name';
+  /// Nombre libre del elemento («Principal», «Sofá de la abuela»), para
+  /// cualquier tipo salvo los actores, que usan [label]. Lo usan la planta,
+  /// el 3D, Unreal y las listas.
+  ///
+  /// No es `props['name']`: en las luces esa clave es el modelo del aparato
+  /// («ARRI SkyPanel S60»), y con él se agrupan la lista de material y la
+  /// leyenda; en un escaneo, el nombre del archivo.
+  static const nameKey = 'displayName';
+
+  /// Modelo del aparato en una luz; nombre del escaneo en un escaneo.
+  static const modelKey = 'name';
+
+  String? get model {
+    final m = props[modelKey];
+    return m is String && m.trim().isNotEmpty ? m.trim() : null;
+  }
 
   String? get customName {
     final name = props[nameKey];
@@ -118,10 +130,19 @@ class PlanElement {
     }
   }
 
-  /// Cómo se llama: su nombre libre o, si no tiene, su tipo.
+  /// Cómo se llama: su nombre libre; si no, el modelo del aparato (o el
+  /// nombre del escaneo); si no, su tipo.
   String get displayLabel => type == ElementType.actor
       ? label ?? 'Actor'
-      : customName ?? typeLabel;
+      : customName ?? model ?? typeLabel;
+
+  /// Para el 3D y Unreal: el nombre libre y, en una luz, también el modelo
+  /// («Principal · ARRI SkyPanel S60»).
+  String get fullLabel => switch ((customName, model)) {
+    (final String name, final String m) when type == ElementType.light =>
+      '$name · $m',
+    _ => displayLabel,
+  };
 
   /// Qué es: el tipo (o «A-1» en una cámara), sin el nombre libre.
   String get typeLabel => switch (type) {
