@@ -246,7 +246,10 @@ class _PlanOutlinerState extends State<PlanOutliner> {
                   ),
                 ),
               IconButton(
-                tooltip: hidden ? 'Mostrar' : 'Ocultar',
+                tooltip: hidden
+                    ? 'Mostrar'
+                    : 'Ocultar: no se ve ni alumbra en la planta, pero sigue '
+                          'en la lista de material y en la carga del rigging',
                 visualDensity: VisualDensity.compact,
                 icon: Icon(
                   hidden

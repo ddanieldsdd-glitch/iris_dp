@@ -1246,6 +1246,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   List<PlanElement> _layerElements(PlanLayer layer) =>
       _elements.where((e) => e.layer == layer).toList();
 
+  /// Lo de las capas que se ven, también lo oculto con el ojo de la lista:
+  /// para el material y las cargas de rigging, que no pueden olvidarlo.
+  List<PlanElement> get _layerElementsShown => _hiddenLayers.isEmpty
+      ? _elements
+      : _elements.where((e) => !_hiddenLayers.contains(e.layer)).toList();
+
   List<PlanElement> get _visibleElements =>
       _hiddenLayers.isEmpty && _hiddenElements.isEmpty
       ? _elements
@@ -2702,7 +2708,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _elements.where(
       (e) => e.layer == PlanLayer.light || e.layer == PlanLayer.shot,
     ),
-    rigging: RigReport.rigging(_visibleElements, _metersPerUnit),
+    // Lo oculto con el ojo sigue colgado: cuenta en la carga.
+    rigging: RigReport.rigging(_layerElementsShown, _metersPerUnit),
   );
 
   /// Tocar una línea de la lista de material selecciona en la planta lo

@@ -129,7 +129,7 @@ void main() {
     expect(find.text('UE'), findsOneWidget);
     await tester.tap(find.text('Sofá'));
     expect(picked?.propType, PropType.sofa);
-    await tester.tap(find.byTooltip('Ocultar').first);
+    await tester.tap(find.byTooltip(RegExp('^Ocultar')).first);
     await tester.pump();
     expect(hidden, hasLength(1));
   });
