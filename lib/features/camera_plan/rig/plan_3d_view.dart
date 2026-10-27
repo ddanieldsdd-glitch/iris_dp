@@ -909,6 +909,12 @@ class _Plan3dViewState extends State<Plan3dView> {
           style: AppTypography.bodyMedium(palette),
         ),
         if (_selected != null && widget.onChanged != null) ...[
+          if (_selected!.type != ElementType.actor)
+            _NameField(
+              key: ValueKey(_selected),
+              element: _selected!,
+              onCommit: _update,
+            ),
           Text(
             _selected!.type == ElementType.light
                 ? 'Arrástralo para moverlo; el asa naranja cambia adónde '
@@ -1080,6 +1086,51 @@ class _Plan3dViewState extends State<Plan3dView> {
 
 /// Lo justo de una luz para retocarla en el 3D: si cuelga, a qué altura,
 /// hacia dónde mira y cuánto se inclina.
+/// Nombre libre del elemento seleccionado; se guarda al terminar de
+/// escribir.
+class _NameField extends StatefulWidget {
+  final PlanElement element;
+  final Future<void> Function() onCommit;
+
+  const _NameField({super.key, required this.element, required this.onCommit});
+
+  @override
+  State<_NameField> createState() => _NameFieldState();
+}
+
+class _NameFieldState extends State<_NameField> {
+  late final _ctrl = TextEditingController(
+    text: widget.element.customName ?? '',
+  );
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    if (_ctrl.text.trim() == (widget.element.customName ?? '')) return;
+    widget.element.customName = _ctrl.text;
+    widget.onCommit();
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+    child: TextField(
+      controller: _ctrl,
+      decoration: InputDecoration(
+        isDense: true,
+        labelText: 'Nombre',
+        hintText: widget.element.typeLabel,
+      ),
+      onSubmitted: (_) => _commit(),
+      onTapOutside: (_) => _commit(),
+    ),
+  );
+}
+
 class _LightControls extends StatelessWidget {
   final PlanElement element;
   final VoidCallback onPreview;

@@ -99,6 +99,7 @@ class PlanScene3d {
         case RigType.pillar:
           pillars.add({
             'id': uid,
+            'name': el.displayLabel,
             'at': xy(el.position),
             'z0': level,
             'shape': PlanPillar.isRound(el) ? 'round' : 'square',
@@ -111,6 +112,7 @@ class PlanScene3d {
         case RigType.truss:
           trusses.add({
             'id': uid,
+            'name': el.displayLabel,
             'from': xy(PlanTruss.start(el)),
             'to': xy(PlanTruss.end(el)),
             'z': _r(level + PlanTruss.lowM(el)),
@@ -122,6 +124,7 @@ class PlanScene3d {
         case RigType.motor || RigType.groundSupport:
           rigging.add({
             'id': uid,
+            'name': el.displayLabel,
             'type': RigTypeCodec.of(el)!.name,
             'at': xy(el.position),
             'z0': level,
@@ -152,7 +155,7 @@ class PlanScene3d {
         case ElementType.prop when furniture.contains(el.propType):
           props.add({
             'id': uid,
-            'name': el.propType!.label,
+            'name': el.customName ?? el.propType!.label,
             'type': el.propType!.name,
             'at': xy(el.position),
             'z0': level,
@@ -175,7 +178,7 @@ class PlanScene3d {
               (el.props['sensorWidthMm'] as num?)?.toDouble() ?? 24.89;
           cameras.add({
             'id': uid,
-            'name': el.cameraLabel,
+            'name': el.customName ?? el.cameraLabel,
             'lens': ?el.lens,
             'at': xy(el.position),
             'z0': level,
@@ -222,8 +225,9 @@ class PlanScene3d {
   /// Unreal; en IRIS queda un sustituto con sus medidas.
   static const unrealAssetKey = 'unrealAsset';
 
-  /// Identificador de un elemento en la escena: su `uid` o, si no tiene,
-  /// su posición en la lista. Con él el visor dice qué se ha tocado.
+  /// Identificador de un elemento en la escena: su `uid`, que todos llevan
+  /// desde F6.20 (`LightOverrides.ensureUids` al cargar y al guardar). La
+  /// posición en la lista queda solo como red de seguridad.
   static String idOf(PlanElement el, int index) =>
       LightOverrides.uidOf(el) ?? 'n$index';
 
@@ -425,6 +429,7 @@ class PlanScene3d {
     holes.sort((a, b) => (a['from'] as double).compareTo(b['from'] as double));
     return {
       'id': id,
+      'name': el.displayLabel,
       'points': [for (final p in pts) xy(p)],
       'z0': level,
       'tops': tops,
@@ -445,6 +450,7 @@ class PlanScene3d {
     final color = PlanDrape.color(el);
     return {
       'id': id,
+      'name': el.displayLabel,
       'z0': level,
       'material': mat.id,
       'color':
@@ -497,7 +503,9 @@ class PlanScene3d {
     final light = PlanLight.of(el);
     return {
       'id': id,
-      'name': el.label?.isNotEmpty == true ? el.label : type.label,
+      'name':
+          el.customName ??
+          (el.label?.isNotEmpty == true ? el.label : type.label),
       'type': type.dbValue,
       'pos': [p[0], p[1], _r(z)],
       'aim': [_r(p[0] + dx * t), _r(p[1] + dy * t), _r(z + dz * t)],

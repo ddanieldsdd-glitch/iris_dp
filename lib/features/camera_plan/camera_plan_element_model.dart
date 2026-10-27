@@ -99,7 +99,32 @@ class PlanElement {
     }
   }
 
-  String get displayLabel => switch (type) {
+  /// Nombre libre del elemento (`props['name']`), para cualquier tipo salvo
+  /// los actores, que usan [label]. Lo usan la planta, el 3D, Unreal y las
+  /// listas.
+  static const nameKey = 'name';
+
+  String? get customName {
+    final name = props[nameKey];
+    return name is String && name.trim().isNotEmpty ? name.trim() : null;
+  }
+
+  set customName(String? value) {
+    final name = value?.trim();
+    if (name == null || name.isEmpty) {
+      props.remove(nameKey);
+    } else {
+      props[nameKey] = name;
+    }
+  }
+
+  /// Cómo se llama: su nombre libre o, si no tiene, su tipo.
+  String get displayLabel => type == ElementType.actor
+      ? label ?? 'Actor'
+      : customName ?? typeLabel;
+
+  /// Qué es: el tipo (o «A-1» en una cámara), sin el nombre libre.
+  String get typeLabel => switch (type) {
     ElementType.camera => cameraLabel,
     ElementType.actor => label ?? 'Actor',
     ElementType.light => lightType?.label ?? 'Luz',

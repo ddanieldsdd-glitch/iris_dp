@@ -881,6 +881,20 @@ Daniel tiene también un PC con tarjeta NVIDIA. El objetivo es que la calidad RT
 
 ---
 
+## F6.20 · Identidad de cada elemento, assets de Unreal y escaneos (base de IRIS Stage)
+
+Plan aprobado por Daniel el 2026-10-27. Un PR por fase, en ramas que salen de `plan/f6-3d-pc`.
+
+| Fase | Qué | Estado |
+|---|---|---|
+| A1 | `uid` estable para todos los elementos (al cargar se guarda una vez; las copias estrenan el suyo y rehacen sus referencias) | en curso (PR 1) |
+| A2 | Nombre libre (`props['name']`) para cualquier elemento, en la ficha 2D y en el 3D, y que llegue a Unreal | en curso (PR 1) |
+| A3–A5 | Color por tipo, «Nombres», distintivo «UE», leyenda, lista de elementos y atrezzo visible en el visor 3D | pendiente |
+| B1–B5 | Un solo modelo `props['unreal']` para todos los tipos, miniaturas renderizadas por Unreal (en la nube), vista de assets y biblioteca | pendiente |
+| C1–C4 | IRIS Stage como lista de seis pasos, tutorial y guía | pendiente |
+| D1–D4 | Buscar en Fab y Quixel desde IRIS, recogida automática, tejidos y packs de partida | pendiente |
+| E1–E5 | RealityScan/RealityCapture sin interfaz: de vídeo a malla, ortofoto y paredes propuestas, con ida y vuelta | pendiente |
+
 ## Orden propuesto y dependencias
 
 1. **F6.0** (con 0.1b WebGPU), **F6.13.1–13.2** (IRIS Stage como contenedor) y **F6.16.1** (paquete versionado desde el principio, para que cada pieza nueva nazca exportable).
