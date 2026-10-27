@@ -3,7 +3,7 @@
 // dibuja y se avisa de lo que se toca.
 //
 // Dart → JS: iris.load(escena), iris.view('top'|'front'|'right'|'iso'),
-//            iris.set({cones, roof, ortho, bg}), iris.select(id).
+//            iris.set({cones, roof, ortho, bg, names}), iris.select(id).
 // JS → Dart: flutter_inappwebview.callHandler('iris', {type, …}).
 'use strict';
 
@@ -56,8 +56,15 @@
   let showCones = true;
   let showRoof = true;
   // Capas que se pueden ocultar desde la app.
-  const LAYERS = ['walls', 'glass', 'drapes', 'pillars', 'rig', 'fixtures', 'people'];
-  const shown = { walls: true, glass: true, drapes: true, pillars: true, rig: true, fixtures: true, people: true };
+  const LAYERS = ['walls', 'glass', 'drapes', 'pillars', 'rig', 'fixtures', 'people', 'props'];
+  const shown = { walls: true, glass: true, drapes: true, pillars: true, rig: true, fixtures: true, people: true, props: true };
+  // Colores por categoría (los manda la app, los mismos que en la planta) y
+  // etiquetas con el nombre de cada pieza.
+  let palette = {};
+  let showNames = false;
+  const labelsGroup = new THREE.Group();
+  let labels = [];
+  scene.add(labelsGroup);
   let L = {};
   let lastScene = null;
   // Escaneos: se cargan una vez por archivo y se recolocan en cada escena.
@@ -253,6 +260,7 @@
 
   function highlight(id) {
     selectedId = id;
+    updateLabels();
     if (selectedBox) {
       scene.remove(selectedBox);
       selectedBox.geometry.dispose();
@@ -500,8 +508,138 @@
     return g;
   }
 
+  // ── Atrezzo ──────────────────────────────────────────────────────────
+  // Formas sencillas por tipo, a sus medidas: lo justo para reconocerlo y
+  // encuadrar. El modelo real (Fab, Megascans) solo vive en Unreal. Se
+  // construyen mirando a −Z (el frente) con la base en el suelo.
+  function catColor(cat) {
+    return new THREE.Color(palette[cat] || '#9aa0a6');
+  }
+
+  function box(w, h, d, mat, x, y, z) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(Math.max(w, 0.01), Math.max(h, 0.01), Math.max(d, 0.01)), mat);
+    m.position.set(x || 0, y === undefined ? h / 2 : y, z || 0);
+    return m;
+  }
+
+  function propShape(p, mat) {
+    const g = new THREE.Group();
+    const s = Math.max(p.sizeM || 0.5, 0.1), h = Math.max(p.heightM || 0.8, 0.05);
+    const leg = (x, z, top) => {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, top, 8), mat);
+      m.position.set(x, top / 2, z);
+      return m;
+    };
+    switch (p.type) {
+      case 'table': {
+        const t = Math.min(0.05, h * 0.1), e = s / 2 - 0.06;
+        g.add(box(s, t, s, mat, 0, h - t / 2));
+        for (const [x, z] of [[-e, -e], [e, -e], [-e, e], [e, e]]) g.add(leg(x, z, h - t));
+        break;
+      }
+      case 'chair': {
+        const seat = Math.min(0.46, h * 0.58), e = s / 2 - 0.04;
+        g.add(box(s, 0.05, s, mat, 0, seat));
+        g.add(box(s, h - seat, 0.05, mat, 0, seat + (h - seat) / 2, s / 2 - 0.025));
+        for (const [x, z] of [[-e, -e], [e, -e], [-e, e], [e, e]]) g.add(leg(x, z, seat));
+        break;
+      }
+      case 'sofa': {
+        const d = Math.min(s * 0.45, 0.95), seat = Math.min(0.45, h * 0.55);
+        g.add(box(s, seat, d, mat));
+        g.add(box(s, h - seat, 0.18, mat, 0, seat + (h - seat) / 2, d / 2 - 0.09));
+        g.add(box(0.16, seat + 0.18, d, mat, -s / 2 + 0.08, (seat + 0.18) / 2));
+        g.add(box(0.16, seat + 0.18, d, mat, s / 2 - 0.08, (seat + 0.18) / 2));
+        break;
+      }
+      case 'bed': {
+        const w = s * 0.7, top = Math.min(0.55, h);
+        g.add(box(w, top, s, mat));
+        g.add(box(w, Math.max(h, top + 0.4) - top, 0.08, mat, 0, top + (Math.max(h, top + 0.4) - top) / 2, s / 2 - 0.04));
+        break;
+      }
+      case 'vehicle': {
+        const w = Math.max(s * 0.42, 0.6), body = h * 0.55;
+        g.add(box(w, body, s, mat, 0, body / 2 + 0.15));
+        g.add(box(w * 0.92, h - body - 0.15, s * 0.5, mat, 0, body + 0.15 + (h - body - 0.15) / 2, s * 0.05));
+        break;
+      }
+      case 'tree': {
+        const crown = Math.min(s / 2, h * 0.45);
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.06 + s * 0.03, 0.09 + s * 0.04, h - crown, 10), new THREE.MeshStandardMaterial({ color: 0x6b5340, roughness: 0.9 }));
+        trunk.position.y = (h - crown) / 2;
+        const top = new THREE.Mesh(new THREE.SphereGeometry(crown, 16, 12), mat);
+        top.position.y = h - crown;
+        g.add(trunk, top);
+        break;
+      }
+      case 'rock': {
+        const r = new THREE.Mesh(new THREE.DodecahedronGeometry(s / 2, 0), mat);
+        r.scale.y = h / s;
+        r.position.y = h / 2;
+        g.add(r);
+        break;
+      }
+      default:
+        g.add(box(s, h, s, mat));
+    }
+    return g;
+  }
+
+  // ── Etiquetas ────────────────────────────────────────────────────────
+  // Un cartel con el nombre, siempre de cara a la cámara y por encima de
+  // lo demás. Con «Nombres» se ven todos; si no, solo el del seleccionado.
+  function makeLabel(text, cat) {
+    const c = document.createElement('canvas');
+    const g = c.getContext('2d');
+    const font = '600 30px -apple-system, system-ui, Segoe UI, sans-serif';
+    g.font = font;
+    const w = Math.ceil(g.measureText(text).width) + 36;
+    c.width = w; c.height = 52;
+    g.font = font;
+    g.fillStyle = 'rgba(16,20,24,0.82)';
+    const r = 12;
+    g.beginPath();
+    g.moveTo(r, 0); g.lineTo(w - r, 0); g.quadraticCurveTo(w, 0, w, r);
+    g.lineTo(w, 52 - r); g.quadraticCurveTo(w, 52, w - r, 52);
+    g.lineTo(r, 52); g.quadraticCurveTo(0, 52, 0, 52 - r);
+    g.lineTo(0, r); g.quadraticCurveTo(0, 0, r, 0);
+    g.fill();
+    g.fillStyle = palette[cat] || '#9aa0a6';
+    g.fillRect(0, 10, 7, 32);
+    g.fillStyle = '#f2f4f6';
+    g.textBaseline = 'middle';
+    g.fillText(text, 20, 27);
+    const tx = new THREE.CanvasTexture(c);
+    tx.encoding = THREE.sRGBEncoding;
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, depthTest: false, transparent: true }));
+    const height = 0.32;
+    sprite.scale.set(height * w / 52, height, 1);
+    sprite.renderOrder = 10;
+    return sprite;
+  }
+
+  function addLabel(id, name, cat, pos) {
+    if (!id || !name) return;
+    const sprite = makeLabel(String(name), cat);
+    sprite.position.copy(pos);
+    sprite.userData.id = id;
+    labels.push(sprite);
+    labelsGroup.add(sprite);
+  }
+
+  function updateLabels() {
+    for (const l of labels) {
+      const layerShown = l.userData.layer ? shown[l.userData.layer] !== false : true;
+      l.visible = layerShown && (showNames || l.userData.id === selectedId);
+    }
+  }
+
   function load(sc) {
     dispose(root);
+    dispose(labelsGroup);
+    labelsGroup.clear();
+    labels = [];
     scene.remove(root);
     root = new THREE.Group();
     scene.add(root);
@@ -517,6 +655,7 @@
     }
 
     lastScene = sc;
+    palette = sc.palette || {};
     root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, sc.sun ? 0.6 : 0.38));
     root.add(new THREE.AmbientLight(0xffffff, 0.12));
 
@@ -530,6 +669,7 @@
     (sc.pillars || []).forEach((p) => grow(p.at[0], p.at[1], p.heightM));
     (sc.people || []).forEach((p) => grow(p.at[0], p.at[1], 1.8));
     (sc.cameras || []).forEach((p) => grow(p.at[0], p.at[1], 1.6));
+    (sc.props || []).forEach((p) => grow(p.at[0], p.at[1], (p.z0 || 0) + (p.heightM || 0.8)));
     const empty = box.isEmpty();
     msg.style.display = empty ? 'grid' : 'none';
     msg.textContent = 'La planta está vacía. Crea una nave con «Nave» en la paleta, o dibuja paredes, truss y luces: aparecerán aquí.';
@@ -660,6 +800,40 @@
       g.userData.id = q.id; g.userData.movable = true; g.userData.dragY = q.z0 || 0; picks.push(g);
       L.people.add(g);
     }
+    for (const p of sc.props || []) {
+      const mat = new THREE.MeshStandardMaterial({ color: catColor(p.cat), roughness: 0.75 });
+      const g = propShape(p, mat);
+      g.position.copy(V(p.at[0], p.at[1], p.z0 || 0));
+      g.rotation.y = -(p.yawDeg || 0) * Math.PI / 180;
+      g.name = (p.name || 'Pieza') + ' · ' + p.id;
+      g.userData.id = p.id; g.userData.movable = true; g.userData.dragY = p.z0 || 0; picks.push(g);
+      L.props.add(g);
+    }
+
+    // Etiquetas: encima de cada pieza.
+    const tag = (list, layer, at) => (list || []).forEach((it) => {
+      const n = labels.length;
+      addLabel(it.id, it.name, it.cat, at(it));
+      if (labels.length > n) labels[labels.length - 1].userData.layer = layer;
+    });
+    tag(sc.fixtures, 'fixtures', (f) => V(f.pos[0], f.pos[1], f.pos[2] + 0.45));
+    tag(sc.people, 'people', (q) => V(q.at[0], q.at[1], (q.z0 || 0) + 2.0));
+    tag(sc.cameras, 'people', (q) => V(q.at[0], q.at[1], (q.z0 || 0) + (q.z || 1.5) + 0.45));
+    tag(sc.props, 'props', (p) => V(p.at[0], p.at[1], (p.z0 || 0) + (p.heightM || 0.8) + 0.3));
+    tag(sc.pillars, 'pillars', (p) => V(p.at[0], p.at[1], (p.z0 || 0) + p.heightM + 0.3));
+    tag(sc.trusses, 'rig', (t) => V((t.from[0] + t.to[0]) / 2, (t.from[1] + t.to[1]) / 2, t.z + 0.75));
+    tag(sc.rigging, 'rig', (r) => V(r.at[0], r.at[1], (trussById[r.truss] ? trussById[r.truss].z : 4) + 1.0));
+    tag(sc.walls, 'walls', (w) => {
+      const k = Math.floor((w.points.length - 1) / 2);
+      const a = w.points[k], b = w.points[Math.min(k + 1, w.points.length - 1)];
+      return V((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (w.z0 || 0) + Math.max(...w.tops) + 0.3);
+    });
+    tag(sc.drapes, 'drapes', (d) => {
+      const m = d.samples[Math.floor(d.samples.length / 2)];
+      return V(m.p[0], m.p[1], (d.z0 || 0) + m.top + 0.3);
+    });
+    tag(sc.scans, null, (q) => V(q.at[0], q.at[1], (q.z0 || 0) + 0.5));
+    updateLabels();
 
     // El sol, con sombras de lo que tapa.
     if (sc.sun) {
@@ -953,6 +1127,7 @@
       if ('roof' in o) { showRoof = !!o.roof; roofs.forEach((r) => (r.visible = showRoof)); }
       if ('ortho' in o) setOrtho(!!o.ortho);
       if (o.bg) scene.background = new THREE.Color(o.bg);
+      if ('names' in o) { showNames = !!o.names; updateLabels(); }
       if ('measure' in o) {
         measuring = !!o.measure;
         if (!measuring) clearMeasure();
@@ -966,6 +1141,7 @@
         }
         // Sin focos no hay conos.
         if ('fixtures' in o.show) cones.forEach((c) => (c.visible = showCones && shown.fixtures));
+        updateLabels();
       }
     },
   };
