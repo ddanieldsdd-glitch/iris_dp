@@ -1080,16 +1080,38 @@ class ProjectContentBundle {
       isLegacyHash(hash)
           ? legacyHashBundle(bundle) == hash
           : hashBundle(bundle) == hash ||
+                _hashBeforeReferenceImages(bundle) == hash ||
                 _hashWithoutPathPresence(bundle) == hash ||
                 _hashWithPaths(bundle) == hash;
 
-  static final _pathKey = RegExp(r'(Path|Paths)$');
+  /// Claves que guardan rutas de archivos de este equipo: en la huella y en
+  /// la mezcla solo cuenta si hay archivo. `referenceImages` (listas de los
+  /// bloques de color, exposición y localización de la biblia) entró
+  /// después: antes viajaba como contenido y una ruta del Mac no era la
+  /// misma «cosa» que la del PC.
+  static final _pathKey = RegExp(r'(Path|Paths|referenceImages)$');
+  static final _pathKeyBeforeReferenceImages = RegExp(r'(Path|Paths)$');
+
+  static bool isPathKey(String key) => _pathKey.hasMatch(key);
+
+  /// La huella de antes de tratar `referenceImages` como ruta: solo para
+  /// reconocer huellas que se guardaron así.
+  static String _hashBeforeReferenceImages(Map<String, dynamic> bundle) =>
+      sha256
+          .convert(
+            utf8.encode(
+              _canonicalJson(bundle, pathKey: _pathKeyBeforeReferenceImages),
+            ),
+          )
+          .toString();
 
   static String _canonicalJson(
     Map<String, dynamic> bundle, {
     bool withPaths = false,
     bool pathPresence = true,
+    RegExp? pathKey,
   }) {
+    final isPath = pathKey ?? _pathKey;
     final copy = Map<String, dynamic>.from(bundle);
     // De los stills cuentan sus datos (título, notas, asignaciones), no su
     // ruta local ni su id.
@@ -1123,11 +1145,11 @@ class ProjectContentBundle {
                           for (final e in row.entries)
                             if (e.key != 'uid' &&
                                 !(e.key is String &&
-                                    _pathKey.hasMatch(e.key as String)))
+                                    isPath.hasMatch(e.key as String)))
                               e.key: e.value
                             else if (pathPresence &&
                                 e.key is String &&
-                                _pathKey.hasMatch(e.key as String))
+                                isPath.hasMatch(e.key as String))
                               e.key: ProjectContentBundle.pathPresence(
                                 e.value,
                               ),
