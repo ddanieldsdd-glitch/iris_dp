@@ -16,7 +16,7 @@ void main() {
 
   List<String> copies() => logs
       .listSync()
-      .map((f) => f.path.split('/').last)
+      .map((f) => f.uri.pathSegments.last)
       .where((n) => n.startsWith('danado-'))
       .toList();
 
