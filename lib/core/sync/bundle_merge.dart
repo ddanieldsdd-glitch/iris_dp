@@ -648,7 +648,7 @@ abstract final class BundleMerge {
   static MergeSide _other(MergeSide s) =>
       s == MergeSide.local ? MergeSide.cloud : MergeSide.local;
 
-  static bool _isPathKey(String k) => k.endsWith('Path') || k.endsWith('Paths');
+  static bool _isPathKey(String k) => ProjectContentBundle.isPathKey(k);
 
   /// Para comparar, como la huella: de las rutas, que son de cada equipo,
   /// solo si hay archivo.

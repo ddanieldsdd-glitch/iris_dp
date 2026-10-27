@@ -195,6 +195,46 @@ const kMediaSlots = <MediaSlot>[
         'WHERE project_id = ?',
     subfolder: 'sites/scans',
   ),
+  // Imágenes de referencia de los bloques de la biblia (listas JSON). Estas
+  // tablas no tienen uid: la clave sale del orden y el nombre del bloque
+  // (`hex` para que acentos y espacios no cambien entre equipos). Al
+  // renombrar un bloque, sus imágenes se vuelven a subir con la clave nueva.
+  MediaSlot(
+    entityType: MediaEntityType.colorBlockImage,
+    kind: MediaKind.image,
+    table: 'visual_bible_color_blocks',
+    column: 'reference_images',
+    selectForProject:
+        "SELECT c.id, 'cb' || c.sort_order || '-' || lower(hex(c.block_name)) "
+        'AS uid, c.reference_images AS path FROM visual_bible_color_blocks c '
+        'JOIN visual_bibles b ON b.id = c.bible_id WHERE b.project_id = ?',
+    subfolder: 'visual_bible/color_refs',
+    isList: true,
+  ),
+  MediaSlot(
+    entityType: MediaEntityType.exposureBlockImage,
+    kind: MediaKind.image,
+    table: 'exposure_blocks',
+    column: 'reference_images',
+    selectForProject:
+        "SELECT e.id, 'eb' || e.sort_order || '-' || lower(hex(e.block_name)) "
+        'AS uid, e.reference_images AS path FROM exposure_blocks e '
+        'JOIN visual_bibles b ON b.id = e.bible_id WHERE b.project_id = ?',
+    subfolder: 'visual_bible/exposure_refs',
+    isList: true,
+  ),
+  MediaSlot(
+    entityType: MediaEntityType.locationRefImage,
+    kind: MediaKind.image,
+    table: 'visual_bible_location_refs',
+    column: 'reference_images',
+    selectForProject:
+        "SELECT l.id, 'lr-' || lower(hex(l.location_name)) AS uid, "
+        'l.reference_images AS path FROM visual_bible_location_refs l '
+        'JOIN visual_bibles b ON b.id = l.bible_id WHERE b.project_id = ?',
+    subfolder: 'visual_bible/location_refs',
+    isList: true,
+  ),
 ];
 
 MediaSlot? mediaSlotFor(String entityType) {
