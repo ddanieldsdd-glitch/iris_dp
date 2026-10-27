@@ -4,6 +4,7 @@ import '../camera_plan/camera_plan_constants.dart';
 import '../camera_plan/camera_plan_element_model.dart';
 import '../camera_plan/light/plan_light.dart';
 import '../camera_plan/light_beam.dart';
+import '../camera_plan/plan_segment.dart';
 import '../camera_plan/rig/plan_rig.dart';
 import '../camera_plan/rig/plan_scene3d.dart';
 import 'unreal_stage_payload.dart';
@@ -76,7 +77,7 @@ class UnrealReturn {
         final loc = _nums(now['loc']), rot = _nums(now['rot']);
         final sLoc = _nums(sent['loc']), sRot = _nums(sent['rot']);
         // El atrezzo solo se mueve y gira en planta.
-        final flat = kind == 'props';
+        final flat = kind == 'props' || kind == 'assets';
         final moved =
             loc.length == 3 &&
             sLoc.length == 3 &&
@@ -136,13 +137,17 @@ class UnrealReturn {
       }
       // En el atrezzo «height» es su alto, no a qué altura está: subir una
       // pieza en Unreal no cambia nada en la planta.
-      if (edit.kind != 'props' && (now[2] - sLoc[2]).abs() > locCm) {
+      if (edit.kind != 'props' &&
+          edit.kind != 'assets' &&
+          (now[2] - sLoc[2]).abs() > locCm) {
         final height = now[2] / 100 - PlanLevel.of(el);
         el.props[PlanLight.heightKey] = (height * 100).roundToDouble() / 100;
         changed = true;
       }
     }
-    if (edit.rot case final rot?) {
+    // Un tramo (pared, truss) se orienta por sus extremos, no por su giro.
+    final segment = PlanSegment.isSegment(el) || PlanTruss.isTruss(el);
+    if (edit.rot case final rot? when !segment) {
       final d = UnrealStagePayload.dirOf(rot);
       if (edit.kind != 'lights') {
         // Cámara o pieza: hacia dónde mira en planta.

@@ -193,7 +193,7 @@ class UnrealLink extends ChangeNotifier {
       final e = byId['${item['id']}'];
       if (e == null) return item;
       // El atrezzo no cambia de cota desde Unreal: se queda la mandada.
-      final loc = e.kind == 'props' && e.loc != null
+      final loc = (e.kind == 'props' || e.kind == 'assets') && e.loc != null
           ? [e.loc![0], e.loc![1], (item['loc'] as List)[2]]
           : e.loc;
       return {

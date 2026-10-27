@@ -200,10 +200,13 @@ def _apply_prop(p):
     size = [float(v) for v in p.get("sizeCm", [50, 50, 80])]
     loc = _vec(p["loc"])
     mesh = None
-    if p.get("asset"):
-        mesh = unreal.EditorAssetLibrary.load_asset(p["asset"])
+    asset = p.get("asset")
+    # F6.20 B1: el asset llega como {path, kind}; antes, como ruta.
+    path = asset.get("path") if isinstance(asset, dict) else asset
+    if path:
+        mesh = unreal.EditorAssetLibrary.load_asset(path)
         if not isinstance(mesh, unreal.StaticMesh):
-            unreal.log_warning("[IRIS Stage] %s no es una malla: va un bloque." % p["asset"])
+            unreal.log_warning("[IRIS Stage] %s no es una malla: va un bloque." % path)
             mesh = None
     lift = 0.0
     if mesh is None:
