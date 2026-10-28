@@ -16,6 +16,7 @@ import '../../core/database/database_provider.dart';
 import '../../core/sync/live_editing.dart';
 import '../../core/sync/realtime_hub.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/project_color_scheme.dart';
@@ -4284,6 +4285,138 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// «Vaciar planta»: cada capa abierta se puede empezar de cero. Lo
   /// vaciado va a la Papelera de plantas.
+  Widget _addImageMenu(AppPalette palette) => PopupMenuButton<String>(
+    tooltip: 'Poner una imagen en la planta',
+    icon: Icon(
+      Icons.add_photo_alternate_outlined,
+      color: palette.textSecondary,
+    ),
+    onSelected: _onAddImage,
+    itemBuilder: (_) => [
+      PopupMenuItem(
+        value: 'paste',
+        child: PlanMenuRow('Pegar imagen', '${modKey}V'),
+      ),
+      const PopupMenuItem(value: 'moodboard', child: Text('Del moodboard…')),
+      if (_isShotMode)
+        PopupMenuItem(
+          value: 'storyboard',
+          enabled: _shot?.storyboardImagePath != null,
+          child: const Text('Storyboard de este plano'),
+        ),
+      const PopupMenuItem(value: 'file', child: Text('Archivo…')),
+    ],
+  );
+
+  void _showElevation() => showPlanElevation(
+    context,
+    elements: _visibleElements,
+    scene: _lightScene,
+    metersPerUnit: _metersPerUnit,
+    name: _linkedSet?.locationName ?? _linkedSite?.name ?? 'planta',
+  );
+
+  /// Barra de arriba en el iPhone: imagen, 3D, encajar y el resto en «Más».
+  /// Guardar va en la barra de abajo. Vaciar la planta, atajos y ajustes se
+  /// quedan para el iPad y el Mac (edición ligera, PLAN_IPHONE).
+  List<Widget> _compactActions(AppPalette palette) {
+    PopupMenuItem<VoidCallback> item(
+      String label,
+      IconData icon,
+      VoidCallback? onTap, {
+      bool on = false,
+    }) => PopupMenuItem<VoidCallback>(
+      value: onTap,
+      enabled: onTap != null,
+      child: ListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        leading: Icon(icon, color: on ? palette.accent : null),
+        title: Text(label),
+      ),
+    );
+
+    return [
+      _addImageMenu(palette),
+      IconButton(
+        tooltip: '3D',
+        icon: Icon(
+          Icons.threed_rotation,
+          color: _show3d ? palette.accent : palette.textSecondary,
+        ),
+        onPressed: _toggle3d,
+      ),
+      IconButton(
+        tooltip: 'Encajar todo',
+        icon: Icon(Icons.fit_screen_outlined, color: palette.textSecondary),
+        onPressed: _fitAll,
+      ),
+      PopupMenuButton<VoidCallback>(
+        tooltip: 'Más',
+        icon: Icon(Icons.more_vert, color: palette.textSecondary),
+        onSelected: (action) => action(),
+        itemBuilder: (_) => [
+          item('Deshacer', Icons.undo, _undoStack.isEmpty ? null : _undo),
+          item('Rehacer', Icons.redo, _redoStack.isEmpty ? null : _redo),
+          const PopupMenuDivider(),
+          for (final view in LightView.values)
+            item(
+              'Luz: ${view.label.toLowerCase()}',
+              view == LightView.camera
+                  ? Icons.camera_outlined
+                  : Icons.visibility_outlined,
+              () => setState(() => _lightView = view),
+              on: view == _lightView,
+            ),
+          item(
+            _exposureMap ? 'Volver a los haces de luz' : 'Mapa de exposición',
+            Icons.gradient,
+            () => setState(() => _exposureMap = !_exposureMap),
+            on: _exposureMap,
+          ),
+          item(
+            _showReadings
+                ? 'Ocultar lecturas de los actores'
+                : 'Mostrar lecturas de los actores',
+            Icons.speed_outlined,
+            () => setState(() => _showReadings = !_showReadings),
+            on: _showReadings,
+          ),
+          item(
+            _gearLabels ? 'Quitar rótulos de equipo' : 'Rótulos de equipo',
+            Icons.sell_outlined,
+            () => setState(() => _gearLabels = !_gearLabels),
+            on: _gearLabels,
+          ),
+          item(
+            _snap ? 'Desactivar el imán' : 'Activar el imán',
+            Icons.grid_goldenratio,
+            () => setState(() => _snap = !_snap),
+            on: _snap,
+          ),
+          const PopupMenuDivider(),
+          item('Alzado y perfil', Icons.view_in_ar_outlined, _showElevation),
+          if (_isShotMode && _shot != null)
+            item(
+              'Bocetos de planta del plano',
+              Icons.image_outlined,
+              () => showShotImageMenu(
+                context,
+                _shot!,
+                target: ShotImageTarget.planSketch,
+              ),
+            ),
+          if (!_isShotMode && _linkedSet != null)
+            item(
+              'Asociar planos a «${_linkedSet!.locationName}»',
+              Icons.playlist_add_check,
+              _associateToLinkedSet,
+            ),
+        ],
+      ),
+    ];
+  }
+
   Widget _clearPlanMenu(AppPalette palette) {
     final site = _linkedSite;
     final set = _linkedSet;
@@ -4349,6 +4482,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     _wide = MediaQuery.sizeOf(context).width >= 1100;
+    final compact = AppLayout.isCompact(context);
     // Otro equipo edita esta planta: aquí no se toca hasta que termine, y
     // al soltarla se vuelve a leer para ver lo que cambió.
     final blocker = _loading
@@ -4415,7 +4549,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                   Text(widget.label, style: AppTypography.titleMedium(palette)),
                 ],
               ),
-        actions: [
+        // En el iPhone no caben los ~20 botones (IP.4.1).
+        actions: compact
+            ? _compactActions(palette)
+            : [
           if (_isShotMode && _shot != null)
             IconButton(
               tooltip: 'Bocetos de planta del plano (imágenes)',
@@ -4435,31 +4572,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               ),
               onPressed: _associateToLinkedSet,
             ),
-          PopupMenuButton<String>(
-            tooltip: 'Poner una imagen en la planta',
-            icon: Icon(
-              Icons.add_photo_alternate_outlined,
-              color: palette.textSecondary,
-            ),
-            onSelected: _onAddImage,
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: 'paste',
-                child: PlanMenuRow('Pegar imagen', '${modKey}V'),
-              ),
-              const PopupMenuItem(
-                value: 'moodboard',
-                child: Text('Del moodboard…'),
-              ),
-              if (_isShotMode)
-                PopupMenuItem(
-                  value: 'storyboard',
-                  enabled: _shot?.storyboardImagePath != null,
-                  child: const Text('Storyboard de este plano'),
-                ),
-              const PopupMenuItem(value: 'file', child: Text('Archivo…')),
-            ],
-          ),
+          _addImageMenu(palette),
           _clearPlanMenu(palette),
           IconButton(
             tooltip: 'Deshacer',
@@ -4528,13 +4641,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               Icons.view_in_ar_outlined,
               color: palette.textSecondary,
             ),
-            onPressed: () => showPlanElevation(
-              context,
-              elements: _visibleElements,
-              scene: _lightScene,
-              metersPerUnit: _metersPerUnit,
-              name: _linkedSet?.locationName ?? _linkedSite?.name ?? 'planta',
-            ),
+            onPressed: _showElevation,
           ),
           IconButton(
             tooltip: _gearLabels
