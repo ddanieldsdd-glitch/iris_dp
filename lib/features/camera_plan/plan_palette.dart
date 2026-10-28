@@ -18,6 +18,9 @@ enum PlanTool {
 
   /// Pared de tela o plástico que cuelga entre dos amarres.
   drape,
+
+  /// Tramo de truss de un punto a otro.
+  truss,
   measure,
 }
 
@@ -28,6 +31,7 @@ extension PlanToolInfo on PlanTool {
     PlanTool.street => 'Calle',
     PlanTool.relief => 'Relieve',
     PlanTool.drape => 'Tela',
+    PlanTool.truss => 'Truss',
     PlanTool.measure => 'Medir',
   };
 
@@ -37,6 +41,7 @@ extension PlanToolInfo on PlanTool {
     PlanTool.street => Icons.add_road,
     PlanTool.relief => Icons.terrain_outlined,
     PlanTool.drape => Icons.curtains_outlined,
+    PlanTool.truss => Icons.view_week_outlined,
     PlanTool.measure => Icons.straighten,
   };
 
@@ -45,7 +50,8 @@ extension PlanToolInfo on PlanTool {
       this == PlanTool.wall ||
       this == PlanTool.street ||
       this == PlanTool.relief ||
-      this == PlanTool.drape;
+      this == PlanTool.drape ||
+      this == PlanTool.truss;
 }
 
 /// Paleta fija de la planta: lo que se puede añadir, siempre a la vista.

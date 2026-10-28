@@ -14,6 +14,7 @@ import 'plan_opening.dart';
 import 'plan_segment.dart';
 import 'rig/drape_controls.dart';
 import 'rig/plan_drape.dart';
+import 'rig/rig_controls.dart';
 
 /// Propiedades de lo que no es un aparato: puertas, ventanas, paredes,
 /// grip, personas y cámaras. Lo que aquí se cambia afecta a cómo se
@@ -46,6 +47,7 @@ class PlanPieceControls extends StatelessWidget {
   static bool appliesTo(PlanElement el) =>
       PlanOpening.isOpening(el) ||
       PlanSegment.isSegment(el) ||
+      RigControls.appliesTo(el) ||
       _isTerrain(el) ||
       _isGrip(el) ||
       el.type == ElementType.actor ||
@@ -407,6 +409,15 @@ class PlanPieceControls extends StatelessWidget {
               el.props[PlanOpening.headKey] = (v * 20).round() / 20,
         ),
       ]);
+    } else if (RigControls.appliesTo(el)) {
+      children.add(
+        RigControls(
+          element: el,
+          metersPerUnit: metersPerUnit,
+          onPreview: onPreview,
+          onUpdate: onUpdate,
+        ),
+      );
     } else if (PlanDrape.isDrape(el)) {
       children.add(
         DrapeControls(

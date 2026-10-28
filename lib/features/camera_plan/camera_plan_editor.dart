@@ -78,6 +78,7 @@ import '../settings/settings_launcher.dart';
 import 'plan_prefs.dart';
 import 'rig/hall_builder_sheet.dart';
 import 'rig/plan_drape.dart';
+import 'rig/plan_rig.dart';
 import 'rig/plan_hall.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
@@ -2475,9 +2476,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Future<void> _addSegment(Offset from, Offset to) async {
     if ((to - from).distance < 8) return;
     await _addElement(
-      _tool == PlanTool.drape
-          ? PlanDrape.create(from, to)
-          : PlanSegment.create(start: from, end: to, kind: _segmentKind),
+      switch (_tool) {
+        PlanTool.drape => PlanDrape.create(from, to),
+        PlanTool.truss => PlanTruss.create(from, to),
+        _ => PlanSegment.create(start: from, end: to, kind: _segmentKind),
+      },
       keepPosition: true,
       select: false,
     );
@@ -2721,6 +2724,37 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     await _addElement(el);
   }
 
+  // ── Truss ─────────────────────────────────────────────────────────────────
+
+  /// Tras mover o cambiar algo: las luces que caen junto a un truss se
+  /// cuelgan de él (y las que se alejan se descuelgan), y lo que cuelga de
+  /// un truss cambiado lo sigue. Devuelve lo que se ha movido de más, para
+  /// guardarlo.
+  Set<PlanElement> _settleRig(Iterable<PlanElement> changed) {
+    final mpu = _metersPerUnit;
+    final extra = <PlanElement>{};
+    final hasTruss = _elements.any(PlanTruss.isTruss);
+    final trusses = <String>{};
+    for (final el in changed) {
+      if (PlanTruss.isTruss(el)) {
+        final uid = LightOverrides.uidOf(el);
+        if (uid != null) trusses.add(uid);
+      } else if (el.type == ElementType.light &&
+          (hasTruss || TrussMagnet.rigOf(el) != null)) {
+        TrussMagnet.snap(el, _visibleElements, mpu);
+      }
+    }
+    if (trusses.isNotEmpty) {
+      TrussMagnet.follow(_elements, mpu);
+      for (final el in _elements) {
+        final on =
+            TrussMagnet.trussUidOf(el) ?? el.props[PlanRigPoint.trussKey];
+        if (trusses.contains(on)) extra.add(el);
+      }
+    }
+    return extra..removeAll(changed);
+  }
+
   // ── Nave ──────────────────────────────────────────────────────────────────
 
   /// La nave a la que pertenece un elemento (o él mismo, si es la receta).
@@ -2873,8 +2907,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   PlanElement? _elementAt(Offset canvasPos) {
     final slack = 1 / math.min(1.0, _scale);
     for (final el in _visibleElements.reversed) {
-      if (PlanSegment.isSegment(el)) continue;
+      if (PlanSegment.isSegment(el) || PlanTruss.isTruss(el)) continue;
       if ((el.position - canvasPos).distance < 28 * slack) return el;
+    }
+    // Un truss se coge por cualquier punto de su tramo.
+    for (final el in _visibleElements.reversed) {
+      if (PlanTruss.isTruss(el) &&
+          PlanTruss.distanceTo(el, canvasPos) < 12 * slack) {
+        return el;
+      }
     }
     // Los tramos, después: lo que está encima de una pared se coge antes.
     for (final el in _visibleElements.reversed) {
@@ -3552,7 +3593,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           el.pathPoints = [for (final p in el.pathPoints) p + shift];
         }
       });
-      await _persistMany(group);
+      // Una luz soltada junto a un truss se cuelga de él; lo colgado de
+      // un truss movido lo sigue.
+      final hung = _settleRig(group);
+      if (hung.isNotEmpty) setState(() {});
+      await _persistMany([...group, ...hung]);
       // Mover la nave (su asa) la rehace en su sitio.
       if (group.length == 1 && PlanHall.isHall(dragged)) {
         await _regenerateHall(dragged);
@@ -4713,8 +4758,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 onUpdate: () async {
                                   final el = _selected!;
                                   await _syncCameraSensor(el);
+                                  final hung = _settleRig([el]);
                                   if (mounted) setState(() {});
                                   await _persistElement(el);
+                                  if (hung.isNotEmpty) await _persistMany(hung);
                                 },
                                 onDelete: _deleteSelected,
                                 onDuplicate: _duplicateSelection,
