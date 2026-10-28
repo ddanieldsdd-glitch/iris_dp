@@ -12,6 +12,7 @@ import '../../bible_form_widgets.dart';
 import '../../bible_paste_zone.dart';
 import '../../color_palette_strip.dart';
 import '../container_detail/palette_target_viewer.dart';
+import '../../../../../core/utils/platform_keys.dart';
 
 /// Bloques de refuerzo (texto + imagen) bajo la paleta del contenedor.
 class ReinforcementBlocks extends StatelessWidget {
@@ -145,7 +146,7 @@ class ReinforcementBlocks extends StatelessWidget {
               border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Text(
-              '⌘V o arrastra imagen de refuerzo',
+              '${modKey}V o arrastra imagen de refuerzo',
               style: AppTypography.bodyMedium(palette).copyWith(
                 fontSize: 12,
                 color: palette.textTertiary,

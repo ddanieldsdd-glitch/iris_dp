@@ -52,6 +52,14 @@ class MediaUploadQueue {
   static const maxConcurrency = 3;
   static const maxRetries = 5;
 
+  /// Se llama al terminar cada tanda con los proyectos (`cloudId`) que
+  /// subieron algo: el canal en vivo avisa a los demás equipos para que las
+  /// bajen ya (ver [AutoSyncScheduler]).
+  static void Function(String projectCloudId)? onProjectUploaded;
+
+  /// Cada cuánto se avisa como mínimo mientras dura una subida larga.
+  static const _announceEvery = Duration(seconds: 10);
+
   /// La pasada del worker en curso, si hay una.
   Future<void>? _run;
 
@@ -243,6 +251,18 @@ class MediaUploadQueue {
           .write(const PendingMediaUploadsCompanion(status: Value('pending')));
       await dropOrphans();
 
+      final uploaded = <String>{};
+      var lastAnnounce = DateTime.now();
+      void announce() {
+        if (uploaded.isNotEmpty) {
+          debugPrint('[medios ${_now()}] aviso a los demás: $uploaded');
+        }
+        final notify = onProjectUploaded;
+        if (notify != null) uploaded.forEach(notify);
+        uploaded.clear();
+        lastAnnounce = DateTime.now();
+      }
+
       while (true) {
         final pending = await (_db.select(_db.pendingMediaUploads)
               ..where((t) => t.status.equals('pending'))
@@ -252,7 +272,10 @@ class MediaUploadQueue {
                 (t) => OrderingTerm.asc(t.id),
               ]))
             .get();
-        if (pending.isEmpty) break;
+        if (pending.isEmpty) {
+          announce();
+          break;
+        }
 
         // Las que esperan su reintento no frenan a las demás.
         final now = DateTime.now();
@@ -268,7 +291,13 @@ class MediaUploadQueue {
           continue;
         }
 
-        await Future.wait(ready.map(_processOne));
+        for (final cloudId in await Future.wait(ready.map(_processOne))) {
+          if (cloudId != null) uploaded.add(cloudId);
+        }
+        // En una subida larga los demás equipos van bajando lo que ya está.
+        if (DateTime.now().difference(lastAnnounce) > _announceEvery) {
+          announce();
+        }
         await notifyProgress(processing: true);
       }
     } finally {
@@ -276,7 +305,10 @@ class MediaUploadQueue {
     }
   }
 
-  Future<void> _processOne(PendingMediaUpload row) async {
+  static String _now() => DateTime.now().toIso8601String().substring(11, 23);
+
+  /// Sube una fila. Devuelve el `cloudId` de su proyecto si se subió.
+  Future<String?> _processOne(PendingMediaUpload row) async {
     await (_db.update(_db.pendingMediaUploads)
           ..where((t) => t.id.equals(row.id)))
         .write(const PendingMediaUploadsCompanion(
@@ -307,6 +339,7 @@ class MediaUploadQueue {
             sortOrder: row.sortOrder,
           );
 
+      debugPrint('[medios ${_now()}] subiendo ${row.entityType} ${row.entityKey}');
       final slot = mediaSlotFor(row.entityType);
       final isFile =
           slot?.kind == MediaKind.file ||
@@ -347,6 +380,8 @@ class MediaUploadQueue {
         remoteHash: Value(result.contentHash),
         fileStamp: Value(mediaFileStamp(row.localPath)),
       ));
+      debugPrint('[medios ${_now()}] subida ${row.entityType} ${row.entityKey}');
+      return cloudId;
     } catch (e, st) {
       debugPrint('MediaUploadQueue error: $e\n$st');
       final retries = row.retries + 1;
@@ -363,6 +398,7 @@ class MediaUploadQueue {
           retryDelay * (1 << retries.clamp(0, 4)),
         );
       }
+      return null;
     }
   }
 

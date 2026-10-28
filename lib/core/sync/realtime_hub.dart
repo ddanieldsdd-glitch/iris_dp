@@ -53,6 +53,7 @@ class RealtimeHub {
   RealtimeHub(this._client);
 
   static const _snapshotEvent = 'snapshot';
+  static const _mediaEvent = 'media';
   static const _typingEvent = 'typing';
   static const _drawingEvent = 'drawing';
 
@@ -71,6 +72,13 @@ class RealtimeHub {
   final _notices = StreamController<SnapshotNotice>.broadcast();
 
   Stream<SnapshotNotice> get snapshotNotices => _notices.stream;
+
+  final _mediaNotices = StreamController<String>.broadcast();
+
+  /// Otro equipo terminó de subir imágenes de un proyecto (su `cloudId`).
+  /// Las imágenes suben después del contenido, así que el aviso del
+  /// contenido no basta para bajarlas enseguida.
+  Stream<String> get mediaNotices => _mediaNotices.stream;
 
   final _drawings = StreamController<Map<String, dynamic>>.broadcast();
   final _drawingParts = DrawingWireAssembler();
@@ -130,6 +138,15 @@ class RealtimeHub {
               hash: hash,
               device: payload['device'] as String?,
             ));
+          },
+        )
+        .onBroadcast(
+          event: _mediaEvent,
+          callback: (payload) {
+            final project = payload['projectCloudId'];
+            if (project is! String) return;
+            if (payload['installId'] == installId) return;
+            _mediaNotices.add(project);
           },
         )
         .subscribe((status, error) {
@@ -239,6 +256,23 @@ class RealtimeHub {
     }
   }
 
+  /// Avisa de que este equipo acaba de subir imágenes de [projectCloudId].
+  Future<void> announceMedia(String projectCloudId) async {
+    final channel = _channel;
+    if (channel == null) return;
+    try {
+      await channel.sendBroadcastMessage(
+        event: _mediaEvent,
+        payload: {
+          'projectCloudId': projectCloudId,
+          'installId': await InstallId.get(),
+        },
+      );
+    } catch (e) {
+      debugPrint('Aviso de imágenes no enviado: $e');
+    }
+  }
+
   Future<void> _leave() async {
     final channel = _channel;
     _channel = null;
@@ -255,6 +289,7 @@ class RealtimeHub {
   Future<void> dispose() async {
     await _leave();
     await _notices.close();
+    await _mediaNotices.close();
     await _drawings.close();
   }
 }

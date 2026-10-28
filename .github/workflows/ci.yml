@@ -22,6 +22,9 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # La misma versión que en el Mac: con una más nueva pdfrx 2.4.5 no
+          # compila, y así lo que funciona aquí funciona en GitHub.
+          flutter-version: 3.44.8
           cache: true
 
       - name: Install dependencies
@@ -34,3 +37,58 @@ jobs:
 
       - name: Test
         run: flutter test
+
+  # Compila la app de Windows para que una rotura se vea en el PR y no meses
+  # después (estuvo rota desde v1.0.18 sin que se notara). Deja el zip para
+  # probarlo en el PC sin esperar a un release.
+  build-windows:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/plan/pc')
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # La misma versión que en el Mac: con una más nueva pdfrx 2.4.5 no
+          # compila, y así lo que funciona aquí funciona en GitHub.
+          flutter-version: 3.44.8
+          cache: true
+
+      # El 3D (flutter_inappwebview) baja WebView2 con NuGet al compilar.
+      - uses: nuget/setup-nuget@v2
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
+        run: |
+          flutter build windows --release --no-tree-shake-icons `
+            --dart-define=SUPABASE_URL=$env:SUPABASE_URL `
+            --dart-define=SUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY `
+            --dart-define=CLOUDINARY_CLOUD_NAME=$env:CLOUDINARY_CLOUD_NAME `
+            --dart-define=CLOUDINARY_UPLOAD_PRESET=$env:CLOUDINARY_UPLOAD_PRESET
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IRIS-DP-Windows-${{ github.sha }}
+          path: build/windows/x64/runner/Release/
+          retention-days: 14
+
+      - name: Build installer
+        run: |
+          choco install innosetup -y --no-progress
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+\s]+)').Matches[0].Groups[1].Value
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" windows\installer\iris_dp.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IRIS-DP-Windows-Setup-${{ github.sha }}
+          path: build/installer/IRIS-DP-Windows-Setup.exe
+          retention-days: 14

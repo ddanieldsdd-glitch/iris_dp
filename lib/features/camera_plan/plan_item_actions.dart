@@ -10,6 +10,7 @@ import 'floor_plan_repository.dart';
 import 'floor_plan_scope.dart';
 import 'light_setup_actions.dart';
 import 'plan_trash_ui.dart';
+import '../../core/utils/platform_keys.dart';
 
 /// Qué hay copiado en la pantalla de plantas: un esquema de luz o un set.
 enum PlanClipKind { setup, set }
@@ -34,7 +35,7 @@ abstract final class PlanBoardClipboard {
 
   static void copy(BuildContext context, PlanClip clip) {
     current.value = clip;
-    _tell(context, 'Copiado ${clip.label}. Pégalo con ⌘V donde quieras.');
+    _tell(context, 'Copiado ${clip.label}. Pégalo con ${modKey}V donde quieras.');
   }
 }
 
@@ -384,13 +385,13 @@ class SetMenuButton extends ConsumerWidget {
         },
         itemBuilder: (_) => [
           const PopupMenuItem(value: 'rename', child: Text('Renombrar')),
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'copy',
-            child: PlanMenuRow('Copiar set', '⌘C'),
+            child: PlanMenuRow('Copiar set', '${modKey}C'),
           ),
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'duplicate',
-            child: PlanMenuRow('Duplicar set', '⌘D'),
+            child: PlanMenuRow('Duplicar set', '${modKey}D'),
           ),
           if (clip != null)
             PopupMenuItem(
@@ -399,7 +400,7 @@ class SetMenuButton extends ConsumerWidget {
                 clip.kind == PlanClipKind.setup
                     ? 'Pegar «${clip.name}» en este set'
                     : 'Pegar el set «${clip.name}»',
-                '⌘V',
+                '${modKey}V',
               ),
             ),
           const PopupMenuItem(value: 'clear', child: Text('Vaciar planta…')),

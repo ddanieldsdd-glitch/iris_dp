@@ -35,6 +35,7 @@ import 'container_detail/container_stills_grid.dart';
 import 'container_detail/reinforcement_blocks.dart';
 import '../moodboard_drag.dart';
 import 'lighting_card_tag_fields.dart';
+import '../../../../core/utils/platform_keys.dart';
 
 /// Detalle editable de una carta narrativa (drill-down).
 class NarrativeCardDetailPage extends ConsumerStatefulWidget {
@@ -522,7 +523,7 @@ class _CoverEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BibleTargetZone(
-      hint: '⌘V o arrastra cover',
+      hint: '${modKey}V o arrastra cover',
       minHeight: 180,
       onPaste: (payload) async {
         final id = await MoodboardHelpers.addImageForNarrativeCard(
@@ -562,7 +563,7 @@ class _CoverEditor extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.04),
                   child: Center(
                     child: Text(
-                      'Portada — ⌘V para pegar',
+                      'Portada — ${modKey}V para pegar',
                       style: AppTypography.bodyMedium(palette).copyWith(
                         color: palette.textTertiary,
                       ),
@@ -652,7 +653,7 @@ class _CardGallery extends StatelessWidget {
                 ),
               ),
               child: Text(
-                'Sin stills — ⌘V o arrastra desde moodboard',
+                'Sin stills — ${modKey}V o arrastra desde moodboard',
                 style: AppTypography.bodyMedium(palette).copyWith(
                   fontSize: 12,
                   color: palette.textTertiary,

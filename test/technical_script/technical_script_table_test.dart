@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
@@ -7,12 +8,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/database/database_provider.dart';
 import 'package:iris_dp/core/theme/app_theme.dart';
+import 'package:iris_dp/core/utils/platform_keys.dart';
 import 'package:iris_dp/core/utils/shot_reference_import.dart';
 import 'package:iris_dp/features/technical_script/table/editable_cell.dart';
 import 'package:iris_dp/features/technical_script/technical_script_screen.dart';
@@ -32,6 +35,10 @@ class _SlowDb extends AppDatabase {
 
 void main() {
   late AppDatabase db;
+
+  // Sin red en las pruebas: sin esto cada fuente se intenta bajar y espera
+  // hasta fallar (en Windows, minutos por prueba).
+  setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -714,7 +721,7 @@ void main() {
     editor.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
     await tester.pump();
 
-    await tester.tap(find.byTooltip('Negrita (⌘B)'));
+    await tester.tap(find.byTooltip('Negrita (${modKey}B)'));
     await settle(tester);
     // Sigue en edición: la barra no le ha quitado el foco.
     expect(activeScriptEditor.value, same(editor));
@@ -837,7 +844,7 @@ void main() {
       await db.updateShotFields(
         shot.id,
         ShotsCompanion(
-          cameraPlanImagePath: Value('["${paths[0]}","${paths[1]}"]'),
+          cameraPlanImagePath: Value(jsonEncode(paths)),
         ),
       );
     });
@@ -997,12 +1004,12 @@ void main() {
     await settle(tester);
     expect(await framing(), 'PP de DIEGO');
 
-    await tester.tap(find.byTooltip('Deshacer (⌘Z)'));
+    await tester.tap(find.byTooltip('Deshacer (${modKey}Z)'));
     await flush(tester);
     await settle(tester);
     expect(await framing(), 'PML de ALI 2');
 
-    await tester.tap(find.byTooltip('Rehacer (⇧⌘Z)'));
+    await tester.tap(find.byTooltip('Rehacer (⇧${modKey}Z)'));
     await flush(tester);
     await settle(tester);
     expect(await framing(), 'PP de DIEGO');

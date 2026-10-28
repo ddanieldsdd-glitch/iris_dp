@@ -115,19 +115,27 @@ chmod +x scripts/build_ipad.sh scripts/package_unsigned_ipa.sh
 
 ## 5. Windows
 
+### Primera instalación
+
+`IRIS-DP-Windows-Setup.exe` (Inno Setup, `windows/installer/iris_dp.iss`): instala para el usuario en `%LOCALAPPDATA%\Programs\IRIS DP`, sin administrador, con accesos directos. Sin certificado de firma, SmartScreen avisa la primera vez («Más información → Ejecutar de todos modos»).
+
+Para probar una rama sin release: cada PR (y cada push a `plan/pc*`) compila Windows en GitHub Actions y deja dos artefactos, el zip y el instalador.
+
 ### Desde la app
 
 1. Banner → **Actualizar ahora**
-2. La app descarga, reemplaza archivos y se reinicia
+2. La app descarga `IRIS-DP-Windows.zip`, reemplaza los archivos de la carpeta de instalación y se reinicia.
 
-### Build local
+### Build local (en el PC)
+
+Necesita Git, Flutter 3.44.8 (la misma que el Mac), Visual Studio 2022 con «Desarrollo para el escritorio con C++», NuGet en el PATH (WebView2 del 3D) y el modo de desarrollador de Windows.
 
 ```powershell
 cd iris_dp
-.\scripts\build_release.sh
+.\scripts\build_windows.ps1
 ```
 
-Comparte `IRIS-DP-Windows.zip` del GitHub Release o la carpeta `build\windows\x64\runner\Release\`.
+Deja la app en `build\windows\x64\runner\Release\` y, si está Inno Setup, el instalador en `build\installer\`.
 
 ---
 

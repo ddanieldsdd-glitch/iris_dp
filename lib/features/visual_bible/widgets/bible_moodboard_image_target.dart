@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../moodboard_helpers.dart';
 import 'bible_paste_zone.dart';
+import '../../../core/utils/platform_keys.dart';
 
 /// Zona hero/referencia con ⌘V y drag desde moodboard hacia una sección.
 class BibleMoodboardImageTarget extends ConsumerWidget {
@@ -28,7 +29,7 @@ class BibleMoodboardImageTarget extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final db = ref.read(databaseProvider);
-    final pasteHint = hint ?? 'Clic aquí → ⌘V para pegar imagen';
+    final pasteHint = hint ?? 'Clic aquí → ${modKey}V para pegar imagen';
 
     return BibleTargetZone(
       hint: pasteHint,
@@ -62,7 +63,7 @@ class BibleMoodboardImageTarget extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  '⌘V',
+                  '${modKey}V',
                   style: AppTypography.mono(palette).copyWith(
                     fontSize: 10,
                     color: Colors.white70,

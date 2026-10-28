@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,6 +16,7 @@ import '../widgets/app_snackbar.dart';
 import '../widgets/sync/sync_conflict_history_sheet.dart';
 import 'content_sync_base_store.dart';
 import 'editing_guard.dart';
+import 'media_upload_queue.dart';
 import 'project_content_sync_service.dart';
 import 'realtime_hub.dart';
 import 'sync_engine.dart';
@@ -78,8 +81,10 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
     WidgetsBinding.instance.removeObserver(this);
     EditingGuard.active.removeListener(_onEditingChanged);
     _liveNotices?.cancel();
+    _mediaNotices?.cancel();
     _liveDebounce?.cancel();
     ProjectContentSyncService.onUploaded = null;
+    MediaUploadQueue.onProjectUploaded = null;
     _ticker?.cancel();
     _editDebounce?.cancel();
     _queueWatch?.cancel();
@@ -105,8 +110,15 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
         _foreground = false;
         // Lo que se editaba queda libre para los demás equipos.
         ref.read(liveEditingProvider).releaseAll();
-        _ticker?.cancel();
-        _ticker = null;
+        // En el ordenador, minimizar no para nada: lo que suben los demás
+        // tiene que estar al volver, y lo de aquí no puede quedarse sin
+        // subir. Solo el iPad y el móvil se paran (batería y datos).
+        if (_isMobile) {
+          debugPrint('[sync ${_now()}] app en segundo plano ($state): '
+              'se para la sincronización automática');
+          _ticker?.cancel();
+          _ticker = null;
+        }
         // Lo editado no espera a la próxima vez que se abra la app.
         _editDebounce?.cancel();
         _pushEdits();
@@ -132,15 +144,48 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
       debugPrint('Canal en vivo: $e');
       return;
     }
-    ProjectContentSyncService.onUploaded = hub.announceSnapshot;
+    ProjectContentSyncService.onUploaded = (projectCloudId, hash) {
+      debugPrint('[medios ${_now()}] contenido subido, aviso: $projectCloudId');
+      return hub.announceSnapshot(projectCloudId, hash);
+    };
+    MediaUploadQueue.onProjectUploaded = (projectCloudId) {
+      unawaited(hub.announceMedia(projectCloudId));
+      // Una imagen nueva (p. ej. pegada en el moodboard) no pasa por la cola
+      // de contenido: su fila sube ya, sin esperar a la pasada de cada
+      // minuto, para que los demás sepan dónde va.
+      _liveDebounce?.cancel();
+      _liveDebounce =
+          Timer(AutoSyncScheduler.liveDelay, () => _run(full: false));
+    };
     if (!identical(hub, _liveHub)) {
       await _liveNotices?.cancel();
+      await _mediaNotices?.cancel();
       _liveHub = hub;
       _liveNotices = hub.snapshotNotices.listen(_onLiveNotice);
+      _mediaNotices = hub.mediaNotices.listen(_onMediaNotice);
     }
   }
 
+  StreamSubscription<String>? _mediaNotices;
+
+  /// Otro equipo subió imágenes: se bajan ya, sin esperar a la pasada de
+  /// cada minuto.
+  void _onMediaNotice(String projectCloudId) {
+    debugPrint('[medios ${_now()}] aviso recibido: imágenes de $projectCloudId');
+    ref.read(syncEngineProvider).followMedia(projectCloudId);
+    _liveDebounce?.cancel();
+    _liveDebounce = Timer(AutoSyncScheduler.liveDelay, () => _run(full: false));
+  }
+
+  static String _now() => DateTime.now().toIso8601String().substring(11, 23);
+
+  static bool get _isMobile =>
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.android;
+
   Future<void> _onLiveNotice(SnapshotNotice notice) async {
+    debugPrint('[medios ${_now()}] aviso recibido: contenido de '
+        '${notice.projectCloudId} (${notice.device})');
     if (!await liveNoticeIsNew(ref.read(databaseProvider), notice)) return;
     // Un segundo de margen: si llegan varios seguidos, una sola pasada.
     _liveDebounce?.cancel();
@@ -175,6 +220,9 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
   }
 
   Future<void> _run({required bool full}) async {
+    debugPrint('[sync ${_now()}] pasada ${full ? 'completa' : 'ligera'}'
+        '${_canSync ? '' : ' · NO SE PUEDE: sin sesión, sin red o nube apagada'}'
+        '${_foreground ? '' : ' · app en segundo plano'}');
     if (!_canSync) return;
     // Cada pasada comprueba también que se sigue en el canal en vivo.
     if (!(ref.read(realtimeHubProvider)?.isLive ?? true)) {

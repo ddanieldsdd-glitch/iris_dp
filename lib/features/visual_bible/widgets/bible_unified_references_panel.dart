@@ -10,6 +10,7 @@ import '../moodboard_helpers.dart';
 import '../visual_bible_model.dart';
 import 'bible_paste_zone.dart';
 import 'bible_section_references_manager.dart';
+import '../../../core/utils/platform_keys.dart';
 
 /// Referencias visuales editables por sección (fuente única moodboard).
 class BibleReferencesPanel extends ConsumerWidget {
@@ -62,12 +63,12 @@ class BibleReferencesPanel extends ConsumerWidget {
               ),
             ),
           Text(
-            'Clic en la zona de abajo y ⌘V para pegar directamente en $sectionLabel.',
+            'Clic en la zona de abajo y ${modKey}V para pegar directamente en $sectionLabel.',
             style: AppTypography.caption(palette),
           ),
           const SizedBox(height: AppSpacing.md),
           BibleTargetZone(
-            hint: 'Clic aquí → ⌘V para pegar en $sectionLabel',
+            hint: 'Clic aquí → ${modKey}V para pegar en $sectionLabel',
             minHeight: 72,
             onPaste: (payload) => MoodboardHelpers.addImageFromBytesAssigned(
               db: db,

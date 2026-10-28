@@ -74,11 +74,11 @@ chmod +x scripts/build_macos_dmg.sh
 
 ## Windows
 
-```powershell
-.\scripts\build_windows.ps1
-```
+GitHub Actions lo compila en cada release (y en cada PR) con Flutter 3.44.8. Al release suben:
+- `IRIS-DP-Windows-Setup.exe`: instalador para la primera vez;
+- `IRIS-DP-Windows.zip`: lo que baja la actualización automática.
 
-Distribuir `IRIS-DP-Windows.zip` del Release o carpeta `Release`.
+En local (en el PC): `.\scripts\build_windows.ps1`.
 
 ## iPad (SideStore — CI sin firma)
 

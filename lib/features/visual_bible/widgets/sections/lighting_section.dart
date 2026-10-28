@@ -27,6 +27,7 @@ import '../narrative_deck/narrative_card_detail.dart';
 import '../narrative_deck/lighting_behaviors_block.dart';
 import '../narrative_deck/lighting_tagged_refs_block.dart';
 import 'section_scaffold.dart';
+import '../../../../core/utils/platform_keys.dart';
 
 /// Iluminación — deck narrativo (overview → estilos → refs → localizaciones).
 class LightingSection extends ConsumerStatefulWidget {
@@ -1196,7 +1197,7 @@ class _SetupCardState extends ConsumerState<_SetupCard> {
               projectId: widget.projectId,
               sectionId: BibleSectionId.lighting,
               bibleId: widget.bibleId,
-              hint: '⌘V — ref del setup',
+              hint: '${modKey}V — ref del setup',
               child: AspectRatio(
                 aspectRatio: 16 / 5,
                 child: InkWell(

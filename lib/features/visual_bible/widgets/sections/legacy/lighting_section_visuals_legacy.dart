@@ -21,6 +21,7 @@ import '../../../bible_paste_helpers.dart';
 import '../../../moodboard_helpers.dart';
 import '../../../visual_bible_model.dart';
 import '../../bible_moodboard_image_target.dart';
+import '../../../../../core/utils/platform_keys.dart';
 
 // ─── Hero ────────────────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ class _HeroBanner extends ConsumerWidget {
         projectId: projectId,
         sectionId: BibleSectionId.lighting,
         bibleId: bibleId,
-        hint: 'Clic aquí → ⌘V para pegar hero de iluminación',
+        hint: 'Clic aquí → ${modKey}V para pegar hero de iluminación',
         child: SizedBox(
           height: 280,
           child: Stack(
@@ -649,7 +650,7 @@ class _LightingReferencesBlock extends ConsumerWidget {
                     projectId: projectId,
                     sectionId: BibleSectionId.lighting,
                     bibleId: bibleId,
-                    hint: '⌘V — ref del set',
+                    hint: '${modKey}V — ref del set',
                     child: InkWell(
                       onTap: pasteToPlan,
                       child: Container(

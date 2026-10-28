@@ -1,6 +1,5 @@
 import '../../../core/database/app_database.dart';
 import '../../../core/database/dao/visual_bible_dao.dart';
-import '../../../core/templates/user_template_service.dart';
 import '../export/bible_section_export_reader.dart';
 import '../moodboard_reference_meta.dart';
 import '../visual_bible_model.dart';
@@ -40,12 +39,13 @@ class VisualBibleRepository {
   bootstrap(int projectId) async {
     final hadBible = await _dao.getForProject(projectId) != null;
     var bible = await _dao.ensureForProject(projectId);
-    if (!hadBible) {
-      await UserTemplateService.maybeApplyBibleTemplateOnCreate(
-        db: _dao.database,
-        projectId: projectId,
-        bibleId: bible.id,
-      );
+    // Por ahora hay una sola biblia: toda biblia nueva lleva la estructura
+    // estándar de IRIS. Ni se pregunta cómo empezar (plantilla, desde cero o
+    // explorar) ni se aplica la plantilla guardada «para proyectos nuevos»
+    // (UserTemplateService.maybeApplyBibleTemplateOnCreate), que dejaba
+    // pantallas de prueba en proyectos nuevos.
+    if (!bible.structureInitialized && bible.engineVersion != 'v2') {
+      await initializeStandard(bible.id);
       bible = (await _dao.getForProject(projectId)) ?? bible;
     }
     final project = await _dao.getProject(projectId);
@@ -55,6 +55,13 @@ class VisualBibleRepository {
       created: !hadBible,
       needsOnboarding: !bible.structureInitialized,
     );
+  }
+
+  /// Estructura estándar de IRIS (todas las pantallas built-in). Si la
+  /// biblia ya tiene pantallas, solo la marca como iniciada.
+  Future<void> initializeStandard(int bibleId) async {
+    await _dao.database.ensureBibleSectionLayout(bibleId);
+    await _dao.database.initializeEmptyBible(bibleId);
   }
 
   Future<void> initializeEmpty(int bibleId) =>

@@ -13,6 +13,7 @@ import '../../../../core/widgets/app_snackbar.dart';
 import '../../bible_paste_helpers.dart';
 import '../../widgets/moodboard_drag.dart';
 import '../model/bible_image_content.dart';
+import '../../../../core/utils/platform_keys.dart';
 
 /// Entrada universal de imagen para Biblia (legacy + v2).
 ///
@@ -22,7 +23,8 @@ class UniversalBibleImageInput extends StatefulWidget {
   final BibleImageContent? value;
   final ValueChanged<BibleImageContent> onChanged;
   final VoidCallback? onClear;
-  final String hint;
+  /// Texto de ayuda; si falta, el de pegar con la tecla de este sistema.
+  final String? hint;
   final double minHeight;
   final bool autofocusForPaste;
   final bool showCropControls;
@@ -33,7 +35,7 @@ class UniversalBibleImageInput extends StatefulWidget {
     required this.onChanged,
     this.value,
     this.onClear,
-    this.hint = 'Arrastra, pega (⌘V) o elige una imagen',
+    this.hint,
     this.minHeight = 120,
     this.autofocusForPaste = false,
     this.showCropControls = true,
@@ -105,7 +107,7 @@ class _UniversalBibleImageInputState extends State<UniversalBibleImageInput> {
   }
 
   String _pasteError(ClipboardImageReadStatus status) => switch (status) {
-    ClipboardImageReadStatus.noImage => 'Copia una imagen y pulsa ⌘V.',
+    ClipboardImageReadStatus.noImage => 'Copia una imagen y pulsa ${modKey}V.',
     ClipboardImageReadStatus.pluginUnavailable =>
       'Reinicia la app para activar el pegado.',
     ClipboardImageReadStatus.invalidUrl =>
@@ -210,7 +212,9 @@ class _UniversalBibleImageInputState extends State<UniversalBibleImageInput> {
                     onFitChanged: _updateFit,
                   )
                 : _EmptyState(
-                    hint: widget.hint,
+                    hint:
+                        widget.hint ??
+                        'Arrastra, pega (${modKey}V) o elige una imagen',
                     palette: palette,
                     onPick: _pickFile,
                     onPaste: _paste,

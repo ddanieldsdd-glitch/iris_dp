@@ -1,13 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:pdf_render_maintained/pdf_render_maintained.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 
-/// Visor PDF del guion (pdf_render_maintained — SPM en macOS).
+/// Visor PDF del guion (pdfrx: PDFium en Mac, iPad y Windows).
 class ScriptPdfViewer extends StatelessWidget {
   final String path;
 
@@ -29,11 +29,11 @@ class ScriptPdfViewer extends StatelessWidget {
 
     return ColoredBox(
       color: const Color(0xFF525659),
-      child: PdfViewer.openFile(
+      child: PdfViewer.file(
         path,
         params: const PdfViewerParams(
-          padding: AppSpacing.md,
-          minScale: 1.0,
+          margin: AppSpacing.md,
+          backgroundColor: Color(0xFF525659),
         ),
       ),
     );

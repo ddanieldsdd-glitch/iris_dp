@@ -44,6 +44,7 @@ import '../../moodboard_helpers.dart';
 import '../../services/lighting_narrative_cards_service.dart';
 import '../../../../shared/visual_bible/bible_section_ids.dart';
 import '../bible_screen_hero.dart';
+import '../../../../core/utils/platform_keys.dart';
 
 /// Localización — layout Stitch (hero + solar + atmósfera + staging).
 /// Fotos que se pueden soltar en la ficha (las del iPhone llegan en HEIC).
@@ -1209,7 +1210,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: BibleTargetZone(
-              hint: 'Clic aquí y ⌘V para pegar la foto principal',
+              hint: 'Clic aquí y ${modKey}V para pegar la foto principal',
               minHeight: 0,
               onPaste: _pastePhoto,
               onMoodboardDropped: _dropMoodboardPhoto,
@@ -1276,7 +1277,7 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              '⌘V',
+                              '${modKey}V',
                               style: AppTypography.mono(
                                 palette,
                               ).copyWith(fontSize: 10, color: Colors.white70),
@@ -2383,7 +2384,7 @@ class _RefsGallery extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           BibleTargetZone(
-            hint: '⌘V para pegar foto de $locationName',
+            hint: '${modKey}V para pegar foto de $locationName',
             minHeight: 100,
             onPaste: onPaste,
             child: images.isEmpty

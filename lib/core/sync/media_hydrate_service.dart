@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:path/path.dart' as p;
 
 import '../database/app_database.dart';
@@ -20,9 +21,16 @@ class MediaHydrateService {
 
   MediaHydrateService(this._db, this._cloud);
 
-  Future<int> hydrateProject(int projectId, String projectCloudId) async {
+  /// [onProgress] recibe cuántas ha bajado, cuántas ha mirado y el total,
+  /// tras cada imagen (para enseñar que se están bajando).
+  Future<int> hydrateProject(
+    int projectId,
+    String projectCloudId, {
+    void Function(int downloaded, int checked, int total)? onProgress,
+  }) async {
     final assets = await _cloud.fetchProjectAssets(projectCloudId);
     var downloaded = 0;
+    var checked = 0;
 
     final strokes = <Map<String, dynamic>>[];
     for (final asset in assets) {
@@ -32,7 +40,10 @@ class MediaHydrateService {
       }
       try {
         if (await _hydrateAsset(projectId, projectCloudId, asset)) {
+          debugPrint('[medios ${DateTime.now().toIso8601String().substring(11, 23)}] '
+              'bajada ${asset['entity_type']} ${asset['entity_key']}');
           downloaded++;
+          onProgress?.call(downloaded, checked + 1, assets.length);
         }
       } catch (e, st) {
         // Un archivo que falle no deja sin bajar el resto.
@@ -42,6 +53,7 @@ class MediaHydrateService {
           context: 'Bajar ${asset['entity_type']} ${asset['entity_key']}',
         );
       }
+      checked++;
     }
 
     // Los trazos, después: van junto a la ruta actual de su imagen, que puede
@@ -147,6 +159,10 @@ class MediaHydrateService {
     final deliveryUrl = asset['delivery_url'] as String?;
     final publicId = asset['public_id'] as String?;
     if (deliveryUrl == null || publicId == null) return false;
+    // Imagen de una fila que aquí no existe (borrada, o fusionada como
+    // duplicada): bajarla no la coloca en ningún sitio y se repetiría en
+    // cada pasada.
+    if (!await _targetExists(projectId, entityType, entityKey)) return false;
 
     final localPath = await _resolveLocalPath(
       projectId: projectId,
@@ -331,6 +347,29 @@ class MediaHydrateService {
       MediaEntityType.projectCover => 'cover',
       _ => 'cloud_cache',
     };
+  }
+
+  /// Si existe aquí la fila a la que va el medio. Los tipos que no se pueden
+  /// comprobar cuentan como que sí.
+  Future<bool> _targetExists(
+    int projectId,
+    String entityType,
+    String entityKey,
+  ) async {
+    if (MediaEntityKeys.uidOf(entityKey) case final uid?) {
+      if (!_uidTables.containsKey(entityType)) return true;
+      return await _rowByUid(projectId, entityType, uid) != null;
+    }
+    if (entityType == MediaEntityType.moodboard ||
+        entityType == MediaEntityType.shotReference) {
+      return await _lookupExistingPath(
+            projectId: projectId,
+            entityType: entityType,
+            entityKey: entityKey,
+          ) !=
+          null;
+    }
+    return true;
   }
 
   Future<String?> _resolveLocalPath({

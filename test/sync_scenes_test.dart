@@ -472,7 +472,7 @@ void main() {
     final copies =
         dir
             .listSync()
-            .map((f) => f.path.split('/').last)
+            .map((f) => f.uri.pathSegments.last)
             .where((n) => n.contains('antes-de-esquema'))
             .toList()
           ..sort();

@@ -9,6 +9,7 @@ import '../../../visual_bible_model.dart';
 import '../../bible_paste_zone.dart';
 import '../../moodboard_drag.dart';
 import 'cover_picker_from_matched.dart';
+import '../../../../../core/utils/platform_keys.dart';
 
 /// Cover del contenedor con pie de foto editable y altura acotada.
 class ContainerHeroWithCaption extends StatelessWidget {
@@ -86,7 +87,7 @@ class ContainerHeroWithCaption extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         BibleTargetZone(
-          hint: '⌘V o arrastra cover',
+          hint: '${modKey}V o arrastra cover',
           minHeight: 160,
           onPaste: (payload) async {
             await onPasteCover(payload);
@@ -115,7 +116,7 @@ class ContainerHeroWithCaption extends StatelessWidget {
                           color: Colors.white.withValues(alpha: 0.04),
                           child: Center(
                             child: Text(
-                              'Portada — ⌘V o elige del pool',
+                              'Portada — ${modKey}V o elige del pool',
                               style: AppTypography.bodyMedium(palette).copyWith(
                                 color: palette.textTertiary,
                               ),

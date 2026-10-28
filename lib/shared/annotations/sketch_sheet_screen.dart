@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
-import 'package:pdf_render_maintained/pdf_render_maintained.dart';
+import 'package:pdfrx/pdfrx.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -24,6 +24,7 @@ import 'live_drawing_link.dart';
 import 'sheet/brush_studio.dart';
 import 'sheet/sheet_guides.dart';
 import 'sheet/sheet_panels.dart';
+import '../../core/utils/platform_keys.dart';
 
 /// Para qué es el folio: cambia el estilo, las capas y las guías de inicio.
 enum SketchSheetPurpose {
@@ -470,9 +471,10 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
 
   /// Primera página de un PDF como PNG (para usarla de papel).
   static Future<Uint8List?> _pdfFirstPage(String path) async {
+    await pdfrxFlutterInitialize();
     final doc = await PdfDocument.openFile(path);
     try {
-      final page = await doc.getPage(1);
+      final page = doc.pages.first;
       final scale = 2048 / math.max(page.width, page.height);
       final w = (page.width * scale).round();
       final h = (page.height * scale).round();
@@ -481,8 +483,10 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
         height: h,
         fullWidth: w.toDouble(),
         fullHeight: h.toDouble(),
+        backgroundColor: 0xFFFFFFFF,
       );
-      final image = await rendered.createImageDetached();
+      if (rendered == null) return null;
+      final image = await rendered.createImage();
       rendered.dispose();
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       image.dispose();
@@ -1442,13 +1446,13 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
           ),
           const SizedBox(height: 6),
           IconButton(
-            tooltip: 'Deshacer (⌘Z)',
+            tooltip: 'Deshacer (${modKey}Z)',
             color: Colors.white70,
             onPressed: _controller.canUndo ? _controller.undo : null,
             icon: const Icon(Icons.undo, size: 20),
           ),
           IconButton(
-            tooltip: 'Rehacer (⇧⌘Z)',
+            tooltip: 'Rehacer (⇧${modKey}Z)',
             color: Colors.white70,
             onPressed: _controller.canRedo ? _controller.redo : null,
             icon: const Icon(Icons.redo, size: 20),

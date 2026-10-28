@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNull, isNotNull;
@@ -256,8 +257,9 @@ void main() {
             sceneId: sceneId,
             projectId: projectId,
             number: 1,
+            // jsonEncode: en Windows la ruta lleva «\», que hay que escapar.
             cameraPlanImagePath: Value(
-              '["/Users/otro/falta.png","setup:12","$here"]',
+              jsonEncode(['/Users/otro/falta.png', 'setup:12', here]),
             ),
           ),
         );
@@ -267,6 +269,6 @@ void main() {
     final shot = await (db.select(
       db.shots,
     )..where((s) => s.projectId.equals(target))).getSingle();
-    expect(shot.cameraPlanImagePath, '["","setup:12","$here"]');
+    expect(shot.cameraPlanImagePath, jsonEncode(['', 'setup:12', here]));
   });
 }

@@ -76,6 +76,7 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
       data: (p) => p.isProcessing,
       orElse: () => false,
     );
+    final downloading = ref.watch(mediaDownloadProgressProvider);
 
     return FutureBuilder<DateTime?>(
       future: CloudSessionStore.lastSyncAt(),
@@ -107,10 +108,27 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
         if (mediaOff) {
           tooltip += ' · imágenes desactivadas en esta versión';
         }
+        if (downloading != null) {
+          tooltip += ' · ${downloading.message}';
+        }
 
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (downloading != null || mediaPending > 0)
+              Container(
+                constraints: const BoxConstraints(maxWidth: 220),
+                padding: const EdgeInsets.only(right: 2),
+                child: Text(
+                  downloading != null
+                      ? '↓ ${downloading.downloaded} img · ${downloading.projectName}'
+                      : '↑ $mediaPending img',
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.caption(context.palette).copyWith(
+                    color: context.palette.textSecondary,
+                  ),
+                ),
+              ),
             PopupMenuButton<_CloudAction>(
               tooltip: tooltip,
               position: PopupMenuPosition.under,
@@ -150,7 +168,7 @@ class _SyncStatusIndicatorState extends ConsumerState<SyncStatusIndicator> {
                   isLabelVisible: unseen > 0,
                   label: Text('$unseen'),
                   backgroundColor: context.palette.warning,
-                  child: _syncing || mediaUploading
+                  child: _syncing || mediaUploading || downloading != null
                       ? SizedBox(
                           width: 20,
                           height: 20,

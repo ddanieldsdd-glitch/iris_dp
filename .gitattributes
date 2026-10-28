@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Windows: PowerShell, .bat e Inno Setup con CRLF; los .sh siempre con LF
+# (también al clonar en el PC).
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.iss text eol=crlf
+*.sh text eol=lf

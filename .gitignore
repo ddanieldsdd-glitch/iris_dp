@@ -51,3 +51,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .venv_xlsx/
+
+# Lleva las claves de .env en los --dart-define.
+.vscode/launch.json
