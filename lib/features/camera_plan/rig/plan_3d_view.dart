@@ -13,8 +13,10 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
+import '../light/ambient.dart';
 import '../light/plan_light.dart';
 import '../plan_piece_controls.dart';
+import 'light_floor.dart';
 import 'plan_scene3d.dart';
 import 'rig_report.dart';
 
@@ -43,6 +45,9 @@ class Plan3dView extends StatefulWidget {
   final PlanElement? selected;
   final ValueChanged<PlanElement?>? onSelect;
 
+  /// Sol y cielo del esquema de luz, para el sol del 3D y la luz del suelo.
+  final PlanAmbient? ambient;
+
   /// Algo cambiado desde el 3D (movido, apuntado, retocado en el lateral):
   /// la planta lo guarda. Sin él, el 3D solo se mira.
   final Future<void> Function(PlanElement)? onChanged;
@@ -63,6 +68,7 @@ class Plan3dView extends StatefulWidget {
     this.name,
     this.selected,
     this.onSelect,
+    this.ambient,
     this.onChanged,
     this.full = false,
     this.onExpand,
@@ -88,6 +94,14 @@ class _Plan3dViewState extends State<Plan3dView> {
   final _show = {for (final (k, _) in _layers) k: true};
   late PlanElement? _selected = widget.selected;
   String? _status;
+
+  /// La luz calculada pintada en el suelo.
+  bool _floor = false;
+  int _floorRun = 0;
+  bool _floorBusy = false;
+
+  bool _measuring = false;
+  String? _measure;
 
   @override
   void didUpdateWidget(Plan3dView old) {
@@ -119,6 +133,7 @@ class _Plan3dViewState extends State<Plan3dView> {
       widget.elements,
       metersPerUnit: widget.metersPerUnit,
       name: widget.name,
+      ambient: widget.ambient,
     );
     final json = jsonEncode(scene);
     if (json == _sent) return;
@@ -126,6 +141,26 @@ class _Plan3dViewState extends State<Plan3dView> {
     setState(() => _scene = scene);
     await web.evaluateJavascript(source: 'iris.load($json);');
     await _pushSelection();
+    if (_floor) unawaited(_pushFloor());
+  }
+
+  /// Calcula la luz en el suelo aparte y la manda; si entretanto la planta
+  /// ha cambiado, se descarta y vale la siguiente.
+  Future<void> _pushFloor() async {
+    final run = ++_floorRun;
+    if (!_floor) {
+      await _call('iris.floor(null);');
+      return;
+    }
+    setState(() => _floorBusy = true);
+    final floor = await LightFloor.build(
+      widget.elements,
+      metersPerUnit: widget.metersPerUnit,
+      ambient: widget.ambient,
+    );
+    if (!mounted || run != _floorRun) return;
+    setState(() => _floorBusy = false);
+    await _call('iris.floor(${jsonEncode(floor)});');
   }
 
   Future<void> _pushSelection() async {
@@ -175,6 +210,16 @@ class _Plan3dViewState extends State<Plan3dView> {
         }
         if (mounted) setState(() => _selected = hit);
         widget.onSelect?.call(hit);
+      case 'measure':
+        String m(Object? v) =>
+            '${((v as num?) ?? 0).toStringAsFixed(2).replaceAll('.', ',')} m';
+        if (mounted) {
+          setState(
+            () => _measure =
+                '${m(message['d'])} · en planta ${m(message['dxy'])} · '
+                'desnivel ${m(message['dz'])}',
+          );
+        }
       case 'move' || 'aim':
         _applyFrom3d(message);
       case 'view':
@@ -361,6 +406,21 @@ class _Plan3dViewState extends State<Plan3dView> {
               checked: _ortho,
               child: const Text('Ortográfica'),
             ),
+            CheckedPopupMenuItem(
+              value: 'floor',
+              checked: _floor,
+              child: const Text('Luz calculada en el suelo'),
+            ),
+            CheckedPopupMenuItem(
+              value: 'measure',
+              checked: _measuring,
+              child: const Text('Medir (dos toques)'),
+            ),
+            for (final c in _cameras)
+              PopupMenuItem(
+                value: 'cam:${c.$1}',
+                child: Text('Ver por la cámara ${c.$2}'),
+              ),
             const PopupMenuDivider(),
             for (final (key, label) in _layers)
               CheckedPopupMenuItem(
@@ -369,7 +429,7 @@ class _Plan3dViewState extends State<Plan3dView> {
                 child: Text(label),
               ),
           ],
-          onSelected: _toggle,
+          onSelected: (v) => v.startsWith('cam:') ? _setView(v) : _toggle(v),
         ),
         if (RigReport.warnings(widget.elements, widget.metersPerUnit)
             case final list when list.isNotEmpty)
@@ -404,6 +464,12 @@ class _Plan3dViewState extends State<Plan3dView> {
     ),
   );
 
+  /// Cámaras de la escena: id, nombre y objetivo.
+  List<(String, String, String?)> get _cameras => [
+    for (final c in (_scene?['cameras'] as List? ?? const []).cast<Map>())
+      (c['id'] as String, c['name'] as String, c['lens'] as String?),
+  ];
+
   void _toggle(String key) {
     setState(() {
       switch (key) {
@@ -416,6 +482,13 @@ class _Plan3dViewState extends State<Plan3dView> {
         case 'ortho':
           _ortho = !_ortho;
           _set({'ortho': _ortho});
+        case 'floor':
+          _floor = !_floor;
+          _pushFloor();
+        case 'measure':
+          _measuring = !_measuring;
+          _measure = null;
+          _set({'measure': _measuring});
         default:
           _show[key] = !_show[key]!;
           _set({
@@ -518,9 +591,47 @@ class _Plan3dViewState extends State<Plan3dView> {
             palette,
           ).copyWith(color: palette.textTertiary),
         ),
+        if (_cameras.isNotEmpty) ...[
+          header('Por la cámara'),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final (id, name, lens) in _cameras)
+                ChoiceChip(
+                  label: Text(lens == null ? name : '$name · $lens'),
+                  selected: _view == 'cam:$id',
+                  onSelected: (_) => _setView('cam:$id'),
+                ),
+            ],
+          ),
+          Text(
+            'Desde la altura del objetivo y con su focal: el marco es lo que '
+            'entra en un 16:9.',
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.textTertiary),
+          ),
+        ],
+        header('Medir'),
+        toggle('Medir con dos toques', _measuring, () => _toggle('measure')),
+        if (_measuring)
+          Text(
+            _measure ?? 'Toca un punto y luego otro: suelo, truss, pared…',
+            style: _measure == null
+                ? AppTypography.caption(
+                    palette,
+                  ).copyWith(color: palette.textTertiary)
+                : AppTypography.mono(palette),
+          ),
         header('Qué se ve'),
         toggle('Cubierta', _roof, () => _toggle('roof')),
         toggle('Conos de luz', _cones, () => _toggle('cones')),
+        toggle(
+          _floorBusy ? 'Luz en el suelo (calculando…)' : 'Luz en el suelo',
+          _floor,
+          () => _toggle('floor'),
+        ),
         for (final (key, label) in _layers)
           toggle(label, _show[key]!, () => _toggle(key)),
         header('En la escena'),
@@ -813,6 +924,7 @@ class Plan3dScreen extends StatefulWidget {
   final PlanElement? selected;
   final ValueChanged<PlanElement?>? onSelect;
   final Future<void> Function(PlanElement)? onChanged;
+  final PlanAmbient? ambient;
 
   const Plan3dScreen({
     super.key,
@@ -822,6 +934,7 @@ class Plan3dScreen extends StatefulWidget {
     this.selected,
     this.onSelect,
     this.onChanged,
+    this.ambient,
   });
 
   static Future<void> show(
@@ -832,6 +945,7 @@ class Plan3dScreen extends StatefulWidget {
     PlanElement? selected,
     ValueChanged<PlanElement?>? onSelect,
     Future<void> Function(PlanElement)? onChanged,
+    PlanAmbient? ambient,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -841,6 +955,7 @@ class Plan3dScreen extends StatefulWidget {
         selected: selected,
         onSelect: onSelect,
         onChanged: onChanged,
+        ambient: ambient,
       ),
     ),
   );
@@ -861,6 +976,7 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       elements: widget.elements,
       metersPerUnit: widget.metersPerUnit,
       name: widget.name,
+      ambient: widget.ambient,
       selected: _selected,
       onSelect: (el) {
         setState(() => _selected = el);

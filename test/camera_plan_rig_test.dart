@@ -7,6 +7,7 @@ import 'package:iris_dp/core/theme/app_theme.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_json.dart';
+import 'package:iris_dp/features/camera_plan/light/ambient.dart';
 import 'package:iris_dp/features/camera_plan/light/light_scene.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
 import 'package:iris_dp/features/camera_plan/light_overrides.dart';
@@ -16,6 +17,7 @@ import 'package:iris_dp/features/camera_plan/plan_opening.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 import 'package:iris_dp/features/camera_plan/rig/catenary.dart';
 import 'package:iris_dp/features/camera_plan/rig/drape_controls.dart';
+import 'package:iris_dp/features/camera_plan/rig/light_floor.dart';
 import 'package:iris_dp/features/camera_plan/rig/hall_builder_sheet.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_drape.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_hall.dart';
@@ -761,5 +763,39 @@ void main() {
     );
     expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
     expect(bytes.length, greaterThan(20000));
+  });
+
+  group('ver como en rodaje', () {
+    test('el sol y la óptica de la cámara llegan a la escena', () {
+      final cam = PlanElement(
+        id: 0,
+        type: ElementType.camera,
+        position: Offset.zero,
+        lens: '35mm',
+      );
+      final scene = PlanScene3d.build(
+        [cam],
+        metersPerUnit: mpu,
+        ambient: const PlanAmbient(day: true, sunAzimuth: 90, sunElevation: 30),
+      );
+      final c = (scene['cameras'] as List).single as Map;
+      // 35 mm en Super 35: unos 39°.
+      expect(c['hfovDeg'] as double, closeTo(39.1, 0.3));
+      expect(c['z'], 1.5);
+      final d = ((scene['sun'] as Map)['dir'] as List).cast<double>();
+      // Azimut 90: hacia la derecha, a 30° de altura.
+      expect(d[0], closeTo(0.866, 0.01));
+      expect(d[2], closeTo(0.5, 0.01));
+    });
+
+    test('la luz calculada sale como imagen para el suelo', () {
+      final l = light(const Offset(300, 300))..props['intensity'] = 100;
+      final floor = LightFloor.compute([l], metersPerUnit: mpu);
+      expect(floor, isNotNull);
+      expect((floor!['png'] as String).length, greaterThan(100));
+      expect(floor['x1'] as double, greaterThan(floor['x0'] as double));
+      expect(floor['yTop'] as double, greaterThan(floor['yBottom'] as double));
+      expect(LightFloor.compute(const [], metersPerUnit: mpu), isNull);
+    });
   });
 }

@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
+import '../light/ambient.dart';
 import '../light/plan_light.dart';
 import '../light_beam.dart';
 import '../light_overrides.dart';
@@ -36,6 +37,9 @@ class PlanScene3d {
     List<PlanElement> elements, {
     required double metersPerUnit,
     String? name,
+
+    /// Sol y cielo del esquema de luz, si lo hay.
+    PlanAmbient? ambient,
   }) {
     final mpu = metersPerUnit;
     List<double> xy(Offset p) => [_r(p.dx * mpu), _r(-p.dy * mpu)];
@@ -58,6 +62,7 @@ class PlanScene3d {
       'version': version,
       'units': 'm',
       'name': ?name,
+      if (ambient != null && ambient.hasSun) 'sun': _sun(ambient),
       'halls': [
         for (final MapEntry(key: uid, value: (el, r)) in halls.entries)
           _hall(uid, el, r, mpu),
@@ -141,9 +146,21 @@ class PlanScene3d {
           cameras.add({
             'id': uid,
             'name': el.cameraLabel,
+            'lens': ?el.lens,
             'at': xy(el.position),
             'z0': level,
+            // Altura del objetivo: la guardada o la de cámara en mano.
+            'z': _r((el.props[PlanLight.heightKey] as num?)?.toDouble() ?? 1.5),
             'dir': [_r(math.sin(rad)), _r(math.cos(rad))],
+            'hfovDeg': _r(
+              cameraFovDegrees(
+                    el.lens,
+                    sensorWidthMm:
+                        (el.props['sensorWidthMm'] as num?)?.toDouble() ??
+                        24.89,
+                  ) ??
+                  40,
+            ),
           });
         default:
           break;
@@ -232,6 +249,25 @@ class PlanScene3d {
       final tilt = math.atan2(horizontal, math.max(drop, 0.01)) * 180 / math.pi;
       light.props[PlanLight.tiltKey] = (tilt * 2).round() / 2;
     }
+  }
+
+  /// El sol: hacia dónde está (vector unitario con los ejes del visor),
+  /// cuánta luz da y de qué color.
+  static Map<String, dynamic> _sun(PlanAmbient a) {
+    final az = a.sunAzimuth * math.pi / 180;
+    final el = a.sunElevation.clamp(2.0, 89.0) * math.pi / 180;
+    // En el lienzo el sol está hacia (sin az, −cos az); en el visor la y va
+    // al revés.
+    return {
+      'dir': [
+        _r(math.sin(az) * math.cos(el)),
+        _r(math.cos(az) * math.cos(el)),
+        _r(math.sin(el)),
+      ],
+      'lux': a.condition.sunLux,
+      'cct': a.condition.sunCct,
+      'skyLux': a.skyLux,
+    };
   }
 
   static double _r(double v) => (v * 1000).roundToDouble() / 1000;
