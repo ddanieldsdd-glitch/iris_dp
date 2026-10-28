@@ -12,6 +12,7 @@ import 'media_entity_types.dart';
 import 'media_file_stamp.dart';
 import 'media_slots.dart';
 import 'primary_reference_repair.dart' as repair_refs;
+import 'unreal_thumb_store.dart';
 import '../utils/error_log.dart';
 
 /// Descarga imágenes remotas y actualiza rutas locales en Drift.
@@ -36,6 +37,21 @@ class MediaHydrateService {
     for (final asset in assets) {
       if (asset['entity_type'] == MediaEntityType.sketchStrokes) {
         strokes.add(asset);
+        continue;
+      }
+      if (asset['entity_type'] == MediaEntityType.unrealThumb) {
+        try {
+          if (await _hydrateUnrealThumb(projectId, projectCloudId, asset)) {
+            downloaded++;
+          }
+        } catch (e, st) {
+          await ErrorLog.record(
+            e,
+            st,
+            context: 'Bajar miniatura de Unreal ${asset['entity_key']}',
+          );
+        }
+        checked++;
         continue;
       }
       try {
@@ -347,6 +363,31 @@ class MediaHydrateService {
       MediaEntityType.projectCover => 'cover',
       _ => 'cloud_cache',
     };
+  }
+
+  /// Miniatura de un asset de Unreal: no va a ninguna fila, sino a su archivo
+  /// por clave (`UnrealThumbStore`). Si ya está aquí, no se baja.
+  Future<bool> _hydrateUnrealThumb(
+    int projectId,
+    String projectCloudId,
+    Map<String, dynamic> asset,
+  ) async {
+    final key = asset['entity_key'] as String?;
+    final storagePath = asset['storage_path'] as String?;
+    if (key == null || storagePath == null || !UnrealThumbStore.isKey(key)) {
+      return false;
+    }
+    if (await UnrealThumbStore.resolve(projectId, key) != null) return false;
+    final path = await _cloud.downloadStorageFile(
+      localProjectId: projectId,
+      storagePath: storagePath,
+      subfolder: UnrealThumbStore.subfolder,
+      fileName: UnrealThumbStore.fileName(key),
+    );
+    if (path == null) return false;
+    await _markDownloaded(projectId, projectCloudId, asset, path);
+    UnrealThumbStore.notifyArrived(key);
+    return true;
   }
 
   /// Si existe aquí la fila a la que va el medio. Los tipos que no se pueden
