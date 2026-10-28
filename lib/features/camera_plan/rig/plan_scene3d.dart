@@ -163,6 +163,74 @@ class PlanScene3d {
   static String idOf(PlanElement el, int index) =>
       LightOverrides.uidOf(el) ?? 'n$index';
 
+  // ── Del 3D a la planta ──────────────────────────────────────────────────
+
+  /// Un desplazamiento del 3D (metros, y al revés que el lienzo) en
+  /// unidades del lienzo.
+  static Offset canvasDelta(double dx, double dy, double metersPerUnit) =>
+      Offset(dx / metersPerUnit, -dy / metersPerUnit);
+
+  /// Mueve un elemento lo que se ha arrastrado en el 3D. Un motor o una
+  /// torre se quedan en su truss: se deslizan a lo largo de él. Devuelve si
+  /// se ha movido algo.
+  static bool moveBy(
+    PlanElement el,
+    double dx,
+    double dy,
+    List<PlanElement> elements,
+    double metersPerUnit,
+  ) {
+    if (PlanSegment.isSegment(el)) return false;
+    final target = el.position + canvasDelta(dx, dy, metersPerUnit);
+    if (PlanRigPoint.isRigPoint(el)) {
+      final uid = el.props[PlanRigPoint.trussKey];
+      final truss = elements
+          .where((t) => PlanTruss.isTruss(t) && LightOverrides.uidOf(t) == uid)
+          .firstOrNull;
+      if (truss != null) {
+        final hit = TrussMagnet.nearest(target, [
+          truss,
+        ], within: double.infinity)!;
+        el
+          ..position = hit.point
+          ..props[PlanRigPoint.alongKey] =
+              hit.t * PlanTruss.length(truss) * metersPerUnit;
+        return true;
+      }
+    }
+    el.position = target;
+    if (PlanTruss.isTruss(el)) return true;
+    el.pathPoints = [
+      for (final p in el.pathPoints) p + canvasDelta(dx, dy, metersPerUnit),
+    ];
+    return true;
+  }
+
+  /// Apunta una luz a un punto del 3D (metros): su giro en planta y, si
+  /// cuelga, su inclinación desde la vertical.
+  static void aimAt(
+    PlanElement light,
+    double x,
+    double y,
+    double z,
+    double metersPerUnit,
+  ) {
+    final px = light.position.dx * metersPerUnit;
+    final py = -light.position.dy * metersPerUnit;
+    final hx = x - px, hy = y - py;
+    final horizontal = math.sqrt(hx * hx + hy * hy);
+    if (horizontal > 0.01) {
+      // En el visor el eje del haz es (sin r, cos r).
+      final deg = math.atan2(hx, hy) * 180 / math.pi;
+      light.rotation = (deg % 360 + 360) % 360;
+    }
+    if (PlanLight.isOverhead(light)) {
+      final drop = PlanLevel.of(light) + PlanLight.heightOf(light) - z;
+      final tilt = math.atan2(horizontal, math.max(drop, 0.01)) * 180 / math.pi;
+      light.props[PlanLight.tiltKey] = (tilt * 2).round() / 2;
+    }
+  }
+
   static double _r(double v) => (v * 1000).roundToDouble() / 1000;
 
   static Map<String, dynamic> _hall(
