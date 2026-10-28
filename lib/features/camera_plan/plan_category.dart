@@ -60,6 +60,10 @@ enum PlanCategory {
     };
   }
 
+  /// Si el elemento tiene un asset de Unreal asignado (distintivo «UE»).
+  static bool hasUnrealAsset(PlanElement el) =>
+      el.props['unrealAsset'] is String || el.props['unreal'] is Map;
+
   /// Colores de todas, para que el visor 3D use los mismos.
   static Map<String, String> get palette => {
     for (final c in values) c.name: c.hex,

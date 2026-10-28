@@ -589,7 +589,13 @@
   // ── Etiquetas ────────────────────────────────────────────────────────
   // Un cartel con el nombre, siempre de cara a la cámara y por encima de
   // lo demás. Con «Nombres» se ven todos; si no, solo el del seleccionado.
+  // Alto de una etiqueta en pantalla, en píxeles: igual de cerca que de
+  // lejos, también en una nave de 40 m vista entera.
+  const LABEL_PX = 22;
+  const LABEL_MAX = 32;
+
   function makeLabel(text, cat) {
+    if (text.length > LABEL_MAX) text = text.slice(0, LABEL_MAX - 1).trimEnd() + '…';
     const c = document.createElement('canvas');
     const g = c.getContext('2d');
     const font = '600 30px -apple-system, system-ui, Segoe UI, sans-serif';
@@ -612,11 +618,22 @@
     g.fillText(text, 20, 27);
     const tx = new THREE.CanvasTexture(c);
     tx.encoding = THREE.sRGBEncoding;
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, depthTest: false, transparent: true }));
-    const height = 0.32;
-    sprite.scale.set(height * w / 52, height, 1);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, depthTest: false, transparent: true, sizeAttenuation: false }));
+    sprite.userData.aspect = w / 52;
     sprite.renderOrder = 10;
     return sprite;
+  }
+
+  // Sin atenuación, el tamaño del cartel va en fracción de la vista: se
+  // recalcula con la cámara (perspectiva u ortográfica) y la ventana.
+  function scaleLabels() {
+    if (!labels.length) return;
+    const { h } = size();
+    const view = cam.isPerspectiveCamera
+      ? 2 * Math.tan((cam.fov * Math.PI / 180) / 2)
+      : (cam.top - cam.bottom) / cam.zoom;
+    const s = LABEL_PX / Math.max(h, 1) * view;
+    for (const l of labels) if (l.visible) l.scale.set(s * l.userData.aspect, s, 1);
   }
 
   function addLabel(id, name, cat, pos) {
@@ -1083,6 +1100,7 @@
     if (anim) anim(now || performance.now());
     controls.update();
     if (selectedBox) selectedBox.update();
+    scaleLabels();
     const { w, h } = size();
     renderer.setViewport(0, 0, w, h);
     renderer.setScissorTest(false);

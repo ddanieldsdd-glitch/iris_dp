@@ -80,6 +80,7 @@ import 'plan_prefs.dart';
 import 'rig/hall_builder_sheet.dart';
 import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
+import 'plan_outliner.dart';
 import 'rig/plan_3d_view.dart';
 import '../../core/utils/shot_reference_import.dart';
 import '../unreal_link/unreal_stage_launcher.dart';
@@ -321,6 +322,74 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// Rótulos de equipo y leyenda, como en una hoja de luces.
   bool _gearLabels = false;
+
+  // Reconocer cada elemento (F6.20 A3–A4): se recuerdan entre sesiones.
+  static const _colorByTypeKey = PrefKey<bool>('plan.colorByType', false);
+  static const _namesKey = PrefKey<bool>('plan.showNames', false);
+  late bool _colorByType = AppPrefs.instance.get(_colorByTypeKey);
+  late bool _showNames = AppPrefs.instance.get(_namesKey);
+
+  /// La lista de elementos, junto a la planta.
+  bool _showOutliner = false;
+
+  /// Elementos ocultos desde la lista (solo en esta sesión).
+  final Set<PlanElement> _hiddenElements = {};
+
+  void _setViewPref(PrefKey<bool> key, bool value) => unawaited(
+    AppPrefs.instance.setIn(key, const SettingsScope.global(), value),
+  );
+
+  void _toggleHidden(PlanElement el) => setState(() {
+    if (!_hiddenElements.remove(el)) {
+      _hiddenElements.add(el);
+      if (identical(_selected, el)) _selected = null;
+      _multi.remove(el);
+    }
+  });
+
+  Widget _outliner({VoidCallback? onClose}) => PlanOutliner(
+    elements: _elements,
+    selected: _selected,
+    hidden: _hiddenElements,
+    onSelect: (el) {
+      _selectFrom3d(el);
+      if (onClose != null) onClose();
+    },
+    onToggleHidden: _toggleHidden,
+    onClose: onClose,
+  );
+
+  /// En el Mac (ancho), la lista va acoplada junto a la planta; en el iPad
+  /// en vertical, en una hoja desde abajo.
+  void _toggleOutliner() {
+    if (_wide) {
+      setState(() => _showOutliner = !_showOutliner);
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheet) => SizedBox(
+        height: MediaQuery.sizeOf(sheet).height * 0.75,
+        child: StatefulBuilder(
+          builder: (_, refresh) => PlanOutliner(
+            elements: _elements,
+            selected: _selected,
+            hidden: _hiddenElements,
+            onSelect: (el) {
+              Navigator.of(sheet).pop();
+              _selectFrom3d(el);
+            },
+            onToggleHidden: (el) {
+              _toggleHidden(el);
+              refresh(() {});
+            },
+            onClose: () => Navigator.of(sheet).pop(),
+          ),
+        ),
+      ),
+    );
+  }
 
   /// Lecturas de diafragma bajo cada actor.
   late bool _showReadings = _planPrefs.readings;
@@ -798,6 +867,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _elements
         ..clear()
         ..addAll(elements);
+      _hiddenElements.clear();
       _uidsToSave = unsaved;
       _selected = null;
       _selectedPathIndex = null;
@@ -1177,9 +1247,22 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   List<PlanElement> _layerElements(PlanLayer layer) =>
       _elements.where((e) => e.layer == layer).toList();
 
-  List<PlanElement> get _visibleElements => _hiddenLayers.isEmpty
+  /// Lo de las capas que se ven, también lo oculto con el ojo de la lista:
+  /// para el material y las cargas de rigging, que no pueden olvidarlo.
+  List<PlanElement> get _layerElementsShown => _hiddenLayers.isEmpty
       ? _elements
       : _elements.where((e) => !_hiddenLayers.contains(e.layer)).toList();
+
+  List<PlanElement> get _visibleElements =>
+      _hiddenLayers.isEmpty && _hiddenElements.isEmpty
+      ? _elements
+      : _elements
+            .where(
+              (e) =>
+                  !_hiddenLayers.contains(e.layer) &&
+                  !_hiddenElements.contains(e),
+            )
+            .toList();
 
   /// Capas de una planta de antes cuyos elementos acaban de recibir
   /// identificador al cargarla: se guardan una vez ([_saveNewUids]).
@@ -2626,7 +2709,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _elements.where(
       (e) => e.layer == PlanLayer.light || e.layer == PlanLayer.shot,
     ),
-    rigging: RigReport.rigging(_visibleElements, _metersPerUnit),
+    // Lo oculto con el ojo sigue colgado: cuenta en la carga.
+    rigging: RigReport.rigging(_layerElementsShown, _metersPerUnit),
   );
 
   /// Tocar una línea de la lista de material selecciona en la planta lo
@@ -4541,6 +4625,38 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             onPressed: () => setState(() => _gearLabels = !_gearLabels),
           ),
           IconButton(
+            tooltip: _colorByType
+                ? 'Quitar los colores por tipo'
+                : 'Colorear por tipo, con leyenda',
+            icon: Icon(
+              Icons.palette_outlined,
+              color: _colorByType ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: () {
+              setState(() => _colorByType = !_colorByType);
+              _setViewPref(_colorByTypeKey, _colorByType);
+            },
+          ),
+          IconButton(
+            tooltip: _showNames ? 'Quitar los nombres' : 'Nombres',
+            icon: Icon(
+              Icons.label_outline,
+              color: _showNames ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: () {
+              setState(() => _showNames = !_showNames);
+              _setViewPref(_namesKey, _showNames);
+            },
+          ),
+          IconButton(
+            tooltip: 'Lista de elementos',
+            icon: Icon(
+              Icons.format_list_bulleted,
+              color: _showOutliner ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: _toggleOutliner,
+          ),
+          IconButton(
             tooltip: _exposureMap
                 ? 'Volver a los haces de luz'
                 : 'Mapa de exposición',
@@ -4958,6 +5074,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                         lightView: _lightView,
                                                         gearLabels:
                                                             _gearLabels,
+                                                        colorByType:
+                                                            _colorByType,
+                                                        showNames: _showNames,
                                                         selectedElement:
                                                             _selected,
                                                         selectedPathIndex:
@@ -5017,6 +5136,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 },
                               ),
                             ),
+                            if (_wide && _showOutliner) ...[
+                              Container(width: 1, color: palette.border),
+                              SizedBox(
+                                width: 300,
+                                child: _outliner(
+                                  onClose: () =>
+                                      setState(() => _showOutliner = false),
+                                ),
+                              ),
+                            ],
                             if (_wide && _show3d) ...[
                               // El borde se arrastra para ensanchar el 3D.
                               MouseRegion(
