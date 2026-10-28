@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../core/sync/unreal_thumb_store.dart';
 import '../camera_plan/camera_plan_element_model.dart';
@@ -94,7 +95,7 @@ class UnrealThumbs extends ChangeNotifier {
       final bytes = await File(path).readAsBytes();
       final codec = await ui.instantiateImageCodec(bytes);
       final frame = await codec.getNextFrame();
-      _images[key]?.dispose();
+      _disposeLater(_images[key]);
       _images[key] = frame.image;
       _files[key] = path;
       notifyListeners();
@@ -108,8 +109,17 @@ class UnrealThumbs extends ChangeNotifier {
   void _arrived(String key) {
     // Ha llegado (o se ha vuelto a renderizar): se carga de nuevo.
     _missing.remove(key);
-    _images.remove(key)?.dispose();
+    _disposeLater(_images.remove(key));
     _files.remove(key);
     notifyListeners();
+  }
+
+  /// La imagen sustituida puede estar aún en el fotograma que se pinta (por
+  /// ejemplo, si se rehace en Unreal mientras se arrastra): se libera
+  /// después.
+  static void _disposeLater(ui.Image? old) {
+    if (old == null) return;
+    SchedulerBinding.instance.addPostFrameCallback((_) => old.dispose());
+    SchedulerBinding.instance.scheduleFrame();
   }
 }
