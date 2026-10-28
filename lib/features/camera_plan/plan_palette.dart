@@ -68,6 +68,9 @@ class PlanPalette extends StatelessWidget {
   final ValueChanged<String>? onQuickAddLight;
   final ValueChanged<ArchitectureType> onAddArchitecture;
 
+  /// Constructor de nave: nueva, o la de lo seleccionado.
+  final VoidCallback? onAddHall;
+
   /// Dónde van paredes y props. `null` si no hay elección.
   final bool? wallsToEnvironment;
   final ValueChanged<bool>? onWallsToEnvironment;
@@ -88,6 +91,7 @@ class PlanPalette extends StatelessWidget {
     this.catalogLights = const [],
     this.onQuickAddLight,
     required this.onAddArchitecture,
+    this.onAddHall,
     this.wallsToEnvironment,
     this.onWallsToEnvironment,
   });
@@ -219,6 +223,14 @@ class PlanPalette extends StatelessWidget {
               ),
             ),
           grid([
+            if (onAddHall != null)
+              _PaletteButton(
+                icon: const Icon(Icons.warehouse_outlined, size: 16),
+                label: 'Nave',
+                tooltip:
+                    'Constructor de nave: medidas, cubierta, pilares y truss',
+                onTap: onAddHall!,
+              ),
             // La pared se dibuja punto a punto con su herramienta: la pieza
             // suelta de tamaño fijo ya no se ofrece.
             for (final type in ArchitectureType.values)

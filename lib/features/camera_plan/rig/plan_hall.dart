@@ -275,6 +275,34 @@ class HallRecipe {
 
   HallEdge edge(int i) => i < edges.length ? edges[i] : const HallEdge();
 
+  /// Parte el lado `i` en dos por su centro: una esquina más que mover.
+  HallRecipe splitEdge(int i) {
+    final mid = edgePoint(i, 0.5);
+    final e = edge(i).copyWith(bulgeM: 0);
+    return copyWith(
+      outline: [...outline]..insert(i + 1, mid),
+      edges: [
+        for (var k = 0; k < outline.length; k++) ...[
+          if (k == i) ...[e, e] else edge(k),
+        ],
+      ],
+    );
+  }
+
+  /// Quita la esquina `i`: sus dos lados se unen en uno, del tipo del
+  /// primero.
+  HallRecipe removeVertex(int i) {
+    if (outline.length <= 3) return this;
+    final prev = (i - 1 + outline.length) % outline.length;
+    return copyWith(
+      outline: [...outline]..removeAt(i),
+      edges: [
+        for (var k = 0; k < outline.length; k++)
+          if (k != i) k == prev ? edge(k).copyWith(bulgeM: 0) : edge(k),
+      ],
+    );
+  }
+
   Map<String, dynamic> toJson() => {
     'outline': [
       for (final p in outline) {'x': p.dx, 'y': p.dy},
@@ -444,6 +472,84 @@ class PlanHall {
 
   static String? hallUidOf(PlanElement el) => el.props[hallKey] as String?;
 
+  /// Lado del perímetro del que sale una pared de la nave, o `null`.
+  static int? edgeIndexOf(PlanElement wall) {
+    final hall = hallUidOf(wall), uid = LightOverrides.uidOf(wall);
+    if (hall == null || uid == null || !uid.startsWith('$hall-e')) return null;
+    return int.tryParse(uid.substring(hall.length + 2));
+  }
+
+  /// Lleva a la receta lo que se ha hecho a mano con una pared de la nave
+  /// (mover un extremo, curvarla): el perímetro se edita en la planta.
+  /// Devuelve si la receta ha cambiado; luego hay que [regenerate].
+  static bool syncFromWall(
+    PlanElement hall,
+    PlanElement wall,
+    double metersPerUnit,
+  ) {
+    final recipe = recipeOf(hall);
+    final i = edgeIndexOf(wall);
+    if (recipe == null || i == null || i >= recipe.outline.length) {
+      return false;
+    }
+    Offset m(Offset canvas) => (canvas - hall.position) * metersPerUnit;
+    final outline = [...recipe.outline];
+    final edges = [for (var k = 0; k < outline.length; k++) recipe.edge(k)];
+    outline[i] = m(PlanSegment.start(wall));
+    outline[(i + 1) % outline.length] = m(PlanSegment.end(wall));
+    edges[i] = edges[i].copyWith(
+      bulgeM: PlanSegment.curve(wall) * metersPerUnit,
+    );
+    hall.props[recipeKey] = recipe
+        .copyWith(outline: outline, edges: edges)
+        .toJson();
+    return true;
+  }
+
+  /// Receta a partir de paredes que cierran un recinto (en cualquier
+  /// orden y sentido). Devuelve el origen en el lienzo y la receta, o
+  /// `null` si las paredes no cierran.
+  static (Offset, HallRecipe)? fromWalls(
+    List<PlanElement> walls,
+    double metersPerUnit, {
+    HallRecipe? base,
+  }) {
+    final segs = walls.where(PlanSegment.isSegment).toList();
+    if (segs.length < 3) return null;
+    final tolerance = 0.15 / metersPerUnit;
+    final order = <(Offset, Offset, double)>[];
+    final left = [...segs];
+    var first = left.removeAt(0);
+    order.add((
+      PlanSegment.start(first),
+      PlanSegment.end(first),
+      PlanSegment.curve(first),
+    ));
+    while (left.isNotEmpty) {
+      final tail = order.last.$2;
+      final next = left.indexWhere(
+        (s) =>
+            (PlanSegment.start(s) - tail).distance < tolerance ||
+            (PlanSegment.end(s) - tail).distance < tolerance,
+      );
+      if (next < 0) return null;
+      final s = left.removeAt(next);
+      // Un tramo dibujado al revés se da la vuelta, y su curva también.
+      order.add(
+        (PlanSegment.start(s) - tail).distance < tolerance
+            ? (PlanSegment.start(s), PlanSegment.end(s), PlanSegment.curve(s))
+            : (PlanSegment.end(s), PlanSegment.start(s), -PlanSegment.curve(s)),
+      );
+    }
+    if ((order.last.$2 - order.first.$1).distance >= tolerance) return null;
+    final origin = order.first.$1;
+    final recipe = (base ?? HallRecipe.rectangle()).copyWith(
+      outline: [for (final s in order) (s.$1 - origin) * metersPerUnit],
+      edges: [for (final s in order) HallEdge(bulgeM: s.$3 * metersPerUnit)],
+    );
+    return (origin, recipe);
+  }
+
   /// Elemento receta de una nave nueva con su origen en `origin`.
   static PlanElement create(Offset origin, HallRecipe recipe) {
     final hall = RigTypeCodec.create(
@@ -490,9 +596,11 @@ class PlanHall {
     final origin = hall.position;
     Offset at(Offset m) => origin + m / metersPerUnit;
     final out = <PlanElement>[];
-    var serial = 0;
+    // Cada pieza lleva un uid fijo que dice de dónde sale (`e2` es el
+    // lado 2, `t0` el primer truss): al rehacer la receta conserva el
+    // mismo, y lo que cuelga de ella la sigue.
     void add(PlanElement el, String tag) {
-      el.props[LightOverrides.uidKey] = '$hallUid-$tag${serial++}';
+      el.props[LightOverrides.uidKey] = '$hallUid-$tag';
       el.props[hallKey] = hallUid;
       PlanLevel.set(el, recipe.levelM);
       out.add(el);
@@ -510,7 +618,7 @@ class PlanHall {
         }
       }
     }
-    for (final p in perimeterPillars) {
+    for (final (k, p) in perimeterPillars.indexed) {
       add(
         PlanPillar.create(
           at(p),
@@ -518,11 +626,11 @@ class PlanHall {
           sizeM: recipe.pillarSizeM,
           heightM: recipe.roofAt(p),
         ),
-        'p',
+        'p$k',
       );
     }
     if (recipe.interiorPillarsM > 0) {
-      for (final p in _interiorGrid(recipe)) {
+      for (final (k, p) in _interiorGrid(recipe).indexed) {
         add(
           PlanPillar.create(
             at(p),
@@ -530,7 +638,7 @@ class PlanHall {
             sizeM: math.max(recipe.pillarSizeM, 0.25),
             heightM: recipe.roofAt(p),
           ),
-          'p',
+          'pi$k',
         );
       }
     }
@@ -547,7 +655,7 @@ class PlanHall {
             wall.props['curve'] = edge.bulgeM / metersPerUnit;
           }
           wall.props[PlanPillar.heightKey] = recipe.eaveM;
-          add(wall, 'w');
+          add(wall, 'e$i');
           if (edge.kind == HallEdgeKind.glass) {
             final head = edge.headM ?? recipe.eaveM - 0.15;
             final length = _edgeLength(recipe, i);
@@ -573,7 +681,7 @@ class PlanHall {
                     PlanOpening.openKey: 0,
                   },
                 ),
-                'g',
+                'e$i-g$k',
               );
             }
           }
@@ -592,7 +700,7 @@ class PlanHall {
               lengthM: edge.drapeLengthM,
               material: 'raso',
             );
-            add(drape, 'c');
+            add(drape, 'e$i-c$k');
           }
         case HallEdgeKind.open:
           break;
@@ -612,7 +720,7 @@ class PlanHall {
           sizeCm: recipe.gridSizeCm,
           lowM: low,
         );
-        add(truss, 't');
+        add(truss, 't$j');
         final lengthM = (line.$2 - line.$1).distance;
         final outer = j == 0 || j == lines.main.length - 1;
         final ground = recipe.roof == HallRoof.tensile;
@@ -624,7 +732,7 @@ class PlanHall {
         } else {
           ts = _spaced(lengthM, recipe.pillarSpacingM);
         }
-        for (final t in ts) {
+        for (final (k, t) in ts.indexed) {
           add(
             PlanRigPoint.create(
               ground ? RigType.groundSupport : RigType.motor,
@@ -632,11 +740,11 @@ class PlanHall {
               t,
               metersPerUnit,
             ),
-            'r',
+            't$j-r$k',
           );
         }
       }
-      for (final line in lines.cross) {
+      for (final (k, line) in lines.cross.indexed) {
         add(
           PlanTruss.create(
             at(line.$1),
@@ -645,7 +753,7 @@ class PlanHall {
             sizeCm: recipe.gridSizeCm,
             lowM: low,
           ),
-          't',
+          'x$k',
         );
       }
     }
