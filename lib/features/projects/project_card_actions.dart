@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/database/app_database.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/media_storage.dart';
 import '../../shared/visual_bible/bible_section_ids.dart';
@@ -102,7 +103,7 @@ class _CardDataDialogState extends State<_CardDataDialog> {
       backgroundColor: palette.surfaceElevated,
       title: const Text('Datos de la tarjeta'),
       content: SizedBox(
-        width: 340,
+        width: AppLayout.dialogWidth(context, 340),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,7 +190,7 @@ Future<void> chooseProjectCardColor(
           backgroundColor: palette.surfaceElevated,
           title: const Text('Color de la tarjeta'),
           content: SizedBox(
-            width: 340,
+            width: AppLayout.dialogWidth(context, 340),
             child: Wrap(
               spacing: 10,
               runSpacing: 10,
