@@ -173,6 +173,8 @@ class PlanScene3d {
             'sizeM': _r(LightScene.propSizeM(el)),
             'heightM': _r(LightScene.propHeightM(el)),
             'asset': ?UnrealAssetRef.of(el)?.toPayload(),
+            // Miniatura 3/4 del asset (F6.20 B4): el visor la pone de cartel.
+            'thumb': ?UnrealAssetRef.of(el)?.thumb34,
           });
         case ElementType.actor:
           people.add({

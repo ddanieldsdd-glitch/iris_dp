@@ -85,6 +85,7 @@ import 'rig/plan_3d_view.dart';
 import '../../core/utils/shot_reference_import.dart';
 import '../unreal_link/unreal_asset_tile.dart';
 import '../unreal_link/unreal_link.dart';
+import '../unreal_link/unreal_thumbs.dart';
 import '../unreal_link/unreal_stage_launcher.dart';
 import '../unreal_link/unreal_stage_payload.dart';
 import 'rig/rig_report.dart';
@@ -328,8 +329,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   // Reconocer cada elemento (F6.20 A3–A4): se recuerdan entre sesiones.
   static const _colorByTypeKey = PrefKey<bool>('plan.colorByType', false);
   static const _namesKey = PrefKey<bool>('plan.showNames', false);
+  static const _assetViewKey = PrefKey<bool>('plan.assetView', false);
   late bool _colorByType = AppPrefs.instance.get(_colorByTypeKey);
   late bool _showNames = AppPrefs.instance.get(_namesKey);
+
+  /// «Vista de assets»: la cenital de cada asset de Unreal en la planta.
+  late bool _assetView = AppPrefs.instance.get(_assetViewKey);
+
+  /// La cenital cargada de una miniatura, para el pintor.
+  ui.Image? _thumbOf(String key) =>
+      UnrealThumbs.instance.image(widget.projectId, key);
+
+  void _onThumbs() {
+    if (mounted) setState(() {});
+  }
 
   /// La lista de elementos, junto a la planta.
   bool _showOutliner = false;
@@ -517,6 +530,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _repo = FloorPlanRepository(ref.read(databaseProvider));
     _imageCache.addListener(_onImageLoaded);
     AppPrefs.instance.addListener(_onPrefsChanged);
+    UnrealThumbs.instance.addListener(_onThumbs);
     _load();
   }
 
@@ -546,6 +560,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   @override
   void dispose() {
     AppPrefs.instance.removeListener(_onPrefsChanged);
+    UnrealThumbs.instance.removeListener(_onThumbs);
     final live = _live;
     final key = _liveKey;
     // Fuera del desmontaje: avisar mientras se quita el árbol no se puede.
@@ -2879,6 +2894,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       unrealWorld: _unrealWorld,
       onUnrealCapture: widget.shotId == null ? null : _saveUnrealCapture,
       onOpenUnreal: _openInUnreal,
+      projectId: widget.projectId,
     );
   }
 
@@ -4640,6 +4656,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             },
           ),
           IconButton(
+            tooltip: _assetView
+                ? 'Quitar la vista de assets'
+                : 'Vista de assets: lo que tiene asset de Unreal, con su '
+                      'imagen desde arriba',
+            icon: Icon(
+              Icons.image_outlined,
+              color: _assetView ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: () {
+              setState(() => _assetView = !_assetView);
+              _setViewPref(_assetViewKey, _assetView);
+            },
+          ),
+          IconButton(
             tooltip: _showNames ? 'Quitar los nombres' : 'Nombres',
             icon: Icon(
               Icons.label_outline,
@@ -5079,6 +5109,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                         colorByType:
                                                             _colorByType,
                                                         showNames: _showNames,
+                                                        assetView: _assetView,
+                                                        thumbOf: _thumbOf,
                                                         selectedElement:
                                                             _selected,
                                                         selectedPathIndex:
@@ -5190,6 +5222,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                       ? null
                                       : _saveUnrealCapture,
                                   onOpenUnreal: _openInUnreal,
+                                  projectId: widget.projectId,
                                 ),
                               ),
                             ],
@@ -5197,6 +5230,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                               _ElementPanel(
                                 palette: palette,
                                 element: _selected!,
+                                projectId: widget.projectId,
                                 scopeNotice: _scopeNotice(_selected!.layer),
                                 moveTargets: [
                                   for (final layer in PlanLayer.values)
@@ -5855,6 +5889,9 @@ class _ElementPanel extends StatefulWidget {
   final AppPalette palette;
   final PlanElement element;
 
+  /// Proyecto de la planta: dónde se guardan las miniaturas de Unreal.
+  final int projectId;
+
   /// A qué afecta cambiar este elemento.
   final String scopeNotice;
   final List<PlanLayer> moveTargets;
@@ -5903,6 +5940,7 @@ class _ElementPanel extends StatefulWidget {
   const _ElementPanel({
     required this.palette,
     required this.element,
+    required this.projectId,
     required this.scopeNotice,
     required this.moveTargets,
     required this.onMove,
@@ -6269,6 +6307,7 @@ class _ElementPanelState extends State<_ElementPanel> {
                     UnrealAssetTile(
                       element: element,
                       link: UnrealLink.instance,
+                      projectId: widget.projectId,
                       onChanged: () async => widget.onUpdate(),
                     ),
                     const SizedBox(height: AppSpacing.sm),

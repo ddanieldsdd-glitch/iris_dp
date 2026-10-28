@@ -16,6 +16,7 @@ import 'light_symbols.dart';
 import 'light/modifiers.dart';
 import 'light/surfaces.dart';
 import 'plan_category.dart';
+import '../unreal_link/unreal_asset_ref.dart';
 import 'plan_images.dart';
 import 'plan_gear_list.dart';
 import 'plan_light_map.dart';
@@ -125,6 +126,13 @@ class CameraPlanPainter extends CustomPainter {
   /// El nombre de cada elemento encima, en una etiqueta.
   final bool showNames;
 
+  /// «Vista de assets» (F6.20 B4): los elementos con miniatura cenital de
+  /// su asset de Unreal se dibujan con ella, a escala y girados con él.
+  final bool assetView;
+
+  /// La cenital ya cargada de una clave de miniatura, o `null`.
+  final ui.Image? Function(String key)? thumbOf;
+
   /// Metros por unidad del lienzo; con él se rotulan longitudes y se pinta
   /// la barra de escala. `null` = sin rótulos de medida.
   final double? metersPerUnit;
@@ -177,6 +185,8 @@ class CameraPlanPainter extends CustomPainter {
     this.gearLabels = false,
     this.colorByType = false,
     this.showNames = false,
+    this.assetView = false,
+    this.thumbOf,
     this.selectedElement,
     this.selectedRoom,
     this.rotating = false,
@@ -315,6 +325,11 @@ class CameraPlanPainter extends CustomPainter {
         _drawCategoryTint(canvas, el);
       }
     }
+    if (assetView) {
+      for (final el in ordered) {
+        _drawAssetTop(canvas, el);
+      }
+    }
     for (final el in ordered) {
       _drawElement(
         canvas,
@@ -446,6 +461,37 @@ class CameraPlanPainter extends CustomPainter {
       Paint()..color = PlanCategory.of(el).color,
     );
     tp.paint(canvas, Offset(rect.left + 10, rect.top + 3));
+  }
+
+  /// La cenital de su asset de Unreal, si la hay: a escala (lo que cubre
+  /// la foto, centrada en el punto de apoyo) y girada con el elemento.
+  ui.Image? _assetTopOf(PlanElement el) {
+    if (!assetView) return null;
+    final key = UnrealAssetRef.of(el)?.thumbTop;
+    return key == null ? null : thumbOf?.call(key);
+  }
+
+  void _drawAssetTop(Canvas canvas, PlanElement el) {
+    final image = _assetTopOf(el);
+    if (image == null) return;
+    final ref = UnrealAssetRef.of(el)!;
+    final mpu = metersPerUnit ?? defaultMetersPerUnit;
+    final spanCm =
+        ref.topSpanCm ??
+        (ref.sizeCm == null
+            ? 100.0
+            : math.max(ref.sizeCm![0], ref.sizeCm![1]) * 1.08);
+    final side = spanCm / 100 / mpu;
+    canvas.save();
+    canvas.translate(el.position.dx, el.position.dy);
+    canvas.rotate(el.rotation * math.pi / 180);
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      Rect.fromCenter(center: Offset.zero, width: side, height: side),
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+    canvas.restore();
   }
 
   /// «UE» junto al elemento que tiene asset de Unreal.
@@ -1817,7 +1863,7 @@ class CameraPlanPainter extends CustomPainter {
       case ElementType.light:
         _drawLight(canvas, el);
       case ElementType.prop:
-        if (body) _drawProp(canvas, el);
+        if (body && _assetTopOf(el) == null) _drawProp(canvas, el);
       case ElementType.wall:
         if (PlanOpening.isOpening(el)) {
           _drawOpening(canvas, el);
@@ -3162,6 +3208,8 @@ class CameraPlanPainter extends CustomPainter {
       old.gearLabels != gearLabels ||
       old.colorByType != colorByType ||
       old.showNames != showNames ||
+      old.assetView != assetView ||
+      old.thumbOf != thumbOf ||
       old.selectedElement?.id != selectedElement?.id ||
       old.selectedPathIndex != selectedPathIndex ||
       old.scale != scale ||
