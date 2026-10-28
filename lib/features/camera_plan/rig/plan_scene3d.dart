@@ -5,6 +5,7 @@ import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
 import '../light/light_scene.dart';
+import '../plan_category.dart';
 import '../light/plan_light.dart';
 import '../light_beam.dart';
 import '../light_overrides.dart';
@@ -63,6 +64,8 @@ class PlanScene3d {
       'version': version,
       'units': 'm',
       'name': ?name,
+      // Colores por categoría: los mismos que en la planta 2D.
+      'palette': PlanCategory.palette,
       if (ambient != null && ambient.hasSun) 'sun': _sun(ambient),
       'halls': [
         for (final MapEntry(key: uid, value: (el, r)) in halls.entries)
@@ -100,6 +103,7 @@ class PlanScene3d {
           pillars.add({
             'id': uid,
             'name': el.displayLabel,
+            'cat': PlanCategory.of(el).name,
             'at': xy(el.position),
             'z0': level,
             'shape': PlanPillar.isRound(el) ? 'round' : 'square',
@@ -113,6 +117,7 @@ class PlanScene3d {
           trusses.add({
             'id': uid,
             'name': el.displayLabel,
+            'cat': PlanCategory.of(el).name,
             'from': xy(PlanTruss.start(el)),
             'to': xy(PlanTruss.end(el)),
             'z': _r(level + PlanTruss.lowM(el)),
@@ -125,6 +130,7 @@ class PlanScene3d {
           rigging.add({
             'id': uid,
             'name': el.displayLabel,
+            'cat': PlanCategory.of(el).name,
             'type': RigTypeCodec.of(el)!.name,
             'at': xy(el.position),
             'z0': level,
@@ -137,6 +143,8 @@ class PlanScene3d {
           if (PlanScan.file(el) case final file?) {
             scans.add({
               'id': uid,
+              'name': el.displayLabel,
+              'cat': PlanCategory.of(el).name,
               'file': file,
               'format': PlanScan.format(el),
               'at': xy(el.position),
@@ -156,6 +164,7 @@ class PlanScene3d {
           props.add({
             'id': uid,
             'name': el.customName ?? el.propType!.label,
+            'cat': PlanCategory.of(el).name,
             'type': el.propType!.name,
             'at': xy(el.position),
             'z0': level,
@@ -169,6 +178,7 @@ class PlanScene3d {
           people.add({
             'id': uid,
             'name': el.label ?? 'Actor',
+            'cat': PlanCategory.of(el).name,
             'at': xy(el.position),
             'z0': level,
           });
@@ -179,6 +189,7 @@ class PlanScene3d {
           cameras.add({
             'id': uid,
             'name': el.customName ?? el.cameraLabel,
+            'cat': PlanCategory.of(el).name,
             'lens': ?el.lens,
             'at': xy(el.position),
             'z0': level,
@@ -430,6 +441,7 @@ class PlanScene3d {
     return {
       'id': id,
       'name': el.displayLabel,
+      'cat': PlanCategory.of(el).name,
       'points': [for (final p in pts) xy(p)],
       'z0': level,
       'tops': tops,
@@ -451,6 +463,7 @@ class PlanScene3d {
     return {
       'id': id,
       'name': el.displayLabel,
+      'cat': PlanCategory.of(el).name,
       'z0': level,
       'material': mat.id,
       'color':
@@ -505,6 +518,7 @@ class PlanScene3d {
       'id': id,
       // «Principal · ARRI SkyPanel S60», o lo que tenga.
       'name': el.fullLabel,
+      'cat': PlanCategory.of(el).name,
       'type': type.dbValue,
       'pos': [p[0], p[1], _r(z)],
       'aim': [_r(p[0] + dx * t), _r(p[1] + dy * t), _r(z + dz * t)],

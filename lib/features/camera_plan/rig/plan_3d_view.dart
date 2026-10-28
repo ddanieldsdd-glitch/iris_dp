@@ -39,6 +39,7 @@ const _layers = <(String, String)>[
   ('rig', 'Truss, motores y torres'),
   ('fixtures', 'Focos'),
   ('people', 'Personas y cámaras'),
+  ('props', 'Mobiliario y atrezzo'),
 ];
 
 /// La planta en 3D: three.js en un WebView, empaquetado en la app para que
@@ -118,6 +119,9 @@ class _Plan3dViewState extends State<Plan3dView> {
   String _view = 'iso';
   bool _cones = true;
   bool _roof = true;
+
+  /// Etiquetas con el nombre de cada pieza (la del seleccionado, siempre).
+  bool _names = false;
   bool _ortho = false;
   final _show = {for (final (k, _) in _layers) k: true};
   late PlanElement? _selected = widget.selected;
@@ -247,6 +251,7 @@ class _Plan3dViewState extends State<Plan3dView> {
           'cones': _cones,
           'roof': _roof,
           'ortho': _ortho,
+          'names': _names,
           'show': _show,
         });
         _push();
@@ -656,6 +661,11 @@ class _Plan3dViewState extends State<Plan3dView> {
           ),
           itemBuilder: (_) => [
             CheckedPopupMenuItem(
+              value: 'names',
+              checked: _names,
+              child: const Text('Nombres'),
+            ),
+            CheckedPopupMenuItem(
               value: 'cones',
               checked: _cones,
               child: const Text('Conos de luz'),
@@ -737,6 +747,9 @@ class _Plan3dViewState extends State<Plan3dView> {
   void _toggle(String key) {
     setState(() {
       switch (key) {
+        case 'names':
+          _names = !_names;
+          _set({'names': _names});
         case 'cones':
           _cones = !_cones;
           _set({'cones': _cones});
@@ -889,6 +902,7 @@ class _Plan3dViewState extends State<Plan3dView> {
                 : AppTypography.mono(palette),
           ),
         header('Qué se ve'),
+        toggle('Nombres', _names, () => _toggle('names')),
         toggle('Cubierta', _roof, () => _toggle('roof')),
         toggle('Conos de luz', _cones, () => _toggle('cones')),
         toggle(
