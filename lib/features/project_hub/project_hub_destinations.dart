@@ -122,8 +122,8 @@ List<ProjectHubDestination> buildProjectHubDestinations() {
     ProjectHubDestination(
       id: ProjectHubDestinationId.lukaBridge,
       icon: Icons.view_in_ar_outlined,
-      title: 'Unreal / LUKA Bridge',
-      subtitle: (_) => 'Exportar escena a UE5 · Gaussian Splat + LUKA',
+      title: 'IRIS Stage',
+      subtitle: (_) => 'Unreal en vivo · render RTX · exportar a UE5 y LUKA',
       accentColor: const Color(0xFFFFD60A),
     ),
     ProjectHubDestination(

@@ -24,6 +24,7 @@ import 'sections/optics_settings_section.dart';
 import 'sections/shoot_documents_settings_section.dart';
 import 'sections/storyboard_settings_section.dart';
 import 'settings_actions.dart';
+import '../unreal_link/unreal_tutorial_screen.dart';
 
 /// Identificadores de las secciones, para abrir una en concreto.
 abstract final class SettingsSectionIds {
@@ -194,6 +195,12 @@ class _HelpSection extends StatelessWidget {
           subtitle: 'Configuración paso a paso desde el principio',
           trailing: chevron,
           onTap: () => SettingsActions.replayTutorial(context),
+        ),
+        SettingsRow(
+          title: 'IRIS con Unreal',
+          subtitle: 'Tutorial: preparar Unreal, conectar y ver el render RTX',
+          trailing: chevron,
+          onTap: () => UnrealTutorialScreen.open(context),
         ),
         SettingsRow(
           title: 'Instalación y actualización',

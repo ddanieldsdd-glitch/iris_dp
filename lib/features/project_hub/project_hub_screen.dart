@@ -122,9 +122,9 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
           'Export PDF call sheet',
         ],
       ProjectHubDestinationId.lukaBridge => const [
-          'Export JSON → Unreal Engine 5',
-          'Gaussian Splat (Luma AI) + ARRI LUKA',
-          'Reimportación de renders como referencias',
+          'Abrir en Unreal con un botón y trabajar en vivo',
+          'Render RTX dentro de IRIS y capturas al storyboard',
+          'Exportar a Unreal Engine 5 y ARRI LUKA',
         ],
       ProjectHubDestinationId.lookBible => const [
           'Moodboard hub del proyecto',
