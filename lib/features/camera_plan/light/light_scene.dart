@@ -7,6 +7,8 @@ import '../camera_plan_element_model.dart';
 import '../plan_marks.dart';
 import '../plan_opening.dart';
 import '../plan_segment.dart';
+import '../rig/plan_drape.dart';
+import '../rig/plan_rig.dart';
 import 'ambient.dart';
 import 'modifiers.dart';
 import 'photometry.dart';
@@ -611,6 +613,69 @@ class LightScene {
     );
   }
 
+  /// Un pilar: tapa hasta su altura, redondo o cuadrado (girado con él).
+  static void _addPillar(
+    List<LightBlocker> blockers,
+    PlanElement el,
+    double metersPerUnit,
+  ) {
+    final size = PlanPillar.sizeM(el) / metersPerUnit;
+    final height = PlanPillar.heightM(el);
+    if (PlanPillar.isRound(el)) {
+      blockers.add(
+        LightBlocker.circle(el.position, size / 2, heightM: height, element: el),
+      );
+      return;
+    }
+    final rad = el.rotation * math.pi / 180;
+    final u = Offset(math.cos(rad), math.sin(rad)) * (size / 2);
+    final v = Offset(-math.sin(rad), math.cos(rad)) * (size / 2);
+    final corners = [
+      el.position - u - v,
+      el.position + u - v,
+      el.position + u + v,
+      el.position - u + v,
+    ];
+    for (var i = 0; i < 4; i++) {
+      blockers.add(
+        LightBlocker(
+          corners[i],
+          corners[(i + 1) % 4],
+          heightM: height,
+          element: el,
+        ),
+      );
+    }
+  }
+
+  /// Una tela: tapa de su bajo a su borde de arriba, que sigue la
+  /// catenaria, y deja pasar lo que deja su tejido.
+  static void _addDrape(
+    List<LightBlocker> blockers,
+    PlanElement el,
+    double metersPerUnit,
+  ) {
+    final c = PlanDrape.catenary(el, metersPerUnit);
+    final transmission = PlanDrape.material(el).transmission;
+    const pieces = 8;
+    var from = PlanSegment.pointAt(el, 0);
+    for (var i = 1; i <= pieces; i++) {
+      final to = PlanSegment.pointAt(el, i / pieces);
+      final mid = (i - 0.5) / pieces;
+      blockers.add(
+        LightBlocker(
+          from,
+          to,
+          heightM: PlanDrape.topAt(el, mid, c),
+          baseM: PlanDrape.bottomAt(el, mid, c),
+          transmission: transmission,
+          element: el,
+        ),
+      );
+      from = to;
+    }
+  }
+
   static double _wallHeight(LightBlocker wall, List<SceneRoom> rooms) {
     final span = wall.b - wall.a;
     final length = span.distance;
@@ -796,6 +861,10 @@ class LightScene {
           }
           continue;
         case ElementType.prop:
+          if (PlanPillar.isPillar(el)) {
+            _addPillar(blockers, el, metersPerUnit);
+            continue;
+          }
           final radius = propSizeM(el) / metersPerUnit;
           final height = propHeightM(el);
           switch (el.propType) {
@@ -878,6 +947,10 @@ class LightScene {
             );
             from = to;
           }
+          continue;
+        }
+        if (PlanDrape.isDrape(el)) {
+          _addDrape(blockers, el, metersPerUnit);
           continue;
         }
         if (PlanSegment.kind(el) != PlanSegment.kindWall) continue;
