@@ -650,6 +650,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       ]);
     }
 
+    // Todo elemento lleva identificador estable: con él se reconoce en el
+    // 3D, en Unreal y en la lista de elementos. Lo que aún no lo tenía (una
+    // planta de antes) se guarda una vez al terminar de cargar.
+    final unsaved = {
+      for (final el in LightOverrides.ensureUids(elements)) el.layer,
+    };
+
     // Zonas de los sets sobre el plano maestro.
     final zones = <PlanZone>[];
     Rect? setZone;
@@ -791,6 +798,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _elements
         ..clear()
         ..addAll(elements);
+      _uidsToSave = unsaved;
       _selected = null;
       _selectedPathIndex = null;
       _multi.clear();
@@ -838,6 +846,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     });
     _lastSaved = _snapshot();
     _claimLive();
+    // Si otro equipo la está editando, no se toca: se guardará al soltarla.
+    if (_uidsToSave.isNotEmpty &&
+        _peerBlocking(ref.read(liveEditingProvider)) == null) {
+      unawaited(_saveNewUids());
+    }
   }
 
   // ── Edición compartida ────────────────────────────────────────────────────
@@ -1168,10 +1181,23 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       ? _elements
       : _elements.where((e) => !_hiddenLayers.contains(e.layer)).toList();
 
+  /// Capas de una planta de antes cuyos elementos acaban de recibir
+  /// identificador al cargarla: se guardan una vez ([_saveNewUids]).
+  Set<PlanLayer> _uidsToSave = const {};
+
+  Future<void> _saveNewUids() async {
+    final layers = _uidsToSave;
+    _uidsToSave = const {};
+    for (final layer in layers) {
+      await _saveLayer(layer);
+    }
+  }
+
   /// Guarda una capa entera en su sitio.
   Future<void> _saveLayer(PlanLayer layer) async {
     if (!_hasLayer(layer)) return;
     final list = _layerElements(layer);
+    LightOverrides.ensureUids(list);
     switch (layer) {
       case PlanLayer.environment:
         await _repo.saveElements(
@@ -1186,9 +1212,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           setId: _linkedSet!.id,
         );
       case PlanLayer.light:
-        // Cada elemento del esquema lleva un identificador estable, para
-        // que un plano pueda ajustarlo sin tocar el de los demás.
-        LightOverrides.ensureUids(list);
+        // Con el identificador estable, un plano ajusta un elemento del
+        // esquema sin tocar el de los demás.
         final own = <String, PlanElement>{};
         final shared = <PlanElement>[];
         for (final el in list) {
@@ -2422,6 +2447,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         ];
       copies.add(copy);
     }
+    LightOverrides.renewUids(copies);
     setState(() {
       _elements.addAll(copies);
       _multi
@@ -3458,13 +3484,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     }
     centre = centre / copies.length.toDouble();
     final shift = _snapToGrid(_cursor ?? _viewCenter) - centre;
+    // Identificadores propios: no son los elementos copiados.
+    LightOverrides.renewUids(copies);
     for (final el in copies) {
       el
         ..id = 0
         ..position += shift
         ..pathPoints = [for (final p in el.pathPoints) p + shift];
-      // Un identificador propio: no es la misma luz que la copiada.
-      el.props.remove('uid');
       await _addElement(el, keepPosition: true, select: false);
     }
     if (!mounted) return;
@@ -5778,13 +5804,26 @@ class _ElementPanel extends StatefulWidget {
 class _ElementPanelState extends State<_ElementPanel> {
   late TextEditingController _lensCtrl;
   late final TextEditingController _nameCtrl = TextEditingController(
-    text: widget.element.label ?? '',
+    text: _nameOf(widget.element),
   );
 
-  /// Pone nombre al personaje. Si ya existe en el proyecto, coge su color.
+  /// El personaje se llama por su [PlanElement.label]; lo demás, por su
+  /// nombre libre.
+  static String _nameOf(PlanElement el) => el.type == ElementType.actor
+      ? el.label ?? ''
+      : el.customName ?? '';
+
+  /// Pone nombre al personaje (si ya existe en el proyecto, coge su color)
+  /// o a cualquier otro elemento.
   void _commitName(String value) {
     final element = widget.element;
     final name = value.trim();
+    if (element.type != ElementType.actor) {
+      if (name == (element.customName ?? '')) return;
+      element.customName = name;
+      widget.onUpdate();
+      return;
+    }
     if (name.isEmpty || name == element.label) return;
     element.label = name;
     final known = widget.cast[PlanCast.key(name)];
@@ -5803,7 +5842,7 @@ class _ElementPanelState extends State<_ElementPanel> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.element.id != widget.element.id) {
       _lensCtrl.text = widget.element.lens ?? '';
-      _nameCtrl.text = widget.element.label ?? '';
+      _nameCtrl.text = _nameOf(widget.element);
     }
   }
 
@@ -6079,6 +6118,22 @@ class _ElementPanelState extends State<_ElementPanel> {
                         ),
                       ),
                     const SizedBox(height: AppSpacing.sm),
+                    if (element.type != ElementType.actor) ...[
+                      TextField(
+                        controller: _nameCtrl,
+                        style: AppTypography.bodyLarge(palette),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          labelText: 'Nombre',
+                          hintText: element.typeLabel,
+                          helperText:
+                              'Se ve en la planta, en el 3D y en Unreal.',
+                        ),
+                        onSubmitted: _commitName,
+                        onTapOutside: (_) => _commitName(_nameCtrl.text),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
                     if (element.type == ElementType.actor)
                       _section(palette, 'Personaje', 'cast', [
                         TextField(

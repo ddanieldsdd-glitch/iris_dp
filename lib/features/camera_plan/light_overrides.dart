@@ -17,13 +17,48 @@ class LightOverrides {
   static const uidKey = 'uid';
   static final _random = math.Random();
 
-  /// Da identificador a los elementos que aún no lo tienen.
-  static void ensureUids(Iterable<PlanElement> elements) {
+  static String _newUid() =>
+      '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}'
+      '${_random.nextInt(1 << 20).toRadixString(36)}';
+
+  /// Da identificador a los elementos que aún no lo tienen. Todos los tipos
+  /// lo llevan: con él se reconoce un elemento en el 3D, en Unreal y en los
+  /// ajustes de cada plano. Devuelve los que lo han estrenado.
+  static List<PlanElement> ensureUids(Iterable<PlanElement> elements) {
+    final fresh = <PlanElement>[];
     for (final el in elements) {
       if (el.props[uidKey] is! String) {
-        el.props[uidKey] =
-            '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}'
-            '${_random.nextInt(1 << 20).toRadixString(36)}';
+        el.props[uidKey] = _newUid();
+        fresh.add(el);
+      }
+    }
+    return fresh;
+  }
+
+  /// Identificadores nuevos para unas copias (duplicar, pegar): no son los
+  /// elementos copiados. Lo que dentro del grupo apuntaba a otro copiado (una
+  /// luz colgada de un truss, un motor) pasa a apuntar a su copia.
+  static void renewUids(List<PlanElement> copies) {
+    final renamed = <String, String>{};
+    for (final el in copies) {
+      final old = uidOf(el);
+      final now = _newUid();
+      if (old != null) renamed[old] = now;
+      el.props[uidKey] = now;
+    }
+    Object? remap(Object? v) => switch (v) {
+      final String s => renamed[s] ?? s,
+      final Map<String, dynamic> m => <String, dynamic>{
+        for (final e in m.entries) e.key: remap(e.value),
+      },
+      final Map m => {for (final e in m.entries) e.key: remap(e.value)},
+      final List l => <dynamic>[for (final x in l) remap(x)],
+      _ => v,
+    };
+    for (final el in copies) {
+      for (final key in el.props.keys.toList()) {
+        if (key == uidKey) continue;
+        el.props[key] = remap(el.props[key]);
       }
     }
   }
