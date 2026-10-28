@@ -952,9 +952,7 @@ class _Plan3dViewState extends State<Plan3dView> {
               onPreview: _preview,
               onUpdate: _update,
             ),
-          if (_selected!.type == ElementType.prop &&
-              PlanScene3d.furniture.contains(_selected!.propType))
-            UnrealAssetTile(
+          UnrealAssetTile(
               element: _selected!,
               link: UnrealLink.instance,
               onChanged: _update,

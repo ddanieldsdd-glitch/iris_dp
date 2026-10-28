@@ -83,6 +83,8 @@ import 'rig/plan_rig.dart';
 import 'plan_outliner.dart';
 import 'rig/plan_3d_view.dart';
 import '../../core/utils/shot_reference_import.dart';
+import '../unreal_link/unreal_asset_tile.dart';
+import '../unreal_link/unreal_link.dart';
 import '../unreal_link/unreal_stage_launcher.dart';
 import '../unreal_link/unreal_stage_payload.dart';
 import 'rig/rig_report.dart';
@@ -6263,6 +6265,13 @@ class _ElementPanelState extends State<_ElementPanel> {
                       ),
                       const SizedBox(height: AppSpacing.sm),
                     ],
+                    // Su asset de Unreal (F6.20 B2), para cualquier tipo.
+                    UnrealAssetTile(
+                      element: element,
+                      link: UnrealLink.instance,
+                      onChanged: () async => widget.onUpdate(),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
                     if (element.type == ElementType.actor)
                       _section(palette, 'Personaje', 'cast', [
                         TextField(

@@ -6,15 +6,16 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../camera_plan/camera_plan_constants.dart';
 import '../camera_plan/camera_plan_element_model.dart';
 import '../camera_plan/light/light_scene.dart';
 import '../camera_plan/rig/plan_scene3d.dart';
 import 'unreal_link.dart';
 
-/// Qué asset de Unreal (Fab, Megascans o propio) hace de esta pieza en
-/// Unreal (paso 5 de F6.19). Los assets de Fab y Megascans solo se pueden
-/// usar dentro de Unreal: no se copian a IRIS, que se queda con un sustituto
-/// de las mismas medidas.
+/// Qué asset de Unreal (Fab, Megascans o propio) hace de este elemento en
+/// Unreal: cualquier tipo, no solo el atrezzo (F6.20 B2). Los assets de Fab
+/// y Megascans solo se pueden usar dentro de Unreal: no se copian a IRIS,
+/// que guarda su ruta y, en el atrezzo, sus medidas.
 class UnrealAssetTile extends StatelessWidget {
   final PlanElement element;
   final UnrealLink link;
@@ -27,20 +28,42 @@ class UnrealAssetTile extends StatelessWidget {
     required this.onChanged,
   });
 
-  static String? assetOf(PlanElement el) =>
-      el.props[PlanScene3d.unrealAssetKey] as String?;
+  static UnrealAssetRef? assetOf(PlanElement el) => UnrealAssetRef.of(el);
 
-  /// Pone [asset] a la pieza y le da sus medidas: la huella (lo más ancho)
-  /// y el alto.
+  /// Pone [asset] al elemento. Al atrezzo le da además sus medidas: la
+  /// huella (lo más ancho) y el alto.
   static void assign(PlanElement el, UnrealAsset asset) {
-    el.props[PlanScene3d.unrealAssetKey] = asset.path;
+    UnrealAssetRef.set(el, asset.toRef());
     final s = asset.sizeCm;
-    if (s.length == 3 && s.every((v) => v > 0)) {
+    if (el.type == ElementType.prop &&
+        PlanScene3d.furniture.contains(el.propType) &&
+        s != null &&
+        s.every((v) => v > 0)) {
       el.props[LightScene.sizeKey] =
           (math.max(s[0], s[1])).roundToDouble() / 100;
       el.props[LightScene.heightKey] = s[2].roundToDouble() / 100;
     }
   }
+
+  /// Qué clases de asset tienen sentido para el elemento: personajes para
+  /// los actores; mallas y Blueprints para lo demás.
+  static Set<UnrealAssetKind> kindsFor(PlanElement el) =>
+      el.type == ElementType.actor
+      ? {
+          UnrealAssetKind.skeletal,
+          UnrealAssetKind.metahuman,
+          UnrealAssetKind.blueprint,
+        }
+      : {UnrealAssetKind.mesh, UnrealAssetKind.blueprint};
+
+  /// Lo que no tiene asset: el atrezzo va como bloque; lo demás no sale en
+  /// Unreal (salvo focos y cámaras, que son luz y cámara de Unreal).
+  static String withoutAsset(PlanElement el) => switch (el.type) {
+    ElementType.prop => 'Un bloque con sus medidas.',
+    ElementType.light => 'La luz de Unreal, sin el cuerpo del aparato.',
+    ElementType.camera => 'La cámara de cine, sin cuerpo ni rig.',
+    _ => 'No sale en Unreal hasta que tenga un asset.',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -55,11 +78,18 @@ class UnrealAssetTile extends StatelessWidget {
           children: [
             Text('En Unreal', style: AppTypography.label(palette)),
             Text(
-              asset == null
-                  ? 'Un bloque con sus medidas.'
-                  : asset.split('/').last.split('.').first,
+              asset == null ? withoutAsset(element) : asset.name,
               style: AppTypography.bodyMedium(palette),
             ),
+            if (asset != null)
+              Text(
+                '${asset.source.label} · ${asset.path}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption(
+                  palette,
+                ).copyWith(color: palette.textTertiary),
+              ),
             const SizedBox(height: AppSpacing.xs),
             OutlinedButton.icon(
               icon: const Icon(Icons.chair_outlined, size: 16),
@@ -70,11 +100,14 @@ class UnrealAssetTile extends StatelessWidget {
                   ? () async {
                       final picked = await showDialog<_Pick>(
                         context: context,
-                        builder: (_) => _AssetDialog(link: link),
+                        builder: (_) => _AssetDialog(
+                          link: link,
+                          kinds: kindsFor(element),
+                        ),
                       );
                       if (picked == null) return;
                       if (picked.asset == null) {
-                        element.props.remove(PlanScene3d.unrealAssetKey);
+                        UnrealAssetRef.set(element, null);
                       } else {
                         assign(element, picked.asset!);
                       }
@@ -103,7 +136,8 @@ class _Pick {
 
 class _AssetDialog extends StatefulWidget {
   final UnrealLink link;
-  const _AssetDialog({required this.link});
+  final Set<UnrealAssetKind> kinds;
+  const _AssetDialog({required this.link, required this.kinds});
 
   @override
   State<_AssetDialog> createState() => _AssetDialogState();
@@ -136,7 +170,14 @@ class _AssetDialogState extends State<_AssetDialog> {
     });
     try {
       final found = await widget.link.findAssets(_query.text);
-      if (mounted) setState(() => _found = found);
+      if (mounted) {
+        setState(
+          () => _found = [
+            for (final a in found)
+              if (widget.kinds.contains(a.kind)) a,
+          ],
+        );
+      }
     } catch (e) {
       if (mounted) setState(() => _error = UnrealLink.describe(e));
     } finally {
@@ -198,7 +239,9 @@ class _AssetDialogState extends State<_AssetDialog> {
                           ListTile(
                             dense: true,
                             title: Text(a.name),
-                            subtitle: Text('${a.sizeLabel} · ${a.folder}'),
+                            subtitle: Text(
+                              '${a.source.label} · ${a.sizeLabel} · ${a.folder}',
+                            ),
                             onTap: () => Navigator.pop(context, _Pick(a)),
                           ),
                       ],
@@ -210,7 +253,7 @@ class _AssetDialogState extends State<_AssetDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, const _Pick(null)),
-          child: const Text('Sin asset (bloque)'),
+          child: const Text('Sin asset'),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context),

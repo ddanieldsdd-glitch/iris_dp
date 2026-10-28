@@ -891,7 +891,8 @@ Plan aprobado por Daniel el 2026-10-27. Un PR por fase, en ramas que salen de `p
 | A2 | Nombre libre (`props['name']`) para cualquier elemento, en la ficha 2D y en el 3D, y que llegue a Unreal | en curso (PR 1) |
 | A5 | Atrezzo visible en el visor 3D (formas por tipo, a sus medidas, seleccionable y movible), etiquetas con el nombre («Nombres»; la del seleccionado, siempre) y color por categoría (`PlanCategory`, el mismo para 2D y 3D) | en curso (PR 2) |
 | A3–A4 | Planta 2D: «Colorear por tipo» (halo o franja del color de su categoría, y leyenda de los tipos presentes), «Nombres» (etiqueta encima de cada elemento), distintivo «UE»; lista de elementos agrupada por categoría, con buscador, «UE» y ojo para ocultar. En el 3D, etiquetas de tamaño fijo en pantalla y nombres largos recortados | en curso (PR 3) |
-| B1–B5 | Un solo modelo `props['unreal']` para todos los tipos, miniaturas renderizadas por Unreal (en la nube), vista de assets y biblioteca | pendiente |
+| B1–B2 | Un solo modelo `props['unreal']` (`UnrealAssetRef`; lee también `unrealAsset` y un `unrealMeshPath` propio) y asset para cualquier elemento: el cuerpo de focos y cámaras unido a ellos, el atrezzo, y paredes, actores, grip y rigging en la lista `assets`. Selector en la ficha 2D y en el 3D; `FindAssets` busca mallas, Blueprints y personajes, con su origen | en curso (PR 4) |
+| B3–B5 | Miniaturas renderizadas por Unreal (en la nube), vista de assets y biblioteca | pendiente |
 | C1–C4 | IRIS Stage como lista de seis pasos, tutorial y guía | pendiente |
 | D1–D4 | Buscar en Fab y Quixel desde IRIS, recogida automática, tejidos y packs de partida | pendiente |
 | E1–E5 | RealityScan/RealityCapture sin interfaz: de vídeo a malla, ortofoto y paredes propuestas, con ida y vuelta | pendiente |

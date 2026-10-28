@@ -6,6 +6,7 @@ import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
 import '../light/light_scene.dart';
 import '../plan_category.dart';
+import '../../unreal_link/unreal_asset_ref.dart';
 import '../light/plan_light.dart';
 import '../light_beam.dart';
 import '../light_overrides.dart';
@@ -171,8 +172,7 @@ class PlanScene3d {
             'yawDeg': el.rotation,
             'sizeM': _r(LightScene.propSizeM(el)),
             'heightM': _r(LightScene.propHeightM(el)),
-            if (el.props[unrealAssetKey] case final String asset)
-              'unrealAsset': asset,
+            'asset': ?UnrealAssetRef.of(el)?.toPayload(),
           });
         case ElementType.actor:
           people.add({
@@ -200,6 +200,7 @@ class PlanScene3d {
               cameraFovDegrees(el.lens, sensorWidthMm: sensorMm) ?? 40,
             ),
             'sensorMm': sensorMm,
+            'asset': ?UnrealAssetRef.of(el)?.toPayload(),
           });
         default:
           break;
@@ -215,8 +216,53 @@ class PlanScene3d {
       ..['people'] = people
       ..['cameras'] = cameras
       ..['scans'] = scans
-      ..['props'] = props;
+      ..['props'] = props
+      ..['assets'] = [
+        for (final (i, el) in elements.indexed)
+          ?_asset(el, idOf(el, i), mpu),
+      ];
     return out;
+  }
+
+  /// Lo demás que tiene asset de Unreal (F6.20 B2): paredes, puertas y
+  /// ventanas (en el centro del tramo, orientadas con él), actores, grip,
+  /// pilares, rigging y truss. Focos, cámaras y atrezzo lo llevan en su
+  /// propia lista.
+  static Map<String, dynamic>? _asset(PlanElement el, String uid, double mpu) {
+    final ref = UnrealAssetRef.of(el);
+    if (ref == null) return null;
+    if (el.type == ElementType.camera ||
+        (el.type == ElementType.light && LightBeam.emits(el.lightType)) ||
+        (el.type == ElementType.prop && furniture.contains(el.propType))) {
+      return null;
+    }
+    var at = el.position;
+    var yaw = el.rotation;
+    Offset? from, to;
+    if (PlanSegment.isSegment(el)) {
+      from = PlanSegment.pointAt(el, 0);
+      to = PlanSegment.pointAt(el, 1);
+    } else if (PlanTruss.isTruss(el)) {
+      from = PlanTruss.start(el);
+      to = PlanTruss.end(el);
+    }
+    if (from != null && to != null) {
+      at = (from + to) / 2;
+      final d = to - from;
+      // Hacia dónde va el tramo, con el giro de la planta: (sin r, cos r)
+      // con la y al revés que el lienzo.
+      yaw = (math.atan2(d.dx, -d.dy) * 180 / math.pi + 360) % 360;
+    }
+    return {
+      'id': uid,
+      'name': el.displayLabel,
+      'cat': PlanCategory.of(el).name,
+      'at': [_r(at.dx * mpu), _r(-at.dy * mpu)],
+      'z0': PlanLevel.of(el),
+      'yawDeg': _r(yaw),
+      if (from != null && to != null) 'lengthM': _r((to - from).distance * mpu),
+      'asset': ref.toPayload(),
+    };
   }
 
   /// El atrezzo que tiene cuerpo (lo demás de [PropType] son colinas,
@@ -233,8 +279,9 @@ class PlanScene3d {
   };
 
   /// Asset de Unreal (Fab, Megascans o propio) que hace de esta pieza en
-  /// Unreal; en IRIS queda un sustituto con sus medidas.
-  static const unrealAssetKey = 'unrealAsset';
+  /// Unreal; en IRIS queda un sustituto con sus medidas. Ver
+  /// [UnrealAssetRef], que también lee esta clave de antes.
+  static const unrealAssetKey = UnrealAssetRef.legacyKey;
 
   /// Identificador de un elemento en la escena: su `uid`, que todos llevan
   /// desde F6.20 (`LightOverrides.ensureUids` al cargar y al guardar). La
@@ -538,6 +585,7 @@ class PlanScene3d {
         },
       if (TrussMagnet.trussUidOf(el) != null)
         'truss': TrussMagnet.trussUidOf(el),
+      'asset': ?UnrealAssetRef.of(el)?.toPayload(),
     };
   }
 }

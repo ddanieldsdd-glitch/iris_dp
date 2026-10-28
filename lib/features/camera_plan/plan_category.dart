@@ -4,6 +4,7 @@ import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light_beam.dart';
 import 'rig/plan_rig.dart';
+import '../unreal_link/unreal_asset_ref.dart';
 
 /// Qué es un elemento de la planta, a grandes rasgos, para reconocerlo de un
 /// vistazo con un color: el mismo en la planta 2D, en el 3D y en la lista de
@@ -61,8 +62,7 @@ enum PlanCategory {
   }
 
   /// Si el elemento tiene un asset de Unreal asignado (distintivo «UE»).
-  static bool hasUnrealAsset(PlanElement el) =>
-      el.props['unrealAsset'] is String || el.props['unreal'] is Map;
+  static bool hasUnrealAsset(PlanElement el) => UnrealAssetRef.has(el);
 
   /// Colores de todas, para que el visor 3D use los mismos.
   static Map<String, String> get palette => {

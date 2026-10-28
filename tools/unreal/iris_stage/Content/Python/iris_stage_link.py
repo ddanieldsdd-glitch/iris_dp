@@ -57,6 +57,13 @@ PLANE = "/Engine/BasicShapes/Plane.Plane"
 # Lo que no se borra al mandar IRIS la escena entera.
 _FIXED = {SUN_ID, SKY_ID, ATMOSPHERE_ID, FLOOR_ID}
 
+# Etiqueta con la ruta del asset que hace de una pieza (F6.20 B2): si el
+# asset cambia, el actor se rehace.
+ASSET_TAG = "iris_asset:"
+
+# El cuerpo (asset) de un foco o una cámara es otro actor, unido a ellos.
+BODY = "#cuerpo"
+
 # Bloques de atrezzo sin asset: su malla tiene el centro en medio y la
 # pieza de IRIS en la base; id → cm que se sube.
 _lift = {}
@@ -143,6 +150,69 @@ def _ensure(uid, cls, label, loc, rot):
     return actor
 
 
+def _asset_of(actor):
+    for tag in actor.tags:
+        text = str(tag)
+        if text.startswith(ASSET_TAG):
+            return text[len(ASSET_TAG):]
+    return None
+
+
+def _asset_path(asset):
+    # {path, kind}; antes (F6.19), solo la ruta.
+    return asset.get("path") if isinstance(asset, dict) else asset
+
+
+def _place_asset(uid, label, asset, loc, rot):
+    """El actor de un asset de Unreal (malla, Blueprint o personaje) en su
+    sitio. Si la pieza tenía otro asset (o era un bloque), se rehace."""
+    path = _asset_path(asset)
+    actor = _find(uid)
+    if actor is not None and _asset_of(actor) != path:
+        _actor_subsystem().destroy_actor(actor)
+        _actors.pop(uid, None)
+        actor = None
+    if actor is None:
+        obj = unreal.EditorAssetLibrary.load_asset(path)
+        if obj is None:
+            unreal.log_warning("[IRIS Stage] No encuentro el asset %s." % path)
+            return None
+        actor = _actor_subsystem().spawn_actor_from_object(obj, loc, rot)
+        if actor is None:
+            unreal.log_warning("[IRIS Stage] %s no se puede poner en el nivel." % path)
+            return None
+        actor.set_actor_label(label)
+        actor.set_folder_path(FOLDER)
+        actor.tags = [unreal.Name(TAG_PREFIX + uid), unreal.Name(ASSET_TAG + path)]
+        _actors[uid] = actor
+        return actor
+    if actor.get_actor_label() != label:
+        actor.set_actor_label(label)
+    actor.set_actor_location_and_rotation(loc, rot, False, True)
+    return actor
+
+
+def _apply_body(uid, parent, label, asset):
+    """El cuerpo de un foco o una cámara (el aparato, el rig): unido a él,
+    se mueve con él. La luz y la cámara siguen siendo las de IRIS."""
+    body_uid = uid + BODY
+    if not asset:
+        _remove([body_uid])
+        return
+    body = _place_asset(body_uid, label + " (cuerpo)", asset,
+                        parent.get_actor_location(), parent.get_actor_rotation())
+    if body is not None and body.get_attach_parent_actor() != parent:
+        rule = unreal.AttachmentRule.KEEP_WORLD
+        body.attach_to_actor(parent, "", rule, rule, rule, False)
+
+
+def _apply_asset(a):
+    """Otra pieza con asset (pared, actor, grip, rigging)."""
+    uid = str(a["id"])
+    _place_asset(uid, "IRIS_%s" % (a.get("name") or uid), a["asset"],
+                 _vec(a["loc"]), _rot(a["rot"]))
+
+
 def _set(obj, name, value):
     try:
         if obj.get_editor_property(name) != value:
@@ -157,6 +227,7 @@ def _apply_light(light):
     cls = _CLASSES.get(kind, unreal.SpotLight)
     label = "IRIS_%s" % (light.get("name") or uid)
     actor = _ensure(uid, cls, label, _vec(light["loc"]), _rot(light["rot"]))
+    _apply_body(uid, actor, label, light.get("asset"))
     comp = actor.get_component_by_class(unreal.LocalLightComponent)
     if comp is None:
         return
@@ -182,6 +253,7 @@ def _apply_camera(cam):
     uid = str(cam["id"])
     label = "IRIS_Cam_%s" % (cam.get("name") or uid)
     actor = _ensure(uid, unreal.CineCameraActor, label, _vec(cam["loc"]), _rot(cam["rot"]))
+    _apply_body(uid, actor, label, cam.get("asset"))
     comp = actor.get_cine_camera_component()
     if comp is None:
         return
@@ -199,25 +271,24 @@ def _apply_prop(p):
     label = "IRIS_%s" % (p.get("name") or uid)
     size = [float(v) for v in p.get("sizeCm", [50, 50, 80])]
     loc = _vec(p["loc"])
-    mesh = None
     if p.get("asset"):
-        mesh = unreal.EditorAssetLibrary.load_asset(p["asset"])
-        if not isinstance(mesh, unreal.StaticMesh):
-            unreal.log_warning("[IRIS Stage] %s no es una malla: va un bloque." % p["asset"])
-            mesh = None
-    lift = 0.0
-    if mesh is None:
-        # Bloque con las medidas de la pieza, apoyado en el suelo.
-        mesh = unreal.EditorAssetLibrary.load_asset(CUBE)
-        lift = size[2] / 2
-        loc = unreal.Vector(loc.x, loc.y, loc.z + lift)
+        _lift[uid] = 0.0
+        if _place_asset(uid, label, p["asset"], loc, _rot(p["rot"])) is not None:
+            return
+    # Bloque con las medidas de la pieza, apoyado en el suelo.
+    mesh = unreal.EditorAssetLibrary.load_asset(CUBE)
+    lift = size[2] / 2
+    loc = unreal.Vector(loc.x, loc.y, loc.z + lift)
+    old = _find(uid)
+    if old is not None and _asset_of(old) is not None:
+        # Antes tenía asset: el bloque es otro actor.
+        _remove([uid])
     actor = _ensure(uid, unreal.StaticMeshActor, label, loc, _rot(p["rot"]))
     _lift[uid] = lift
     comp = actor.static_mesh_component
     if comp.static_mesh != mesh:
         comp.set_static_mesh(mesh)
-    scale = (unreal.Vector(size[0] / 100, size[1] / 100, size[2] / 100)
-             if lift else unreal.Vector(1, 1, 1))
+    scale = unreal.Vector(size[0] / 100, size[1] / 100, size[2] / 100)
     now = actor.get_actor_scale3d()
     if max(abs(now.x - scale.x), abs(now.y - scale.y), abs(now.z - scale.z)) > 0.001:
         actor.set_actor_scale3d(scale)
@@ -302,10 +373,22 @@ def _capture_result(token):
     return data
 
 
+def _source_of(package):
+    p = package.lower()
+    if p.startswith("/game/fab/"):
+        return "fab"
+    if p.startswith("/game/megascans/") or p.startswith("/game/quixel/"):
+        return "megascans"
+    return "project"
+
+
 def _find_assets(query, limit=40):
+    """Mallas, Blueprints y personajes del proyecto que contienen todas las
+    palabras de [query] en su nombre o su carpeta."""
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
+    classes = {"StaticMesh": "mesh", "Blueprint": "blueprint", "SkeletalMesh": "skeletal"}
     flt = unreal.ARFilter(
-        class_paths=[unreal.TopLevelAssetPath("/Script/Engine", "StaticMesh")],
+        class_paths=[unreal.TopLevelAssetPath("/Script/Engine", c) for c in classes],
         package_paths=["/Game"], recursive_paths=True)
     words = [w for w in str(query or "").lower().split() if w]
     out = []
@@ -317,16 +400,28 @@ def _find_assets(query, limit=40):
         hay = (package + " " + name).lower()
         if any(w not in hay for w in words):
             continue
-        mesh = unreal.EditorAssetLibrary.load_asset(package)
-        if not isinstance(mesh, unreal.StaticMesh):
-            continue
-        box = mesh.get_bounding_box()
+        kind = classes.get(str(data.asset_class_path.asset_name), "mesh")
+        if "/metahumans/" in package.lower() and kind == "blueprint":
+            kind = "metahuman"
+        size = None
+        if kind == "mesh":
+            mesh = unreal.EditorAssetLibrary.load_asset(package)
+            if isinstance(mesh, unreal.StaticMesh):
+                box = mesh.get_bounding_box()
+                size = [_round(box.max.x - box.min.x), _round(box.max.y - box.min.y),
+                        _round(box.max.z - box.min.z)]
+        elif kind == "skeletal":
+            mesh = unreal.EditorAssetLibrary.load_asset(package)
+            if isinstance(mesh, unreal.SkeletalMesh):
+                ext = mesh.get_bounds().box_extent
+                size = [_round(ext.x * 2), _round(ext.y * 2), _round(ext.z * 2)]
         out.append({
             "path": "%s.%s" % (package, name),
             "name": name,
             "folder": package.rsplit("/", 1)[0],
-            "sizeCm": [_round(box.max.x - box.min.x), _round(box.max.y - box.min.y),
-                       _round(box.max.z - box.min.z)],
+            "kind": kind,
+            "source": _source_of(package),
+            "sizeCm": size,
         })
         if len(out) >= limit:
             break
@@ -376,6 +471,7 @@ def _apply_sky(sky):
 
 
 def _remove(ids):
+    ids = list(ids) + [str(uid) + BODY for uid in ids if not str(uid).endswith(BODY)]
     for uid in ids:
         actor = _find(str(uid))
         if actor is not None:
@@ -387,12 +483,15 @@ def _apply(data):
     lights = data.get("lights", [])
     cameras = data.get("cameras", [])
     props = data.get("props", [])
+    assets = data.get("assets", [])
     if data.get("world"):
         _ensure_world(data["world"])
     if data.get("full"):
         # Escena entera: lo de IRIS que ya no está, fuera.
         _rescan()
-        keep = ({str(x["id"]) for x in lights + cameras + props} | _FIXED)
+        keep = ({str(x["id"]) for x in lights + cameras + props + assets}
+                | {str(x["id"]) + BODY for x in lights + cameras if x.get("asset")}
+                | _FIXED)
         _remove([uid for uid in list(_actors) if uid not in keep])
     _remove(data.get("remove", []))
     for light in lights:
@@ -401,6 +500,8 @@ def _apply(data):
         _apply_camera(cam)
     for p in props:
         _apply_prop(p)
+    for a in assets:
+        _apply_asset(a)
     if "sun" in data:
         _apply_sun(data["sun"])
     if "sky" in data:

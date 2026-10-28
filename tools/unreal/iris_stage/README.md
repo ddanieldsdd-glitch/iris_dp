@@ -6,7 +6,12 @@ Con esto IRIS y Unreal trabajan juntos en vivo (F6.19, en `docs/PLAN_F6_3D_PREVI
 2. **De Unreal a IRIS:** lo que mueves, giras, regulas o cambias de color en Unreal vuelve a la planta y se guarda.
 3. **Render RTX:** la imagen de Unreal, con Lumen y el trazado de rayos de la tarjeta, se ve dentro de IRIS por Pixel Streaming, también por la cámara de un plano.
 4. **Capturar con RTX:** una foto en alta por la cámara del plano va a su storyboard.
-5. **Assets de Fab y Megascans:** una pieza de atrezzo de IRIS se ve en Unreal con un modelo del proyecto de Unreal; en IRIS queda la pieza con sus medidas.
+5. **Assets de Fab y Megascans:** cualquier elemento de IRIS puede tener su asset de Unreal (malla, Blueprint o personaje):
+   - el atrezzo se ve con ese modelo, y en IRIS la pieza toma sus medidas;
+   - focos y cámaras llevan el cuerpo del aparato o el rig unido a la luz o a la cámara de Unreal;
+   - paredes, puertas y ventanas lo llevan en el centro del tramo y orientado con él;
+   - actores (Manny, Quinn o MetaHuman), grip y rigging, en su sitio.
+   Sin asset, el atrezzo va como bloque y lo demás (salvo focos y cámaras) no sale en Unreal.
 6. **Un mundo por set:** cada set de rodaje es un nivel propio de Unreal.
 
 ## Mundos: cómo se reparte el proyecto
@@ -65,7 +70,7 @@ A mano, si lo prefieres:
    - IRIS mira cada medio segundo si en Unreal se ha tocado alguna pieza suya y se trae el cambio.
 5. Para ver Unreal dentro de IRIS, pulsa **Render RTX** (el icono de la tele). En «Ver por la cámara…» elige una cámara de la planta, y el visor de Unreal pasa a mirar por ella con su focal y su sensor. El reproductor está en el puerto 80; si en Unreal usas otro, cámbialo con el icono de red de esa pantalla.
 6. En la planta de un plano, **Capturar con RTX** saca una foto de 1920 × 1080 por la cámara elegida y la guarda en el storyboard de ese plano, como un render de Unreal. La primera tarda unos segundos más.
-7. Para el atrezzo, abre el 3D a pantalla entera, selecciona la pieza (mesa, sofá, coche…) y pulsa **Elegir asset de Unreal…**. Aparecen las mallas del proyecto de Unreal: lo que hayas añadido de Fab o Megascans, o lo tuyo. Al elegir una, la pieza de IRIS toma sus medidas (huella y alto).
+7. Para darle a un elemento su asset, selecciónalo (en la planta o en el 3D a pantalla entera) y, en su ficha, pulsa **Elegir asset de Unreal…**. Aparece lo del proyecto de Unreal: lo que hayas añadido de Fab o Megascans, o lo tuyo, con su origen. A los actores se les ofrecen personajes; a lo demás, mallas y Blueprints. Una pieza de atrezzo toma además las medidas del asset (huella y alto).
 
 ## Assets de Fab y Megascans
 

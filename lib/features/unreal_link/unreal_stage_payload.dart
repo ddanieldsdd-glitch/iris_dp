@@ -102,6 +102,7 @@ class UnrealStagePayload {
       'sizeCm': size,
       // Hasta dónde llega en Unreal: de sobra para no cortar la luz.
       'reachCm': _r((dist * 400).clamp(2000.0, 10000.0)),
+      'asset': ?f['asset'],
     };
   }
 
@@ -137,6 +138,7 @@ class UnrealStagePayload {
       ),
       'focalMm': _r(sensor / (2 * math.tan(hfov / 2))),
       'sensorMm': _r(sensor),
+      'asset': ?c['asset'],
     };
   }
 
@@ -154,7 +156,23 @@ class UnrealStagePayload {
       'loc': loc([at[0], at[1], p['z0'] ?? 0]),
       'rot': rotToward(math.sin(rad), math.cos(rad), 0),
       'sizeCm': [size, size, _r(((p['heightM'] ?? 0.8) as num) * 100)],
-      'asset': ?p['unrealAsset'],
+      'asset': ?p['asset'],
+    };
+  }
+
+  /// Otra pieza con asset de Unreal (pared, actor, grip, rigging): el asset
+  /// en su sitio y con su giro. Sin asset no va a Unreal.
+  static Map<String, dynamic>? asset(Map a) {
+    final at = a['at'] as List?;
+    if (at == null || a['asset'] == null) return null;
+    final rad = ((a['yawDeg'] ?? 0) as num) * math.pi / 180;
+    return {
+      'id': a['id'],
+      'name': a['name'],
+      'loc': loc([at[0], at[1], a['z0'] ?? 0]),
+      'rot': rotToward(math.sin(rad), math.cos(rad), 0),
+      'lengthCm': ?(a['lengthM'] == null ? null : _r((a['lengthM'] as num) * 100)),
+      'asset': a['asset'],
     };
   }
 
@@ -174,7 +192,7 @@ class UnrealStagePayload {
   }
 
   /// Las listas de piezas que se comparan una a una.
-  static const kinds = ['lights', 'cameras', 'props'];
+  static const kinds = ['lights', 'cameras', 'props', 'assets'];
 
   /// La escena entera para Unreal, en el mundo (nivel) [world].
   static Map<String, dynamic> build(
@@ -188,6 +206,10 @@ class UnrealStagePayload {
       'props': [
         for (final p in (scene['props'] as List? ?? const []).cast<Map>())
           ?prop(p),
+      ],
+      'assets': [
+        for (final a in (scene['assets'] as List? ?? const []).cast<Map>())
+          ?asset(a),
       ],
       'lights': [
         for (final f in (scene['fixtures'] as List? ?? const []).cast<Map>())
