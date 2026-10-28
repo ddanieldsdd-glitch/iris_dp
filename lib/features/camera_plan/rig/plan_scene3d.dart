@@ -65,6 +65,7 @@ class PlanScene3d {
     };
 
     final openings = elements.where(PlanOpening.isOpening).toList();
+    final loads = RigLoads.of(elements, mpu);
     final walls = <Map<String, dynamic>>[];
     final drapes = <Map<String, dynamic>>[];
     final pillars = <Map<String, dynamic>>[];
@@ -118,6 +119,8 @@ class PlanScene3d {
             'z0': level,
             'truss': el.props[PlanRigPoint.trussKey],
             'wllKg': PlanRigPoint.wllKg(el),
+            if (loads[LightOverrides.uidOf(el)] case final load?)
+              'loadKg': _r(load),
           });
         case RigType.hall || RigType.scan || null:
           break;

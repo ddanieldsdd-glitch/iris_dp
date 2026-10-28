@@ -210,6 +210,27 @@ class _HallBuilderSheetState extends State<HallBuilderSheet> {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
+        if (!widget.editing && !widget.freeOutline) ...[
+          _Header('Empezar de', palette),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final (name, hint, recipe) in HallTemplates.all)
+                Tooltip(
+                  message: hint,
+                  child: ActionChip(
+                    label: Text(name),
+                    onPressed: () => setState(() {
+                      _r = recipe;
+                      _rectangle = _isRectangle(recipe);
+                    }),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
         _Header('Forma', palette),
         if (_rectangle) ...[
           _SliderRow(
@@ -406,6 +427,17 @@ class _HallBuilderSheetState extends State<HallBuilderSheet> {
             step: 0.1,
             text: m(r.gridLowM),
             onChanged: (v) => _set(r.copyWith(gridLowM: v)),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Rejilla cruzada'),
+            subtitle: const Text(
+              'Travesaños también por dentro, no solo en '
+              'los extremos.',
+            ),
+            value: r.gridCross,
+            onChanged: (v) => _set(r.copyWith(gridCross: v)),
           ),
           _SliderRow(
             label: 'Distancia a las paredes',

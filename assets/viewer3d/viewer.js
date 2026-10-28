@@ -545,8 +545,11 @@
       const t = trussById[r.truss];
       const s = t ? (t.sizeCm - 1) / 100 : 0.29;
       const z = t ? t.z : 4;
+      // Color por carga: verde holgado, ámbar al límite, rojo pasado.
+      const ratio = r.loadKg !== undefined ? r.loadKg / Math.max(r.wllKg || 500, 1) : null;
+      const loadMat = ratio === null ? null : new THREE.MeshStandardMaterial({ color: ratio > 1 ? 0xd9412b : ratio > 0.8 ? 0xe8a33c : 0x3f9b5f, roughness: 0.6 });
       if (r.type === 'motor') {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.42, 0.26), dark);
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.42, 0.26), loadMat || dark);
         m.position.copy(V(r.at[0], r.at[1], z + s + 0.26));
         m.userData.id = r.id; m.userData.movable = true; m.userData.dragY = z + s; picks.push(m);
         L.rig.add(m);
@@ -561,7 +564,7 @@
         const base = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.05, 0.9), dark);
         base.position.copy(V(r.at[0], r.at[1], z0 + 0.025));
         L.rig.add(base);
-        const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.42), steel);
+        const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.42), loadMat || steel);
         sleeve.position.copy(V(r.at[0], r.at[1], z + s / 2));
         L.rig.add(sleeve);
       }
