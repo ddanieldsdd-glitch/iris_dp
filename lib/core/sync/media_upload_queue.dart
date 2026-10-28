@@ -343,7 +343,8 @@ class MediaUploadQueue {
       final slot = mediaSlotFor(row.entityType);
       final isFile =
           slot?.kind == MediaKind.file ||
-          row.entityType == MediaEntityType.sketchStrokes;
+          row.entityType == MediaEntityType.sketchStrokes ||
+          row.entityType == MediaEntityType.unrealThumb;
       final result = isFile
           ? await _cloud.uploadRawFile(
               localPath: row.localPath,

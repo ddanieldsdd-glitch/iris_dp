@@ -29,6 +29,10 @@ abstract final class MediaEntityType {
   static const exposureBlockImage = 'exposure_block_image';
   static const locationRefImage = 'location_ref_image';
 
+  /// Miniatura de un asset de Unreal (cenital o 3/4), por ruta del asset:
+  /// ver `UnrealThumbStore`. Va como archivo, no por Cloudinary.
+  static const unrealThumb = 'unreal_thumb';
+
   /// Trazos editables de un boceto (`<imagen>.trazos.json`), que viajan con
   /// su imagen. Clave: `<tipo de la imagen>|<clave de la imagen>`.
   static const sketchStrokes = 'sketch_strokes';
