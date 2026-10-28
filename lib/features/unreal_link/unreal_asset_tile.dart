@@ -11,6 +11,7 @@ import '../camera_plan/camera_plan_constants.dart';
 import '../camera_plan/camera_plan_element_model.dart';
 import '../camera_plan/light/light_scene.dart';
 import '../camera_plan/rig/plan_scene3d.dart';
+import 'unreal_library.dart';
 import 'unreal_link.dart';
 import 'unreal_thumbs.dart';
 
@@ -92,6 +93,7 @@ class _UnrealAssetTileState extends State<UnrealAssetTile> {
     try {
       final withThumbs = await UnrealThumbs.render(widget.link, projectId, ref);
       UnrealAssetRef.set(widget.element, withThumbs);
+      await UnrealLibrary.instance.remember(withThumbs, projectId: projectId);
       await widget.onChanged();
     } catch (e) {
       if (mounted) setState(() => _error = UnrealLink.describe(e));
@@ -115,8 +117,24 @@ class _UnrealAssetTileState extends State<UnrealAssetTile> {
       return;
     }
     UnrealAssetTile.assign(widget.element, picked.asset!);
+    // Si ya tiene miniaturas en la biblioteca, se usan esas.
+    final known = UnrealLibrary.instance.entryOf(picked.asset!.path)?.ref;
+    if (known?.thumb34 != null) {
+      UnrealAssetRef.set(
+        widget.element,
+        UnrealAssetRef.of(widget.element)!.copyWith(
+          thumbTop: known!.thumbTop,
+          thumb34: known.thumb34,
+          topSpanCm: known.topSpanCm,
+        ),
+      );
+    }
+    await UnrealLibrary.instance.remember(
+      UnrealAssetRef.of(widget.element)!,
+      projectId: widget.projectId,
+    );
     await widget.onChanged();
-    await _renderThumbs();
+    if (known?.thumb34 == null) await _renderThumbs();
   }
 
   @override
