@@ -27,6 +27,7 @@ import '../../unreal_link/unreal_asset_tile.dart';
 import '../../unreal_link/unreal_render_view.dart';
 import '../../unreal_link/unreal_return.dart';
 import '../../unreal_link/unreal_stage_payload.dart';
+import '../../unreal_link/unreal_thumbs.dart';
 import 'scan_store.dart';
 import 'rig_report.dart';
 
@@ -86,6 +87,9 @@ class Plan3dView extends StatefulWidget {
   /// «Abrir en Unreal» del proyecto de esta planta.
   final Future<void> Function()? onOpenUnreal;
 
+  /// Proyecto de la planta: sus miniaturas de Unreal.
+  final int? projectId;
+
   const Plan3dView({
     super.key,
     required this.elements,
@@ -102,6 +106,7 @@ class Plan3dView extends StatefulWidget {
     this.unrealWorld,
     this.onUnrealCapture,
     this.onOpenUnreal,
+    this.projectId,
   });
 
   static const asset = 'assets/viewer3d/index.html';
@@ -147,6 +152,7 @@ class _Plan3dViewState extends State<Plan3dView> {
     super.initState();
     _realLength.addListener(() => setState(() {}));
     _fromUnreal = UnrealLink.instance.edits.listen(_applyFromUnreal);
+    UnrealThumbs.instance.addListener(_onThumbs);
     _schedule();
   }
 
@@ -163,6 +169,7 @@ class _Plan3dViewState extends State<Plan3dView> {
   @override
   void dispose() {
     _fromUnreal?.cancel();
+    UnrealThumbs.instance.removeListener(_onThumbs);
     _debounce?.cancel();
     _realLength.dispose();
     super.dispose();
@@ -192,8 +199,39 @@ class _Plan3dViewState extends State<Plan3dView> {
     _sent = json;
     setState(() => _scene = scene);
     await web.evaluateJavascript(source: 'iris.load($json);');
+    unawaited(_sendThumbs());
     await _pushSelection();
     if (_floor) unawaited(_pushFloor());
+  }
+
+  /// Miniaturas 3/4 ya mandadas al visor.
+  final _sentThumbs = <String>{};
+
+  /// Manda al visor las miniaturas que pide la escena y aún no tiene: van
+  /// una vez, como imagen, y el visor rehace el atrezzo con ellas.
+  Future<void> _sendThumbs() async {
+    final projectId = widget.projectId;
+    final scene = _scene;
+    if (projectId == null || scene == null || !_ready) return;
+    final out = <String, String>{};
+    for (final p in (scene['props'] as List? ?? const []).cast<Map>()) {
+      final key = p['thumb'] as String?;
+      if (key == null || _sentThumbs.contains(key)) continue;
+      final file = UnrealThumbs.instance.file(projectId, key);
+      if (file == null) continue;
+      try {
+        out[key] =
+            'data:image/png;base64,${base64Encode(await File(file).readAsBytes())}';
+        _sentThumbs.add(key);
+      } catch (_) {}
+    }
+    if (out.isNotEmpty) await _call('iris.thumbs(${jsonEncode(out)});');
+  }
+
+  void _onThumbs() {
+    // Una miniatura nueva (o rehecha): se vuelve a mandar.
+    _sentThumbs.clear();
+    unawaited(_sendThumbs());
   }
 
   /// Calcula la luz en el suelo aparte y la manda; si entretanto la planta
@@ -955,6 +993,7 @@ class _Plan3dViewState extends State<Plan3dView> {
           UnrealAssetTile(
               element: _selected!,
               link: UnrealLink.instance,
+              projectId: widget.projectId,
               onChanged: _update,
             ),
         ],
@@ -1307,6 +1346,7 @@ class Plan3dScreen extends StatefulWidget {
   final UnrealWorld? unrealWorld;
   final UnrealCaptureSink? onUnrealCapture;
   final Future<void> Function()? onOpenUnreal;
+  final int? projectId;
 
   const Plan3dScreen({
     super.key,
@@ -1321,6 +1361,7 @@ class Plan3dScreen extends StatefulWidget {
     this.unrealWorld,
     this.onUnrealCapture,
     this.onOpenUnreal,
+    this.projectId,
   });
 
   static Future<void> show(
@@ -1336,6 +1377,7 @@ class Plan3dScreen extends StatefulWidget {
     UnrealWorld? unrealWorld,
     UnrealCaptureSink? onUnrealCapture,
     Future<void> Function()? onOpenUnreal,
+    int? projectId,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -1350,6 +1392,7 @@ class Plan3dScreen extends StatefulWidget {
         unrealWorld: unrealWorld,
         onUnrealCapture: onUnrealCapture,
         onOpenUnreal: onOpenUnreal,
+        projectId: projectId,
       ),
     ),
   );
@@ -1393,6 +1436,7 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       unrealWorld: widget.unrealWorld,
       onUnrealCapture: widget.onUnrealCapture,
       onOpenUnreal: widget.onOpenUnreal,
+      projectId: widget.projectId,
     ),
   );
 }

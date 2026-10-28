@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -11,21 +12,27 @@ import '../camera_plan/camera_plan_element_model.dart';
 import '../camera_plan/light/light_scene.dart';
 import '../camera_plan/rig/plan_scene3d.dart';
 import 'unreal_link.dart';
+import 'unreal_thumbs.dart';
 
 /// Qué asset de Unreal (Fab, Megascans o propio) hace de este elemento en
 /// Unreal: cualquier tipo, no solo el atrezzo (F6.20 B2). Los assets de Fab
 /// y Megascans solo se pueden usar dentro de Unreal: no se copian a IRIS,
-/// que guarda su ruta y, en el atrezzo, sus medidas.
-class UnrealAssetTile extends StatelessWidget {
+/// que guarda su ruta, en el atrezzo sus medidas y, con [projectId], las
+/// miniaturas que renderiza Unreal (B3), que viajan por la nube.
+class UnrealAssetTile extends StatefulWidget {
   final PlanElement element;
   final UnrealLink link;
   final Future<void> Function() onChanged;
+
+  /// Proyecto donde se guardan las miniaturas; sin él, no se renderizan.
+  final int? projectId;
 
   const UnrealAssetTile({
     super.key,
     required this.element,
     required this.link,
     required this.onChanged,
+    this.projectId,
   });
 
   static UnrealAssetRef? assetOf(PlanElement el) => UnrealAssetRef.of(el);
@@ -66,65 +73,150 @@ class UnrealAssetTile extends StatelessWidget {
   };
 
   @override
+  State<UnrealAssetTile> createState() => _UnrealAssetTileState();
+}
+
+class _UnrealAssetTileState extends State<UnrealAssetTile> {
+  bool _rendering = false;
+  String? _error;
+
+  /// Pide a Unreal las miniaturas del asset del elemento y las guarda.
+  Future<void> _renderThumbs() async {
+    final ref = UnrealAssetRef.of(widget.element);
+    final projectId = widget.projectId;
+    if (ref == null || projectId == null || !widget.link.isOn) return;
+    setState(() {
+      _rendering = true;
+      _error = null;
+    });
+    try {
+      final withThumbs = await UnrealThumbs.render(widget.link, projectId, ref);
+      UnrealAssetRef.set(widget.element, withThumbs);
+      await widget.onChanged();
+    } catch (e) {
+      if (mounted) setState(() => _error = UnrealLink.describe(e));
+    } finally {
+      if (mounted) setState(() => _rendering = false);
+    }
+  }
+
+  Future<void> _pick() async {
+    final picked = await showDialog<_Pick>(
+      context: context,
+      builder: (_) => _AssetDialog(
+        link: widget.link,
+        kinds: UnrealAssetTile.kindsFor(widget.element),
+      ),
+    );
+    if (picked == null) return;
+    if (picked.asset == null) {
+      UnrealAssetRef.set(widget.element, null);
+      await widget.onChanged();
+      return;
+    }
+    UnrealAssetTile.assign(widget.element, picked.asset!);
+    await widget.onChanged();
+    await _renderThumbs();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final asset = assetOf(element);
+    final link = widget.link;
+    final thumbs = UnrealThumbs.instance;
     return ListenableBuilder(
-      listenable: link,
-      builder: (context, _) => Padding(
-        padding: const EdgeInsets.only(top: AppSpacing.sm),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('En Unreal', style: AppTypography.label(palette)),
-            Text(
-              asset == null ? withoutAsset(element) : asset.name,
-              style: AppTypography.bodyMedium(palette),
-            ),
-            if (asset != null)
+      listenable: Listenable.merge([link, thumbs]),
+      builder: (context, _) {
+        final asset = UnrealAssetTile.assetOf(widget.element);
+        final projectId = widget.projectId;
+        final file = projectId == null
+            ? null
+            : thumbs.file(projectId, asset?.thumb34);
+        return Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('En Unreal', style: AppTypography.label(palette)),
+              if (file != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: ColoredBox(
+                      color: palette.surfaceElevated,
+                      child: Image.file(
+                        File(file),
+                        height: 140,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                ),
               Text(
-                '${asset.source.label} · ${asset.path}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.caption(
-                  palette,
-                ).copyWith(color: palette.textTertiary),
+                asset == null
+                    ? UnrealAssetTile.withoutAsset(widget.element)
+                    : asset.name,
+                style: AppTypography.bodyMedium(palette),
               ),
-            const SizedBox(height: AppSpacing.xs),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.chair_outlined, size: 16),
-              label: Text(
-                asset == null ? 'Elegir asset de Unreal…' : 'Cambiar asset…',
+              if (asset != null)
+                Text(
+                  [
+                    asset.source.label,
+                    if (asset.sizeCm case final s?)
+                      '${s.map((v) => v.round()).join(' × ')} cm',
+                    asset.path,
+                  ].join(' · '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.caption(
+                    palette,
+                  ).copyWith(color: palette.textTertiary),
+                ),
+              const SizedBox(height: AppSpacing.xs),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.chair_outlined, size: 16),
+                label: Text(
+                  asset == null ? 'Elegir asset de Unreal…' : 'Cambiar asset…',
+                ),
+                onPressed: link.isOn && !_rendering ? _pick : null,
               ),
-              onPressed: link.isOn
-                  ? () async {
-                      final picked = await showDialog<_Pick>(
-                        context: context,
-                        builder: (_) => _AssetDialog(
-                          link: link,
-                          kinds: kindsFor(element),
-                        ),
-                      );
-                      if (picked == null) return;
-                      if (picked.asset == null) {
-                        UnrealAssetRef.set(element, null);
-                      } else {
-                        assign(element, picked.asset!);
-                      }
-                      await onChanged();
-                    }
-                  : null,
-            ),
-            if (!link.isOn)
-              Text(
-                'Conecta con Unreal para elegir un asset de su proyecto.',
-                style: AppTypography.caption(
-                  palette,
-                ).copyWith(color: palette.textTertiary),
-              ),
-          ],
-        ),
-      ),
+              if (asset != null && projectId != null && link.isOn)
+                TextButton.icon(
+                  icon: _rendering
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.photo_camera_outlined, size: 16),
+                  label: Text(
+                    _rendering
+                        ? 'Unreal está haciendo las miniaturas…'
+                        : asset.thumb34 == null
+                        ? 'Hacer miniaturas en Unreal'
+                        : 'Volver a hacer las miniaturas',
+                  ),
+                  onPressed: _rendering ? null : _renderThumbs,
+                ),
+              if (_error != null)
+                Text(
+                  _error!,
+                  style: AppTypography.caption(
+                    palette,
+                  ).copyWith(color: palette.error),
+                ),
+              if (!link.isOn)
+                Text(
+                  'Conecta con Unreal para elegir un asset de su proyecto.',
+                  style: AppTypography.caption(
+                    palette,
+                  ).copyWith(color: palette.textTertiary),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

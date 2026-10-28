@@ -26,7 +26,8 @@ Funciones:
   ViewThrough(id)    → el visor del editor (y Pixel Streaming) por esa cámara
   Capture(json)      → {"ok": true, "token": …}: foto en alta por una cámara
   CaptureResult(tok) → {"ok": true, "ready": bool, "png": base64}
-  FindAssets(texto)  → {"ok": true, "assets": [{path, name, sizeCm}]}
+  FindAssets(texto)  → {"ok": true, "assets": [{path, name, kind, source, sizeCm}]}
+  AssetPreview(ruta) → {"ok": true, "top": png64, "threeQuarter": png64, "topSpanCm"}
 
 La ruta del objeto para Remote Control es
 `/Game/Python/iris_stage_link_PY.Default__IrisStageLink` (el módulo tiene
@@ -35,11 +36,14 @@ que estar en Content/Python del proyecto).
 
 import base64
 import json
+import math
 import os
 import re
+import struct
 import time
 import unicodedata
 import uuid
+import zlib
 
 import unreal
 
@@ -428,6 +432,116 @@ def _find_assets(query, limit=40):
     return out
 
 
+# ── Miniaturas (F6.20 B3) ──────────────────────────────────────────────
+# Unreal fotografía el asset (cenital con transparencia y 3/4) lejos del
+# set, con luces propias y una cámara de captura que solo lo ve a él. IRIS
+# guarda las fotos y las sube: son un render, no el modelo.
+PREVIEW_AT = unreal.Vector(5000000.0, 5000000.0, 0.0)  # a 50 km del set
+PREVIEW_PX = 512
+TOP_MARGIN = 1.08
+
+
+def _png_rgba(width, height, rgba):
+    """Un PNG de 8 bits RGBA, sin depender de librerías de imagen."""
+    stride = width * 4
+    raw = b"".join(b"\x00" + bytes(rgba[y * stride:(y + 1) * stride]) for y in range(height))
+
+    def chunk(kind, data):
+        return (struct.pack(">I", len(data)) + kind + data
+                + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF))
+
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw, 6))
+            + chunk(b"IEND", b""))
+
+
+def _shoot(world, target, loc, rot, ortho_width=None, fov=30.0):
+    """Una foto de [target] solo, en HDR, con su opacidad: PNG con alfa."""
+    rt = unreal.RenderingLibrary.create_render_target2d(
+        world, PREVIEW_PX, PREVIEW_PX, unreal.TextureRenderTargetFormat.RTF_RGBA16F,
+        unreal.LinearColor(0, 0, 0, 0), False)
+    cap = _actor_subsystem().spawn_actor_from_class(unreal.SceneCapture2D, loc, rot)
+    try:
+        comp = cap.capture_component2d
+        comp.set_editor_property("texture_target", rt)
+        comp.set_editor_property("capture_source", unreal.SceneCaptureSource.SCS_SCENE_COLOR_HDR)
+        comp.set_editor_property("primitive_render_mode",
+                                 unreal.SceneCapturePrimitiveRenderMode.PRM_USE_SHOW_ONLY_LIST)
+        comp.show_only_actor_components(target)
+        comp.set_editor_property("capture_every_frame", False)
+        comp.set_editor_property("capture_on_movement", False)
+        if ortho_width is not None:
+            comp.set_editor_property("projection_type", unreal.CameraProjectionMode.ORTHOGRAPHIC)
+            comp.set_editor_property("ortho_width", float(ortho_width))
+        else:
+            comp.set_editor_property("fov_angle", float(fov))
+        comp.capture_scene()
+        pixels = unreal.RenderingLibrary.read_render_target_raw(world, rt)
+    finally:
+        _actor_subsystem().destroy_actor(cap)
+    # En HDR, A es la opacidad al revés. El color se normaliza con lo más
+    # claro de la pieza: la foto no depende de la exposición del set.
+    lum = sorted(0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b for c in pixels if c.a < 0.5)
+    peak = lum[int(len(lum) * 0.98)] if lum else 1.0
+    gain = 0.85 / peak if peak > 1e-6 else 1.0
+    out = bytearray(len(pixels) * 4)
+    for i, c in enumerate(pixels):
+        alpha = 1.0 - min(max(c.a, 0.0), 1.0)
+        for k, v in enumerate((c.r, c.g, c.b)):
+            v = min(max(v * gain, 0.0), 1.0) ** (1 / 2.2)
+            out[i * 4 + k] = int(v * 255 + 0.5)
+        out[i * 4 + 3] = int(alpha * 255 + 0.5)
+    return _png_rgba(PREVIEW_PX, PREVIEW_PX, out)
+
+
+def _asset_preview(path):
+    obj = unreal.EditorAssetLibrary.load_asset(path)
+    if obj is None:
+        raise ValueError("No encuentro el asset %s." % path)
+    world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    temp = []
+    try:
+        target = _actor_subsystem().spawn_actor_from_object(obj, PREVIEW_AT, unreal.Rotator())
+        if target is None:
+            raise ValueError("%s no se puede poner en el nivel." % path)
+        temp.append(target)
+        origin, extent = target.get_actor_bounds(False)
+        off_x, off_y = origin.x - PREVIEW_AT.x, origin.y - PREVIEW_AT.y
+        # La cenital, centrada en el punto de apoyo de la pieza: IRIS la
+        # dibuja centrada en el elemento, girada con él.
+        half = max(abs(off_x) + extent.x, abs(off_y) + extent.y, 1.0) * TOP_MARGIN
+        radius = max(math.sqrt(extent.x ** 2 + extent.y ** 2 + extent.z ** 2), 1.0)
+        # Luces propias (llave, relleno y contra), solo allí.
+        for dx, dy, dz, power in ((1.2, -0.8, 1.4, 1.0), (-1.0, -1.2, 0.6, 0.45), (-0.6, 1.3, 1.1, 0.6)):
+            light = _actor_subsystem().spawn_actor_from_class(
+                unreal.PointLight,
+                unreal.Vector(origin.x + dx * radius * 2, origin.y + dy * radius * 2,
+                              origin.z + dz * radius * 2),
+                unreal.Rotator())
+            comp = light.get_component_by_class(unreal.PointLightComponent)
+            comp.set_editor_property("intensity_units", unreal.LightUnits.CANDELAS)
+            comp.set_editor_property("intensity", 2000.0 * power * (radius / 100.0) ** 2)
+            comp.set_editor_property("attenuation_radius", radius * 8)
+            temp.append(light)
+        top = _shoot(world, target,
+                     unreal.Vector(PREVIEW_AT.x, PREVIEW_AT.y, origin.z + extent.z + radius * 2),
+                     unreal.Rotator(roll=0.0, pitch=-90.0, yaw=0.0), ortho_width=half * 2)
+        eye = unreal.Vector(0.75, 0.6, 0.5)
+        dist = radius / math.tan(math.radians(15)) * 1.15
+        norm = math.sqrt(eye.x ** 2 + eye.y ** 2 + eye.z ** 2)
+        at = unreal.Vector(origin.x + eye.x / norm * dist, origin.y + eye.y / norm * dist,
+                           origin.z + eye.z / norm * dist)
+        look = unreal.MathLibrary.find_look_at_rotation(at, origin)
+        three = _shoot(world, target, at, look, fov=30.0)
+        return {"top": base64.b64encode(top).decode("ascii"),
+                "threeQuarter": base64.b64encode(three).decode("ascii"),
+                "topSpanCm": _round(half * 2)}
+    finally:
+        for actor in temp:
+            _actor_subsystem().destroy_actor(actor)
+
+
 def _view_through(uid):
     actor = _find(str(uid))
     if actor is None:
@@ -593,6 +707,17 @@ class IrisStageLink(unreal.BlueprintFunctionLibrary):
         try:
             return json.dumps({"ok": True, "assets": _find_assets(query)})
         except Exception as exc:
+            return json.dumps({"ok": False, "error": str(exc)})
+
+    @unreal.ufunction(static=True, params=[str], ret=str,
+                      meta=dict(Category="IRIS Stage"))
+    def AssetPreview(path):
+        try:
+            result = _asset_preview(path)
+            result["ok"] = True
+            return json.dumps(result)
+        except Exception as exc:
+            unreal.log_error("[IRIS Stage] AssetPreview: %s" % exc)
             return json.dumps({"ok": False, "error": str(exc)})
 
     @unreal.ufunction(static=True, ret=str, meta=dict(Category="IRIS Stage"))

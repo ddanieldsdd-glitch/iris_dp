@@ -62,6 +62,8 @@
   // etiquetas con el nombre de cada pieza.
   let palette = {};
   let showNames = false;
+  // Miniaturas 3/4 de los assets de Unreal (F6.20 B4): clave → textura.
+  const thumbTex = {};
   const labelsGroup = new THREE.Group();
   let labels = [];
   scene.add(labelsGroup);
@@ -818,8 +820,20 @@
       L.people.add(g);
     }
     for (const p of sc.props || []) {
-      const mat = new THREE.MeshStandardMaterial({ color: catColor(p.cat), roughness: 0.75 });
+      const thumb = p.thumb && thumbTex[p.thumb];
+      // Con miniatura del asset, el bloque queda tenue y la foto va de
+      // cartel, siempre de cara: el modelo real solo vive en Unreal.
+      const mat = new THREE.MeshStandardMaterial({ color: catColor(p.cat), roughness: 0.75,
+        transparent: !!thumb, opacity: thumb ? 0.18 : 1, depthWrite: !thumb });
       const g = propShape(p, mat);
+      if (thumb) {
+        const side = Math.max(p.sizeM || 0.5, p.heightM || 0.8) * 1.15;
+        const card = new THREE.Sprite(new THREE.SpriteMaterial({ map: thumb, transparent: true }));
+        card.scale.set(side, side, 1);
+        card.position.y = side / 2;
+        card.userData.thumb = true;
+        g.add(card);
+      }
       g.position.copy(V(p.at[0], p.at[1], p.z0 || 0));
       g.rotation.y = -(p.yawDeg || 0) * Math.PI / 180;
       g.name = (p.name || 'Pieza') + ' · ' + p.id;
@@ -1140,6 +1154,25 @@
     select: (id) => highlight(id),
     floor: (f) => setFloorLight(f),
     exportGlb,
+    // Miniaturas que manda la app: {clave: dataURL}. El atrezzo se rehace
+    // con ellas cuando están cargadas.
+    thumbs: (map) => {
+      const keys = Object.keys(map || {});
+      let pending = keys.length;
+      for (const key of keys) {
+        const img = new Image();
+        img.onload = () => {
+          const tx = new THREE.Texture(img);
+          tx.encoding = THREE.sRGBEncoding;
+          tx.needsUpdate = true;
+          if (thumbTex[key]) thumbTex[key].dispose();
+          thumbTex[key] = tx;
+          if (--pending === 0 && lastScene) load(lastScene);
+        };
+        img.onerror = () => { if (--pending === 0 && lastScene) load(lastScene); };
+        img.src = map[key];
+      }
+    },
     set: (o) => {
       if ('cones' in o) { showCones = !!o.cones; cones.forEach((c) => (c.visible = showCones)); }
       if ('roof' in o) { showRoof = !!o.roof; roofs.forEach((r) => (r.visible = showRoof)); }

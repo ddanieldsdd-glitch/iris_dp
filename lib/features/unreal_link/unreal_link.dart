@@ -254,6 +254,21 @@ class UnrealLink extends ChangeNotifier {
     throw UnrealLinkException('Unreal no ha terminado la captura en 2 minutos.');
   }
 
+  /// Fotos del asset [path] que renderiza Unreal (F6.20 B3): cenital con
+  /// transparencia y 3/4, en PNG de 512 px, y lo que cubre de lado la
+  /// cenital en centímetros.
+  Future<({Uint8List top, Uint8List threeQuarter, double topSpanCm})>
+  assetPreview(String path) async {
+    final r = await call('AssetPreview', {
+      'path': path,
+    }, const Duration(minutes: 2));
+    return (
+      top: base64Decode(r['top'] as String),
+      threeQuarter: base64Decode(r['threeQuarter'] as String),
+      topSpanCm: ((r['topSpanCm'] ?? 100) as num).toDouble(),
+    );
+  }
+
   /// Mallas del proyecto de Unreal (Fab, Megascans o propias) que contienen
   /// [query] en el nombre o la carpeta.
   Future<List<UnrealAsset>> findAssets(String query) async {

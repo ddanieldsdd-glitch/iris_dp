@@ -64,9 +64,14 @@ class UnrealAssetRef {
   /// Ancho, fondo y alto, en centímetros, si se conocen.
   final List<double>? sizeCm;
 
-  /// Miniaturas que renderiza Unreal (B3): cenital y 3/4.
+  /// Miniaturas que renderiza Unreal (B3): claves de [UnrealThumbStore]
+  /// de la cenital (con transparencia) y de la 3/4.
   final String? thumbTop;
   final String? thumb34;
+
+  /// Lo que cubre de lado la cenital, en centímetros, centrada en el punto
+  /// de apoyo de la pieza: con ella se dibuja a escala en la planta.
+  final double? topSpanCm;
 
   const UnrealAssetRef({
     required this.path,
@@ -76,6 +81,7 @@ class UnrealAssetRef {
     this.sizeCm,
     this.thumbTop,
     this.thumb34,
+    this.topSpanCm,
   });
 
   /// Un asset nuevo a partir de su ruta: nombre y origen salen de ella.
@@ -103,6 +109,7 @@ class UnrealAssetRef {
     'sizeCm': ?sizeCm,
     'thumbTop': ?thumbTop,
     'thumb34': ?thumb34,
+    'topSpanCm': ?topSpanCm,
   };
 
   static UnrealAssetRef? fromJson(Object? raw) {
@@ -122,6 +129,7 @@ class UnrealAssetRef {
           : null,
       thumbTop: raw['thumbTop'] as String?,
       thumb34: raw['thumb34'] as String?,
+      topSpanCm: (raw['topSpanCm'] as num?)?.toDouble(),
     );
   }
 
@@ -158,14 +166,18 @@ class UnrealAssetRef {
   /// Lo que va a Unreal: qué cargar y cómo colocarlo.
   Map<String, dynamic> toPayload() => {'path': path, 'kind': kind.name};
 
-  UnrealAssetRef copyWith({String? thumbTop, String? thumb34}) =>
-      UnrealAssetRef(
-        path: path,
-        name: name,
-        kind: kind,
-        source: source,
-        sizeCm: sizeCm,
-        thumbTop: thumbTop ?? this.thumbTop,
-        thumb34: thumb34 ?? this.thumb34,
-      );
+  UnrealAssetRef copyWith({
+    String? thumbTop,
+    String? thumb34,
+    double? topSpanCm,
+  }) => UnrealAssetRef(
+    path: path,
+    name: name,
+    kind: kind,
+    source: source,
+    sizeCm: sizeCm,
+    thumbTop: thumbTop ?? this.thumbTop,
+    thumb34: thumb34 ?? this.thumb34,
+    topSpanCm: topSpanCm ?? this.topSpanCm,
+  );
 }
