@@ -10,6 +10,7 @@ import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/compact_nav_shell.dart';
 import '../shoot_documents/shoot_document_import_actions.dart';
 import '../shoot_documents/state/shoot_document_providers.dart';
 import 'project_hub_destinations.dart';
@@ -148,7 +149,34 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // iPhone: barra inferior con lo que se consulta en set (IP.1.2). En iPad
+    // y escritorio la shell devuelve el hub tal cual.
+    return CompactNavShell(
+      tabs: [
+        CompactNavTab(
+          label: 'Proyecto',
+          icon: Icons.dashboard_outlined,
+          selectedIcon: Icons.dashboard,
+          builder: _buildHub,
+        ),
+        for (final tab in compactHubTabs)
+          CompactNavTab(
+            label: tab.label,
+            icon: tab.icon,
+            selectedIcon: tab.selectedIcon,
+            builder: (_) => ProjectHubRouter.screenFor(
+              id: tab.id,
+              project: widget.project,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHub(BuildContext context) {
     final palette = context.palette;
+    final compact = AppLayout.isCompact(context);
+    final gutter = AppLayout.gutter(context, regular: AppSpacing.xl);
     final destinations = buildProjectHubDestinations()
         .where((d) => d.visible())
         .toList();
@@ -157,7 +185,7 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 280,
+            expandedHeight: compact ? 180 : 280,
             pinned: true,
             backgroundColor: palette.surface,
             iconTheme: IconThemeData(color: palette.textPrimary),
@@ -195,10 +223,10 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.lg,
-                AppSpacing.xl,
+              padding: EdgeInsets.fromLTRB(
+                gutter,
+                compact ? AppSpacing.md : AppSpacing.lg,
+                gutter,
                 AppSpacing.md,
               ),
               child: Column(
@@ -293,12 +321,7 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
             ),
           ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.xl,
-              0,
-              AppSpacing.xl,
-              AppSpacing.xl,
-            ),
+            padding: EdgeInsets.fromLTRB(gutter, 0, gutter, gutter),
             sliver: SliverLayoutBuilder(
               builder: (context, constraints) {
                 final crossAxisCount = constraints.crossAxisExtent >=
@@ -313,12 +336,16 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
                     crossAxisCount: crossAxisCount,
                     crossAxisSpacing: AppSpacing.md,
                     mainAxisSpacing: AppSpacing.md,
-                    childAspectRatio: crossAxisCount == 1 ? 2.4 : 1.25,
+                    // En el iPhone la columna es estrecha: la tarjeta va
+                    // algo más alta para que quepan título y subtítulo.
+                    childAspectRatio: crossAxisCount == 1
+                        ? (compact ? 2.0 : 2.4)
+                        : 1.25,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       final destination = destinations[index];
-                      return _HubCard(
+                      return ProjectHubCard(
                         destination: destination,
                         stats: _stats,
                         onTap: () => _openDestination(destination),
@@ -336,12 +363,14 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
   }
 }
 
-class _HubCard extends StatelessWidget {
+/// Tarjeta de módulo del hub (pública para las pruebas a 390 de IP.1).
+class ProjectHubCard extends StatelessWidget {
   final ProjectHubDestination destination;
   final ProjectHubStats stats;
   final VoidCallback onTap;
 
-  const _HubCard({
+  const ProjectHubCard({
+    super.key,
     required this.destination,
     required this.stats,
     required this.onTap,
@@ -354,9 +383,12 @@ class _HubCard extends StatelessWidget {
     final highlighted = destination.highlight(stats);
     final subtitle = destination.subtitle(stats);
 
+    final compact = AppLayout.isCompact(context);
+    final iconBox = compact ? 36.0 : 44.0;
+
     return AppCard(
       onTap: onTap,
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: EdgeInsets.all(compact ? AppSpacing.md : AppSpacing.lg),
       focused: highlighted,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -364,8 +396,8 @@ class _HubCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: iconBox,
+                height: iconBox,
                 decoration: BoxDecoration(
                   color: destination.accentColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
@@ -380,7 +412,7 @@ class _HubCard extends StatelessWidget {
                   color: available
                       ? destination.accentColor
                       : palette.textTertiary,
-                  size: 24,
+                  size: compact ? 20 : 24,
                 ),
               ),
               const Spacer(),

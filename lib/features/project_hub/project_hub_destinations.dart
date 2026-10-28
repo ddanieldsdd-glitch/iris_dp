@@ -136,3 +136,42 @@ List<ProjectHubDestination> buildProjectHubDestinations() {
     ),
   ];
 }
+
+/// Pestaña de la barra inferior del hub en el iPhone (IP.1.2).
+class CompactHubTab {
+  final ProjectHubDestinationId id;
+  final String label;
+  final IconData icon;
+  final IconData selectedIcon;
+
+  const CompactHubTab({
+    required this.id,
+    required this.label,
+    required this.icon,
+    required this.selectedIcon,
+  });
+}
+
+/// Lo que se consulta en set, por orden de uso (PLAN_IPHONE, prioridades):
+/// documento del día, storyboard y localizaciones (fotos). La planta entra
+/// cuando esté adaptada a compacto (IP.3); hasta entonces se abre desde el hub.
+const compactHubTabs = <CompactHubTab>[
+  CompactHubTab(
+    id: ProjectHubDestinationId.dailyOrder,
+    label: 'Rodaje',
+    icon: Icons.description_outlined,
+    selectedIcon: Icons.description,
+  ),
+  CompactHubTab(
+    id: ProjectHubDestinationId.storyboard,
+    label: 'Storyboard',
+    icon: Icons.view_comfy_outlined,
+    selectedIcon: Icons.view_comfy,
+  ),
+  CompactHubTab(
+    id: ProjectHubDestinationId.locations,
+    label: 'Localiz.',
+    icon: Icons.location_city_outlined,
+    selectedIcon: Icons.location_city,
+  ),
+];

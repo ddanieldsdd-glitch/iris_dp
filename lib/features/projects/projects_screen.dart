@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/sync/project_cloud_actions.dart';
@@ -15,6 +14,8 @@ import '../auth/auth_screen.dart';
 import 'project_form_sheet.dart';
 import 'project_card_actions.dart';
 import 'project_card_stats.dart';
+import 'projects_header.dart';
+import '../../core/theme/app_layout.dart';
 import 'project_poster_card.dart';
 import '../project_hub/project_hub_screen.dart';
 import '../../core/widgets/app_snackbar.dart';
@@ -64,57 +65,21 @@ class ProjectsScreen extends ConsumerWidget {
             const OfflineStatusBanner(),
             const UpdateAvailableBanner(),
             const SideStoreReminderBanner(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.xl,
-                AppSpacing.xl,
-                AppSpacing.lg,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'IRIS',
-                          style: AppTypography.displayMedium(palette),
-                        ),
-                        Text(
-                          'Proyectos',
-                          style: AppTypography.bodyMedium(palette),
-                        ),
-                      ],
-                    ),
+            ProjectsHeader(
+              statusActions: [
+                IconButton(
+                  tooltip: 'Ajustes',
+                  icon: Icon(
+                    Icons.settings_outlined,
+                    color: palette.textSecondary,
                   ),
-                  IconButton(
-                    tooltip: 'Ajustes',
-                    icon: Icon(
-                      Icons.settings_outlined,
-                      color: palette.textSecondary,
-                    ),
-                    onPressed: () => openSettingsCenter(context),
-                  ),
-                  const SyncStatusIndicator(),
-                  AccountMenuButton(
-                    onLoginAction: () => openAuthScreen(context),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  AppButton(
-                    label: 'Nuevo grupo',
-                    icon: Icons.create_new_folder_outlined,
-                    variant: AppButtonVariant.secondary,
-                    onTap: () => _createGroup(context, ref),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  AppButton(
-                    label: 'Nuevo proyecto',
-                    icon: Icons.add,
-                    onTap: () => _showCreateProject(context, ref),
-                  ),
-                ],
-              ),
+                  onPressed: () => openSettingsCenter(context),
+                ),
+                const SyncStatusIndicator(),
+                AccountMenuButton(onLoginAction: () => openAuthScreen(context)),
+              ],
+              onNewProject: () => _showCreateProject(context, ref),
+              onNewGroup: () => _createGroup(context, ref),
             ),
             Expanded(
               child: StreamBuilder<List<ProjectGroup>>(
@@ -129,7 +94,9 @@ class ProjectsScreen extends ConsumerWidget {
 
                       if (allProjects.isEmpty) {
                         return ListView(
-                          padding: const EdgeInsets.all(AppSpacing.xl),
+                          padding: EdgeInsets.all(
+                            AppLayout.gutter(context, regular: AppSpacing.xl),
+                          ),
                           children: [
                             if (pendingPlan != null) ...[
                               PendingSyncBanner(
@@ -150,7 +117,9 @@ class ProjectsScreen extends ConsumerWidget {
                           .toList();
 
                       return ListView(
-                        padding: const EdgeInsets.all(AppSpacing.xl),
+                        padding: EdgeInsets.all(
+                          AppLayout.gutter(context, regular: AppSpacing.xl),
+                        ),
                         children: [
                           if (pendingPlan != null) ...[
                             PendingSyncBanner(
@@ -435,9 +404,7 @@ class _ProjectGrid extends StatelessWidget {
               Builder(
                 builder: (_) {
                   final size = ProjectCardSize.of(project.cardSize);
-                  final width = size.width > available
-                      ? available
-                      : size.width;
+                  final width = size.width > available ? available : size.width;
                   return SizedBox(
                     width: width,
                     height: width * 10 / 16,
