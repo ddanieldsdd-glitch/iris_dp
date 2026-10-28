@@ -73,9 +73,57 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
     };
   }
 
+  /// iPhone (IP.4.1): sin columna lateral, el navegador sale en una hoja.
+  void _showNavigatorSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.palette.surface,
+      builder: (sheet) => FractionallySizedBox(
+        heightFactor: 0.85,
+        child: PlanDataBuilder(
+          projectId: widget.projectId,
+          builder: (context, data) => _PlanNavigator(
+            data: data,
+            target: _target,
+            onOpen: (target) {
+              Navigator.of(sheet).pop();
+              _open(target);
+            },
+            onCollapse: () => Navigator.of(sheet).pop(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompact(BuildContext context) {
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    return Stack(
+      children: [
+        Positioned.fill(child: _editor()),
+        // Encima de la barra de abajo del editor (Añadir · Guardar), a la
+        // izquierda, donde no tapa sus botones.
+        Positioned(
+          left: 12,
+          bottom: bottom + 56 + 12,
+          child: FloatingActionButton.small(
+            heroTag: null,
+            tooltip: 'Plantas',
+            onPressed: _showNavigatorSheet,
+            child: const Icon(Icons.layers_outlined),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    if (AppLayout.isCompact(context)) {
+      return Material(color: palette.background, child: _buildCompact(context));
+    }
     // Plegado de entrada: el sitio es para la paleta y el lienzo.
     final open = _navigatorOpen ?? false;
 

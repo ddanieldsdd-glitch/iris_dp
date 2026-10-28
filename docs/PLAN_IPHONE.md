@@ -40,7 +40,7 @@ sesiones.
 | Guion técnico | Tabla ancha con desplazamiento horizontal: usable pero incómoda; formulario de escena 600, importación 1180. | IP.2 (vista de lectura por plano) |
 | Localizaciones | Por debajo de 960 ya cambia a lista/detalle, bien. `site_place` 460, diálogo de 360. Falta la cámara. | IP.3 |
 | Moodboard / biblia | 65 000 líneas, 47 comprobaciones de ancho propias; diálogos de 280–640. Se consulta; no se maqueta en el iPhone. | IP.3 / IP.5 |
-| Planta de cámara y luz | Barra lateral de 300 fija (o 44 plegada) + paleta + lienzo: a 390 el lienzo se queda en ~300. Diálogos de 380–1080 (hall builder). | IP.4 |
+| Planta de cámara y luz | La pantalla de trabajo se desbordaba 503 pt (columna lateral de 300, o 44 plegada) y el editor 459 pt (~20 botones arriba). Diálogos de 380–1080 (hall builder). | IP.4.1 ✅ / IP.4 |
 | 3D | Lo lleva F6. Aquí solo: abrir el visor en modo ligero desde la planta. | IP.4 (enganche) |
 | Ajustes y cuenta | Secciones en lista: caben; revisar diálogos de cuenta. | IP.5 |
 
@@ -54,7 +54,7 @@ sesiones.
   diálogos de ancho fijo no se salgan.
 - **IP.1.2** Barra inferior: `CompactNavShell` (`lib/core/widgets`). En el
   iPhone el hub del proyecto lleva abajo *Proyecto · Rodaje · Storyboard ·
-  Localiz.*; cada pestaña se construye al visitarla y se conserva. En iPad y
+  Planta · Localiz.*; cada pestaña se construye al visitarla y se conserva. En iPad y
   escritorio no cambia nada. La app no tiene barra lateral global: las
   barras laterales están dentro de plantas y localizaciones (IP.3/IP.4).
 - **IP.1.3** Cabecera de proyectos compacta: los dos botones pasan a un «+»
@@ -95,9 +95,13 @@ sesiones.
 
 ### IP.4 · Planta y 3D en consulta (prioridad 3)
 
-- **IP.4.1** Planta en compacto: navegador de planos como hoja inferior en vez
-  de barra lateral; lienzo a pantalla completa; paleta de herramientas oculta
-  (solo lectura, zoom y desplazamiento).
+- **IP.4.1** ✅ (adelantado a petición de Daniel) Planta en compacto: el
+  navegador de plantas sale en una hoja inferior (botón «Plantas») en vez de
+  la columna lateral, y el lienzo ocupa todo el ancho. Arriba solo imagen,
+  3D, encajar y «Más» (deshacer, rehacer, luz, exposición, lecturas,
+  rótulos, imán, alzado, bocetos, asociar planos); guardar y añadir siguen
+  en la barra de abajo. Vaciar la planta, atajos y ajustes se quedan para el
+  iPad y el Mac. Pruebas: `test/iphone/plan_compact_test.dart`.
 - **IP.4.2** Ficha del plano desde la planta: cámara, óptica, luces.
 - **IP.4.3** Enganche con el visor 3D de F6 en calidad ligera (lo implementa
   F6; aquí solo el botón y la comprobación a 390).

@@ -120,6 +120,7 @@ void main() {
       expect(ids.toSet().length, ids.length);
       expect(ids.first, ProjectHubDestinationId.dailyOrder);
       expect(ids, contains(ProjectHubDestinationId.storyboard));
+      expect(ids, contains(ProjectHubDestinationId.cameraPlans));
       // Hub + pestañas: NavigationBar admite como mucho 5.
       expect(compactHubTabs.length + 1, lessThanOrEqualTo(5));
     });

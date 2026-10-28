@@ -153,8 +153,8 @@ class CompactHubTab {
 }
 
 /// Lo que se consulta en set, por orden de uso (PLAN_IPHONE, prioridades):
-/// documento del día, storyboard y localizaciones (fotos). La planta entra
-/// cuando esté adaptada a compacto (IP.3); hasta entonces se abre desde el hub.
+/// documento del día, storyboard, planta y localizaciones (fotos). Con el
+/// hub son 5, el máximo de la barra.
 const compactHubTabs = <CompactHubTab>[
   CompactHubTab(
     id: ProjectHubDestinationId.dailyOrder,
@@ -167,6 +167,12 @@ const compactHubTabs = <CompactHubTab>[
     label: 'Storyboard',
     icon: Icons.view_comfy_outlined,
     selectedIcon: Icons.view_comfy,
+  ),
+  CompactHubTab(
+    id: ProjectHubDestinationId.cameraPlans,
+    label: 'Planta',
+    icon: Icons.grid_on_outlined,
+    selectedIcon: Icons.grid_on,
   ),
   CompactHubTab(
     id: ProjectHubDestinationId.locations,
