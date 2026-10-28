@@ -5,9 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/settings/app_prefs.dart';
+import 'unreal_asset_ref.dart';
 import 'unreal_return.dart';
 import 'unreal_stage_payload.dart';
 
+export 'unreal_asset_ref.dart';
 export 'unreal_return.dart' show UnrealEdit;
 
 enum UnrealLinkState { off, connecting, on, error }
@@ -367,34 +369,57 @@ class UnrealLink extends ChangeNotifier {
   }
 }
 
-/// Una malla del proyecto de Unreal que puede hacer de una pieza de IRIS.
+/// Un asset del proyecto de Unreal que puede hacer de un elemento de IRIS:
+/// malla, Blueprint o personaje.
 class UnrealAsset {
   /// Ruta del objeto: `/Game/Fab/Sofa/SM_Sofa.SM_Sofa`.
   final String path;
   final String name;
   final String folder;
+  final UnrealAssetKind kind;
+  final UnrealAssetSource source;
 
-  /// Ancho, fondo y alto en centímetros.
-  final List<double> sizeCm;
+  /// Ancho, fondo y alto en centímetros; `null` en un Blueprint.
+  final List<double>? sizeCm;
 
   const UnrealAsset({
     required this.path,
     required this.name,
     required this.folder,
-    required this.sizeCm,
+    this.kind = UnrealAssetKind.mesh,
+    this.source = UnrealAssetSource.project,
+    this.sizeCm,
   });
 
-  factory UnrealAsset.fromJson(Map m) => UnrealAsset(
-    path: m['path'] as String,
-    name: m['name'] as String? ?? '',
-    folder: m['folder'] as String? ?? '',
-    sizeCm: [
-      for (final v in (m['sizeCm'] as List? ?? const [0, 0, 0]))
-        (v as num).toDouble(),
-    ],
+  factory UnrealAsset.fromJson(Map m) {
+    final path = m['path'] as String;
+    final size = m['sizeCm'];
+    return UnrealAsset(
+      path: path,
+      name: m['name'] as String? ?? UnrealAssetRef.nameOfPath(path),
+      folder: m['folder'] as String? ?? '',
+      kind: UnrealAssetKind.byName(m['kind'] as String?),
+      source: m['source'] is String
+          ? UnrealAssetSource.byName(m['source'] as String)
+          : UnrealAssetSource.ofPath(path),
+      sizeCm: size is List && size.length == 3
+          ? [for (final v in size) (v as num).toDouble()]
+          : null,
+    );
+  }
+
+  /// Para guardarlo en el elemento.
+  UnrealAssetRef toRef() => UnrealAssetRef(
+    path: path,
+    name: name,
+    kind: kind,
+    source: source,
+    sizeCm: sizeCm,
   );
 
-  String get sizeLabel => '${sizeCm.map((v) => v.round()).join(' × ')} cm';
+  String get sizeLabel => sizeCm == null
+      ? kind.name
+      : '${sizeCm!.map((v) => v.round()).join(' × ')} cm';
 }
 
 class UnrealLinkException implements Exception {

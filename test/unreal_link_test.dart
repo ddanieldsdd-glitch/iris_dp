@@ -132,9 +132,9 @@ void main() {
       final q = UnrealStagePayload.prop({
         'id': 'P',
         'at': [0, 0],
-        'unrealAsset': '/Game/Fab/Sofa.Sofa',
+        'asset': {'path': '/Game/Fab/Sofa.Sofa', 'kind': 'mesh'},
       })!;
-      expect(q['asset'], '/Game/Fab/Sofa.Sofa');
+      expect(q['asset'], {'path': '/Game/Fab/Sofa.Sofa', 'kind': 'mesh'});
     });
 
     test('la planta manda su atrezzo con cuerpo, no las colinas', () {
