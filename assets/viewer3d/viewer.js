@@ -60,6 +60,11 @@
   const shown = { walls: true, glass: true, drapes: true, pillars: true, rig: true, fixtures: true, people: true };
   let L = {};
   let lastScene = null;
+  // Escaneos: se cargan una vez por archivo y se recolocan en cada escena.
+  const scansGroup = new THREE.Group();
+  scene.add(scansGroup);
+  const scanCache = {};
+  const scanWrappers = {};
   let floorLight = null;
   let measuring = false;
   let measurePts = [];
@@ -325,6 +330,7 @@
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.computeVertexNormals();
     const m = new THREE.Mesh(g, mat);
+    if (id) m.name = id;
     if (id) { m.userData.id = id; picks.push(m); }
     return m;
   }
@@ -482,7 +488,7 @@
       P = (k, u) => V(A[0] + ux * u + nx * offs[k][0], A[1] + uy * u + ny * offs[k][0], z0 + offs[k][1]);
     }
     const g = new THREE.Group();
-    if (id) { g.userData.id = id; picks.push(g); }
+    if (id) { g.userData.id = id; g.name = id; picks.push(g); }
     if (L < 0.05) return g;
     for (let k = 0; k < offs.length; k++) g.add(cyl(P(k, 0), P(k, L), 0.024, steel));
     const n = Math.max(1, Math.round(L / s)), pts = [];
@@ -608,6 +614,7 @@
       const lens = new THREE.Mesh(new THREE.CircleGeometry(0.13, 18), new THREE.MeshBasicMaterial({ color: f.on ? col : 0x333333 }));
       lens.position.z = 0.205;
       body.add(lens);
+      body.name = (f.name || 'Foco') + ' · ' + f.id;
       body.userData.id = f.id; body.userData.movable = true; body.userData.dragY = p.y; body.userData.aim = a.clone(); picks.push(body);
       L.fixtures.add(body);
       if (!f.on) return;
@@ -675,6 +682,8 @@
       });
       floor.castShadow = false;
     }
+
+    placeScans(sc.scans || []);
 
     const first = radius === 20 && center.lengthSq() === 0;
     center = c;
@@ -820,6 +829,69 @@
     img.src = 'data:image/png;base64,' + f.png;
   }
 
+  // ── Escaneos ──────────────────────────────────────────────────────────
+  function b64ToBuffer(b64) {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out.buffer;
+  }
+
+  async function loadScan(file, format) {
+    const bridge = window.flutter_inappwebview;
+    if (!bridge) throw new Error('sin app');
+    const b64 = await bridge.callHandler('iris', { type: 'scanData', file });
+    if (!b64) throw new Error('El archivo del escaneo no está en esta máquina.');
+    const buffer = b64ToBuffer(b64);
+    if (format === 'obj') {
+      return new THREE.OBJLoader().parse(new TextDecoder().decode(buffer));
+    }
+    if (format === 'ply') {
+      const geo = new THREE.PLYLoader().parse(buffer);
+      geo.computeBoundingBox();
+      // Sin caras (una nube de puntos o un splat): puntos con su color.
+      if (!geo.index) {
+        return new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.02, vertexColors: !!geo.attributes.color }));
+      }
+      geo.computeVertexNormals();
+      return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: !!geo.attributes.color, roughness: 0.9 }));
+    }
+    return await new Promise((resolve, reject) =>
+      new THREE.GLTFLoader().parse(buffer, '', (g) => resolve(g.scene), reject));
+  }
+
+  function placeScans(list) {
+    const keep = new Set(list.map((q) => q.id));
+    for (const id of Object.keys(scanWrappers)) {
+      if (!keep.has(id)) { scansGroup.remove(scanWrappers[id]); delete scanWrappers[id]; }
+    }
+    for (const q of list) {
+      let w = scanWrappers[q.id];
+      if (!w) {
+        w = new THREE.Group();
+        w.userData.id = q.id;
+        w.userData.movable = true;
+        w.name = 'Escaneo · ' + q.id;
+        scanWrappers[q.id] = w;
+        scansGroup.add(w);
+        if (!scanCache[q.file]) {
+          scanCache[q.file] = loadScan(q.file, q.format).catch((e) => {
+            post({ type: 'scanError', id: q.id, message: String(e && e.message || e) });
+            return null;
+          });
+        }
+        scanCache[q.file].then((obj) => {
+          if (obj && scanWrappers[q.id] === w) w.add(obj.clone());
+        });
+      }
+      w.position.copy(V(q.at[0], q.at[1], q.z0 || 0));
+      w.rotation.set(0, -(q.yawDeg || 0) * Math.PI / 180, 0);
+      w.scale.setScalar(q.scale || 1);
+      w.userData.dragY = q.z0 || 0;
+      if (!picks.includes(w)) picks.push(w);
+    }
+  }
+
   function setOrtho(on) {
     const next = on ? camO : camP;
     if (next === cam) return;
@@ -855,9 +927,13 @@
   }
 
   // glTF de lo que se ve, en base64, para exportar desde la app.
-  function exportGlb() {
+  function exportGlb(opts) {
+    // Solo la estructura (para el MVR, que lleva los focos aparte), o todo.
+    const what = opts && opts.structure
+      ? [...roofs, L.walls, L.glass, L.drapes, L.pillars, L.rig].filter(Boolean)
+      : [root, scansGroup];
     return new Promise((resolve, reject) => {
-      new THREE.GLTFExporter().parse(root, (glb) => {
+      new THREE.GLTFExporter().parse(what, (glb) => {
         const bytes = new Uint8Array(glb);
         let bin = '';
         for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));

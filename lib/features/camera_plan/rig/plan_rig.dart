@@ -111,6 +111,58 @@ class PlanPillar {
       (el.props[heightKey] as num?)?.toDouble() ?? defaultHeightM;
 }
 
+/// Escaneo de una localización (Polycam, Luma AI…): un modelo 3D
+/// colocado en la planta. Su origen es `position`, su giro `rotation`
+/// (grados, como cualquier pieza) y el archivo vive en la carpeta de
+/// escaneos de la app ([ScanStore]).
+class PlanScan {
+  PlanScan._();
+
+  /// Nombre del archivo en la carpeta de escaneos.
+  static const fileKey = 'file';
+
+  /// glb, gltf, obj o ply.
+  static const formatKey = 'format';
+
+  /// Escala: metros del escaneo por metro real. 1 si ya viene a escala.
+  static const scaleKey = 'scale';
+
+  /// Cuánto se sube o se baja para que su suelo quede en el de la planta,
+  /// en metros.
+  static const offsetKey = 'offsetZ';
+  static const nameKey = 'name';
+
+  static const formats = ['glb', 'gltf', 'obj', 'ply'];
+
+  static bool isScan(PlanElement el) => RigTypeCodec.of(el) == RigType.scan;
+
+  static PlanElement create(
+    Offset position, {
+    required String file,
+    required String format,
+    String? name,
+  }) => RigTypeCodec.create(
+    RigType.scan,
+    position,
+    props: {fileKey: file, formatKey: format, scaleKey: 1.0, nameKey: ?name},
+  );
+
+  static String? file(PlanElement el) => el.props[fileKey] as String?;
+  static String format(PlanElement el) =>
+      el.props[formatKey] as String? ?? 'glb';
+  static double scale(PlanElement el) =>
+      (el.props[scaleKey] as num?)?.toDouble() ?? 1;
+  static double offsetZ(PlanElement el) =>
+      (el.props[offsetKey] as num?)?.toDouble() ?? 0;
+
+  /// Calibra la escala con una medida: lo que mide algo en el escaneo y lo
+  /// que mide de verdad.
+  static void calibrate(PlanElement el, double measuredM, double realM) {
+    if (measuredM <= 0 || realM <= 0) return;
+    el.props[scaleKey] = scale(el) * realM / measuredM;
+  }
+}
+
 /// Perfil de un truss.
 enum TrussProfile { square, triangle, ladder }
 

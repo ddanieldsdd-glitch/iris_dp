@@ -408,8 +408,14 @@ class PlanCadExport {
     List<PlanElement> elements,
     double metersPerUnit, {
     String layerName = 'IRIS',
+
+    /// La nave y su estructura (paredes, telas, pilares, truss) en glTF
+    /// binario, tal como sale del visor 3D. Va dentro del .mvr como un
+    /// objeto de escena con su geometría.
+    Uint8List? environmentGlb,
   }) {
     final units = lightUnitNumbers(elements);
+    const glbName = 'iris_estructura.glb';
     String mm(double meters) => (meters * 1000).toStringAsFixed(1);
     final builder = XmlBuilder()
       ..processing('xml', 'version="1.0" encoding="UTF-8" standalone="no"');
@@ -435,6 +441,28 @@ class PlanCadExport {
                     builder.element(
                       'ChildList',
                       nest: () {
+                        if (environmentGlb != null) {
+                          builder.element(
+                            'SceneObject',
+                            attributes: {
+                              'name': 'Nave y estructura',
+                              'uuid': _uuid('scene:$layerName:estructura'),
+                            },
+                            nest: () {
+                              builder.element(
+                                'Matrix',
+                                nest: '{1,0,0}{0,1,0}{0,0,1}{0,0,0}',
+                              );
+                              builder.element(
+                                'Geometries',
+                                nest: () => builder.element(
+                                  'Geometry3D',
+                                  attributes: {'fileName': glbName},
+                                ),
+                              );
+                            },
+                          );
+                        }
                         for (final MapEntry(key: el, value: unit)
                             in units.entries) {
                           final light = PlanLight.of(el);
@@ -497,6 +525,11 @@ class PlanCadExport {
           utf8.encode(xml),
         ),
       );
+    if (environmentGlb != null) {
+      archive.addFile(
+        ArchiveFile(glbName, environmentGlb.length, environmentGlb),
+      );
+    }
     return Uint8List.fromList(ZipEncoder().encode(archive)!);
   }
 
