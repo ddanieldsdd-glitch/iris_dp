@@ -10,6 +10,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
+import '../../core/theme/app_layout.dart';
+import '../shoot_documents/shoot_day_on_set.dart';
 import '../../core/sync/live_editing.dart';
 import '../../core/sync/live_editing_scope.dart';
 import '../../core/sync/realtime_hub.dart';
@@ -264,8 +266,11 @@ class TechnicalScriptScreen extends ConsumerWidget {
         ],
       ),
       body: _HistoryKeys(
-        child: Column(
+        child: _CompactSwitch(
+          projectId: projectId,
+          table: (readSwitch) => Column(
           children: [
+            ?readSwitch,
             _FormatBar(settings: settings),
             Expanded(
               child: PlanDataBuilder(
@@ -315,6 +320,7 @@ class TechnicalScriptScreen extends ConsumerWidget {
               ),
             ),
           ],
+          ),
         ),
       ),
     ));
@@ -873,6 +879,111 @@ class _FormatBar extends ConsumerWidget {
 
 /// Guion técnico: una tabla por escena, como hojas de un documento. Ocupa
 /// todo el ancho; por debajo del mínimo, se desplaza entera.
+/// En el iPhone (IP.2.3) el guion se abre en lectura: escenas y planos en
+/// tarjetas. La tabla sigue a un toque, para retocar algo suelto.
+class _CompactSwitch extends StatefulWidget {
+  final int projectId;
+
+  /// La tabla de siempre; en el iPhone recibe arriba el selector.
+  final Widget Function(Widget? readSwitch) table;
+
+  const _CompactSwitch({required this.projectId, required this.table});
+
+  @override
+  State<_CompactSwitch> createState() => _CompactSwitchState();
+}
+
+class _CompactSwitchState extends State<_CompactSwitch> {
+  bool _read = true;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!AppLayout.isCompact(context)) return widget.table(null);
+    final selector = Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppLayout.gutter(context),
+        vertical: AppSpacing.sm,
+      ),
+      child: SegmentedButton<bool>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment(
+            value: true,
+            icon: Icon(Icons.view_agenda_outlined, size: 18),
+            label: Text('Lectura'),
+          ),
+          ButtonSegment(
+            value: false,
+            icon: Icon(Icons.table_chart_outlined, size: 18),
+            label: Text('Tabla'),
+          ),
+        ],
+        selected: {_read},
+        onSelectionChanged: (v) => setState(() => _read = v.first),
+      ),
+    );
+    if (!_read) return widget.table(selector);
+    return Column(
+      children: [
+        selector,
+        Expanded(child: _ScriptReadList(projectId: widget.projectId)),
+      ],
+    );
+  }
+}
+
+/// El guion técnico en tarjetas, en orden de guion.
+class _ScriptReadList extends ConsumerWidget {
+  final int projectId;
+
+  const _ScriptReadList({required this.projectId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final db = ref.watch(databaseProvider);
+    final gutter = AppLayout.gutter(context);
+    return StreamBuilder<List<Scene>>(
+      stream: db.watchScenesForProject(projectId),
+      builder: (context, sceneSnap) => StreamBuilder<List<Shot>>(
+        stream: db.watchShotsForProject(projectId),
+        builder: (context, shotSnap) {
+          final scenes = sceneSnap.data ?? const <Scene>[];
+          final byScene = <int, List<Shot>>{};
+          for (final shot in shotSnap.data ?? const <Shot>[]) {
+            byScene.putIfAbsent(shot.sceneId, () => []).add(shot);
+          }
+          return ListView(
+            padding: EdgeInsets.fromLTRB(gutter, 0, gutter, 40),
+            children: [
+              for (final scene in scenes) ...[
+                Padding(
+                  padding: const EdgeInsets.only(
+                    top: AppSpacing.lg,
+                    bottom: 6,
+                  ),
+                  child: Text(
+                    'ESC ${scene.label} · ${scene.locationCanonical}',
+                    style: AppTypography.titleMedium(palette),
+                  ),
+                ),
+                if ((byScene[scene.id] ?? const []).isEmpty)
+                  Text('Sin planos.', style: AppTypography.caption(palette)),
+                for (final shot in byScene[scene.id] ?? const <Shot>[])
+                  OnSetShotCard(
+                    order: shot.number,
+                    shot: shot,
+                    scene: scene,
+                  ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _ScriptTable extends StatelessWidget {
   final PlanProjectData data;
   final TechnicalScriptSettings settings;

@@ -65,6 +65,14 @@ sesiones.
 
 ### IP.2 · Consulta en set: plan del día y storyboard (prioridad 1)
 
+**Estado (2026-10-30, `plan/ip2-rodaje-iphone`):** IP.2.1, IP.2.3 e IP.2.4 en
+curso. En el iPhone, la jornada se abre en «En set»
+(`shoot_day_on_set.dart`): los planos en orden de rodaje, en tarjetas por
+tramo, con «Hecho», «Descartar» y una nota de set, que se guardan en
+`contentOverridesJson.onSet` del bloque y viajan con la jornada. El guion
+técnico se abre en «Lectura» (tarjetas por escena) y la tabla sigue a un
+toque. Falta el storyboard compacto (IP.2.2) y llevar el estado al PDF.
+
 - **IP.2.1** Documento del día a pantalla completa en el iPhone: abrir
   directamente el documento activo (`primaryDocument`) desde la pestaña
   *Rodaje*; `ShootDocumentOnSetView` con tipografía de lectura y bloques a

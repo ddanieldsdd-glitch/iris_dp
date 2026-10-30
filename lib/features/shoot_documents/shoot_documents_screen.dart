@@ -14,7 +14,9 @@ import 'shoot_document_template_picker.dart';
 import '../../core/templates/user_template_service.dart';
 import 'shoot_template_editor_screen.dart';
 import 'package:drift/drift.dart' show Value;
+import 'shoot_day_on_set.dart';
 import 'shoot_day_screen.dart';
+import '../../core/theme/app_layout.dart';
 import '../settings/settings_launcher.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_snackbar.dart';
@@ -451,6 +453,16 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
 
   void _openEditor(BuildContext context, ShootDocument doc) {
     if (doc.kind == kShootDayKind) {
+      // En el iPhone, la jornada se consulta y se marca en el set (IP.2).
+      if (AppLayout.isCompact(context)) {
+        ShootDayOnSetScreen.open(
+          context,
+          projectId: widget.projectId,
+          documentId: doc.id,
+          title: doc.name,
+        );
+        return;
+      }
       Navigator.push<void>(
         context,
         MaterialPageRoute<void>(
