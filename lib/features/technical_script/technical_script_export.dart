@@ -74,6 +74,7 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
         title:
             '${scene.label}. ${scene.locationCanonical}'
             '${scene.offScript ? ' (fuera del guion)' : ''}',
+        indexLabel: _indexLabel(scene),
         headerFill: _rgb(sheet.headerFill(colors.sceneColor(scene))),
         rows: rows,
       ),
@@ -94,8 +95,19 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
       },
     ),
     sections: sections,
+    fontFamily: settings.fontFamily,
   );
 }
+
+/// Línea del índice de [scene], con los planos [shots] si es un tramo.
+String _indexLabel(Scene scene, [List<Shot> shots = const []]) =>
+    scriptIndexLabel(
+      sceneLabel: scene.label,
+      intExt: scene.intExt,
+      location: scene.locationPureName,
+      dayNight: scene.dayNight,
+      shots: [for (final s in shots) '${s.number}'],
+    );
 
 /// Fila del documento para un plano, con sus colores y su imagen. [order]
 /// es su puesto en el orden de rodaje, cuando el documento es una jornada.
@@ -337,6 +349,7 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
   final sections = <ScriptDocSection>[];
   Scene? current;
   var rows = <ScriptDocRow>[];
+  var tract = <Shot>[];
   var order = 0;
   void close() {
     final scene = current;
@@ -344,11 +357,13 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
     sections.add(
       ScriptDocSection(
         title: '${scene.label}. ${scene.locationCanonical}',
+        indexLabel: _indexLabel(scene, tract),
         headerFill: _rgb(sheet.headerFill(colors.sceneColor(scene))),
         rows: rows,
       ),
     );
     rows = <ScriptDocRow>[];
+    tract = <Shot>[];
   }
 
   for (final block in blocks) {
@@ -361,6 +376,7 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
       current = scene;
     }
     order++;
+    tract.add(shot);
     rows.add(
       await _docRow(
         db,
@@ -408,6 +424,7 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
       ),
     ],
     sections: sections,
+    fontFamily: settings.fontFamily,
   );
 }
 

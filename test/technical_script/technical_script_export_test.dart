@@ -283,4 +283,79 @@ void main() {
     expect(document.findAllElements('w:drawing').length, 1);
     expect(part('word/_rels/document.xml.rels'), contains('referencia1.jpg'));
   });
+
+  test('el índice lleva cada escena con su página y enlace, en PDF y Word',
+      () async {
+    final doc = await build();
+    expect(doc.sections.first.indexText, 'ESCENA 1. EXT CALLE RAVAL DÍA');
+
+    // El índice ocupa la primera página: las escenas empiezan después.
+    final pages = await TechnicalScriptPdfExporter.scenePages(doc);
+    expect(pages.keys, [0, 1]);
+    expect(pages[0], greaterThanOrEqualTo(2));
+    expect(pages[1], greaterThanOrEqualTo(pages[0]!));
+    final pdf = latin1.decode(await TechnicalScriptPdfExporter.buildBytes(doc));
+    expect(pdf, contains('/Outlines'));
+    expect(pdf, contains('esc_1'));
+    // Sin índice no hay marcadores.
+    final plain = latin1.decode(
+      await TechnicalScriptPdfExporter.buildBytes(
+        doc.copyWith(includeIndex: false),
+      ),
+    );
+    expect(plain, isNot(contains('esc_0')));
+
+    final zip = ZipDecoder().decodeBytes(
+      TechnicalScriptDocxExporter.buildBytes(
+        doc.copyWith(fontFamily: 'Tinos'),
+        pages: pages,
+        fonts: await DocxFontFiles.load('Tinos'),
+      ),
+    );
+    String part(String name) =>
+        utf8.decode(zip.files.firstWhere((f) => f.name == name).content);
+    final xml = part('word/document.xml');
+    XmlDocument.parse(xml);
+    expect(xml, contains('ÍNDICE'));
+    expect(xml, contains('<w:hyperlink w:anchor="esc_0"'));
+    expect(xml, contains('w:name="esc_1"'));
+    expect(xml, contains('PAGEREF esc_1 \\h'));
+    expect(xml, contains('<w:t>${pages[0]}</w:t>'));
+    expect(xml, isNot(contains('Calibri')));
+    // La tipografía de la hoja va en los estilos e incrustada.
+    final styles = part('word/styles.xml');
+    XmlDocument.parse(styles);
+    expect(styles, contains('w:ascii="Tinos"'));
+    expect(part('word/fontTable.xml'), contains('w:embedItalic'));
+    expect(
+      zip.files.where((f) => f.name.endsWith('.odttf')),
+      hasLength(4),
+    );
+    expect(part('word/settings.xml'), contains('w:updateFields'));
+  });
+
+  test('un asterisco en el título o la escena no pone nada en cursiva',
+      () async {
+    final doc = TechnicalScriptDoc(
+      title: 'GUION *PRUEBA* __X__',
+      columns: kScriptDocColumns,
+      sections: [
+        const ScriptDocSection(
+          title: '1. INT. *CASA* - NOCHE',
+          headerFill: 0xEEEEEE,
+          rows: [],
+        ),
+      ],
+    );
+    final xml = utf8.decode(
+      ZipDecoder()
+          .decodeBytes(TechnicalScriptDocxExporter.buildBytes(doc))
+          .files
+          .firstWhere((f) => f.name == 'word/document.xml')
+          .content,
+    );
+    expect(xml, contains('GUION *PRUEBA* __X__'));
+    expect(xml, contains('*CASA*'));
+    expect(xml, isNot(contains('<w:i/>')));
+  });
 }

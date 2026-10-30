@@ -10,12 +10,34 @@ class TechnicalScriptDoc {
   final List<ScriptDocColumn> columns;
   final List<ScriptDocSection> sections;
 
+  /// Tipografía de la hoja ('Inter', 'Noto Sans', 'Tinos'): el documento
+  /// sale con la misma que se ve en pantalla.
+  final String fontFamily;
+
+  /// Índice de escenas al principio, con su página y enlace a cada una.
+  final bool includeIndex;
+
   const TechnicalScriptDoc({
     required this.title,
     required this.columns,
     required this.sections,
     this.subtitle,
+    this.fontFamily = 'Inter',
+    this.includeIndex = true,
   });
+
+  TechnicalScriptDoc copyWith({bool? includeIndex, String? fontFamily}) =>
+      TechnicalScriptDoc(
+        title: title,
+        subtitle: subtitle,
+        columns: columns,
+        sections: sections,
+        fontFamily: fontFamily ?? this.fontFamily,
+        includeIndex: includeIndex ?? this.includeIndex,
+      );
+
+  /// Hay índice que poner.
+  bool get hasIndex => includeIndex && sections.isNotEmpty;
 }
 
 class ScriptDocColumn {
@@ -59,6 +81,10 @@ List<ScriptDocColumn> scriptDocColumns({required Set<String> hidden}) => [
 class ScriptDocSection {
   final String title;
 
+  /// Línea del índice: «ESCENA 4. INT/EXT CORTIJO NOCHE (1-2)». Sin ella
+  /// se usa el título.
+  final String? indexLabel;
+
   /// Color de la fila de títulos (0xRRGGBB), el de la escena aclarado.
   final int headerFill;
   final List<ScriptDocRow> rows;
@@ -67,7 +93,29 @@ class ScriptDocSection {
     required this.title,
     required this.headerFill,
     required this.rows,
+    this.indexLabel,
   });
+
+  String get indexText => indexLabel ?? title;
+}
+
+/// Línea del índice de una escena, como la de la planta de cámara:
+/// «ESCENA 4. INT/EXT CORTIJO NOCHE (1-2)». [shots] son los números de los
+/// planos de ese tramo; sin ellos no lleva paréntesis.
+String scriptIndexLabel({
+  required String sceneLabel,
+  required String intExt,
+  required String location,
+  required String dayNight,
+  List<String> shots = const [],
+}) {
+  final meta = [
+    intExt.trim(),
+    location.trim(),
+    dayNight.trim(),
+  ].where((s) => s.isNotEmpty).join(' ');
+  final planes = shots.isEmpty ? '' : ' (${shots.join('-')})';
+  return 'ESCENA $sceneLabel. $meta$planes'.toUpperCase();
 }
 
 class ScriptDocRow {

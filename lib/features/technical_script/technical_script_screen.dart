@@ -40,6 +40,7 @@ import 'scene_form_sheet.dart';
 import 'table/editable_cell.dart';
 import 'table/script_sheet_theme.dart';
 import 'import/technical_script_import_action.dart';
+import 'script_export_dialog.dart';
 import 'technical_script_export.dart';
 import 'technical_script_settings.dart';
 import '../../core/utils/shot_technical_options.dart';
@@ -214,15 +215,10 @@ class TechnicalScriptScreen extends ConsumerWidget {
               return TechnicalScriptPdfExporter.buildBytes(doc);
             },
           ),
-          PopupMenuButton<bool>(
+          IconButton(
             tooltip: 'Exportar el guion técnico',
             icon: Icon(Icons.ios_share, color: palette.accent),
-            color: palette.surfaceElevated,
-            onSelected: (word) => _export(context, ref, word: word),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: false, child: Text('PDF')),
-              PopupMenuItem(value: true, child: Text('Word (.docx)')),
-            ],
+            onPressed: () => _export(context, ref),
           ),
           PopupMenuButton<String>(
             tooltip: 'Importar guion técnico',
@@ -326,16 +322,19 @@ class TechnicalScriptScreen extends ConsumerWidget {
 
   Future<void> _export(
     BuildContext context,
-    WidgetRef ref, {
-    required bool word,
-  }) async {
+    WidgetRef ref,
+  ) async {
+    final choice = await showScriptExportDialog(context);
+    if (choice == null || !context.mounted) return;
+    final word = choice.word;
     final db = ref.read(databaseProvider);
     try {
-      final doc = await buildNarrativeScriptDoc(
+      final built = await buildNarrativeScriptDoc(
         db,
         projectId,
         ref.read(technicalScriptSettingsProvider),
       );
+      final doc = built?.copyWith(includeIndex: choice.index);
       if (!context.mounted) return;
       if (doc == null || doc.sections.isEmpty) {
         AppSnackBar.show(context, 'No hay escenas para exportar.');
@@ -571,6 +570,32 @@ class _FormatBar extends ConsumerWidget {
                 onSelectionChanged: (s) =>
                     notifier.update((v) => v.copyWith(view: s.first)),
               ),
+              const SizedBox(width: 12),
+              PopupMenuButton<String>(
+                tooltip: 'Columnas visibles',
+                color: palette.surfaceElevated,
+                onSelected: notifier.toggleColumn,
+                itemBuilder: (_) => [
+                  for (final c in ScriptColumn.optional)
+                    CheckedPopupMenuItem(
+                      value: c,
+                      checked: settings.shows(c),
+                      child: Text(ScriptColumn.label(c)),
+                    ),
+                ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.view_column_outlined,
+                      size: 18,
+                      color: palette.textPrimary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text('Columnas', style: label),
+                  ],
+                ),
+              ),
               divider(),
               PopupMenuButton<String>(
                 tooltip: 'Tipografía de la tabla',
@@ -667,10 +692,10 @@ class _FormatBar extends ConsumerWidget {
                             size: 18,
                             color: palette.textPrimary,
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           for (final c in kScriptMarkerColors.entries)
                             Padding(
-                              padding: const EdgeInsets.only(right: 5),
+                              padding: const EdgeInsets.only(right: 3),
                               child: Tooltip(
                                 message: 'Marcador ${c.value.toLowerCase()}',
                                 child: InkResponse(
@@ -683,8 +708,8 @@ class _FormatBar extends ConsumerWidget {
                                           color: c.key,
                                         ),
                                   child: Container(
-                                    width: 18,
-                                    height: 18,
+                                    width: 16,
+                                    height: 16,
                                     decoration: BoxDecoration(
                                       color: kScriptMarkerFills[c.key],
                                       borderRadius: BorderRadius.circular(3),
@@ -694,15 +719,49 @@ class _FormatBar extends ConsumerWidget {
                                 ),
                               ),
                             ),
+                          const SizedBox(width: 4),
+                          // Color de la letra: el mismo color otra vez lo
+                          // quita.
+                          for (final c in kScriptTextColors.entries)
+                            Tooltip(
+                              message: 'Letra ${c.value.toLowerCase()}',
+                              child: InkResponse(
+                                radius: 12,
+                                onTap: editor == null
+                                    ? null
+                                    : () => applyScriptMark(
+                                        editor,
+                                        ScriptMark.textColor,
+                                        color: c.key,
+                                      ),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 18,
+                                  child: Center(
+                                    child: Text(
+                                      'A',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        color: kScriptTextColorValues[c.key],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           iconButton(
-                            tooltip: 'Quitar el marcador',
+                            tooltip: 'Quitar el marcador y el color',
                             icon: Icons.format_clear,
                             onTap: editor == null
                                 ? null
-                                : () => applyScriptMark(
-                                    editor,
-                                    ScriptMark.marker,
-                                  ),
+                                : () {
+                                    applyScriptMark(editor, ScriptMark.marker);
+                                    applyScriptMark(
+                                      editor,
+                                      ScriptMark.textColor,
+                                    );
+                                  },
                           ),
                         ],
                       ),
@@ -799,32 +858,6 @@ class _FormatBar extends ConsumerWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(settings.planView.label, style: label),
-                  ],
-                ),
-              ),
-              divider(),
-              PopupMenuButton<String>(
-                tooltip: 'Columnas visibles',
-                color: palette.surfaceElevated,
-                onSelected: notifier.toggleColumn,
-                itemBuilder: (_) => [
-                  for (final c in ScriptColumn.optional)
-                    CheckedPopupMenuItem(
-                      value: c,
-                      checked: settings.shows(c),
-                      child: Text(ScriptColumn.label(c)),
-                    ),
-                ],
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.view_column_outlined,
-                      size: 18,
-                      color: palette.textPrimary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text('Columnas', style: label),
                   ],
                 ),
               ),

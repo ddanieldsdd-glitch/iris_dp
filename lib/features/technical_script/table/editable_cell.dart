@@ -16,21 +16,30 @@ const kScriptMarkerFills = {
   'b': Color(0xFF90CAF9),
 };
 
+/// Color de cada color de letra.
+final kScriptTextColorValues = {
+  for (final e in kScriptTextColorRgb.entries)
+    e.key: Color(0xFF000000 | e.value),
+};
+
 /// Limpia un texto pegado: los espacios «duros» y tabuladores de Word o de
 /// un PDF pasan a espacio normal, los repetidos se juntan, las líneas no
-/// acaban en espacio y no quedan más de dos saltos seguidos.
+/// acaban en espacio y no quedan líneas en blanco entre párrafos.
 String cleanPastedText(String text) => text
     .replaceAll('\r\n', '\n')
     .replaceAll('\r', '\n')
     .replaceAll(RegExp('[\t   ​]'), ' ')
     .replaceAll(RegExp(' {2,}'), ' ')
     .replaceAll(RegExp(r' *\n *'), '\n')
-    .replaceAll(RegExp(r'\n{3,}'), '\n\n');
+    .replaceAll(RegExp(r'\n{2,}'), '\n');
 
 /// Aplica [cleanPastedText] a lo que entra de golpe en un campo (pegar);
-/// lo que se teclea letra a letra no se toca.
+/// lo que se teclea letra a letra no se toca. Con [plain] (celdas sin
+/// formato) se quitan además las marcas de formato que vengan de otra celda.
 class PastedTextCleaner extends TextInputFormatter {
-  const PastedTextCleaner();
+  final bool plain;
+
+  const PastedTextCleaner({this.plain = false});
 
   static final _blank = RegExp(r'\s');
 
@@ -57,22 +66,57 @@ class PastedTextCleaner extends TextInputFormatter {
       return newValue;
     }
     final before = newValue.text.substring(0, start);
-    var pasted = cleanPastedText(newValue.text.substring(start, end));
-    // Al principio de la celda o tras un espacio, sin blancos delante; al
-    // final de la celda, sin blancos detrás.
+    var pasted = newValue.text.substring(start, end);
+    if (plain) {
+      pasted = scriptMarkupToPlain(pasted);
+    } else {
+      // Lo copiado de otra celda con formato sale sin marcas al
+      // portapapeles; aquí dentro recupera su formato.
+      final copied = _lastScriptCopy;
+      if (copied != null && copied.plain == pasted) pasted = copied.raw;
+    }
+    pasted = cleanPastedText(pasted);
+    // Al principio de la celda o tras un blanco, sin blancos delante; al
+    // final de la celda o antes de un blanco, sin blancos detrás. En mitad
+    // de una línea, un salto en el borde pasa a ser un espacio, que separa
+    // las palabras sin partir la línea.
     if (before.isEmpty || _blank.hasMatch(before[before.length - 1])) {
       pasted = pasted.trimLeft();
+    } else if (pasted.startsWith('\n')) {
+      pasted = ' ${pasted.trimLeft()}';
     }
-    if (tail.isEmpty) {
+    if (tail.isEmpty || _blank.hasMatch(tail[0])) {
       pasted = pasted.trimRight();
     } else if (pasted.endsWith('\n')) {
-      pasted = '${pasted.trimRight()}${_blank.hasMatch(tail[0]) ? '' : ' '}';
+      pasted = '${pasted.trimRight()} ';
     }
     final text = '$before$pasted$tail';
     if (text == newValue.text) return newValue;
     return TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: before.length + pasted.length),
+    );
+  }
+}
+
+/// Último trozo copiado de una celda con formato: el texto que fue al
+/// portapapeles (sin marcas) y el original (con ellas).
+({String plain, String raw})? _lastScriptCopy;
+
+/// Copia (o corta) la selección de una celda con formato: al portapapeles
+/// va el texto limpio, que es lo que se espera al pegar en otra aplicación.
+void copyScriptSelection(TextEditingController controller, {bool cut = false}) {
+  final selection = controller.selection;
+  if (!selection.isValid || selection.isCollapsed) return;
+  final raw = selection.textInside(controller.text);
+  final plain = scriptMarkupToPlain(raw);
+  _lastScriptCopy = (plain: plain, raw: raw);
+  Clipboard.setData(ClipboardData(text: plain));
+  if (cut) {
+    controller.value = TextEditingValue(
+      text: selection.textBefore(controller.text) +
+          selection.textAfter(controller.text),
+      selection: TextSelection.collapsed(offset: selection.start),
     );
   }
 }
@@ -101,14 +145,15 @@ void applyScriptMark(
 /// Estilo de un trozo de texto con formato sobre el estilo [base].
 TextStyle scriptSpanStyle(TextStyle base, ScriptSpan span) {
   final marked = span.marker != null;
+  final ink = kScriptTextColorValues[span.textColor];
   return base.copyWith(
     fontWeight: span.bold ? FontWeight.w700 : null,
     fontStyle: span.italic ? FontStyle.italic : null,
     decoration: span.underline ? TextDecoration.underline : null,
-    decorationColor: marked ? const Color(0xFF111111) : base.color,
+    decorationColor: ink ?? (marked ? const Color(0xFF111111) : base.color),
     backgroundColor: marked ? kScriptMarkerFills[span.marker] : null,
     // Sobre el marcador el texto va siempre oscuro, también en vista oscura.
-    color: marked ? const Color(0xFF111111) : null,
+    color: ink ?? (marked ? const Color(0xFF111111) : null),
   );
 }
 
@@ -322,7 +367,7 @@ class _EditableCellState extends State<EditableCell> {
     textAlign: widget.textAlign,
     keyboardType: TextInputType.multiline,
     textInputAction: TextInputAction.newline,
-    inputFormatters: const [PastedTextCleaner()],
+    inputFormatters: [PastedTextCleaner(plain: !widget.rich)],
     style: widget.style,
     cursorColor: widget.style.color,
     decoration: const InputDecoration(
@@ -358,6 +403,20 @@ class _EditableCellState extends State<EditableCell> {
                         applyScriptMark(ctrl, entry.value),
                     SingleActivator(entry.key, control: true): () =>
                         applyScriptMark(ctrl, entry.value),
+                  },
+                  for (final modifier in [true, false]) ...{
+                    SingleActivator(
+                      LogicalKeyboardKey.keyC,
+                      meta: modifier,
+                      control: !modifier,
+                    ): () =>
+                        copyScriptSelection(ctrl),
+                    SingleActivator(
+                      LogicalKeyboardKey.keyX,
+                      meta: modifier,
+                      control: !modifier,
+                    ): () =>
+                        copyScriptSelection(ctrl, cut: true),
                   },
                 },
                 child: _field(ctrl),

@@ -239,7 +239,17 @@ void main() {
     await settle();
     expect(find.textContaining('rachas'), findsNothing);
 
-    // Orden de rodaje, con el número de plano del guion técnico.
+    // Por escenas: cada tarjeta es la línea que tendrá en el índice.
+    expect(find.textContaining('ESCENA 6.'), findsOneWidget);
+    expect(find.textContaining('ESCENA 1.'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.textContaining('ESCENA 6.')).dy,
+      lessThan(tester.getTopLeft(find.textContaining('ESCENA 1.')).dy),
+    );
+
+    // Orden de rodaje plano a plano, con el número del guion técnico.
+    await tester.tap(find.textContaining('Planos ('));
+    await settle();
     expect(find.text('Esc. 6 · Plano 1 · P seguimiento'), findsOneWidget);
     expect(find.text('Esc. 1 · Plano 1 · PP de ALI'), findsOneWidget);
     final first = tester.getTopLeft(

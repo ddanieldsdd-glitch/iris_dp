@@ -83,6 +83,14 @@ flutter:
     - assets/fonts/Inter-Bold.ttf
     - assets/fonts/NotoSans-Regular.ttf
     - assets/fonts/NotoSans-Bold.ttf
+    - assets/fonts/Inter-Italic.ttf
+    - assets/fonts/Inter-BoldItalic.ttf
+    - assets/fonts/NotoSans-Italic.ttf
+    - assets/fonts/NotoSans-BoldItalic.ttf
+    - assets/fonts/Tinos-Regular.ttf
+    - assets/fonts/Tinos-Bold.ttf
+    - assets/fonts/Tinos-Italic.ttf
+    - assets/fonts/Tinos-BoldItalic.ttf
     - assets/catalog/manifest.json
     - assets/catalog/cameras.json
     - assets/catalog/lenses.json

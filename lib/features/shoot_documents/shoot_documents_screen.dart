@@ -6,7 +6,6 @@ import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
-import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_card.dart';
 import 'shoot_document_composer.dart';
 import 'shoot_document_editor_screen.dart';
@@ -17,6 +16,13 @@ import 'shoot_template_editor_screen.dart';
 import 'package:drift/drift.dart' show Value;
 import 'shoot_day_screen.dart';
 import '../settings/settings_launcher.dart';
+import '../../core/utils/user_error.dart';
+import '../../core/widgets/app_snackbar.dart';
+import '../../shared/pdf_export/technical_script_pdf.dart';
+import '../../shared/technical_script_export/technical_script_docx.dart';
+import '../technical_script/script_export_dialog.dart';
+import '../technical_script/technical_script_export.dart';
+import '../technical_script/technical_script_settings.dart';
 
 /// Hub de documentos para el rodaje — referencia principal en set.
 class ShootDocumentsScreen extends ConsumerStatefulWidget {
@@ -57,21 +63,6 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
             sectionId: SettingsSectionIds.shootDocuments,
             projectId: widget.projectId,
           ),
-          TextButton.icon(
-            onPressed: () => _createShootDay(context),
-            icon: Icon(Icons.event_note, color: palette.accent, size: 18),
-            label: Text(
-              'Guion técnico de rodaje',
-              style: AppTypography.label(
-                palette,
-              ).copyWith(color: palette.accent),
-            ),
-          ),
-          IconButton(
-            tooltip: 'Crear documento',
-            icon: Icon(Icons.add, color: palette.accent),
-            onPressed: () => _createDocument(context),
-          ),
         ],
       ),
       body: StreamBuilder<List<ShootDocument>>(
@@ -92,94 +83,260 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
               ? allDocs
               : allDocs.where((d) => d.shootDate == _dateFilter).toList();
 
-          if (allDocs.isEmpty) {
-            return _EmptyState(
-              palette: palette,
-              isShooting: isShooting,
-              onCreate: () => _createDocument(context),
-            );
+          // Por jornada, en orden de fecha; los que no tienen, al final.
+          final groups = <String?, List<ShootDocument>>{};
+          for (final date in [...dates, null]) {
+            final inDate = docs.where((d) => d.shootDate == date).toList();
+            if (inDate.isNotEmpty) groups[date] = inDate;
           }
 
-          return ListView(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            children: [
-              if (isShooting)
-                AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Row(
+          return StreamBuilder<List<Scene>>(
+            stream: db.watchScenesForProject(widget.projectId),
+            builder: (context, sceneSnap) {
+              final scenes = {
+                for (final s in sceneSnap.data ?? const <Scene>[]) s.id: s,
+              };
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth - AppSpacing.lg * 2;
+                  // Tarjetas de unos 320 px: una columna en el móvil.
+                  final columns = (width / 320).floor().clamp(1, 4);
+                  final cardWidth =
+                      (width - AppSpacing.md * (columns - 1)) / columns;
+
+                  Widget grid(List<Widget> cards) => Wrap(
+                    spacing: AppSpacing.md,
+                    runSpacing: AppSpacing.md,
                     children: [
-                      Icon(Icons.star, color: palette.accent, size: 20),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          'Tu documento de referencia en set. Marca uno como '
-                          '«activo hoy» para abrirlo rápido.',
-                          style: AppTypography.bodyMedium(palette),
-                        ),
-                      ),
+                      for (final card in cards)
+                        SizedBox(width: cardWidth, child: card),
                     ],
-                  ),
-                ),
-              if (isShooting) const SizedBox(height: AppSpacing.md),
-              if (dates.isNotEmpty) ...[
-                Text('Vista por jornada', style: AppTypography.label(palette)),
-                const SizedBox(height: AppSpacing.sm),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
-                  children: [
-                    FilterChip(
-                      label: const Text('Todos'),
-                      selected: _dateFilter == null,
-                      onSelected: (_) => setState(() => _dateFilter = null),
-                    ),
-                    for (final date in dates)
-                      FilterChip(
-                        label: Text(date),
-                        selected: _dateFilter == date,
-                        onSelected: (_) => setState(() => _dateFilter = date),
+                  );
+
+                  return ListView(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    children: [
+                      Text('Crear', style: AppTypography.label(palette)),
+                      const SizedBox(height: AppSpacing.sm),
+                      grid([
+                        _CreateCard(
+                          icon: Icons.event_note,
+                          title: 'Guion técnico de rodaje',
+                          description:
+                              'Una jornada: escenas en el orden en que se '
+                              'ruedan, con índice, sol y previsión.',
+                          highlighted: true,
+                          onTap: () => _createShootDay(context),
+                        ),
+                        _CreateCard(
+                          icon: Icons.menu_book_outlined,
+                          title: 'Guion técnico completo',
+                          description:
+                              'Todo el guion técnico en orden de guion, con '
+                              'índice. En PDF o Word.',
+                          onTap: () => _exportFullScript(context),
+                        ),
+                        _CreateCard(
+                          icon: Icons.dashboard_customize_outlined,
+                          title: 'Documento libre',
+                          description:
+                              'Desde una plantilla: bloques de guion, planos, '
+                              'personajes y referencias.',
+                          onTap: () => _createDocument(context),
+                        ),
+                      ]),
+                      if (isShooting) ...[
+                        const SizedBox(height: AppSpacing.lg),
+                        AppCard(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          child: Row(
+                            children: [
+                              Icon(Icons.star, color: palette.accent, size: 20),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  'Marca un documento como «activo hoy» para '
+                                  'abrirlo rápido en el set.',
+                                  style: AppTypography.bodyMedium(palette),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.xl),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Documentos',
+                              style: AppTypography.titleMedium(palette),
+                            ),
+                          ),
+                          Text(
+                            '${allDocs.length}',
+                            style: AppTypography.caption(palette),
+                          ),
+                        ],
                       ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              if (docs.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
-                  child: Text(
-                    'Ningún documento para esta jornada.',
-                    style: AppTypography.bodyMedium(palette),
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              else
-                ...docs.map(
-                  (doc) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: _DocumentTile(
-                      doc: doc,
-                      palette: palette,
-                      onTap: () => _openEditor(context, doc),
-                      onSetPrimary: () async {
-                        await db.setPrimaryShootDocument(
-                          widget.projectId,
-                          doc.id,
-                        );
-                      },
-                      onDelete: () async {
-                        final ok = await _confirmDelete(context, doc.name);
-                        if (ok == true) {
-                          await db.deleteShootDocument(doc.id);
-                        }
-                      },
-                    ),
-                  ),
-                ),
-            ],
+                      if (dates.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.sm,
+                          children: [
+                            FilterChip(
+                              label: const Text('Todas las jornadas'),
+                              selected: _dateFilter == null,
+                              onSelected: (_) =>
+                                  setState(() => _dateFilter = null),
+                            ),
+                            for (final date in dates)
+                              FilterChip(
+                                label: Text(_shortDate(date)),
+                                selected: _dateFilter == date,
+                                onSelected: (_) =>
+                                    setState(() => _dateFilter = date),
+                              ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.md),
+                      if (allDocs.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppSpacing.xl,
+                          ),
+                          child: Text(
+                            'Aún no hay documentos. Empieza por un guion '
+                            'técnico de rodaje: eliges las escenas del día, '
+                            'las ordenas y lo exportas con su índice.',
+                            style: AppTypography.bodyMedium(palette),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      else if (docs.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppSpacing.xl,
+                          ),
+                          child: Text(
+                            'Ningún documento para esta jornada.',
+                            style: AppTypography.bodyMedium(palette),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      else
+                        for (final group in groups.entries) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              top: AppSpacing.sm,
+                              bottom: AppSpacing.sm,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  group.key == null
+                                      ? Icons.inbox_outlined
+                                      : Icons.calendar_today_outlined,
+                                  size: 14,
+                                  color: palette.textSecondary,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  group.key == null
+                                      ? 'Sin fecha'
+                                      : formatShootDate(group.key),
+                                  style: AppTypography.label(palette),
+                                ),
+                              ],
+                            ),
+                          ),
+                          grid([
+                            for (final doc in group.value)
+                              _DocumentCard(
+                                doc: doc,
+                                scenes: scenes,
+                                onTap: () => _openEditor(context, doc),
+                                onExport: doc.kind == kShootDayKind
+                                    ? (word) => exportShootDayDocument(
+                                        context,
+                                        db,
+                                        ref.read(
+                                          technicalScriptSettingsProvider,
+                                        ),
+                                        doc.id,
+                                        (word: word, index: true),
+                                      )
+                                    : null,
+                                onSetPrimary: () => db.setPrimaryShootDocument(
+                                  widget.projectId,
+                                  doc.id,
+                                ),
+                                onDelete: () async {
+                                  final ok = await _confirmDelete(
+                                    context,
+                                    doc.name,
+                                  );
+                                  if (ok == true) {
+                                    await db.deleteShootDocument(doc.id);
+                                  }
+                                },
+                              ),
+                          ]),
+                          const SizedBox(height: AppSpacing.md),
+                        ],
+                    ],
+                  );
+                },
+              );
+            },
           );
         },
       ),
     );
+  }
+
+  /// «12/10» de una fecha "2026-10-12".
+  static String _shortDate(String iso) {
+    final date = DateTime.tryParse(iso);
+    return date == null ? iso : '${date.day}/${date.month}';
+  }
+
+  /// Exporta el guion técnico entero, en orden de guion.
+  Future<void> _exportFullScript(BuildContext context) async {
+    final choice = await showScriptExportDialog(context);
+    if (choice == null || !context.mounted) return;
+    final db = ref.read(databaseProvider);
+    try {
+      final doc = (await buildNarrativeScriptDoc(
+        db,
+        widget.projectId,
+        ref.read(technicalScriptSettingsProvider),
+      ))?.copyWith(includeIndex: choice.index);
+      if (!context.mounted) return;
+      if (doc == null || doc.sections.isEmpty) {
+        AppSnackBar.show(context, 'El guion técnico aún no tiene escenas.');
+        return;
+      }
+      final fileName = technicalScriptFileName(widget.projectName);
+      final path = choice.word
+          ? await TechnicalScriptDocxExporter.exportAndSave(
+              doc,
+              fileName: fileName,
+            )
+          : await TechnicalScriptPdfExporter.exportAndSave(
+              doc,
+              fileName: fileName,
+            );
+      if (!context.mounted || path == null) return;
+      AppSnackBar.show(
+        context,
+        '${choice.word ? 'Word' : 'PDF'} guardado en $path',
+      );
+    } catch (e) {
+      if (context.mounted) AppSnackBar.showError(context, userFriendlyError(e));
+    }
   }
 
   Future<void> _createDocument(BuildContext context) async {
@@ -339,115 +496,216 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  final AppPalette palette;
-  final bool isShooting;
-  final VoidCallback onCreate;
+/// Tarjeta para crear un tipo de documento.
+class _CreateCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+  final bool highlighted;
+  final VoidCallback onTap;
 
-  const _EmptyState({
-    required this.palette,
-    required this.isShooting,
-    required this.onCreate,
+  const _CreateCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.onTap,
+    this.highlighted = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.description_outlined,
-            size: 56,
-            color: palette.textTertiary,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            isShooting
-                ? 'Crea tu documento de rodaje'
-                : 'Documentos para el rodaje',
-            style: AppTypography.titleLarge(palette),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Compón libremente guion, planos, personajes, duración y refs '
-            'visuales (Artemis, ShotDeck). Este será tu documento de '
-            'referencia en set.',
-            style: AppTypography.bodyMedium(palette),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          AppButton(label: 'Crear documento', icon: Icons.add, onTap: onCreate),
-        ],
+    final palette = context.palette;
+    return AppCard(
+      onTap: onTap,
+      focused: highlighted,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: SizedBox(
+        height: 96,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: palette.accent.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: palette.accent, size: 22),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: AppTypography.titleMedium(palette)),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption(palette),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.add, size: 18, color: palette.textSecondary),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _DocumentTile extends StatelessWidget {
+/// Tarjeta de un documento: qué es, qué escenas lleva y exportación
+/// directa si es un guion técnico de rodaje.
+class _DocumentCard extends ConsumerWidget {
   final ShootDocument doc;
-  final AppPalette palette;
+  final Map<int, Scene> scenes;
   final VoidCallback onTap;
+
+  /// Exporta a PDF (falso) o Word (verdadero); nulo si no se exporta desde
+  /// aquí.
+  final ValueChanged<bool>? onExport;
   final VoidCallback onSetPrimary;
   final VoidCallback onDelete;
 
-  const _DocumentTile({
+  const _DocumentCard({
     required this.doc,
-    required this.palette,
+    required this.scenes,
     required this.onTap,
+    required this.onExport,
     required this.onSetPrimary,
     required this.onDelete,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final db = ref.watch(databaseProvider);
+    final isDay = doc.kind == kShootDayKind;
+
     return AppCard(
       onTap: onTap,
-      padding: const EdgeInsets.all(AppSpacing.md),
       focused: doc.isPrimaryOnSet,
-      child: Row(
-        children: [
-          Icon(
-            doc.isPrimaryOnSet ? Icons.star : Icons.description_outlined,
-            color: doc.isPrimaryOnSet ? palette.accent : palette.textSecondary,
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(doc.name, style: AppTypography.titleMedium(palette)),
-                if (doc.shootDate != null)
-                  Text(
-                    'Jornada: ${doc.shootDate}',
-                    style: AppTypography.caption(palette),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: StreamBuilder<List<ShootDocumentBlock>>(
+        stream: db.watchBlocksForShootDocument(doc.id),
+        builder: (context, snap) {
+          final blocks = snap.data ?? const <ShootDocumentBlock>[];
+          final shots = blocks.where((b) => b.shotId != null).length;
+          // Escenas en el orden del documento, sin repetir.
+          final sceneIds = <int>[];
+          for (final b in blocks) {
+            final id = b.sceneId;
+            if (id != null && !sceneIds.contains(id)) sceneIds.add(id);
+          }
+          final sceneLabels = [
+            for (final id in sceneIds)
+              if (scenes[id] != null) scenes[id]!.label,
+          ];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    isDay ? Icons.event_note : Icons.description_outlined,
+                    size: 18,
+                    color: palette.accent,
                   ),
-                if (doc.isPrimaryOnSet)
-                  Text(
-                    'Activo hoy en set',
-                    style: AppTypography.caption(
-                      palette,
-                    ).copyWith(color: palette.accent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      isDay ? 'Guion técnico de rodaje' : 'Documento libre',
+                      style: AppTypography.caption(palette),
+                    ),
                   ),
-              ],
-            ),
-          ),
-          PopupMenuButton<String>(
-            onSelected: (v) {
-              if (v == 'primary') onSetPrimary();
-              if (v == 'delete') onDelete();
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'primary',
-                child: Text('Marcar activo hoy'),
+                  if (doc.isPrimaryOnSet)
+                    Tooltip(
+                      message: 'Activo hoy en set',
+                      child: Icon(Icons.star, size: 18, color: palette.accent),
+                    ),
+                  SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: PopupMenuButton<String>(
+                      padding: EdgeInsets.zero,
+                      iconSize: 18,
+                      color: palette.surfaceElevated,
+                      onSelected: (v) {
+                        if (v == 'primary') onSetPrimary();
+                        if (v == 'delete') onDelete();
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'primary',
+                          child: Text('Marcar activo hoy'),
+                        ),
+                        PopupMenuItem(value: 'delete', child: Text('Eliminar')),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const PopupMenuItem(value: 'delete', child: Text('Eliminar')),
+              const SizedBox(height: 6),
+              Text(
+                doc.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.titleMedium(palette),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                [
+                  if (sceneIds.isNotEmpty)
+                    '${sceneIds.length} '
+                        '${sceneIds.length == 1 ? 'escena' : 'escenas'}',
+                  if (shots > 0) '$shots ${shots == 1 ? 'plano' : 'planos'}',
+                  if (sceneIds.isEmpty && shots == 0) 'Vacío',
+                ].join(' · '),
+                style: AppTypography.caption(palette),
+              ),
+              if (sceneLabels.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  'ESC ${sceneLabels.join(', ')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.caption(
+                    palette,
+                  ).copyWith(color: palette.textPrimary),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  if (onExport != null) ...[
+                    OutlinedButton.icon(
+                      onPressed: shots == 0 ? null : () => onExport!(false),
+                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                      label: const Text('PDF'),
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    OutlinedButton.icon(
+                      onPressed: shots == 0 ? null : () => onExport!(true),
+                      icon: const Icon(Icons.description_outlined, size: 16),
+                      label: const Text('Word'),
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  TextButton(onPressed: onTap, child: const Text('Abrir')),
+                ],
+              ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
