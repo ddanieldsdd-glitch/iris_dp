@@ -31,17 +31,46 @@ class TechnicalScriptPdfExporter {
   static PdfColor _color(int rgb) => PdfColor.fromInt(0xFF000000 | rgb);
 
   static Future<Uint8List> _build(TechnicalScriptDoc doc) async {
-    final fonts = await PdfExportFonts.load();
-    final theme = PdfExportFonts.theme(
-      regular: fonts.regular,
-      bold: fonts.bold,
-    );
-    // Las fuentes de la app no traen cursiva: se usa la de serie del PDF.
-    final italic = pw.Font.helveticaOblique();
-    final boldItalic = pw.Font.helveticaBoldOblique();
+    final family = await PdfExportFonts.loadFamily(doc.fontFamily);
+    if (!doc.hasIndex) return _compose(doc, family);
+    // Primera pasada para saber en qué página cae cada escena; la segunda
+    // ya pone esas páginas en el índice (que ocupa lo mismo en las dos).
+    final pages = <int, int>{};
+    await _compose(doc, family, record: pages);
+    return _compose(doc, family, pages: pages);
+  }
+
+  /// Página en la que empieza cada escena (por su posición) en el PDF; el
+  /// Word la usa como valor inicial de su índice.
+  static Future<Map<int, int>> scenePages(TechnicalScriptDoc doc) async {
+    final pages = <int, int>{};
+    if (!doc.hasIndex) return pages;
+    final family = await PdfExportFonts.loadFamily(doc.fontFamily);
+    await _compose(doc, family, record: pages);
+    return pages;
+  }
+
+  /// Nombre del destino de la sección [i], para los enlaces del índice.
+  static String _anchor(int i) => 'esc_$i';
+
+  static Future<Uint8List> _compose(
+    TechnicalScriptDoc doc,
+    PdfFontFamily family, {
+    Map<int, int>? record,
+    Map<int, int> pages = const {},
+  }) async {
+    final theme = PdfExportFonts.familyTheme(family);
     final pdf = pw.Document();
 
-    const base = pw.TextStyle(fontSize: 8.5, color: _ink, lineSpacing: 1.5);
+    final bodySize = doc.fontSize ?? 8.5;
+    final base = pw.TextStyle(
+      fontSize: bodySize,
+      color: _ink,
+      lineSpacing: 1.5,
+    );
+    final paper = doc.paper == ScriptDocPaper.letter
+        ? PdfPageFormat.letter
+        : PdfPageFormat.a4;
 
     pw.Widget rich(String text, {required bool centered}) {
       final spans = parseScriptMarkup(text);
@@ -54,10 +83,12 @@ class TechnicalScriptPdfExporter {
               pw.TextSpan(
                 text: span.text,
                 style: pw.TextStyle(
-                  font: span.italic
-                      ? (span.bold ? boldItalic : italic)
-                      : (span.bold ? fonts.bold : null),
+                  font: family.of(bold: span.bold, italic: span.italic),
                   fontWeight: span.bold ? pw.FontWeight.bold : null,
+                  fontStyle: span.italic ? pw.FontStyle.italic : null,
+                  color: span.textColor == null
+                      ? null
+                      : _color(kScriptTextColorRgb[span.textColor]!),
                   decoration: span.underline
                       ? pw.TextDecoration.underline
                       : null,
@@ -72,6 +103,82 @@ class TechnicalScriptPdfExporter {
               ),
           ],
         ),
+      );
+    }
+
+    // Índice: una línea por escena, con puntos hasta su página; cada línea
+    // lleva a su escena.
+    pw.Widget indexLine(int i) {
+      final style = pw.TextStyle(
+        fontSize: 9.5,
+        fontWeight: pw.FontWeight.bold,
+        color: _ink,
+      );
+      final page = pages[i];
+      return pw.Link(
+        destination: _anchor(i),
+        child: pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(vertical: 2.5),
+          child: pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            children: [
+              pw.Text(doc.sections[i].indexText, style: style),
+              pw.Expanded(
+                child: pw.Container(
+                  height: 1,
+                  margin: const pw.EdgeInsets.only(left: 2, right: 2, bottom: 2.5),
+                  decoration: const pw.BoxDecoration(
+                    border: pw.Border(
+                      bottom: pw.BorderSide(
+                        color: _ink,
+                        width: 0.8,
+                        style: pw.BorderStyle.dotted,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              pw.SizedBox(
+                width: 22,
+                child: pw.Text(
+                  page == null ? '000' : '$page',
+                  textAlign: pw.TextAlign.right,
+                  style: style,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Encabezado de escena: destino de su línea del índice y marcador del
+    // lector; en la primera pasada apunta en qué página cae.
+    pw.Widget heading(int i) {
+      final section = doc.sections[i];
+      final text = pw.Text(
+        section.title,
+        style: pw.TextStyle(
+          fontSize: 10.5,
+          fontWeight: pw.FontWeight.bold,
+          color: _ink,
+        ),
+      );
+      // El Builder se vuelve a montar si la escena salta de página: en la
+      // pasada que mide no se crean marcadores, que saldrían repetidos.
+      if (record != null) {
+        return pw.Builder(
+          builder: (context) {
+            record[i] = context.pageNumber;
+            return text;
+          },
+        );
+      }
+      if (!doc.hasIndex) return text;
+      return pw.Outline(
+        name: _anchor(i),
+        title: section.indexText,
+        child: text,
       );
     }
 
@@ -91,7 +198,7 @@ class TechnicalScriptPdfExporter {
     pdf.addPage(
       pw.MultiPage(
         theme: theme,
-        pageFormat: PdfPageFormat.a4.landscape,
+        pageFormat: doc.landscape ? paper.landscape : paper.portrait,
         margin: const pw.EdgeInsets.all(28),
         build: (context) => [
           pw.Text(
@@ -110,15 +217,17 @@ class TechnicalScriptPdfExporter {
             ),
           ],
           pw.SizedBox(height: 14),
-          for (final section in doc.sections) ...[
+          if (doc.hasIndex) ...[
             pw.Text(
-              section.title,
-              style: pw.TextStyle(
-                fontSize: 10.5,
-                fontWeight: pw.FontWeight.bold,
-                color: _ink,
-              ),
+              'ÍNDICE',
+              style: const pw.TextStyle(fontSize: 18, color: _ink),
             ),
+            pw.SizedBox(height: 6),
+            for (var i = 0; i < doc.sections.length; i++) indexLine(i),
+            pw.NewPage(),
+          ],
+          for (final (i, section) in doc.sections.indexed) ...[
+            heading(i),
             pw.SizedBox(height: 4),
             pw.Table(
               border: const pw.TableBorder(
@@ -144,7 +253,7 @@ class TechnicalScriptPdfExporter {
                           column.label,
                           textAlign: pw.TextAlign.center,
                           style: pw.TextStyle(
-                            fontSize: 8,
+                            fontSize: bodySize - 0.5,
                             fontWeight: pw.FontWeight.bold,
                             color: _ink,
                           ),

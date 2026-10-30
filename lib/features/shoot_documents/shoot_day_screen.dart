@@ -14,15 +14,62 @@ import '../../core/widgets/app_snackbar.dart';
 import '../../core/widgets/safe_reorderable_column.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
 import '../../shared/rich_text/script_markup.dart';
+import '../../shared/technical_script_export/technical_script_doc.dart';
 import '../../shared/technical_script_export/technical_script_docx.dart';
 import '../locations/locations_screen.dart';
+import '../technical_script/script_export_dialog.dart';
 import '../technical_script/technical_script_export.dart';
 import '../technical_script/technical_script_settings.dart';
+import 'shoot_day_order.dart';
 import 'shoot_document_block_types.dart';
 import 'shoot_document_script_picker.dart';
 
 /// Tipo de documento de rodaje que es una jornada con su guion técnico.
 const kShootDayKind = 'technical_day';
+
+/// Exporta el guion técnico de la jornada [documentId] a PDF o Word, con o
+/// sin índice, y avisa de dónde se guardó.
+Future<void> exportShootDayDocument(
+  BuildContext context,
+  AppDatabase db,
+  TechnicalScriptSettings settings,
+  int documentId,
+  ScriptExportOptions choice,
+) async {
+  final word = choice.word;
+  try {
+    final built = await buildShootDayScriptDoc(
+      db,
+      documentId,
+      settings,
+      hiddenColumns: choice.hiddenColumns,
+    );
+    final doc = built == null ? null : choice.applyTo(built);
+    if (!context.mounted) return;
+    if (doc == null || doc.sections.isEmpty) {
+      AppSnackBar.show(context, 'Añade planos a la jornada para exportarla.');
+      return;
+    }
+    final day = await db.getShootDocument(documentId);
+    final name = (day?.name ?? 'jornada')
+        .replaceAll(RegExp(r'[^\w\s-]'), '')
+        .trim();
+    final fileName = name.isEmpty ? 'jornada' : name;
+    final path = word
+        ? await TechnicalScriptDocxExporter.exportAndSave(
+            doc,
+            fileName: fileName,
+          )
+        : await TechnicalScriptPdfExporter.exportAndSave(
+            doc,
+            fileName: fileName,
+          );
+    if (!context.mounted || path == null) return;
+    AppSnackBar.show(context, '${word ? 'Word' : 'PDF'} guardado en $path');
+  } catch (e) {
+    if (context.mounted) AppSnackBar.showError(context, userFriendlyError(e));
+  }
+}
 
 /// Guion técnico de rodaje de una jornada: fecha, lugar, meteorología y los
 /// planos del guion técnico en el orden en que se van a rodar.
@@ -141,37 +188,20 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
     }
   }
 
-  Future<void> _export({required bool word}) async {
-    try {
-      final doc = await buildShootDayScriptDoc(
-        _db,
-        widget.documentId,
-        ref.read(technicalScriptSettingsProvider),
-      );
-      if (!mounted) return;
-      if (doc == null || doc.sections.isEmpty) {
-        AppSnackBar.show(context, 'Añade planos a la jornada para exportarla.');
-        return;
-      }
-      final day = await _db.getShootDocument(widget.documentId);
-      final name = (day?.name ?? 'jornada')
-          .replaceAll(RegExp(r'[^\w\s-]'), '')
-          .trim();
-      final fileName = name.isEmpty ? 'jornada' : name;
-      final path = word
-          ? await TechnicalScriptDocxExporter.exportAndSave(
-              doc,
-              fileName: fileName,
-            )
-          : await TechnicalScriptPdfExporter.exportAndSave(
-              doc,
-              fileName: fileName,
-            );
-      if (!mounted || path == null) return;
-      AppSnackBar.show(context, '${word ? 'Word' : 'PDF'} guardado en $path');
-    } catch (e) {
-      if (mounted) AppSnackBar.showError(context, userFriendlyError(e));
-    }
+  Future<void> _export() async {
+    final choice = await showScriptExportDialog(
+      context,
+      screen: ref.read(technicalScriptSettingsProvider),
+      title: 'Exportar la jornada',
+    );
+    if (choice == null || !mounted) return;
+    await exportShootDayDocument(
+      context,
+      _db,
+      ref.read(technicalScriptSettingsProvider),
+      widget.documentId,
+      choice,
+    );
   }
 
   @override
@@ -196,15 +226,13 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
             backgroundColor: palette.surface,
             title: Text(day.name, style: AppTypography.titleMedium(palette)),
             actions: [
-              PopupMenuButton<bool>(
-                tooltip: 'Exportar la jornada',
-                icon: Icon(Icons.ios_share, color: palette.accent),
-                color: palette.surfaceElevated,
-                onSelected: (word) => _export(word: word),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: false, child: Text('PDF')),
-                  PopupMenuItem(value: true, child: Text('Word (.docx)')),
-                ],
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilledButton.icon(
+                  onPressed: _export,
+                  icon: const Icon(Icons.ios_share, size: 18),
+                  label: const Text('Exportar'),
+                ),
               ),
             ],
           ),
@@ -497,8 +525,10 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
       '${t.minute.toString().padLeft(2, '0')}';
 }
 
-/// Planos de la jornada en su orden de rodaje.
-class _OrderList extends ConsumerWidget {
+/// Planos de la jornada en su orden de rodaje. Se ordena por escenas (cada
+/// tramo seguido de una escena se mueve entero, y cada tarjeta es la línea
+/// que tendrá en el índice del documento) o plano a plano.
+class _OrderList extends ConsumerStatefulWidget {
   final int projectId;
   final int documentId;
   final List<ShootDocumentBlock> blocks;
@@ -512,25 +542,51 @@ class _OrderList extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_OrderList> createState() => _OrderListState();
+}
+
+class _OrderListState extends ConsumerState<_OrderList> {
+  bool _byScene = true;
+
+  @override
+  Widget build(BuildContext context) {
     final palette = context.palette;
     final db = ref.watch(databaseProvider);
 
     return StreamBuilder<List<Scene>>(
-      stream: db.watchScenesForProject(projectId),
+      stream: db.watchScenesForProject(widget.projectId),
       builder: (context, sceneSnap) => StreamBuilder<List<Shot>>(
-        stream: db.watchShotsForProject(projectId),
+        stream: db.watchShotsForProject(widget.projectId),
         builder: (context, shotSnap) {
-          final scenes = {
-            for (final s in sceneSnap.data ?? const <Scene>[]) s.id: s,
+          final sceneList = sceneSnap.data ?? const <Scene>[];
+          final scenes = {for (final s in sceneList) s.id: s};
+          final scenePosition = {
+            for (final (i, s) in sceneList.indexed) s.id: i,
           };
           final shots = {
             for (final s in shotSnap.data ?? const <Shot>[]) s.id: s,
           };
           final rows = [
-            for (final b in blocks)
+            for (final b in widget.blocks)
               if (shots[b.shotId] != null) b,
           ];
+          final shotOfBlock = {for (final b in rows) b.id: shots[b.shotId]!};
+          final ids = [for (final b in rows) b.id];
+          final tracts = groupShootTracts(
+            ids,
+            (id) => shotOfBlock[id]!.sceneId,
+          );
+
+          void reorder(List<int> next) =>
+              db.reorderShootDocumentBlocks(widget.documentId, next);
+
+          final inScriptOrder = scriptOrderOf(
+            ids,
+            scenePosition: (id) =>
+                scenePosition[shotOfBlock[id]!.sceneId] ?? 1 << 30,
+            shotNumber: (id) => shotOfBlock[id]!.number,
+          );
+          final isScriptOrder = _sameOrder(ids, inScriptOrder);
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -556,27 +612,130 @@ class _OrderList extends ConsumerWidget {
                             rows.isEmpty
                                 ? 'Elige las escenas y planos que se ruedan '
                                       'este día.'
-                                : 'Arrastra para ordenar. El número de plano '
-                                      'es el del guion técnico.',
+                                : _byScene
+                                ? 'Arrastra las escenas para ordenarlas. Así '
+                                      'sale el índice del documento.'
+                                : 'Arrastra los planos para ordenarlos. El '
+                                      'número de plano es el del guion técnico.',
                             style: AppTypography.caption(palette),
                           ),
                         ],
                       ),
                     ),
                     FilledButton.tonalIcon(
-                      onPressed: onAdd,
+                      onPressed: widget.onAdd,
                       icon: const Icon(Icons.playlist_add, size: 18),
                       label: const Text('Escenas y planos'),
                     ),
                   ],
                 ),
               ),
+              if (rows.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    0,
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                  ),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      SegmentedButton<bool>(
+                        showSelectedIcon: false,
+                        style: const ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        segments: [
+                          ButtonSegment(
+                            value: true,
+                            icon: const Icon(Icons.view_agenda_outlined, size: 16),
+                            label: Text('Escenas (${tracts.length})'),
+                          ),
+                          ButtonSegment(
+                            value: false,
+                            icon: const Icon(Icons.format_list_numbered, size: 16),
+                            label: Text('Planos (${rows.length})'),
+                          ),
+                        ],
+                        selected: {_byScene},
+                        onSelectionChanged: (v) =>
+                            setState(() => _byScene = v.first),
+                      ),
+                      TextButton.icon(
+                        onPressed: isScriptOrder
+                            ? null
+                            : () => reorder(inScriptOrder),
+                        icon: const Icon(Icons.sort, size: 16),
+                        label: const Text('Orden de guion'),
+                      ),
+                    ],
+                  ),
+                ),
               Expanded(
                 child: rows.isEmpty
                     ? Center(
                         child: Text(
                           'La jornada aún no tiene planos.',
                           style: AppTypography.bodyMedium(palette),
+                        ),
+                      )
+                    : _byScene
+                    ? SafeReorderableColumn(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                        ),
+                        itemCount: tracts.length,
+                        keyOf: (i) => ValueKey('tract-${tracts[i].blockIds.first}'),
+                        dragLabel: (i) =>
+                            'Escena ${scenes[tracts[i].sceneId]?.label ?? '—'}',
+                        onReorder: (from, to) =>
+                            reorder(moveShootTract(tracts, from, to)),
+                        itemBuilder: (context, i) => _TractCard(
+                          position: i + 1,
+                          scene: scenes[tracts[i].sceneId],
+                          shots: [
+                            for (final id in tracts[i].blockIds)
+                              shotOfBlock[id]!,
+                          ],
+                          onRemove: () async {
+                            final tract = tracts[i];
+                            final n = tract.blockIds.length;
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: Text(
+                                  'Quitar la escena '
+                                  '${scenes[tract.sceneId]?.label ?? '—'} '
+                                  'de la jornada',
+                                ),
+                                content: Text(
+                                  n == 1
+                                      ? 'Se quita 1 plano de este documento. '
+                                          'El plano sigue en el guion técnico.'
+                                      : 'Se quitan $n planos de este '
+                                          'documento. Siguen en el guion '
+                                          'técnico.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('Cancelar'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text('Quitar'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (ok != true) return;
+                            for (final id in tract.blockIds) {
+                              await db.deleteShootDocumentBlock(id);
+                            }
+                          },
                         ),
                       )
                     : SafeReorderableColumn(
@@ -587,13 +746,13 @@ class _OrderList extends ConsumerWidget {
                         keyOf: (i) => ValueKey(rows[i].id),
                         dragLabel: (i) {
                           final shot = shots[rows[i].shotId]!;
-                          return 'Esc. ${scenes[shot.sceneId]?.number ?? '—'} '
+                          return 'Esc. ${scenes[shot.sceneId]?.label ?? '—'} '
                               '· Plano ${shot.number}';
                         },
                         onReorder: (from, to) {
-                          final ids = [for (final b in rows) b.id];
-                          ids.insert(to, ids.removeAt(from));
-                          db.reorderShootDocumentBlocks(documentId, ids);
+                          final next = [...ids];
+                          next.insert(to, next.removeAt(from));
+                          reorder(next);
                         },
                         itemBuilder: (context, i) {
                           final shot = shots[rows[i].shotId]!;
@@ -650,7 +809,7 @@ class _OrderList extends ConsumerWidget {
                                     Expanded(
                                       child: Text(
                                         [
-                                          'Esc. ${scene?.number ?? '—'} · '
+                                          'Esc. ${scene?.label ?? '—'} · '
                                               'Plano ${shot.number}',
                                           if (framing.isNotEmpty) framing,
                                         ].join(' · '),
@@ -680,6 +839,117 @@ class _OrderList extends ConsumerWidget {
             ],
           );
         },
+      ),
+    );
+  }
+
+  static bool _sameOrder(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+}
+
+/// Tarjeta de un tramo de escena: su puesto, la línea que tendrá en el
+/// índice y sus planos.
+class _TractCard extends StatelessWidget {
+  final int position;
+  final Scene? scene;
+  final List<Shot> shots;
+  final VoidCallback onRemove;
+
+  const _TractCard({
+    required this.position,
+    required this.scene,
+    required this.shots,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final scene = this.scene;
+    final title = scene == null
+        ? 'Escena desconocida'
+        : scriptIndexLabel(
+            sceneLabel: scene.label,
+            intExt: scene.intExt,
+            location: scene.locationPureName,
+            dayNight: scene.dayNight,
+          );
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(12, 10, 48, 10),
+      decoration: BoxDecoration(
+        color: palette.surfaceElevated,
+        border: Border.all(color: palette.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: palette.accent.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '$position',
+              style: AppTypography.mono(
+                palette,
+              ).copyWith(color: palette.accent),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: AppTypography.label(
+                    palette,
+                  ).copyWith(color: palette.textPrimary),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    for (final shot in shots)
+                      Tooltip(
+                        message: scriptMarkupToPlain(shot.framing).trim(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: palette.border),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            'Plano ${shot.number}',
+                            style: AppTypography.caption(palette),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Quitar la escena de la jornada',
+            icon: Icon(Icons.close, size: 16, color: palette.textSecondary),
+            onPressed: onRemove,
+          ),
+        ],
       ),
     );
   }
